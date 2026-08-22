@@ -1,44 +1,101 @@
 @echo off
-setlocal
+setlocal EnableDelayedExpansion
 cd /d "%~dp0"
 
 rem =====================================================================
 rem  install_game.bat
-rem  Oyuncu APK'sini bagli gozluge kurar (adb install -r -g).
+rem  Installs a player APK on the connected headset (adb install -r -g).
 rem
-rem  APK'yi UC YERDE arar, ilk buldugunu kurar:
-rem    1) bu betigin yani  ->  deploy-player-apk.bat betigi apk'nin yanina
-rem                            bu dosyanin bir kopyasini koyar
-rem    2) deploy\player\   ->  repo kokunden calistirildiginda normal yol
-rem    3) Builds\player\   ->  PlayerBuildTool'un -buildOutput verilmeden
-rem                            calistirildigindaki varsayilani
+rem  VERSIONED APKs: builds are named game_v<N>.apk and each carries its own
+rem  application id (com.vortex.arenav<N>), so several versions can stay
+rem  installed side by side. This script lists the versions it finds and asks
+rem  which one to install; the package name is derived from the choice.
 rem
-rem  Boylece hangi kopyayi cift tikladigin fark etmez; APK'yi elle tasimak
-rem  ya da yeniden adlandirmak gerekmez.
+rem  It looks for APKs in THREE places and uses the first folder that
+rem  contains a game_v*.apk:
+rem    1) next to this script  ->  deploy-player-apk.bat drops a copy of this
+rem                                file next to the apk
+rem    2) deploy\player\       ->  the normal path when run from the repo root
+rem    3) Builds\player\       ->  PlayerBuildTool's default when it runs
+rem                                without -buildOutput
+rem
+rem  So it does not matter which copy is double-clicked; no APK has to be
+rem  moved or renamed by hand.
+rem
+rem  NOTE: delayed expansion is ON - a "!" inside an echo would be eaten, so
+rem  the messages below avoid it.
 rem =====================================================================
 
-set "VA_APK="
+rem  %%~P keeps the trailing backslash (%%~fP would strip it and glue the
+rem  folder name to the file name).
+set "VA_DIR="
 for %%P in (
-  "%~dp0game.apk"
-  "%~dp0deploy\player\game.apk"
-  "%~dp0Builds\player\game.apk"
-) do if not defined VA_APK if exist "%%~fP" set "VA_APK=%%~fP"
+  "%~dp0"
+  "%~dp0deploy\player\"
+  "%~dp0Builds\player\"
+) do if not defined VA_DIR if exist "%%~Pgame_v*.apk" set "VA_DIR=%%~P"
 
-if not defined VA_APK (
-    echo [HATA] game.apk bulunamadi. Bakilan yerler:
-    echo    %~dp0game.apk
-    echo    %~dp0deploy\player\game.apk
-    echo    %~dp0Builds\player\game.apk
+if not defined VA_DIR (
+    echo [HATA] game_v^<numara^>.apk bulunamadi. Bakilan yerler:
+    echo    %~dp0
+    echo    %~dp0deploy\player\
+    echo    %~dp0Builds\player\
     echo.
     echo APK'yi uretmek icin: scripts\deploy-player-apk.bat
-    echo ^(Unity editoru kapali olmali.^)
+    echo ^(Unity editoru kapali olmali; betik surum numarasini sorar.^)
     pause
     exit /b 1
 )
 
+rem  Numeric sort is not reliable in pure batch (string compare puts 9 after
+rem  118), so PowerShell produces the sorted version list.
+set "VA_LIST="
+set "VA_LAST="
+for /f "usebackq delims=" %%V in (`powershell -NoProfile -Command "Get-ChildItem -LiteralPath '!VA_DIR!' -Filter 'game_v*.apk' ^| ForEach-Object { if ($_.BaseName -match 'game_v([0-9]+)$') { [int]$Matches[1] } } ^| Sort-Object -Unique"`) do (
+    set "VA_LIST=!VA_LIST!  %%V"
+    set "VA_LAST=%%V"
+)
+
+if not defined VA_LAST (
+    echo [HATA] Klasorde game_v^<numara^>.apk desenine uyan dosya yok:
+    echo    !VA_DIR!
+    echo.
+    echo APK'yi uretmek icin: scripts\deploy-player-apk.bat
+    pause
+    exit /b 1
+)
+
+echo Klasor: !VA_DIR!
+echo Bulunan surumler:!VA_LIST!
+echo.
+
+:va_pick
+set "VA_SEL="
+set "VA_DEF=0"
+set /p "VA_SEL=Kurulacak surum (bos birakirsan en yenisi: !VA_LAST!): "
+set "VA_SEL=!VA_SEL: =!"
+if not defined VA_SEL (
+    set "VA_SEL=!VA_LAST!"
+    set "VA_DEF=1"
+)
+set "VA_APK=!VA_DIR!game_v!VA_SEL!.apk"
+if exist "!VA_APK!" goto :va_picked
+echo.
+echo [HATA] Bu surum bulunamadi: !VA_APK!
+if "!VA_DEF!"=="1" (
+    echo        Varsayilan surum de okunamadi - kurulum yapilamiyor.
+    pause
+    exit /b 1
+)
+echo        Yukaridaki listeden bir numara girin ^(Enter = !VA_LAST!^).
+echo.
+goto :va_pick
+
+:va_picked
+echo.
 echo Kurulacak APK:
-echo    %VA_APK%
-for %%F in ("%VA_APK%") do echo    %%~zF bayt  -  %%~tF
+echo    !VA_APK!
+for %%F in ("!VA_APK!") do echo    %%~zF bayt  -  %%~tF
 echo.
 
 where adb >nul 2>nul
@@ -50,13 +107,13 @@ if errorlevel 1 (
 )
 
 rem =====================================================================
-rem  Cihaz yetkilendirmesi
-rem  "unauthorized" = gozluk bu PC'nin RSA anahtarini kabul etmemis.
-rem  Gelistirici modu ACIK olsa bile ayri bir onay gerekir; anahtar
-rem  yenilendiginde (%USERPROFILE%\.android\adbkey) eski onay olur.
-rem  Cozum: adb kill-server + start-server -> anahtar yeniden gonderilir,
-rem  onay penceresi gozlukte yeniden cikar. Betik once izin ister,
-rem  sonra kullanicinin gozlukte onayladigini adb'ye tekrar sorarak teyit eder.
+rem  Device authorization
+rem  "unauthorized" = the headset has not accepted this PC's RSA key.
+rem  A separate approval is needed even with developer mode ON; renewing the
+rem  key (%USERPROFILE%\.android\adbkey) invalidates the old approval.
+rem  Fix: adb kill-server + start-server -> the key is sent again and the
+rem  approval dialog reappears on the headset. The script asks for permission
+rem  first, then re-queries adb to confirm the user really approved it.
 rem =====================================================================
 
 :va_devcheck
@@ -67,7 +124,7 @@ echo.
 call :va_find_unauthorized
 if not defined VA_UNAUTH goto :va_install
 
-echo [UYARI] Gozluk "unauthorized" durumda  ^(%VA_UNAUTH%^)
+echo [UYARI] Gozluk "unauthorized" durumda  ^(!VA_UNAUTH!^)
 echo   Cihaz gorunuyor ama bu bilgisayara guvenmiyor: RSA anahtari onaylanmamis.
 echo   Kablo/surucu sorunu degildir.
 echo.
@@ -118,23 +175,28 @@ adb devices
 echo.
 
 :va_install
-set "VA_PKG=com.vortex.arena"
+rem  The package name carries the version, so each build lives next to the
+rem  others on the headset instead of replacing them.
+set "VA_PKG=com.vortex.arenav!VA_SEL!"
 set "VA_INSTALL_LOG=%TEMP%\va_install_log_%RANDOM%.txt"
 
-echo Gozluge kuruluyor, lutfen bekleyin...
+echo Gozluge kuruluyor ^(paket: !VA_PKG!^), lutfen bekleyin...
 call :va_do_install
-if "%VA_INSTALL_OK%"=="1" goto :va_install_done
+if "!VA_INSTALL_OK!"=="1" goto :va_install_done
 
-findstr /i "INSTALL_FAILED_UPDATE_INCOMPATIBLE" "%VA_INSTALL_LOG%" >nul
+findstr /i "INSTALL_FAILED_UPDATE_INCOMPATIBLE" "!VA_INSTALL_LOG!" >nul
 if not errorlevel 1 (
     echo.
     echo [UYARI] Gozlukteki kurulum farkli bir imzayla imzalanmis - once o kaldiriliyor...
-    echo ^> adb uninstall %VA_PKG%
-    adb uninstall %VA_PKG%
+    echo ^> adb uninstall !VA_PKG!
+    adb uninstall !VA_PKG!
     echo.
     echo Tekrar kuruluyor...
     call :va_do_install
-    if "%VA_INSTALL_OK%"=="1" goto :va_install_done
+    rem  Delayed expansion is mandatory here: %VA_INSTALL_OK% would expand when
+    rem  the block is PARSED, i.e. before :va_do_install ran, and a successful
+    rem  second install would still fall through to the failure branch.
+    if "!VA_INSTALL_OK!"=="1" goto :va_install_done
 )
 
 echo.
@@ -144,26 +206,26 @@ echo   - Gelistirici modu acik mi, USB hata ayiklama izni verildi mi?
 echo   - Birden fazla cihaz bagliysa digerlerini cikarin.
 echo   - Eski bir kurulum baska bir paket adiyla duruyorsa once onu kaldirin:
 echo       adb uninstall com.UnityTechnologies.com.unity.template.urpblank
-del "%VA_INSTALL_LOG%" >nul 2>nul
+del "!VA_INSTALL_LOG!" >nul 2>nul
 pause
 exit /b 1
 
 :va_install_done
-del "%VA_INSTALL_LOG%" >nul 2>nul
+del "!VA_INSTALL_LOG!" >nul 2>nul
 echo.
-echo Kurulum tamamlandi.
+echo Kurulum tamamlandi ^(paket: !VA_PKG!^).
 pause
 exit /b 0
 
 rem ---------------------------------------------------------------------
-rem  adb install -r -g calistirir, ciktiyi hem ekrana basar hem log dosyasina
-rem  yazar (imza uyusmazligini tespit icin), basari ise VA_INSTALL_OK=1 yapar.
+rem  Runs adb install -r -g, prints the output and also writes it to a log
+rem  file (to detect the signature mismatch); sets VA_INSTALL_OK=1 on success.
 rem ---------------------------------------------------------------------
 :va_do_install
 set "VA_INSTALL_OK=0"
-adb install -r -g "%VA_APK%" > "%VA_INSTALL_LOG%" 2>&1
-type "%VA_INSTALL_LOG%"
-findstr /i /c:"Success" "%VA_INSTALL_LOG%" >nul
+adb install -r -g "!VA_APK!" > "!VA_INSTALL_LOG!" 2>&1
+type "!VA_INSTALL_LOG!"
+findstr /i /c:"Success" "!VA_INSTALL_LOG!" >nul
 if not errorlevel 1 set "VA_INSTALL_OK=1"
 exit /b 0
 
@@ -174,8 +236,8 @@ pause
 exit /b 1
 
 rem ---------------------------------------------------------------------
-rem  adb devices ciktisinda "unauthorized" satiri ararsa seri numarasini
-rem  VA_UNAUTH'a yazar, yoksa tanimsiz birakir.
+rem  Looks for an "unauthorized" line in adb devices output and stores the
+rem  serial in VA_UNAUTH; leaves it undefined otherwise.
 rem ---------------------------------------------------------------------
 :va_find_unauthorized
 set "VA_UNAUTH="

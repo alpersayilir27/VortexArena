@@ -1,12 +1,13 @@
 # scripts/ — dağıtım ve doküman betikleri
 
 Dört bileşenin her biri kendi betiğiyle `deploy/` altına üretilir. Betikler **idempotent**:
-hedef klasörü silip yeniden yazarlar.
+hedef klasörü silip yeniden yazarlar. Tek istisna `deploy\player\`: sürümlü APK'lar yan yana
+durduğu için o klasör silinmez, yalnız aynı adlı dosya üzerine yazılır.
 
 | Betik | Kaynak | Çıktı | Ön koşul |
 |---|---|---|---|
 | `deploy-admin-game.bat` | Unity projesi (`Assets/`) | `deploy\admin\VortexArena.exe` | Unity Editor kapalı (betik zorlamaz) |
-| `deploy-player-apk.bat` | Unity projesi (`Assets/`) | `deploy\player\game.apk` + `install_game.bat`; sonda APK sunucudaki yayın ucuna POST'lanır (`updater_uploader/` — uç kapalıysa yalnız uyarı, build başarılı sayılır) | Unity Editor kapalı + **Android Build Support** modülü |
+| `deploy-player-apk.bat` | Unity projesi (`Assets/`) | `deploy\player\game_v<sürüm>.apk` + `install_game.bat`; sonda APK sunucudaki yayın ucuna POST'lanır (`updater_uploader/` — uç kapalıysa yalnız uyarı, build başarılı sayılır) | Unity Editor kapalı + **Android Build Support** modülü; başlangıçta sürüm numarası sorulur |
 | `deploy-server.bat` | `Server/VortexArena.Server.App` | `deploy\server\VortexArena.Server.App.exe` | .NET 10 SDK |
 | `deploy-launcher.bat` | `launcher/VortexArena.Launcher` (WPF) | `deploy\launcher\VortexArena.Launcher.exe` | .NET 10 SDK + launcher kapalı |
 | `deploy_android_updater.bat` | `updater/` (Kotlin Android) | `deploy\updater\VortexUpdater.apk` + `install_updater.bat` | Unity'nin **Android Build Support** modülü (JDK/Gradle oradan — editör açık olabilir, Unity başlatılmaz); Android SDK'sı `%LOCALAPPDATA%\VortexUpdaterSdk` köküne ilk koşuda iner → ilk koşu internet ister |
@@ -18,6 +19,29 @@ sahne listesini** kullanır (Build Settings). Fark yalnız platformdur: Windows 
 Quest oyuncusu. Rol ve sunucu adresi **hiçbirine gömülmez** — admin adresi launcher'ın
 `--server-ip` argümanından, oyuncu ise UDP beacon keşfinden alır, yani **aynı APK her gözlüğe**
 kurulur.
+
+## Oyuncu APK'sının sürümü
+
+`deploy-player-apk.bat` açılışta **sürüm numarasını sorar** (pozitif tam sayı); sürümsüz oyuncu
+build'i yoktur. Numaranın komut satırı argümanı **yoktur** — bu yüzden `--no-pause` kipinde betik
+sürümü soramaz ve hata verip durur.
+
+Girilen numara dört yere birden girer: APK adı (`deploy\player\game_v<sürüm>.apk`), Android paket
+adı (`com.vortex.arenav<sürüm>`), `bundleVersion` + `AndroidBundleVersionCode`, ve gözlükte görünen
+uygulama adı (`VortexArena v<sürüm>`).
+
+- ⚠️ **Paket ekinde nokta yoktur** (`com.vortex.arenav132`, `com.vortex.arena.v132` değil):
+  Android paket segmenti rakamla başlayamaz.
+- Bu `PlayerSettings` değerleri **yalnız o build süresince** değiştirilir; build biter bitmez
+  `ProjectSettings.asset` eski haline döner, projenin temel bundle id'si (`com.vortex.arena`)
+  kalıcı olarak değişmez.
+- Sürümler **farklı paket adı taşıdığı için aynı gözlükte yan yana kurulu durabilir**; her sürümün
+  kendi verisi ve izinleri ayrıdır.
+- `deploy\player\` klasörü build'de **silinmez** — eski sürümlerin APK'ları yerinde kalır, yalnız
+  aynı adlı dosya üzerine yazılır.
+- Build sonunda APK yayın ucuna `POST /upload?v=<sürüm>` ile gönderilir ve sunucuda
+  `game_versions\game_v<sürüm>.apk` olarak durur; adres ve gözlükteki updater'ın davranışı
+  `updater/README.md`'de.
 
 ## Dokümantasyon sitesi
 

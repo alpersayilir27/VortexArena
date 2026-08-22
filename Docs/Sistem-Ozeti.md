@@ -2111,7 +2111,7 @@ Dört bileşenin her biri kendi script'iyle `deploy/` altına üretilir:
 | Komut | Ne yapar | Çıktı |
 |---|---|---|
 | `scripts\deploy-admin-game.bat` | Unity batch-mode Windows build (`PlayerBuildTool.BuildWindowsAdmin`) | `deploy\admin\VortexArena.exe` |
-| `scripts\deploy-player-apk.bat` | Unity batch-mode Android build (`PlayerBuildTool.BuildQuestPlayer`) | `deploy\player\game.apk` + `install_game.bat` |
+| `scripts\deploy-player-apk.bat` | Unity batch-mode Android build (`PlayerBuildTool.BuildQuestPlayer`) | `deploy\player\game_v<sürüm>.apk` + `install_game.bat` |
 | `scripts\deploy-server.bat` | `dotnet publish -r win-x64 --self-contained` + `config/` kopyası | `deploy\server\VortexArena.Server.App.exe` |
 | `scripts\deploy-launcher.bat` | `dotnet publish -r win-x64 --self-contained` | `deploy\launcher\VortexArena.Launcher.exe` |
 
@@ -2123,6 +2123,15 @@ girmeden önce **diskte olmayan sahne satırlarını** yakalayıp adlarıyla ipt
 arenanın satırı Build Settings'te kalabiliyor ve o hâlde `BuildPipeline` sebebi görünmeyen bir
 yığın iziyle düşerdi.
 
+- **Oyuncu build'i sürümlüdür, admin build'i değildir.** `BuildQuestPlayer` `-buildVersion <tam
+  sayı>` argümanını **zorunlu** ister (betik numarayı operatöre sorar); sürümsüz oyuncu build'i
+  yoktur. Numara APK adına (`game_v<sürüm>.apk`) ve build boyunca `PlayerSettings`'e girer: paket
+  adı `com.vortex.arenav<sürüm>`, `bundleVersion`, `AndroidBundleVersionCode` ve ürün adı.
+  ⚠️ Paket ekinde **nokta yoktur** — Android paket segmenti rakamla başlayamaz. Bu değerler build
+  bitiminde geri alınır, yani proje ayarı (`com.vortex.arena`) kalıcı değişmez; geri alma
+  `EditorApplication.Exit`'ten **önce** biter (`Exit` süreci anında sonlandırır, `finally`
+  çalışmaz). Sürümler ayrı paket adı taşıdığı için aynı gözlükte yan yana kurulu durabilir, bu
+  yüzden `deploy\player\` klasörü build'de silinmez. `BuildWindowsAdmin` sürüm almaz.
 - **İki Unity build'i de canlı ilerleme basar.** İkisi de Unity'yi doğrudan değil
   `scripts\lib\watch-unity-build.ps1` üzerinden çalıştırır: izleyici kendi log'unu
   (`deploy\admin-build.log` / `deploy\player-build.log`) akarken okur ve tek satırlık durum
@@ -2165,11 +2174,14 @@ yığın iziyle düşerdi.
   Unity kurulumu, Unity/Hub + paket cache'leri ve build zincirinin exe'leri dışlanır. ⚠️ Dışlanan
   klasörler taranmaz — oraya indirme yapılmaz. Ayrıntı ve Dev Drive alternatifi:
   `scripts/README.md`.
-- **APK kurulumu:** `install_game.bat` → `adb install -r -g`. Betik APK'yı **sırayla kendi yanında,
-  `deploy\player\` ve `Builds\player\` altında** arar, ilk bulduğunu kurar — bu yüzden repo
+- **APK kurulumu:** `install_game.bat` → `adb install -r -g`. Betik `game_v*.apk` dosyalarını
+  **sırayla kendi yanında, `deploy\player\` ve `Builds\player\` altında** arar — bu yüzden repo
   kökündeki kopya da `deploy-player-apk.bat`'in APK yanına bıraktığı kopya da çalışır ve dosya
-  taşımak gerekmez. **Aynı APK her gözlüğe kurulur** — rol ve sunucu adresi gömülü değildir,
-  oyuncu build'i sunucuyu UDP beacon ile kendi bulur.
+  taşımak gerekmez. Bulduğu klasördeki sürümleri **küçükten büyüğe listeler** ve hangisinin
+  kurulacağını sorar; boş bırakılırsa en büyük sürümü kurar. İmza uyuşmazlığında kaldırılan paket
+  yalnız seçilen sürümün paketidir (`com.vortex.arenav<sürüm>`), diğer sürümler gözlükte kalır.
+  **Aynı sürüm her gözlüğe kurulur** — rol ve sunucu adresi gömülü değildir, oyuncu build'i
+  sunucuyu UDP beacon ile kendi bulur.
   Cihaz `unauthorized` görünüyorsa betik kuruluma **hiç girmez**: sebebi yazar (gözlük bu PC'nin
   RSA anahtarını kabul etmemiş — geliştirici modu açık olsa bile bu ayrı bir onaydır, kablo/sürücü
   sorunu değildir), izin isteyip `adb kill-server` + `adb start-server` ile onay penceresini
