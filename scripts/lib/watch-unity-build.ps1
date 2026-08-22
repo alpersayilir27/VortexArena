@@ -37,6 +37,8 @@ param(
   [string]$Log,
   [string]$Method = 'VortexArena.Core.Editor.PlayerBuildTool.BuildWindowsAdmin',
   [string]$UnityBuildTarget,
+  # Player build only; PlayerBuildTool refuses to build without it.
+  [string]$BuildVersion,
   [int]$HeartbeatSeconds = 15,
   [int]$StallSeconds = 180,
   [string]$ReplayLog
@@ -425,6 +427,11 @@ if (-not [string]::IsNullOrWhiteSpace($UnityBuildTarget)) {
 $argList += @(
   '-executeMethod'; $Method
   '-buildOutput'; ('"{0}"' -f $OutDir)
+)
+if (-not [string]::IsNullOrWhiteSpace($BuildVersion)) {
+  $argList += @('-buildVersion'; $BuildVersion)
+}
+$argList += @(
   '-logFile'; ('"{0}"' -f $Log)
 )
 

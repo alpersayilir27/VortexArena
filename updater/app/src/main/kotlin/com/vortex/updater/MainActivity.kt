@@ -18,44 +18,55 @@ import android.view.ViewGroup
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ProgressBar
+import android.widget.ScrollView
 import android.widget.TextView
+import org.json.JSONArray
+import org.json.JSONObject
 import java.io.File
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 
 /**
- * Gozlukte duran tek ekranli guncelleyici: sabit URL'den oyun APK'sini indirir
- * ve PackageInstaller ile kurar. USB yalniz BU uygulamanin ilk kurulumu icin
- * gerekir; sonrasinda oyun kablosuz guncellenir.
+ * Single-screen updater running on the headset: lists every game version published
+ * on the server and installs the selected one. Each version is a separate package
+ * ("com.vortex.arenav<version>"), so they can live side by side on the device.
  */
 class MainActivity : Activity() {
 
     companion object {
-        private const val GAME_PACKAGE = "com.vortex.arena"
-        private const val APK_URL = "http://159.100.20.26:8090/game.apk"
+        // Server addresses live only here; there is no settings screen on the headset.
+        private const val GAME_PACKAGE_PREFIX = "com.vortex.arenav"
+        private const val VERSIONS_URL = "http://159.100.20.26:8091/versions"
+        private const val DOWNLOAD_BASE = "http://159.100.20.26:8090/game_versions/"
 
         private const val INSTALL_ACTION = "com.vortex.updater.INSTALL_RESULT"
-        private const val REQ_UNINSTALL = 1001
         private const val REQ_UNINSTALL_FOR_RETRY = 1002
         private const val NET_TIMEOUT_MS = 15000
     }
 
+    /** One row of the server listing; size is 0 when the server omitted it. */
+    private data class VersionEntry(val version: Int, val size: Long)
+
     private lateinit var statusView: TextView
-    private lateinit var versionView: TextView
     private lateinit var progressBar: ProgressBar
-    private lateinit var updateButton: Button
-    private lateinit var wipeButton: Button
-    private lateinit var launchButton: Button
+    private lateinit var refreshButton: Button
+    private lateinit var listContainer: LinearLayout
 
     private var busy = false
 
-    // Indirilen APK; imza uyusmazligi nedeniyle kurulum reddedilirse eski
-    // paketi kaldirip ayni dosyayi tekrar indirmeden yeniden kurmak icin tutulur.
-    private var pendingApk: File? = null
+    // Last listing fetched from the server. onResume redraws from this instead of
+    // hitting the network, so a row flips to "Ac" right after the install dialog.
+    private var versions: List<VersionEntry> = emptyList()
+    private var listLoaded = false
 
-    // Kurulum sonucu sistemden broadcast ile gelir; alici dinamik cunku
-    // yalnizca uygulama on plandayken anlami var.
+    // Downloaded APK kept around: on a signature conflict the package is removed
+    // and the very same file is installed again without re-downloading ~600 MB.
+    private var pendingApk: File? = null
+    private var pendingVersion: Int = -1
+
+    // Install result arrives as a broadcast; receiver is dynamic because it only
+    // means anything while the app is in the foreground.
     private val installReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             handleInstallResult(intent)
@@ -68,11 +79,13 @@ class MainActivity : Activity() {
 
         val filter = IntentFilter(INSTALL_ACTION)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            // API 33+ bayragi zorunlu kiliyor; alici yalniz sisteme acik olsun.
+            // API 33+ requires the flag; keep the receiver system-only.
             registerReceiver(installReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
         } else {
             registerReceiver(installReceiver, filter)
         }
+
+        fetchVersions()
     }
 
     override fun onDestroy() {
@@ -82,10 +95,11 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
-        refreshInstalledVersion()
+        // No network here: only the installed/not-installed state can have changed.
+        if (listLoaded) renderVersions()
     }
 
-    // --- Arayuz (layout XML yok, res/ klasoru hic yok) --------------------
+    // --- UI (no layout XML, no res/ folder at all) ------------------------
 
     private fun buildUi(): ViewGroup {
         val pad = (24 * resources.displayMetrics.density).toInt()
@@ -102,15 +116,8 @@ class MainActivity : Activity() {
         }
         root.addView(title)
 
-        versionView = TextView(this).apply {
-            textSize = 18f
-            setTextColor(Color.LTGRAY)
-            setPadding(0, pad / 2, 0, 0)
-        }
-        root.addView(versionView)
-
         statusView = TextView(this).apply {
-            text = "Hazir."
+            text = "Surumler aliniyor..."
             textSize = 18f
             setTextColor(Color.WHITE)
             setPadding(0, pad / 2, 0, pad / 2)
@@ -126,24 +133,28 @@ class MainActivity : Activity() {
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.START
-            setPadding(0, pad / 2, 0, 0)
+            setPadding(0, pad / 2, 0, pad / 2)
         }
-        updateButton = Button(this).apply {
-            text = "Guncelle"
-            setOnClickListener { onUpdateClicked() }
+        refreshButton = Button(this).apply {
+            text = "Yenile"
+            setOnClickListener { onRefreshClicked() }
         }
-        wipeButton = Button(this).apply {
-            text = "Sil ve Yukle"
-            setOnClickListener { onWipeInstallClicked() }
-        }
-        launchButton = Button(this).apply {
-            text = "Oyunu Baslat"
-            setOnClickListener { onLaunchClicked() }
-        }
-        row.addView(updateButton)
-        row.addView(wipeButton)
-        row.addView(launchButton)
+        row.addView(refreshButton)
         root.addView(row)
+
+        listContainer = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+        val scroll = ScrollView(this).apply {
+            addView(listContainer)
+        }
+        root.addView(
+            scroll,
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                0
+            ).apply { weight = 1f }
+        )
 
         return root
     }
@@ -155,41 +166,154 @@ class MainActivity : Activity() {
     private fun setBusy(value: Boolean) {
         runOnUiThread {
             busy = value
-            updateButton.isEnabled = !value
-            wipeButton.isEnabled = !value
-        }
-    }
-
-    // --- Kurulu surum -----------------------------------------------------
-
-    private fun getGameVersion(): Pair<String, Long>? = try {
-        val info = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            packageManager.getPackageInfo(GAME_PACKAGE, PackageManager.PackageInfoFlags.of(0))
-        } else {
-            @Suppress("DEPRECATION")
-            packageManager.getPackageInfo(GAME_PACKAGE, 0)
-        }
-        Pair(info.versionName ?: "?", info.longVersionCode)
-    } catch (e: PackageManager.NameNotFoundException) {
-        null
-    }
-
-    private fun refreshInstalledVersion() {
-        val v = getGameVersion()
-        runOnUiThread {
-            if (v == null) {
-                versionView.text = "Oyun kurulu degil"
-                launchButton.isEnabled = false
-            } else {
-                versionView.text = "Kurulu: ${v.first} (code ${v.second})"
-                launchButton.isEnabled = true
+            refreshButton.isEnabled = !value
+            for (i in 0 until listContainer.childCount) {
+                setRowEnabled(listContainer.getChildAt(i), !value)
             }
         }
     }
 
-    // --- Dugmeler ---------------------------------------------------------
+    private fun setRowEnabled(view: android.view.View, enabled: Boolean) {
+        if (view !is ViewGroup) return
+        for (i in 0 until view.childCount) {
+            val child = view.getChildAt(i)
+            if (child is Button) child.isEnabled = enabled
+        }
+    }
 
-    /** Bilinmeyen kaynak izni yoksa ayara yonlendirir ve false doner. */
+    // --- Version list -----------------------------------------------------
+
+    private fun packageOf(version: Int) = "$GAME_PACKAGE_PREFIX$version"
+
+    private fun isInstalled(version: Int): Boolean = try {
+        val pkg = packageOf(version)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            packageManager.getPackageInfo(pkg, PackageManager.PackageInfoFlags.of(0))
+        } else {
+            @Suppress("DEPRECATION")
+            packageManager.getPackageInfo(pkg, 0)
+        }
+        true
+    } catch (e: PackageManager.NameNotFoundException) {
+        false
+    }
+
+    private fun onRefreshClicked() {
+        if (busy) return
+        fetchVersions()
+    }
+
+    private fun fetchVersions() {
+        setBusy(true)
+        setStatus("Surumler aliniyor...")
+        Thread {
+            val result = loadVersions()
+            val error = result.second
+            runOnUiThread {
+                if (error != null) {
+                    statusView.text = error
+                } else {
+                    versions = result.first
+                    listLoaded = true
+                    statusView.text = if (versions.isEmpty()) {
+                        "Sunucuda hic surum yok."
+                    } else {
+                        "${versions.size} surum bulundu."
+                    }
+                    renderVersions()
+                }
+                setBusy(false)
+            }
+        }.start()
+    }
+
+    /** Returns (list, null) on success, (empty, message) on failure. */
+    private fun loadVersions(): Pair<List<VersionEntry>, String?> {
+        var connection: HttpURLConnection? = null
+        try {
+            connection = (URL(VERSIONS_URL).openConnection() as HttpURLConnection).apply {
+                connectTimeout = NET_TIMEOUT_MS
+                readTimeout = NET_TIMEOUT_MS
+                requestMethod = "GET"
+            }
+            connection.connect()
+
+            val code = connection.responseCode
+            if (code != HttpURLConnection.HTTP_OK) {
+                return Pair(emptyList(), "Sunucu HTTP $code dondu.")
+            }
+
+            val body = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+            val array: JSONArray = JSONObject(body).optJSONArray("versions")
+                ?: return Pair(emptyList(), "Sunucu listesi okunamadi - beklenen alan yok.")
+
+            // Server already sorts newest first; keep its order.
+            val list = ArrayList<VersionEntry>(array.length())
+            for (i in 0 until array.length()) {
+                val item = array.optJSONObject(i) ?: continue
+                val version = item.optInt("version", -1)
+                if (version <= 0) continue
+                list.add(VersionEntry(version, item.optLong("size", 0L)))
+            }
+            return Pair(list, null)
+        } catch (e: IOException) {
+            return Pair(emptyList(), "Sunucuya ulasilamadi: ${e.message}")
+        } catch (e: Exception) {
+            return Pair(emptyList(), "Surum listesi cozumlenemedi: ${e.message}")
+        } finally {
+            connection?.disconnect()
+        }
+    }
+
+    private fun renderVersions() {
+        val pad = (12 * resources.displayMetrics.density).toInt()
+        listContainer.removeAllViews()
+
+        for (entry in versions) {
+            val installed = isInstalled(entry.version)
+
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(0, pad / 2, 0, pad / 2)
+            }
+
+            val label = TextView(this).apply {
+                text = buildString {
+                    append("Surum ${entry.version}")
+                    if (entry.size > 0) append("  ·  ${entry.size / (1024 * 1024)} MB")
+                    if (installed) append("  ·  kurulu")
+                }
+                textSize = 18f
+                setTextColor(Color.WHITE)
+            }
+            row.addView(
+                label,
+                LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT).apply { weight = 1f }
+            )
+
+            val action = Button(this).apply {
+                text = if (installed) "Ac" else "Indir"
+                isEnabled = !busy
+                setOnClickListener {
+                    if (installed) onLaunchClicked(entry.version) else onDownloadClicked(entry.version)
+                }
+            }
+            row.addView(action)
+
+            listContainer.addView(
+                row,
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                )
+            )
+        }
+    }
+
+    // --- Buttons ----------------------------------------------------------
+
+    /** Sends the user to the settings screen and returns false when the install permission is missing. */
     private fun ensureInstallPermission(): Boolean {
         if (packageManager.canRequestPackageInstalls()) return true
         setStatus(
@@ -206,77 +330,62 @@ class MainActivity : Activity() {
         return false
     }
 
-    private fun onUpdateClicked() {
+    private fun onLaunchClicked(version: Int) {
         if (busy) return
-        if (!ensureInstallPermission()) return
-        downloadAndInstall()
-    }
-
-    private fun onWipeInstallClicked() {
-        if (busy) return
-        if (!ensureInstallPermission()) return
-
-        if (getGameVersion() == null) {
-            // Zaten kurulu degil: kaldirma adimina gerek yok.
-            downloadAndInstall()
-            return
-        }
-
-        setStatus("Once mevcut oyun kaldiriliyor...")
-        val intent = Intent(Intent.ACTION_UNINSTALL_PACKAGE, Uri.parse("package:$GAME_PACKAGE"))
-        intent.putExtra(Intent.EXTRA_RETURN_RESULT, true)
-        @Suppress("DEPRECATION")
-        startActivityForResult(intent, REQ_UNINSTALL)
-    }
-
-    private fun onLaunchClicked() {
-        val intent = packageManager.getLaunchIntentForPackage(GAME_PACKAGE)
+        val intent = packageManager.getLaunchIntentForPackage(packageOf(version))
         if (intent == null) {
-            setStatus("Oyun kurulu degil, baslatilamiyor.")
+            setStatus("Surum $version kurulu degil, baslatilamiyor.")
+            renderVersions()
             return
         }
         startActivity(intent)
     }
 
+    private fun onDownloadClicked(version: Int) {
+        if (busy) return
+        if (!ensureInstallPermission()) return
+        downloadAndInstall(version)
+    }
+
     @Suppress("DEPRECATION")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode != REQ_UNINSTALL && requestCode != REQ_UNINSTALL_FOR_RETRY) return
+        if (requestCode != REQ_UNINSTALL_FOR_RETRY) return
 
-        // Sonuc kodu cihazdan cihaza degisiyor; tek guvenilir olcut paketin
-        // gercekten gitmis olmasidir.
-        if (getGameVersion() != null) {
+        val version = pendingVersion
+        // Result code varies between devices; the only reliable check is whether
+        // the package is really gone.
+        if (version <= 0 || isInstalled(version)) {
             setStatus("Kaldirma tamamlanmadi - islem iptal edildi.")
             setBusy(false)
-            refreshInstalledVersion()
+            renderVersions()
             return
         }
-        refreshInstalledVersion()
 
-        if (requestCode == REQ_UNINSTALL_FOR_RETRY) {
-            val apk = pendingApk
-            if (apk == null || !apk.exists()) {
-                setStatus("Eski surum kaldirildi ama indirilen dosya bulunamadi - Guncelle'ye tekrar basin.")
-                setBusy(false)
-                return
-            }
-            setStatus("Eski surum kaldirildi. Tekrar kuruluyor...")
-            installApk(apk)
-        } else {
-            downloadAndInstall()
+        val apk = pendingApk
+        if (apk == null || !apk.exists()) {
+            setStatus("Eski surum kaldirildi ama indirilen dosya bulunamadi - Indir'e tekrar basin.")
+            setBusy(false)
+            renderVersions()
+            return
         }
+        setStatus("Eski surum kaldirildi. Tekrar kuruluyor...")
+        installApk(apk, version)
     }
 
-    // --- Indirme ----------------------------------------------------------
+    // --- Download ---------------------------------------------------------
 
-    private fun downloadAndInstall() {
+    private fun downloadAndInstall(version: Int) {
         setBusy(true)
         runOnUiThread { progressBar.progress = 0 }
-        setStatus("Indiriliyor: $APK_URL")
+        setStatus("Indiriliyor: surum $version")
 
         Thread {
-            val target = File(cacheDir, "game.apk")
-            val error = downloadTo(target)
+            // Each build is ~600 MB; leftover downloads would fill the headset.
+            clearCachedApks()
+
+            val target = File(cacheDir, "game_v$version.apk")
+            val error = downloadTo(version, target)
             if (error != null) {
                 setStatus(error)
                 setBusy(false)
@@ -284,15 +393,26 @@ class MainActivity : Activity() {
             }
             setStatus("Indirme tamam (${target.length() / (1024 * 1024)} MB). Kurulum baslatiliyor...")
             pendingApk = target
-            installApk(target)
+            pendingVersion = version
+            installApk(target, version)
         }.start()
     }
 
-    /** Basarili ise null, degilse kullaniciya gosterilecek hata metni doner. */
-    private fun downloadTo(target: File): String? {
+    private fun clearCachedApks() {
+        val files = cacheDir.listFiles() ?: return
+        for (file in files) {
+            if (file.isFile && file.name.startsWith("game_v") && file.name.endsWith(".apk")) {
+                runCatching { file.delete() }
+            }
+        }
+    }
+
+    /** Returns null on success, otherwise the message shown to the user. */
+    private fun downloadTo(version: Int, target: File): String? {
         var connection: HttpURLConnection? = null
+        val url = "${DOWNLOAD_BASE}game_v$version.apk"
         try {
-            connection = (URL(APK_URL).openConnection() as HttpURLConnection).apply {
+            connection = (URL(url).openConnection() as HttpURLConnection).apply {
                 connectTimeout = NET_TIMEOUT_MS
                 readTimeout = NET_TIMEOUT_MS
                 requestMethod = "GET"
@@ -302,7 +422,7 @@ class MainActivity : Activity() {
             val code = connection.responseCode
             if (code != HttpURLConnection.HTTP_OK) {
                 return when (code) {
-                    404 -> "HTTP 404 - sunucuda game.apk yok ya da IIS'te .apk MIME eslemesi eksik."
+                    404 -> "HTTP 404 - sunucuda game_v$version.apk yok ya da IIS'te .apk MIME eslemesi eksik."
                     403 -> "HTTP 403 - IIS dosyaya erisim izni vermiyor."
                     else -> "Sunucu HTTP $code dondu."
                 }
@@ -329,7 +449,7 @@ class MainActivity : Activity() {
                     }
                 }
             }
-            if (target.length() <= 0L) return "Indirilen dosya bos - sunucudaki game.apk bozuk olabilir."
+            if (target.length() <= 0L) return "Indirilen dosya bos - sunucudaki game_v$version.apk bozuk olabilir."
             return null
         } catch (e: IOException) {
             return "Sunucuya ulasilamadi: ${e.message}"
@@ -340,25 +460,25 @@ class MainActivity : Activity() {
         }
     }
 
-    // --- Kurulum ----------------------------------------------------------
+    // --- Install ----------------------------------------------------------
 
-    private fun installApk(apk: File) {
+    private fun installApk(apk: File, version: Int) {
         try {
             val installer = packageManager.packageInstaller
             val params = PackageInstaller.SessionParams(
                 PackageInstaller.SessionParams.MODE_FULL_INSTALL
             )
-            params.setAppPackageName(GAME_PACKAGE)
+            params.setAppPackageName(packageOf(version))
 
             val sessionId = installer.createSession(params)
             installer.openSession(sessionId).use { session ->
-                session.openWrite("game.apk", 0, apk.length()).use { output ->
+                session.openWrite(apk.name, 0, apk.length()).use { output ->
                     apk.inputStream().use { input -> input.copyTo(output) }
                     session.fsync(output)
                 }
 
-                // PendingIntent MUTABLE olmali: sistem EXTRA_STATUS'u icine yaziyor.
-                // setPackage sart - Android 14 hedefi belirsiz mutable intent'i reddeder.
+                // PendingIntent must be MUTABLE: the system writes EXTRA_STATUS into it.
+                // setPackage is required - Android 14 rejects mutable implicit intents.
                 val intent = Intent(INSTALL_ACTION).setPackage(packageName)
                 val pending = PendingIntent.getBroadcast(
                     this,
@@ -396,32 +516,36 @@ class MainActivity : Activity() {
             PackageInstaller.STATUS_SUCCESS -> {
                 setStatus("Kurulum tamamlandi.")
                 setBusy(false)
-                refreshInstalledVersion()
+                runOnUiThread { renderVersions() }
             }
 
             else -> {
                 val message = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE)
 
-                // Kurulu surum farkli imzayla imzalanmis (ör. gelistirme/CI anahtari
-                // degisti): sistem STATUS_FAILURE_CONFLICT dondurur, mesaj genelde
-                // "INSTALL_FAILED_UPDATE_INCOMPATIBLE" icerir. Eski paketi kaldirip
-                // ayni indirilen dosyayla otomatik tekrar dene.
+                // Installed package carries a different signature (e.g. the dev/CI key
+                // changed): the system returns STATUS_FAILURE_CONFLICT, usually with
+                // "INSTALL_FAILED_UPDATE_INCOMPATIBLE". Remove it and retry with the
+                // already downloaded file.
                 val isSignatureMismatch = status == PackageInstaller.STATUS_FAILURE_CONFLICT ||
                     (message?.contains("INCOMPATIBLE", ignoreCase = true) == true) ||
                     (message?.contains("signatures do not match", ignoreCase = true) == true)
 
-                if (isSignatureMismatch && getGameVersion() != null) {
+                val version = pendingVersion
+                if (isSignatureMismatch && version > 0 && isInstalled(version)) {
                     setStatus("Kurulu surumun imzasi farkli - eski surum kaldirilip tekrar kuruluyor...")
-                    val intent2 = Intent(Intent.ACTION_UNINSTALL_PACKAGE, Uri.parse("package:$GAME_PACKAGE"))
-                    intent2.putExtra(Intent.EXTRA_RETURN_RESULT, true)
+                    val uninstall = Intent(
+                        Intent.ACTION_UNINSTALL_PACKAGE,
+                        Uri.parse("package:${packageOf(version)}")
+                    )
+                    uninstall.putExtra(Intent.EXTRA_RETURN_RESULT, true)
                     @Suppress("DEPRECATION")
-                    startActivityForResult(intent2, REQ_UNINSTALL_FOR_RETRY)
+                    startActivityForResult(uninstall, REQ_UNINSTALL_FOR_RETRY)
                     return
                 }
 
                 setStatus("Kurulum basarisiz (durum $status): ${message ?: "ayrinti yok"}")
                 setBusy(false)
-                refreshInstalledVersion()
+                runOnUiThread { renderVersions() }
             }
         }
     }

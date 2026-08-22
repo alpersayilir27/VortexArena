@@ -2,50 +2,63 @@
 setlocal EnableDelayedExpansion
 rem =====================================================================
 rem  deploy-player-apk.bat
-rem  Unity oyuncu (Meta Quest 3/3S) build'ini alir -> deploy\player\game.apk
-rem  ve kurulum betigini yanina kopyalar (deploy\player\install_game.bat).
+rem  Builds the Unity player (Meta Quest 3/3S) -> deploy\player\game_v<N>.apk
+rem  and copies the installer next to it (deploy\player\install_game.bat).
 rem
-rem  Admin build'inden farki YALNIZ platformdur: sahne listesi, rol ve
-rem  sunucu adresi cozumu aynidir. Oyuncu build'i calisma aninda player
-rem  rolune duser ve sunucuyu UDP beacon ile kendi bulur - IP gomulmez.
+rem  VERSIONED BUILD: the script always asks for a version number. It goes
+rem  into the APK name AND into the Android application id
+rem  (com.vortex.arenav<N>, no dot - an Android package segment cannot start
+rem  with a digit), so several versions stay installed side by side on one
+rem  headset. There is no version-less player build.
 rem
-rem  ONEMLI 1: batch-mode Unity, editor ayni projeyi acikken proje kilidine
-rem  takilabilir. Betik bunu KONTROL ETMEZ (bilincli, bkz. deploy-admin-game.bat).
-rem  Build kilitte takilirsa elle iptal edip tekrar baslatin.
+rem  Only the platform differs from the admin build: scene list, role and
+rem  server address resolution are identical. The player build falls to the
+rem  player role at runtime and finds the server over a UDP beacon - no IP
+rem  is baked in.
 rem
-rem  ONEMLI 2: HEDEF PLATFORM BU BETIKTE SABITTIR: -buildTarget Android.
-rem  Aktif platformdan turetilmez - projede hangi platform acik kalmis olursa
-rem  olsun bu betik APK alir. Bayrak Unity'ye ACILISTA verilir: platformu
-rem  -executeMethod'un icinden cevirmek domain reload tetikler ve calisan
-rem  metot yarida kalir.
-rem  Aktif platform Android degilse gecis acilista olur ve o kosu TAM REIMPORT
-rem  demektir (texture'lar ASTC'ye yeniden sikistirilir) - 20-40 dk surebilir;
-rem  sonrakiler hizlidir. Platform build sonunda geri ALINMAZ (geri almak
-rem  ikinci bir tam reimport daha olurdu) ve gerekmez: admin betigi de kendi
-rem  hedefini sabit geciyor.
+rem  IMPORTANT 1: batch-mode Unity can hit the project lock while the editor
+rem  has the same project open. This script does NOT check for it (deliberate,
+rem  see deploy-admin-game.bat). If the build hangs on the lock, cancel and
+rem  restart it by hand.
 rem
-rem  Unity yolu: UNITY_EXE ortam degiskeni > Hub'daki proje surumu.
+rem  IMPORTANT 2: THE TARGET PLATFORM IS PINNED HERE: -buildTarget Android.
+rem  It is not derived from the active platform - whatever platform the
+rem  project was left on, this script produces an APK. The flag is passed at
+rem  Unity STARTUP: switching platform from inside -executeMethod triggers a
+rem  domain reload and aborts the running method.
+rem  If the active platform is not Android the switch happens at startup and
+rem  that run means a FULL REIMPORT (textures recompressed to ASTC) - it can
+rem  take 20-40 min; later runs are fast. The platform is NOT restored after
+rem  the build (restoring would cost a second full reimport) and need not be:
+rem  the admin script pins its own target too.
 rem
-rem  Build sonunda APK sunucudaki yayin ucuna POST'lanir
-rem  (updater_uploader\updater_uploader_main.py); uc kapaliysa yalniz
-rem  uyari basilir, build basarili sayilir.
+rem  Unity path: UNITY_EXE environment variable > project version from Hub.
 rem
-rem  Kullanim:
-rem    deploy-player-apk.bat             cift tiklanabilir; sonda bekler
-rem    deploy-player-apk.bat --no-pause  otomasyon; beklemeden cikar
-rem    (VORTEX_NO_PAUSE=1 ortam degiskeni de beklemeyi kapatir)
+rem  After the build the APK is POSTed to the publish endpoint on the server
+rem  (updater_uploader\updater_uploader_main.py); if the endpoint is down only
+rem  a warning is printed and the build still counts as successful.
 rem
-rem  NOT: betik-ici degiskenler VA_ onekli - cocuk sureclere (Unity ->
-rem  IL2CPP -> Gradle) miras kaliyor ve kisa genel adlar derleme zincirini
-rem  kiriyor. Yeni degisken eklerken VA_ onekini koru.
+rem  Usage:
+rem    deploy-player-apk.bat             double-clickable; asks for the
+rem                                      version, waits at the end
+rem    deploy-player-apk.bat --no-pause  exits without waiting - BUT the
+rem                                      version cannot be asked in this mode,
+rem                                      so the script fails with exit 2
+rem    (the VORTEX_NO_PAUSE environment variable disables the wait too)
+rem
+rem  NOTE: script-local variables are VA_ prefixed - they are inherited by
+rem  child processes (Unity -> IL2CPP -> Gradle) and short generic names break
+rem  the build chain. Keep the VA_ prefix on new variables.
 rem =====================================================================
 
-rem --- Cift tiklamada pencere kapanmasin -------------------------------
+rem --- Keep the window open on double click ----------------------------
 set "VA_HOLD="
+set "VA_AUTO="
 set "VA_CL=%cmdcmdline%"
 if not "!VA_CL:%~nx0=!"=="!VA_CL!" set "VA_HOLD=1"
-if defined VORTEX_NO_PAUSE set "VA_HOLD="
-if /i "%~1"=="--no-pause" set "VA_HOLD="
+if defined VORTEX_NO_PAUSE set "VA_AUTO=1"
+if /i "%~1"=="--no-pause" set "VA_AUTO=1"
+if defined VA_AUTO set "VA_HOLD="
 set "VA_RC=0"
 
 set "VA_REPO=%~dp0.."
@@ -55,10 +68,61 @@ set "VA_LOG=%VA_REPO%\deploy\player-build.log"
 
 echo === VortexArena : oyuncu ^(Meta Quest / Android^) build ===
 echo   Proje : %VA_REPO%
-echo   Hedef : %VA_OUT%\game.apk
 echo.
 
-rem --- 1) Proje Unity surumu -------------------------------------------
+rem --- 0) Version (interactive) ----------------------------------------
+rem  Automation mode has no console to ask on: set /p would return empty
+rem  immediately and the prompt would loop forever. Fail early instead.
+if defined VA_AUTO (
+  echo [HATA] Otomasyon kipinde ^(--no-pause / VORTEX_NO_PAUSE^) surum sorulamaz.
+  echo        Bu betik surumu yalnizca interaktif olarak sorar; beklemesiz
+  echo        kipte calistirmayin.
+  set "VA_RC=2"
+  goto :son
+)
+
+echo   Girilen numara hem APK adina ^(game_v^<numara^>.apk^) hem paket adina
+echo   ^(com.vortex.arenav^<numara^>^) girer; gozlukte diger surumlerin yanina
+echo   kurulur, onlari silmez.
+
+set "VA_VER="
+set "VA_TRY=0"
+:va_ask_version
+set /a VA_TRY+=1
+if !VA_TRY! GTR 5 (
+  echo [HATA] Gecerli surum numarasi alinamadi ^(5 deneme^).
+  echo        Beklenen: pozitif tam sayi, ornek 132.
+  set "VA_RC=2"
+  goto :son
+)
+set "VA_IN="
+set /p "VA_IN=  Surum numarasi (or. 132): "
+set "VA_IN=!VA_IN: =!"
+if not defined VA_IN (
+  echo   [UYARI] Surum bos birakilamaz.
+  goto :va_ask_version
+)
+rem  Leading zeros are REJECTED, not trimmed: Unity parses -buildVersion as an
+rem  int, so "007" would produce game_v7.apk while this script keeps looking
+rem  for game_v007.apk and would call a finished build failed.
+echo(!VA_IN!|findstr /r "^[1-9][0-9]*$" >nul
+if errorlevel 1 (
+  echo   [UYARI] Pozitif tam sayi girin, basinda sifir olmadan ^(ornek: 132^).
+  goto :va_ask_version
+)
+set "VA_VER=!VA_IN!"
+set "VA_APK=%VA_OUT%\game_v!VA_VER!.apk"
+
+rem  Overwriting an existing version is legitimate (rebuild of the same
+rem  number), so this only warns.
+if exist "!VA_APK!" (
+  echo   [UYARI] Bu surum zaten var, uzerine yazilacak: !VA_APK!
+)
+echo   Hedef : !VA_APK!
+echo   Paket : com.vortex.arenav!VA_VER!
+echo.
+
+rem --- 1) Project Unity version ----------------------------------------
 set "VA_UVER="
 for /f "tokens=2" %%v in ('findstr /b "m_EditorVersion:" "%VA_REPO%\ProjectSettings\ProjectVersion.txt"') do set "VA_UVER=%%v"
 if not defined VA_UVER (
@@ -69,7 +133,7 @@ if not defined VA_UVER (
 )
 echo   Surum : %VA_UVER%
 
-rem --- 2) Unity.exe bul ------------------------------------------------
+rem --- 2) Locate Unity.exe ---------------------------------------------
 if defined UNITY_EXE (
   set "VA_UNITY=%UNITY_EXE%"
 ) else (
@@ -84,9 +148,9 @@ if not exist "!VA_UNITY!" (
 )
 echo   Unity : !VA_UNITY!
 
-rem --- 3) Android modulu kurulu mu -------------------------------------
-rem  Modul yoksa Unity platformu Android'e ceviremez ve build sessizce
-rem  Windows olarak devam edip .exe uretirdi. Erken ve acikca soyleyelim.
+rem --- 3) Is the Android module installed? ------------------------------
+rem  Without the module Unity cannot switch to Android and the build would
+rem  silently continue as Windows and emit an .exe. Say so early and clearly.
 for %%I in ("!VA_UNITY!") do set "VA_UDIR=%%~dpI"
 if not exist "!VA_UDIR!Data\PlaybackEngines\AndroidPlayer" (
   echo [HATA] Unity Android Build Support kurulu degil:
@@ -97,21 +161,23 @@ if not exist "!VA_UDIR!Data\PlaybackEngines\AndroidPlayer" (
   goto :son
 )
 
-rem --- 4) Cikti klasorunu temizle --------------------------------------
-if exist "%VA_OUT%" (
-  echo   Temizlik: eski cikti siliniyor...
-  rmdir /s /q "%VA_OUT%"
+rem --- 4) Prepare the output file --------------------------------------
+rem  The FOLDER is never wiped: older game_v*.apk files must stay so the
+rem  installer can offer them. Only the same-named file is replaced.
+if not exist "%VA_OUT%" mkdir "%VA_OUT%" 2>nul
+if exist "!VA_APK!" (
+  echo   Temizlik: ayni isimli eski apk siliniyor...
+  del /q "!VA_APK!" 2>nul
 )
-if exist "%VA_OUT%" (
-  echo [HATA] Eski cikti silinemedi: "%VA_OUT%"
+if exist "!VA_APK!" (
+  echo [HATA] Eski cikti silinemedi: "!VA_APK!"
   set "VA_RC=1"
   goto :son
 )
-mkdir "%VA_OUT%" 2>nul
 
 rem --- 5) Build --------------------------------------------------------
-rem  -nographics KULLANILMIYOR: shader varyant derlemesi grafik cihazi
-rem  isteyebilir ve sessizce bozuk cikti uretebilir.
+rem  -nographics IS NOT USED: shader variant compilation may need a graphics
+rem  device and could silently produce a broken build.
 echo.
 echo   Build basliyor.
 echo   [!] Hedef platform sabit: Android. Aktif platform baska ise acilista
@@ -127,7 +193,7 @@ if exist "%VA_WATCH%" (
   powershell -NoProfile -ExecutionPolicy Bypass -File "%VA_WATCH%" ^
     -Unity "!VA_UNITY!" -Project "%VA_REPO%" -OutDir "%VA_OUT%" -Log "%VA_LOG%" ^
     -Method VortexArena.Core.Editor.PlayerBuildTool.BuildQuestPlayer ^
-    -UnityBuildTarget Android
+    -UnityBuildTarget Android -BuildVersion !VA_VER!
   set "VA_RC=!ERRORLEVEL!"
 ) else (
   echo   [UYARI] Izleyici yok, ilerleme basilamayacak: "%VA_WATCH%"
@@ -136,13 +202,14 @@ if exist "%VA_WATCH%" (
     -buildTarget Android ^
     -executeMethod VortexArena.Core.Editor.PlayerBuildTool.BuildQuestPlayer ^
     -buildOutput "%VA_OUT%" ^
+    -buildVersion !VA_VER! ^
     -logFile "%VA_LOG%"
   set "VA_RC=!ERRORLEVEL!"
 )
 
-rem  Basarisizlik teshisi lib\explain-build-failure.ps1'e aittir (gerekce
-rem  deploy-admin-game.bat'ta): sebep log'dan cikarilir, kilit ipucu yalnizca
-rem  log'da gercekten kilit izi varsa basilir.
+rem  Failure diagnosis belongs to lib\explain-build-failure.ps1 (rationale in
+rem  deploy-admin-game.bat): the cause is extracted from the log, and the lock
+rem  hint is printed only if the log really shows a lock.
 set "VA_EXPLAIN=%~dp0lib\explain-build-failure.ps1"
 if not "%VA_RC%"=="0" (
   echo.
@@ -156,16 +223,17 @@ if not "%VA_RC%"=="0" (
   goto :son
 )
 
-if not exist "%VA_OUT%\game.apk" (
-  echo [HATA] Build 0 dondu ama apk yok: "%VA_OUT%\game.apk"
+if not exist "%VA_APK%" (
+  echo [HATA] Build 0 dondu ama apk yok: "%VA_APK%"
   echo        Log: %VA_LOG%
   set "VA_RC=1"
   goto :son
 )
 
-rem --- 6) Kurulum betigini apk'nin yanina koy --------------------------
-rem  install_game.bat, game.apk'yi KENDI klasorunde arar; ikisi birlikte
-rem  tasinsin diye kopyalanir (repo kokundeki kopya tek dogruluk kaynagi).
+rem --- 6) Put the installer next to the apk ----------------------------
+rem  install_game.bat looks for game_v*.apk in its OWN folder; it is copied so
+rem  the two travel together (the copy in the repo root is the single source
+rem  of truth).
 if exist "%VA_REPO%\install_game.bat" (
   copy /y "%VA_REPO%\install_game.bat" "%VA_OUT%\install_game.bat" >nul
 ) else (
@@ -174,30 +242,31 @@ if exist "%VA_REPO%\install_game.bat" (
 
 echo.
 echo === TAMAM ===
-echo   %VA_OUT%\game.apk
-powershell -NoProfile -Command "$s=(Get-Item '%VA_OUT%\game.apk').Length/1MB; Write-Host ('  Boyut: {0:N1} MB' -f $s)"
+echo   %VA_APK%
+powershell -NoProfile -Command "$s=(Get-Item '%VA_APK%').Length/1MB; Write-Host ('  Boyut: {0:N1} MB' -f $s)"
 
-rem --- 7) Sunucuya yukle (OTA) -----------------------------------------
-rem  APK, sunucudaki yayin ucuna gonderilir (updater_uploader betigi) -
-rem  gozlukteki Vortex Updater ayni adresten indirir. Yukleme hatasi
-rem  build'i BASARISIZ SAYMAZ: apk uretildi, elle de yayinlanabilir.
-set "VA_UPLOAD_URL=http://159.100.20.26:8091/upload"
+rem --- 7) Upload to the server (OTA) -----------------------------------
+rem  The APK is sent to the publish endpoint on the server (updater_uploader
+rem  script) - the Vortex Updater on the headset downloads it from the same
+rem  address. An upload failure does NOT fail the build: the apk exists and
+rem  can be published by hand.
+set "VA_UPLOAD_URL=http://159.100.20.26:8091/upload?v=%VA_VER%"
 echo.
 echo   Sunucuya yukleniyor: %VA_UPLOAD_URL%
-curl -f --connect-timeout 10 -X POST --data-binary "@%VA_OUT%\game.apk" "%VA_UPLOAD_URL%"
+curl -f --connect-timeout 10 -X POST --data-binary "@%VA_APK%" "%VA_UPLOAD_URL%"
 if errorlevel 1 (
   echo.
-  echo   [UYARI] Sunucuya yukleme BASARISIZ - gozlukler eski APK'yi gormeye devam eder.
+  echo   [UYARI] Sunucuya yukleme BASARISIZ - gozlukler bu surumu goremez.
   echo           Sunucuda updater_uploader_main.py calisiyor mu? 8091 disaridan erisilir mi?
   echo           Elle tekrar denemek icin:
-  echo             curl -f -X POST --data-binary "@%VA_OUT%\game.apk" %VA_UPLOAD_URL%
+  echo             curl -f -X POST --data-binary "@%VA_APK%" "%VA_UPLOAD_URL%"
 ) else (
   echo.
-  echo   Sunucuya yuklendi - gozlukteki Vortex Updater artik yeni APK'yi gorur.
+  echo   Sunucuya yuklendi - gozlukteki Vortex Updater artik bu surumu gorur.
 )
 echo.
 echo   Gozluge kurmak icin: gozlugu USB ile bagla, gelistirici modu acik olsun,
-echo   sonra "%VA_OUT%\install_game.bat" dosyasini calistir.
+echo   sonra "%VA_OUT%\install_game.bat" dosyasini calistir ve surumu sec.
 echo   ^(Ayni APK her iki gozluge de kurulur - rol ve sunucu adresi gomulu degildir.^)
 
 :son

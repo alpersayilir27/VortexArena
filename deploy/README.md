@@ -1,12 +1,13 @@
 # deploy/ — dağıtılabilir çıktılar
 
 Bu klasörün alt klasörleri **`scripts/deploy-*.bat` tarafından üretilir ve git'e girmez**
-(`.gitignore`). Elle dosya koymayın; bir sonraki deploy siler.
+(`.gitignore`). Elle dosya koymayın; bir sonraki deploy siler (`player/` silinmez, orada sürümlü
+APK'lar birikir).
 
 | Klasör | Üreten | İçerik | Nasıl çalıştırılır |
 |---|---|---|---|
 | `admin/` | `scripts/deploy-admin-game.bat` | Unity Windows yönetim build'i (`VortexArena.exe` + `VortexArena_Data/`) | **Launcher başlatır** — elle çalıştırılırsa sunucu adresi olmaz |
-| `player/` | `scripts/deploy-player-apk.bat` | Unity Android oyuncu build'i (`game.apk` + `install_game.bat`) | Gözlüğe kurulur — `install_game.bat` (adb) |
+| `player/` | `scripts/deploy-player-apk.bat` | Unity Android oyuncu build'leri (`game_v<sürüm>.apk` + `install_game.bat`) — sürümler yan yana durur, klasör build'de silinmez | Gözlüğe kurulur — `install_game.bat` (adb) bulduğu sürümleri listeler, hangisinin kurulacağını sorar |
 | `server/` | `scripts/deploy-server.bat` | Self-contained .NET 10 sunucu (`VortexArena.Server.App.exe` + `config/`) | **Launcher başlatır** (mekanı `--venue` ile geçer) ya da elle çift tıkla |
 | `launcher/` | `scripts/deploy-launcher.bat` | Self-contained .NET 10 WPF operatör launcher'ı (`VortexArena.Launcher.exe` + runtime) | Operatör çift tıklar |
 | `updater/` | `scripts/deploy_android_updater.bat` | Quest OTA updater (`VortexUpdater.apk` + `install_updater.bat`) | Gözlüğe **bir kez** kurulur — `install_updater.bat` (adb); sonrası USB'siz: oyun APK'sı IIS'ten indirilip kurulur (`updater/README.md`) |
@@ -18,12 +19,13 @@ Bu klasörün alt klasörleri **`scripts/deploy-*.bat` tarafından üretilir ve 
 3. `scripts\deploy-admin-game.bat` ve `scripts\deploy-launcher.bat` → `deploy\admin\` +
    `deploy\launcher\` klasörlerini yönetim PC'sine kopyala (**klasörlerin tamamı** — exe'ler
    tek başına çalışmaz).
-4. `scripts\deploy-player-apk.bat` → gözlükleri USB ile bağla (geliştirici modu açık) ve
-   `deploy\player\install_game.bat` ile **her gözlüğe aynı APK'yı** kur. Rol ve sunucu adresi
-   gömülü değildir; oyuncu build'i sunucuyu UDP beacon ile kendi bulur.
+4. `scripts\deploy-player-apk.bat` (sürüm numarasını sorar) → gözlükleri USB ile bağla (geliştirici
+   modu açık) ve `deploy\player\install_game.bat` ile **her gözlüğe aynı sürümü** kur; betik bulduğu
+   sürümleri listeler, hangisinin kurulacağını sorar. Rol ve sunucu adresi gömülü değildir; oyuncu
+   build'i sunucuyu UDP beacon ile kendi bulur.
    Sonraki oyun güncellemeleri USB'siz yapılabilir: gözlüğe bir kez `install_updater.bat` ile
    **Vortex Updater** kurulur; `deploy-player-apk.bat` build sonunda APK'yı sunucudaki yayın
-   ucuna (`updater_uploader/`) kendisi yükler, gözlükteki updater oradan indirip kurar
+   ucuna (`updater_uploader/`) kendisi yükler, gözlükteki updater sürümleri listeleyip indirir
    (`updater/README.md`).
 5. Launcher'ı aç ve bir kez doldur: **1 · Sunucu** → `deploy\server\VortexArena.Server.App.exe`
    + listeden **mekan**; **2 · Bağlantı** → sunucunun IP'si; **3 · Yönetim oyunu** →

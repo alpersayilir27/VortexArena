@@ -380,6 +380,15 @@ tek düzlem + `lifetimeLoss = 1`.
 
 Hasar sayıları istemcide yaşar; sunucuyu yeniden başlatmak yetmez.
 
+### ⛔ Oyuncu build'inde `PlayerSettings` geri almasını `EditorApplication.Exit`'ten SONRAYA bırakma
+
+Sürümlü oyuncu build'i `PlayerSettings`'i (bundle id, `bundleVersion`, `AndroidBundleVersionCode`,
+ürün adı) geçici olarak değiştirir; eski değerlerin geri yazılması **`Exit` çağrılmadan önce**
+bitmiş olmalıdır. `Exit` süreci anında sonlandırır — `finally` bloğu çalışmaz ve
+`ProjectSettings.asset` diskte sürümlü değerlerle kalır, sonraki her build o bozuk hâlden başlar.
+⚠️ Paket eki **noktasızdır** (`com.vortex.arenav132`, `com.vortex.arena.v132` DEĞİL): Android paket
+segmenti rakamla başlayamaz.
+
 ### ⚠️ Build/import "sebepsiz" yavaşsa önce Defender dışlamalarına bak
 
 Yeni bilgisayarda `scripts\defender-exclusions.cmd` (yönetici) bir kez çalıştırılır. Gerçek zamanlı

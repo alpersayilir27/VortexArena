@@ -86,7 +86,8 @@ Bu liste, VortexArena'yı yeni bir işletmeye kuran ekibin fiziksel alan ölçü
 - [ ] `Tools > VortexArena > Build > Configure All Build Elements` → **Hepsini Çalıştır** (sahne açıkken) → `MapDefinition`, katalog kaydı, Build Settings girdisi ve `Server/config/maps.json` tek geçişte üretilir. Çıkan sağlık raporunu ve uyarıları oku; özellikle "sceneName Build Settings'te YOK / KAPALI" uyarısı varsa düzelt ve tekrar çalıştır.
   > Araç kayıtları mekan klasörü ağacından **eşitler**: ağaçta olmayan katalog/Build Settings satırlarını siler. Bir arenayı sildiysen ya da başka bir kutuya taşıdıysan aynı düğme sahne açık olmasa da çalışır (o durumda `MapDefinition` adımı atlanır, eşitleme tam koşar) — kalıntı bir satır build'i sebebi görünmeyen bir hatayla düşürür.
 - [ ] Build Settings'te yeni sahnenin **listede ve işaretli (enabled)** olduğunu doğrula. Sahne adı = `start_match` katalog anahtarı; boşluk/typo dahil birebir eşleşmeli.
-- [ ] Android APK'yı **yeniden al**: `scripts\deploy-player-apk.bat` (Unity editörü kapalı) → `deploy\player\game.apk`. Yeni arena APK'da yoksa o başlık maçı engeller (Bölüm 8).
+- [ ] Android APK'yı **yeniden al**: `scripts\deploy-player-apk.bat` (Unity editörü kapalı). Betik bir **sürüm numarası** sorar (pozitif tam sayı, örn. `132`); çıktı `deploy\player\game_v132.apk` olur. Yeni arena APK'da yoksa o başlık maçı engeller (Bölüm 8).
+  > Her build yeni bir numara ister — numara APK adına, gözlükteki uygulama adına (`VortexArena v132`) ve paket adına girer, böylece sürümler gözlükte yan yana kurulu durabilir ve hangi başlıkta ne olduğu görünür.
 
 ---
 
@@ -215,7 +216,7 @@ Arena, her başlıkta **2 nokta** ile fiziksel alana hizalanır (`ArenaCalibrato
 - [ ] **Dağıtım paketlerini üret** (ofiste, geliştirme makinesinde):
   - `scripts\deploy-server.bat` → `deploy\server\` (self-contained; işletme PC'sine .NET kurmak gerekmez)
   - `scripts\deploy-admin-game.bat` → `deploy\admin\` (**Unity editörü kapalı olmalı**)
-  - `scripts\deploy-player-apk.bat` → `deploy\player\` (**Unity editörü kapalı olmalı** + Android Build Support modülü; platform değişen koşu 20-40 dk sürer)
+  - `scripts\deploy-player-apk.bat` → `deploy\player\` (**Unity editörü kapalı olmalı** + Android Build Support modülü; açılışta **sürüm numarası** sorar, çıktı `game_v<sürüm>.apk`; platform değişen koşu 20-40 dk sürer)
   - `scripts\deploy-launcher.bat` → `deploy\launcher\` (self-contained; tek ön koşul .NET 10 SDK)
   - Klasörlerin **tamamını** kopyala — exe'ler tek başına çalışmaz.
 - [ ] **Fon müziği klasörü** (isteğe bağlı): admin exe'sinin **yanına** `Muzik` adlı bir klasör aç
@@ -257,12 +258,14 @@ Arena, her başlıkta **2 nokta** ile fiziksel alana hizalanır (`ArenaCalibrato
 ## 6. Başlıkların hazırlanması
 
 - [ ] Her başlıkta geliştirici modu açık, USB hata ayıklama izni verildi.
-- [ ] APK kurulumu: `install_game.bat` çalıştır — **repo kökündeki de `deploy\player\` altındaki kopya da olur**. Betik APK'yı sırayla kendi yanında, `deploy\player\` ve `Builds\player\` altında arar; bulduğu dosyanın yolunu, boyutunu ve tarihini yazar (doğru build'i kurduğunu böyle görürsün), sonra `adb devices` listesini gösterip `adb install -r -g` ile kurar.
+- [ ] APK kurulumu: `install_game.bat` çalıştır — **repo kökündeki de `deploy\player\` altındaki kopya da olur**. Betik `game_v*.apk` dosyalarını sırayla kendi yanında, `deploy\player\` ve `Builds\player\` altında arar; bulduklarını **sürüme göre küçükten büyüğe** listeler ve hangisini kuracağını sorar (boş bırakırsan en büyük sürüm kurulur). Seçtiğin dosyanın yolunu, boyutunu ve tarihini yazar (doğru build'i kurduğunu böyle görürsün), sonra `adb devices` listesini gösterip `adb install -r -g` ile kurar.
+  - Her sürümün gözlükte **kendi paketi** vardır (`com.vortex.arenav<sürüm>`), yani sürümler birbirini silmez, yan yana kurulu kalır. İmza uyuşmazlığında kaldırılan paket de yalnız **seçtiğin sürümün** paketidir; diğer sürümler yerinde kalır.
+  - Gözlükte hangi sürümü başlattığın uygulama adından okunur: `VortexArena v<sürüm>`. Yer açmak için eski sürümler gözlüğün uygulama listesinden kaldırılır.
   - Cihaz `unauthorized` çıkarsa betik kurmadan durur ve sırayla: onayınla `adb kill-server` + `adb start-server` çalıştırıp onay penceresini yeniden tetikler, gözlükte izni verdiğini sorar, cevabı `adb devices` ile teyit eder ve ancak o zaman kurar. Gözlükte pencereyi görmek için başlığı **takmış** olman gerekir (masada ekran kapalıyken çizilmez) ve bir uygulamanın içindeysen önce ana ekrana çık. ⚠️ **"Bu bilgisayardan her zaman izin ver"i işaretle** — işaretlenmezse yetki adb yeniden başladığında düşer ve her kurulumda yeniden sorulur.
   - `adb` bulunamıyorsa Android platform-tools (veya Meta Quest Developer Hub) kur ve PATH'e ekle.
   - Kablosuz kurulum için önce `adb connect <gozluk-ip>:5555`.
   - Aynı anda birden fazla cihaz bağlıysa diğerlerini çıkar.
-- [ ] **Tüm başlıklarda aynı APK sürümü** olmalı — sahne listesi farklı olan bir başlık maçın başlamasını engeller (bkz. Bölüm 8).
+- [ ] **Tüm başlıklarda aynı APK sürümü** olmalı — hepsinde aynı `game_v<sürüm>.apk` kurulu ve maça o sürüm ile girilmiş olmalı; sahne listesi farklı olan bir başlık maçın başlamasını engeller (bkz. Bölüm 8). Bir gözlükte birden çok sürüm kurulu durabildiği için oyunu **hangi uygulama simgesinden** açtığın da bu kurala dahildir.
 - [ ] Cihaz kimlikleri: başlık ilk bağlandığında sunucu ona havuzdan rastgele bir **ad** ve 1'den itibaren ilk boş **forma numarasını** (1..99) atar, `Server/config/devices.json`'a (`deviceId → {name, number}`) yazar. Ad tekrar edebilir, **numara tüm kayıtlı cihazlar arasında benzersizdir**.
   - [ ] Hangi kimliğin hangi fiziksel başlık olduğunu **başlıkları teker teker bağlayarak** eşle: bir başlığı bağla, roster'da beliren **ad + numarayı** o başlığa fiziken etiketle, sonra sıradakine geç. Eşleme kalıcıdır — ad/numara cihaza `devices.json`'da bağlıdır, ertesi gün de aynı gelir.
   - [ ] Ad değiştirmek: admin **İstatistik** panelinde o oyuncunun satırındaki **İSİM** düğmesiyle, sunucuyu durdurmadan yapılır. Forma numarasını sunucu atar; elle değiştiren bir arayüz yoktur. (Elle `devices.json` düzenlemek gerekmez; gerekirse **sunucu kapalıyken** düzenle — UTF-8, **BOM'suz** — ve yeniden başlat.)

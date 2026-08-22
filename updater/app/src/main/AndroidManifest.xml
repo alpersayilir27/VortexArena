@@ -5,11 +5,11 @@
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
 
-    <!-- Android 11+ paket gorunurlugu: bu blok olmadan getPackageInfo
-         NameNotFound verir ve oyun "kurulu degil" gorunur. -->
-    <queries>
-        <package android:name="com.vortex.arena" />
-    </queries>
+    <!-- Android 11+ package visibility: game package names are version-dependent
+         (com.vortex.arenav<version>), so no static <queries> list can cover them
+         and every version would look "not installed". Sideloaded only, never
+         published on Play Store. -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
 
     <application
         android:label="Vortex Updater"
