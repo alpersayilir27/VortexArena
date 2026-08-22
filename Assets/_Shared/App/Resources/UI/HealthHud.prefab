@@ -228,7 +228,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.UI.HeadLockedHud
   head: {fileID: 0}
   distance: 1
-  pitchDegrees: 30
+  pitchDegrees: 20
   yawDegrees: 0
   lockPitch: 1
   tiltToEye: 1
