@@ -25,8 +25,8 @@ Material:
     m_TexEnvs: []
     m_Ints: []
     m_Floats:
-    - _InnerRadius: 0.32
-    - _OuterRadius: 0.78
+    - _InnerRadius: 0.18
+    - _OuterRadius: 0.36
     m_Colors:
     - _BaseColor: {r: 0.75, g: 0.03, b: 0.03, a: 0}
   m_BuildTextureStacks: []

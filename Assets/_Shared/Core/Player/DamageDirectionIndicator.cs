@@ -66,10 +66,17 @@ namespace VortexArena.Core.Player
 
         [Tooltip("Titreşim genliği (0..1).")]
         [Range(0f, 1f)]
-        [SerializeField] private float hapticAmplitude = 0.7f;
+        [SerializeField] private float hapticAmplitude = 1f;
 
         /// <summary><see cref="ControllerHaptics"/> source id.</summary>
         private const string HapticSourceId = "damage";
+
+        private const int ChannelNone = 0;
+        private const int ChannelLeft = 1;
+        private const int ChannelRight = 2;
+
+        /// <summary>Both controllers — used when the hit is real but its direction is unknown.</summary>
+        private const int ChannelBoth = 3;
 
         /// <summary>Below this a flattened vector has no usable bearing (attacker standing on our head,
         /// or a head looking straight down).</summary>
@@ -89,7 +96,7 @@ namespace VortexArena.Core.Player
         // every frame anyway, and this component already has a per-frame loop — so the buzz costs no
         // allocation per hit.
         private float _hapticUntil;
-        private bool _hapticRight;
+        private int _hapticChannel;
 
         private void Awake()
         {
@@ -118,12 +125,12 @@ namespace VortexArena.Core.Player
         {
             NetEvents.OnHealthUpdate -= HandleHealthUpdate;
 
-            if (_hapticUntil > 0f)
+            if (_hapticChannel != ChannelNone)
             {
                 // Released explicitly: without a report the arbiter only forgets us after its timeout,
                 // and a component disabled mid-buzz would keep the controller running until then.
-                ControllerHaptics.ReportHand(HapticSourceId, _hapticRight, 0f);
-                _hapticUntil = 0f;
+                WriteHaptic(_hapticChannel, 0f);
+                _hapticChannel = ChannelNone;
             }
 
             _hitPeak = 0f;
@@ -153,9 +160,21 @@ namespace VortexArena.Core.Player
                 return;
             }
 
-            if (!TryGetBearing(msg.attackerId, out float bearing))
+            float bearing = 0f;
+            bool hasBearing = TryGetBearing(msg.attackerId, out bearing);
+
+            // ⚠️ The buzz does NOT wait for the bearing. An attacker missing from the snapshot (just
+            // joined, packet loss, shot from outside the interpolation window) is exactly the case where
+            // the player is being hurt with no visual explanation — going silent there would drop the
+            // one piece of feedback that never fails.
+            if (hapticEnabled && hapticSeconds > 0f)
             {
-                return; // attacker not in the snapshot yet: no arc, no buzz, no wrong direction
+                BeginHaptic(hasBearing ? (bearing >= 0f ? ChannelRight : ChannelLeft) : ChannelBoth);
+            }
+
+            if (!hasBearing)
+            {
+                return; // no arc without a direction — a guessed one is worse than none
             }
 
             // Screen angle: the arc is authored at the TOP of the quad (bearing 0 = straight ahead).
@@ -171,44 +190,55 @@ namespace VortexArena.Core.Player
             _hitFrom = current;
             _hitPeak = Mathf.Max(current, intensity);
             _hitTime = Time.unscaledTime;
-
-            if (hapticEnabled && hapticSeconds > 0f)
-            {
-                BeginHaptic(bearing >= 0f);
-            }
         }
 
-        /// <summary>Opens the buzz window on one hand. A hit from the OTHER side while one is running
-        /// releases the previous hand explicitly — left to time out on its own it would keep buzzing for
-        /// the arbiter's whole timeout and read as "both controllers".</summary>
-        private void BeginHaptic(bool right)
+        /// <summary>Opens the buzz window on one channel. A hit on a DIFFERENT channel while one is
+        /// running releases the previous one explicitly — left to time out on its own it would keep
+        /// buzzing for the arbiter's whole timeout and read as "both controllers".</summary>
+        private void BeginHaptic(int channel)
         {
-            if (_hapticUntil > 0f && _hapticRight != right)
+            if (_hapticChannel != ChannelNone && _hapticChannel != channel)
             {
-                ControllerHaptics.ReportHand(HapticSourceId, _hapticRight, 0f);
+                WriteHaptic(_hapticChannel, 0f);
             }
 
-            _hapticRight = right;
+            _hapticChannel = channel;
             _hapticUntil = Time.unscaledTime + hapticSeconds;
+        }
+
+        /// <summary>⚠️ Through the arbiter, never straight to OVRInput: a vibration written behind its
+        /// back is either swallowed by its "already wrote that amplitude" check or left switched on.</summary>
+        private void WriteHaptic(int channel, float amplitude)
+        {
+            switch (channel)
+            {
+                case ChannelLeft:
+                    ControllerHaptics.ReportHand(HapticSourceId, false, amplitude);
+                    break;
+                case ChannelRight:
+                    ControllerHaptics.ReportHand(HapticSourceId, true, amplitude);
+                    break;
+                case ChannelBoth:
+                    ControllerHaptics.Report(HapticSourceId, amplitude);
+                    break;
+            }
         }
 
         private void TickHaptic()
         {
-            if (_hapticUntil <= 0f)
+            if (_hapticChannel == ChannelNone)
             {
                 return;
             }
 
-            // ⚠️ Through the arbiter, never straight to OVRInput: a vibration written behind its back is
-            // either swallowed by its "already wrote that amplitude" check or left switched on.
             if (Time.unscaledTime >= _hapticUntil)
             {
-                ControllerHaptics.ReportHand(HapticSourceId, _hapticRight, 0f);
-                _hapticUntil = 0f;
+                WriteHaptic(_hapticChannel, 0f);
+                _hapticChannel = ChannelNone;
                 return;
             }
 
-            ControllerHaptics.ReportHand(HapticSourceId, _hapticRight, hapticAmplitude);
+            WriteHaptic(_hapticChannel, hapticAmplitude);
         }
 
         /// <summary>Signed YAW bearing to the attacker in degrees: 0 straight ahead, +90 hard right,
