@@ -1151,7 +1151,10 @@ diye okur ve fail-open'ı devreye girer. Editörde seçiliyken dikdörtgen Gizmo
 `MapDefinition` / `ModeDefinition` / `GameCatalog` (içerik SO'ları),
 `Weapon` (ISDK ile tutulan hitscan tüfek; tetik **silahı tutan elin** kumandasından okunur — çift
 silahta tetikler bağımsız; şarjör+yedek şarjör durumu taşır, boş şarjörde **otomatik reload YOK**
-(kuru tetik sesi), reload **bel-altı jestiyle** başlar; `reserveMode=DiscardMagazine`'de erken
+(kuru tetik sesi + kısa haptik; bu ipucu tetik **basılı tutulurken de** yinelenir — otomatik silah
+şarjörü basılı tetiğin ALTINDA bitirir, yalnız yeni basışta çalan bir ipucu tam gereken anda sessiz
+kalır ve oyuncu merminin bittiğini elden bırakıp yeniden çekene kadar öğrenemezdi; yineleme kanalı
+boğmamak için hız sınırlıdır, yeni basış sınırı beklemez), reload **bel-altı jestiyle** başlar; `reserveMode=DiscardMagazine`'de erken
 reload'da şarjörde kalan mermi **yanar** (ürün kuralı; `PoolRounds` = CS2 havuzu SO'dan seçilebilir);
 spread atış sürdükçe açılır (bloom) ve boşta toparlar; **saçmalıda tek tetik çekişi
 `WeaponDefinition.PelletCount` kadar ışın atar** — hasar saçma başınadır, isabet eden her saçma
@@ -1192,8 +1195,10 @@ Uzak avatarda çizilmez: `RemoteAvatar.SterilizeVisual` kopyadaki MonoBehaviour'
 `WeaponDefinition` (SO — hasar/HS çarpanı/RPM/şarjör/reload/spread/recoil/**tek el cezası
 (`oneHandSpreadMultiplier` · `oneHandRecoilMultiplier` · `oneHandRecoveryPenalty` — ölçü iki elli
 tutuşa GÖREDİR, 1 = ceza yok; spread/recoil alanları ham değerdir ve sahadaki karşılıkları her
-zaman kavrayış çarpanıyla çarpımdır)**/**haptik (atış başına
-titreşim şiddeti + süresi; biri 0 = o silahta haptik yok)**/ses profili + verilen
+zaman kavrayış çarpanıyla çarpımdır)**/**haptik (atış başına titreşim şiddeti + süresi, ayrıca
+boş tetik için AYRI bir şiddet/süre çifti — atış darbesi zaten zayıf olan bir silahta "mermi yok"
+ipucu atıştan ayırt edilebilir kalsın diye oranla türetilmez; bir çiftin biri 0 = o ipucunun
+haptiği yok)**/ses profili + verilen
 **tek denge kaynağı**, sunucuya export edilmez; elin silaha göre duruşu denge alanlarının yanında
 DEĞİL, tabandaki `ItemDefinition`'ın kavrama kayıtlarındadır — stüdyoda yazılır) + `WeaponAudio` (Meta XR spatializer'lı namlu AudioSource:
 ateş/şarjör çıkar-tak/kuru tetik/alma) + `WeaponAnimator` (Animator'sız kod-güdümlü parça

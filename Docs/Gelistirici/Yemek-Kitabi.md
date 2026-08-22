@@ -423,7 +423,8 @@ Okunabilir alanlar: `ModeId`, `Teams`, `Scoring`, `FriendlyFire`, `Revive`, `Wea
 2. `WeaponDefinition` SO'sunu `Assets/_Shared/Arsenal/Data/` altına oluştur
    (*Create → VortexArena → Weapon Definition*): `weaponId`, hasar, atış hızı, menzil, saçılım,
    şarjör, haptik (`hapticAmplitude` 0-1 + `hapticDuration` sn — atış başına kumanda titreşimi;
-   ikisinden biri 0 ise o silahta haptik yoktur), `prefab`.
+   `dryFireHapticAmplitude` + `dryFireHapticDuration` — boş şarjörde tetiğe basınca; her çiftte
+   ikisinden biri 0 ise o ipucunun haptiği yoktur), `prefab`.
 3. **Tek el cezası** (*Tek El Cezası* başlığı): `oneHandSpreadMultiplier` ·
    `oneHandRecoilMultiplier` · `oneHandRecoveryPenalty`. Ölçü **iki elli tutuşa göredir** (1 = ceza
    yok), yani silahın ne kadar ağır/uzun olduğu buraya yazılır: hafif bir SMG 1.5 civarı, uzun bir

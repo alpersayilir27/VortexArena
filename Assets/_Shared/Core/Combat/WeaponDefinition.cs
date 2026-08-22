@@ -84,6 +84,13 @@ namespace VortexArena.Core.Combat
         [Min(0f)]
         [Tooltip("Atış başına titreşimin süresi (saniye). 0 = haptik kapalı.")]
         [SerializeField] private float hapticDuration = 0.05f;
+        [Range(0f, 1f)]
+        [Tooltip("Şarjör boşken tetiğe basınca titreşim şiddeti — atıştan HAFİF olmalı, " +
+                 "\"mermi yok\" der. 0 = haptik kapalı.")]
+        [SerializeField] private float dryFireHapticAmplitude = 0.45f;
+        [Min(0f)]
+        [Tooltip("Boş tetik titreşiminin süresi (saniye). 0 = haptik kapalı.")]
+        [SerializeField] private float dryFireHapticDuration = 0.06f;
 
         [Header("Cephane")]
         [SerializeField] private int magazineSize = 30;
@@ -211,6 +218,15 @@ namespace VortexArena.Core.Combat
 
         /// <summary>Vibration duration per shot (seconds). <c>0</c> = haptics off.</summary>
         public float HapticDuration => hapticDuration;
+
+        /// <summary>Vibration strength of the empty-magazine dry fire (0-1). <c>0</c> = off.
+        /// <para>Deliberately its OWN field, not a fraction of <see cref="HapticAmplitude"/>: the
+        /// cue must stay distinguishable from a shot on a weapon whose shot pulse is already weak.
+        /// </para></summary>
+        public float DryFireHapticAmplitude => dryFireHapticAmplitude;
+
+        /// <summary>Dry fire vibration duration (seconds). <c>0</c> = off.</summary>
+        public float DryFireHapticDuration => dryFireHapticDuration;
 
         /// <summary>Magazine capacity.</summary>
         public int MagazineSize => magazineSize;
