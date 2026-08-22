@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -42,6 +43,11 @@ namespace VortexArena.App
     /// translucent card; dimming their view is dangerous. (b) While `ArenaBoundary` reports
     /// out-of-bounds the overlay hides COMPLETELY: the out-of-bounds dim + warning must always
     /// dominate — a connection error screen must never make a player walk into a wall.
+    ///
+    /// ⚠️ **The card is lazy-following and stands right in front of the head, so it COVERS any world
+    /// UI opened at that moment.** Whoever opens such a panel must file a
+    /// <see cref="SetSuppressed"/> request (today the lobby IP numpad): without it the panel that
+    /// solves the very problem this screen reports is unreachable behind it.
     /// </summary>
     public class ConnectionOverlay : MonoBehaviour
     {
@@ -83,6 +89,9 @@ namespace VortexArena.App
         // ----------------------------------------------------------------- state
 
         private static ConnectionOverlay _instance;
+
+        /// <summary>Requesters currently hiding the screen — see <see cref="SetSuppressed"/>.</summary>
+        private static readonly List<UnityEngine.Object> SuppressRequesters = new List<UnityEngine.Object>();
 
         /// <summary>Prefab <c>Resources</c> paths (no extension) — VR world-space and desktop
         /// screen-space are two separate prefabs; <see cref="Install"/> picks one.</summary>
@@ -184,6 +193,52 @@ namespace VortexArena.App
             }
         }
 
+        /// <summary>
+        /// Hides the screen for one requester (idempotent; same pattern as
+        /// <c>ControllerModelHider.SetRayVisualsRequested</c> — per-requester, so one panel closing
+        /// does not un-hide it for another still open).
+        /// <para>⚠️ <b>Whoever opens a world UI in front of the player must call this</b>: the card
+        /// lazy-follows the head and would sit on top of that UI. The request must be dropped when
+        /// the panel closes AND when the requester is disabled, or the screen stays gone for good.</para>
+        /// <para>Retrying is NOT affected — this only silences the presentation; <c>ArenaClient</c>
+        /// keeps its backoff loop running.</para>
+        /// </summary>
+        public static void SetSuppressed(UnityEngine.Object requester, bool suppressed)
+        {
+            if (requester == null)
+            {
+                return;
+            }
+
+            for (int i = SuppressRequesters.Count - 1; i >= 0; i--)
+            {
+                UnityEngine.Object existing = SuppressRequesters[i];
+                if (existing == null || existing == requester)
+                {
+                    SuppressRequesters.RemoveAt(i);
+                }
+            }
+
+            if (suppressed)
+            {
+                SuppressRequesters.Add(requester);
+            }
+        }
+
+        /// <summary>Is anyone hiding the screen — destroyed requesters are pruned and do not count.</summary>
+        private static bool IsSuppressed()
+        {
+            for (int i = SuppressRequesters.Count - 1; i >= 0; i--)
+            {
+                if (SuppressRequesters[i] == null)
+                {
+                    SuppressRequesters.RemoveAt(i);
+                }
+            }
+
+            return SuppressRequesters.Count > 0;
+        }
+
         private void OnEnable()
         {
             NetEvents.OnConnectionStateChanged += HandleConnectionStateChanged;
@@ -209,6 +264,20 @@ namespace VortexArena.App
             // the first state change may fire before we subscribe → poll the state too.
             ArenaClient client = ArenaClient.Instance;
             TrackState(client != null ? client.State : ArenaConnectionState.Disconnected);
+
+            // A requester is deliberately hiding the card (lobby IP numpad). The grace clock is
+            // PAUSED meanwhile: otherwise the card would pop back the instant the panel closes,
+            // right on top of the attempt the player just started.
+            if (IsSuppressed())
+            {
+                if (_disconnectedSince >= 0f)
+                {
+                    _disconnectedSince = Time.unscaledTime;
+                }
+
+                SetVisible(false);
+                return;
+            }
 
             if (!ShouldShow())
             {

@@ -107,8 +107,10 @@ namespace VortexArena.App
             _beaconSubscribed = false;
 
             // The ray is asked for only while the panel is open — leaving the scene with the panel
-            // open would carry it into the arena.
+            // open would carry it into the arena. Same for the error screen: a request left behind
+            // would keep it hidden for the rest of the session.
             ControllerModelHider.SetRayVisualsRequested(this, false);
+            ConnectionOverlay.SetSuppressed(this, false);
         }
 
         private void Start()
@@ -207,13 +209,20 @@ namespace VortexArena.App
             // (ControllerModelHider) — without asking for it the player aims blind.
             ControllerModelHider.SetRayVisualsRequested(this, visible);
 
+            // ⚠️ `ConnectionOverlay`'s VR card lazy-follows the head and stands right in front of
+            // it — it covers this very numpad, i.e. the way OUT of the error it reports. Hidden
+            // while the panel is open; retrying keeps running behind it.
+            ConnectionOverlay.SetSuppressed(this, visible);
+
             if (visible)
             {
                 _hintShown = true; // don't rewrite the hint while the panel is open
                 WarnIfPanelOffCanvasPlane();
                 RefreshIpText();
-                RefreshStatus();
             }
+
+            // Opening drops the "server not found" hint, closing puts the live state back.
+            RefreshStatus();
         }
 
         /// <summary>
@@ -359,6 +368,10 @@ namespace VortexArena.App
 
             _autoConnectDone = true; // connected manually; the beacon must not take over
             ArenaClient.Instance.Connect(ip, port, AppSession.Role);
+
+            // The address is entered — the numpad has done its job. Closing it also releases the
+            // `ConnectionOverlay` request, so the normal connection screens take over again.
+            SetIpPanelVisible(false);
         }
 
         public void DisconnectPressed()
