@@ -136,6 +136,8 @@ MonoBehaviour:
   centerNoticeRoot: {fileID: 206951411324978731}
   centerNoticeText: {fileID: 9104736551011118176}
   centerNoticeDim: {fileID: 2581293700553468323}
+  roundScorePanel: {fileID: 8406794531321632960}
+  roundResultBanner: {fileID: 2329507843652553254}
 --- !u!114 &4471903025518800471
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -261,6 +263,17 @@ RectTransform:
   m_CorrespondingSourceObject: {fileID: 2210244689067161849, guid: 5ff3c669afc37ee489adf83b1df0dc8f, type: 3}
   m_PrefabInstance: {fileID: 1092680428715377514}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &2329507843652553254 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 3422146400664652108, guid: 5ff3c669afc37ee489adf83b1df0dc8f, type: 3}
+  m_PrefabInstance: {fileID: 1092680428715377514}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cf242698db5f5424a8fd0cfca53d0cb6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.UI.RoundResultBanner
 --- !u!114 &3364172289693123464 stripped
 MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 2415631238460408034, guid: 5ff3c669afc37ee489adf83b1df0dc8f, type: 3}
@@ -283,6 +296,17 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
+--- !u!114 &8406794531321632960 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 8899979391816522666, guid: 5ff3c669afc37ee489adf83b1df0dc8f, type: 3}
+  m_PrefabInstance: {fileID: 1092680428715377514}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dcb1b217b7e9a8b40b08598adfc6b077, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.UI.TeamScorePanel
 --- !u!1001 &4444436618465382338
 PrefabInstance:
   m_ObjectHideFlags: 0

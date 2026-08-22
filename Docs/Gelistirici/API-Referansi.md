@@ -402,6 +402,7 @@ oyuncunun takımı boşsa (takımsız mod). Aynı takımdan birden çok bölge k
 | ✅ `WinnerLine(MatchEndMsg)` | `abstract` | **Zorunlu.** Maç sonu başlığı |
 | ✅ `EndScoreLine(MatchEndMsg)` | `virtual` | `null` → son değer korunur |
 | ✅ `OnLobbyStateApplied(LobbyStateMsg)` | `virtual` | Bireysel skor tabloları için |
+| ✅ `OnMatchStateApplied(MatchStateMsg)` | `virtual` | Taban faz/süre/skoru çizdikten sonra: modun **kendi** panelleri buradan beslenir; alt sınıfın `modeState`'i etiket üretmeden görebildiği tek yer |
 | ✅ `NameOf(int playerId)` | yardımcı | `playerId` → ad |
 | ✅ `FindSelf(LobbyStateMsg)` | yardımcı | Kendi roster satırın |
 | ✅ `LocalPlayerId` | yardımcı | Kendi `playerId`'in; bağlantı yokken `0` |
@@ -409,7 +410,8 @@ oyuncunun takımı boşsa (takımsız mod). Aynı takımdan birden çok bölge k
 | ✅ `SetCenterNotice(string)` | `public` | Ekranın ortasındaki büyük tek satır; boş string temizler |
 
 Tabandan **hazır** gelenler: faz/süre, geri sayım, can + can barı, ölüm ekranı, durum metni,
-merkez bildirimi, kill-feed, kendi öldürme/ölüm sayacın.
+merkez bildirimi, kill-feed, kendi öldürme/ölüm sayacın. Takım skoru paneli ve tur sonucu şeridi
+tabanda **değildir** (aşağıdaki nota bak).
 
 > **Ölüm ekranı da moda ait DEĞİLDİR:** görseli `_Shared/App/Resources/UI/DeathHud.prefab`'da
 > durur, HUD prefabının altına iç içe konur ve taban açıp kapatır. Katil satırını
@@ -430,6 +432,18 @@ merkez bildirimi, kill-feed, kendi öldürme/ölüm sayacın.
 > kadar, canlanması olmayan modda **3** verilir ki ekran kapansın ve bildirim görünsün.
 
 > ⚠️ Takıma ait hiçbir şey tabanda değildir (bazı modlarda takım yoktur) — renk ve kolon alt sınıfın işi.
+
+> **Takım skoru paneli ve tur sonucu şeridi de tabanda DEĞİLDİR** (aynı sebep: taban takım-agnostik).
+> İkisi `HealthHud.prefab`'ın altında hazır durur ve referansları **alt sınıfın** `[SerializeField]`
+> alanlarıdır:
+>
+> | Bileşen | Çağrılar |
+> |---|---|
+> | `VortexArena.Core.UI.TeamScorePanel` | `SetScore(int red, int blue)` · `SetRoundLabel(string)` (tur kavramı yoksa hiç çağrılmaz) · `Clear()` (lobiye dönüşte) |
+> | `VortexArena.Core.UI.RoundResultBanner` | `Show(string text, RoundOutcome)` — `Won`/`Lost`/`Draw` yalnız **tonu** seçer, metin modundur · `Hide()` |
+>
+> Panel takımsız modda kendini gizler (`ModeRuntime.IsTeamless`), yani takımsız bir HUD'da alanı boş
+> bırakmak yeterlidir. Şerit süresini kendi tutar (prefab alanı, bugün 3 sn) — modun kapatması gerekmez.
 
 > **Maç sonu ekranı (KAZANDIN/KAYBETTİN + skor tablosu) moda ait DEĞİLDİR** ve yeni mod için
 > yapılacak hiçbir iş yoktur: `MatchResultOverlay` mod-agnostiktir, maç bitince HUD'ı kendisi

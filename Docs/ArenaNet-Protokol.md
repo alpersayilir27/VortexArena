@@ -1019,7 +1019,14 @@ oyunu durdurmak isterse çekirdekten `phase = paused` + `phaseReason = "mode"` i
 | Değer | Faz | Anlamı / HUD |
 |---|---|---|
 | `round:<n>` | `playing` | Kaçıncı tur oynanıyor. HUD skor satırına "TUR n" yazar |
+| `roundend:<kazanan>:<n>` | `paused` + `mode` | **Biten** turun sonucu: `red` · `blue` · `draw` ve turun numarası. HUD "TUR KAZANILDI/KAYBEDİLDİ" şeridini açar |
 | `regroup:<hazır>/<toplam>` | `paused` + `mode` | Turlar arası toplanma: kaç oyuncu tabanına döndü. HUD "TOPLANMA 2/6" yazar |
+
+⚠️ **`roundend:` YALNIZ tek bir yayında geçer** — toplanmayı **açan** `match_state`'tedir ve bir
+sonraki sunucu tikinde `regroup:…` onu ezer. İstemci onu **mandallar** (gelince şeridi açar),
+yoklamaz; yoklayan bir istemci sonucu hiç göremez. Numara süs değildir: onsuz aynı takımın kazandığı
+iki tur birebir aynı string olur ve mandal ikincisini "zaten gösterdim" diye yutar. Maçı **bitiren**
+turda bu değer hiç yayınlanmaz — orada faz `finished`'a gider ve sonucu `match_end` taşır.
 
 ⚠️ Bu tablo **çekirdeğin sözleşmesi değildir** — `MatchDirector` bu stringleri hiç ayrıştırmaz.
 Yeni bir tur tabanlı mod kendi sözlüğünü tanımlar ve buraya bir satır ekler.
@@ -1310,8 +1317,8 @@ olmalı, tanınmayan `modeId` reddedilir):
 > **`tournament` — tur tabanlı takım elemesi.** TDM varsayılanından ayrıldığı **tek** kural
 > `reviveAnchor:"none"`dır; geri kalan her şey varsayılandır. Tur kavramı bir kural alanı DEĞİLDİR
 > ve `ModeRules`'a girmez — turlar modun iç durumudur, çekirdek onları bilmez (§10.1 "tur tabanlı
-> modlar"). Telde görünen tek izleri `modeState` (`round:<n>` / `regroup:<h>/<t>`) ve tur başındaki
-> `health_update`'lerdir.
+> modlar"). Telde görünen tek izleri `modeState` (`round:<n>` / `roundend:<kazanan>:<n>` /
+> `regroup:<h>/<t>`) ve tur başındaki `health_update`'lerdir.
 >
 > | Soru | Cevap |
 > |---|---|
@@ -1323,6 +1330,7 @@ olmalı, tanınmayan `modeId` reddedilir):
 > | Ayakta sayımında kim sayılır? | Yalnız `alive` **ve** `calibrated` oyuncular (§10.6): kalibresiz oyuncu ne vurur ne vurulur, savaş dışıdır. **Eleme** kontrolünde ise kalibrasyona bakılmaz — kalibresiz oyuncu ölü değildir, takımını ayakta tutar (tur süreye gider, kıyas onu zaten dışarıda bırakır) |
 > | Eleme neden `OnKill` ile değil tik ile ölçülür? | Takım **bağlantı kopmasıyla** da boşalır ve o yolda `OnKill` hiç çağrılmaz. Tek tarama = tek doğruluk kaynağı |
 > | Turlar arası ne olur? | `paused`/`mode`, `modeState:"regroup:<h>/<t>"`. Geri sayım **yalnız** herkes kendi taban bölgesine girip `set_ready{true}` yollayınca başlar — zaman aşımı YOKTUR, bekleme süresizdir |
+> | Biten turu kim kazandı, oyuncu nereden öğrenir? | Toplanmayı **açan** `match_state`'in `modeState`'i `roundend:<kazanan>:<n>`dir (§10.1); ayrı bir mesaj YOKTUR — skor zaten aynı yayında güncel gidiyor ve ikinci bir gönderici doğurmaya değmez. Maçı bitiren turda bu değer yayınlanmaz, sonucu `match_end` taşır |
 > | Geri sayımda biri tabandan çıkarsa? | Geri sayım **iptal edilir**, faz `paused`/`mode`'a döner ve sayaç sıfırdan başlar. Kural "tabanda **bekle**"dir, "tabana uğra" değil. ⚠️ İptalin **istisnası yoktur**: geri sayım her koşulda geri alınabilir |
 > | Toplanma takılırsa ne olur? | Çıkış operatöründür: takılan oyuncuyu **atar** (`kick`) ya da `abort_match` yapar. Atılan/kopan oyuncu toplamdan düştüğü için kalanlar hazırsa tur o an başlar — sayım her tikte çevrimiçi oyunculardan yeniden yapılır. Bekleme uzarsa sunucu konsoluna 30 sn'de bir "toplanma bekleniyor (h/t) — tabanına dönmeyenler: …" satırı düşer; bu bir **teşhis** satırıdır, tur başlatmaz |
 > | Cephane? | Şarjör + yedek şarjör (`weaponSource:"weaponcanvas"`), **her tur başında herkes tam dolu** — istemci geri sayımda doldurur. Sunucunun bundan haberi yoktur (§10.3: silah tablosu yok) |
