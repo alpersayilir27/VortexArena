@@ -118,7 +118,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: VortexArena.Modes.Ffa::VortexArena.Modes.Ffa.FfaClientController
   phaseText: {fileID: 0}
-  timeText: {fileID: 0}
+  timeText: {fileID: 2493689592874393671}
+  timeFrame: {fileID: 157633568545671481}
   scoreText: {fileID: 0}
   killFeedText: {fileID: 0}
   killFeedSeconds: 6
@@ -130,6 +131,10 @@ MonoBehaviour:
   deathStatusText: {fileID: 7318071765614930078}
   healthFill: {fileID: 1161218836817393049}
   selfStatsText: {fileID: 0}
+  deathOverlaySeconds: 0
+  centerNoticeRoot: {fileID: 0}
+  centerNoticeText: {fileID: 0}
+  centerNoticeDim: {fileID: 0}
   standingsText: {fileID: 0}
 --- !u!1001 &3496004810248080339
 PrefabInstance:
@@ -139,6 +144,10 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 559219975589532133}
     m_Modifications:
+    - target: {fileID: 1337723131936035063, guid: 5ff3c669afc37ee489adf83b1df0dc8f, type: 3}
+      propertyPath: m_sharedMaterial
+      value: 
+      objectReference: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
     - target: {fileID: 2210244689067161849, guid: 5ff3c669afc37ee489adf83b1df0dc8f, type: 3}
       propertyPath: m_Pivot.x
       value: 0.5
@@ -228,6 +237,11 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 5ff3c669afc37ee489adf83b1df0dc8f, type: 3}
+--- !u!1 &157633568545671481 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 3653627932031795946, guid: 5ff3c669afc37ee489adf83b1df0dc8f, type: 3}
+  m_PrefabInstance: {fileID: 3496004810248080339}
+  m_PrefabAsset: {fileID: 0}
 --- !u!114 &1161218836817393049 stripped
 MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 2348969957437144650, guid: 5ff3c669afc37ee489adf83b1df0dc8f, type: 3}
@@ -242,6 +256,17 @@ MonoBehaviour:
 --- !u!114 &1225619058353883953 stripped
 MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 2415631238460408034, guid: 5ff3c669afc37ee489adf83b1df0dc8f, type: 3}
+  m_PrefabInstance: {fileID: 3496004810248080339}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f4688fdb7df04437aeb418b961361dc5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.TextMeshPro::TMPro.TextMeshProUGUI
+--- !u!114 &2493689592874393671 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 1305780708500384660, guid: 5ff3c669afc37ee489adf83b1df0dc8f, type: 3}
   m_PrefabInstance: {fileID: 3496004810248080339}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 0}

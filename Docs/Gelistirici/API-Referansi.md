@@ -423,6 +423,10 @@ tabanda **değildir** (aşağıdaki nota bak).
 > (`Backdrop/Fill`, `Image.type = Filled`) ve `healthText` (`Backdrop/Value`). Alt sınıfın işi
 > yoktur.
 
+> **Maç saati de aynı prefabtadır** ve iki alan ister: `timeText` (`Clock/Panel/Time`) ile
+> `timeFrame` (`Clock` — kutunun kökü). Taban süreyi yazarken kutuyu açar, süre boşalınca
+> (lobi) kapatır; `timeFrame` bağlanmazsa yalnız metin silinir ve arkadaki panel asılı kalır.
+
 > **Merkez bildirimi de moda ait DEĞİLDİR:** görseli
 > `_Shared/App/Resources/UI/RoundNoticeHud.prefab`'da durur, o da HUD prefabının altına iç içe konur
 > (**en son kardeş**). Taban geri sayım sayısını oraya kendisi yazar; modun kendi başlığı
