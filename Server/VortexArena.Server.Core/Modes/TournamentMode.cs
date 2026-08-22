@@ -8,8 +8,9 @@ namespace VortexArena.Server.Core.Modes;
 /// <para>⚠️ The round concept is not a rule field and never enters <see cref="ModeRules"/> — rounds are
 /// this class's internal state, unknown to the core (§10.1). Their only wire traces are
 /// <c>modeState</c> and the <c>health_update</c>s the mode asks for when a round CLOSES.</para>
-/// <para>Score means something else here: <c>scoreRed</c>/<c>scoreBlue</c> count rounds won, and
-/// <c>roundSeconds</c> is the ROUND's length, not the match's.</para></remarks>
+/// <para>Score means something else here: <c>scoreRed</c>/<c>scoreBlue</c> count rounds won. The
+/// ROUND has no clock of its own: <c>roundSeconds</c> bounds the whole MATCH, as in every other mode —
+/// a round is decided by elimination.</para></remarks>
 public sealed class TournamentMode : IGameMode
 {
     /// <summary>Interval of the "who is missing" console line while the regroup drags on.</summary>
@@ -45,6 +46,15 @@ public sealed class TournamentMode : IGameMode
     private bool _matchOver;
     private MatchOutcome _outcome = MatchOutcome.Draw;
 
+    /// <summary>Seconds left of the whole MATCH; carried across rounds because the core resets its clock
+    /// at every <c>playing</c> entry.</summary>
+    /// <remarks>⚠️ Only counted down in <c>playing</c> (the core's own clock does that) — the regroup and
+    /// the countdown between rounds do NOT burn match time, or a slow return would eat the match.
+    /// <para>The match ends on whichever fills first: this clock or the round limit. With
+    /// <c>scoreLimit</c> unlimited the clock is the only end condition left (besides
+    /// <c>end_match</c>).</para></remarks>
+    private float _matchRemaining;
+
     /// <summary>Time of the next "waiting for regroup" console line (see
     /// <see cref="RegroupReportIntervalSeconds"/>).</summary>
     private DateTime _nextRegroupReportAt;
@@ -63,13 +73,15 @@ public sealed class TournamentMode : IGameMode
         RespawnDelay = 0f
     };
 
-    /// <summary>⚠️ The length (seconds) of the <b>ROUND</b>, not of the match.</summary>
-    public int DefaultRoundSeconds => 120;
+    /// <summary>The length (seconds) of the whole MATCH — rounds are not time-boxed.</summary>
+    /// <remarks>Longer than the other modes' default on purpose: a free-roam round ends by elimination
+    /// in tens of seconds, so this has to cover a whole best-of.</remarks>
+    public int DefaultRoundSeconds => 600;
 
     /// <summary>ROUNDS needed to win the match → best-of-7.</summary>
     /// <remarks>The operator can override it (§5.2) or choose unlimited
     /// (<c>ArenaProtocol.SCORE_LIMIT_UNLIMITED</c>): then neither win limit nor round cap applies and
-    /// rounds continue until <c>abort_match</c>.</remarks>
+    /// rounds run until the match clock expires (or the operator's <c>end_match</c>).</remarks>
     public int DefaultScoreLimit => 4;
 
     public void OnMatchStart(MatchDirector director)
@@ -82,17 +94,28 @@ public sealed class TournamentMode : IGameMode
         _outcome = MatchOutcome.Draw;
         _stage = RoundStage.None;
 
+        // ⚠️ The operator's duration is the MATCH's, never a round's: a free-roam round is decided by
+        // elimination in tens of seconds, and a per-round clock that restarts forever would leave an
+        // unlimited match with NO end condition at all.
         var limit = director.ScoreLimit;
-        Console.WriteLine($"[tournament] maç başladı — tur {director.RoundSeconds} sn, " +
+        _matchRemaining = director.RoundSeconds;
+
+        Console.WriteLine($"[tournament] maç başladı — MAÇ süresi {director.RoundSeconds} sn; " +
                           (limit > 0
-                              ? $"{limit} tur galibiyet (en fazla {MaxRounds(limit)} tur)."
-                              : "SINIRSIZ (galibiyet limiti ve tur tavanı yok; bitişi operatör verir)."));
+                              ? $"{limit} tur galibiyet (en fazla {MaxRounds(limit)} tur) — " +
+                                "hangisi önce dolarsa maç orada biter."
+                              : "SINIRSIZ tur — süre dolunca çok tur alan kazanır."));
     }
 
     public void OnRoundStart(MatchDirector director)
     {
         _roundLive = true;
         _stage = RoundStage.None;
+
+        // The core restarted its clock at roundSeconds; here that clock is the MATCH's, so the remaining
+        // budget is written back over it.
+        director.SetTimeRemaining(_matchRemaining);
+
         director.SetModeState($"round:{_round}");
         Console.WriteLine($"[tournament] tur {_round} başladı " +
                           $"(kırmızı {director.ScoreRed} : mavi {director.ScoreBlue}).");
@@ -126,9 +149,9 @@ public sealed class TournamentMode : IGameMode
         }
     }
 
-    /// <summary>⚠️ <c>TimeRemaining &lt;= 0</c> does NOT end the match here (unlike TDM/FFA):
-    /// <c>timeRemaining</c> is the ROUND's clock, so it ends the round. The match decision is made only
-    /// in <see cref="EndRound"/>; this method just carries it.</summary>
+    /// <summary>⚠️ <c>TimeRemaining &lt;= 0</c> is not answered here directly (unlike TDM/FFA): the clock
+    /// running out first closes the RUNNING round, and the match can only be decided after that. Every
+    /// decision is made in <see cref="EndRound"/>; this method just carries it.</summary>
     public bool IsMatchOver(MatchDirector director, out MatchOutcome outcome)
     {
         outcome = _outcome;
@@ -187,9 +210,10 @@ public sealed class TournamentMode : IGameMode
 
         if (director.TimeRemaining > 0f) return;
 
-        // Time up: more players standing wins; on a tie nobody scores.
+        // The MATCH clock ran out mid-round → this round is the last, and is closed normally (more
+        // players standing wins, a tie scores nothing); EndRound then decides the match.
         var winner = redFit > blueFit ? "red" : blueFit > redFit ? "blue" : "";
-        EndRound(director, winner, $"süre doldu ({redFit} - {blueFit} savaşabilir ayakta)");
+        EndRound(director, winner, $"maç süresi doldu ({redFit} - {blueFit} savaşabilir ayakta)");
     }
 
     /// <summary>Closes the round: writes the point, checks for match end, otherwise moves to the
@@ -199,13 +223,16 @@ public sealed class TournamentMode : IGameMode
         _roundLive = false;
         if (winnerTeam.Length > 0) director.AddScore(winnerTeam, 1);
 
+        // Carried over: the core restarts its clock at every round, so what is left of the MATCH is only
+        // knowable here (see _matchRemaining).
+        _matchRemaining = director.TimeRemaining;
+
         Console.WriteLine($"[tournament] tur {_round} bitti — {reason}; " +
                           $"{(winnerTeam.Length > 0 ? winnerTeam + " +1" : "puan yok")} " +
                           $"(kırmızı {director.ScoreRed} : mavi {director.ScoreBlue}).");
 
-        // Unlimited match (operator's choice, §5.2): neither win limit nor round cap applies until
-        // abort_match. ⚠️ One gate for both, since both derive from the same number — leaving either
-        // open would silently end an "unlimited" match.
+        // ⚠️ One gate for both the win limit and the round cap, since both derive from the same number —
+        // leaving either open would silently end an "unlimited" match.
         var limit = director.ScoreLimit;
         if (limit > 0)
         {
@@ -233,6 +260,18 @@ public sealed class TournamentMode : IGameMode
             }
         }
 
+        // The MATCH clock, checked AFTER the limit so a round that both reaches the limit and runs the
+        // clock out is reported as the win it is. With unlimited rounds this is the only gate left.
+        if (_matchRemaining <= 0f)
+        {
+            var red = director.ScoreRed;
+            var blue = director.ScoreBlue;
+            Decide(red > blue ? MatchOutcome.Team("red")
+                : blue > red ? MatchOutcome.Team("blue")
+                : MatchOutcome.Draw, "maç süresi doldu");
+            return;
+        }
+
         // The result rides the SAME broadcast that opens the regroup (§10.1): match_state already
         // carries the new score, and a message of its own would be a second sender for one fact.
         // ⚠️ Built BEFORE the increment — it names the round that just CLOSED. The number is not
@@ -250,6 +289,11 @@ public sealed class TournamentMode : IGameMode
             Console.WriteLine("[tournament] toplanmaya geçilemedi (faz değişmiş) — tur akışı durdu.");
             return;
         }
+
+        // ⚠️ TryPauseForMode ZEROES the clock — right where that clock belongs to the round, a lie here:
+        // the HUD would sit at 00:00 through the whole regroup and jump back up when the round opens,
+        // which reads as a bug.
+        director.SetTimeRemaining(_matchRemaining);
 
         // Full health the MOMENT the round closes, not when the next one opens: the eliminated player
         // walks to their base during the regroup, and leaving them on the death screen for that walk
@@ -359,8 +403,8 @@ public sealed class TournamentMode : IGameMode
         Console.WriteLine($"[tournament] maç kararı ({reason}) — {_round}. turda bitti.");
     }
 
-    /// <summary>Best-of cap: <c>2 × limit − 1</c> rounds; no limit (unlimited match) = no cap, the
-    /// operator ends it.</summary>
+    /// <summary>Best-of cap: <c>2 × limit − 1</c> rounds; no limit (unlimited match) = no cap, the match
+    /// clock ends it.</summary>
     /// <remarks>⚠️ May also be called limitless just to produce text — the decision gate in
     /// <see cref="EndRound"/> is already closed by <c>limit &gt; 0</c>.</remarks>
     private static int MaxRounds(int scoreLimit) =>

@@ -21,8 +21,10 @@ public interface IGameMode
     /// <see cref="ModeRules.TeamDefault"/> gives today's TDM behaviour.</remarks>
     ModeRules Rules { get; }
 
-    /// <summary>Default round length for load_match.roundSeconds — a default, not a lock: the admin
+    /// <summary>Default MATCH duration for load_match.roundSeconds — a default, not a lock: the admin
     /// can override it per match (§5.2).</summary>
+    /// <remarks>⚠️ The name is the wire field's, not a promise about rounds: a round-based mode spends
+    /// this budget across ALL its rounds (§10.5).</remarks>
     int DefaultRoundSeconds { get; }
 
     /// <summary>Default score limit for load_match.scoreLimit (overridable the same way).</summary>

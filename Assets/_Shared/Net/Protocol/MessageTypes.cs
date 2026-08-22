@@ -18,6 +18,8 @@ namespace VortexArena.Protocol
         // Admin only → Server
         public const string StartMatch = "start_match";
         public const string AbortMatch = "abort_match";
+        // Ends the match NORMALLY (match_end + result screen) — not abort_match, which skips both (§5.2)
+        public const string EndMatch = "end_match";
         public const string PauseMatch = "pause_match"; // freezes a running match (§5.2)
         public const string ResumeMatch = "resume_match"; // lifts the operator pause only
         public const string SetTeam = "set_team";

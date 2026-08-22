@@ -36,7 +36,7 @@ namespace VortexArena.App.Admin
         /// <summary>Shared selection: map scene name from the server (empty = never selected).</summary>
         public static string SceneName { get; private set; } = "";
 
-        /// <summary>Shared selection: next match's round length (s); <c>0</c> = the mode's default (§5.2).</summary>
+        /// <summary>Shared selection: next match's duration (s); <c>0</c> = the mode's default (§5.2).</summary>
         public static int RoundSeconds { get; private set; }
 
         /// <summary>Shared selection: next match's score/round limit; <c>0</c> = the mode's default,

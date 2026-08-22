@@ -287,12 +287,13 @@ namespace VortexArena.Protocol
         public const float REVIVE_HOLD_RADIUS = 1f;
 
         /// <summary>Match duration options for the admin UI (seconds, 1 min … 1 h). <b>A UI list, not a
-        /// protocol limit</b> — the server accepts any positive roundSeconds (§5.2). The short values
-        /// serve round-based modes, where this field is the ROUND length (§10.5).</summary>
+        /// protocol limit</b> — the server accepts any positive roundSeconds (§5.2). In EVERY mode the
+        /// value is the whole match's: round-based modes spend it across all their rounds and do not
+        /// time-box a single round (§10.5).</summary>
         public static readonly int[] ROUND_SECONDS_OPTIONS = { 60, 90, 120, 150, 180, 300, 600, 900, 1200, 1800, 3600 };
 
         /// <summary>The UNLIMITED value of <c>scoreLimit</c> (§5.2): no score/round limit, the match
-        /// ends on time or on <c>abort_match</c>. A separate value is needed because <c>0</c> already
+        /// ends on time or on the operator's <c>end_match</c>. A separate value is needed because <c>0</c> already
         /// means "operator did not choose"; every server gate asks "limit &gt; 0", so negatives are
         /// already unlimited.
         /// <para>⚠️ In round-based modes this also removes the round ceiling (<c>2 × limit − 1</c>,

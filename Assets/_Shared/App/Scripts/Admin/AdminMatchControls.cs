@@ -6,8 +6,13 @@ using VortexArena.Protocol;
 namespace VortexArena.App.Admin
 {
     /// <summary>
-    /// The <b>match control bar</b> at the bottom center of the HUD: three icon buttons
-    /// (▶ START · ⏸/▶ PAUSE-RESUME · ■ ABORT).
+    /// The <b>match control bar</b> at the bottom center of the HUD: four icon buttons
+    /// (▶ START · ⏸/▶ PAUSE-RESUME · ⏹ END · ■ ABORT).
+    ///
+    /// <para>⚠️ <b>END and ABORT are not the same button twice.</b> END finishes the match normally —
+    /// result screen, scoreboard, the usual return to the lobby; ABORT drops it and shows nothing. Both
+    /// exist because a mode's own end condition may never fire (an unlimited tournament has no win limit
+    /// and no round cap), and the operator should not have to pay the scoreboard to get out.</para>
     ///
     /// <para><b>Visuals come from the prefab</b> (<c>AdminHud.prefab</c> → <c>MatchBar</c>); this
     /// class only wires, colors and disables the buttons by phase.</para>
@@ -38,6 +43,9 @@ namespace VortexArena.App.Admin
         [SerializeField] private Image startIcon;
         [SerializeField] private Button pauseButton;
         [SerializeField] private Image pauseIcon;
+        [Tooltip("BİTİR: maçı normal yoldan bitirir (sonuç ekranı çıkar). İPTAL'den farkı budur.")]
+        [SerializeField] private Button endButton;
+        [SerializeField] private Image endIcon;
         [SerializeField] private Button abortButton;
         [SerializeField] private Image abortIcon;
 
@@ -72,6 +80,7 @@ namespace VortexArena.App.Admin
         {
             Wire(startButton, StartMatch);
             Wire(pauseButton, TogglePause);
+            Wire(endButton, AdminCommands.EndMatch);
             Wire(abortButton, AdminCommands.AbortMatch);
         }
 
@@ -252,6 +261,20 @@ namespace VortexArena.App.Admin
                            roster.Phase == ArenaProtocol.PHASE_PAUSED &&
                            (string.IsNullOrEmpty(roster.PhaseReason) ||
                             roster.PhaseReason == ArenaProtocol.PAUSE_REASON_LOBBY);
+
+            // END: a match that is running or paused can be finished; one already finished has its
+            // result on screen and one in the lobby does not exist.
+            bool canEnd = roster == null ||
+                          (!inLobby && roster.Phase != ArenaProtocol.PHASE_FINISHED);
+            if (endButton != null)
+            {
+                endButton.interactable = canEnd;
+            }
+
+            if (endIcon != null)
+            {
+                endIcon.color = canEnd ? UiKit.Title : UiKit.Faint;
+            }
             if (abortButton != null)
             {
                 abortButton.interactable = !inLobby;

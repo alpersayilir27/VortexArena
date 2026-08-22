@@ -15,7 +15,7 @@ MonoBehaviour:
   modeId: tournament
   displayName: Turnuva
   lobbyProfile: 0
-  roundSeconds: 120
+  roundSeconds: 600
   scoreLimit: 4
   teamMode: 0
   scoring: 0

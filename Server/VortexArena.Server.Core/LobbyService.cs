@@ -695,6 +695,14 @@ public sealed class LobbyService
         await _director.ReturnToLobbyAsync();
     }
 
+    /// <summary>end_match (§5.2) — ends the match normally (match_end + result screen), unlike
+    /// abort_match. The notice follows the same rule as pause: only on an actual end.</summary>
+    public async Task HandleEndMatchAsync(ClientConnection connection)
+    {
+        if (await _director.EndMatchAsync())
+            await BroadcastAdminStateAsync(Notice(connection, "maç operatörce bitirildi"));
+    }
+
     /// <summary>pause_match (§5.2). The notice is broadcast ONLY on an actual pause — a rejected
     /// command must not print "paused" on the other operators' screens.</summary>
     public async Task HandlePauseMatchAsync(ClientConnection connection)

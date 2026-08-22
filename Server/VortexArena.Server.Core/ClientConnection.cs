@@ -224,6 +224,12 @@ public sealed class ClientConnection
                 await _lobby.HandleAbortMatchAsync(this);
                 return;
             }
+            case MessageTypes.EndMatch:
+            {
+                if (!RequireAdmin(type)) return;
+                await _lobby.HandleEndMatchAsync(this);
+                return;
+            }
             case MessageTypes.PauseMatch:
             {
                 if (!RequireAdmin(type)) return;
