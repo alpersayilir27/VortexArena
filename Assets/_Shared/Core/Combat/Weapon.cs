@@ -55,6 +55,10 @@ namespace VortexArena.Core.Combat
         /// <summary>Minimum repeat interval of the blocked-muzzle cue (s).</summary>
         private const float BlockedCueSeconds = 0.4f;
 
+        /// <summary>Minimum repeat interval of the empty-magazine cue while the trigger is HELD (s).
+        /// Short enough to read as "the gun is trying", long enough not to flood the channel.</summary>
+        private const float DryCueSeconds = 0.35f;
+
         /// <summary>Blocked-muzzle haptic amplitude — lighter than a shot, it just says "no".</summary>
         private const float BlockedHapticAmplitude = 0.6f;
 
@@ -268,6 +272,7 @@ namespace VortexArena.Core.Combat
         private InputAction attackAction;
         private float nextFireTime;
         private float nextBlockedCueTime;
+        private float nextDryCueTime;
         private Bounds bodyBounds;
         private bool bodyBoundsResolved;
         private float reloadEndTime;
@@ -596,13 +601,54 @@ namespace VortexArena.Core.Combat
                 // nextFireTime does not advance — the player cannot burn a magazine into a wall.
                 CueBlockedFire();
             }
-            else if (pressedThisFrame && combatAllows && !canFire && !IsReloading && CurrentAmmo == 0)
+            else if (pressed && combatAllows && !canFire && !IsReloading && CurrentAmmo == 0)
             {
                 // Empty magazine: dry fire. Auto-reload is deliberately absent — reloading starts
                 // from a deliberate player gesture (TryStartReload).
-                weaponAudio?.PlayDry();
-                DryFired?.Invoke();
+                CueDryFire(pressedThisFrame);
             }
+        }
+
+        /// <summary>Empty-magazine cue: dry-fire sound + a short pulse, so the player learns the
+        /// magazine is out without reading the HUD.
+        /// <para>⚠️ Keyed on the HELD trigger, not only a fresh press: an automatic weapon runs dry
+        /// UNDER a held trigger, so a press-only cue stays silent at the one moment it is needed and
+        /// the player has to release and pull again to be told anything.</para>
+        /// <para>Repeats are rate limited (<see cref="DryCueSeconds"/>) — a click per frame is both
+        /// inaudible and channel-flooding — but a fresh press ALWAYS cues: the click has to land on
+        /// the same frame as the pull, never on the tail of an earlier interval.</para></summary>
+        private void CueDryFire(bool pressedThisFrame)
+        {
+            if (!pressedThisFrame && Time.unscaledTime < nextDryCueTime)
+            {
+                return;
+            }
+
+            nextDryCueTime = Time.unscaledTime + DryCueSeconds;
+
+            weaponAudio?.PlayDry();
+            DryFired?.Invoke();
+
+            // Haptics are the WEAPON's own data (WeaponDefinition), like the shot pulse: a granted
+            // clone and a scene instance of the same weapon must feel identical.
+            float amplitude = definition != null ? Mathf.Clamp01(definition.DryFireHapticAmplitude) : 0f;
+            float duration = definition != null ? definition.DryFireHapticDuration : 0f;
+
+            // ⚠️ Zero amplitude or duration means "haptics off" and no pulse starts: a zero-length
+            // coroutine squeezes on and off into the same frame and can leave a vibration hanging.
+            if (amplitude <= 0f || duration <= 0f)
+            {
+                return;
+            }
+
+            // Same path as the shot pulse: one coroutine, cleaned up in OnDisable, so no vibration
+            // is left hanging on the controller.
+            if (hapticRoutine != null)
+            {
+                StopCoroutine(hapticRoutine);
+            }
+
+            hapticRoutine = StartCoroutine(HapticPulse(amplitude, duration));
         }
 
         /// <summary>Blocked-muzzle cue: dry-fire sound + a short pulse.
