@@ -25,10 +25,10 @@ Material:
     m_TexEnvs: []
     m_Ints: []
     m_Floats:
-    - _ArcFeather: 28
-    - _ArcHalfAngle: 30
-    - _InnerRadius: 0.62
-    - _OuterRadius: 1
+    - _ArcFeather: 30
+    - _ArcHalfAngle: 34
+    - _InnerRadius: 0.22
+    - _OuterRadius: 0.34
     m_Colors:
     - _BaseColor: {r: 0.55689996, g: 0.12159998, b: 0.12159998, a: 0}
   m_BuildTextureStacks: []

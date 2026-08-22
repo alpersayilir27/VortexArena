@@ -1765,6 +1765,7 @@ MonoBehaviour:
   fullIntensityDamage: 25
   lowHpThreshold: 0.3
   lowHpAlpha: 0.16
+  lowHpEntryScale: 0.5
   lowHpPulseFloor: 0.55
   lowHpPulseHz: 0.35
 --- !u!1 &1272451756600780371
@@ -8009,7 +8010,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Meta.XR.BuildingBlocks::Meta.XR.BuildingBlocks.BuildingBlock
   blockId: 5817f7c0-f2a5-45f9-a5ca-64264e0166e8
-  instanceId: a472890d-7c20-4589-91e2-46a94690a5b3
+  instanceId: 508b0d34-6318-4392-9b3e-0a248ce5339e
   version: 1
   installationRoutineCheckpoint:
     _installationRoutineId: 
@@ -8756,7 +8757,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Meta.XR.BuildingBlocks::Meta.XR.BuildingBlocks.BuildingBlock
   blockId: e47682b9-c270-40b1-b16d-90b627a5ce1b
-  instanceId: 3d40e31b-677f-4475-97d4-2091f436b9b1
+  instanceId: 618b4a38-59da-48bc-af37-56e40eba089b
   version: 1
   installationRoutineCheckpoint:
     _installationRoutineId: 
@@ -10728,7 +10729,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Meta.XR.BuildingBlocks::Meta.XR.BuildingBlocks.BuildingBlock
   blockId: 5817f7c0-f2a5-45f9-a5ca-64264e0166e8
-  instanceId: 39af67fd-b800-47d2-b268-45f5a3b9e86f
+  instanceId: fca0daa9-254a-41c6-b8d5-81f90c422c0a
   version: 1
   installationRoutineCheckpoint:
     _installationRoutineId: 
@@ -11692,7 +11693,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Meta.XR.BuildingBlocks::Meta.XR.BuildingBlocks.BuildingBlock
   blockId: 81f55626-5fad-45e9-a1df-184f330da7ba
-  instanceId: 4d4f76be-f709-40f4-a9f2-71e500edde35
+  instanceId: ddf10446-f59e-4611-96e7-207d1a9ab324
   version: 1
   installationRoutineCheckpoint:
     _installationRoutineId: 2063f481-1b63-4eda-9ee8-a00df98536bc
