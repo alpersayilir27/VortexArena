@@ -406,9 +406,10 @@ oyuncunun takımı boşsa (takımsız mod). Aynı takımdan birden çok bölge k
 | ✅ `FindSelf(LobbyStateMsg)` | yardımcı | Kendi roster satırın |
 | ✅ `LocalPlayerId` | yardımcı | Kendi `playerId`'in; bağlantı yokken `0` |
 | ✅ `SetText(TMP_Text, string)` | yardımcı | Null-güvenli |
+| ✅ `SetCenterNotice(string)` | `public` | Ekranın ortasındaki büyük tek satır; boş string temizler |
 
 Tabandan **hazır** gelenler: faz/süre, geri sayım, can + can barı, ölüm ekranı, durum metni,
-kill-feed, kendi öldürme/ölüm sayacın.
+merkez bildirimi, kill-feed, kendi öldürme/ölüm sayacın.
 
 > **Ölüm ekranı da moda ait DEĞİLDİR:** görseli `_Shared/App/Resources/UI/DeathHud.prefab`'da
 > durur, HUD prefabının altına iç içe konur ve taban açıp kapatır. Katil satırını
@@ -419,6 +420,14 @@ kill-feed, kendi öldürme/ölüm sayacın.
 > ve o da HUD prefabının altına iç içe konur. Taban iki alanı sürer: `healthFill`
 > (`Backdrop/Fill`, `Image.type = Filled`) ve `healthText` (`Backdrop/Value`). Alt sınıfın işi
 > yoktur.
+
+> **Merkez bildirimi de moda ait DEĞİLDİR:** görseli
+> `_Shared/App/Resources/UI/RoundNoticeHud.prefab`'da durur, o da HUD prefabının altına iç içe konur
+> (**en son kardeş**). Taban geri sayım sayısını oraya kendisi yazar; modun kendi başlığı
+> `SetCenterNotice("…")` ile gelir ve **aynı ögeyi paylaşır** — öncelik geri sayımındadır, metin bu
+> yüzden kısa olmalıdır (ayrıntı `statusText`'e). Karartma yalnız geri sayımda açılır ve onu da taban
+> yönetir. `deathOverlaySeconds` (prefab alanı) ölüm ekranının açık kalma süresidir: `0` = canlanana
+> kadar, canlanması olmayan modda **3** verilir ki ekran kapansın ve bildirim görünsün.
 
 > ⚠️ Takıma ait hiçbir şey tabanda değildir (bazı modlarda takım yoktur) — renk ve kolon alt sınıfın işi.
 

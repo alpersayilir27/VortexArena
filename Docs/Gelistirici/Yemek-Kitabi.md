@@ -714,6 +714,19 @@ prefabının altına **iç içe prefab** olarak koy, sonra iki alanı bağla: `h
 `Backdrop/Fill`, `healthText` → `Backdrop/Value`. Bar kendi `HeadLockedHud`'uyla kafaya kilitlidir;
 HUD'da ayrıca bir can göstergesi **bulundurma** — aynı sayı iki yerde çizilirdi.
 
+**Ortada büyük yazı gerekiyorsa (geri sayım, "şunu bekliyorsun"):**
+`_Shared/App/Resources/UI/RoundNoticeHud.prefab`'ı aynı desenle HUD prefabının altına **iç içe
+prefab** olarak koy — **en son kardeş** (opak ölüm ekranının üstünde çizilsin diye) — örneği
+**kapat**, sonra üç alanı bağla: `centerNoticeRoot` → örneğin kökü, `centerNoticeText` → `Notice`,
+`centerNoticeDim` → `Dim`. Geri sayımı taban kendiliğinden yazar; kendi metnini modun bileşeninden
+`hud.SetCenterNotice("…")` ile ver, boş string temizler. ⚠️ **Aynı ögeyi paylaşırlar** — bu yüzden
+metin KISA ve tek satır olmalı, ayrıntı `statusText`'te kalır. ⚠️ Karartmayı elle açma: taban onu
+yalnız geri sayımda açar.
+
+**Ölüm ekranı canlanması olmayan modda kilitli kalmasın:** `deathOverlaySeconds`'ı **3** yap
+(0 = canlanana kadar açık). `reviveAnchor:none`'da canlanma hiç gelmez, ekran tur bitene kadar durur
+ve oyuncunun asıl beklediği şeyi örter.
+
 > ⚠️ Taban sınıfın `OnEnable`/`OnDisable`/`Start`/`Update`'ini override edersen **`base.` çağır**,
 > yoksa kill-feed ve can bağlantısı ölür.
 

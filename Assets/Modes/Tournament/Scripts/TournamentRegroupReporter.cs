@@ -2,6 +2,7 @@ using UnityEngine;
 using VortexArena.Core;
 using VortexArena.Core.Combat;
 using VortexArena.Core.Player;
+using VortexArena.Core.UI;
 using VortexArena.Net;
 using VortexArena.Protocol;
 
@@ -31,11 +32,25 @@ namespace VortexArena.Modes.Tournament
     /// <para>"Am I in the base" is the client's decision — the server keeps the ledger rather than
     /// refereeing (§10.3, same contract as <c>reviveAnchor</c>); its safety net is its own
     /// timeout.</para>
+    /// <para>Two texts, two altitudes: the HUD's status line carries the DETAILED instruction (which
+    /// base, what happens next) and <see cref="ModeHudBase.SetCenterNotice"/> the one-line headline the
+    /// player reads without looking for it. The headline shares its element with the countdown.</para>
     /// </remarks>
     public class TournamentRegroupReporter : MonoBehaviour
     {
         // Single instance so the DTO is not reallocated every frame.
         private readonly SetReadyMsg _msg = new SetReadyMsg();
+
+        /// <summary>The HUD on the same prefab root — the centre notice's only drawer.</summary>
+        private ModeHudBase _hud;
+
+        /// <summary>Players still missing from their base, split by side (<c>lobby_state</c>). ⚠️ Only
+        /// meaningful inside the regroup: outside it the server has cleared every <c>ready</c> flag,
+        /// which would read as "everybody is missing".</summary>
+        private int _teammatesMissing;
+
+        /// <inheritdoc cref="_teammatesMissing"/>
+        private int _opponentsMissing;
 
         /// <summary>Regroup reporting active (only <c>paused/mode</c> and its countdown);
         /// <c>set_ready</c> is sent only while set.</summary>
@@ -50,8 +65,26 @@ namespace VortexArena.Modes.Tournament
         /// <summary>Was inside the own base last frame — for the entry-edge vibration.</summary>
         private bool _wasInsideBase;
 
+        private void Awake()
+        {
+            _hud = GetComponent<ModeHudBase>();
+            if (_hud == null)
+            {
+                // Loud on purpose: silently the flow still works and only the big text never appears —
+                // a fault nobody notices until a match is running on the headsets.
+                Debug.LogWarning("[Regroup] Aynı kökte ModeHudBase yok — merkez bildirimi çizilmeyecek.");
+            }
+        }
+
+        private void OnEnable()
+        {
+            NetEvents.OnLobbyState += HandleLobbyState;
+        }
+
         private void OnDisable()
         {
+            NetEvents.OnLobbyState -= HandleLobbyState;
+
             // Scene/HUD going away: drop the prompt, else it stays stuck on the persistent singleton.
             Leave();
         }
@@ -127,6 +160,8 @@ namespace VortexArena.Modes.Tournament
                     : $"Öldün — {baseName} dön, yeni tur orada başlayacak");
             }
 
+            SetNotice(CenterNotice(inBase));
+
             // Base ENTRY edge: three pulses on both controllers (criterion is the REAL entry).
             bool insideBase = combat.IsInsideOwnBase;
             if (insideBase && !_wasInsideBase)
@@ -158,6 +193,103 @@ namespace VortexArena.Modes.Tournament
                       $"açıkTabanVar={combat.HasOpenBaseZone} → set_ready({inBase})");
         }
 
+        /// <summary>The big centre line: WHAT is being waited for, in one glance. Empty = nothing to
+        /// say — the countdown then takes the same element over (<see cref="ModeHudBase"/>).</summary>
+        /// <remarks>Order is deliberate: the player's OWN duty comes first. Naming who else is missing
+        /// while the player is still outside would send them looking at other people instead of
+        /// walking.</remarks>
+        private string CenterNotice(bool inBase)
+        {
+            if (!inBase)
+            {
+                return "BASE'E BEKLENİYORSUNUZ";
+            }
+
+            // Mid-round death: the round has not closed, so no one else is being called to a base and
+            // the ready flags carry no answer (see _teammatesMissing).
+            if (!_active)
+            {
+                return "";
+            }
+
+            if (_teammatesMissing > 0)
+            {
+                return "TAKIM ARKADAŞLARINIZ BASE'DE BEKLENİYOR";
+            }
+
+            return _opponentsMissing > 0 ? "RAKİP BASE'DE BEKLENİYOR" : "";
+        }
+
+        /// <summary>Roster refresh: how many are still out of their base, split by side. Fed by the SAME
+        /// <c>ready</c> flag the server's gate counts (§10.1) — no second ledger, so the text can never
+        /// disagree with the gate that actually opens the round.</summary>
+        private void HandleLobbyState(LobbyStateMsg msg)
+        {
+            _teammatesMissing = 0;
+            _opponentsMissing = 0;
+
+            if (msg?.players == null)
+            {
+                return;
+            }
+
+            PlayerCombatState combat = PlayerCombatState.Instance;
+            int selfId = combat != null ? combat.PlayerId : 0;
+            string ownTeam = TeamWire(combat != null ? combat.Team : Team.Neutral);
+
+            for (int i = 0; i < msg.players.Length; i++)
+            {
+                PlayerInfo info = msg.players[i];
+
+                // Same scope as the server's gate: connected PLAYERS only, and our own state is the
+                // inBase flag, not a roster row.
+                if (info == null || info.role == "admin" || info.playerId == selfId)
+                {
+                    continue;
+                }
+
+                if (!string.IsNullOrEmpty(info.connection) &&
+                    info.connection != ArenaProtocol.CONNECTION_CONNECTED)
+                {
+                    continue;
+                }
+
+                if (info.ready)
+                {
+                    continue;
+                }
+
+                if (ownTeam.Length > 0 && info.team == ownTeam)
+                {
+                    _teammatesMissing++;
+                }
+                else
+                {
+                    _opponentsMissing++;
+                }
+            }
+        }
+
+        /// <summary>Team on the wire (§10.5); empty for <see cref="Team.Neutral"/> — a teamless player
+        /// has no "own side", so everyone missing reads as an opponent.</summary>
+        private static string TeamWire(Team team)
+        {
+            switch (team)
+            {
+                case Team.Red: return "red";
+                case Team.Blue: return "blue";
+                default: return "";
+            }
+        }
+
+        private void SetNotice(string notice)
+        {
+            if (_hud != null)
+            {
+                _hud.SetCenterNotice(notice);
+            }
+        }
+
         /// <summary>Name of the base to head for ("KIRMIZI tabanına"); no color for
         /// <see cref="Team.Neutral"/>, since every base is open to them
         /// (<c>PlayerCombatState.EvaluateZones</c>).</summary>
@@ -185,6 +317,7 @@ namespace VortexArena.Modes.Tournament
 
             _guiding = false;
             PlayerCombatState.Instance?.SetModePrompt("");
+            SetNotice("");
         }
     }
 }

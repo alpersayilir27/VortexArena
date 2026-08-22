@@ -11,8 +11,8 @@ namespace VortexArena.Core.UI
 {
     /// <summary>
     /// The <b>team-agnostic</b> common base of the mode HUDs: phase/time, countdown, health, death
-    /// overlay and status text, kill feed, your own kill/death counter and the match end line.
-    /// It is a presentation component — NO rules/authority, it computes nothing.
+    /// overlay and status text, the big centre notice, kill feed, your own kill/death counter and the
+    /// match end line. It is a presentation component — NO rules/authority, it computes nothing.
     ///
     /// <para><b>Nothing team-related lives here</b> (some modes have no teams): the score line, the
     /// team color and the team column are the subclass's job
@@ -51,6 +51,16 @@ namespace VortexArena.Core.UI
         [SerializeField] protected Image healthFill;
         [Tooltip("Opsiyonel: kendi öldürme/ölüm sayacın (lobby_state'ten). Atanmazsa çizilmez.")]
         [SerializeField] protected TMP_Text selfStatsText;
+        [Tooltip("Ölüm ekranının açık kalma süresi (sn). 0 = canlanana kadar açık kalır.")]
+        [SerializeField] private float deathOverlaySeconds;
+
+        [Header("Merkez bildirimi")]
+        [Tooltip("Opsiyonel: ekranın ortasındaki büyük bildirim kökü. Yazacak bir şey yokken kapanır.")]
+        [SerializeField] protected GameObject centerNoticeRoot;
+        [Tooltip("Opsiyonel: merkez bildiriminin metni. Geri sayım ve modun uyarısı AYNI elemanı kullanır.")]
+        [SerializeField] protected TMP_Text centerNoticeText;
+        [Tooltip("Opsiyonel: yalnız geri sayım boyunca açılan hafif karartma.")]
+        [SerializeField] protected GameObject centerNoticeDim;
 
         /// <summary>A kill feed line + its expiry time (unscaled).</summary>
         private struct KillFeedLine
@@ -75,6 +85,12 @@ namespace VortexArena.Core.UI
         private string _countdownLabel = "";
         private bool _countdownActive;
         private bool _killFeedDirty;
+
+        /// <summary>The mode's own center notice (see <see cref="SetCenterNotice"/>).</summary>
+        private string _modeNotice = "";
+
+        /// <summary>Unscaled time the death screen closes at; negative = no timer running.</summary>
+        private float _deathOverlayHideAt = -1f;
 
         // Who killed the local player, kept as an id (not a resolved name): a lobby_state arriving
         // later can still turn it into a real name. Cleared only on revive/lobby.
@@ -149,6 +165,7 @@ namespace VortexArena.Core.UI
             TryBindCombat();
             RedrawKillFeed();
             RefreshStatusText();
+            RefreshCenterNotice();
         }
 
         protected virtual void Update()
@@ -159,6 +176,7 @@ namespace VortexArena.Core.UI
                 TryBindCombat();
             }
 
+            TickDeathOverlay();
             AgeKillFeed();
 
             if (_killFeedDirty)
@@ -203,6 +221,7 @@ namespace VortexArena.Core.UI
                 _countdownActive = false;
                 _countdownLabel = "";
                 RefreshStatusText();
+                RefreshCenterNotice();
             }
 
             SetText(phaseText, PhaseLabel(msg.phase, msg.phaseReason, msg.modeState));
@@ -231,6 +250,7 @@ namespace VortexArena.Core.UI
             }
 
             RefreshStatusText();
+            RefreshCenterNotice();
         }
 
         private void HandleKillEvent(KillEventMsg msg)
@@ -296,7 +316,9 @@ namespace VortexArena.Core.UI
 
             _countdownActive = false;
             _countdownLabel = "";
+            _modeNotice = "";
             RefreshStatusText();
+            RefreshCenterNotice();
 
             SetText(phaseText, WinnerLine(msg));
             SetText(timeText, "00:00");
@@ -312,6 +334,7 @@ namespace VortexArena.Core.UI
         {
             _countdownActive = false;
             _countdownLabel = "";
+            _modeNotice = "";
             _killFeed.Clear();
             _killFeedDirty = false;
 
@@ -322,10 +345,9 @@ namespace VortexArena.Core.UI
             SetText(selfStatsText, "");
             RefreshStatusText();
 
-            if (deathOverlay != null)
-            {
-                deathOverlay.SetActive(false);
-            }
+            _deathOverlayHideAt = -1f;
+            ShowDeathOverlay(false);
+            RefreshCenterNotice();
 
             ClearDeathLine();
         }
@@ -385,20 +407,49 @@ namespace VortexArena.Core.UI
 
         private void HandleAliveChanged(bool alive)
         {
-            if (deathOverlay != null)
-            {
-                deathOverlay.SetActive(!alive);
-            }
+            ShowDeathOverlay(!alive);
 
             if (alive)
             {
+                _deathOverlayHideAt = -1f;
                 ClearDeathLine();
+                RefreshCenterNotice();
                 return;
             }
+
+            // ⚠️ Measured from DEATH, not from the killer line arriving: kill_event may never come
+            // (environmental death) and the screen would then never close.
+            _deathOverlayHideAt = deathOverlaySeconds > 0f
+                ? Time.unscaledTime + deathOverlaySeconds
+                : -1f;
 
             // ⚠️ The killer is NOT cleared here — kill_event may already have arrived (see
             // HandleKillEvent). With no killer yet the line opens as a fallback and is rewritten.
             RefreshDeathLine();
+            RefreshCenterNotice();
+        }
+
+        /// <summary>Closes the death screen once <c>deathOverlaySeconds</c> is up, leaving the centre
+        /// to the mode's notice. With no revive (<c>reviveAnchor:none</c>) the screen would otherwise
+        /// stay until the round ends and cover everything the player is actually waiting for.</summary>
+        private void TickDeathOverlay()
+        {
+            if (_deathOverlayHideAt < 0f || Time.unscaledTime < _deathOverlayHideAt)
+            {
+                return;
+            }
+
+            _deathOverlayHideAt = -1f;
+            ShowDeathOverlay(false);
+            RefreshCenterNotice();
+        }
+
+        private void ShowDeathOverlay(bool visible)
+        {
+            if (deathOverlay != null)
+            {
+                deathOverlay.SetActive(visible);
+            }
         }
 
         private void HandleStatusChanged(string status)
@@ -411,12 +462,55 @@ namespace VortexArena.Core.UI
 
         /// <summary>While the countdown is active the big number is shown, otherwise the combat status
         /// text. The death screen carries its own copy: the overlay covers the HUD's own status line,
-        /// and the revive countdown lives in exactly that text.</summary>
+        /// and the revive countdown lives in exactly that text.
+        /// <para>Where a centre notice IS wired the number belongs to that (bigger) element instead,
+        /// and this line keeps the mode's guidance — otherwise the guidance would be swallowed by the
+        /// number exactly while it matters ("stay in the base").</para></summary>
         private void RefreshStatusText()
         {
-            string text = _countdownActive ? _countdownLabel : _combatStatus;
+            string text = _countdownActive && centerNoticeText == null ? _countdownLabel : _combatStatus;
             SetText(statusText, text);
             SetText(deathStatusText, text);
+        }
+
+        /// <summary>The mode's own big centre line (empty clears). ONE element carries all of it — the
+        /// countdown and the mode's notice must not jump in size or place between states.
+        /// <para>Priority: countdown &gt; mode notice. While the death screen is up the notice waits —
+        /// the killer line is read first (<c>deathOverlaySeconds</c>).</para>
+        /// <para>⚠️ Presentation only: WHAT to write is the mode's decision, never this class's — no
+        /// <c>if (modeId == …)</c> here (§10.5).</para></summary>
+        public void SetCenterNotice(string notice)
+        {
+            notice ??= "";
+            if (notice == _modeNotice)
+            {
+                return;
+            }
+
+            _modeNotice = notice;
+            RefreshCenterNotice();
+        }
+
+        /// <summary>Draws the centre notice; the dim belongs to the COUNTDOWN alone — a permanent veil
+        /// over a free-roam player walking back to their base would be a hazard, not an emphasis.</summary>
+        private void RefreshCenterNotice()
+        {
+            bool deathScreenUp = deathOverlay != null && deathOverlay.activeSelf;
+            string text = _countdownActive
+                ? _countdownLabel
+                : (deathScreenUp ? "" : _modeNotice);
+
+            SetText(centerNoticeText, text);
+
+            if (centerNoticeRoot != null)
+            {
+                centerNoticeRoot.SetActive(text.Length > 0);
+            }
+
+            if (centerNoticeDim != null)
+            {
+                centerNoticeDim.SetActive(text.Length > 0 && _countdownActive);
+            }
         }
 
         /// <summary>The death screen's killer line. No killer (environmental death, self-kill, or a
