@@ -25,11 +25,11 @@ namespace VortexArena.Core.UI
         [Tooltip("Göz hizasına göre dikey ofset (m; negatif = aşağıda).")]
         [SerializeField] private float verticalOffset = -0.32f;
         [Tooltip("Konum yumuşatma süresi (s).")]
-        [SerializeField] private float positionSmoothTime = 0.35f;
+        [SerializeField] private float positionSmoothTime = 0.175f;
         [Tooltip("Bu açıdan küçük kafa dönüşlerinde panel yerinde kalır (derece).")]
-        [SerializeField] private float yawDeadZoneDegrees = 18f;
+        [SerializeField] private float yawDeadZoneDegrees = 9f;
         [Tooltip("Ölü bölge aşılınca yöne oturma hızı (derece/sn ölçeği).")]
-        [SerializeField] private float yawSmoothTime = 0.35f;
+        [SerializeField] private float yawSmoothTime = 0.175f;
 
         private Vector3 _positionVelocity;
         private float _yawVelocity;
