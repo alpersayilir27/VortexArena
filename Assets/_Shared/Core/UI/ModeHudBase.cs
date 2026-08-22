@@ -114,6 +114,12 @@ namespace VortexArena.Core.UI
         /// from here (<c>PlayerInfo.score</c>, §10.2). The base only resolves the names.</summary>
         protected virtual void OnLobbyStateApplied(LobbyStateMsg msg) { }
 
+        /// <summary>The match state was applied (phase/time/score already drawn) — a mode's OWN extra
+        /// panels are fed from here. Symmetric with <see cref="OnLobbyStateApplied"/>, and the only
+        /// place a subclass gets to see <c>modeState</c> outside a label: the base never interprets
+        /// that string (§10.1).</summary>
+        protected virtual void OnMatchStateApplied(MatchStateMsg msg) { }
+
         // ------------------------------------------------------------- Unity lifecycle
 
         protected virtual void OnEnable()
@@ -227,6 +233,8 @@ namespace VortexArena.Core.UI
             SetText(phaseText, PhaseLabel(msg.phase, msg.phaseReason, msg.modeState));
             SetText(timeText, FormatTime(msg.timeRemaining));
             SetText(scoreText, ScoreLine(msg));
+
+            OnMatchStateApplied(msg);
         }
 
         private void HandleCountdown(CountdownMsg msg)

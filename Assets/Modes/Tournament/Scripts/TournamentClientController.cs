@@ -1,4 +1,7 @@
 using System;
+using UnityEngine;
+using VortexArena.Core;
+using VortexArena.Core.Combat;
 using VortexArena.Core.UI;
 using VortexArena.Net;
 using VortexArena.Protocol;
@@ -6,7 +9,8 @@ using VortexArena.Protocol;
 namespace VortexArena.Modes.Tournament
 {
     /// <summary>PRESENTATION component at the root of the Tournament HUD prefab; adds only what is
-    /// the tournament's: round number, round score, alive count, regroup label.</summary>
+    /// the tournament's: round number, round score, alive count, regroup label and the banner for the
+    /// round that just closed.</summary>
     /// <remarks>Everything else comes from <see cref="ModeHudBase"/>.
     /// <para>⚠️ Score means something else here: <c>scoreRed</c>/<c>scoreBlue</c> count rounds won,
     /// not kills (§10.5) — same number, different label, so the score line is not copied from
@@ -16,6 +20,12 @@ namespace VortexArena.Modes.Tournament
     /// on every death.</para></remarks>
     public class TournamentClientController : ModeHudBase
     {
+        [Header("Tur paneli")]
+        [Tooltip("Can barının yanındaki tur/skor paneli (HealthHud içindeki örnek).")]
+        [SerializeField] private TeamScorePanel roundScorePanel;
+        [Tooltip("Can barının altındaki tur sonucu şeridi (HealthHud içindeki örnek).")]
+        [SerializeField] private RoundResultBanner roundResultBanner;
+
         /// <summary>"3v2" from the last <c>lobby_state</c>; appended to the score line.</summary>
         private string _aliveLine = "";
 
@@ -23,6 +33,13 @@ namespace VortexArena.Modes.Tournament
         // the 1 Hz match_state (a "3v2" arriving a second late misses the death).
         private int _scoreRed;
         private int _scoreBlue;
+
+        /// <summary>The <c>roundend:…</c> token the banner has already shown. The same
+        /// <c>match_state</c> can be rebroadcast (an operator pause landing inside the regroup) and the
+        /// banner must not restart on a result already read — which is why the token carries the round
+        /// NUMBER: without it two rounds won by the same team would be the same string and the second
+        /// would be swallowed.</summary>
+        private string _shownRoundEnd = "";
 
         /// <summary>The alive line is not in the base, so clearing it on return to lobby lives here
         /// too (same pattern as FFA's standings line).</summary>
@@ -43,6 +60,17 @@ namespace VortexArena.Modes.Tournament
             _aliveLine = "";
             _scoreRed = 0;
             _scoreBlue = 0;
+            _shownRoundEnd = "";
+
+            if (roundScorePanel != null)
+            {
+                roundScorePanel.Clear();
+            }
+
+            if (roundResultBanner != null)
+            {
+                roundResultBanner.Hide();
+            }
         }
 
         protected override string ScoreLine(MatchStateMsg msg)
@@ -83,11 +111,18 @@ namespace VortexArena.Modes.Tournament
         }
 
         /// <summary>Mode pause (<c>phaseReason == "mode"</c>) = between-rounds regroup;
-        /// <c>modeState</c> is <c>regroup:&lt;ready&gt;/&lt;total&gt;</c> (§10.1).</summary>
+        /// <c>modeState</c> is <c>regroup:&lt;ready&gt;/&lt;total&gt;</c> (§10.1). The broadcast that
+        /// OPENS that pause still carries <c>roundend:…</c> — one tick later the regroup state
+        /// overwrites it.</summary>
         protected override string ModeStateLabel(string modeState)
         {
             string counts = ValueAfter(modeState, "regroup:");
-            return counts.Length > 0 ? $"TOPLANMA {counts}" : "TOPLANMA";
+            if (counts.Length > 0)
+            {
+                return $"TOPLANMA {counts}";
+            }
+
+            return ValueAfter(modeState, "roundend:").Length > 0 ? "TUR BİTTİ" : "TOPLANMA";
         }
 
         /// <summary>Roster refreshed: the alive count lives here (§10.2).</summary>
@@ -97,7 +132,84 @@ namespace VortexArena.Modes.Tournament
             SetText(scoreText, BuildScoreLine());
         }
 
+        /// <summary>Feeds the two panels riding the health strip: the running round score, and the
+        /// result of a round that has just closed.</summary>
+        protected override void OnMatchStateApplied(MatchStateMsg msg)
+        {
+            if (roundScorePanel != null)
+            {
+                roundScorePanel.SetScore(msg.scoreRed, msg.scoreBlue);
+
+                // Only `round:<n>` carries the number. During the regroup the heading deliberately KEEPS
+                // the last round instead of blanking: an empty line where a number was reads as a fault.
+                int round = ParseRound(msg.modeState);
+                if (round > 0)
+                {
+                    roundScorePanel.SetRoundLabel($"TUR {round}");
+                }
+            }
+
+            ApplyRoundEnd(msg.modeState);
+        }
+
         // ---------------------------------------------------------------- internals
+
+        /// <summary>The finished round's result (<c>roundend:&lt;kazanan&gt;:&lt;n&gt;</c>, §10.1).</summary>
+        /// <remarks>⚠️ LATCHED, not polled: the token rides exactly one broadcast (the one that opens the
+        /// regroup) and the next server tick overwrites it with <c>regroup:…</c>. Reading it off a timer
+        /// would miss it.</remarks>
+        private void ApplyRoundEnd(string modeState)
+        {
+            string value = ValueAfter(modeState, "roundend:");
+            if (value.Length == 0 || value == _shownRoundEnd)
+            {
+                return;
+            }
+
+            _shownRoundEnd = value;
+
+            if (roundResultBanner == null)
+            {
+                return;
+            }
+
+            int sep = value.IndexOf(':');
+            string winner = sep >= 0 ? value.Substring(0, sep) : value;
+
+            if (winner == "draw")
+            {
+                roundResultBanner.Show("TUR BERABERE", RoundOutcome.Draw);
+                return;
+            }
+
+            string ownTeam = TeamWire(PlayerCombatState.Instance != null
+                ? PlayerCombatState.Instance.Team
+                : Team.Neutral);
+
+            // No side of our own (a player the server has not put on a team yet): naming the winner is
+            // the only honest line — "you won" would be a guess.
+            if (ownTeam.Length == 0)
+            {
+                roundResultBanner.Show(winner == "red" ? "TURU KIRMIZI ALDI" : "TURU MAVİ ALDI",
+                    RoundOutcome.Draw);
+                return;
+            }
+
+            bool won = winner == ownTeam;
+            roundResultBanner.Show(won ? "TUR KAZANILDI" : "TUR KAYBEDİLDİ",
+                won ? RoundOutcome.Won : RoundOutcome.Lost);
+        }
+
+        /// <summary>Team on the wire (§10.5); empty for <see cref="Team.Neutral"/>.</summary>
+        private static string TeamWire(Team team)
+        {
+            switch (team)
+            {
+                case Team.Red: return "red";
+                case Team.Blue: return "blue";
+                default: return "";
+            }
+        }
 
         private string BuildScoreLine()
         {

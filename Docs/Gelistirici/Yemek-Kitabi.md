@@ -715,6 +715,16 @@ prefabının altına **iç içe prefab** olarak koy, sonra iki alanı bağla: `h
 `Backdrop/Fill`, `healthText` → `Backdrop/Value`. Bar kendi `HeadLockedHud`'uyla kafaya kilitlidir;
 HUD'da ayrıca bir can göstergesi **bulundurma** — aynı sayı iki yerde çizilirdi.
 
+**Takım skoru / tur sonucu gerekiyorsa:** ikisi de aynı `HealthHud` örneğinin içinden gelir, yeni
+prefab koymana gerek yok — çünkü ikisi de barın **tek** `HeadLockedHud`'una biner (ikinci bir kafa
+kilidi eklenmez, gerekçesi `HeadLockedHud`'un kendi belgesinde). Modun kendi bileşenine iki
+`[SerializeField]` alan koy — **tabana koyma**, taban takım-agnostiktir — ve HUD prefabında bağla:
+`TeamScorePanel` → `HealthHud/RoundScore`, `RoundResultBanner` → `HealthHud/RoundResult`. Sonra
+`OnMatchStateApplied(msg)`'i override edip `panel.SetScore(msg.scoreRed, msg.scoreBlue)` de; tur
+kavramın varsa `panel.SetRoundLabel($"TUR {n}")`, sonucu duyuracaksan
+`banner.Show("TUR KAZANILDI", RoundOutcome.Won)`. Lobiye dönüşte `panel.Clear()`. Takımsız modda
+alanları **boş bırak**: panel zaten `ModeRuntime.IsTeamless` ile kendini gizler.
+
 **Ortada büyük yazı gerekiyorsa (geri sayım, "şunu bekliyorsun"):**
 `_Shared/App/Resources/UI/RoundNoticeHud.prefab`'ı aynı desenle HUD prefabının altına **iç içe
 prefab** olarak koy — **en son kardeş** (opak ölüm ekranının üstünde çizilsin diye) — örneği

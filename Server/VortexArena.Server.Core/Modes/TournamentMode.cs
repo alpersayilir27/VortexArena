@@ -233,10 +233,17 @@ public sealed class TournamentMode : IGameMode
             }
         }
 
+        // The result rides the SAME broadcast that opens the regroup (§10.1): match_state already
+        // carries the new score, and a message of its own would be a second sender for one fact.
+        // ⚠️ Built BEFORE the increment — it names the round that just CLOSED. The number is not
+        // decoration: without it two rounds won by the same team are the same string and the client's
+        // latch swallows the second.
+        var result = $"roundend:{(winnerTeam.Length > 0 ? winnerTeam : "draw")}:{_round}";
+
         _round++;
 
         // Regroup: everyone physically walks to their own base (free-roam — nobody is teleported, §10.4).
-        if (!director.TryPauseForMode("regroup:0/0"))
+        if (!director.TryPauseForMode(result))
         {
             // abort_match / an operator pause may have come in between: the round flow is out of our
             // hands, so log it rather than fail silently.
@@ -269,6 +276,8 @@ public sealed class TournamentMode : IGameMode
     {
         var (ready, total) = CountInBase(director);
 
+        // ⚠️ This is also what OVERWRITES the roundend state one tick after EndRound opened the pause —
+        // the client latches that value on arrival rather than polling for it (§10.1).
         director.SetModeState($"regroup:{ready}/{total}"); // broadcasts only if it CHANGED
 
         if (total == 0) return; // nobody left — wait for the operator's abort_match
