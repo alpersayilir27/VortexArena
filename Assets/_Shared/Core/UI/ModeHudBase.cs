@@ -30,6 +30,8 @@ namespace VortexArena.Core.UI
         [Header("Maç durumu")]
         [SerializeField] protected TMP_Text phaseText;
         [SerializeField] protected TMP_Text timeText;
+        [Tooltip("Süre kutusunun kökü (arkaplan dahil) — süre YOKken gizlenir. Boş bırakılabilir.")]
+        [SerializeField] protected GameObject timeFrame;
         [SerializeField] protected TMP_Text scoreText;
 
         [Header("Kill-feed")]
@@ -231,7 +233,7 @@ namespace VortexArena.Core.UI
             }
 
             SetText(phaseText, PhaseLabel(msg.phase, msg.phaseReason, msg.modeState));
-            SetText(timeText, FormatTime(msg.timeRemaining));
+            SetTimeText(FormatTime(msg.timeRemaining));
             SetText(scoreText, ScoreLine(msg));
 
             OnMatchStateApplied(msg);
@@ -329,7 +331,7 @@ namespace VortexArena.Core.UI
             RefreshCenterNotice();
 
             SetText(phaseText, WinnerLine(msg));
-            SetText(timeText, "00:00");
+            SetTimeText("00:00");
 
             string score = EndScoreLine(msg);
             if (score != null)
@@ -347,7 +349,7 @@ namespace VortexArena.Core.UI
             _killFeedDirty = false;
 
             SetText(phaseText, "");
-            SetText(timeText, "");
+            SetTimeText("");
             SetText(scoreText, "");
             SetText(killFeedText, "");
             SetText(selfStatsText, "");
@@ -678,6 +680,19 @@ namespace VortexArena.Core.UI
         /// is shown.
         /// </summary>
         protected virtual string ModeStateLabel(string modeState) => "BEKLEME";
+
+        /// <summary>Draws the clock and hides its FRAME when there is no clock to draw.</summary>
+        /// <remarks>The frame is a panel, not bare text: an empty one hanging over the health bar in
+        /// the lobby reads as a broken HUD. Only the base knows when the value is gone, so only the
+        /// base can pull the frame with it.</remarks>
+        private void SetTimeText(string value)
+        {
+            SetText(timeText, value);
+            if (timeFrame != null)
+            {
+                timeFrame.SetActive(!string.IsNullOrEmpty(value));
+            }
+        }
 
         protected static string FormatTime(float seconds)
         {

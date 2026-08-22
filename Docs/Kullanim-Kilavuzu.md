@@ -576,8 +576,11 @@ sayaç **maçın** süresidir. **4 turu kazanan maçı kazanır** (bu yüzden en
 
 ⚠️ **Maç süresi bir turun ortasında biterse o tur yarıda kesilmez:** oynanmakta olan tur normal
 şekilde sonuna kadar oynanır, bitince maç biter ve o ana kadar çok tur almış takım kazanır (eşitse
-berabere). Üstteki saat `00:00`'ı gösterirken hâlâ oyun sürüyorsa sebebi budur — son tur devam
-ediyordur.
+berabere). Saat `00:00`'ı gösterirken hâlâ oyun sürüyorsa sebebi budur — son tur devam ediyordur.
+Aynı saati oyuncular da can barlarının üstünde görür.
+
+⚠️ **BİTİR bunu yapmaz:** operatör tur ortasında bitirirse o tur sayılmaz, kazanan o anki tur
+skorundan ilan edilir. Bekleyebiliyorsan turun bitmesini bekle.
 
 ⚠️ **Bağlantısı kopan oyuncu ölü sayılır.** Gözlüğü kapanan, ağdan düşen ya da oyundan çıkan oyuncu
 takımını ayakta tutmaz; bir takımın **tamamı** düşerse tur karşı takıma yazılır ve akış tıkanmaz.
@@ -632,6 +635,10 @@ vurulabildiği için savaş dışıdır.
 > Yanlış harita seçtiysen alt ortadaki kırmızı **✕ İPTAL** → doğru haritayı seç → **▶ BAŞLAT**.
 
 > **Alt ortadaki dört düğme:** **▶ BAŞLAT** · **⏸ DURAKLAT/DEVAM** · **■ BİTİR** · **✕ İPTAL**.
+> ⚠️ **BİTİR İKİ KEZ basılır:** ilk basışta ikon turuncuya döner ("onaylamak için tekrar bas"),
+> ikinci basışta maç biter. Turuncu ~3 saniye sonra kendiliğinden söner ve hiçbir şey gönderilmez.
+> Sebebi: BİTİR geri alınamaz ve **oynanmakta olan turu saymaz** — kazanan o anki tur skorundan
+> ilan edilir.
 > ⚠️ **BİTİR ile İPTAL aynı şey değildir:** BİTİR maçı **normal yoldan** kapatır — o anki skora göre
 > kazanan ilan edilir, oyunculara kazandın/kaybettin ekranı ve skor tablosu çıkar. İPTAL maçı
 > **sonuçsuz** kaldırır: kazanan yoktur, sonuç ekranı da çıkmaz, herkes doğrudan lobiye döner.

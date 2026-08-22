@@ -269,6 +269,16 @@ durumunda bırakır; başarısız ölçümü ölçek olarak yazmak ise sessizce 
   hedefe alansız bir `measure_body_scale` iletir (`reload_calibration` ile aynı çift yönlü desen) ve ölçümü
   başlık yapıp `set_body_scale` ile döner. ⚠️ **Kalibresiz oyuncuya iletilmez:** ölçü arena zeminine
   göredir, kalibresiz başlıkta zemin bilinmiyor — atlanan hedefler `admin_state.notice` ile bildirilir.
+- **`restart_body_tracking`** `{ "type":"restart_body_tracking", "playerId":5 }` — o oyuncunun
+  başlığında **gövde izlemesini yeniden başlattırır** (§6.11). **`playerId:0` = TÜM oyuncular.**
+  Sunucu bir şey hesaplamaz; hedefe alansız bir `restart_body_tracking` iletir
+  (`measure_body_scale` ile aynı çift yönlü desen). **Cevabı yoktur** — sonucu gövdenin akıp
+  akmadığıdır, o da zaten diğer ekranlarda görünür.
+  ⚠️ **Kalibresiz hedef ATLANMAZ** (`measure_body_scale`'in aksine, `reload_calibration` gibi):
+  izleme onarımının arena hizalamasıyla ilgisi yoktur, kapı komutu boşuna işlevsiz bırakırdı.
+  ⚠️ **Başlık bunu zaten kendiliğinden yapar** (§6.11); komut, otomatik denemelerin aralığı
+  büyüdükten sonra operatöre hemen deneten elle kapıdır. Bu yüzden **kalibrasyon komutlarına
+  gömülmez**: çalışan bir hizalamayı yenilemek, gereksiz yere izleme kesintisi demek olurdu.
 - **`return_to_lobby`** `{ "type":"return_to_lobby" }`
 - **`set_selection`** `{ "type":"set_selection", "modeId":"tdm", "sceneName":"<Arena>", "roundSeconds":600, "scoreLimit":30, "countdownSeconds":10 }` — bir sonraki maçın **ortak** mod/harita/süre/limit/geri sayım seçimi. Maçı BAŞLATMAZ; yalnız sunucudaki seçimi günceller ve sunucu bunu `admin_state` ile tüm adminlere yayar (çoklu admin senkronu, §5.3). Boş string veya `0` bırakılan alan mevcut değerini korur. Seçim maç bitiminde sıfırlanmaz — operatör aynı haritayı tekrar başlatabilsin.
   ⚠️ **`sceneName` yalnız operatör harita/mod imlecini gerçekten oynattığında doldurulur** (süre/limit dokunuşunda boş gider): dolu harita alanı sahnelemeyi tetikler (§10.7), yani süre değiştirmek herkesi bir arenaya taşırdı.
@@ -429,6 +439,10 @@ Aynı mesaj **lobi sahnelemesini** de taşır (§10.7): operatör lobideyken har
 `set_body_scale` ile döner (§10.8). Yalnız player'a gider; ölçüm başarısız olursa istemci yine
 `set_body_scale` yollar ama `error` alanı **dolu** olur — eski ölçek durur, gerekçe operatöre
 gider (§5.1).
+**`restart_body_tracking`** `{ "type":"restart_body_tracking" }` — istemci gövde izlemesini yeniden
+başlatır (§6.11). Yalnız player'a gider; `playerId` taşımaz — hedef zaten o bağlantıdır. ⚠️ **Cevap
+mesajı YOKTUR** ve eklenmemelidir: "yeniden başlatıldı" demek "gövde akıyor" demek değildir, tek
+anlamlı ölçüt akışın kendisidir ve o zaten `0x07` ile görünür.
 **`clear_calibration`** `{ "type":"clear_calibration", "keepSaved":true }` — istemci hizalamayı
 **ve yarım kalmış elle kalibrasyon sekansını** siler ve elle kalibrasyon kapısını yeniden açar
 (§10.6). Yalnız player'a gider; `playerId` taşımaz — hedef zaten o bağlantıdır. Tek alanı
@@ -939,8 +953,47 @@ girdileri de** düşürürdü.
 davranış; bayat durum temizliği snapshot'ın işidir).
 
 ⚠️ **İstemci düşürme kuralı iskelete DAYANMAZ:** uzak avatarın yaşam süresi snapshot'tan gelir
-(§6.3, ~1.5 sn). İskelet akışı kesilirse avatar kaybolmaz, gövdesi son karede donar — gövdeyi
-kaybetmek avatarı kaybetmekten iyidir.
+(§6.3, ~1.5 sn). İskelet akışı kesilse de avatar kaybolmaz; gövdesi §6.11'deki poz güdümlü sürücüye
+devredilir.
+
+### 6.11 Gövde görünürlük garantisi — iskelet ölünce poz kanalı çizer
+
+Gövdenin çizilmesi altı halkaya bağlıdır: gözlüğün body tracking servisi → Movement SDK retargeter →
+`0x07` blob (tek datagram, parçalanma yok) → sunucu → `0x08` → alıcının kayıt defteri. Herhangi biri
+koparsa iskelet akışı susar. **Oyuncu bu yüzden görünmez kalmaz:** alıcı, iskelet kökü tazeliğini
+yitirdiğinde gövdeyi **poz kanalından** çizer — kök kafanın zemin izdüşümü (yalnız yaw), kafa kemiği
+kafa pozundan, kollar el pozlarına iki kemikli IK ile; gerisi olduğu yerde kalır.
+
+**Neden alıcı tarafında:** poz kanalı bu arızada da akmaya devam eder — aynı veri oyuncunun isim
+etiketini ve silahını doğru yerde çizmeye devam eder, kanıtı budur. Gönderendeki T-poz yedeği ise
+yerine geçtiği retargeter'a bağımlıdır: onunla birlikte ölür ve kendisinden sonraki halkaların
+(blob boyutu, paket kaybı, hiç başlamamış akış) hiçbirini kapsamaz.
+
+⚠️ **Canlı T-poz akışı poz kanalına DEVREDİLMEZ.** Yedek çerçeve üreten gönderen kendi durumu
+hakkında açık bir beyanda bulunuyordur; alıcı onu ikinci kez yorumlamaz. Devir yalnız akış
+**hiçbir şey** üretmediğinde olur.
+
+⚠️ **Tazelik testi şarttır, çünkü kayıt defterinde kök örnekleri eskimez.** Yaş sorulmazsa dakikalar
+önce susmuş bir akış gövdeyi son kökünde sonsuza dek dondurur; hiç örnek gelmemişse gövde sıfır
+ölçekle tümden kaybolur — ve o hâlde **kemiklere asılı çarpma kutuları da bir noktaya çöktüğü için
+oyuncu vurulamaz olur**. Görünürlük bu yüzden sunum meselesi değil, maç bütünlüğü meselesidir.
+
+⚠️ **Eşik, iskelet periyodunun (`SKELETON_RATE_HZ` → ≈83 ms) ve interp tamponunun belirgin
+üstündedir.** Sıradan paket kaybında devretmek gövdeyi iki sürücü arasında birkaç karede bir gidip
+getirir.
+
+**Gönderen taraf kendini onarır.** `RetargeterValid` **kesintisiz** tanıma süresi boyunca düşük
+kalırsa başlık body tracking'i yeniden başlatır, bayat gövde kalibrasyonunu siler ve boyu ipucu
+olarak verir; denemeler artan aralıklarla yinelenir ve gövde dönünce sayaçlar sıfırlanır.
+
+- ⚠️ **`OVRBody` bunu kendiliğinden yapmaz:** başarısız bir başlatmadan sonra kendini kapatır ve
+  **bir daha denemez** — onu geri açan tek şey bu onarımdır.
+- ⚠️ **Boy ipucu `bodyScale` DEĞİLDİR:** o iki göz yüksekliğinin oranıdır (§10.8), metre taşımaz.
+  İpucu HMD'nin **arena uzayındaki** yüksekliğinden türetilir: gözlüğün kendi zemini bu arızada tam
+  da güvenilmez olandır, arena zeminini ise kendi hizalamamız sabitler.
+- ⚠️ **Kesintisiz süre şartı gevşetilemez:** `RetargeterValid` sahne yüklemesinde ve kaynak anlık göz
+  kaybettiğinde bir kare düşer; ona bakıp yeniden başlatmak, onarmaya çalıştığı arızayı **üretir**.
+- Operatör aynı onarımı `restart_body_tracking` ile elle de tetikleyebilir (§5.2).
 
 ## 7. DTO tasarım kuralları
 
@@ -1333,7 +1386,7 @@ olmalı, tanınmayan `modeId` reddedilir):
 > | Ayakta sayımında kim sayılır? | Yalnız `alive` **ve** `calibrated` oyuncular (§10.6) — tek kural, elemede de aynısı. Kalibresiz oyuncu ne vurur ne vurulur, yani savaş dışıdır; tur artık **yalnız** elemeyle bittiği için onu "ayakta" saymak, kimsenin öldüremediği bir oyuncunun turu (ve onunla maçı) süresiz açık tutması demek olurdu |
 > | Eleme neden `OnKill` ile değil tik ile ölçülür? | Takım **bağlantı kopmasıyla** da boşalır ve o yolda `OnKill` hiç çağrılmaz. Tek tarama = tek doğruluk kaynağı |
 > | Turlar arası ne olur? | `paused`/`mode`, `modeState:"regroup:<h>/<t>"`. Geri sayım **yalnız** herkes kendi taban bölgesine girip `set_ready{true}` yollayınca başlar — zaman aşımı YOKTUR, bekleme süresizdir |
-> | Biten turu kim kazandı, oyuncu nereden öğrenir? | Toplanmayı **açan** `match_state`'in `modeState`'i `roundend:<kazanan>:<n>`dir (§10.1); ayrı bir mesaj YOKTUR — skor zaten aynı yayında güncel gidiyor ve ikinci bir gönderici doğurmaya değmez. Maçı bitiren turda bu değer yayınlanmaz, sonucu `match_end` taşır |
+> | Biten turu kim kazandı, oyuncu nereden öğrenir? | Toplanmayı **açan** `match_state`'in `modeState`'i `roundend:<kazanan>:<n>`dir (§10.1); ayrı bir mesaj YOKTUR — skor zaten aynı yayında güncel gidiyor ve ikinci bir gönderici doğurmaya değmez. ⚠️ **Maçı bitiren tur da yayınlar:** değer toplanmadan ÖNCE, turu kapatan aynı tikte gönderilir — sonra ya toplanma onu ezer ya da `match_end` gelir. Aksi hâlde maçı belirleyen tur, oyuncunun kazandığı söylenmeyen tek tur olurdu |
 > | Geri sayımda biri tabandan çıkarsa? | Geri sayım **iptal edilir**, faz `paused`/`mode`'a döner ve sayaç sıfırdan başlar. Kural "tabanda **bekle**"dir, "tabana uğra" değil. ⚠️ İptalin **istisnası yoktur**: geri sayım her koşulda geri alınabilir |
 > | Toplanma takılırsa ne olur? | Çıkış operatöründür: takılan oyuncuyu **atar** (`kick`), maçı o anki skorla bitirir (`end_match`) ya da sonuçsuz kaldırır (`abort_match`). Atılan/kopan oyuncu toplamdan düştüğü için kalanlar hazırsa tur o an başlar — sayım her tikte çevrimiçi oyunculardan yeniden yapılır. Bekleme uzarsa sunucu konsoluna 30 sn'de bir "toplanma bekleniyor (h/t) — tabanına dönmeyenler: …" satırı düşer; bu bir **teşhis** satırıdır, tur başlatmaz |
 > | Cephane? | Şarjör + yedek şarjör (`weaponSource:"weaponcanvas"`), **her tur başında herkes tam dolu** — istemci geri sayımda doldurur. Sunucunun bundan haberi yoktur (§10.3: silah tablosu yok) |

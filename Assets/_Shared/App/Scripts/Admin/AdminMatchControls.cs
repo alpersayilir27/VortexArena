@@ -33,6 +33,12 @@ namespace VortexArena.App.Admin
         /// <summary>Safety refresh interval (s) — same rhythm as <see cref="AdminHud"/>.</summary>
         private const float RefreshInterval = 0.25f;
 
+        /// <summary>How long END stays armed after the first click (s).</summary>
+        /// <remarks>⚠️ END is irreversible and its neighbour is the destructive ABORT, so it asks twice:
+        /// first click arms (icon goes accent), second click inside this window sends. Short on purpose —
+        /// an armed button the operator has forgotten about is a trap, not a safeguard.</remarks>
+        private const float EndArmSeconds = 3f;
+
         [Header("Seçim kaynağı")]
         [Tooltip("Mod/harita/süre seçimi ve lobi durumu bu panelde yaşar; BAŞLAT ona sorar. " +
                  "Boşsa Awake'te aynı canvas'ta aranır.")]
@@ -58,6 +64,9 @@ namespace VortexArena.App.Admin
         private float _nextRefresh;
         private bool _dirty = true;
 
+        /// <summary>When the armed END disarms itself; <c>&lt;= 0</c> = not armed.</summary>
+        private float _endArmedUntil;
+
         private void Awake()
         {
             if (preferences == null)
@@ -80,7 +89,7 @@ namespace VortexArena.App.Admin
         {
             Wire(startButton, StartMatch);
             Wire(pauseButton, TogglePause);
-            Wire(endButton, AdminCommands.EndMatch);
+            Wire(endButton, EndMatch);
             Wire(abortButton, AdminCommands.AbortMatch);
         }
 
@@ -176,6 +185,28 @@ namespace VortexArena.App.Admin
             preferences.StartSelectedMatch();
         }
 
+        /// <summary>Two-step END: the first click arms, a second one inside
+        /// <see cref="EndArmSeconds"/> sends.</summary>
+        /// <remarks>⚠️ Not the same weight as the other three: END declares a winner from the CURRENT
+        /// score and throws away the round in progress, and the operator cannot take it back. The arming
+        /// is shown by the icon turning accent — no label to change on a 60×60 icon button.</remarks>
+        private void EndMatch()
+        {
+            if (!IsEndArmed)
+            {
+                _endArmedUntil = Time.unscaledTime + EndArmSeconds;
+                AdminCommands.Note("BİTİR: onaylamak için tekrar bas.");
+                _dirty = true;
+                return;
+            }
+
+            _endArmedUntil = 0f;
+            _dirty = true;
+            AdminCommands.EndMatch();
+        }
+
+        private bool IsEndArmed => _endArmedUntil > 0f && Time.unscaledTime < _endArmedUntil;
+
         /// <summary>
         /// Pauses while <c>playing</c>, resumes an operator-paused match.
         /// <para>⚠️ Decided from the server's phase, not a local flag: with multiple admins somebody
@@ -266,6 +297,13 @@ namespace VortexArena.App.Admin
             // result on screen and one in the lobby does not exist.
             bool canEnd = roster == null ||
                           (!inLobby && roster.Phase != ArenaProtocol.PHASE_FINISHED);
+            if (!canEnd)
+            {
+                // A button that goes unusable while armed must not stay armed: the next time it lights
+                // up, one click would end a different match.
+                _endArmedUntil = 0f;
+            }
+
             if (endButton != null)
             {
                 endButton.interactable = canEnd;
@@ -273,7 +311,7 @@ namespace VortexArena.App.Admin
 
             if (endIcon != null)
             {
-                endIcon.color = canEnd ? UiKit.Title : UiKit.Faint;
+                endIcon.color = !canEnd ? UiKit.Faint : IsEndArmed ? UiKit.Accent : UiKit.Title;
             }
             if (abortButton != null)
             {

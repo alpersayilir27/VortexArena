@@ -257,6 +257,20 @@ public sealed class TournamentMode : IGameMode
                           $"{(winnerTeam.Length > 0 ? winnerTeam + " +1" : "puan yok")} " +
                           $"(kırmızı {director.ScoreRed} : mavi {director.ScoreBlue}).");
 
+        // The result rides the SAME broadcast channel as everything else the mode says (§10.1):
+        // match_state already carries the new score, and a message of its own would be a second sender
+        // for one fact.
+        // ⚠️ Built BEFORE the increment — it names the round that just CLOSED. The number is not
+        // decoration: without it two rounds won by the same team are the same string and the client's
+        // latch swallows the second.
+        var result = $"roundend:{(winnerTeam.Length > 0 ? winnerTeam : "draw")}:{_round}";
+
+        // ⚠️ Published BEFORE the match-end gates below, not only on the way into the regroup: the
+        // DECIDING round used to be the one round nobody was ever told they had won — the client jumped
+        // straight from the firefight to the match result. On the normal path the regroup overwrites
+        // this a tick later; when the match ends it is simply the last thing the players are told.
+        director.SetModeState(result);
+
         // ⚠️ One gate for both the win limit and the round cap, since both derive from the same number —
         // leaving either open would silently end an "unlimited" match.
         var limit = director.ScoreLimit;
@@ -291,13 +305,6 @@ public sealed class TournamentMode : IGameMode
             DecideByRoundScore(director, "maç süresi doldu");
             return;
         }
-
-        // The result rides the SAME broadcast that opens the regroup (§10.1): match_state already
-        // carries the new score, and a message of its own would be a second sender for one fact.
-        // ⚠️ Built BEFORE the increment — it names the round that just CLOSED. The number is not
-        // decoration: without it two rounds won by the same team are the same string and the client's
-        // latch swallows the second.
-        var result = $"roundend:{(winnerTeam.Length > 0 ? winnerTeam : "draw")}:{_round}";
 
         _round++;
 
