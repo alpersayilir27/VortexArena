@@ -224,7 +224,7 @@ namespace VortexArena.Core.Combat
 
         private void Update()
         {
-            if (_weapon == null || _detached || !isRayVisible || !WeaponGranter.CanSelectWeapon)
+            if (_weapon == null || _detached || !isRayVisible || !WeaponGranter.HandsFree)
             {
                 // Collect any live ray, otherwise it freezes on screen — the toggle may have been
                 // cleared at runtime (Editor tinkering), or a hand may have filled mid-hover, and a
@@ -579,7 +579,8 @@ namespace VortexArena.Core.Combat
                 case PointerEventType.Select:
                     // Select = "this weapon is mine now": WeaponGranter builds/hides the clone.
                     // This component has nothing to do with the held weapon; the source stays framed.
-                    WeaponGranter.SelectWeapon(_weapon != null ? _weapon.Definition : null);
+                    WeaponGranter.SelectWeapon(_weapon != null ? _weapon.Definition : null,
+                        WeaponGranter.ResolveController(evt));
                     _hovering.Clear();
                     HideRay(_rayLeft);
                     HideRay(_rayRight);
