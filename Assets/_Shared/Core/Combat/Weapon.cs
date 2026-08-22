@@ -59,6 +59,11 @@ namespace VortexArena.Core.Combat
         /// Short enough to read as "the gun is trying", long enough not to flood the channel.</summary>
         private const float DryCueSeconds = 0.35f;
 
+        /// <summary>Minimum repeat interval of the reload-rejected cue (s). Longer than the dry-fire one:
+        /// this cue answers a deliberate gesture, which cannot repeat anywhere near as fast as a held
+        /// trigger.</summary>
+        private const float ReloadRejectCueSeconds = 0.6f;
+
         /// <summary>Blocked-muzzle haptic amplitude — lighter than a shot, it just says "no".</summary>
         private const float BlockedHapticAmplitude = 0.6f;
 
@@ -273,6 +278,7 @@ namespace VortexArena.Core.Combat
         private float nextFireTime;
         private float nextBlockedCueTime;
         private float nextDryCueTime;
+        private float nextReloadRejectTime;
         private Bounds bodyBounds;
         private bool bodyBoundsResolved;
         private float reloadEndTime;
@@ -977,8 +983,9 @@ namespace VortexArena.Core.Combat
         /// weapon (§10.5; a frame weapon HAS reload, driven by the below-the-belt gesture), already
         /// reloading, no definition, full magazine, dead player, insufficient reserve (Discard: no
         /// full magazine; Pool: empty). In Discard mode the magazine is dropped up front: the
-        /// trigger is dead for the duration and remaining rounds are BURNED. No sound is played —
-        /// WeaponAnimator owns the magazine audio timeline.</summary>
+        /// trigger is dead for the duration and remaining rounds are BURNED. A STARTED reload plays
+        /// no sound here — WeaponAnimator owns the magazine audio timeline; only the empty-reserve
+        /// refusal cues (<see cref="CueReloadRejected"/>).</summary>
         public bool TryStartReload()
         {
             if (IsDisposableGrant || IsReloading || definition == null)
@@ -991,7 +998,10 @@ namespace VortexArena.Core.Combat
             if (definition.ReserveMode == WeaponReserveMode.DiscardMagazine)
             {
                 if (reserveRounds < definition.MagazineSize)
+                {
+                    CueReloadRejected();
                     return false;
+                }
 
                 // The new magazine is deducted NOW; rounds in the old one count as thrown away
                 // with it (the default product rule).
@@ -1000,6 +1010,7 @@ namespace VortexArena.Core.Combat
             }
             else if (reserveRounds <= 0)
             {
+                CueReloadRejected();
                 return false;
             }
             // Pool mode keeps the rounds in the magazine (CS2 rule) and deducts on completion.
@@ -1009,6 +1020,33 @@ namespace VortexArena.Core.Combat
             ReloadStarted?.Invoke(definition.ReloadTime);
             AmmoChanged?.Invoke();
             return true;
+        }
+
+        /// <summary>"Nothing left to load" cue: the reload gesture WAS recognised and refused.
+        /// <para>⚠️ Only the empty-reserve branches cue. A full magazine, a dead player, a running reload
+        /// or a Disposable grant are states in which lowering the weapon is perfectly ordinary and a click
+        /// each time would be nagging; an empty reserve is the one refusal where the player is waiting for
+        /// something that will never arrive, and a silent gesture there reads as a broken one.</para>
+        /// <para>TWO pulses against the ONE that confirms a started reload
+        /// (<see cref="WeaponReloadGesture"/>): both share the dry click, so the rhythm is what separates
+        /// "done" from "cannot".</para>
+        /// <para><see cref="DryFired"/> is deliberately NOT raised — that event means "magazine empty" and
+        /// drives the HUD's reload prompt, which is exactly the advice that does not apply here.</para>
+        /// </summary>
+        private void CueReloadRejected()
+        {
+            if (Time.unscaledTime < nextReloadRejectTime)
+            {
+                return;
+            }
+
+            nextReloadRejectTime = Time.unscaledTime + ReloadRejectCueSeconds;
+
+            weaponAudio?.PlayDry();
+
+            // The burst path (not the weapon's own HapticPulse): it is the same channel the reload
+            // confirmation uses, so the two cues cannot fight over the motor.
+            ControllerHaptics.PulseBoth(this, 2);
         }
 
         private void FinishReload()

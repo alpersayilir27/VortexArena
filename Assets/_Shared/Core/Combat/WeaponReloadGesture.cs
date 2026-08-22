@@ -12,11 +12,12 @@ namespace VortexArena.Core.Combat
     /// sits <c>gripPosition</c> forward along the barrel (0–34 cm per weapon) and that offset
     /// projects vertically with the weapon's angle — measuring the root would catch the same gesture
     /// at belly level on one weapon and knee level on another.</para>
-    /// <para>⚠️ No threshold is a FIXED metre value: the measure is the hand's DROP BELOW THE EYE
-    /// and the threshold is a ratio of STANDING eye height (<see cref="WaistDropRatio"/>) — exactly
-    /// belt level on an upright player. Short and tall players lower their arm differently but both
-    /// lower it "to the waist". Hence the fixed drop from the head (<c>headY − 0.62</c>) was
-    /// dropped.</para>
+    /// <para>⚠️ The measure is the hand's DROP BELOW THE EYE and the threshold is a ratio of
+    /// STANDING eye height (<see cref="WaistDropRatio"/>) — exactly belt level on an upright player.
+    /// Short and tall players lower their arm differently but both lower it "to the waist", which a
+    /// fixed drop from the head (<c>headY − 0.62</c>) cannot follow. The ratio is then CLAMPED into a
+    /// metre band (<see cref="MinWaistDropMeters"/>): the denominator is a MEASURE, and a measure that
+    /// is wrong must not be able to move the waist line out of reach.</para>
     /// <para>⚠️ Both halves of the measure are deliberate and must not be mixed: the reference point
     /// is the LIVE eye (descends with the head), the scale is STANDING height
     /// (<see cref="StandingHeightState"/>, posture-independent). A floor-fixed line would put a
@@ -32,7 +33,8 @@ namespace VortexArena.Core.Combat
     /// <para>A single haptic pulse confirms only when the reload ACTUALLY started. ⚠️ It buzzes
     /// because <c>TryStartReload</c> accepted, not because the gesture was recognized: buzzing on a
     /// rejected gesture would tell the player "reloaded" and the lie would surface only at the
-    /// trigger.</para>
+    /// trigger. The one refusal that DOES answer — an empty reserve — is cued by <c>Weapon</c> itself
+    /// with a different rhythm, because only <c>Weapon</c> knows which refusal it was.</para>
     /// <para>With no resolvable rig (admin spectator, editor session, unrecognized hand) the gesture
     /// is NEVER recognized: there is no correct answer to "where is the hand" in a hand-less
     /// session, so it stays silent instead of guessing.</para>
@@ -48,12 +50,26 @@ namespace VortexArena.Core.Combat
         private const float WaistDropRatio = 0.38f;
 
         /// <summary>
-        /// How far ABOVE the waist line the hand must rise to re-arm (same scale). ⚠️ Not an
-        /// independent ratio — derived from <see cref="WaistDropRatio"/>: two separate thresholds
-        /// would let the re-arm band be forgotten when the waist is raised, and the band could
-        /// invert.
+        /// Metre band the waist line is clamped into after <see cref="WaistDropRatio"/> is applied.
+        /// <para>⚠️ The denominator is a learned measure (<see cref="StandingHeightState"/>) and its two
+        /// error directions are not symmetric: too small self-triggers the gesture on a hanging arm, too
+        /// large puts the waist line where the arm cannot go and reload dies SILENTLY for the rest of the
+        /// session. The band is the range the ratio yields across real players (eye 1.40–1.75 m →
+        /// 0.53–0.67 m), so a sound measure never reaches it and a poisoned one cannot leave it.</para>
         /// </summary>
-        private const float RearmMargin = 0.10f;
+        private const float MinWaistDropMeters = 0.45f;
+
+        /// <inheritdoc cref="MinWaistDropMeters"/>
+        private const float MaxWaistDropMeters = 0.68f;
+
+        /// <summary>
+        /// Re-arm line as a fraction of the waist line: the hand must rise this far above the eye-drop
+        /// that armed it. ⚠️ Expressed against the waist line, not against the raw height, so it inherits
+        /// the clamp and cannot invert — two independent thresholds would let the re-arm band be
+        /// forgotten whenever the waist line moves. 0.74 ≈ (0.38 − 0.10) / 0.38, i.e. a tenth of eye
+        /// height above the belt.
+        /// </summary>
+        private const float RearmDropFactor = 0.74f;
 
         /// <summary>How far below horizontal the controller's forward axis must point: sin(25°).
         /// With the hand at the belt and a neutral wrist the muzzle sits ~20–30° down; a steeper
@@ -95,13 +111,15 @@ namespace VortexArena.Core.Combat
             }
 
             // Hand drop below the EYE: the reference descends with the head, the scale is standing
-            // height.
+            // height, and the result is clamped to metres (rationale in MinWaistDropMeters).
             float drop = eyeY - anchor.position.y;
+            float waistDrop = Mathf.Clamp(standingEye * WaistDropRatio,
+                MinWaistDropMeters, MaxWaistDropMeters);
 
             if (!_armed)
             {
                 // Armed only after the hand rises to chest level once.
-                if (drop < standingEye * (WaistDropRatio - RearmMargin))
+                if (drop < waistDrop * RearmDropFactor)
                 {
                     _armed = true;
                 }
@@ -109,7 +127,7 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
-            bool belowWaist = drop > standingEye * WaistDropRatio;
+            bool belowWaist = drop > waistDrop;
             bool pointingDown = -anchor.forward.y >= MinDownSin;
 
             if (belowWaist && pointingDown)
