@@ -4,6 +4,7 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 using VortexArena.Net;
+using VortexArena.Protocol;
 
 namespace VortexArena.App.Admin
 {
@@ -52,6 +53,8 @@ namespace VortexArena.App.Admin
         [SerializeField] private TextMeshProUGUI scoreBlueText;
         [Tooltip("FFA lider tablosu satırı; takımlı modda boş kalır.")]
         [SerializeField] private TextMeshProUGUI leaderboardText;
+        [Tooltip("Üst banttaki maç saati. Koşan maçta geri sayar; maç yokken boştur.")]
+        [SerializeField] private TextMeshProUGUI clockText;
         [Tooltip("Skorların ortasındaki chip: faz/süre yazar, tıklanınca istatistikleri açar.")]
         [SerializeField] private TextMeshProUGUI chipText;
 
@@ -252,6 +255,30 @@ namespace VortexArena.App.Admin
                 // label made "where are the stats" a per-phase question.
                 chipText.text = ChipLabelText;
             }
+
+            if (clockText != null)
+            {
+                clockText.text = ClockLine(roster);
+            }
+        }
+
+        /// <summary>The match clock on the top band, <c>mm:ss</c>. Empty in the lobby: a frozen 00:00
+        /// over an empty arena reads as a stuck match.</summary>
+        /// <remarks>What the number MEANS belongs to the mode (§10.1) — a round's remainder in a
+        /// round-based match, the whole match's where that mode has no round limit. The panel only
+        /// draws what <c>match_state</c> carries; it does not interpret it.</remarks>
+        private static string ClockLine(AdminRoster roster)
+        {
+            bool inLobby = roster.Phase == ArenaProtocol.PHASE_PAUSED &&
+                           (string.IsNullOrEmpty(roster.PhaseReason) ||
+                            roster.PhaseReason == ArenaProtocol.PAUSE_REASON_LOBBY);
+            if (inLobby)
+            {
+                return "";
+            }
+
+            int total = Mathf.Max(0, Mathf.CeilToInt(roster.TimeRemaining));
+            return $"{total / 60:00}:{total % 60:00}";
         }
 
         /// <summary>

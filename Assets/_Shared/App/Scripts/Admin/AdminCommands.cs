@@ -157,6 +157,16 @@ namespace VortexArena.App.Admin
             }
         }
 
+        /// <summary>Ends the match NORMALLY (§5.2): result screen + return to lobby. ⚠️ Not
+        /// <see cref="AbortMatch"/> — abort throws the scoreboard away.</summary>
+        public static void EndMatch()
+        {
+            if (Send(new EndMatchMsg()))
+            {
+                SetStatus("Maçı bitirme isteği gönderildi.");
+            }
+        }
+
         /// <summary>Freezes the running match (§5.2). The server only applies it in <c>playing</c>;
         /// in any other phase the command is silently dropped.</summary>
         public static void PauseMatch()

@@ -555,7 +555,7 @@ Sorun yaşandığında ilk bakılacak yer burasıdır ve sana üç şeyi ayırt 
 | Silah | Arenaya yerleştirilmiş silahlardan seçilir: oyuncu silaha ~2 metreye kadar yaklaşıp nişan alır, yan tuşa (grip) basınca silahın bir kopyası eline gelir. Silah yerinden kaybolmaz, sınırsız kez alınabilir. ⚠️ Silahların arenaya konması **haritayı yapan kişinin işidir** — konmamış bir arenada oyuncunun eline silah gelmez | Oyuncu kumandanın **yan tuşunu (grip) basılı tutunca** eline rastgele bir silah gelir; bıraktığında silah kaybolur, tekrar bastığında **başka** bir silah gelir | Takım Ölüm Maçı ile aynı (arenadaki silahlardan seçilir) |
 | Şarjör | Boşalınca kendiliğinden dolar | **Dolmaz** — oyuncu silahı bırakıp yenisini çeker | Her **tur başında** herkes tam dolu başlar |
 | Ölünce | 5 saniye bekle, sonra **kendi renkli tabanına yürü** | Tabana gitmek yok: **5 saniye boyunca olduğun yerde kıpırdamadan dur** (1 metreden fazla yürürsen sayaç başa döner) | **Canlanma yok** — tur bitene kadar beklersin, yeni tur herkesi tam canla ayağa kaldırır |
-| Varsayılan süre / puan | 300 sn (5 dk) / 30 | 300 sn (5 dk) / 20 | **Tur başına** 2 dk / 4 tur |
+| Varsayılan süre / puan | 300 sn (5 dk) / 30 | 300 sn (5 dk) / 20 | 600 sn (10 dk) / **4 tur** |
 
 **Herkes Tek'te oyunculara söylenecek iki cümle:**
 1. *"Silah almak için kumandanın yan tuşunu basılı tut — bıraktığında silah kaybolur."*
@@ -570,9 +570,11 @@ Sorun yaşandığında ilk bakılacak yer burasıdır ve sana üç şeyi ayırt 
 #### Turnuva modu — turlar hâlinde eleme
 
 Turnuva bir maçı **turlara** böler. Tur içinde canlanma yoktur: ölen oyuncu turun sonuna kadar
-izler. Bir takımın sahadaki **herkesi** ölünce tur biter ve diğer takım **+1 tur** alır. Tur süresi
-(varsayılan 2 dk) dolarsa **ayakta kalan sayısı fazla olan** takım turu alır; sayı eşitse o tur
-kimseye puan yazmaz. **4 turu kazanan maçı kazanır** (bu yüzden en fazla 7 tur oynanır).
+izler. Bir takımın sahadaki **herkesi** ölünce tur biter ve diğer takım **+1 tur** alır. **Turun kendi
+süre sınırı yoktur** — alan küçük olduğu için tur zaten saniyeler içinde bitiyor; geri sayan tek
+sayaç **maçın** süresidir. **4 turu kazanan maçı kazanır** (bu yüzden en fazla 7 tur oynanır);
+maç süresi bir turun ortasında biterse o tur son turdur ve **ayakta kalan sayısı fazla olan** takım
+alır, sayı eşitse o tur kimseye puan yazmaz.
 
 **Turlar arası TOPLANMA — operatörün asıl işi burada:**
 
@@ -587,18 +589,24 @@ kimseye puan yazmaz. **4 turu kazanan maçı kazanır** (bu yüzden en fazla 7 t
   bağlantısı koptu, oyundan çıktı) sistem kendiliğinden devam etmez — çözüm sende:
   - o oyuncuyu satırındaki **AT** düğmesiyle çıkar → kalanlar zaten tabanındaysa tur **hemen**
     başlar, ya da
-  - **İPTAL** ile maçı bitir.
+  - **■ BİTİR** ile maçı o anki skora göre bitir (kazanan ilan edilir), ya da **✕ İPTAL** ile
+    sonuçsuz kaldır.
   Bu bilinçlidir: turnuvada eksik oyuncuyla açılan bir tur, hakemin istemediği bir turdur.
 
-> Süre ve tur sayısını Tercihler'den değiştirebilirsin: **Süre** turnuvada **turun** süresidir
-> (maçın değil), **Skor limiti** ise maçı kazanmak için gereken tur sayısıdır. Geri sayım
-> uzunluğu da ayarlanabilir (5–30 saniye).
+> Süre ve tur sayısını Tercihler'den değiştirebilirsin: **Süre** turnuvada da **MAÇIN tamamıdır**
+> (turun değil — turun kendi süre sınırı yoktur), **Skor limiti** ise maçı kazanmak için gereken tur
+> sayısıdır. Geri sayım uzunluğu da ayarlanabilir (5–30 saniye).
+>
+> **Maçı hangisi önce bitirirse o bitirir:** ya bir takım gereken turu alır, ya da üstteki saat
+> sıfırlanır. Saat maç boyunca geri sayar — turlar arasında sıfırlanmaz ve toplanma ile geri sayım
+> sırasında **durur**, yani beklemek maç süresini yemez.
 >
 > **Sınırsız turnuva:** skor limitinde **[−]**'ye `1`'in de altına inersen değer **sınırsız**
-> olur. O maçta kimse "maçı kazandı" diye ilan edilmez ve tur tavanı da yoktur — turlar sen
-> **İPTAL**'e basana kadar birbirini izler (her turun arasında yine toplanma + geri sayım vardır).
-> Sahada turu hakem yönetiyorsa kullanacağın ayar budur; bitirmeyi unutursan maç kendiliğinden
-> kapanmaz. Geri dönmek için aynı satırda **[+]**'ya bas (`1` tura döner) ya da modu değiştir
+> olur. Tur tavanı yoktur, turlar birbirini izler (her turun arasında yine toplanma + geri sayım
+> vardır) ve maçı bitiren tek şey **süre** olur: saat bitince koşan tur normal yolla kapanır ve
+> **çok tur alan takım maçı kazanır**, eşitse berabere. Erken bitirmek istersen **■ BİTİR**'e bas
+> — kazanan yine ilan edilir.
+> Sahada turu hakem yönetiyorsa kullanacağın ayar budur. Geri dönmek için aynı satırda **[+]**'ya bas (`1` tura döner) ya da modu değiştir
 > (mod değişimi limiti o modun varsayılanına çeker).
 
 **Maç başlatma sırası**
@@ -613,7 +621,14 @@ kimseye puan yazmaz. **4 turu kazanan maçı kazanır** (bu yüzden en fazla 7 t
 > ⚠️ **BAŞLAT'a bastıktan sonra harita/mod satırları kilitlenir** ve maç bitene (ya da **İPTAL**'e
 > basana) kadar sönük durur — yükleme ve geri sayım sırasında da. Sebebi: harita seçmek **tüm
 > gözlüklere** sahne yükletir, kurulmakta olan maçın altından çekilirse oyuncular yarı yüklü kalır.
-> Yanlış harita seçtiysen alt ortadaki kırmızı **■ İPTAL** → doğru haritayı seç → **▶ BAŞLAT**.
+> Yanlış harita seçtiysen alt ortadaki kırmızı **✕ İPTAL** → doğru haritayı seç → **▶ BAŞLAT**.
+
+> **Alt ortadaki dört düğme:** **▶ BAŞLAT** · **⏸ DURAKLAT/DEVAM** · **■ BİTİR** · **✕ İPTAL**.
+> ⚠️ **BİTİR ile İPTAL aynı şey değildir:** BİTİR maçı **normal yoldan** kapatır — o anki skora göre
+> kazanan ilan edilir, oyunculara kazandın/kaybettin ekranı ve skor tablosu çıkar. İPTAL maçı
+> **sonuçsuz** kaldırır: kazanan yoktur, sonuç ekranı da çıkmaz, herkes doğrudan lobiye döner.
+> Maç doğal yoldan bitmiyorsa (sınırsız turnuva gibi) kullanacağın düğme **BİTİR**'dir; İPTAL'i
+> yanlış başlatılmış, iptal edilmesi gereken maçlar için sakla.
 
 **Herkesi lobiye almak:** harita listesini aç, ilk satırdaki **Lobi**'yi seç — tüm gözlükler lobi
 sahnesine döner. Ayrı bir "Lobiye Dön" düğmesi yoktur. Maç koşarken bu satır da kilitlidir; koşan
@@ -704,8 +719,8 @@ ve **arenanın dışı**. İkisini de sen görürsün, oyuncu da kendi ekranınd
 - Oyuncu arena sınırına yaklaşırsa ekranı hafifçe kararmaya başlar; dışarı çıkarsa tümden kararır,
   uyarı çıkar ve **ateş edemez** → geri içeri girmesi yeterli, silahı anında geri çalışır. Dışarıda
   kalmak **can götürmez**; onu senin görmen için ekranında işaretlenir (aşağıdaki bölüm).
-- Maç, süre dolunca veya skor limitine ulaşılınca biter (skor limiti **sınırsız** seçildiyse ikinci
-  yol yoktur — bitirmek sana kalır); kazanan duyurulur ve **kazanan ekranı
+- Maç, süre dolunca veya skor limitine ulaşılınca biter — hangisi önce olursa (skor limiti
+  **sınırsız** seçildiyse geriye yalnız süre kalır, maç yine kendiliğinden biter); kazanan duyurulur ve **kazanan ekranı
   sen bir şey seçene kadar ekranda kalır.** Kendiliğinden lobiye dönülmez: sıradaki haritayı seç
   (herkes oraya geçer), harita listesinden **Lobi**'yi seç ya da **İPTAL**'e bas. Böylece maç
   sonunu konuşmak, ödül vermek ya da sıradaki turu anlatmak için istediğin kadar vaktin olur.
@@ -713,12 +728,13 @@ ve **arenanın dışı**. İkisini de sen görürsün, oyuncu da kendi ekranınd
 **Maçı geçici olarak durdurmak (DURAKLAT)**
 
 Sahada bir şey olduğunda — biri gözlüğünü düzeltiyor, bir oyuncu düştü, seyirciyle konuşulacak —
-ekranın alt ortasındaki **⏸ DURAKLAT** düğmesi (BAŞLAT ile İPTAL'in arasında):
+ekranın alt ortasındaki **⏸ DURAKLAT** düğmesi (BAŞLAT ile BİTİR'in arasında):
 
 - Süre durur, kimse kimseye hasar veremez, **skorlar olduğu gibi kalır.**
 - Oyuncular arenada kalır, hiçbir yere ışınlanmaz; maç bittiği sanılmaz.
 - Aynı düğme yeşil **▶ DEVAM ET**'e döner; bastığında maç **kaldığı yerden** sürer.
-- Maçı gerçekten bitirmek istiyorsan duraklatma değil **İPTAL** kullan.
+- Maçı gerçekten bitirmek istiyorsan duraklatma değil **■ BİTİR** kullan (kazanan ilan edilir);
+  maçı sonuçsuz iptal etmek istiyorsan **✕ İPTAL**.
 - ⚠️ **Duraklatılmış maçta harita/mod değiştirilemez** — donmuş da olsa maç kuruludur. Önce
   **İPTAL**, sonra yeni harita.
 

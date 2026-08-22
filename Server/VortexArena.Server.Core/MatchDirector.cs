@@ -1122,6 +1122,61 @@ public sealed class MatchDirector
         return true;
     }
 
+    /// <summary><c>end_match</c> (§5.2) — ends the match NORMALLY: <see cref="Phase.Finished"/> +
+    /// <c>match_end</c> + the result screen, then the usual return to the lobby.</summary>
+    /// <remarks>⚠️ NOT <c>abort_match</c>: that one skips the result entirely and drops to the lobby.
+    /// This exists because a mode's own end condition may never fire — an unlimited tournament has no
+    /// win limit and no round cap (§10.5) — and "there is no way out but abort" costs the operators the
+    /// scoreboard their players just played for.
+    /// <para>The winner is decided HERE and the mode's <see cref="IGameMode.IsMatchOver"/> is NOT asked:
+    /// the operator is ending it precisely because the mode's condition is not met, so a mode answer
+    /// would be "not over" and there would be nobody to declare.</para>
+    /// <para>Works from a pause too (the between-rounds regroup is one) — otherwise the command would be
+    /// unusable in exactly the mode that needs it most. Lobby and an already finished match are logged
+    /// and ignored.</para></remarks>
+    public async Task<bool> EndMatchAsync()
+    {
+        var outbox = new List<Outgoing>();
+        lock (_gate)
+        {
+            bool inMatch = _phase == Phase.Playing ||
+                           (_phase == Phase.Paused && _pauseReason != PauseReason.Lobby &&
+                            _pauseReason != PauseReason.None);
+            if (!inMatch)
+            {
+                Console.WriteLine($"[match] end_match yok sayıldı: faz {PhaseWire(_phase)} (bitirilecek maç yok).");
+                return false;
+            }
+
+            EnterEndLocked(outbox, DateTime.UtcNow, DecideOutcomeLocked());
+        }
+        await FlushAsync(outbox);
+        FlushRosterRefresh();
+        return true;
+    }
+
+    /// <summary>Who is ahead RIGHT NOW, on the channel the mode's rules use (§10.2). Draw when nobody
+    /// leads — inventing a winner from a 0-0 board would be worse than saying "berabere".</summary>
+    private MatchOutcome DecideOutcomeLocked()
+    {
+        if (_rules.Scoring == ScoreKind.Player)
+        {
+            var leaderId = 0;
+            var best = 0;
+            foreach (var player in ConnectedPlayersLocked())
+            {
+                if (player.Score <= best) continue;
+                best = player.Score;
+                leaderId = player.PlayerId;
+            }
+
+            return leaderId > 0 ? MatchOutcome.Player(leaderId) : MatchOutcome.Draw;
+        }
+
+        if (_scoreRed > _scoreBlue) return MatchOutcome.Team("red");
+        return _scoreBlue > _scoreRed ? MatchOutcome.Team("blue") : MatchOutcome.Draw;
+    }
+
     /// <summary><c>resume_match</c> (§5.2) — resumes the match the operator paused.</summary>
     /// <remarks>⚠️ Only <see cref="PauseReason.Operator"/> is lifted. Every pause is lifted by its owner:
     /// lifting <see cref="PauseReason.Mode"/> would break the mode's sub-state,
@@ -1222,6 +1277,32 @@ public sealed class MatchDirector
             if (_modeState == next) return;
 
             _modeState = next;
+            QueueBroadcastLocked(_pendingOutbox, JsonUtil.Serialize(BuildMatchStateLocked()));
+        }
+    }
+
+    /// <summary>Overwrites the match clock (§10.1) and broadcasts <c>match_state</c>.</summary>
+    /// <remarks>The core OWNS the clock — it starts it at <see cref="EnterLiveLocked"/> and decrements it
+    /// in <see cref="TickLiveLocked"/> — but it does not own its MEANING. A round-based mode restarts
+    /// <c>playing</c> once per round while its clock is the whole MATCH's, so it writes the carried-over
+    /// budget back here. Writing it is the mode's single lever over the clock; the core still runs it.
+    /// <para>⚠️ Deliberately NOT clamped to <c>roundSeconds</c>: the value a mode writes here is by
+    /// definition a remainder, not the configured duration.</para>
+    /// <para>Does nothing outside a live/paused match, so a stale mode hook cannot resurrect a clock in
+    /// the lobby.</para></remarks>
+    public void SetTimeRemaining(float seconds)
+    {
+        lock (_gate)
+        {
+            if (_phase == Phase.Finished || (_phase == Phase.Paused && _pauseReason == PauseReason.Lobby))
+            {
+                return;
+            }
+
+            var next = MathF.Max(0f, seconds);
+            if (MathF.Abs(_timeRemaining - next) < 0.001f) return;
+
+            _timeRemaining = next;
             QueueBroadcastLocked(_pendingOutbox, JsonUtil.Serialize(BuildMatchStateLocked()));
         }
     }

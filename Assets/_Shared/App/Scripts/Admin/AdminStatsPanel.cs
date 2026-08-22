@@ -614,7 +614,7 @@ namespace VortexArena.App.Admin
                            $"mod {mode} · harita {map}" +
                            // Duration/limit can be per match (§5.2), so this is where the operator
                            // verifies the chosen value was really applied.
-                           (roster.RoundSeconds > 0 ? $" · raund {AdminCommands.FormatDuration(roster.RoundSeconds)}" : "") +
+                           (roster.RoundSeconds > 0 ? $" · süre {AdminCommands.FormatDuration(roster.RoundSeconds)}" : "") +
                            // The limit is three-valued (§5.2) and is written for unlimited too:
                            // "no limit line" and "limit is unlimited" must be distinguishable.
                            (roster.ScoreLimit != 0

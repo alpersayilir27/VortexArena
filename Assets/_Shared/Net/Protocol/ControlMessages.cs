@@ -173,6 +173,15 @@ namespace VortexArena.Protocol
         public string type = MessageTypes.AbortMatch;
     }
 
+    /// <summary>Ends the match NORMALLY (§5.2): <c>finished</c> + <c>match_end</c> + result screen.
+    /// ⚠️ Not <see cref="AbortMatchMsg"/>: abort skips both and drops straight to the lobby. The winner
+    /// is decided by the CORE from the current scores, not by the mode.</summary>
+    [Serializable]
+    public class EndMatchMsg
+    {
+        public string type = MessageTypes.EndMatch;
+    }
+
     /// <summary>Freezes a running match: <c>playing</c> → <c>paused</c>/<c>operator</c> (§5.2). Only
     /// acts while <c>playing</c>.</summary>
     [Serializable]
