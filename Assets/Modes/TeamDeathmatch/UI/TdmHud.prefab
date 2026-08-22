@@ -102,9 +102,9 @@ MonoBehaviour:
   head: {fileID: 0}
   distance: 1.1
   verticalOffset: -0.32
-  positionSmoothTime: 0.35
-  yawDeadZoneDegrees: 18
-  yawSmoothTime: 0.35
+  positionSmoothTime: 0.175
+  yawDeadZoneDegrees: 9
+  yawSmoothTime: 0.175
 --- !u!114 &2126660521902699881
 MonoBehaviour:
   m_ObjectHideFlags: 0
