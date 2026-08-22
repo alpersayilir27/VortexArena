@@ -33,6 +33,14 @@ namespace VortexArena.Core.Player
     /// a pattern straight to the motor — a vibration written behind the arbiter's back either stays on
     /// until the arbiter makes its next decision, or is never felt at all.
     /// </para>
+    /// <para>
+    /// <b>Per-hand sources</b> (<see cref="ReportHand"/>): there really are TWO motors, and a source
+    /// that knows which side it means (damage arriving from the left) says so.
+    /// Each hand resolves as max(shared sources, that hand's sources), so every source that reports
+    /// through <see cref="Report"/> without naming a hand still drives both hands exactly as before.
+    /// ⚠️ The sides are NOT two independent arbiters: a shared source at 0.8 still outranks a per-hand
+    /// 0.5 on that hand — otherwise a directional nicety could mask an obstacle warning.
+    /// </para>
     /// </summary>
     public static class ControllerHaptics
     {
@@ -78,8 +86,16 @@ namespace VortexArena.Core.Player
         // not know about each other).
         private static readonly Dictionary<string, Entry> Sources = new Dictionary<string, Entry>();
 
-        /// <summary>The last applied amplitude — so the same value is not written over and over.</summary>
-        private static float _applied;
+        /// <summary>Sources that named a hand. Kept SEPARATE from <see cref="Sources"/> so an unnamed
+        /// report keeps meaning "both hands" without every existing caller changing.</summary>
+        private static readonly Dictionary<string, Entry> LeftSources = new Dictionary<string, Entry>();
+
+        private static readonly Dictionary<string, Entry> RightSources = new Dictionary<string, Entry>();
+
+        /// <summary>The last applied amplitudes — so the same value is not written over and over.</summary>
+        private static float _appliedLeft;
+
+        private static float _appliedRight;
 
         /// <summary>
         /// <b>Pulse</b> report: while <paramref name="active"/> is true the source asks for vibration at
@@ -146,8 +162,37 @@ namespace VortexArena.Core.Player
         }
 
         /// <summary>
+        /// A source's vibration request for that frame, <b>for one hand only</b>. Same heartbeat
+        /// contract as <see cref="Report"/>: report every frame, go silent to drop out.
+        /// <para>⚠️ There is deliberately NO one-shot "pulse this hand for N seconds" helper next to
+        /// <see cref="PulseBoth"/>: a timed one-shot needs a coroutine, and every per-hand caller so far
+        /// already has a per-frame loop of its own — running the clock there costs no allocation and
+        /// keeps the "who is asking" answer inside the asking component.</para>
+        /// </summary>
+        /// <param name="sourceId">The source's fixed id.</param>
+        /// <param name="right">True = right controller.</param>
+        /// <param name="amplitude">Vibration amplitude, 0..1.</param>
+        public static void ReportHand(string sourceId, bool right, float amplitude)
+        {
+            if (string.IsNullOrEmpty(sourceId))
+            {
+                return;
+            }
+
+            Dictionary<string, Entry> target = right ? RightSources : LeftSources;
+            target[sourceId] = new Entry
+            {
+                Amplitude = Mathf.Clamp01(amplitude),
+                Time = UnityEngine.Time.unscaledTime
+            };
+
+            ApplyResolved();
+        }
+
+        /// <summary>
         /// A source's vibration request for that frame. If <paramref name="amplitude"/> is <c>0</c> the
         /// source does not want vibration (same outcome as not reporting, but explicit).
+        /// <para>Names no hand → drives BOTH.</para>
         /// </summary>
         /// <param name="sourceId">The source's fixed id.</param>
         /// <param name="amplitude">Vibration amplitude, 0..1.</param>
@@ -166,21 +211,21 @@ namespace VortexArena.Core.Player
                 Time = UnityEngine.Time.unscaledTime
             };
 
-            Apply(Resolve());
+            ApplyResolved();
         }
 
         /// <summary>
-        /// The winning amplitude: the fresh source asking for the <b>highest</b> amplitude. Mixing
-        /// (adding/multiplying) is deliberately ABSENT — summing two sources' amplitudes gives a result
-        /// harsher than either of them, and the answer to "why is it vibrating this hard" would not be
-        /// found in any single source.
+        /// The winning amplitude in <paramref name="sources"/>: the fresh source asking for the
+        /// <b>highest</b> amplitude. Mixing (adding/multiplying) is deliberately ABSENT — summing two
+        /// sources' amplitudes gives a result harsher than either of them, and the answer to "why is it
+        /// vibrating this hard" would not be found in any single source.
         /// </summary>
-        private static float Resolve()
+        private static float Resolve(Dictionary<string, Entry> sources)
         {
             float now = UnityEngine.Time.unscaledTime;
             float amplitude = 0f;
 
-            foreach (KeyValuePair<string, Entry> kv in Sources)
+            foreach (KeyValuePair<string, Entry> kv in sources)
             {
                 Entry entry = kv.Value;
                 if (now - entry.Time > EntryTimeoutSeconds)
@@ -197,16 +242,27 @@ namespace VortexArena.Core.Player
             return amplitude;
         }
 
-        private static void Apply(float amplitude)
+        /// <summary>Each hand gets max(shared, that hand). With no per-hand source in play this is
+        /// identical to the shared winner on both controllers.</summary>
+        private static void ApplyResolved()
         {
-            if (Mathf.Approximately(amplitude, _applied))
+            float shared = Resolve(Sources);
+            Apply(Mathf.Max(shared, Resolve(LeftSources)), Mathf.Max(shared, Resolve(RightSources)));
+        }
+
+        private static void Apply(float left, float right)
+        {
+            if (!Mathf.Approximately(left, _appliedLeft))
             {
-                return;
+                _appliedLeft = left;
+                OVRInput.SetControllerVibration(VibrationFrequency, left, OVRInput.Controller.LTouch);
             }
 
-            _applied = amplitude;
-            OVRInput.SetControllerVibration(VibrationFrequency, amplitude, OVRInput.Controller.LTouch);
-            OVRInput.SetControllerVibration(VibrationFrequency, amplitude, OVRInput.Controller.RTouch);
+            if (!Mathf.Approximately(right, _appliedRight))
+            {
+                _appliedRight = right;
+                OVRInput.SetControllerVibration(VibrationFrequency, right, OVRInput.Controller.RTouch);
+            }
         }
     }
 }

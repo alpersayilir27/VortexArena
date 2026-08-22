@@ -536,8 +536,10 @@ namespace VortexArena.Protocol
         public int playerId;
         public float hp;
 
-        /// <summary>The attacking player; <c>0</c> = not an attack (revive). Nothing reads it today —
-        /// reserved for a directional damage indicator.</summary>
+        /// <summary>The attacking player; <c>0</c> = not an attack (revive / environmental damage).
+        /// <para>Read by the client's directional damage indicator: it looks the attacker's pose up in
+        /// the snapshot registry, so the bearing costs NOTHING on the wire — do not add a position or
+        /// direction field here for it.</para></summary>
         public int attackerId;
     }
 

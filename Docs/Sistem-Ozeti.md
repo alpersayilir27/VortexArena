@@ -1671,15 +1671,45 @@ Karartma quad'ından **daha yakın** durduğu için saydam sıralamasında onun 
 ⚠️ Karartmanın **açıklaması** olduğu için onunla aynı kapıdadır: faz da canlılık da sorulmaz —
 kapkaranlık bir ekranı sebepsiz bırakmak, yazının kendisini gereksiz kılardı.
 
-**`DamageVignette`** (aynı yerde): can kaybının kırmızısı. Can düştükçe nabız (tek pakette 25 HP =
-tam nabız, saniyede 2 birim sönüm), can 40'ın altındayken sabit çerçeve; ölüyken çizilmez.
+**`DamageVignette`** (aynı yerde): can kaybının kırmızısı — hızla yükselip sona doğru yavaşlayan bir
+eğriyle sönen radyal çerçeve; ölüyken çizilmez. Can eşiğin altına düşünce çerçeve **tamamen sönmez**,
+düşük opaklıkta yavaşça nabız atar. Renk, opaklık, süreler, eşik ve **ana anahtar** Inspector'dadır;
+sayılar burada tutulmaz.
+⚠️ **Merkez tamamen temiz kalır** (shader'ın iç yarıçapı) ve bu bir estetik tercih değil **güvenlik**
+şartıdır: oyuncu fiziksel olarak yürüyor, görüşünün ortasını kapatan hiçbir katman konulmaz. Aynı
+kapıdan geçen diğer konfor sınırları: kamera sarsıntısı / FOV oynatması / kamera rotasyonu yok, tam
+ekran flash yok, full-screen post-process (blur, chromatic aberration, URP `Vignette` override) yok,
+saniyede 3'ten hızlı yanıp sönme yok.
 ⚠️ **`ScreenFade`'e kaynak olarak EKLENEMEZ ve eklenmemelidir:** hakem "en yüksek alfa kazanır"
 diyor, yani engel karartması 1.0'dayken hiçbir kırmızı görünmez ve oyuncu kapkaranlık bir ekranda
 canının gittiğini fark etmez. Bu yüzden kendi renderer'ı ve kendi shader'ı vardır
 (`VortexArena/ScreenVignette` — `Overlay` kuyruğu + `ZTest Always`), yani karartmanın **üstüne**
-çizilir. Engele özel değildir: mermiyle gelen hasarda da çalışır. Değeri **abonelikle değil kare
-başına farkla** okur — can yalnız ağ mesajıyla değişiyor, kalıcı tekilin doğuş sırasına bağlı bir
-abonelik ömrü yönetmeye gerek yok.
+çizilir. Engele özel değildir: mermiyle gelen hasarda da çalışır.
+⚠️ **Üst üste gelen hasar zarfı YIĞMAZ, TAZELER:** ikinci bir zarf eklemek ekranı tam da oyuncunun
+en çok görmesi gereken anda tavanın üstüne çıkarırdı. Yeni vuruş yoğunluğun yükseğini alır, sönüm
+saatini sıfırlar ve yükselişe **o anki seviyeden** başlar — sıfırdan başlasaydı ikinci vuruş ekranı
+parlatmadan önce karartırdı.
+⚠️ **Renk `.linear`'a çevrilerek yazılır:** proje Linear uzayda çiziyor ama serialize edilmiş bir
+`Color` renk seçicinin gösterdiği sRGB değerini tutuyor ve `SetColor` hiçbir dönüşüm yapmıyor —
+çevrilmeden yazılan renk shader'a belirgin biçimde fazla parlak ulaşır ve "doygunluğu düşük" olması
+istenen kırmızı saf kırmızıya kayar.
+Değeri **abonelikle değil kare başına farkla** okur — can yalnız ağ mesajıyla değişiyor, kalıcı
+tekilin doğuş sırasına bağlı bir abonelik ömrü yönetmeye gerek yok.
+
+**`DamageDirectionIndicator`** (aynı yerde, vinyetin kardeşi): hasarın geldiği kenarda beliren yay +
+o taraftaki kumandada kısa titreşim. **Ağ üzerinde hiçbir maliyeti yoktur:** `health_update` zaten
+`attackerId` taşıyor ve saldırganın pozu zaten `RemotePlayerRegistry`'de duruyor, yani yön tamamen
+istemcide çıkarılıyor — bu efekt için pakete alan **eklenmez** (gerekçe `ArenaNet-Protokol.md` §5).
+⚠️ **Kardeşinin aksine örnekleme değil ABONELİK kullanır** ve bu bilinçlidir: kare başına can farkı
+"vuruldum" der ama **kimin vurduğunu asla söyleyemez**; `attackerId` yalnız mesajın üstündedir.
+⚠️ **Açı yalnız YAW'dan hesaplanır** (iki vektör de açıdan ÖNCE XZ'ye yassıltılır). Kafanın eğimi ve
+yana yatması yayı kıpırdatmamalıdır — yoksa kafayı yana yatırmak yayı görüşün etrafında döndürürdü ki
+bu efektin var oluş sebebi tam olarak o hareketi yaptırmamaktır.
+⚠️ **Vinyet quad'ıyla BİREBİR AYNI local derinlikte durur;** katmanlama derinlikle değil **kuyrukla**
+yapılır (`VortexArena/DamageDirection` — `Overlay+1`). Farklı derinlik iki katmana farklı stereo
+ayrışması verir ve iki gözde **çift görüntü** olarak okunur.
+⚠️ `attackerId` `0` iken (çevresel hasar, canlanma) ve saldırganın pozu kayıtta yokken **hiçbir şey
+çizilmez**: uydurulmuş bir yön, yön göstermemekten kötüdür. Vinyet o durumda da çalışmaya devam eder.
 
 **`ObstacleVolumes`** (statik): *"bu şey bir iç engelin içinde mi"* sorusunun **tek** cevabı, dört
 biçimde: `Sample` + `Contains` (bir sorgu, çok nokta — kafa ve el ölçümü), `ContainsPoint` (tek
@@ -1707,7 +1737,7 @@ unutmak mümkün değil). ⚠️ Karışım (alfa toplama) bilinçli olarak yok:
 "en yüksek alfa kazanır" kuralı, tam karartma varken kendisinden düşük olan her katmanı **görünmez
 kılar**. Bu hakem yalnız *"ekran ne kadar kararsın"* sorusunu cevaplar; üstte görünmesi gereken her
 şey kendi renderer'ıyla ve daha yakında/`Overlay` kuyruğunda çizilir (`DamageVignette` ·
-`ObstacleWarningOverlay`).
+`DamageDirectionIndicator` · `ObstacleWarningOverlay`).
 
 **`ControllerHaptics`** (statik hakem — `ScreenFade`'in titreşim ikizi): kumanda titreşimini isteyen
 birden çok sistem var (engel ihlali · alan dışı · onay darbesi) ve aynı anda birden fazlası doğru
@@ -1726,6 +1756,14 @@ son yazdığı titreşimi açık bırakırdı.
 hakem bir sonraki kararını verene kadar kumandayı açık bırakır ya da "aynı genliği zaten yazdım"
 elemesine takılıp hiç duyulmazdı. Genliği nabzınkinden yüksektir: nabız bir uyarı, darbe bir
 onaydır ve ikisi aynı anda doğru olabilir.
+⚠️ **El adı veren kaynaklar ayrı tutulur** (`ReportHand`): motor gerçekten iki tanedir
+ve tarafı anlam taşıyan bir kaynak (hasarın geldiği yön) bunu söyleyebilir. Her el
+**max(el adı vermeyen kaynaklar, o elin kaynakları)** ile çözülür — yani `Report` ile bildiren her
+kaynak iki eli birden sürmeye devam eder, tek satırı değişmez. ⚠️ **İki taraf iki ayrı hakem
+DEĞİLDİR:** ortak bir kaynağın 0.8'i o eldeki 0.5'lik bir taraf kaynağını yine yener, yoksa yönlü
+bir incelik engel uyarısını maskeleyebilirdi. ⚠️ Tarafın **tek atımlık** karşılığı (`PulseBoth`'un el
+versiyonu) bilinçli olarak YOKTUR: süreli bir atım coroutine ister, oysa el adı veren çağıranların
+zaten kendi kare döngüsü var — saati orada işletmek vuruş başına allocation üretmez.
 
 **`ArenaLayers`** (statik): `Obstacle` layer adının tek yazıldığı yer, maskeyi bir kez çözer ve
 layer tanımsızsa **bir kez hata basar**. Gerekçe: `LayerMask.NameToLayer` tanımsız adda `-1` döner,
