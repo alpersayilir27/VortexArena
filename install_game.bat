@@ -78,6 +78,14 @@ if not defined VA_SEL (
     set "VA_SEL=!VA_LAST!"
     set "VA_DEF=1"
 )
+
+rem  "007" is the same version as "7": the file name carries the plain integer.
+:va_trim_zeros
+if not "!VA_SEL:~0,1!"=="0" goto :va_trimmed
+if "!VA_SEL:~1!"=="" goto :va_trimmed
+set "VA_SEL=!VA_SEL:~1!"
+goto :va_trim_zeros
+:va_trimmed
 set "VA_APK=!VA_DIR!game_v!VA_SEL!.apk"
 if exist "!VA_APK!" goto :va_picked
 echo.
