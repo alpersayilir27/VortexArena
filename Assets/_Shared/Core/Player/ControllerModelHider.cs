@@ -99,7 +99,7 @@ namespace VortexArena.Core.Player
         /// <c>DistanceControllerHandGrabInteractor</c> — the last two share one component type).
         /// <para>⚠️ These are looked up so the visuals can be silenced <b>without touching the
         /// interactor</b>. Disabling the interactor, or filtering the frame out of its candidate list,
-        /// makes ISDK swallow the grip press entirely (<c>WeaponGranter.CanSelectWeapon</c>) — the
+        /// makes ISDK swallow the grip press entirely (<c>WeaponGranter.CanSelectWith</c>) — the
         /// visual is the only part that may be taken away.</para>
         /// </summary>
         private const string DistanceGrabInteractorTypeName = "DistanceGrabInteractor";
@@ -237,7 +237,7 @@ namespace VortexArena.Core.Player
         /// reticle, but it makes ISDK swallow the grip press: with an empty candidate list the interactor
         /// still hovers on a queued press, enters Hover with a NULL interactable and dequeues the press
         /// without selecting anything. The symptom is a press that does nothing and "works on the third
-        /// try" (<c>WeaponGranter.CanSelectWeapon</c>).</para>
+        /// try" (<c>WeaponGranter.CanSelectWith</c>).</para>
         /// <para>The request must be dropped when the reason ends AND when the requester is destroyed,
         /// or the player keeps aiming at racks with no reticle.</para>
         /// </summary>

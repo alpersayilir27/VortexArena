@@ -118,31 +118,51 @@ namespace VortexArena.Core.Combat
         /// <summary>Weapon in the RIGHT hand right now — see <see cref="LeftHandWeapon"/>.</summary>
         public static Weapon RightHandWeapon => HeldWeaponIn(OVRInput.Controller.RTouch);
 
-        /// <summary>May the player TAKE a weapon from a frame right now: only with BOTH hands empty.
-        /// Read by <see cref="SelectWeapon"/> and by <see cref="WeaponFrame"/> for its aim ray, and
-        /// it drives the distance-grab visuals through
-        /// <see cref="ControllerModelHider.SetGrabVisualsSuppressed"/>.
-        /// <para>⚠️ <b>This value must NEVER gate an ISDK candidate filter</b>
-        /// (<c>IGameObjectFilter</c> / <c>CanBeSelectedBy</c>), no matter how tempting "then no
-        /// reticle is drawn either" sounds. With an empty candidate list ISDK still hovers on a
-        /// queued press (<c>Interactor.ShouldHover</c> = <c>HasCandidate || ComputeShouldSelect</c>),
-        /// enters Hover with a NULL interactable, and <c>Select()</c> then DEQUEUES the press and
-        /// selects nothing. The press is silently swallowed: the player presses grip at the rack,
-        /// the old weapon arrives instead, and only a release plus a fresh press has a chance —
-        /// which is exactly the "it takes two or three tries" symptom. Hide the VISUALS instead; the
-        /// candidate list stays whole.</para>
-        /// <para>⚠️ It is LATCHED on the grip edge, not sampled live: the decision is taken on the
-        /// FIRST frame of a press, before that frame's summon runs, because one press both selects
-        /// at the frame and summons the held clone. Sampled live, the clone would fill the hand and
-        /// close the gate on the very frame the player is selecting. From the second frame of the
-        /// press the gate closes as soon as a weapon is in hand, so the reticle dies immediately and
-        /// one press can take at most one weapon.</para></summary>
-        public static bool CanSelectWeapon { get; private set; } = true;
+        /// <summary>Are BOTH hands empty RIGHT NOW — live, unlatched. This is what the player SEES:
+        /// <see cref="WeaponFrame"/>'s aim ray and the distance-grab reticle
+        /// (<see cref="ControllerModelHider.SetGrabVisualsSuppressed"/>). Permission to actually take
+        /// a weapon is <see cref="CanSelectWith"/> — do not confuse the two.</summary>
+        public static bool HandsFree => LeftHandWeapon == null && RightHandWeapon == null;
 
-        /// <summary>Frames the current grip press has lasted; 0 = nothing gripped. Only the
-        /// difference between "first frame" and "later" matters (see
-        /// <see cref="CanSelectWeapon"/>).</summary>
-        private int _pressFrames;
+        /// <summary>May THIS hand take a weapon from a frame: were both hands empty at the moment
+        /// this hand's grip press BEGAN.
+        /// <para>⚠️ <b>Latched for the whole press; never re-closed inside it.</b> One press does two
+        /// things — it selects at the frame AND it summons the held clone — and the summon lands on
+        /// the press's FIRST frame. A live "are the hands empty" test would therefore close the gate
+        /// on frame two, while ISDK delivers its select whenever the interactor reaches Select state,
+        /// commonly a frame or more later (Normal → Hover → Select). Selection would survive only a
+        /// one-frame race: the select is rejected, <c>_selected</c> never changes, the PREVIOUS
+        /// weapon is summoned again, and it "works on the second or third try". That race is decided
+        /// by frame rate and hover stability, which is why it looks like a per-map bug.</para>
+        /// <para>⚠️ This must NEVER gate an ISDK candidate filter (<c>IGameObjectFilter</c> /
+        /// <c>CanBeSelectedBy</c>), however tempting "then no reticle is drawn either" sounds. With
+        /// an empty candidate list ISDK still hovers on a queued press
+        /// (<c>Interactor.ShouldHover</c> = <c>HasCandidate || ComputeShouldSelect</c>), enters Hover
+        /// with a NULL interactable, and <c>Select()</c> then DEQUEUES the press and selects nothing.
+        /// Hide the VISUALS instead; the candidate list stays whole.</para>
+        /// <para>An unresolved hand (Editor session, no controller) passes while EITHER latch is
+        /// open: failing closed would make the rack untestable in the Editor.</para></summary>
+        public static bool CanSelectWith(OVRInput.Controller hand)
+        {
+            if (hand == OVRInput.Controller.LTouch)
+            {
+                return _canSelectLeft;
+            }
+
+            if (hand == OVRInput.Controller.RTouch)
+            {
+                return _canSelectRight;
+            }
+
+            return _canSelectLeft || _canSelectRight;
+        }
+
+        // Per-hand latch plus the previous frame's grip, so the press EDGE can be seen. Static
+        // because CanSelectWith is; reset in Awake, since disabled domain reload keeps static state.
+        private static bool _canSelectLeft = true;
+        private static bool _canSelectRight = true;
+        private static bool _gripWasHeldLeft;
+        private static bool _gripWasHeldRight;
 
         /// <summary>The weapon a hand holds, scanned from <see cref="Weapon.Active"/> so EVERY
         /// source counts — a stowed frame clone is inactive and drops out of that list by itself.
@@ -191,9 +211,11 @@ namespace VortexArena.Core.Combat
 
             Instance = this;
 
-            // Static, so with domain reload disabled the field initializer does not run again.
-            CanSelectWeapon = true;
-            _pressFrames = 0;
+            // Static, so with domain reload disabled the field initializers do not run again.
+            _canSelectLeft = true;
+            _canSelectRight = true;
+            _gripWasHeldLeft = false;
+            _gripWasHeldRight = false;
 
             // Persistent singleton: subscribe in Awake/OnDestroy so rule/scene events are not
             // missed while the object is disabled (PlayerCombatState pattern).
@@ -224,7 +246,8 @@ namespace VortexArena.Core.Combat
             // Drop the visual request: dying with it open would leave the rig's grab reticle hidden
             // for the rest of the session, with nothing left to explain why.
             ControllerModelHider.SetGrabVisualsSuppressed(this, false);
-            CanSelectWeapon = true;
+            _canSelectLeft = true;
+            _canSelectRight = true;
 
             Instance = null;
         }
@@ -248,7 +271,9 @@ namespace VortexArena.Core.Combat
 
             // A full hand must not even see what it cannot take: the distance-grab tube and reticle
             // are the only aim feedback in the arena (every frame ships with isRayVisible off).
-            ControllerModelHider.SetGrabVisualsSuppressed(this, !CanSelectWeapon);
+            // ⚠️ Driven by the LIVE state, not by the latch: this is pure visuals with no ISDK side
+            // effect, and the latch deliberately stays open across a press that fills the hand.
+            ControllerModelHider.SetGrabVisualsSuppressed(this, !HandsFree);
 
             // The frame path runs when the mode's source is the rack OR the player has SELECTED
             // one (only possible in the free playground: racks are hidden in a running match).
@@ -288,41 +313,37 @@ namespace VortexArena.Core.Combat
             TickHand(OVRInput.Controller.RTouch, rig.rightHandAnchor, ref _grantedRight, _grantedLeft);
         }
 
-        /// <summary>Advances the <see cref="CanSelectWeapon"/> latch. ⚠️ Called at the TOP of
-        /// <see cref="Update"/>, before anything is summoned or granted this frame: on the first
-        /// frame of a press the gate must describe the hands as they were BEFORE that press filled
-        /// them, or the clone the press summons would close the gate on its own select.</summary>
+        /// <summary>Advances both hands' selection latches. ⚠️ Called at the TOP of
+        /// <see cref="Update"/>, before anything is summoned or granted this frame: a press edge must
+        /// be judged by the hands as they were BEFORE that same frame's summon filled them.</summary>
         private void TickSelectionGate()
         {
-            bool gripHeld =
-                OVRInput.Get(OVRInput.Axis1D.PrimaryHandTrigger, OVRInput.Controller.LTouch) >= GripThreshold ||
-                OVRInput.Get(OVRInput.Axis1D.PrimaryHandTrigger, OVRInput.Controller.RTouch) >= GripThreshold;
+            // Read ONCE for both hands: TickHandGate may not observe the left hand's summon while
+            // deciding the right hand's press — both are judged by the same pre-summon snapshot.
+            bool handsFree = HandsFree;
 
-            bool handsEmpty = LeftHandWeapon == null && RightHandWeapon == null;
+            TickHandGate(OVRInput.Controller.LTouch, ref _gripWasHeldLeft, ref _canSelectLeft, handsFree);
+            TickHandGate(OVRInput.Controller.RTouch, ref _gripWasHeldRight, ref _canSelectRight, handsFree);
+        }
 
-            if (!gripHeld)
+        /// <summary>One hand's latch: it follows the hands while the grip is up, freezes on the press
+        /// EDGE, and is left alone for the rest of the press.
+        /// <para>This is what blocks the SECOND weapon: a hand whose press begins while the other
+        /// hand already holds something starts shut and stays shut. A hand that starts from empty
+        /// hands keeps its permission even after this very press summons the previously selected
+        /// clone into it — that clone is the press's own doing, not a second weapon
+        /// (see <see cref="CanSelectWith"/>).</para></summary>
+        private static void TickHandGate(OVRInput.Controller hand, ref bool gripWasHeld,
+            ref bool canSelect, bool handsFree)
+        {
+            bool gripHeld = OVRInput.Get(OVRInput.Axis1D.PrimaryHandTrigger, hand) >= GripThreshold;
+
+            if (!gripHeld || !gripWasHeld)
             {
-                // Nothing in flight: the gate simply follows the hands, and a release reopens it.
-                _pressFrames = 0;
-                CanSelectWeapon = handsEmpty;
-                return;
+                canSelect = handsFree;
             }
 
-            _pressFrames++;
-
-            if (_pressFrames == 1)
-            {
-                // The press is judged ONCE, by the state it started from.
-                CanSelectWeapon = handsEmpty;
-                return;
-            }
-
-            // Past the first frame the gate closes the moment a weapon is in hand: the reticle dies
-            // and the rest of this press cannot take a second weapon.
-            if (!handsEmpty)
-            {
-                CanSelectWeapon = false;
-            }
+            gripWasHeld = gripHeld;
         }
 
         // ------------------------------------------------------------------- rules
@@ -663,16 +684,19 @@ namespace VortexArena.Core.Combat
         /// kept, otherwise ammo would silently refill every time the player aimed at the frame. A
         /// different weapon destroys the old clone; the new one is born FULL on the next
         /// grip.</para>
-        /// <para>⚠️ Selection needs BOTH hands EMPTY (<see cref="CanSelectWeapon"/>): with a weapon
-        /// already in hand the free hand may not pick a second one. <b>This is the ONLY place that
-        /// rule is enforced</b>, and deliberately so — rejecting here costs nothing, because ISDK
-        /// has already delivered its select and consumed the press normally. Pushing the same rule
-        /// down into <see cref="WeaponFrame.Filter"/> looks equivalent and is not: it empties the
-        /// candidate list, and ISDK then burns the press on a null select (details in
-        /// <see cref="CanSelectWeapon"/>).</para></summary>
-        public static void SelectWeapon(WeaponDefinition definition)
+        /// <para>⚠️ The SELECTING hand must have begun its grip press with both hands empty
+        /// (<see cref="CanSelectWith"/>): with a weapon already in hand the free hand may not pick a
+        /// second one. <b>This is the ONLY place that rule is enforced</b>, and deliberately so —
+        /// rejecting here costs nothing, because ISDK has already delivered its select and consumed
+        /// the press normally. Pushing the same rule down into <see cref="WeaponFrame.Filter"/> looks
+        /// equivalent and is not: it empties the candidate list, and ISDK then burns the press on a
+        /// null select (details in <see cref="CanSelectWith"/>).</para>
+        /// <para><paramref name="hand"/> is the hand that raised the ISDK event
+        /// (<see cref="ResolveController"/>); <c>None</c> means unresolved, not "no hand".</para>
+        /// </summary>
+        public static void SelectWeapon(WeaponDefinition definition, OVRInput.Controller hand)
         {
-            if (Instance == null || definition == null || !CanSelectWeapon)
+            if (Instance == null || definition == null || !CanSelectWith(hand))
             {
                 return;
             }

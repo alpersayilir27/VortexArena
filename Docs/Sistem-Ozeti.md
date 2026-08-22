@@ -1708,8 +1708,12 @@ bu efektin var oluş sebebi tam olarak o hareketi yaptırmamaktır.
 ⚠️ **Vinyet quad'ıyla BİREBİR AYNI local derinlikte durur;** katmanlama derinlikle değil **kuyrukla**
 yapılır (`VortexArena/DamageDirection` — `Overlay+1`). Farklı derinlik iki katmana farklı stereo
 ayrışması verir ve iki gözde **çift görüntü** olarak okunur.
-⚠️ `attackerId` `0` iken (çevresel hasar, canlanma) ve saldırganın pozu kayıtta yokken **hiçbir şey
+⚠️ `attackerId` `0` iken (çevresel hasar, canlanma) ve saldırganın pozu kayıtta yokken **yay
 çizilmez**: uydurulmuş bir yön, yön göstermemekten kötüdür. Vinyet o durumda da çalışmaya devam eder.
+⚠️ **Titreşim yönü BEKLEMEZ:** saldırgan gerçek ama pozu kayıtta yoksa (yeni katılmış, paket kaybı,
+interpolasyon penceresinin dışından atış) tek taraf yerine **iki kumanda birden** titrer. Sebebi:
+oyuncunun görsel açıklaması olmadan canının gittiği durum tam olarak odur, geri bildirimi orada
+susturmak hiç geri bildirim vermemek olurdu.
 
 **`ObstacleVolumes`** (statik): *"bu şey bir iç engelin içinde mi"* sorusunun **tek** cevabı, dört
 biçimde: `Sample` + `Contains` (bir sorgu, çok nokta — kafa ve el ölçümü), `ContainsPoint` (tek
@@ -4330,6 +4334,19 @@ konsoluna tek satır sebep yazar.
     bırakır** (ISDK ışını isteğiyle aynı desen ve aynı bırakma kuralı). ⚠️ Bastırma yalnız
     **sunumu** susturur — `ArenaClient` denemeyi sürdürür; grace saati bastırma boyunca durur,
     yoksa panel kapanır kapanmaz kart oyuncunun az önce başlattığı denemenin üstüne düşerdi.
+182. **Kameraya asılı bir quad'ın UV'si EKRAN DEĞİLDİR — quad başlığın gördüğünden geniştir ve
+    taşan kısmı hiç çizilmez.** Hasar vinyeti ile yön göstergesi `CenterEyeAnchor`'ın altında,
+    görüş alanını kesin kapatsın diye **bilerek büyük** bir quad üzerinde durur: 0,44 m mesafede
+    1,9 birimlik quad görüş merkezinden ±65°'ye uzanır, oysa bir Quest gözü yaklaşık ±50°
+    yatay / ±45° dikey görür. Sonuç: quad UV'sinden hesaplanan `distance` **1,0'a hiçbir zaman
+    ulaşmaz** — görünür bölge yaklaşık 0,55'te biter. Bu yüzden shader'daki yarıçaplar "ekranın
+    yüzdesi" gibi okunamaz; ~0,55 üstüne yazılan her yarıçap, kod hangi alfayı yazarsa yazsın,
+    başlıkta **tek piksel bile üretmez**. Arıza sessizdir ve yanlış yere baktırır: renderer açıktır,
+    materyal doğrudur, alfa yazılır, konsol temizdir — yalnız halka görüş alanının dışında kalır,
+    yani "efekt hiç çalışmıyor" gibi görünür. Kural: yarıçapları AÇI olarak yaz
+    (`distance ≈ tan(açı) × 0,46`) ve tam alfayı ±40° civarında bitir; quad'ı küçültüp UV'yi
+    ekrana yaklaştırmak ise **çözüm değildir** — quad görüş alanından dar kalırsa bu kez kenarı
+    sert bir dikdörtgen olarak görünür.
 
 ---
 
