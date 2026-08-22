@@ -102,12 +102,23 @@ if not defined VA_IN (
   echo   [UYARI] Surum bos birakilamaz.
   goto :va_ask_version
 )
-rem  Leading zeros are REJECTED, not trimmed: Unity parses -buildVersion as an
-rem  int, so "007" would produce game_v7.apk while this script keeps looking
-rem  for game_v007.apk and would call a finished build failed.
-echo(!VA_IN!|findstr /r "^[1-9][0-9]*$" >nul
+echo(!VA_IN!|findstr /r "^[0-9][0-9]*$" >nul
 if errorlevel 1 (
-  echo   [UYARI] Pozitif tam sayi girin, basinda sifir olmadan ^(ornek: 132^).
+  echo   [UYARI] Yalnizca rakam girin ^(ornek: 132^).
+  goto :va_ask_version
+)
+
+rem  Leading zeros are trimmed to the plain integer ("007" -> "7"): Unity parses
+rem  -buildVersion as an int and would name the file game_v7.apk, while this
+rem  script kept looking for game_v007.apk and called a finished build failed.
+:va_trim_zeros
+if not "!VA_IN:~0,1!"=="0" goto :va_trimmed
+if "!VA_IN:~1!"=="" goto :va_trimmed
+set "VA_IN=!VA_IN:~1!"
+goto :va_trim_zeros
+:va_trimmed
+if "!VA_IN!"=="0" (
+  echo   [UYARI] Surum sifir olamaz.
   goto :va_ask_version
 )
 set "VA_VER=!VA_IN!"
