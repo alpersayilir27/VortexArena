@@ -249,6 +249,12 @@ public sealed class ClientConnection
                 await _lobby.HandleResumeMatchAsync(this);
                 return;
             }
+            case MessageTypes.ModeContinue:
+            {
+                if (!RequireAdmin(type)) return;
+                await _lobby.HandleModeContinueAsync(this);
+                return;
+            }
             case MessageTypes.ReturnToLobby:
             {
                 if (!RequireAdmin(type)) return;

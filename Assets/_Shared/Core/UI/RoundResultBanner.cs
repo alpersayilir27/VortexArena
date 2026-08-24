@@ -5,7 +5,7 @@ namespace VortexArena.Core.UI
 {
     /// <summary>
     /// One line under the health bar for the round that just closed ("TUR KAZANILDI"), shown for a few
-    /// seconds and then gone.
+    /// seconds and then gone — or held open when the caller asks (<c>sticky</c>).
     ///
     /// <para><b>Presentation only:</b> the text is written by the mode, this class only holds it for
     /// <see cref="visibleSeconds"/> and tints it by <see cref="RoundOutcome"/>.</para>
@@ -34,7 +34,8 @@ namespace VortexArena.Core.UI
         [Tooltip("Beraberlik ve takımı olmayan izleyici için nötr ton.")]
         [SerializeField] private Color drawColor = new Color(0.95f, 0.85f, 0.35f);
 
-        /// <summary>Unscaled time the banner comes down at; negative = not showing.</summary>
+        /// <summary>Unscaled time the banner comes down at; negative = not showing,
+        /// <see cref="float.PositiveInfinity"/> = up until <see cref="Hide"/>.</summary>
         private float _hideAt = -1f;
 
         private void Awake()
@@ -59,7 +60,10 @@ namespace VortexArena.Core.UI
         }
 
         /// <summary>Shows one line for <see cref="visibleSeconds"/>; an empty text takes it down.</summary>
-        public void Show(string text, RoundOutcome outcome)
+        /// <param name="sticky">Leaves the line up with NO timer, until the caller takes it down. For a
+        /// result the server is holding on the wire (the tournament's round review, §10.5): that wait has
+        /// no known length, so a reading time would either cut it short or be a guess.</param>
+        public void Show(string text, RoundOutcome outcome, bool sticky = false)
         {
             if (string.IsNullOrEmpty(text))
             {
@@ -75,7 +79,7 @@ namespace VortexArena.Core.UI
 
             // Restarted on every call: a second round result arriving while the first is still up must
             // get its own full reading time, not the remainder of the previous one.
-            _hideAt = Time.unscaledTime + Mathf.Max(0.5f, visibleSeconds);
+            _hideAt = sticky ? float.PositiveInfinity : Time.unscaledTime + Mathf.Max(0.5f, visibleSeconds);
             Apply(true);
         }
 

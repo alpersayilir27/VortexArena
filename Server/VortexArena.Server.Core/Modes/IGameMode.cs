@@ -30,6 +30,13 @@ public interface IGameMode
     /// <summary>Default score limit for load_match.scoreLimit (overridable the same way).</summary>
     int DefaultScoreLimit { get; }
 
+    /// <summary>true keeps the <c>finished</c> result screen up until the operator acts: the core's
+    /// <c>MATCH_END_SECONDS</c> auto-return to the lobby is switched OFF (§10.1).</summary>
+    /// <remarks>For a mode whose scoreboard is the match's product (round based play, §10.5) that timer
+    /// wipes the table exactly as the referee reads it out. The exit stays what it always was —
+    /// <c>return_to_lobby</c> / <c>abort_match</c> / a new <c>start_match</c>.</remarks>
+    bool HoldsResultForOperator => false;
+
     /// <summary>Called ONCE per match, on the first transition to Live.</summary>
     /// <remarks>⚠️ In a round based mode (<c>tournament</c>) later Live entries do NOT retrigger it —
     /// "match started" and "round started" are separate events (see <see cref="OnRoundStart"/>).</remarks>

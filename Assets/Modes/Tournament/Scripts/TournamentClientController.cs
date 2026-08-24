@@ -34,12 +34,18 @@ namespace VortexArena.Modes.Tournament
         private int _scoreRed;
         private int _scoreBlue;
 
-        /// <summary>The <c>roundend:…</c> token the banner has already shown. The same
-        /// <c>match_state</c> can be rebroadcast (an operator pause landing inside the regroup) and the
+        /// <summary>The <c>roundend:…</c> token the banner has already shown. The same value arrives on
+        /// more than one <c>match_state</c> (the round closing, then the review pause opening) and the
         /// banner must not restart on a result already read — which is why the token carries the round
         /// NUMBER: without it two rounds won by the same team would be the same string and the second
         /// would be swallowed.</summary>
         private string _shownRoundEnd = "";
+
+        /// <summary>Was the shown banner put up sticky. The same <c>roundend:…</c> arrives twice — once
+        /// on the broadcast that closes the round (still <c>playing</c>) and once on the one that opens
+        /// the review pause — and only the second one may hold it open, so the latch has to key on this
+        /// too or the banner would time out during the wait.</summary>
+        private bool _shownRoundEndSticky;
 
         /// <summary>The alive line is not in the base, so clearing it on return to lobby lives here
         /// too (same pattern as FFA's standings line).</summary>
@@ -61,6 +67,7 @@ namespace VortexArena.Modes.Tournament
             _scoreRed = 0;
             _scoreBlue = 0;
             _shownRoundEnd = "";
+            _shownRoundEndSticky = false;
 
             if (roundScorePanel != null)
             {
@@ -110,10 +117,9 @@ namespace VortexArena.Modes.Tournament
             return base.PhaseLabel(phase, phaseReason, modeState);
         }
 
-        /// <summary>Mode pause (<c>phaseReason == "mode"</c>) = between-rounds regroup;
-        /// <c>modeState</c> is <c>regroup:&lt;ready&gt;/&lt;total&gt;</c> (§10.1). The broadcast that
-        /// OPENS that pause still carries <c>roundend:…</c> — one tick later the regroup state
-        /// overwrites it.</summary>
+        /// <summary>Mode pause (<c>phaseReason == "mode"</c>) = the two between-rounds stages (§10.1):
+        /// <c>roundend:…</c> while the operator reads the result, then
+        /// <c>regroup:&lt;ready&gt;/&lt;total&gt;</c> once they release it.</summary>
         protected override string ModeStateLabel(string modeState)
         {
             string counts = ValueAfter(modeState, "regroup:");
@@ -149,24 +155,49 @@ namespace VortexArena.Modes.Tournament
                 }
             }
 
-            ApplyRoundEnd(msg.modeState);
+            // Held open only while the server is actually parked on the result (the round review, §10.5):
+            // in `playing` the same string is just the round closing, and in `finished` the match result
+            // screen takes over.
+            bool held = msg.phase == ArenaProtocol.PHASE_PAUSED &&
+                        msg.phaseReason == ArenaProtocol.PAUSE_REASON_MODE;
+            ApplyRoundEnd(msg.modeState, held);
         }
 
         // ---------------------------------------------------------------- internals
 
         /// <summary>The finished round's result (<c>roundend:&lt;kazanan&gt;:&lt;n&gt;</c>, §10.1).</summary>
-        /// <remarks>⚠️ LATCHED, not polled: the token rides exactly one broadcast (the one that opens the
-        /// regroup) and the next server tick overwrites it with <c>regroup:…</c>. Reading it off a timer
-        /// would miss it.</remarks>
-        private void ApplyRoundEnd(string modeState)
+        /// <remarks>⚠️ LATCHED, not polled: the token rides the broadcast that CLOSES the round and is
+        /// overwritten only when the operator releases the review (§10.5) and the regroup starts. Reading
+        /// it off a timer would miss the transition.
+        /// <para>⚠️ The empty case takes the banner DOWN: it is the only signal that the review is over,
+        /// and a sticky line has no timer to end it.</para></remarks>
+        private void ApplyRoundEnd(string modeState, bool held)
         {
             string value = ValueAfter(modeState, "roundend:");
-            if (value.Length == 0 || value == _shownRoundEnd)
+            if (value.Length == 0)
+            {
+                if (_shownRoundEnd.Length == 0)
+                {
+                    return;
+                }
+
+                _shownRoundEnd = "";
+                _shownRoundEndSticky = false;
+                if (roundResultBanner != null)
+                {
+                    roundResultBanner.Hide();
+                }
+
+                return;
+            }
+
+            if (value == _shownRoundEnd && held == _shownRoundEndSticky)
             {
                 return;
             }
 
             _shownRoundEnd = value;
+            _shownRoundEndSticky = held;
 
             if (roundResultBanner == null)
             {
@@ -178,7 +209,7 @@ namespace VortexArena.Modes.Tournament
 
             if (winner == "draw")
             {
-                roundResultBanner.Show("TUR BERABERE", RoundOutcome.Draw);
+                roundResultBanner.Show("TUR BERABERE", RoundOutcome.Draw, held);
                 return;
             }
 
@@ -191,13 +222,13 @@ namespace VortexArena.Modes.Tournament
             if (ownTeam.Length == 0)
             {
                 roundResultBanner.Show(winner == "red" ? "TURU KIRMIZI ALDI" : "TURU MAVİ ALDI",
-                    RoundOutcome.Draw);
+                    RoundOutcome.Draw, held);
                 return;
             }
 
             bool won = winner == ownTeam;
             roundResultBanner.Show(won ? "TUR KAZANILDI" : "TUR KAYBEDİLDİ",
-                won ? RoundOutcome.Won : RoundOutcome.Lost);
+                won ? RoundOutcome.Won : RoundOutcome.Lost, held);
         }
 
         /// <summary>Team on the wire (§10.5); empty for <see cref="Team.Neutral"/>.</summary>

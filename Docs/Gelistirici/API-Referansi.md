@@ -444,7 +444,7 @@ tabanda **değildir** (aşağıdaki nota bak).
 > | Bileşen | Çağrılar |
 > |---|---|
 > | `VortexArena.Core.UI.TeamScorePanel` | `SetScore(int red, int blue)` · `SetRoundLabel(string)` (tur kavramı yoksa hiç çağrılmaz) · `Clear()` (lobiye dönüşte) |
-> | `VortexArena.Core.UI.RoundResultBanner` | `Show(string text, RoundOutcome)` — `Won`/`Lost`/`Draw` yalnız **tonu** seçer, metin modundur · `Hide()` |
+> | `VortexArena.Core.UI.RoundResultBanner` | `Show(string text, RoundOutcome, bool sticky = false)` — `Won`/`Lost`/`Draw` yalnız **tonu** seçer, metin modundur; `sticky` şeridi sayaçsız açık bırakır (sunucunun telde TUTTUĞU sonuç için — süresi bilinmeyen bir bekleme okuma süresine sığmaz), indiren `Hide()` olur · `Hide()` |
 >
 > Panel takımsız modda kendini gizler (`ModeRuntime.IsTeamless`), yani takımsız bir HUD'da alanı boş
 > bırakmak yeterlidir. Şerit süresini kendi tutar (prefab alanı, bugün 3 sn) — modun kapatması gerekmez.

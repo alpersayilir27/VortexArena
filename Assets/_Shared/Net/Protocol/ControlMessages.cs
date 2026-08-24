@@ -198,6 +198,15 @@ namespace VortexArena.Protocol
         public string type = MessageTypes.ResumeMatch;
     }
 
+    /// <summary>The operator's "carry on" for a mode that parked the round flow (§5.2). Accepted only
+    /// while <c>phaseReason == "mode"</c>; it does not move the phase itself — the mode's own tick
+    /// consumes the queued flag and lifts its pause, so a pause is still lifted by its owner.</summary>
+    [Serializable]
+    public class ModeContinueMsg
+    {
+        public string type = MessageTypes.ModeContinue;
+    }
+
     [Serializable]
     public class SetTeamMsg
     {

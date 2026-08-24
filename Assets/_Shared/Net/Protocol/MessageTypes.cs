@@ -22,6 +22,8 @@ namespace VortexArena.Protocol
         public const string EndMatch = "end_match";
         public const string PauseMatch = "pause_match"; // freezes a running match (§5.2)
         public const string ResumeMatch = "resume_match"; // lifts the operator pause only
+        // "Carry on" for a mode that parked the flow; queues a flag the mode's own tick consumes (§5.2)
+        public const string ModeContinue = "mode_continue";
         public const string SetTeam = "set_team";
         public const string Kick = "kick";
         public const string ReturnToLobby = "return_to_lobby"; // the server → client direction uses the same type

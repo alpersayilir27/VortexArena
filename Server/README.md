@@ -225,9 +225,16 @@ Kural otoritesi tamamen sunucudadır (`MatchDirector` + `Modes/<X>Mode.cs`): ist
 uygulamaz, skor tutmaz, faz değiştirmez. **Faz üç değerdir:** `paused` · `playing` · `finished`.
 Duraklamanın gerekçesi ayrı bir alandır (`phaseReason`: `lobby`/`loading`/`countdown`/`operator`/
 `mode`), modun kendi ara durumu da öyle (`modeState`). Akış:
-`paused(lobby) → paused(loading) → paused(countdown 5) → playing → finished(10 sn) → paused(lobby)`
+`paused(lobby) → paused(loading) → paused(countdown 5) → playing → finished → paused(lobby)`
 (detay: `../Docs/ArenaNet-Protokol.md` §10.1). **Lobi bir faz değil bir türdür** — `modeId:"lobby"`,
 yalnız lobi haritasında ve o türdeyken maç başlatılamaz.
+
+`finished`'dan lobiye dönüşü operatör seçer (`return_to_lobby`/`abort_match`/yeni `start_match`);
+`MATCH_END_SECONDS` yalnız bir emniyettir ve **sonucunu operatöre bırakan modda hiç işlemez**
+(`IGameMode.HoldsResultForOperator` — bugün `tournament`). Aynı mod turlar arasında da operatörü
+bekler: tur biter, sonuç `modeState`'te asılı kalır ve akış `mode_continue` gelene kadar ilerlemez.
+Konsolda görünen satırlar: `[tournament] tur N sonucu operatör incelemesinde …` ve dakikada bir
+`… hâlâ incelemede`.
 
 Admin `start_match` yolladığında sunucu şunları doğrular: mod kayıtlı mı, `sceneName`
 `config/maps.json`'da var mı ve o harita bu modu destekliyor mu (tablo boşsa bu adım atlanır),
