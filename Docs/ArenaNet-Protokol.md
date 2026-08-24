@@ -219,6 +219,7 @@ durumunda bırakır; başarısız ölçümü ölçek olarak yazmak ise sessizce 
 - **`end_match`** `{ "type":"end_match" }` — maçı **normal yoldan** bitirir: faz `finished`, `match_end` yayınlanır, sonuç ekranı açılır ve `MATCH_END_SECONDS` sonra lobiye dönülür. ⚠️ **`abort_match` ile karıştırma:** iptal maçı yok sayıp doğrudan lobiye düşürür (`match_end` YOK, sonuç ekranı YOK); `end_match` ise "maç burada bitti" der. Kazananı **çekirdek** belirler, mod değil — takım skorlu maçta yüksek skor (eşitse berabere), oyuncu skorlu maçta en yüksek `score`'lu oyuncu (kimse puan almadıysa berabere). Modun `IsMatchOver`'ı **sorulmaz**: operatör bitirdiğinde modun şartı zaten sağlanmamıştır. `playing` **ve** duraklı fazlarda çalışır (tur arası toplanmada da bitirilebilir); lobide ve zaten bitmiş maçta loglanıp yok sayılır. ⚠️ **`PROTOCOL_VERSION` bu mesaj için ARTMAZ:** yalnız admin→sunucu yönünde yeni bir tip eklendi, oyuncu istemcisi onu ne gönderir ne okur; tanımayan eski bir sunucu bilinmeyen tipi zaten loglayıp yok sayar (kaybolan şey bir düğmenin işlevidir, bozuk bir maç değil) ve admin ile sunucu aynı depodan birlikte dağıtılır.
 - **`pause_match`** `{ "type":"pause_match" }` — koşan maçı dondurur: `playing` → `paused` + `phaseReason:"operator"` (§10.1). Süre durur, hasar kapanır, skorlar ve `modeState` **korunur**. **Yalnız `playing` iken iş yapar**; başka fazda loglanıp yok sayılır (duraklı bir maçı duraklatmanın anlamı yok).
 - **`resume_match`** `{ "type":"resume_match" }` — `paused`/`operator`'dan `playing`'e döner; süre kaldığı yerden akar, canlar/skorlar sıfırlanmaz. ⚠️ **Yalnız operatörün duraklattığı maç sürdürülebilir:** `phaseReason` `loading`/`countdown`/`mode`/`lobby` iken reddedilir. Sebep: o duraklamaların sahibi operatör değildir — modun istediği duraklamayı (`mode`) operatörün kaldırması modun ara durumunu bozar, geri sayımı elle bitirmek de yükleme kapısını atlar. Her duraklamayı kendi sahibi kaldırır.
+- **`mode_continue`** `{ "type":"mode_continue" }` — modun **park ettiği** akışa operatörün "devam" onayı. ⚠️ **`resume_match`'in işini YAPMAZ:** fazı kendisi değiştirmez, yalnız bekleyen bir bayrak bırakır; bayrağı modun kendi tiki okur ve akışı o sürdürür — yani duraklamayı yine **sahibi** kaldırır (§10.1) ve "her duraklamayı kendi sahibi kaldırır" kuralı delinmez. **Yalnız `paused` + `phaseReason:"mode"` iken kabul edilir**, başka fazda loglanıp yok sayılır. Bugünkü tek tüketicisi `tournament`'ın **tur incelemesi**dir (§10.5): tur biter, sonucu `modeState`'te asılı kalır ve akış bu komut gelene kadar toplanmaya geçmez. Bayrak **tüketilir** (okundu = silindi): operatörün basışı tek bir olaydır, ayakta kalan bir bayrak bir sonraki incelemeyi de atlardı. ⚠️ **`PROTOCOL_VERSION` bu mesaj için ARTMAZ** — `end_match` ile aynı gerekçe: yalnız admin→sunucu yönünde yeni bir tip, oyuncu istemcisi onu ne gönderir ne okur, tanımayan eski sunucu bilinmeyen tipi loglayıp yok sayar ve admin ile sunucu aynı depodan birlikte dağıtılır.
 - **`set_team`** `{ "type":"set_team", "playerId":5, "team":"blue" }` (`"red"|"blue"`) — hedef oyuncunun takımı. **Faz kapısı YOKTUR:** operatör `playing` dahil her fazda, sunucuya bağlı herkesin takımını değiştirebilir; değişiklik `lobby_state` ile yayılır ve istemcide anında geçerlidir (taban bölgesi, arayüz renkleri). Hedef admin ise reddedilir. Oyuncudan gelen `set_team` loglanıp yok sayılır — **oyuncu kendi takımını seçemez, bunun için protokol mesajı YOKTUR ve eklenmeyecektir.**
 - **`set_friendly_fire`** `{ "type":"set_friendly_fire", "enabled":true }` — dost ateşi anahtarı (§10.5). **Faz kapısı YOKTUR:** operatör `playing` dahil her fazda basabilir ve etkisi anlıktır — gerekçe `set_team` ile aynıdır: operatör sahadaki durumu maçı iptal etmeden düzeltebilmeli. Değer sunucuda yaşar (açılışta `false`), yürürlükteki kural şekline damgalanır ve koşan maçta `rules_update` ile herkese yayılır (§5.3). Maç başlangıcı, harita sahneleme ve lobiye dönüş anahtarı **sıfırlamaz** (süre/limit seçimiyle aynı sözleşme); sıfırlayan tek şey sunucunun yeniden başlatılmasıdır. Oyuncudan gelirse loglanıp yok sayılır.
   ⚠️ **Neden `set_selection` alanı değil:** o mesaj "boş/`0` = dokunulmadı" sözleşmesiyle çalışır ve bir `bool` "dokunulmadı"yı ifade edemez. Aynı sebeple seçim kilidine (§10.7 "ne zaman serbest") de takılmaz — bu bir sonraki maçın seçimi değil, o anın durumudur.
@@ -466,7 +467,7 @@ yeniden yüklemeyi dener** ve sonucu bildirir (§10.6): başarıda normal bir
   "calibrationMode":"two_anchor",
   "notice":"Ofis-PC: harita -> <Arena>", "adminCount":2 }
 ```
-- Gönderim anları: admin `hello` yanıtında (welcome'dan hemen sonra, geç katılan admin senkron başlasın), her `set_selection`'da, her admin komutunda (`start_match`/`abort_match`/`pause_match`/`resume_match`/`return_to_lobby`/`kick`/`set_team`/`set_friendly_fire`/`set_calibration_mode`), oyuncunun bildirdiği
+- Gönderim anları: admin `hello` yanıtında (welcome'dan hemen sonra, geç katılan admin senkron başlasın), her `set_selection`'da, her admin komutunda (`start_match`/`abort_match`/`pause_match`/`resume_match`/`mode_continue`/`return_to_lobby`/`kick`/`set_team`/`set_friendly_fire`/`set_calibration_mode`), oyuncunun bildirdiği
   zemin sapması eşiği aştığında, gövde ölçümü ya da kayıtlı hizalamanın yeniden yüklenmesi
   başarısız olduğunda (§10.6/§10.8) ve admin
   bağlanıp ayrıldığında. ⚠️ `pause_match`/`resume_match` için duyuru **yalnız komut gerçekten uygulandıysa** yayılır — reddedilen komut diğer operatörlerin ekranına olmamış bir eylemi yazmamalı.
@@ -1074,14 +1075,15 @@ oyunu durdurmak isterse çekirdekten `phase = paused` + `phaseReason = "mode"` i
 | Değer | Faz | Anlamı / HUD |
 |---|---|---|
 | `round:<n>` | `playing` | Kaçıncı tur oynanıyor. HUD skor satırına "TUR n" yazar |
-| `roundend:<kazanan>:<n>` | `paused` + `mode` | **Biten** turun sonucu: `red` · `blue` · `draw` ve turun numarası. HUD "TUR KAZANILDI/KAYBEDİLDİ" şeridini açar |
+| `roundend:<kazanan>:<n>` | `paused` + `mode` | **Biten** turun sonucu: `red` · `blue` · `draw` ve turun numarası. HUD "TUR KAZANILDI/KAYBEDİLDİ" şeridini açar. Operatör incelemesi boyunca telde **asılı kalır** |
 | `regroup:<hazır>/<toplam>` | `paused` + `mode` | Turlar arası toplanma: kaç oyuncu tabanına döndü. HUD "TOPLANMA 2/6" yazar |
 
-⚠️ **`roundend:` YALNIZ tek bir yayında geçer** — toplanmayı **açan** `match_state`'tedir ve bir
-sonraki sunucu tikinde `regroup:…` onu ezer. İstemci onu **mandallar** (gelince şeridi açar),
-yoklamaz; yoklayan bir istemci sonucu hiç göremez. Numara süs değildir: onsuz aynı takımın kazandığı
-iki tur birebir aynı string olur ve mandal ikincisini "zaten gösterdim" diye yutar. Maçı **bitiren**
-turda bu değer hiç yayınlanmaz — orada faz `finished`'a gider ve sonucu `match_end` taşır.
+⚠️ **`roundend:` operatör `mode_continue` yollayana kadar durur** (§5.2) — turu kapatan `match_state`
+ile gelir ve onu ezen ilk şey, incelemenin bitişinde açılan `regroup:…`dır. İstemci onu yine
+**mandallar** (gelince şeridi açar) çünkü tur içinde bir kez yayınlanır; numara süs değildir: onsuz
+aynı takımın kazandığı iki tur birebir aynı string olur ve mandal ikincisini "zaten gösterdim" diye
+yutar. Maçı **bitiren** turda değer bir kez `playing` fazında yayınlanır, ardından faz `finished`'a
+gider ve sonucu `match_end` taşır.
 
 ⚠️ Bu tablo **çekirdeğin sözleşmesi değildir** — `MatchDirector` bu stringleri hiç ayrıştırmaz.
 Yeni bir tur tabanlı mod kendi sözlüğünü tanımlar ve buraya bir satır ekler.
@@ -1118,6 +1120,7 @@ ile tanımlanır (§10.5, §10.7).
 - **`phaseReason:"countdown"`:** saniyede bir `countdown{seconds}` (5→1); 0'da faz `playing`.
 - **`playing`:** `match_state` 1 Hz; `timeRemaining` sunucuda azalır; `IGameMode.OnTick` çağrılır. **Hasar yalnız burada işlenir.**
 - **`finished`:** `match_end` yayınlanır ve **kazanan ekranı operatör bir şey seçene kadar durur.** Sayacı öldüren şey fazı değiştiren her komuttur: harita seçmek ya da harita seçicisindeki lobi satırı (sahneleme fazı `paused`/`lobby`'ye çeker, §10.7), `start_match`, `abort_match`/`return_to_lobby`. Operatör hiçbir şey yapmazsa `MATCH_END_SECONDS` sonra kendiliğinden `return_to_lobby` + faz `paused`/`lobby` gelir (skorlar/canlar sıfırlanır) — ama bu **emniyet subabıdır, akış değil**: tur/maç aralarını sahada hakem yönetir. `finished` iken operatör harita/mod seçebilir ve yeni maç başlatabilir.
+  ⚠️ **Sonucunu operatöre bırakan modda emniyet subabı KAPALIDIR** (`IGameMode.HoldsResultForOperator`; bugün yalnız `tournament`, §10.5): sayaç hiç işlemez, `finished` ekranı `return_to_lobby`/`abort_match`/`start_match` gelene kadar durur. Sebep, o modda sonuç tablosunun maçın ürünü olmasıdır — hakem takımlara skoru okurken ekranın altından lobiye kayması, tam da okunmak için üretilmiş veriyi siler. Diğer modlarda subap olduğu gibi kalır.
 - **`abort_match`** her durumdan `paused`/`lobby`'ye düşürür (`return_to_lobby` yayınlanır); `return_to_lobby` doğrudan aynı işi yapar.
 - **Duraklatma (`phaseReason:"operator"` / `"mode"`):** `playing` iken duraklatılan maç `paused`'a geçer — süre durur, hasar kapanır, `modeState` **korunur** (mod kaldığı yerden sürer). Devam edilince `playing`'e döner. ⚠️ Operatörün duraklatması ile modun duraklatması aynı fazı üretir ama gerekçeleri ayrıdır: turnuva "herkes tabana dönsün" derken (`mode`) operatör de duraklatırsa (`operator`) HUD'un doğru mesajı gösterebilmesi için ikisi karışmamalıdır.
   - Operatörün kapısı `pause_match` / `resume_match`'tir (§5.2) ve **yalnız kendi duraklatmasını kaldırabilir** (`phaseReason == "operator"`). `mode` gerekçesini kaldırma yetkisi modundur; `loading`/`countdown` zaten kendi koşullarıyla biter.
@@ -1131,8 +1134,11 @@ paused/loading → paused/countdown → playing                     ◄── TU
                         ▲   │             │
                         │   │             │ mod turu bitirdi (eleme / süre)
                         │   │             ▼
-                        │   │    maç bitti mi? ──evet──► finished (normal yol)
+                        │   │    maç bitti mi? ──evet──► finished (normal yol; subap KAPALI)
                         │   │             │ hayır
+                        │   │             ▼
+                        │   │    paused/mode · modeState="roundend:red:3"   ◄── OPERATÖR İNCELEMESİ
+                        │   │             │ operatör `mode_continue` yolladı
                         │   │             ▼
                         │   └───►paused/mode · modeState="regroup:2/6"
                         └─────────────────┘ modun şartı sağlandı → yeni tur
@@ -1142,15 +1148,22 @@ paused/loading → paused/countdown → playing                     ◄── TU
 
 - Duraklamayı **mod koydu** (`phaseReason:"mode"`), kaldırma yetkisi de onundur — `resume_match`
   bu duraklamayı kaldırmaz (§5.2). Duraklama boyunca **süre işlemez ve hasar yoktur** (faz `paused`).
+- **Tur biter bitmez akış PARK EDER** (operatör incelemesi): faz `paused`/`mode`'a geçer, `modeState`
+  `roundend:<kazanan>:<n>` olarak **asılı kalır** ve mod kendiliğinden toplanmaya geçmez. Kapı tek
+  komuttur: `mode_continue` (§5.2). Zaman aşımı **YOKTUR** — sayaçla açılan bir kapı, tam da operatör
+  skorları okurken tabloyu elinden alırdı. ⚠️ Turu **kim kazandı** kararı burada değil, turun
+  kapanışında verilmiştir: inceleme skoru değiştirmez, yalnız okunmasını bekler; operatörün oradaki
+  diğer çıkışları `end_match` ve `abort_match`'tir.
 - Yeni tur, çekirdeğin **mevcut geri sayımına** girer (`phaseReason:"countdown"`,
   `countdownSeconds` uzunluğunda) ve oradan `playing`'e döner. Yeni bir faz/gerekçe **eklenmedi.**
-- Tur **BİTER BİTMEZ** — toplanma duraklaması açılır açılmaz, geri sayım beklenmeden — sunucu
-  **her oyuncuya `health_update{hp:PLAYER_MAX_HP, attackerId:0}` gönderir**; ölüye de, yarası açık
+- Tur **BİTER BİTMEZ** — mod duraklaması (operatör incelemesi) açılır açılmaz, incelemenin ve geri
+  sayımın bitmesi beklenmeden — sunucu **her oyuncuya
+  `health_update{hp:PLAYER_MAX_HP, attackerId:0}` gönderir**; ölüye de, yarası açık
   hayatta kalana da. Canların dolması sunucu içi bir tazeleme değil, **telde görünen bir olaydır**.
   ⚠️ Gönderilmezse tur içinde ölmüş oyuncu istemcide **ölüm ekranında kalır** ve hayatta kalan
   **bir önceki turdan kalan canını görür**: maç içi tur geçişinde `load_match` yoktur, yani
   istemcinin kendini sıfırlayacağı ikinci bir yol da yoktur.
-  ⚠️ **Tur bitişi, tur başlangıcı değil:** arada toplanma + geri sayım vardır ve oyuncu o süre
+  ⚠️ **Tur bitişi, tur başlangıcı değil:** arada operatör incelemesi + toplanma + geri sayım vardır ve oyuncu o süre
   boyunca tabanına *yürür*. Tazeleme `playing` kapısına bırakılırsa oyuncu bu yürüyüşün tamamını
   ölüm ekranında geçirir; "tur bitti" ile "hâlâ ölüyüm" ayırt edilemez. Erken tazeleme geri
   alınamaz: hasar `playing` ister (§10.3) ve engel sayacı yalnız `playing` tiklerinde ilerler
@@ -1386,8 +1399,10 @@ olmalı, tanınmayan `modeId` reddedilir):
 > | Bağlantısı kopan ne sayılır? | **Ölü.** Sahadan düşen oyuncu tur içinde geri gelmeyeceği için takımını ayakta tutmaz; bir takımın **tümü** düşerse tur karşı tarafa yazılır, ikisi birden düşerse puansız kapanır. ⚠️ Tek istisna **hiç çatışmaya dönüşmemiş** tur (admin harita önizlemesi, kimsenin katılmadığı maç): orada boşluk "kazanılacak bir tur"un yokluğudur, çıkışı operatörün `end_match`/`abort_match`'idir |
 > | Ayakta sayımında kim sayılır? | Yalnız `alive` **ve** `calibrated` oyuncular (§10.6) — tek kural, elemede de aynısı. Kalibresiz oyuncu ne vurur ne vurulur, yani savaş dışıdır; tur artık **yalnız** elemeyle bittiği için onu "ayakta" saymak, kimsenin öldüremediği bir oyuncunun turu (ve onunla maçı) süresiz açık tutması demek olurdu |
 > | Eleme neden `OnKill` ile değil tik ile ölçülür? | Takım **bağlantı kopmasıyla** da boşalır ve o yolda `OnKill` hiç çağrılmaz. Tek tarama = tek doğruluk kaynağı |
-> | Turlar arası ne olur? | `paused`/`mode`, `modeState:"regroup:<h>/<t>"`. Geri sayım **yalnız** herkes kendi taban bölgesine girip `set_ready{true}` yollayınca başlar — zaman aşımı YOKTUR, bekleme süresizdir |
-> | Biten turu kim kazandı, oyuncu nereden öğrenir? | Toplanmayı **açan** `match_state`'in `modeState`'i `roundend:<kazanan>:<n>`dir (§10.1); ayrı bir mesaj YOKTUR — skor zaten aynı yayında güncel gidiyor ve ikinci bir gönderici doğurmaya değmez. ⚠️ **Maçı bitiren tur da yayınlar:** değer toplanmadan ÖNCE, turu kapatan aynı tikte gönderilir — sonra ya toplanma onu ezer ya da `match_end` gelir. Aksi hâlde maçı belirleyen tur, oyuncunun kazandığı söylenmeyen tek tur olurdu |
+> | Turlar arası ne olur? | **İki basamak, ikisi de `paused`/`mode`.** Önce **operatör incelemesi** (`modeState:"roundend:<kazanan>:<n>"`): sonuç ekranda asılı kalır, mod kendiliğinden ilerlemez, kapı `mode_continue`'dur (§5.2). Sonra **toplanma** (`modeState:"regroup:<h>/<t>"`): geri sayım **yalnız** herkes kendi taban bölgesine girip `set_ready{true}` yollayınca başlar. İkisinde de zaman aşımı YOKTUR, bekleme süresizdir |
+> | Tur bitince neden kendiliğinden devam etmiyor? | Tur sonu **hakemin** karar anıdır: skoru ve oyuncu istatistiklerini admin panelinden okur, gerekirse müdahale eder (isim/takım düzeltmesi, kalibrasyon, `kick`). Sayaçla ya da "herkes tabanına döndü" ile açılan bir kapı, tabloyu tam okunurken elinden alırdı. Bu yüzden ilerleten tek şey operatörün `mode_continue`'udur; oradaki diğer çıkışlar `end_match` ve `abort_match`'tir |
+> | Maç bitince lobiye ne zaman dönülür? | **Kendiliğinden DÖNÜLMEZ.** `finished` fazının `MATCH_END_SECONDS` emniyet subabı bu modda kapalıdır (`HoldsResultForOperator`, §10.1): sonuç ekranı operatör `return_to_lobby`/`abort_match` yollayana ya da yeni maç başlatana kadar durur. Gerekçe tur incelemesiyle aynıdır — sonuç tablosu maçın ürünüdür |
+> | Biten turu kim kazandı, oyuncu nereden öğrenir? | Turu **kapatan** `match_state`'in `modeState`'i `roundend:<kazanan>:<n>`dir (§10.1) ve **operatör incelemesi boyunca orada durur**; ayrı bir mesaj YOKTUR — skor zaten aynı yayında güncel gidiyor ve ikinci bir gönderici doğurmaya değmez. ⚠️ **Maçı bitiren tur da yayınlar:** değer turu kapatan aynı tikte gönderilir — sonra ya inceleme sonundaki toplanma onu ezer ya da `match_end` gelir. Aksi hâlde maçı belirleyen tur, oyuncunun kazandığı söylenmeyen tek tur olurdu |
 > | Geri sayımda biri tabandan çıkarsa? | Geri sayım **iptal edilir**, faz `paused`/`mode`'a döner ve sayaç sıfırdan başlar. Kural "tabanda **bekle**"dir, "tabana uğra" değil. ⚠️ İptalin **istisnası yoktur**: geri sayım her koşulda geri alınabilir |
 > | Toplanma takılırsa ne olur? | Çıkış operatöründür: takılan oyuncuyu **atar** (`kick`), maçı o anki skorla bitirir (`end_match`) ya da sonuçsuz kaldırır (`abort_match`). Atılan/kopan oyuncu toplamdan düştüğü için kalanlar hazırsa tur o an başlar — sayım her tikte çevrimiçi oyunculardan yeniden yapılır. Bekleme uzarsa sunucu konsoluna 30 sn'de bir "toplanma bekleniyor (h/t) — tabanına dönmeyenler: …" satırı düşer; bu bir **teşhis** satırıdır, tur başlatmaz |
 > | Cephane? | Şarjör + yedek şarjör (`weaponSource:"weaponcanvas"`), **her tur başında herkes tam dolu** — istemci geri sayımda doldurur. Sunucunun bundan haberi yoktur (§10.3: silah tablosu yok) |

@@ -135,6 +135,12 @@ public sealed class MatchDirector
     /// carries it; the client HUD reads it. Preserved across pauses so the mode can resume.</summary>
     private string _modeState = "";
 
+    /// <summary>An operator <c>mode_continue</c> waiting to be picked up (§5.2).</summary>
+    /// <remarks>⚠️ The core does NOT act on it — it only carries the press to the mode's next tick,
+    /// which CONSUMES it (<see cref="ConsumeModeContinue"/>). Handling it here would make the core the
+    /// second owner of a pause the mode set (§10.1).</remarks>
+    private bool _modeContinuePending;
+
     private string _modeId = "";
     private string _sceneName = "";
 
@@ -909,8 +915,16 @@ public sealed class MatchDirector
         }), victim.Name));
     }
 
+    /// <summary>The <c>finished</c> safety valve: back to the lobby after <c>MATCH_END_SECONDS</c> if the
+    /// operator chose nothing (§10.1).</summary>
+    /// <remarks>⚠️ Switched OFF for a mode that holds its result
+    /// (<see cref="IGameMode.HoldsResultForOperator"/>): there the scoreboard is the match's product and
+    /// a timer would wipe it exactly as it is being read out. The exit stays
+    /// <c>return_to_lobby</c>/<c>abort_match</c>/a new <c>start_match</c>.</remarks>
     private void TickEndLocked(List<Outgoing> outbox, DateTime now)
     {
+        if (_mode is { HoldsResultForOperator: true }) return;
+
         if ((now - _phaseEnteredAt).TotalSeconds < ArenaProtocol.MATCH_END_SECONDS) return;
         EnterLobbyLocked(outbox, now);
     }
@@ -1208,6 +1222,31 @@ public sealed class MatchDirector
         return true;
     }
 
+    /// <summary><c>mode_continue</c> (§5.2) — the operator's "carry on" for a mode that parked the round
+    /// flow (the tournament's round review, §10.5).</summary>
+    /// <remarks>⚠️ Deliberately NOT a phase transition: it only queues a flag. The mode reads it on its
+    /// next tick and lifts its OWN pause — so "every pause is lifted by its owner" still holds, which is
+    /// exactly why <c>resume_match</c> was not widened to cover this instead.
+    /// <para>Accepted only in <see cref="PauseReason.Mode"/>: in any other phase there is no parked flow
+    /// and a flag left standing would fire the NEXT hold.</para></remarks>
+    public bool ModeContinue()
+    {
+        lock (_gate)
+        {
+            if (_phase != Phase.Paused || _pauseReason != PauseReason.Mode)
+            {
+                Console.WriteLine($"[match] mode_continue reddedildi: durum {PhaseWire(_phase)}" +
+                                  $"{(_pauseReason != PauseReason.None ? "/" + ReasonWire(_pauseReason) : "")} " +
+                                  "(bekleyen bir mod akışı yok).");
+                return false;
+            }
+
+            _modeContinuePending = true;
+            Console.WriteLine("[match] mode_continue — mod akışı sürdürülecek.");
+            return true;
+        }
+    }
+
     // ---- Mode commands (§10.1 "round-based modes") ----
     //
     // All three are called from IGameMode hooks: OUTSIDE the lock and SYNCHRONOUSLY (OnTick is void, a
@@ -1217,6 +1256,24 @@ public sealed class MatchDirector
     // ⚠️ The core knows NOTHING about rounds. "Round" here is only in the names; the meaning lives in the
     // mode. Without these three a mode would have to either send its own messages (a second sender) or
     // write the phase directly (a second authority).
+
+    /// <summary>Reads AND clears a pending operator <c>mode_continue</c> (§5.2); <c>false</c> when none
+    /// is waiting.</summary>
+    /// <remarks>⚠️ Consuming, not peeking: the press is a single event. A flag left standing would be
+    /// read again at the mode's next hold and skip it without anyone touching a button.
+    /// <para>Called from a mode hook, so a mode that parks its flow in more than one stage must consume
+    /// on every tick and act only where the press means something — otherwise a press landing in the
+    /// wrong stage still queues up for the next one.</para></remarks>
+    public bool ConsumeModeContinue()
+    {
+        lock (_gate)
+        {
+            if (!_modeContinuePending) return false;
+
+            _modeContinuePending = false;
+            return true;
+        }
+    }
 
     /// <summary>Requests a mode pause (§10.1): <see cref="Phase.Playing"/> → <see cref="Phase.Paused"/> +
     /// <see cref="PauseReason.Mode"/>, with the reason written into <paramref name="modeState"/>.</summary>
@@ -1794,6 +1851,9 @@ public sealed class MatchDirector
         _matchStartPending = false;
         _roundStartPending = false;
         _matchStarted = false;
+        // The mode that would have consumed it is gone; carrying the press into the NEXT match would
+        // skip that match's first hold.
+        _modeContinuePending = false;
 
         foreach (var player in _registry.Snapshot())
         {

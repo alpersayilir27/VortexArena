@@ -762,6 +762,15 @@ public sealed class LobbyService
             await BroadcastAdminStateAsync(Notice(connection, "maç sürdürüldü"));
     }
 
+    /// <summary>mode_continue (§5.2) — releases a mode that parked the round flow (the tournament's
+    /// round review, §10.5). The notice follows the pause rule: only on an accepted command, so a press
+    /// landing outside a hold does not print "devam" on the other operators' screens.</summary>
+    public async Task HandleModeContinueAsync(ClientConnection connection)
+    {
+        if (_director.ModeContinue())
+            await BroadcastAdminStateAsync(Notice(connection, "tur akışı sürdürüldü"));
+    }
+
     /// <summary>
     /// <c>set_friendly_fire</c> (§5.2) — the friendly fire switch, <b>no phase gate</b>: valid during
     /// a running match and effective immediately.

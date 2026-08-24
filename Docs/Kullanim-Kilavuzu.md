@@ -592,9 +592,24 @@ takımını ayakta tutmaz; bir takımın **tamamı** düşerse tur karşı takı
 Aynı şey kalibrasyonunu kaybeden oyuncu için de geçerlidir: kalibresiz oyuncu ne vurabildiği ne de
 vurulabildiği için savaş dışıdır.
 
-**Turlar arası TOPLANMA — operatörün asıl işi burada:**
+**Turlar arası — operatörün asıl işi burada. İki basamak vardır ve ikisi de seni bekler:**
 
-- Tur biter bitmez maç duraklar ve herkes **kendi renkli tabanına yürür**. Ekranda kaç kişinin
+**1) TUR SONU — sonucu okuma molası.** Tur biter bitmez maç durur ve **orada kalır**: skor tablosu
+ve oyuncu istatistikleri ekranda asılı durur, sistem kendiliğinden bir sonraki tura geçmez, maç
+bitmişse lobiye de dönmez. Bu molanın **süresi yoktur** — istediğin kadar bakabilirsin.
+
+- Tabloyu **İSTATİSTİK panelinden** (`I`) okursun: takım toplamları, oyuncu başına K/D, skor, ping.
+  Gerekirse burada müdahale de edersin (isim düzeltme, takım değiştirme, kalibrasyon, **AT**).
+- **Devam etmek için paneli kapat.** Panel açıkken sunucu beklediğinde kapat düğmesinin yazısı
+  **TURA DEVAM** olur; ona (ya da `I` tuşuna) basmak sıradaki tura geçirir.
+- Devam etmek istemiyorsan çıkışlar aynı: **■ BİTİR** maçı o anki skorla bitirir, **✕ İPTAL**
+  sonuçsuz kaldırır.
+- Oyuncular bu sırada "TUR BİTTİ" ve turu kimin aldığını görür; canları çoktan dolmuştur, kimse
+  ölüm ekranında beklemez.
+
+**2) TOPLANMA — herkes tabanına döner.**
+
+- Sen devam dedikten sonra herkes **kendi renkli tabanına yürür**. Ekranda kaç kişinin
   toplandığı yazar (ör. "TOPLANMA 4/6").
 - **Herkes tabanına girdiğinde** geri sayım başlar (varsayılan 5 saniye) ve yeni tur açılır —
   herkes **tam can, tam şarjörle** ayağa kalkar.

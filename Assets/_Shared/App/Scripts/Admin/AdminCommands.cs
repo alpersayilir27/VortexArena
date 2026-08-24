@@ -187,6 +187,18 @@ namespace VortexArena.App.Admin
             }
         }
 
+        /// <summary>Releases a mode that parked the round flow (§5.2) — today the tournament's round
+        /// review. ⚠️ Not <see cref="ResumeMatch"/>: this does not lift the pause itself, it hands the
+        /// operator's press to the mode, which lifts its own pause. The server drops it outside a mode
+        /// pause.</summary>
+        public static void ModeContinue()
+        {
+            if (Send(new ModeContinueMsg()))
+            {
+                SetStatus("Tur devam isteği gönderildi.");
+            }
+        }
+
         public static void ReturnToLobby()
         {
             if (Send(new ReturnToLobbyMsg()))

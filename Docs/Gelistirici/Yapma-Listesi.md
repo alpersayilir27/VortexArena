@@ -125,6 +125,19 @@ FFA'da öyle: bekleme yerine "sabit dur" şartı işler. `if (delay > 0)` deyip 
 Takım skorlu modlarda `match_end.winnerTeam`, bireysel skorlu modlarda `winnerPlayerId`.
 Hangisine bakacağını `ModeRuntime.Scoring` söyler. Bir mod ikisini birden doldurmaz.
 
+### ⛔ Operatörü bekleyen duraklamalara zaman aşımı ekleme
+
+Turnuvada tur sonu beklemesi (`RoundStage.Review`) ve `finished` ekranı **bilerek** süresizdir:
+ikisi de tam olarak operatör skoru ve oyuncu tablosunu okusun diye durur, sayaçla açılan bir kapı
+tabloyu tam okunurken elinden alır. Takılan akışın çıkışı sayaç değil operatördür (`mode_continue` ·
+`end_match` · `abort_match` · `return_to_lobby`). Gerekçe: `Docs/Sistem-Ozeti.md` §3.8.2.
+
+### ⛔ Turu ilerleten kararı incelemeye taşıma
+
+Puan, galibiyet limiti, tur tavanı ve maç saati kararları turu **kapatan** yerde verilir
+(`TournamentMode.EndRound`), bekleme basamağında değil. İncelemeye taşınan bir karar, maçın sonucunu
+bir düğmeye ne zaman basıldığına bağlar.
+
 ---
 
 ## Koordinat
