@@ -202,6 +202,28 @@ yaklaşırken duvar uyarısını alsın diye. Ölçü `size` alanından gelir, t
 Tekil engel işaretlemek arena ölçüsünün yerini tutmaz: sınırın kendisi arenanın **boyut
 dosyasından** gelir ve o dosya `ArenaBoundary.dimensionsJson` alanına bağlanır.
 
+### ⛔ Görsel hizalamak için silahın `Muzzle` nesnesini oynatma
+
+`Muzzle` bir efekt yuvası değil, **atışın kendisinin çıkış noktasıdır**: `Weapon` hitscan ışınını
+oradan atar, `ArenaCombat.ReportShot` uzak oyunculara o konumu bildirir (karşı taraf mermi izini
+oradan çizer) ve siperden ateş kapısı `IsWeaponBlocked` yine o konum + `forward` ile sorulur.
+Namlu alevi yanlış yerde diye kaydırılırsa mermi silahın gövdesinin içinden çıkmaya başlar,
+üstelik hiçbir şey hata vermez — kimse fark etmeden isabet geometrisi bozulur.
+
+Yeri **namlu ucudur** (`AR_B_Barrel` mesh'inin ileri sınırı); efekt kayması efektin kendi
+ofsetinden düzeltilir, `Muzzle`'dan değil. VFX Graph namlu alevinde bu ofsetler `VisualEffect`
+inspector'ında **açığa çıkarılmış özellik** olarak durur (`Alev Ofseti`, `Parlama Ofseti`) —
+grafiği açmadan elle ayarlanır. Alev mesh'i **kendi ekseni boyunca ileri uzar**, yani `Set Size`
+büyütmek onu ileri de taşır: "alev çok önde" şikâyetinin sebebi genelde ofset değil boydur.
+
+⚠️ **Alev mesh'inin ekseni ve UV'si namluyla kendiliğinden hizalı DEĞİLDİR** — `MuzzlePlanes`
+uzunluğunu `-X`'te taşır (namlu `+Z`'dir, aradaki fark açı bloğunun `Y` bileşeniyle kapatılır) ve
+`V` eksenini uzun eksene ters bindirir: dokunun parlak kökü mesh'in **uzak ucuna** düşer. Ters
+kalırsa alev namludan kopuk, ileride bir leke gibi görünür; düzeltmesi çıktının `uvMode`'unu
+`ScaleAndBias`'a alıp `uvScale.y = -1`, `uvBias.y = 1` vermektir — geometriyi kaydırmak DEĞİL
+(kaydırma boyla ölçeklenmediği için `Set Size` her değiştiğinde yeniden bozulur). Yeni bir alev
+mesh'i getirildiğinde ikisi de yeniden kontrol edilir.
+
 ### ⛔ Sahneye elle kalibrasyon işaretçisi koyma
 
 `anchor_a`/`anchor_b` tektir ve ölçü maketinin (`<Mekan>_DimensionMesh`) altındadır; sahneye
