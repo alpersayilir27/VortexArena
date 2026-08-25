@@ -199,12 +199,12 @@ namespace VortexArena.App.Admin
         [SerializeField] private Button _roofPrev;
         [SerializeField] private Button _roofNext;
 
+        [Header("SES bölümü (yalnız bu ekran)")]
+
         /// <summary>Audio output device selector (this screen only — <see cref="AdminSession"/>);
         /// a dropdown because the endpoint count is unknown per PC. ⚠️ Options are filled by CODE
         /// from Windows; the prefab list is a template and is cleared at runtime.</summary>
         [SerializeField] private TMP_Dropdown _audioDeviceDropdown;
-
-        [Header("SES bölümü (yalnız bu ekran)")]
 
         // ⚠️ Rows are index-bound to AudioChannel: Ambiyans, Silah sesleri, Seslendirme, Müzik. An
         // unbound element silently draws nothing, so every read below is null-safe (At<T>).
@@ -373,9 +373,9 @@ namespace VortexArena.App.Admin
         {
             _tab = tab;
 
-            // Device list refreshes when entering GÖRÜNÜM, so a headset plugged in while the panel
+            // Device list refreshes when entering SES, so a headset plugged in while the panel
             // is open does not require closing and reopening it.
-            if (tab == AdminPreferencesTab.View)
+            if (tab == AdminPreferencesTab.Audio)
             {
                 RefreshAudioDeviceList();
             }
@@ -1223,7 +1223,7 @@ namespace VortexArena.App.Admin
         private bool _audioDeviceMissing;
 
         /// <summary>Re-reads the device list from Windows and rebuilds the options. Called on panel
-        /// open and when entering GÖRÜNÜM, never per frame — endpoint enumeration is a COM
+        /// open and when entering SES, never per frame — endpoint enumeration is a COM
         /// call.</summary>
         private void RefreshAudioDeviceList()
         {

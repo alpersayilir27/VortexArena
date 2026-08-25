@@ -453,7 +453,7 @@ Yönetim ekranındaki dashboard'da elindeki kontroller:
 | **Kamera: POV** (oyuncu kartındaki **POV** düğmesi; seçili oyuncu için `1` ya da `F`) | O oyuncunun **kendi gözünden** izlersin — karttaki POV'a basmak hem oyuncuyu seçer hem gözünden bakmaya geçer. Sağ üstte ayrı bir POV düğmesi yoktur; hangi oyuncuya baktığını listede **turuncu çerçeveli** satırdan görürsün | "Bu oyuncu ne görüyor / neden takıldı?" |
 | **Kamera: Serbest** (sağ üstteki **SERBEST** düğmesi ya da `2`) | Arenada özgürce dolaşırsın: **W A S D** yürü, **Q/E** in-çık, **sağ fare tuşunu basılı tutup** bakış çevir, **Shift** hızlı | Bir köşeye yakından bakmak |
 | **İstatistik** | Skorun ortasındaki kutuya bas (veya `I`) | Oyuncu başına öldürme/ölüm/can/batarya **ve PING** tablosu. Takımlı bir modda liste **ikiye bölünür — solda kırmızı, sağda mavi**; her iki tarafta da aynı bilgiler ve aynı düğmeler vardır, düğmeler dar sütunda yazı yerine **ikon** olarak görünür. Herkes tek modunda tek listeye döner. Takımı henüz belli olmayan oyuncular **sol sütunda** durur, sütunun başlığı kaç tane olduğunu yazar |
-| **Tercihler** | Sol üstteki düğme (veya `P`). Panel **dört sekmelidir**: **MAÇ** (mod/harita/süre/skor limiti/geri sayım/dost ateşi + kalibre modu), **GÖRÜNÜM** (halkalar, ad etiketleri, ihlal sesi, kamera hızı, çatı, ses çıkışı — yalnız senin ekranın), **BAĞLANTI** (yeniden bağlan/kes, oyundan çık), **SES** (dört ses türünün seviyesi + salona fon müziği çalan **müzik çalar** — yalnız senin ekranın) | Maç kurmak, görünümü ayarlamak, bağlantıyı yönetmek. Başlat/duraklat/iptal düğmeleri panelde **değil**, ekranın alt ortasındadır |
+| **Tercihler** | Sol üstteki düğme (veya `P`). Panel **dört sekmelidir**: **MAÇ** (mod/harita/süre/skor limiti/geri sayım/dost ateşi + kalibre modu), **GÖRÜNÜM** (halkalar, ad etiketleri, ihlal sesi, kamera hızı, çatı — yalnız senin ekranın), **BAĞLANTI** (yeniden bağlan/kes, oyundan çık), **SES** (ses çıkışı + dört ses türünün seviyesi + salona fon müziği çalan **müzik çalar** — yalnız senin ekranın) | Maç kurmak, görünümü ayarlamak, bağlantıyı yönetmek. Başlat/duraklat/iptal düğmeleri panelde **değil**, ekranın alt ortasındadır |
 | **Tam ekran / Pencereli** | `F11` (ekranda düğmesi yoktur) | Yönetim penceresini tüm ekrana yay veya küçült. Seçimin bu bilgisayarda **hatırlanır**: uygulama bir dahaki açılışta aynı kiple gelir |
 | **Oyundan çık** | Tercihler → **BAĞLANTI** sekmesindeki **OYUNDAN ÇIK** | Yönetim uygulamasını kapatır. Güvenlik için **iki kez** basmak gerekir (ilk basışta düğme "EMİN? ÇIK" olur). Sunucuyu ve maçı **kapatmaz** — o ayrı bir penceredir |
 
@@ -518,7 +518,7 @@ Bu ayrı bir ayardır: **hangi hoparlörden** çalacağını seçer, **ne kadar*
 (o SES sekmesindedir). Yönetim bilgisayarına birden çok ses cihazı bağlıysa (masa hoparlörü, salonun ses sistemi,
 kulaklık) sesin hangisinden çıkacağını kendin seçebilirsin:
 
-- [ ] **Tercihler** (`P`) → **GÖRÜNÜM** sekmesi → **Ses çıkışı** satırına bas, liste açılır.
+- [ ] **Tercihler** (`P`) → **SES** sekmesi → **Ses çıkışı** satırına bas, liste açılır.
 - [ ] Listeden cihazı seç. En üstteki **sistem varsayılanı** satırı "karışma, Windows ne diyorsa o"
       demektir.
 - [ ] Ses hemen yeni cihazdan gelmeye başlar; ortam müziği kaldığı yerden devam eder.
