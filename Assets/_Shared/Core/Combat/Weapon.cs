@@ -85,7 +85,6 @@ namespace VortexArena.Core.Combat
         [Tooltip("Silah geometrisini taşıyan çocuk; geri tepme buraya uygulanır.")]
         [SerializeField] private Transform modelPivot;
         [SerializeField] private Grabbable grabbable;
-        [SerializeField] private ParticleSystem muzzleFlash;
         [SerializeField] private WeaponAudio weaponAudio;
         [SerializeField] private GameObject hitEffectPrefab;
         [Tooltip("YALNIZ editör fallback'i (kontrolcü çözülemezse 'Player/Attack'). Boşsa proje geneli aksiyonlar.")]
@@ -755,9 +754,6 @@ namespace VortexArena.Core.Combat
             AmmoChanged?.Invoke();
             Fired?.Invoke();
             weaponAudio?.PlayFire();
-
-            if (muzzleFlash != null)
-                muzzleFlash.Emit(14);
 
             if (string.IsNullOrEmpty(WeaponId))
                 WarnMissingWeaponId();

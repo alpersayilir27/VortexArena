@@ -1285,7 +1285,7 @@ seçim değişiminde yanlış oyuncuyu duyurmaya devam ederdi) ve oyuncu istemci
 orada her atış mesafeye göre duyulur) + `ShellEjector` (`Weapon.Fired` olayına abone; ateşte silahın `Eject`
 noktasından kalibreye göre (`Casing_762x39`/`Casing_556x45`) bir kovan fırlatır — kovanın kendisi
 `CasingPool`'dan gelir, bileşen yalnız "nereden, ne kadar kuvvetle" sorusunu cevaplar;
-`MuzzleFlash` altındaki "Smoke" sub-emitter'ı da dahil tüm bu kit `WeaponKitBuilder` tarafından
+kovan kiti `WeaponKitBuilder` tarafından
 üretilir/güncellenir) +
 `WeaponAmmoPanel` (`Core/UI` — cephane göstergesi silahın **ÜSTÜNDE**, kendi dünya-uzayı
 canvas'ında: şarjördeki mermi + yedek şarjör sayısı. Bileşen canvas prefabının kökünde
@@ -2930,8 +2930,8 @@ konsoluna tek satır sebep yazar.
     ölçülmeli ve bozulursa karar geri alınabilmeli (`TryCancelCountdownForMode`). Bunun kaçınılmaz
     ikinci yarısı: kapının dayandığı bayrak (`ready`) o pencere boyunca **temizlenmez**, yoksa geri
     alma kararının dayanağı kalmaz.
-73. **Elle ayarlanan bir yerleşimi editör aracı HER KOŞUDA yeniden hesaplamaz.** `Muzzle`/
-    `MuzzleFlash` için zaten geçerli olan kural kovan çıkışına (`Eject`) da uygulanır:
+73. **Elle ayarlanan bir yerleşimi editör aracı HER KOŞUDA yeniden hesaplamaz.** Namlu ucu
+    (`Muzzle`) için zaten geçerli olan kural kovan çıkışına (`Eject`) da uygulanır:
     `WeaponKitBuilder` onu **yalnız yoksa** üretir, varsa **taşımaz**. Sebebi iki katlı:
     (a) yeri gözle ayarlanan bir şeydir, (b) hesabın kendisi güvenilmez — silah ölçüsü alt
     ağaçtaki tüm Renderer'lardan çıkarılıyordu ve **kapalı bir `Renderer`'ın `bounds`'u
@@ -4348,6 +4348,20 @@ konsoluna tek satır sebep yazar.
     (`distance ≈ tan(açı) × 0,46`) ve tam alfayı ±40° civarında bitir; quad'ı küçültüp UV'yi
     ekrana yaklaştırmak ise **çözüm değildir** — quad görüş alanından dar kalırsa bu kez kenarı
     sert bir dikdörtgen olarak görünür.
+
+183. **Bir editör aracı üretimini bir OBJEDEN klonluyorsa, o obje aracın sessiz bağımlılığıdır —
+    silinmesi aracı bozmaz, çıktısını boşaltır.** `WPN_*` prefablarında namlu alevi VFX Graph'tır
+    (`Muzzle/Flash/vfxgraph_Muzzle` + `WeaponMuzzleVfx`); parçacık tabanlı `MuzzleFlash` objesi ve
+    altındaki `Smoke` alt sistemi **yoktur**. Ama `WeaponKitBuilder` uzak atış efektini
+    (`FX_RemoteShot.prefab` — diğer oyuncuların gördüğü alev) hâlâ bir `MuzzleFlash` child'ını
+    klonlayarak üretir. Bugün zararsızdır, çünkü o adım prefab **varsa hiç koşmaz**; tuzak
+    `FX_RemoteShot.prefab` silinip kit yeniden koşulduğunda kapanır: araç hata vermez, yalnız
+    "kaynakta 'MuzzleFlash' child'ı yok" uyarısı basar ve **alevsiz** bir uzak efekt yazar —
+    belirtisi "uzaktaki oyuncunun silahı ateş ediyor ama parlamıyor"dur, yani kendi silahında
+    hiç görünmez. Aynı sebeple her kit koşusu silah başına bir "namlu alevi/dumanı ayarlanamadı"
+    uyarısı verir; bu uyarı **beklenen** durumdur, susturmak için araca dokunulmaz. Genel kural:
+    bir aracın girdisi kod değil **sahne/prefab objesiyse**, o objeyi kaldıran değişiklik aracın
+    o adımını da birlikte ele almalıdır.
 
 ---
 
