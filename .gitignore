@@ -56,6 +56,10 @@ $RECYCLE.BIN/
 *.blend1
 *.blend1.meta
 
+# Çökme sonrası kurtarılan sahne dökümleri — her kurtarmada bir kopya daha
+# birikir, hiçbiri Build Settings'te ya da bir katalogda yer almaz
+/[Aa]ssets/_Recovery/
+
 # MemoryCapture'lar çok büyük olabilir ve hassas veri içerebilir
 /[Mm]emoryCaptures/
 
