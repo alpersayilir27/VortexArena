@@ -52,7 +52,6 @@ Bir arena sahnesinin ağa bağlanması için sahnede bulunması gerekenler.
 > `BaseZone` gibi tek örnek olarak koymak yerleşimi tek yerden düzeltilebilir kılar.
 > ⚠️ Hangi silahın duracağını **arena** belirler, `ModeDefinition.loadout` değil — moda silah
 > eklemek arenaları değiştirmez. `loadout` yalnız `random` modlarında (FFA, lobi) okunur.
-> Çerçeve görselini örnek başına `WeaponFrame.isFrameVisible` ile aç/kapat.
 
 > ⚠️ **Arena geometrisi dünya orijinine göre kurulur:** zemin dünya y=0'da, arena merkezi dünya
 > (0,0,0) civarında. Arena uzayı dünya uzayıdır — sahneyi topluca kaydırmak ya da döndürmek

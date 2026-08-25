@@ -606,37 +606,28 @@ oyuncunun kendi eli: uzak oyuncunun eli metrelerce öteden görülüyor.
 `HandFingerRig.FingerMaxAngles` / `ThumbMaxAngles`. Tek bir silah tuhaf duruyorsa bakılacak yer o
 silahın **kavrama kaydıdır**, tavanlar değil.
 
-## 11.1 Bir arenada silah çerçevesini görünür/görünmez yapmak
+## 11.1 Silah çerçevesinin görünümü
 
-**Ne zaman:** çerçeve o arenanın sanat diline uymuyor (ör. silah bir masanın üstünde dursun,
-çerçeve görünmesin) ya da tersine oyuncuya "silah buradan alınır" diye göstermek istiyorsun.
+`VA_WeaponFrame` prefabında **çerçeve MODELİ yoktur** — çerçeve görünmeyen bir seçim hacmidir
+(kutu collider + iki mesafe-kavrama bileşeni). `WeaponFrame.isFrameVisible` işaretlense de
+çizilecek görsel bulunmaz; görsel isteniyorsa önce prefaba bir model kökü eklenip `frameVisual`
+alanına bağlanır, model çalışma anında silahın ölçüsüne oturtulur.
 
-1. Arena sahnesini aç.
-2. Hiyerarşide sahnedeki `WPN_*` **örneğini** seç.
-3. Altındaki `VA_WeaponFrame` çocuğuna in.
-4. `WeaponFrame` bileşenindeki **`isFrameVisible`** kutusunu işaretle / kaldır.
-5. Sahneyi kaydet. (Birden çok silahı aynı anda seçip tek hamlede yapabilirsin.)
-
-> ⚠️ Bu bir **prefab override**'dır, yani ayar **sahneye özeldir** — istenen davranış budur:
-> aynı silah bir arenada çerçeveli, başka arenada çerçevesiz durabilir. `VA_WeaponFrame`
-> prefabının kendisini düzenlersen **tüm arenalar** etkilenir.
-
-> ⚠️ Görünürlük **yalnız sunumdur.** Çerçeve görünmez olsa bile silah yine oradan,
-> `maxGrabDistance` mesafesinden nişan alınarak seçilir ve ele klonlanır; alma menzilini ya da
+> ⚠️ Görsel **yalnız sunumdur.** Çerçeve görünmese de silah yine oradan, `maxGrabDistance`
+> mesafesinden nişan alınarak seçilir ve ele klonlanır; görselin yokluğu alma menzilini ya da
 > kavramayı kapatmaz.
 
 > ⚠️ **Nişan ışını çerçeveden gelmez.** Oyuncunun gördüğü uzaktan-seçim göstergesi ISDK'nın kendi
 > mesafe-kavrama görselidir (tüp + reticle); `WeaponFrame`'in kendi `LineRenderer` ışını
 > (`isRayVisible`) **kapalıdır**, ikisi birden açıkken elde iki ışın görünür. Menzil bilgisi
-> kaybolmaz: ISDK adaylarını `WeaponFrame.Filter`'dan geçiriyor, 2 m'nin dışındaki çerçeve hover
+> kaybolmaz: ISDK adaylarını `WeaponFrame.Filter`'dan geçiriyor, menzil dışındaki çerçeve hover
 > bile almaz.
 
 > **Çerçeve yalnız silah SABİT dururken vardır.** Silah hangi yoldan tutulursa tutulsun — ele
 > verildi (`WeaponGranter`) ya da doğrudan kavrandı (ISDK) — çerçevenin GameObject'i kapanır;
-> bırakılınca geri gelir. Yani elde duran silahta ne çerçeve görseli ne de uzaktan seçim kapısı
-> olur. Bu `isFrameVisible` ile ilgisizdir ve elle kurulum istemez:
-> `WeaponFrame` silahın `Weapon.HeldChanged` olayını dinler. Yeni bir "silahı ele alma" yolu
-> yazarsan o yola ayrıca bir şey eklemene gerek YOKTUR — kural olayda durur.
+> bırakılınca geri gelir. Yani elde duran silahta uzaktan seçim kapısı olmaz. Elle kurulum
+> istemez: `WeaponFrame` silahın `Weapon.HeldChanged` olayını dinler. Yeni bir "silahı ele alma"
+> yolu yazarsan o yola ayrıca bir şey eklemene gerek YOKTUR — kural olayda durur.
 
 ---
 
@@ -645,8 +636,8 @@ silahın **kavrama kaydıdır**, tavanlar değil.
 **Ne zaman:** o sahnede silah bir çerçeve kaynağı değil, yerde duran normal bir nesne olsun
 istiyorsun (oyuncu yaklaşıp elle kavrasın, uzaktan seçme olmasın).
 
-⚠️ **`isFrameVisible` bunu YAPMAZ** — o yalnız çerçeve modelini gizler (§11.1). Kapatman gereken
-şey görsel değil, `WeaponFrame`'in **kendisidir**:
+⚠️ Kapatman gereken şey `WeaponFrame`'in **kendisidir** — çerçeve zaten görünmez olduğu için
+(bkz. "Silah çerçevesinin görünümü") görselle uğraşmak silahı yerde bırakmaz:
 
 1. Sahnedeki `WPN_*` örneğini seç → altındaki **`VA_WeaponFrame` çocuğunu** seç.
 2. Objenin **aktiflik kutusunu kaldır** (`SetActive(false)`) — bileşeni değil, GameObject'i.
@@ -655,19 +646,17 @@ istiyorsun (oyuncu yaklaşıp elle kavrasın, uzaktan seçme olmasın).
 Böylece `WeaponFrame.Awake` hiç koşmaz: silah donmaz (`Rigidbody` fizikli kalır), kendi
 `Grabbable`/`GrabInteractable`/`HandGrabInteractable`'ı açık kalır → normal
 yakın kavrama çalışır (iki kavrama hattı da açık kaldığı için el izleme ayarından bağımsızdır).
-Çerçeve görseli prefabda zaten pasif durduğu için kendiliğinden görünmez.
 
 ⚠️ **Bileşeni `enabled = false` yapma.** Unity kapalı bileşende de `Awake` çağırır → silah yine
 donar ve yakın kavrama kapanır; ama `OnEnable` koşmadığı için uzaktan da seçilemez. Sonuç: hiç
 alınamayan ölü bir silah.
 
-Üç seçeneğin ölçülen farkı (`WPN_M4A1` örneği üstünde):
+İki seçeneğin ölçülen farkı (`WPN_M4A1` örneği üstünde):
 
-| | Grabbable / GripSockets | Rigidbody | çerçeve görseli |
+| | Grabbable / GripSockets | Rigidbody | nasıl alınır |
 |---|---|---|---|
-| Normal (çerçeve açık) | kapalı | kinematik, yerçekimsiz | görünür, silaha oturtulmuş |
-| `isFrameVisible = false` | **kapalı** (değişmez) | kinematik, yerçekimsiz | gizli |
-| `VA_WeaponFrame` GO kapalı | **açık** | fizikli, yerçekimli | gizli |
+| Normal (çerçeve açık) | kapalı | kinematik, yerçekimsiz | yalnız uzaktan, klon olarak |
+| `VA_WeaponFrame` GO kapalı | **açık** | fizikli, yerçekimli | yalnız elle, yakından |
 
 ---
 
