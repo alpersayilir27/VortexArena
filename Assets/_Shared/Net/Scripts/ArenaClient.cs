@@ -54,6 +54,11 @@ namespace VortexArena.Net
         /// lifetime (the blob is consumed, the root interpolated).</summary>
         public RemoteSkeletonRegistry RemoteSkeletons { get; private set; }
 
+        /// <summary>Remote OBJECT pose registry (§6.12): rings the object section of <c>0x05</c>.
+        /// ⚠️ SEPARATE from <see cref="Remotes"/> (an object is not a player) but on the SAME clock —
+        /// two time bases would drift a held object away from the hand holding it.</summary>
+        public RemoteObjectRegistry RemoteObjects { get; private set; }
+
         /// <summary>Is the socket open — safe from any thread.</summary>
         public bool IsConnected => IsSocketOpen;
 
@@ -123,6 +128,7 @@ namespace VortexArena.Net
             UdpChannel = gameObject.AddComponent<UdpStateChannel>();
             Remotes = gameObject.AddComponent<RemotePlayerRegistry>();
             RemoteSkeletons = gameObject.AddComponent<RemoteSkeletonRegistry>();
+            RemoteObjects = gameObject.AddComponent<RemoteObjectRegistry>();
 
             _hardwareId = SystemInfo.deviceUniqueIdentifier;
             // The admin id is PER SESSION so two admin windows can run on one PC (§2); the GUID is
@@ -517,6 +523,43 @@ namespace VortexArena.Net
                     {
                         MatchEndMsg msg = JsonUtility.FromJson<MatchEndMsg>(json);
                         _mainThreadActions.Enqueue(() => NetEvents.RaiseMatchEnd(msg));
+                        break;
+                    }
+
+                    case MessageTypes.ObjectState:
+                    {
+                        ObjectStateMsg msg = JsonUtility.FromJson<ObjectStateMsg>(json);
+                        _mainThreadActions.Enqueue(() => NetEvents.RaiseObjectState(msg));
+                        break;
+                    }
+
+                    case MessageTypes.ObjectSpawn:
+                    {
+                        // Same body as object_state (§5.3) — only the TYPE separates a spawn from a
+                        // drifted id, so it must not be merged into the case above.
+                        ObjectStateMsg msg = JsonUtility.FromJson<ObjectStateMsg>(json);
+                        _mainThreadActions.Enqueue(() => NetEvents.RaiseObjectSpawn(msg));
+                        break;
+                    }
+
+                    case MessageTypes.ObjectDespawn:
+                    {
+                        ObjectDespawnMsg msg = JsonUtility.FromJson<ObjectDespawnMsg>(json);
+                        _mainThreadActions.Enqueue(() => NetEvents.RaiseObjectDespawn(msg));
+                        break;
+                    }
+
+                    case MessageTypes.ObjectEvent:
+                    {
+                        ObjectEventMsg msg = JsonUtility.FromJson<ObjectEventMsg>(json);
+                        _mainThreadActions.Enqueue(() => NetEvents.RaiseObjectEvent(msg));
+                        break;
+                    }
+
+                    case MessageTypes.WorldState:
+                    {
+                        WorldStateMsg msg = JsonUtility.FromJson<WorldStateMsg>(json);
+                        _mainThreadActions.Enqueue(() => NetEvents.RaiseWorldState(msg));
                         break;
                     }
 

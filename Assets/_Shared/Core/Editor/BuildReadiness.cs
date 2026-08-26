@@ -105,6 +105,21 @@ namespace VortexArena.Core.Editor
                     "uzak oyuncunun elinde çizilmez."),
 
                 Check(
+                    "Eşya alma yolu ↔ prefab",
+                    ItemGrabPathGuard.ArePrefabsMatched,
+                    // The button WRITES NOTHING — it only dumps every mismatch to the console, because
+                    // the row shows one line and the fix is a human step in the prefab.
+                    "Konsola dök",
+                    ItemGrabPathGuard.LogMismatches,
+                    "Eşya tanımındaki 'Alma yolu' ile prefabın gerçekten taşıdığı kavrama bileşenleri. " +
+                    "NE ZAMAN: bir eşyanın alma yolunu değiştirince ya da yeni elle tutulan obje " +
+                    "ekleyince. ✗ ise insan adımıdır: DistanceGrab OLMAYAN bir eşyanın prefabında " +
+                    "mesafeli kavrama bileşeni duruyor — ISDK'da 'alınamaz' filtreyle DEĞİL, bileşenin " +
+                    "YOKLUĞUYLA ifade edilir; boş aday listesiyle bile interactor hover'a girer ve " +
+                    "kavrama basışı sessizce yenir. Araç düzeltmez (bileşeni silmek istenerek mesafeli " +
+                    "alınan bir silahı alınamaz yapardı); bileşen prefabdan elle kaldırılır."),
+
+                Check(
                     "İskelet eklem listesi (iki gövde prefabı)",
                     SkeletonStreamGuard.AreJointListsMatched,
                     null,
@@ -115,6 +130,17 @@ namespace VortexArena.Core.Editor
                     "karakter modeli değişince. ✗ ise insan adımıdır: blob opak olduğu için ayrışma " +
                     "hiçbir yerde hata vermez, yalnız uzak gövdeler bozuk çizilir. Liste RUNTIME'da " +
                     "hesaplanmaz — iki prefabın Inspector'ında düzeltilir."),
+
+                Check(
+                    "Ağ nesneleri",
+                    BuildElementsConfigurator.AreNetObjectsReady,
+                    null,
+                    null,
+                    "Kırılabilir/ağ objelerinin tür tablosu (NetObjectKind) ve sahnelerin export edilmiş " +
+                    "obje listeleri. NE ZAMAN: yeni tür ekleyince ya da bir sahneye NetObject koyup " +
+                    "sahneyi kaydedince. Sahne listesi sahne KAYDINDA yazılır; ✗ ise insan adımıdır: " +
+                    "boş/yinelenen 'kind' ya da sahnede olup türü olmayan bir obje var — sunucu o objeyi " +
+                    "tabloya almaz ve sahada 'obje kırılmıyor' diye görünür. Tür yoksa satır temizdir."),
 
                 Check(
                     "Sunucu harita tablosu (maps.json)",

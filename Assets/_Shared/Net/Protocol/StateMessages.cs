@@ -35,6 +35,13 @@ namespace VortexArena.Protocol
         /// per target per tick, and in this product the bottleneck is packet count, not bandwidth
         /// (<c>Docs/Sistem-Ozeti.md</c> §3.12).</para></summary>
         public const byte SkeletonBatch = 0x08;
+
+        /// <summary>0x09 — an owned object's pose (<see cref="ObjectPose"/>, §6.12). Client → server,
+        /// <see cref="ArenaProtocol.OBJECT_POSE_RATE_HZ"/>; only the OWNER, and only while the object is
+        /// awake and NOT held.
+        /// <para>⚠️ The downlink is not a separate packet: the same pose rides the object section of
+        /// <c>0x05</c> as <see cref="ObjectPoseEntry"/> (§6.8).</para></summary>
+        public const byte ObjectPose = 0x09;
     }
 
     /// Pose block: f32 px,py,pz,qx,qy,qz,qw — 28 B, in arena space.
@@ -84,8 +91,86 @@ namespace VortexArena.Protocol
     }
 
     /// <summary>
-    /// 0x05 — [u8 type][u8 playerCount][u8 eventCount][u32 serverTick] + playerCount×
-    /// <see cref="SnapshotEntry"/> + eventCount×<see cref="FireEventEntry"/>. Header is <b>7 B</b>.
+    /// 0x09 — [u8 type][u8 playerId][u16 netId][u16 seq][pose 28] = <b>34 B</b> (client → server,
+    /// <see cref="ArenaProtocol.OBJECT_POSE_RATE_HZ"/>; §6.12). Sent only by the OWNER, and only while
+    /// the object is awake and NOT held — a held object hangs off the owner's hand, which already
+    /// streams at 20 Hz; streaming both would drift the hand and the object apart.
+    /// <para><c>seq</c> wraps PER OBJECT; an old <c>seq</c> drops the packet (the state-channel rule of
+    /// <c>0x01</c>, §6.2).</para>
+    /// <para>⚠️ The server does NOT validate the pose (it knows no metres), it validates OWNERSHIP; and
+    /// it does not write the pose into the table as state, it relays it — the table is written by
+    /// <c>object_rest</c>, because <c>world_state</c> must carry a RESTING pose, not a frame from
+    /// mid-flight.</para>
+    /// </summary>
+    public struct ObjectPose
+    {
+        public const int SIZE = 34;
+
+        public byte playerId;
+
+        /// <summary>The object's network id (§10.10).</summary>
+        public ushort netId;
+
+        public ushort seq;
+
+        /// <summary>The object's pose in <b>arena space</b> (§3).</summary>
+        public PoseData pose;
+
+        public void Write(BinaryWriter w)
+        {
+            w.Write(UdpPacketType.ObjectPose);
+            w.Write(playerId);
+            w.Write(netId);
+            w.Write(seq);
+            pose.Write(w);
+        }
+
+        public static ObjectPose Read(BinaryReader r)
+        {
+            ObjectPose m;
+            m.playerId = r.ReadByte();
+            m.netId = r.ReadUInt16();
+            m.seq = r.ReadUInt16();
+            m.pose = PoseData.Read(r);
+            return m;
+        }
+    }
+
+    /// <summary>The object entry of the <c>0x05</c> object section: [u16 netId][pose 28] = <b>30 B</b>
+    /// (§6.12). <c>seq</c> is not carried — the server already dropped the old ones.</summary>
+    public struct ObjectPoseEntry
+    {
+        public const int SIZE = 30;
+
+        public ushort netId;
+        public PoseData pose;
+
+        public void Write(BinaryWriter w)
+        {
+            w.Write(netId);
+            pose.Write(w);
+        }
+
+        public static ObjectPoseEntry Read(BinaryReader r)
+        {
+            ObjectPoseEntry e;
+            e.netId = r.ReadUInt16();
+            e.pose = PoseData.Read(r);
+            return e;
+        }
+    }
+
+    /// <summary>
+    /// 0x05 — [u8 type][u8 playerCount][u8 eventCount][u8 objectCount][u32 serverTick] + playerCount×
+    /// <see cref="SnapshotEntry"/> + eventCount×<see cref="FireEventEntry"/> + objectCount×
+    /// <see cref="ObjectPoseEntry"/>. Header is <b>8 B</b>.
+    /// <para>⚠️ <b><c>objectCount</c> grew the header from 7 B to 8 B in v18 and that BREAKS the wire:</b>
+    /// a reader that does not know the field decodes the whole body one byte off, losing the entire
+    /// snapshot, not just the objects.</para>
+    /// <para>⚠️ <c>objectCount = 0</c> is perfectly normal — object poses only exist for awake, unheld
+    /// objects. On the fallback path (<c>0x02</c>+<c>0x04</c>) the object section is DROPPED and no
+    /// section is added there; what is lost is the smoothness of the motion, not the final pose (that
+    /// comes over WS via <c>object_rest</c> → <c>object_state</c>).</para>
     /// <para><b>Exists for packet count:</b> a typical match (10 players) is 886 B of snapshot + 45 B
     /// of events — one datagram instead of <b>two</b> per target per tick. The win is <b>airtime</b>,
     /// not bandwidth (Docs/Sistem-Ozeti.md §3.12).</para>
@@ -99,21 +184,28 @@ namespace VortexArena.Protocol
     /// </summary>
     public struct SnapshotWithEvents
     {
-        /// <summary>[type][playerCount][eventCount][serverTick] — the fixed part before the entries.</summary>
-        public const int HEADER_SIZE = 7;
+        /// <summary>[type][playerCount][eventCount][objectCount][serverTick] — the fixed part before the
+        /// entries.</summary>
+        public const int HEADER_SIZE = 8;
 
         public uint serverTick;
         public SnapshotEntry[] players;
         public FireEventEntry[] events;
 
+        /// <summary>Object poses of this tick (§6.12); <c>null</c> or empty = no object section.</summary>
+        public ObjectPoseEntry[] objects;
+
         public void Write(BinaryWriter w)
         {
+            int objectCount = objects != null ? objects.Length : 0;
             w.Write(UdpPacketType.SnapshotWithEvents);
             w.Write((byte)players.Length);
             w.Write((byte)events.Length);
+            w.Write((byte)objectCount);
             w.Write(serverTick);
             for (int i = 0; i < players.Length; i++) players[i].Write(w);
             for (int i = 0; i < events.Length; i++) events[i].Write(w);
+            for (int i = 0; i < objectCount; i++) objects[i].Write(w);
         }
 
         public static SnapshotWithEvents Read(BinaryReader r)
@@ -121,11 +213,14 @@ namespace VortexArena.Protocol
             SnapshotWithEvents m;
             byte playerCount = r.ReadByte();
             byte eventCount = r.ReadByte();
+            byte objectCount = r.ReadByte();
             m.serverTick = r.ReadUInt32();
             m.players = new SnapshotEntry[playerCount];
             for (int i = 0; i < playerCount; i++) m.players[i] = SnapshotEntry.Read(r);
             m.events = new FireEventEntry[eventCount];
             for (int i = 0; i < eventCount; i++) m.events[i] = FireEventEntry.Read(r);
+            m.objects = new ObjectPoseEntry[objectCount];
+            for (int i = 0; i < objectCount; i++) m.objects[i] = ObjectPoseEntry.Read(r);
             return m;
         }
     }

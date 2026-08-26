@@ -163,6 +163,9 @@ public sealed class TournamentMode : IGameMode
         // budget is written back over it.
         director.SetTimeRemaining(_matchRemaining);
 
+        // §10.10: a new round starts behind intact covers — the previous round's breaks are undone.
+        director.TryResetObjectsForMode();
+
         director.SetModeState($"round:{_round}");
         Console.WriteLine($"[tournament] tur {_round} başladı " +
                           $"(kırmızı {director.ScoreRed} : mavi {director.ScoreBlue}).");

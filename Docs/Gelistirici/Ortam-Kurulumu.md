@@ -49,7 +49,7 @@ konumundan türetir — elle yol ekleme, gerekiyorsa `-ExtraPath` geç. Geri alm
 
 ## 2. MCP sunucularının kaydı
 
-Üç kayıt da **proje scope'undadır**: tek kaynak repo kökündeki `.mcp.json`. User scope'a ya da
+Kayıtların hepsi **proje scope'undadır**: tek kaynak repo kökündeki `.mcp.json`. User scope'a ya da
 `~/.claude.json` içindeki `projects[...].mcpServers` altına kayıt açılmaz.
 
 ### `auggie` Windows'ta neden `cmd /c` ile çağrılır
@@ -59,6 +59,26 @@ doğrudan `spawn("auggie")` **ENOENT** verir, `spawn("auggie.cmd")` ise Node'un 
 kısıtına takılıp **EINVAL** verir. macOS/Linux'ta `command: "auggie", args: ["--mcp"]` yeterlidir.
 Banner satırları stderr'e gider, stdout temiz JSON-RPC kalır (protokolü kirletmez); ilk çağrı
 workspace'i indekslediği için gecikebilir.
+
+### `blender` kaydı — sunucu + Blender eklentisi iki parçadır
+
+Kayıt `uvx blender-mcp`'dir; MCP sunucusu tek başına hiçbir şey yapmaz, Blender içindeki eklentiye
+**localhost:9876**'dan bağlanır. İki parça ayrı kurulur ve **protokol sürümleri eşleşmek
+zorundadır** — eklenti eskiyse çağrılar el sıkışmada düşer.
+
+| # | Ne | Nasıl |
+|---|---|---|
+| 1 | `uv` (uvx) | PowerShell: `irm https://astral.sh/uv/install.ps1 \| iex` |
+| 2 | Blender eklentisi | `uvx blender-mcp install-addon` → paketin içindeki `addon.py`'yi Blender'ın kullanıcı eklenti klasörüne kopyalar (4.2+ için `extensions/user_default`). Yüklü sürümü kontrol: `uvx blender-mcp addon-paths` |
+| 3 | Blender'da etkinleştir | *Preferences → Add-ons → "Blender MCP"* aç (zaten açıksa kapat-aç ya da Blender'ı yeniden başlat) |
+| 4 | Köprüyü başlat | 3D görünümde *Sidebar (N) → BlenderMCP → Start MCP Server* |
+
+- ⚠️ **Blender kapalıyken ya da "Start MCP Server" tıklanmamışken** sunucu ayakta görünür ama her
+  çağrı bağlantı hatası verir — Unity kapısındaki mantığın aynısı: önce köprü, sonra iş.
+- ⚠️ Eklentiyi güncellemek eskisini `.bak` olarak yedekler; Blender **çalışırken güncelleme
+  yüklenmez**, eklenti yeniden etkinleştirilene kadar bellekteki eski kod koşar.
+- Konsolda `UnicodeEncodeError`/`charmap` görürsen sebep Windows kod sayfasıdır (çıktıdaki `→`);
+  `$env:PYTHONIOENCODING='utf-8'` ile koş, kurulumun kendisi etkilenmez.
 
 ### `unity-mcp` (AI Assistant relay) kaydı neden yok
 

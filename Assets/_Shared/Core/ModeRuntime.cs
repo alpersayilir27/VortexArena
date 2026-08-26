@@ -65,6 +65,11 @@ namespace VortexArena.Core
         /// <summary>Teamless-mode shortcut — so callers do not repeat the enum comparison.</summary>
         public static bool IsTeamless => Teams == ModeTeamMode.None;
 
+        /// <summary>Weaponless-mode shortcut (§10.5 <c>weaponSource:"none"</c>): no grant runs, scene
+        /// racks stay hidden and the trigger is shut. The single answer to "is there a weapon in this
+        /// mode" — read from the RULE, never from <c>modeId</c>.</summary>
+        public static bool IsWeaponless => Weapons == ModeWeaponSource.None;
+
         /// <summary>
         /// Applies the rule shape coming from the server. If <paramref name="info"/> is <c>null</c>
         /// (a server that does not carry rules), the catalog takes over — see <see cref="ApplyFromCatalog"/>.
@@ -176,6 +181,11 @@ namespace VortexArena.Core
 
         private static ModeScoreKind ParseScoring(string value)
         {
+            if (Matches(value, "shared"))
+            {
+                return ModeScoreKind.PlayerAndShared;
+            }
+
             return Matches(value, "player") ? ModeScoreKind.Player : ModeScoreKind.Team;
         }
 
@@ -191,6 +201,11 @@ namespace VortexArena.Core
 
         private static ModeWeaponSource ParseWeapons(string value)
         {
+            if (Matches(value, "none"))
+            {
+                return ModeWeaponSource.None;
+            }
+
             return Matches(value, "random") ? ModeWeaponSource.RandomGrant : ModeWeaponSource.WeaponCanvas;
         }
 

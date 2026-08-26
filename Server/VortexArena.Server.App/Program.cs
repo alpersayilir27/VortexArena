@@ -1,13 +1,38 @@
+using System.Runtime.InteropServices;
 using System.Text;
 using VortexArena.Protocol;
 using VortexArena.Server.Core;
 
 namespace VortexArena.Server.App;
 
-/// <summary>Console server: load config → start hosts → print status → close cleanly on Ctrl+C.</summary>
+/// <summary>Console server: load config → start hosts → print status → close cleanly on Ctrl+C,
+/// on window close and on process exit.</summary>
 /// <remarks>No UI — the management UI is the Unity admin build.</remarks>
 internal static class Program
 {
+    // ---- Shutdown plumbing ----
+
+    /// <summary>Serialises the three shutdown entry points (Ctrl+C, window close, ProcessExit);
+    /// together with <see cref="_shutdownDone"/> it makes the sequence run exactly once.</summary>
+    private static readonly SemaphoreSlim ShutdownGate = new(1, 1);
+
+    private static bool _shutdownDone;
+
+    /// <summary>⚠️ Kept in a STATIC field on purpose: as a local, the GC would collect the delegate
+    /// while Windows still holds the native pointer and the handler would crash on window close.</summary>
+    private static ConsoleCtrlDelegate? _consoleCtrlHandler;
+
+    private delegate bool ConsoleCtrlDelegate(uint ctrlType);
+
+    private const uint CTRL_CLOSE_EVENT = 2;
+    private const uint CTRL_LOGOFF_EVENT = 5;
+    private const uint CTRL_SHUTDOWN_EVENT = 6;
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetConsoleCtrlHandler(ConsoleCtrlDelegate? handler,
+        [MarshalAs(UnmanagedType.Bool)] bool add);
+
     /// <summary>Exit code: <c>0</c> clean shutdown, <c>2</c> startup validation failed (§11 fail-fast)
     /// so scripts/launcher can tell them apart.</summary>
     private static async Task<int> Main(string[] args)
@@ -47,7 +72,7 @@ internal static class Program
         Console.WriteLine($"  UDP beacon : {config.beaconPort} (her {ArenaProtocol.BEACON_INTERVAL:0} sn)");
         Console.WriteLine($"  UDP state  : {config.statePort}");
         Console.WriteLine($"  Modlar     : {string.Join(", ", director.ModeIds)}");
-        Console.WriteLine($"  Haritalar  : {(maps.IsEmpty ? "yok (doğrulama kapalı)" : string.Join(", ", maps.SceneNames))}");
+        Console.WriteLine($"  Haritalar  : {(maps.IsEmpty ? "yok (doğrulama kapalı)" : string.Join(", ", maps.SceneSummaries))}");
         Console.WriteLine($"  Lobi       : {DescribeLobby(director.LobbyScene, maps)}");
         Console.WriteLine("  Hasar      : istemci bildirir (silah tablosu ve hile denetimi yok)");
         Console.WriteLine($"  Config     : {configDir}");
@@ -89,21 +114,58 @@ internal static class Program
         lobby.Start(); // net_stats broadcast (admins only, 1 Hz)
         Console.WriteLine("Sunucu hazır. Çıkmak için Ctrl+C.");
 
+        // Shutdown order: telemetry (lobby) → tick (director) → UDP (stateHost) → beacon → control
+        // (close frame to clients) → registry. Each producer is silenced before the channel it writes
+        // to is closed, so no loop can log or broadcast after "Kapandı.".
+        async Task ShutdownAsync()
+        {
+            await ShutdownGate.WaitAsync();
+            try
+            {
+                if (_shutdownDone) return;
+                _shutdownDone = true;
+
+                Console.WriteLine("Kapatılıyor...");
+                await lobby.StopAsync();
+                await director.StopAsync();
+                await stateHost.StopAsync();
+                await beacon.StopAsync();
+                await control.StopAsync();
+                registry.Dispose();
+                Console.WriteLine("Kapandı.");
+            }
+            finally
+            {
+                ShutdownGate.Release();
+            }
+        }
+
         var quit = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         Console.CancelKeyPress += (_, e) =>
         {
             e.Cancel = true; // we close the process, not Windows
             quit.TrySetResult();
         };
-        await quit.Task;
+        // Best effort for the paths that never reach the line after `await quit.Task`.
+        AppDomain.CurrentDomain.ProcessExit += (_, _) => ShutdownAsync().GetAwaiter().GetResult();
+        // Window close / logoff / system shutdown: Windows kills the process the moment the handler
+        // returns, so the wait MUST be synchronous here. ⚠️ It grants ~5 s in total — that is where
+        // ServiceShutdown's 2 s per-service ceiling comes from. Ctrl+C/Break return false and stay
+        // with CancelKeyPress above.
+        _consoleCtrlHandler = ctrlType =>
+        {
+            if (ctrlType is not (CTRL_CLOSE_EVENT or CTRL_LOGOFF_EVENT or CTRL_SHUTDOWN_EVENT)) return false;
+            ShutdownAsync().GetAwaiter().GetResult();
+            return true;
+        };
+        // Guarded: the P/Invoke targets kernel32, so calling it anywhere else would throw at startup.
+        if (OperatingSystem.IsWindows())
+        {
+            SetConsoleCtrlHandler(_consoleCtrlHandler, true);
+        }
 
-        Console.WriteLine("Kapatılıyor...");
-        lobby.Stop();
-        director.Stop();
-        beacon.Stop();
-        stateHost.Stop();
-        await control.StopAsync();
-        Console.WriteLine("Kapandı.");
+        await quit.Task;
+        await ShutdownAsync();
         return 0;
     }
 

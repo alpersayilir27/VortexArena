@@ -21,6 +21,27 @@ namespace VortexArena.Net
         public static event Action<KillEventMsg> OnKillEvent;
         public static event Action<RespawnMsg> OnRespawn;
         public static event Action<MatchEndMsg> OnMatchEnd;
+
+        /// <summary>Goes TO EVERYONE (§5.3): a network object's server-authoritative state changed
+        /// (§10.10). <c>NetObjectSync</c> listens and writes it to the scene object.</summary>
+        public static event Action<ObjectStateMsg> OnObjectState;
+
+        /// <summary>Every network object of a scene at once (§10.10). ⚠️ It can arrive BEFORE the scene
+        /// load — <c>NetObjectSync</c> buffers it, listeners must not assume the scene is loaded.</summary>
+        public static event Action<WorldStateMsg> OnWorldState;
+
+        /// <summary>A network object was BORN at runtime (§10.10). The body is an
+        /// <see cref="ObjectStateMsg"/> — ⚠️ separate from <see cref="OnObjectState"/> because of what an
+        /// unknown <c>netId</c> MEANS: there it is a drift to log, here it is the truth itself.</summary>
+        public static event Action<ObjectStateMsg> OnObjectSpawn;
+
+        /// <summary>A dynamic network object left the world (§10.10). Scene objects are never despawned.</summary>
+        public static event Action<ObjectDespawnMsg> OnObjectDespawn;
+
+        /// <summary>A COSMETIC object event relayed by the server (§10.10). A state-changing event never
+        /// arrives here — its result is <c>object_state</c>, and announcing the same fact twice would
+        /// play the presentation twice.</summary>
+        public static event Action<ObjectEventMsg> OnObjectEvent;
         /// <summary>Return to lobby (§10.7). The message carries the lobby scene + profile; a listener
         /// that does not care ignores the parameter.</summary>
         public static event Action<ReturnToLobbyMsg> OnReturnToLobby;
@@ -109,6 +130,11 @@ namespace VortexArena.Net
         internal static void RaiseKillEvent(KillEventMsg msg) { OnKillEvent?.Invoke(msg); }
         internal static void RaiseRespawn(RespawnMsg msg) { OnRespawn?.Invoke(msg); }
         internal static void RaiseMatchEnd(MatchEndMsg msg) { OnMatchEnd?.Invoke(msg); }
+        internal static void RaiseObjectState(ObjectStateMsg msg) { OnObjectState?.Invoke(msg); }
+        internal static void RaiseWorldState(WorldStateMsg msg) { OnWorldState?.Invoke(msg); }
+        internal static void RaiseObjectSpawn(ObjectStateMsg msg) { OnObjectSpawn?.Invoke(msg); }
+        internal static void RaiseObjectDespawn(ObjectDespawnMsg msg) { OnObjectDespawn?.Invoke(msg); }
+        internal static void RaiseObjectEvent(ObjectEventMsg msg) { OnObjectEvent?.Invoke(msg); }
         internal static void RaiseReturnToLobby(ReturnToLobbyMsg msg) { OnReturnToLobby?.Invoke(msg); }
         // Passed with `in` so a 40+ byte struct is not copied at 10 events/s (it is not modified while
         // publishing). A copy is made anyway when handing it to the delegate; the gain here is the call

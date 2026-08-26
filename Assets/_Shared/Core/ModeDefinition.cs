@@ -23,6 +23,9 @@ namespace VortexArena.Core
         [Tooltip("Protokol anahtarı — sunucudaki IGameMode.ModeId ile birebir aynı.")]
         [SerializeField] private string modeId = "";
         [SerializeField] private string displayName = "";
+        [Tooltip("Oyun tipi — operatörün ilk seçimi. Bugünkü tüm arenalar Hızlı Savaş'tır.")]
+        // Default QuickBattle: existing assets resolve correctly WITHOUT being touched.
+        [SerializeField] private GameType gameType = GameType.QuickBattle;
         [Tooltip("Bu tanım bir MAÇ modu değil, LOBİ profilidir (§10.7): sunucuda IGameMode " +
                  "karşılığı yoktur, start_match ile başlatılamaz. Yalnız lobide silah loadout'u " +
                  "ve HUD çözmek için katalogda durur; admin mod seçicisinde gösterilmez.")]
@@ -60,6 +63,9 @@ namespace VortexArena.Core
 
         /// <summary>Name shown in the UI.</summary>
         public string DisplayName => displayName;
+
+        /// <summary>Game type the round type belongs to (§11).</summary>
+        public GameType GameType => gameType;
 
         /// <summary>
         /// Is this a lobby profile (§10.7)? When <c>true</c> this definition is <b>not a startable

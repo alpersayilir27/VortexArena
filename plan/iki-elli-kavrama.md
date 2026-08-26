@@ -32,7 +32,7 @@ prefab/asset'ler commit'e girer.
 ⚠️ Kavraması yazılmamış silahta el `Idle`'da kalır; ön kabza kaydı yoksa soket hiç çizilmez ve
 ikinci el bağlanmaz (`ItemDefinition.HasSecondaryGrip`).
 
-`Tools > VortexArena > Weapons > Kavrama Pozu Stüdyosu`, prefab kipinde
+`Tools > VortexArena > Items > Kavrama Pozu Stüdyosu`, prefab kipinde
 (tam reçete: `Docs/Gelistirici/Yemek-Kitabi.md` §11.0):
 
 1. `WPN_*`'ı prefab kipinde aç → **Ana Kabza Ellerini Oluştur** (+ **Ön Kabza Ellerini Oluştur**);

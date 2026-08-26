@@ -6,9 +6,9 @@ using VortexArena.Core.Combat;
 
 namespace VortexArena.Core.Editor
 {
-    /// <summary>Verifies that every <see cref="ItemDefinition"/> has an assigned and UNIQUE
+    /// <summary>Verifies that every byte-carried <see cref="ItemDefinition"/> has an assigned and UNIQUE
     /// <c>netItemId</c> (§6.6), then rewrites <c>Resources/NetItemCatalog.asset</c> from the items
-    /// FOUND in the project.</summary>
+    /// FOUND in the project. <c>WorldSingle</c> items are skipped — their byte is always 0.</summary>
     /// <remarks>
     /// No separate menu item: <c>Configure All Build Elements</c> runs this on every sync
     /// (<c>BuildElementsConfigurator.SyncAll</c>) and the "Hazırlık" section shows its state.
@@ -45,6 +45,7 @@ namespace VortexArena.Core.Editor
             var unassigned = new List<string>();
             var conflicts = new List<string>();
             int checkedCount = 0;
+            int worldSingle = 0;
 
             for (int i = 0; i < guids.Length; i++)
             {
@@ -52,6 +53,15 @@ namespace VortexArena.Core.Editor
                 ItemDefinition def = AssetDatabase.LoadAssetAtPath<ItemDefinition>(path);
                 if (def == null)
                 {
+                    continue;
+                }
+
+                // §6.6: a WorldSingle item never rides the itemL/itemR byte — the remote hand draws the
+                // network object's own instance. Demanding an id here would ask for a number that is by
+                // contract never sent, and the catalog entry could never be reached.
+                if (def.IsWorldSingle)
+                {
+                    worldSingle++;
                     continue;
                 }
 
@@ -80,7 +90,8 @@ namespace VortexArena.Core.Editor
                 sb.AppendLine("Tüm netItemId'ler atanmış ve tekil.");
                 sb.Append(RebuildCatalog(byId));
                 Debug.Log($"[NetItemIdGuard] {sb}");
-                return $"net eşya kataloğu: {checkedCount} eşya, kimlikler tekil — yazıldı.";
+                return $"net eşya kataloğu: {checkedCount} eşya, kimlikler tekil — yazıldı" +
+                       (worldSingle > 0 ? $" ({worldSingle} WorldSingle eşya kimlik istemez, atlandı)." : ".");
             }
 
             for (int i = 0; i < unassigned.Count; i++)

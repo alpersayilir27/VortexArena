@@ -11,10 +11,11 @@ Server/
   VortexArena.Server.sln
   VortexArena.Server.Core/    # Kestrel WS host, beacon, PlayerRegistry, LobbyService,
                               # StateHost (UDP), MatchDirector (faz makinesi + vuruş hattı),
-                              # MapTable, Modes/ (IGameMode, TdmMode, FfaMode)
+                              # MapTable, KindTable, World/ (WorldObjectTable),
+                              # Modes/ (IGameMode, TdmMode, FfaMode)
   VortexArena.Server.App/     # konsol exe (UI YOK — yönetim UI'ı Unity admin build'i)
   config/server.json          # portlar + mekan adı + tickHz + venue + lobbyScene (ELLE)
-  config/maps.json            # harita tablosu (sceneName + venue + modes) — Unity export
+  config/maps.json            # harita tablosu (sceneName + venue + gameType + modes + objects) + kinds[] — Unity export
   config/devices.json         # deviceId -> { ad, forma numarası }; otomatik doldurulur
   firewall-kur.cmd            # Windows Firewall kuralları (yönetici olarak çalıştırın)
 ```
@@ -53,6 +54,31 @@ Açılış başlığında `Modlar : tdm, ffa, tournament` ve `Haritalar : …` s
 tablosunu özetler (`maps.json` yoksa `Haritalar : yok (doğrulama kapalı)`); `Lobi :` satırı
 yapılandırılmış lobi sahnesini gösterir ve o sahne `maps.json`'da yoksa uyarır; `Hasar : istemci
 bildirir` satırı sunucuda silah tablosu ve hile denetimi olmadığını hatırlatır (§10.3).
+
+## Kapanış
+
+Kapanışı **üç olay** tetikler ve üçü de aynı yoldan geçer (sıra ve süre aynı):
+
+- konsolda **Ctrl+C**,
+- **konsol penceresinin kapatılması** (ayrıca oturum kapatma / Windows kapanışı),
+- sürecin normal sonlanması (`ProcessExit`) — launcher'dan durdurma da buraya düşer.
+
+İkinci bir tetikleyici gelirse kapanış **yeniden koşmaz** (tek seferliktir).
+
+Servisler bu **sırayla** durdurulur; her adım bir öncekinin yazdığı kanalı kapatmadan önce onu
+susturur:
+
+`lobby` (net_stats telemetrisi) → `director` (maç tik'i) → `stateHost` (UDP state) → `beacon`
+→ `control` (istemcilere WebSocket close frame) → oyuncu kaydı (bağlantı zamanlayıcısı).
+
+- Her servis, döngüsü gerçekten bitene kadar **beklenir**; tavan **servis başına 2 sn**. Tavan
+  Windows'un konsol kapatma işleyicisine tanıdığı ~5 sn'ye göre seçilmiştir.
+- Süre dolarsa tek satır düşer ve kapanış devam eder:
+  `[kapanış] <servis> 2 sn'de durmadı — zorla.`
+- **"Kapandı." son satırdır** — ondan sonra hiçbir döngü log yazmaz veya paket yayınlamaz.
+- Süreç normal koşulda 3 sn içinde çıkar; çıkış kodu `0` (temiz kapanış), `2` (açılış doğrulaması
+  başarısız).
+- Bağlı başlıklar close frame aldığı için yeniden bağlanma ekranına düşer.
 
 ## Portlar
 
@@ -160,11 +186,24 @@ işlenir; ateş serbestliği lobi türünün kuralıdır, `rules.fireWhilePaused
 > kullanır). Bedeli: denge değişikliği istemci build'i ister.
 
 **maps.json** — harita tablosu (§10.1): `start_match`'te `sceneName`'in bilinen bir harita olup
-olmadığı ve o haritanın modu destekleyip desteklemediği buradan doğrulanır.
+olmadığı, o haritanın modu destekleyip desteklemediği ve modun oyun tipiyle haritanınkinin uyuşup
+uyuşmadığı buradan doğrulanır.
 ```json
-{ "maps": [ { "sceneName": "<Arena>", "venue": "<Mekan>", "modes": ["ffa", "tdm"] } ] }
+{
+  "maps": [ { "sceneName": "<Arena>", "venue": "<Mekan>", "gameType": "quickbattle",
+              "modes": ["ffa", "tdm"],
+              "objects": [ { "sceneId": 12, "kind": "crate_wood" } ] } ],
+  "kinds": [ { "kind": "crate_wood", "maxHp": 60 } ]
+}
 ```
-`modes` boş bırakılırsa harita tüm modları kabul eder. **Dosya yoksa oluşturulmaz** (sunucunun
+`modes` boş bırakılırsa harita tüm modları kabul eder. `gameType` (`"quickbattle"` | `"kids"`) bir
+üst katmandır — haritayı hangi oyun ailesinin kullandığını söyler ve modun tipiyle uyuşmazsa
+`start_match` reddedilir; boş bırakılan/eski export `"quickbattle"` sayılır. Ağ nesneleri (§10.10)
+iki yerden gelir:
+harita girdisindeki `objects[]` o sahnede hangi kimlikte (`sceneId`) hangi türün olduğunu, kökteki
+`kinds[]` ise türün kurallarını (`maxHp`; `0` = hasar almaz) söyler — kimlik listesi sahneye, tür
+kuralı içeriğe aittir. Bilinmeyen `kind` ya da aralık dışı `sceneId` tabloya alınmaz (konsolda tek
+satır). **Dosya yoksa oluşturulmaz** (sunucunun
 uyduracağı harita listesi yoktur): tablo boş kalır, harita doğrulaması devre dışı kalır ve açılış
 özetinde `Haritalar : yok (doğrulama kapalı)` görünür.
 
@@ -304,6 +343,7 @@ aynı ortak kanaldan (`set_selection` → `admin_state`) gider, böylece iki ope
 | `tdm` | `Modes/TdmMode.cs` | Tümüyle varsayılan (`ModeRules.TeamDefault`): iki takım, takım skoru, kendi tabanında canlanma, sahnede duran silah, 5 sn gecikme | 300 sn / 30 |
 | `ffa` | `Modes/FfaMode.cs` | Takımsız · bireysel skor · sabit durarak canlanma · silahı mod dağıtır · gecikme 0 | 300 sn / 20 |
 | `tournament` | `Modes/TournamentMode.cs` | TDM varsayılanından tek farkı: **canlanma yok** (`Revive = None`, gecikme 0). Tur tabanlı takım elemesi | 120 sn (**turun** süresi) / 4 tur (operatör **sınırsız** da seçebilir) |
+| `burger` | `Modes/BurgerMode.cs` | **Oyun tipi `kids`** · silah yok (`Weapons = None`, dolayısıyla hasar yok) · takımsız · canlanma yok (gecikme 0) · ortak skor (`PlayerAndShared`) | 600 sn / **sınırsız** (limit yok) |
 
 > `ffa` skoru `AddPlayerScore(killerId, 1)` ile yazar ve kazananı `TryGetLeader` ile bulur;
 > eşitlikte `TryGetLeader` false döndüğü için maç berabere biter. Oyuncusuz başlatılan maçta
@@ -315,6 +355,13 @@ aynı ortak kanaldan (`set_selection` → `admin_state`) gider, böylece iki ope
 > **savaşabilir** (canlı **ve** kalibreli) sayısı fazla olan takım alır, eşitse kimseye puan yok.
 > `scoreLimit` **sınırsız** seçilirse (`SCORE_LIMIT_UNLIMITED`) ne galibiyet limiti ne tur tavanı
 > işler: turlar `abort_match`'e kadar sürer.
+
+> **`burger` Çocuk Oyunları ailesindendir** (`GameType = "kids"`): `start_match` yalnız `gameType`
+> `kids` olan haritayı kabul eder, `quickbattle` haritası reddedilir. Maçı bitiren tek koşul
+> **süredir**; `match_end`'de kazanan alanlarının **ikisi de boş** kalır (§10.5 ortak skor kuralı) ve
+> sonuç ekranı `HoldsResultForOperator` ile operatör kapatana kadar durur. Bugün sunucuda yalnız
+> modun şekli ve yaşam döngüsü vardır — müşteri/tarif/pişirme mantığı ve ortak skorun yazan yolu
+> yoktur, yani mod puan üretmez.
 > Turlar arasında faz `paused`/`mode` olur (`modeState:"regroup:2/6"`), oyuncular fiziksel olarak
 > kendi taban bölgelerine yürüyüp `set_ready{true}` yollar ve herkes toplanınca geri sayım başlar
 > — **toplanmanın zaman aşımı YOKTUR**, çıkışı operatörün `kick`/`abort_match`'idir. **Geri sayım

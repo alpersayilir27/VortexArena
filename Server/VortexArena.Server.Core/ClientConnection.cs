@@ -293,6 +293,36 @@ public sealed class ClientConnection
                 if (msg != null) await _director.HandleHitReportAsync(State, msg);
                 return;
             }
+            // Object messages (§10.10). The player/phase/ownership gates live in the director; here the
+            // only rule is "there must be a session".
+            case MessageTypes.ObjectGrab:
+            {
+                if (State == null) return;
+                var msg = JsonUtil.Deserialize<ObjectGrabMsg>(json);
+                if (msg != null) await _director.HandleObjectGrabAsync(State, msg);
+                return;
+            }
+            case MessageTypes.ObjectRelease:
+            {
+                if (State == null) return;
+                var msg = JsonUtil.Deserialize<ObjectReleaseMsg>(json);
+                if (msg != null) await _director.HandleObjectReleaseAsync(State, msg);
+                return;
+            }
+            case MessageTypes.ObjectRest:
+            {
+                if (State == null) return;
+                var msg = JsonUtil.Deserialize<ObjectRestMsg>(json);
+                if (msg != null) await _director.HandleObjectRestAsync(State, msg);
+                return;
+            }
+            case MessageTypes.ObjectEvent:
+            {
+                if (State == null) return;
+                var msg = JsonUtil.Deserialize<ObjectEventMsg>(json);
+                if (msg != null) _director.HandleObjectEvent(State, msg);
+                return;
+            }
             case MessageTypes.ReviveRequest:
             {
                 if (State == null) return;

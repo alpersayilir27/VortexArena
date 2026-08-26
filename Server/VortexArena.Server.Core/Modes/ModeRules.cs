@@ -17,7 +17,11 @@ public enum ScoreKind
     Team,
 
     /// <summary>lobby_state → PlayerInfo.score (§10.2).</summary>
-    Player
+    Player,
+
+    /// <summary>Co-op: the contribution goes to PlayerInfo.score, the shared total to
+    /// match_state.scoreRed; scoreBlue stays 0 and there is no winner. Wire value <c>"shared"</c>.</summary>
+    PlayerAndShared
 }
 
 /// <summary>Revive condition (§10.4/2, §10.5 <c>reviveAnchor</c>).</summary>
@@ -43,7 +47,11 @@ public enum WeaponSource
     WeaponCanvas,
 
     /// <summary>A random weapon granted by the mode.</summary>
-    RandomGrant
+    RandomGrant,
+
+    /// <summary>No weapon: the frame is hidden, nothing is granted, the trigger stays silent. Wire
+    /// value <c>"none"</c>.</summary>
+    None
 }
 
 /// <summary>The mode's SHAPE (Docs/ArenaNet-Protokol.md §10.5) — server-authoritative, returned by
@@ -110,7 +118,12 @@ public sealed record ModeRules
     public ModeRulesInfo ToInfo() => new()
     {
         teamMode = Teams == TeamMode.None ? "none" : "two",
-        scoring = Scoring == ScoreKind.Player ? "player" : "team",
+        scoring = Scoring switch
+        {
+            ScoreKind.Player => "player",
+            ScoreKind.PlayerAndShared => "shared",
+            _ => "team"
+        },
         friendlyFire = FriendlyFire,
         reviveAnchor = Revive switch
         {
@@ -118,7 +131,12 @@ public sealed record ModeRules
             ReviveAnchor.None => "none",
             _ => "base"
         },
-        weaponSource = Weapons == WeaponSource.RandomGrant ? "random" : "weaponcanvas",
+        weaponSource = Weapons switch
+        {
+            WeaponSource.RandomGrant => "random",
+            WeaponSource.None => "none",
+            _ => "weaponcanvas"
+        },
         respawnDelay = RespawnDelay,
         fireWhilePaused = FireWhilePaused
     };
