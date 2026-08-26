@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
@@ -15,7 +16,8 @@ namespace VortexArena.Net
     /// 1 s until the server echoes the same 6 bytes (ack). Once registered it sends the arena-space
     /// poses from IPoseSource as 20 Hz PoseUpdate (0x01) and forwards incoming Snapshots (0x02) to
     /// RemotePlayerRegistry. Shot/throw events (0x03) go out IMMEDIATELY and incoming event batches
-    /// (0x04) are published as NetEvents.OnRemoteFireEvent (§6.4/6.5). Managed by ArenaClient.
+    /// (0x04) are published as NetEvents.OnRemoteFireEvent (§6.4/6.5). An OWNED object's pose goes out as
+    /// 0x09 and the object section of 0x05 feeds RemoteObjectRegistry (§6.12). Managed by ArenaClient.
     /// </summary>
     public class UdpStateChannel : MonoBehaviour
     {
@@ -62,6 +64,17 @@ namespace VortexArena.Net
         // event seq only suppresses duplicates (§6.4). Merged into one, pose loss would gap the event
         // numbers and the server's loss measurement would lie.
         private ushort _eventSeq;
+
+        // ---- 0x09 object pose sending (main thread only, §6.12) ----
+        // ⚠️ Its OWN buffer for the same reason as the event buffer: it goes out between pose writes.
+        private byte[] _objectBuffer;
+        private MemoryStream _objectStream;
+        private BinaryWriter _objectWriter;
+        private bool _objectSendWarned;
+
+        // ⚠️ seq wraps PER OBJECT (§6.12): one shared counter would make the server see a gap on every
+        // object whenever another object's packet was lost, and it drops packets by seq.
+        private readonly Dictionary<int, ushort> _objectSeq = new Dictionary<int, ushort>();
 
         // ---- 0x07 skeleton sending (main thread only) ----
         // ⚠️ SEPARATE from the pose/event buffers and much larger (variable-length blob, §6.9).
@@ -148,6 +161,10 @@ namespace VortexArena.Net
             _eventStream = new MemoryStream(_eventBuffer, 0, _eventBuffer.Length, true);
             _eventWriter = new BinaryWriter(_eventStream);
 
+            _objectBuffer = new byte[ObjectPose.SIZE];
+            _objectStream = new MemoryStream(_objectBuffer, 0, _objectBuffer.Length, true);
+            _objectWriter = new BinaryWriter(_objectStream);
+
             _probeBuffer = new byte[RttProbe.SIZE];
             _probeStream = new MemoryStream(_probeBuffer, 0, _probeBuffer.Length, true);
             _probeWriter = new BinaryWriter(_probeStream);
@@ -220,6 +237,10 @@ namespace VortexArena.Net
             _sendAccumulator = 0f;
             _sendWarned = false; // a new session may log the send warning again
             _eventSendWarned = false;
+            _objectSendWarned = false;
+            // New session = new server-side seq state; carrying ours over would make the first packets
+            // of every object look old and get dropped.
+            _objectSeq.Clear();
             _skeletonSendWarned = false;
             _lastSkeletonSendTime = float.NegativeInfinity;
             // ⚠️ _skeletonSizeWarned is NOT reset: an oversized blob is a CONFIGURATION error (prefab
@@ -541,6 +562,56 @@ namespace VortexArena.Net
                 {
                     _eventSendWarned = true;
                     Debug.LogWarning($"[UdpStateChannel] FireEvent gönderimi başarısız: {e.Message}");
+                }
+            }
+        }
+
+        /// <summary>
+        /// §6.12: streams the pose of an object we OWN (<c>0x09</c>). A silent no-op before registration.
+        /// <para>⚠️ <b>The gates are the CALLER's</b> — owner + awake + not held (§6.12), i.e. the FLIGHT
+        /// WINDOW between <c>object_release</c> and <c>object_rest</c>, plus the
+        /// <see cref="ArenaProtocol.OBJECT_POSE_RATE_HZ"/> cadence. They all need object state and
+        /// physics this layer cannot see; this is only the sender.</para>
+        /// <para><paramref name="arenaPose"/> is in <b>ARENA space</b> (§3) — the world→arena conversion
+        /// is the caller's job, exactly as on the pose and fire-event paths.</para>
+        /// </summary>
+        public void SendObjectPose(int netId, Pose arenaPose)
+        {
+            if (!Registered || _udp == null)
+            {
+                return;
+            }
+
+            if (netId < ArenaProtocol.NET_ID_SCENE_MIN || netId > ArenaProtocol.NET_ID_DYNAMIC_MAX)
+            {
+                return; // unaddressable id: 0 = unbaked, above the range = not on the wire
+            }
+
+            _objectSeq.TryGetValue(netId, out ushort seq);
+            _objectSeq[netId] = unchecked((ushort)(seq + 1));
+
+            var msg = new ObjectPose
+            {
+                playerId = _playerId,
+                netId = (ushort)netId,
+                seq = seq,
+                pose = ToPoseData(arenaPose)
+            };
+
+            try
+            {
+                _objectStream.Position = 0;
+                msg.Write(_objectWriter);
+                _objectWriter.Flush();
+                _udp.Send(_objectBuffer, ObjectPose.SIZE, _serverEndpoint);
+            }
+            catch (Exception e)
+            {
+                // As on the pose path: swallow + one spam-free warning (reset on re-registration).
+                if (!_objectSendWarned)
+                {
+                    _objectSendWarned = true;
+                    Debug.LogWarning($"[UdpStateChannel] ObjectPose gönderimi başarısız: {e.Message}");
                 }
             }
         }
@@ -895,11 +966,15 @@ namespace VortexArena.Net
 
                     case UdpPacketType.SnapshotWithEvents:
                     {
-                        // 1(type) + 1(playerCount) + 1(eventCount) + 4(serverTick) + n×88 + m×9
+                        // 1(type) + 1(playerCount) + 1(eventCount) + 1(objectCount) + 4(serverTick)
+                        // + n×88 + m×9 + k×30. ⚠️ objectCount is part of the LENGTH CHECK too (v18):
+                        // left out, a packet carrying object poses passes the check one section short
+                        // and the read runs off the end of the buffer.
                         if (buffer.Length < SnapshotWithEvents.HEADER_SIZE
                             || buffer.Length < SnapshotWithEvents.HEADER_SIZE
                                                + buffer[1] * SnapshotEntry.SIZE
-                                               + buffer[2] * FireEventEntry.SIZE)
+                                               + buffer[2] * FireEventEntry.SIZE
+                                               + buffer[3] * ObjectPoseEntry.SIZE)
                         {
                             return;
                         }
@@ -918,6 +993,11 @@ namespace VortexArena.Net
 
                         // Event block: goes through the SAME code and the SAME tick ring as 0x04 (§6.8).
                         DispatchFireEvents(combined.serverTick, combined.events);
+
+                        // Object block (§6.12): a state channel like the snapshot — no tick ring, a
+                        // repeated tick just rewrites the same pose (last one wins).
+                        RemoteObjectRegistry.Instance?.IngestFromNetThread(
+                            combined.objects, Environment.TickCount);
                         break;
                     }
 

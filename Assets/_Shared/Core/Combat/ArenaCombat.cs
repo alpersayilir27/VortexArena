@@ -50,6 +50,9 @@ namespace VortexArena.Core.Combat
         private static readonly Collider[] OverlapBuffer = new Collider[64];
         private static readonly HashSet<int> AreaHitOnce = new HashSet<int>();
 
+        /// <summary>⚠️ Separate set on purpose: a <c>netId</c> and a <c>playerId</c> collide numerically.</summary>
+        private static readonly HashSet<int> AreaHitObjectsOnce = new HashSet<int>();
+
         // ------------------------------------------------------------------ state
 
         /// <summary>Local player's server id; <c>0</c> when not connected.</summary>
@@ -77,9 +80,13 @@ namespace VortexArena.Core.Combat
         /// but playing local sound/FX lies to the player.
         /// <para>Two gates, two questions: the first is <b>server-authoritative state</b> (health,
         /// phase), the second is a purely <b>local physical rule</b> with no protocol counterpart.</para>
+        /// <para>A weaponless mode (<see cref="ModeRuntime.IsWeaponless"/>) is shut here too: no path
+        /// puts a weapon in hand there, but the throwable reads the SAME gate and would otherwise stay
+        /// live in a mode that is meant to have nothing to fire.</para>
         /// </summary>
         public static bool CanFire =>
-            (PlayerCombatState.Instance == null || PlayerCombatState.Instance.CanFire) && !IsOutsideArena;
+            (PlayerCombatState.Instance == null || PlayerCombatState.Instance.CanFire) &&
+            !IsOutsideArena && !ModeRuntime.IsWeaponless;
 
         /// <summary>Is the local player OUTSIDE the boundary's safe area — a fire gate.
         /// <para>Poking the weapon into an obstacle is already closed (§10.9), so stepping outside and
@@ -259,9 +266,11 @@ namespace VortexArena.Core.Combat
         /// <summary>
         /// Is there a NETWORK PLAYER behind a collision. Pass the collider the raycast hit; on
         /// <c>true</c> <paramref name="playerId"/> is that player and you MUST report damage with
-        /// <see cref="ReportHit"/>. On <c>false</c> the target is not a network player (prop, wall)
-        /// and <b>there is no such thing as damage</b>: nothing on the client holds health, so that
-        /// target takes none. Breakables become networked later.
+        /// <see cref="ReportHit"/>. On <c>false</c> the target is not a network player (prop, wall).
+        /// <para>Then ask <see cref="TryGetTargetNetId"/>: a network object (§10.10) resolves its
+        /// <c>netId</c> from <c>NetObject</c> and takes damage through <see cref="ReportObjectHit"/>.
+        /// Neither of the two = <b>there is no such thing as damage</b>: nothing on the client holds
+        /// health, so that target takes none.</para>
         /// </summary>
         public static bool TryGetTargetPlayerId(Collider collider, out int playerId)
         {
@@ -279,6 +288,28 @@ namespace VortexArena.Core.Combat
             }
 
             playerId = hitBox.PlayerId;
+            return true;
+        }
+
+        /// <summary>Is there a NETWORK OBJECT behind a collision (§10.10); on <c>true</c> report damage
+        /// with <see cref="ReportObjectHit"/>. Asked only after <see cref="TryGetTargetPlayerId"/>
+        /// says no — a player and an object are never the same target.</summary>
+        public static bool TryGetTargetNetId(Collider collider, out int netId)
+        {
+            netId = 0;
+            if (collider == null)
+            {
+                return false;
+            }
+
+            // The collider may sit on any child of the object — search upward.
+            NetObject netObject = collider.GetComponentInParent<NetObject>();
+            if (netObject == null || netObject.NetId <= 0)
+            {
+                return false;
+            }
+
+            netId = netObject.NetId;
             return true;
         }
 
@@ -415,7 +446,10 @@ namespace VortexArena.Core.Combat
             }
 
             Hit.seq = ++_seq;
+            // ⚠️ BOTH target fields are written on BOTH paths: Hit is one reused instance, so an
+            // unwritten field leaks the previous hit's target and the server damages the wrong thing.
             Hit.targetPlayerId = targetPlayerId;
+            Hit.targetNetId = 0;
             Hit.weaponId = weaponId ?? "";
             Hit.damage = damage;
             Write(Hit.hitPos, ArenaSpace.WorldToArena(worldHitPoint));
@@ -428,11 +462,59 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
+        /// <b>I damaged a NETWORK OBJECT</b> (breakable cover, target board; §10.10) — the twin of
+        /// <see cref="ReportHit"/> on the same <c>hit_report</c> message, only the target field differs.
+        /// <para>The server answers with <c>object_state</c>, NOT <c>health_update</c>, and writes no
+        /// score/kill: breaking an object is a world state, not a game event. Spawn protection and
+        /// friendly fire do not gate it — an object has no team.</para>
+        /// <para>Never break the object locally: the decision and the broken flag come from the server
+        /// (<c>NetObject</c>).</para>
+        /// </summary>
+        /// <param name="targetNetId">Id from <see cref="TryGetTargetNetId"/>.</param>
+        /// <param name="worldHitPoint">World position of the hit (for FX/stats).</param>
+        /// <param name="damage">Damage to apply — <b>must be positive and finite</b>.</param>
+        /// <param name="weaponId">Label; may be empty.</param>
+        public static void ReportObjectHit(int targetNetId, Vector3 worldHitPoint, float damage, string weaponId)
+        {
+            if (targetNetId <= 0)
+            {
+                return;
+            }
+
+            if (!float.IsFinite(damage) || damage <= 0f)
+            {
+                Debug.LogWarning($"[ArenaCombat] Geçersiz hasar ({damage}) — vuruş gönderilmedi. " +
+                                 "Hasar pozitif ve sonlu olmalı (sunucu da reddeder).");
+                return;
+            }
+
+            ArenaClient client = ArenaClient.Instance;
+            if (client == null || !client.IsConnected)
+            {
+                return;
+            }
+
+            Hit.seq = ++_seq;
+            // ⚠️ BOTH target fields are written on BOTH paths: Hit is one reused instance, so an
+            // unwritten field leaks the previous hit's target and the server damages the wrong thing.
+            Hit.targetNetId = targetNetId;
+            Hit.targetPlayerId = 0;
+            Hit.weaponId = weaponId ?? "";
+            Hit.damage = damage;
+            Write(Hit.hitPos, ArenaSpace.WorldToArena(worldHitPoint));
+            client.Send(Hit);
+
+            // Same rationale as ReportHit: the marker says a report was made, not that damage landed.
+            HitMarker.Shared.Play(worldHitPoint);
+        }
+
+        /// <summary>
         /// Shortcut for hitscan weapons: reports the hit and returns <c>true</c> when the raycast
         /// target is a network player.
         /// <para>
-        /// <c>false</c> means the target is NOT a network player and <b>no damage is applied</b> (no
-        /// client-side health). The return value is only a PRESENTATION decision — body FX or wall FX:
+        /// <c>false</c> means the target is not a network PLAYER — it does NOT mean no damage: a network
+        /// object (§10.10) is reported from here too and still returns <c>false</c>. The return value is
+        /// only a PRESENTATION decision — body FX or wall FX:
         /// <code>
         /// if (Physics.Raycast(muzzle.position, dir, out var hit, range))
         /// {
@@ -444,30 +526,42 @@ namespace VortexArena.Core.Combat
         /// </summary>
         public static bool ReportRaycastHit(in RaycastHit hit, float damage, string weaponId)
         {
-            if (!TryGetTargetPlayerId(hit.collider, out int playerId))
+            if (TryGetTargetPlayerId(hit.collider, out int playerId))
             {
-                return false;
+                ReportHit(playerId, hit.point, damage, weaponId);
+                return true;
             }
 
-            ReportHit(playerId, hit.point, damage, weaponId);
-            return true;
+            // A network object takes damage too (§10.10) but is NOT a player: the report goes out and the
+            // return value stays false, so every caller's blood/spark choice keeps its old meaning.
+            if (TryGetTargetNetId(hit.collider, out int netId))
+            {
+                ReportObjectHit(netId, hit.point, damage, weaponId);
+            }
+
+            return false;
         }
 
         /// <summary>
         /// <b>Area effect</b> (bomb, grenade, shockwave): reports a SEPARATE hit for EVERY network
-        /// player in radius — there is no "area damage" message in the protocol (§10.3), an area
-        /// effect means n <c>hit_report</c>s.
+        /// player AND network object (§10.10) in radius — there is no "area damage" message in the
+        /// protocol (§10.3), an area effect means n <c>hit_report</c>s.
         /// <para>
         /// Damage falls off linearly with distance: <paramref name="damage"/> at the centre,
         /// <paramref name="damage"/> × <paramref name="edgeScale"/> at the edge. At most ONE hit per
-        /// player (a body has several hit boxes).
+        /// player (a body has several hit boxes) and one per object.
         /// </para>
-        /// <para>⚠️ No line-of-sight check. If you want one, combine
-        /// <see cref="TryGetTargetPlayerId"/> with your own <c>Physics.Linecast</c>.</para>
+        /// <para>⚠️ <b>The local player is NOT in this list and cannot be</b>: player targets are found
+        /// from <see cref="RemoteHitBox"/> colliders and the local rig carries none. Self damage goes
+        /// through <see cref="ReportAreaSelfHit"/>.</para>
         /// </summary>
-        /// <returns>Number of players a hit was reported for.</returns>
+        /// <param name="requireLineOfSight">Skip targets with an obstacle between them and the centre
+        /// (<c>Physics.Linecast</c>). Off by default — a blast wrapping a corner is the old behaviour
+        /// and callers that never asked must not change.</param>
+        /// <returns>Number of PLAYERS a hit was reported for — network objects are reported but not
+        /// counted, since callers read this value for player-facing feedback.</returns>
         public static int ReportAreaHit(Vector3 worldCenter, float radius, float damage, string weaponId,
-            float edgeScale = 0.25f, int layerMask = ~0)
+            float edgeScale = 0.25f, int layerMask = ~0, bool requireLineOfSight = false)
         {
             if (radius <= 0f || !float.IsFinite(damage) || damage <= 0f)
             {
@@ -475,6 +569,7 @@ namespace VortexArena.Core.Combat
             }
 
             AreaHitOnce.Clear();
+            AreaHitObjectsOnce.Clear();
             int count = Physics.OverlapSphereNonAlloc(worldCenter, radius, OverlapBuffer, layerMask,
                 QueryTriggerInteraction.Collide);
 
@@ -487,27 +582,149 @@ namespace VortexArena.Core.Combat
             int reported = 0;
             for (int i = 0; i < count; i++)
             {
-                if (!TryGetTargetPlayerId(OverlapBuffer[i], out int playerId) || !AreaHitOnce.Add(playerId))
+                Collider collider = OverlapBuffer[i];
+
+                if (TryGetTargetPlayerId(collider, out int playerId))
+                {
+                    if (!AreaHitOnce.Add(playerId))
+                    {
+                        continue;
+                    }
+
+                    Vector3 playerPoint = collider.ClosestPoint(worldCenter);
+
+                    // ⚠️ The LOS ray goes to the collider's CENTRE, not to the closest point: the closest
+                    // point sits ON the surface, and a wall touching the target would read as clear.
+                    if (requireLineOfSight && IsAreaBlocked(worldCenter, collider.bounds.center))
+                    {
+                        continue;
+                    }
+
+                    float applied = AreaFalloff(worldCenter, playerPoint, radius, damage, edgeScale);
+                    if (applied <= 0f)
+                    {
+                        continue;
+                    }
+
+                    ReportHit(playerId, playerPoint, applied, weaponId);
+                    reported++;
+                    continue;
+                }
+
+                if (!TryGetTargetNetId(collider, out int netId) || !AreaHitObjectsOnce.Add(netId))
                 {
                     continue;
                 }
 
-                Vector3 point = OverlapBuffer[i].ClosestPoint(worldCenter);
-                float t = Mathf.Clamp01(Vector3.Distance(worldCenter, point) / radius);
-                float applied = damage * Mathf.Lerp(1f, Mathf.Clamp01(edgeScale), t);
-                if (applied <= 0f)
+                Vector3 point = collider.ClosestPoint(worldCenter);
+
+                if (requireLineOfSight && IsAreaBlockedForObject(worldCenter, collider.bounds.center, netId))
                 {
                     continue;
                 }
 
-                ReportHit(playerId, point, applied, weaponId);
-                reported++;
+                float appliedToObject = AreaFalloff(worldCenter, point, radius, damage, edgeScale);
+                if (appliedToObject <= 0f)
+                {
+                    continue;
+                }
+
+                ReportObjectHit(netId, point, appliedToObject, weaponId);
             }
 
             return reported;
         }
 
+        /// <summary>
+        /// <b>The blast damaged ME</b> — the local player's own share of an area effect.
+        /// <para><b>Why this is not part of <see cref="ReportAreaHit"/>:</b> that one finds targets from
+        /// <see cref="RemoteHitBox"/> colliders and <b>the local rig has none</b>, so self damage could
+        /// never come out of it. Here the distance is measured to the player's own head
+        /// (<see cref="WeaponGranter.TryResolveHead"/>, the same point <c>ObstacleViolationProbe</c>
+        /// measures) and the falloff formula is shared with the area path.</para>
+        /// <para>⚠️ <b>The friendly-fire switch is read on the CLIENT too</b> (§10.3, 5th gate): with it
+        /// off the server rejects a self hit anyway, so sending would only print a rejection line per
+        /// blast. The decision stays the server's — this is a noise gate, not a rule.</para>
+        /// <para>Silent no-op with no connection, no rig or no player id (the class contract).</para>
+        /// </summary>
+        /// <returns><c>true</c> if a hit was reported for the local player.</returns>
+        public static bool ReportAreaSelfHit(Vector3 worldCenter, float radius, float damage,
+            string weaponId, float edgeScale = 0.25f, bool requireLineOfSight = false)
+        {
+            if (radius <= 0f || !float.IsFinite(damage) || damage <= 0f || !ModeRuntime.FriendlyFire)
+            {
+                return false;
+            }
+
+            int playerId = LocalPlayerId;
+            if (playerId <= 0 || !WeaponGranter.TryResolveHead(out Vector3 head))
+            {
+                return false;
+            }
+
+            if (Vector3.Distance(worldCenter, head) > radius)
+            {
+                return false;
+            }
+
+            if (requireLineOfSight && IsAreaBlocked(worldCenter, head))
+            {
+                return false;
+            }
+
+            float applied = AreaFalloff(worldCenter, head, radius, damage, edgeScale);
+            if (applied <= 0f)
+            {
+                return false;
+            }
+
+            ReportHit(playerId, head, applied, weaponId);
+            return true;
+        }
+
         // ---------------------------------------------------------------- helpers
+
+        /// <summary>Linear falloff shared by both area paths: <paramref name="damage"/> at the centre,
+        /// <c>damage × edgeScale</c> at the radius. ⚠️ One formula, or the thrower would take damage on
+        /// a different curve than everyone else.</summary>
+        private static float AreaFalloff(in Vector3 worldCenter, in Vector3 point, float radius,
+            float damage, float edgeScale)
+        {
+            float t = Mathf.Clamp01(Vector3.Distance(worldCenter, point) / radius);
+            return damage * Mathf.Lerp(1f, Mathf.Clamp01(edgeScale), t);
+        }
+
+        /// <summary>Is an obstacle between the blast centre and the target (Yemek-Kitabi §3 pattern).
+        /// <para>⚠️ <c>Obstacle</c> mask ONLY: a maskless linecast would stop on the target's own hit
+        /// box, on the thrower's hands, on grab volumes — and swallow every hit. With no obstacle layer
+        /// configured the gate stays OPEN (fail-open), like the other obstacle rules.</para></summary>
+        private static bool IsAreaBlocked(Vector3 worldCenter, Vector3 targetPoint)
+        {
+            int obstacleMask = ArenaLayers.ObstacleMask;
+            return obstacleMask != 0 &&
+                   Physics.Linecast(worldCenter, targetPoint, obstacleMask, QueryTriggerInteraction.Ignore);
+        }
+
+        /// <summary>LOS gate for a network object target.
+        /// <para>⚠️ A breakable cover usually sits on the <c>Obstacle</c> layer itself: the masked
+        /// linecast stops on its OWN collider and the object would shadow itself into never taking
+        /// damage — if the first hit IS the target, there is no obstacle.</para></summary>
+        private static bool IsAreaBlockedForObject(Vector3 worldCenter, Vector3 targetPoint, int netId)
+        {
+            int obstacleMask = ArenaLayers.ObstacleMask;
+            if (obstacleMask == 0)
+            {
+                return false;
+            }
+
+            if (!Physics.Linecast(worldCenter, targetPoint, out RaycastHit hit, obstacleMask,
+                    QueryTriggerInteraction.Ignore))
+            {
+                return false;
+            }
+
+            return !(TryGetTargetNetId(hit.collider, out int hitNetId) && hitNetId == netId);
+        }
 
         private static void Write(float[] target, in Vector3 value)
         {

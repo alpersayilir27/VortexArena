@@ -171,6 +171,11 @@ Ayrıca birkaç teknik not:
   etiketi iki adımlı onayla değişiyor (boştaki hâli ↔ onay bekleyen hâli) ve rengini de
   `AdminStatsPanel` yazıyor; prefabtaki metin ile renk yalnız tasarım yaparken düğmeyi görebilmeniz
   içindir. Punto, hizalama, font ve düğmenin ölçüsü prefabta kalıcıdır — metin ve renk değil.
+- **İstatistik panelinin KAPAT düğmesinin metnini de kod sürer.** `Fill/Close/Label` TMP'si
+  `AdminStatsPanel`'in `_closeLabel` alanına bağlıdır: sunucu biten turun sonucunda beklerken yazı
+  `TURA DEVAM`a döner (kapatmak turu ilerletir, §3.8.2), diğer her durumda prefabta yazan hâline
+  geri konur. Prefabtaki metin ve renk **başlangıç hâlidir**; alan boş bırakılırsa panel yine
+  çalışır, yalnız düğme adını değiştirmez.
 - **Tercihler panelinin sekmelerini ve maç şeridinin ikonlarını kod sürer.** `Tabs/Tab_*`
   düğmelerinin zemin/etiket rengi ve `Page_*` sayfalarının açık/kapalı hâli çalışırken
   `AdminPreferencesPanel` tarafından yazılır (aktif sekme `UiKit.Accent`); prefabta hangi sayfanın

@@ -1,14 +1,152 @@
 {
   "maps": [
-    { "sceneName": "Dust_B_Outdoor14x16", "venue": "Outdoor14x16", "modes": ["ffa", "tdm", "tournament"] },
-    { "sceneName": "IceWorld_Outdoor12x12", "venue": "Outdoor12x12", "modes": ["ffa", "tdm", "tournament"] },
-    { "sceneName": "IceWorld_Outdoor12x16", "venue": "Outdoor12x16", "modes": ["ffa", "tdm", "tournament"] },
-    { "sceneName": "IceWorld_Outdoor14x16", "venue": "Outdoor14x16", "modes": ["ffa", "tdm", "tournament"] },
-    { "sceneName": "Lobby_Outdoor12x12", "venue": "Outdoor12x12", "modes": ["lobby"] },
-    { "sceneName": "Lobby_Outdoor12x16", "venue": "Outdoor12x16", "modes": ["lobby"] },
-    { "sceneName": "Lobby_Outdoor14x16", "venue": "Outdoor14x16", "modes": ["lobby"] },
-    { "sceneName": "Lobby_VortexAntep", "venue": "VortexAntep", "modes": ["lobby"] },
-    { "sceneName": "Military_VortexAntep", "venue": "VortexAntep", "modes": ["ffa", "tdm", "tournament"] },
-    { "sceneName": "Mirage_A_Outdoor14x16", "venue": "Outdoor14x16", "modes": ["ffa", "tdm", "tournament"] }
+    {
+      "sceneName": "Burger_Outdoor14x16",
+      "venue": "Outdoor14x16",
+      "gameType": "kids",
+      "modes": ["burger"],
+      "objects": [
+        { "sceneId": 1, "kind": "dispenser_bun_whole" },
+        { "sceneId": 2, "kind": "dispenser_patty" },
+        { "sceneId": 3, "kind": "dispenser_cheese" },
+        { "sceneId": 4, "kind": "dispenser_bacon" },
+        { "sceneId": 5, "kind": "dispenser_lettuce" },
+        { "sceneId": 6, "kind": "dispenser_onion" },
+        { "sceneId": 7, "kind": "dispenser_pickle" },
+        { "sceneId": 8, "kind": "dispenser_tomato" },
+        { "sceneId": 9, "kind": "dispenser_sauce" },
+        { "sceneId": 10, "kind": "board" },
+        { "sceneId": 11, "kind": "board" },
+        { "sceneId": 12, "kind": "board" },
+        { "sceneId": 13, "kind": "knife" },
+        { "sceneId": 14, "kind": "spatula" }
+      ]
+    },
+    {
+      "sceneName": "Dust_B_Outdoor14x16",
+      "venue": "Outdoor14x16",
+      "gameType": "quickbattle",
+      "modes": ["ffa", "tdm", "tournament"],
+      "objects": []
+    },
+    {
+      "sceneName": "IceWorld_Outdoor12x12",
+      "venue": "Outdoor12x12",
+      "gameType": "quickbattle",
+      "modes": ["ffa", "tdm", "tournament"],
+      "objects": []
+    },
+    {
+      "sceneName": "IceWorld_Outdoor12x16",
+      "venue": "Outdoor12x16",
+      "gameType": "quickbattle",
+      "modes": ["ffa", "tdm", "tournament"],
+      "objects": []
+    },
+    {
+      "sceneName": "IceWorld_Outdoor14x16",
+      "venue": "Outdoor14x16",
+      "gameType": "quickbattle",
+      "modes": ["ffa", "tdm", "tournament"],
+      "objects": []
+    },
+    {
+      "sceneName": "Lobby_Outdoor12x12",
+      "venue": "Outdoor12x12",
+      "gameType": "quickbattle",
+      "modes": ["lobby"],
+      "objects": []
+    },
+    {
+      "sceneName": "Lobby_Outdoor12x16",
+      "venue": "Outdoor12x16",
+      "gameType": "quickbattle",
+      "modes": ["lobby"],
+      "objects": []
+    },
+    {
+      "sceneName": "Lobby_Outdoor14x16",
+      "venue": "Outdoor14x16",
+      "gameType": "quickbattle",
+      "modes": ["lobby"],
+      "objects": [
+        { "sceneId": 1, "kind": "target_board" },
+        { "sceneId": 2, "kind": "breakable_cover" },
+        { "sceneId": 3, "kind": "breakable_cover" }
+      ]
+    },
+    {
+      "sceneName": "Lobby_VortexAntep",
+      "venue": "VortexAntep",
+      "gameType": "quickbattle",
+      "modes": ["lobby"],
+      "objects": []
+    },
+    {
+      "sceneName": "Military_VortexAntep",
+      "venue": "VortexAntep",
+      "gameType": "quickbattle",
+      "modes": ["ffa", "tdm", "tournament"],
+      "objects": []
+    },
+    {
+      "sceneName": "Mirage_A_Outdoor14x16",
+      "venue": "Outdoor14x16",
+      "gameType": "quickbattle",
+      "modes": ["ffa", "tdm", "tournament"],
+      "objects": []
+    }
+  ],
+  "kinds": [
+    { "kind": "bacon", "maxHp": 0, "grab": "anyone", "events": [] },
+    { "kind": "board", "maxHp": 0, "grab": "anyone", "events": [
+        { "name": "serve", "policy": "anyone", "phaseGate": "playing" }
+      ] },
+    { "kind": "breakable_cover", "maxHp": 200, "grab": "none", "events": [] },
+    { "kind": "bun_bottom", "maxHp": 0, "grab": "anyone", "events": [] },
+    { "kind": "bun_top", "maxHp": 0, "grab": "anyone", "events": [] },
+    { "kind": "bun_whole", "maxHp": 0, "grab": "anyone", "events": [
+        { "name": "cut", "policy": "anyone", "phaseGate": "playing" }
+      ] },
+    { "kind": "cheese", "maxHp": 0, "grab": "anyone", "events": [] },
+    { "kind": "customer", "maxHp": 0, "grab": "none", "events": [] },
+    { "kind": "dispenser_bacon", "maxHp": 0, "grab": "none", "events": [
+        { "name": "take", "policy": "anyone", "phaseGate": "playing" }
+      ] },
+    { "kind": "dispenser_bun_whole", "maxHp": 0, "grab": "none", "events": [
+        { "name": "take", "policy": "anyone", "phaseGate": "playing" }
+      ] },
+    { "kind": "dispenser_cheese", "maxHp": 0, "grab": "none", "events": [
+        { "name": "take", "policy": "anyone", "phaseGate": "playing" }
+      ] },
+    { "kind": "dispenser_lettuce", "maxHp": 0, "grab": "none", "events": [
+        { "name": "take", "policy": "anyone", "phaseGate": "playing" }
+      ] },
+    { "kind": "dispenser_onion", "maxHp": 0, "grab": "none", "events": [
+        { "name": "take", "policy": "anyone", "phaseGate": "playing" }
+      ] },
+    { "kind": "dispenser_patty", "maxHp": 0, "grab": "none", "events": [
+        { "name": "take", "policy": "anyone", "phaseGate": "playing" }
+      ] },
+    { "kind": "dispenser_pickle", "maxHp": 0, "grab": "none", "events": [
+        { "name": "take", "policy": "anyone", "phaseGate": "playing" }
+      ] },
+    { "kind": "dispenser_sauce", "maxHp": 0, "grab": "none", "events": [
+        { "name": "take", "policy": "anyone", "phaseGate": "playing" }
+      ] },
+    { "kind": "dispenser_tomato", "maxHp": 0, "grab": "none", "events": [
+        { "name": "take", "policy": "anyone", "phaseGate": "playing" }
+      ] },
+    { "kind": "knife", "maxHp": 0, "grab": "anyone", "events": [] },
+    { "kind": "lettuce", "maxHp": 0, "grab": "anyone", "events": [] },
+    { "kind": "onion", "maxHp": 0, "grab": "anyone", "events": [] },
+    { "kind": "patty", "maxHp": 0, "grab": "anyone", "events": [
+        { "name": "grill", "policy": "anyone", "phaseGate": "playing" }
+      ] },
+    { "kind": "pickle", "maxHp": 0, "grab": "anyone", "events": [] },
+    { "kind": "sauce", "maxHp": 0, "grab": "anyone", "events": [] },
+    { "kind": "spatula", "maxHp": 0, "grab": "anyone", "events": [] },
+    { "kind": "target_board", "maxHp": 60, "grab": "none", "events": [] },
+    { "kind": "tomato", "maxHp": 0, "grab": "anyone", "events": [] }
   ]
 }

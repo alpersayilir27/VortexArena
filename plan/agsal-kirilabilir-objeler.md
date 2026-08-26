@@ -1,43 +1,32 @@
-# Ağsal kırılabilir objeler (sunucu-otoriter obje canı)
+# Ağsal kırılabilir objeler
 
-**Hedef:** hasar alabilen ağ-dışı hiçbir şey kalmasın. Kırılabilir/yıkılabilir sahne objeleri
-`NetIdentity` genişletilerek sunucu-otoriter hâle gelsin — can, kırılma ve durum sıfırlama kararı
-sunucuda verilsin, istemci yalnız sunum yapsın.
+**Hedef:** hasar alabilen ağ-dışı hiçbir şey kalmasın. Kod tarafı ağ nesnesi modelinin B1 fazına
+(`ag-nesne-modeli.md`) oturdu ve yazıldı; kalan iş **içerik** ve **doğrulama**. Kural
+`Docs/ArenaNet-Protokol.md` §10.10, reçete `Docs/Gelistirici/Yemek-Kitabi.md` "Ağ nesnesi eklemek".
 
-## Bugünkü durum
+## Kalan içerik işi
 
-- Yerel `Health` bileşeni **silindi**; istemcide can tutan hiçbir bileşen yok.
-- `ArenaCombat.ReportRaycastHit` `false` dönünce **hiçbir şey olmuyor** — dönüş değeri yalnız
-  sunum kararı içindir (gövde efekti mi, duvar efekti mi).
-- Arena sahnelerinde hedef/talim objesi kalmadı; ağa bağlı olmayan tüm geometri **dekor**dur.
-- Yani bugün oyunda kırılabilir obje yok; bu iş o boşluğu ağsal olarak dolduracak.
+Shader, iki tür asset'i (`breakable_cover` · `target_board`), iki prefab
+(`_Shared/World/Prefabs/NO_BreakableCover` · `NO_TargetBoard`), materyaller ve kırılma efekti
+(`_Shared/FX/FX_BreakDebris`) kuruldu; bir lobide bir hedef tahtası + iki siper duruyor ve export
+koşuldu.
 
-## Altyapıda hazır olan
+- [ ] **Arena yerleşimi:** siperler oyun arenalarına konmalı — seviye tasarımı kararıdır, boş
+      alanı olan arena yok denecek kadar az. Sahneyi kaydet → `Export Server Config`.
+      ⚠️ Export koşulmazsa sunucu objeyi tanımaz, vuruş sessizce reddedilir.
+- [ ] **`maxHp` denemeyle oturur** (bugün siper `200`, tahta `60`).
+- [ ] **Kırılma sesi geçicidir** — bugün ISDK örnek paketinden 0,19 sn'lik bir darbe sesi bağlı
+      (`breakClip`). Gerçek bir kırılma/parçalanma klibi `Assets/Audio/` altına girmeli;
+      ⚠️ paket örneği bir gün yerinden kalkarsa ses sessizce yok olur, hata vermez.
 
-- `NetIdentity` — sahne objesine benzersiz `sceneId` verir
-  (`GameObject > VortexArena > Network Parent`), `SceneIdGuard` çakışmaları onarır.
-- `NetSpawnCatalog` — dinamik obje eşlemesi için iskelet.
+## Doğrulama (kullanıcı koşar)
 
-⚠️ İkisi de bugün yalnız **iskelet**: hiçbir mesaj `sceneId` taşımıyor, oyuncular `playerId` ile
-senkronlanıyor ve `NetIdentity` gerektirmiyor.
-
-## Sıra (kritik)
-
-1. **ÖNCE `Docs/ArenaNet-Protokol.md`** — obje canı/kırılma mesajları, `sceneId` ile hedefleme,
-   doğrulama kuralları, geç bağlanan istemciye durum aktarımı.
-2. **SONRA iki uç:** `Assets/_Shared/Net/Protocol` (saf C# DTO) + `Server/`.
-3. En son istemci sunumu (kırılma efekti, obje görünürlüğü).
-
-Kod-önce gidilirse iki uçlu sapma başlar — protokol tek doğruluk kaynağıdır.
-
-## Açık sorular (karar verilmedi)
-
-- **Obje canı sunucuda kimde durur?** Aktif mod (`IGameMode`) mu, haritaya bağlı ayrı bir servis
-  mi? Mod başına farklı kırılma davranışı istenecek mi?
-- **Hedefleme:** `hit_report`'un hedefi `playerId` yerine `sceneId` olabilir mi (tek mesaj, iki
-  hedef tipi), yoksa ayrı bir mesaj mı daha temiz? Ayrımı ne taşıyacak?
-- **Sıfırlama:** kırılma durumu maç bitişinde / harita değişiminde sıfırlanır mı, yoksa maç boyu
-  kalıcı mı? Kim tetikler?
-- **Geç bağlanan istemci** sahne objelerinin mevcut durumunu nasıl alır — `welcome` içinde toplu
-  liste mi, sahne yüklendikten sonra ayrı bir senkron mesajı mı?
-- Kırılan obje **çarpışması** ne olur (free-roam'da oyuncu fiziksel olarak o hacimde yürüyecek)?
+- İki başlık aynı objeyi vurur: can tek defterde düşer, hasar görünümü ikisinde aynı, aynı anda
+  kırılır.
+- Lobide hedef tahtası: can düşer ve kırılır (`fireWhilePaused`); oyuncuya hasar yine yok.
+- Turnuvada tur başı: kırık objeler tam cana ve sağlam görünüme döner, efekt oynamaz.
+- Geç katılan (maç ortası `hello`) kırık objeyi kırık görür, kırılma efekti oynamaz.
+- Lobiye dönüp yeni maç: obje tam canla geri gelir.
+- Bomba: patlama yarıçapındaki objeler hasar alır; siperin arkasındaki oyuncu korunurken siperin
+  kendisi hasar alır (obje kendi collider'ında gölgelenmez).
+- `maxHp > 0` olup collider'ı olmayan obje: sahne kaydında konsola uyarı düşer.

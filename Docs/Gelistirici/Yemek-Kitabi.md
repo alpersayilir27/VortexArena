@@ -24,6 +24,7 @@ Her reçetenin altında *neden böyle* kutusu var — orayı okumazsan çalış�
 | Yeni silah eklemek | [11](#11-yeni-silah-eklemek) |
 | Kendi mod HUD'ını yazmak | [12](#12-kendi-hudını-yazmak) |
 | Yeni mod eklemek | [13](#13-yeni-mod-eklemek) |
+| Çocuk oyunu eklemek (silahsız, kooperatif) | [13.1](#131-çocuk-oyunu-eklemek-silahsız-kooperatif) |
 | Yeni arena eklemek | [14](#14-yeni-arena-eklemek) |
 | Hazır bir environment'ın içinde arena bölgesi kurmak | [14.1](#141-hazır-bir-environmentın-içinde-arena-bölgesi-kurmak) |
 | Gözlüksüz test (dev penceresi) | [15](#15-gözlüksüz-test-dev-penceresi) |
@@ -158,17 +159,28 @@ Debug.Log($"{vurulan} oyuncu vuruldu");
 ```
 
 Hasar merkeze uzaklıkla doğrusal düşer ve her oyuncuya **en fazla bir** vuruş gider (bir gövdede
-birden çok isabet kutusu vardır).
+birden çok isabet kutusu vardır). Yarıçaptaki **ağ nesneleri** de aynı yoldan raporlanır
+(`hit_report{targetNetId}`, aynı mesafe düşümü); dönen sayı yine **yalnız oyuncu** isabetidir.
 
-> ⚠️ **Duvar arkası kontrolü yapılmaz.** Görüş hattı istiyorsan kendin kur:
+**Duvar arkası** istemiyorsan kendin kurma — son parametreyi aç:
+`ReportAreaHit(…, requireLineOfSight: true)`. Merkezle hedef arasında engel varsa o hedef atlanır.
+
+> ⚠️ **Kendine hasar bu metottan ÇIKMAZ ve bu bir hata değildir.** `ReportAreaHit` hedefleri uzak
+> oyuncuların isabet kutularından bulur; **yerel oyuncunun kendi rig'inde hedef collider yoktur**
+> (kendi gövdeni görmezsin, §3 "oyuncu kendi gövdesini görmez"). Kendi patlamandan hasar almak
+> istiyorsan ikinci çağrı gerekir:
 > ```csharp
-> foreach (var col in Physics.OverlapSphere(merkez, 6f))
-> {
->     if (!ArenaCombat.TryGetTargetPlayerId(col, out int id)) continue;
->     if (Physics.Linecast(merkez, col.bounds.center, engelKatmani)) continue;  // duvar var
->     ArenaCombat.ReportHit(id, col.bounds.center, HasarHesapla(merkez, col), "bomba");
-> }
+> ArenaCombat.ReportAreaHit(merkez, 6f, 120f, "bomba", 0.25f);      // ötekiler
+> ArenaCombat.ReportAreaSelfHit(merkez, 6f, 120f, "bomba", 0.25f);  // ben
 > ```
+> `ReportAreaSelfHit` **dost ateşi anahtarını kendisi okur**: kapalıyken hiç rapor yollamaz (sunucu
+> zaten reddederdi, boş rapor konsolu kirletir). Aynı kapı takımsız modda da geçerlidir — "kendi
+> bombamın hasarını alır mıyım" sorusunun cevabı her modda operatörün anahtarıdır (`Protokol` §10.3
+> 5. kapı).
+
+> ⚠️ **Atıcının ölmesi patlamayı iptal ETMEZ.** Elden çıkmış hasar kaynağı sahibi öldükten sonra da
+> raporlanır ve skoru normal yazılır — sunucudaki kapı bir **pencere**dir (`Protokol` §10.3 2. kapı).
+> Yani havadaki bombanın sayacını "oyuncu öldü" diye durdurma.
 
 ---
 
@@ -205,7 +217,9 @@ if (!ArenaCombat.CanFire) return;
 ```
 
 `CanFire` şunların hepsini birden kontrol eder: oyuncu **hayatta mı**, faz **Lobby veya Live mı**
-(Loading/Countdown/End'de ateş yok) ve bir kez bağlanıldıysa **bağlantı açık mı**.
+(Loading/Countdown/End'de ateş yok), bir kez bağlanıldıysa **bağlantı açık mı** ve mod
+**silahsız mı** (`weaponSource:"none"` → `ModeRuntime.IsWeaponless`; atılabilir eşya da bu kapıyı
+okur).
 
 > **Neden tek özellik:** bunları ayrı ayrı kontrol eden kod kaçınılmaz olarak birini unutur —
 > en sık unutulan geri sayım fazıdır ve oyuncu "başla" demeden ateş eder.
@@ -398,7 +412,7 @@ ModeRuntime.Changed += KurallarDegisti;      // maç yüklenince tetiklenir
 ```
 
 Okunabilir alanlar: `ModeId`, `Teams`, `Scoring`, `FriendlyFire`, `Revive`, `Weapons`,
-`RespawnDelay`, `FireWhilePaused`, `IsTeamless`.
+`RespawnDelay`, `FireWhilePaused`, `IsTeamless`, `IsWeaponless`.
 
 > **Neden tek okuma noktası:** canlanma, skor satırı, silah kaynağı ve admin arayüzü aynı bilgiyi
 > ister. Dördü ayrı ayrı `load_match` dinlerse dördü ayrı ayrı bayatlar.
@@ -505,7 +519,7 @@ Ayarlanabilir bir "silah dönüşü" alanı da yoktur.
 
 **Akış (prefab kipinde, Play gerekmez):**
 
-1. `Tools > VortexArena > Weapons > Kavrama Pozu Stüdyosu` ile pencereyi aç.
+1. `Tools > VortexArena > Items > Kavrama Pozu Stüdyosu` ile pencereyi aç.
 2. `_Shared/Arsenal/Prefabs/WPN_*.prefab`'ı **prefab kipinde** aç (Project'te çift tık). Pencere
    stage'i kendiliğinden tanır.
 3. **Ana Kabza Ellerini Oluştur** (iki elli silahta ayrıca **Ön Kabza Ellerini Oluştur**) → sağ ve
@@ -660,6 +674,228 @@ alınamayan ölü bir silah.
 
 ---
 
+## 11.3 Atılabilir eşya eklemek (bomba, molotof, flashbang, sis)
+
+⚠️ **Protokole DOKUNULMAZ.** Atma olayı `itemId` taşıdığı için yeni tür telde bedavadır: bir
+`netItemId` + bir katalog girdisi. Yeni tür **hiçbir zaman** protokol sürümünü artırmaz, sunucuya da
+tek satır iş çıkarmaz (denge sayıları istemcide yaşar — `Protokol` §10.3 sonu).
+
+**1. Tanım.** `Create > VortexArena > Throwable Definition` → `ThrowableDefinition`:
+`netItemId` (benzersiz, 1-255), prefab, `holdMode = OneHand`, tetik kipi (**Fuse** = fitil, bomba;
+**Impact** = ilk temas, molotof), fitil/dolum süreleri, atış hızı ölçeği + tavanı, patlama
+yarıçapı/hasarı/`edgeScale`, `requireLineOfSight`, patlama prefabı + ses klibi.
+
+**2. Prefab.** Root'ta `Rigidbody` + collider + **fizik materyali**, `Throwable` bileşeni ve bir
+`ThrowableEffect` (bomba için `BlastEffect`).
+⚠️ **Sekme katsayısını düşük tut** — kopyaların ayrışması sekme sayısıyla büyür (`Sistem-Ozeti` §7
+"atılabilir avatarla çarpışmaz").
+
+**3. Kavrama.** `Tools > VortexArena > Items > Kavrama Pozu Stüdyosu` ile **ana kabza** kaydını yaz
+(tek elli — ön kabza yok). Yazılmazsa eşya elde idle parmaklarla ve yanlış açıyla durur; uzak
+oyuncuların gördüğü de odur.
+⚠️ **Önce tanımın `prefab` alanını bağla:** atılabilirin prefabında tanımı taşıyan bir bileşen
+yoktur (`Throwable` tanımını çalışma zamanında `Arm`'da alır), stüdyo hedef tanımı **ters aramayla**
+bulur — `prefab` alanı boşsa prefab stüdyoda açılır ama yazılacak asset bulunamaz.
+
+**4. Katalog.** `NetItemCatalog`'a ekle → `Configure All Build Elements` (kimlik bekçisi çakışmayı
+burada yakalar).
+
+**5. Taşıma.** Bileklikte taşınacaksa rig'deki `WristHolster`'a tanımı bağla. Kılıf sol bilektedir,
+sağ el alır; alırken sağ eldeki silah **askıya alınır** (yere düşmez, yeniden seçilmez) ve atıştan
+sonra aynı silah geri gelir.
+
+**Yeni bir ETKİ yazmak** (ateş havuzu, flashbang, sis): `ThrowableEffect`'ten türet, `Trigger`'ı
+yaz, prefaba ekle. İki kural:
+- **Hasarı yalnız atanın kopyası raporlar** (`source.LocalOwner`) — uzak kopyalar sadece FX oynatır.
+- **Hasarsız etkiler hiç `hit_report` üretmez:** flashbang/sis'te her istemci **yalnız kendi
+  oyuncusunu** değerlendirir (mesafe + bakış + görüş hattı), sunucu onları hiç görmez.
+- ⚠️ **Sis/ateş hacmi raycast'e takılmamalı ve `Obstacle` layer'ında olmamalıdır:** hasar görüş
+  hattı, engel ihlali kuralı ve silah namlu kapısı hepsi raycast okur — sis onları tetiklerse
+  oyuncular sisin içinde sessizce ölmeye başlar.
+- ⚠️ **Süreli etki** (yanan havuz) sunucudaki ölüm sonrası penceresinden uzun yaşayamaz; son tikleri
+  sessizce reddedilir (`Protokol` §10.3 2. kapı).
+
+---
+
+## 11.4 Ağ nesnesi eklemek (kırılabilir örtü, hedef tahtası)
+
+Oyuncu olmayan ama **herkeste aynı** olması gereken bir obje (kırılan siper, vurulan tahta) ağ
+nesnesidir: canını sunucu tutar, sen yalnız sunumunu yazarsın. Kural
+`Docs/ArenaNet-Protokol.md` §10.10.
+
+**1. Tür.** `Create > VortexArena > Net Object Kind` → `kind` (telde taşınan kimlik, projede
+benzersiz) + `maxHp` (`0` = hasar almaz; kimliği olan dekoratif nesne meşrudur).
+
+**Tutulabilir olacaksa** aynı asset'te `Grab = Anyone` (varsayılan `None` = alınamaz). **Objeye özel
+bir etkileşim** (kesme, doldurma, alma) olacaksa izinli olay listesine (`Events`) birer satır yaz:
+`Name` (telde giden ad) + `Policy` (`Anyone` / `Owner` = yalnız objeyi tutan) + `PhaseGate`
+(`Playing` / `Any` = lobide de serbest).
+⚠️ **Listede olmayan olay sunucuda REDDEDİLİR** — ad telde serbest metindir, sunucuda değildir. Buraya
+yazılan bir yazım hatası derleme hatası vermez, "hiç gerçekleşmeyen etkileşim" olarak görünür.
+⚠️ **Kural TÜRDE durur, objede değil:** aynı tür on arenada geçer; kuralı objeye kopyalamak on ayrı
+doğruluk kaynağı üretir.
+
+**2. Sahnedeki obje.** Objenin köküne `NetObject` ekle (`NetIdentity`'yi kendisi zorunlu kılar) ve
+`kind` alanına 1. adımdaki asset'i bağla. ⚠️ **Kimliği elle yazma** — sahne kaydında bake'lenir;
+sahneyi kopyalarsan `SceneIdGuard` çakışanları kendisi ayırır.
+
+**3. Hasar collider'ı.** Objenin raycast'e takılan bir collider'ı olmalı; yoksa mermi ona hiç
+çarpmaz ve obje "kırılmıyor" görünür. Hitscan silahlar `ArenaCombat.ReportRaycastHit` üzerinden
+ağ nesnesini **kendiliğinden** raporlar — silah kodunda yapılacak bir iş yoktur.
+⚠️ **Alan hasarı (bomba) da ağ nesnesine geçer:** `ReportAreaHit` yarıçaptaki ağ nesnelerini de
+tarar ve her biri için ayrı `hit_report{targetNetId}` yollar; görüş hattı isteyen etkilerde objenin
+**kendi collider'ı kendini gölgelemez** (kırılabilir siper çoğu zaman `Obstacle` layer'ındadır).
+⚠️ `maxHp > 0` olup raycast'e takılan collider'ı olmayan obje **hiç vurulamaz**: sahne kaydı bunu
+konsola uyarı olarak düşürür (obje yine listeye girer).
+
+**4. Sahneyi KAYDET.** Kayıt `<Sahne klasörü>/Data/<SahneAdı>_objects.json`'u yazar. Kaydetmeden
+export hiçbir şey görmez.
+
+**5. Export.** `Tools > VortexArena > Server > Export Server Config` → `maps.json`'a haritanın
+`objects[]`'i ve kökteki `kinds[]` girer — **`grab` ve `events[]` de o satırla gider**. ⚠️ **Export
+koşulmazsa sunucu o objeyi tanımaz**, vuruş sessizce reddedilir ve sahada yalnız "kırılmıyor" diye
+görünür; türü sonradan tutulabilir yapıp export'u unutmanın belirtisi de aynıdır — "kavrıyorum ama
+obje elime gelmiyor" (sunucu hâlâ `grab:"none"` okur).
+
+**6. Sunum.** **Hazır yol:** objeye `BreakableObject` ekle ve alanlarını bağla (`damageRenderers`,
+`hitColliders` — boş bırakılırsa alt ağaçtan kendisi toplar —, `intactRoot`, `brokenRoot`,
+`breakFxPrefab`, `breakFxLifetime`, `breakClip`, `breakVolume`); yazılacak kod yoktur. Otomatik
+toplama `brokenRoot`'un altını **dışlar** — enkazın kendi collider'ları kırılınca kapanmaz.
+
+Hasar görünümünün materyali `VortexArena/BreakableSurface` shader'ını kullanmalıdır (hazır prop
+materyalleri `_Shared/World/Materials/`): ⚠️ `_DamageAmount` özelliği olmayan bir shader'da yazım
+sessizce yok sayılır — obje kırılır ama arada "hasarlı ama ayakta" hâli hiç görünmez. Shader'ın
+aydınlatması URP'nin kendisidir, yani prop hasarsızken kaynak `Lit` materyaliyle **birebir aynı**
+görünür; ayrı bir görünüm ayarlaması gerekmez.
+
+Kurulu iki örnek `_Shared/World/Prefabs/` altındadır (`NO_BreakableCover` · `NO_TargetBoard`) —
+yeni bir kırılabilir için en kısa yol birini kopyalayıp mesh/tür/`maxHp`'sini değiştirmektir.
+Ortak kırılma efekti `_Shared/FX/FX_BreakDebris` (enkaz parçacıkları + toz).
+
+Kendi sunumunu yazacaksan `NetObject.StateChanged`'e abone ol: **hasar oranını** materyale yaz
+(`_DamageAmount`, `MaterialPropertyBlock`), `IsBroken` olunca collider'ı kapat ve kırık görünüme
+geç:
+
+```csharp
+private void OnEnable()  { netObject.StateChanged += Uygula; Uygula(netObject, NetStateOrigin.Snapshot); }
+private void OnDisable() { netObject.StateChanged -= Uygula; }
+
+private void Uygula(NetObject o, NetStateOrigin origin)
+{
+    _block.SetFloat(DamageId, 1f - o.HealthRatio);   // 0 = sağlam, 1 = yok olmuş
+    _renderer.SetPropertyBlock(_block);
+    _collider.enabled = !o.IsBroken;
+
+    if (origin == NetStateOrigin.Live && o.IsBroken) { /* efekt + ses */ }
+}
+```
+
+⚠️ **`Snapshot` efekt oynatmaz** (`world_state` = anlık görüntü): geç katılan oyuncu katılmadan
+önce olmuş patlamayı görmemelidir.
+
+⚠️ **`Hp`/`Flags`'i yerelde YAZMA** (`Yapma-Listesi` → "Ağ nesnesinin durumunu istemcide yazma"):
+kırılma kararı sunucudadır, yerel kısayol iki başlıkta farklı siper üretir.
+
+Hasar görünümü objenin shader'ında `_DamageAmount` özelliği varsa çalışır; yoksa yazım **sessizce
+yok sayılır** (hata vermez, kırılma yine çalışır).
+
+**7. Yer değiştiren obje mi?** Objenin pozu ağdan gelecekse (taşınıyor, fırlatılıyor) köküne
+`NetObjectBody` + `NetObjectPoseSender` ekle: ilki **serbest** objeyi yerine koyar ve fizik
+otoritesini tutar (`isKinematic = !IsMine`), ikincisi sahibi olduğun objenin pozunu akıtıp durunca
+`object_rest` yollar.
+⚠️ **Yerinden oynamayan objede İKİSİ DE GEREKMEZ** — kırılan ama duran bir örtünün pozu telde hiç
+gitmez, sahnedeki yeri zaten doğrudur. İkisini yine de eklemek boşuna iş değil, **zarardır**:
+dinlenme pozu olmayan objede gereksiz bir yazar doğar ve kutuyu her karede sahnedeki yerine
+oturtmaya çalışır.
+⚠️ **`NetObjectBody`, obje ELDEYKEN hiçbir şey yazmaz** — o an transform'un sahibi kavrama
+köprüsüdür (§11.5); tek transform'a iki yazar derleme hatası değil, görünür bir titremedir.
+
+**Tur başında sıfırlama** çekirdekte hazırdır (`MatchDirector.TryResetObjectsForMode`) ve sahne her
+sahnelendiğinde de sıfırlanır — modun içinde yazılacak bir şey yoktur.
+
+---
+
+## 11.5 Elle tutulan dünya objesi eklemek (tek örnek, sahibi devredilen)
+
+**Ne zaman:** arenada **tek** örneği olan, oyuncunun eline alıp taşıdığı/fırlattığı bir şey (bıçak,
+tabak, malzeme). Silahlar bu yolu kullanmaz — onlar her oyuncuya kopyalanır ve ağ nesnesi değildir.
+
+⚠️ **Atlanan adımın bedeli:** alma yolu ile prefab çelişirse obje ya hiç alınmaz ya da **yakınındaki
+başka bir objenin kavrama basışını yer** (aşağıda 2. adım) · `WorldSingle` yazılmazsa uzak elde
+**iki kopya** görünür ve gecikmede ayrışır · kavrama pozu yazılmazsa obje her istemcide farklı bir
+ofsetle durur · spawn kataloğuna kaydedilmezse dinamik doğan obje **hiç görünmez** (tek satır log).
+
+**1. Ağ nesnesi tarafını kur** (§11.4): tür asset'i `Grab = Anyone` ile, sahnedeki objede
+`NetObject`, sonra `NetObjectBody` + `NetObjectPoseSender` (obje yer değiştiriyor). Sahneyi kaydet,
+export'u koştur.
+
+**2. Üç ekseni seç** (`ItemDefinition`, `Create > VortexArena > …`):
+
+| Eksen | Bu obje için | Ne demek |
+|---|---|---|
+| Alma yolu (`GrabPath`) | `ProximitySocket` | Oyuncu yaklaşıp kavrar (ışınla uzaktan değil) |
+| Örnekleme (`Instancing`) | `WorldSingle` | Tek örnek vardır, sahiplik devredilir |
+| Bırakma (`ReleaseMode`) | `Physics` ya da `Return` | Serbest düşsün mü, yerine mi otursun |
+
+⚠️ **Alma yolu `DistanceGrab` DEĞİLSE prefabda mesafeli kavrama bileşeni BULUNMAMALIDIR**
+(`DistanceGrabInteractable` / `DistanceHandGrabInteractable`): "aday listesini kapatmak" yetmez, boş
+listeyle bile interactor hover'a girer ve kavrama basışını sessizce yer — belirti "kavrama tuşu bazen
+çalışmıyor"dur (`Sistem-Ozeti` Tuzaklar).
+
+**3. Soketi yerleştir.** Prefabda objenin alınacağı yere `GripSocket` koy: kabul yarıçapı + gösterge
+prefabı + hangi ellerin alabileceği. ⚠️ **Oyuncunun gördüğü küre kabul hacminin kendisidir** —
+gösterge ile yarıçapı ayrı ayrı ayarlamak "içindeyim ama almıyor" üretir. Soket "nereden alınır"ı
+söyler, elin nasıl duracağını **söylemez**; o bir sonraki adımdır.
+
+**4. Kavramayı stüdyoda yaz.** `Tools > VortexArena > Items > Kavrama Pozu Stüdyosu` ile ana kabza
+kaydını yaz. ⚠️ **Kavrama pozu SABİT olmak zorundadır:** obje ele kanonik pozla bağlanır, serbest
+kavrama her istemcide farklı bir ofset demektir ve obje uzak başlıkta elin yanında durur.
+
+**5. Köprüyü bağla.** Objenin köküne `NetObjectGrabBridge` ekle ve **eşya tanımını ata** (soket boş
+bırakılırsa çocuklarda aranır). Kavrama iyimserdir: basış objeyi hemen yerelde alır, sahip başkası
+çıkarsa kavrama kendiliğinden geri alınır — yazacağın bir red yolu yoktur.
+
+**6. Dinamik doğacaksa katalog.** Obje çalışma zamanında doğuyorsa (§11.6) `NetSpawnCatalog`'a
+`kind` → prefab satırı ekle. Kaydı olmayan `kind` gelirse obje doğmaz ve konsola tek satır düşer.
+
+**7. Bekçiyi çalıştır.** `Tools > VortexArena > Build > Configure All Build Elements` →
+**Hazırlık** bölümündeki *Eşya alma yolu ↔ prefab* satırı, alma yolu `DistanceGrab` olmayan
+eşyaların prefabında mesafeli kavrama bileşeni kalıp kalmadığını söyler. ⚠️ Bekçi **hiçbir şey
+yazmaz** — düzeltme senin adımın (bileşeni kaldır ya da tanımdaki yolu düzelt).
+
+---
+
+## 11.6 Dinamik obje doğuran mod
+
+Doğuşun **iki kaynağı vardır ve üçüncüsü yoktur**: modun kendisi ve türün kuralı (dağıtıcıya gelen
+bir olay gibi). ⚠️ **İstemci spawn isteyemez** ve böyle bir mesaj eklenmez — isteyebilse bozuk bir
+başlık arenayı objeyle doldurabilirdi.
+
+1. Modun içinde `director.SpawnObject(kind, pose)` çağır; dönen `netId` `0` ise doğuş reddedilmiştir
+   (bilinmeyen `kind` ya da tükenen aralık) ve konsola sebep yazılmıştır. Kaldırma:
+   `director.DespawnObject(netId)`.
+   Obje **doğrudan bir elde** doğacaksa aynı çağrıya sahip ve el verilir:
+   `SpawnObject(kind, pose, playerId, rightHand)` — obje `owner` dolu ve `Held` bayrağıyla gelir,
+   ayrı bir "eline ver" mesajı yoktur. Eldeki obje istemcide kendiliğinden benimsenir
+   (`NetObjectGrabBridge`), ama ⚠️ **doğuşu isteyen bileşen dolu eli kendisi reddetmelidir**
+   (`HeldItems.RightHand/LeftHand` → `IsEmpty`): sunucu elin dolu olduğunu bilmez, aynı yumrukta iki
+   obje bırakır ve eskisi yenisinin altında görünmez olur.
+2. Örneğe ait metin (bir müşterinin siparişi, slot numarası) `payload` parametresiyle ya da
+   `director.SetObjectPayload(netId, …)` ile yazılır ve `object_state.s` olarak gider. ⚠️ Biçimini
+   **mod** tanımlar, çekirdek yorumlamaz — `modeState` ile aynı sözleşme. Yeri olay değil obje
+   durumudur, çünkü `world_state` onu taşır: geç katılan oyuncu bekleyen müşteriyi siparişiyle
+   görmek zorundadır.
+3. Olay tetikleyecekse `IGameMode.OnObjectEvent`'i yaz. Dönüş değeri yalnız **relay** sorusunu
+   cevaplar: `true` = "ben hallettim, relay etme", `false` = kozmetik (aynı olay herkese relay
+   edilir). ⚠️ **Duyuran, yazandır:** `SetObjectStage`/`SetObjectFlags`/`SetObjectPayload`/
+   `SpawnObject`/`DespawnObject` sonucu kendisi yayınlar — bir olay birden çok objeyi
+   değiştirebildiği için "olayın objesini yayınla" kısayolu yalnız birini duyururdu. Mod tabloya
+   dokunmaz; okuma da `director.TryReadObject(...)` üzerindendir.
+4. İstemci tarafında yazılacak bir şey yoktur: prefabı `NetSpawnCatalog` çözer, örneği
+   `NetObjectSpawner` kurar. Tur/sahne sıfırlaması dinamik objelerin **hepsini** siler.
+
+---
+
 ## 12. Kendi HUD'ını yazmak
 
 Sıfırdan yazma — `ModeHudBase`'den türet. Faz/süre, geri sayım, can barı, ölüm ekranı, kill-feed
@@ -769,9 +1005,59 @@ public sealed class BenimModum : IGameMode
 > ⚠️ Export'u unutursan `start_match` "harita bu modu desteklemiyor" diye **sessizce** reddedilir;
 > sebep yalnızca sunucu konsolunda tek satır olarak görünür.
 
+**Oyun tipi:** `ModeDefinition`'ın `gameType` alanı ile sunucudaki `IGameMode.GameType` **aynı
+aileyi** göstermelidir ([Sistem Özeti §3.10](../Sistem-Ozeti.md)). İkisinin de varsayılanı Hızlı
+Savaş'tır (`QuickBattle` / `"quickbattle"`), yani Hızlı Savaş modu yazarken ikisine de dokunmazsın;
+yalnız bir Çocuk Oyunları modu ikisini birden çevirir — SO'da `Kids`, mod sınıfında
+`public string GameType => "kids";`.
+
+> ⚠️ **İkisi tutmazsa mod o haritada BAŞLATILAMAZ:** `start_match` modun tipini haritanın
+> `gameType`'ıyla karşılaştırır ve uyuşmazsa reddeder. Sahadaki belirti yine "maç başlamıyor"dur,
+> sebep yalnız sunucu konsolunda tek satırdır.
+
 > ⚠️ asmdef üretirken mevcut moddan **JSON'u kopyala, `.meta`'yı KOPYALAMA** — GUID çakışır.
 
 Ayrıntı: `ModeRules` alanlarının tamamı → [Sistem Özeti §3.9](../Sistem-Ozeti.md).
+
+---
+
+## 13.1 Çocuk oyunu eklemek (silahsız, kooperatif)
+
+Reçete 13'ün üstüne binen **beş fark** vardır; gerisi aynıdır.
+
+**1. Aile.** Sunucuda `public string GameType => "kids";`, `ModeDefinition`'da `gameType = Kids`,
+haritanın `MapDefinition`'ında da `gameType = Kids`. ⚠️ Üçü tutmazsa `start_match` **sessizce**
+reddedilir — sahadaki belirti "maç başlamıyor"dur, sebep yalnız sunucu konsolundadır.
+
+**2. Kural şekli.** `Weapons = None` (hasarı kapatan şey budur, ayrı bir anahtar yoktur — atılabilir
+eşya da atılamaz), `Teams = None`, `Revive = None`, `RespawnDelay = 0`. Kooperatif skor için
+`Scoring = ScoreKind.PlayerAndShared` ve yazan yol `director.AddSharedScore(playerId, puan)`:
+bireysel katkı ve ortak toplam **tek çağrıdan** gider, `scoreBlue` `0` kalır ve **kazanan yoktur**
+(`IsMatchOver` her zaman `MatchOutcome.Draw` döndürür). Sonuç tablosu grubun birlikte okuduğu şey
+olduğu için `HoldsResultForOperator => true`.
+
+**3. HUD.** `ModeHudBase`'den türet ama silah/can/ölüm/kill-feed alanlarını prefabda **boş bırak** —
+taban atanmamış alan için hiçbir şey çizmez, bu modda karşılıkları yoktur. Kendi sayaçlarını
+`modeState`'ten oku (biçimi mod tanımlar, çekirdek yorumlamaz) ve **bilinmeyen anahtarı atla**:
+alan sonradan yeni sayaç kazanacaktır, bozuk dize HUD'ı düşürmemelidir.
+
+**4. Etkileşim = ağ nesnesi.** Oyunun eşyaları `NetObjectKind` asset'leriyle tanımlanır (`grab` +
+`events[]`), dinamik olanların prefabı `NetSpawnCatalog`'a girer, sunucu tarafı
+`IGameMode.OnObjectEvent` ile yorumlar → [11.4](#114-ağ-nesnesi-eklemek-kırılabilir-örtü-hedef-tahtası) ·
+[11.5](#115-elle-tutulan-dünya-objesi-eklemek-tek-örnek-sahibi-devredilen) ·
+[11.6](#116-dinamik-obje-doğuran-mod). Elle tutulan proplar `PropDefinition` + `WorldSingle` +
+`ProximitySocket` + `Physics`tir ve `netItemId` **almazlar**.
+
+**5. Sunum sahnede kalır.** Bir NPC'nin yürüyüşü, bir istasyonun ışığı, bir balonun içeriği telde
+taşınmaz: sunucu **metre bilmez**. Taşınan tek şey `stage` (aşama) ve `s` (örnek verisi); nerede
+durduğunu sahnedeki yol/slot bileşenleri söyler. ⚠️ Böyle bir objeye `NetObjectBody`/
+`NetObjectPoseSender` **eklenmez** — objeyi hem yoldan hem ağdan süren iki yazar, iki başlıkta iki
+yer demektir.
+
+⚠️ **Bir olayı KİM bildirir?** `policy:"anyone"` olan bir olayı herkes gönderebilir, ama aynı
+gerçeği N istemcinin bildirmesi sunucuda aynı sayacı N kez başlatır. Seçici sahnede aranır ve tek
+kişiyi göstermelidir: objeyi **durduran** istemci (`NetObjectPoseSender.RestSent`), objeyi **elinde
+tutan** istemci, ya da olayı üreten aleti tutan kişi.
 
 ---
 
@@ -834,10 +1120,18 @@ kalibrasyon işaretçileri onunla birlikte silinir).
 olduğu için üretilen boş bir tanım lobiyi sessizce her modda oynanır kılardı. Sahneyi aç, modları
 araç penceresinden seç.
 
+⚠️ **Aynı `MapDefinition`'daki `gameType` haritayı bir oyun ailesine bağlar**
+([Sistem Özeti §3.10](../Sistem-Ozeti.md)): Hızlı Savaş arenasında alana **dokunulmaz** —
+varsayılanı `QuickBattle`'dır; yalnız Çocuk Oyunları haritasında `Kids` seçilir. Değer 6. adımda
+`maps.json`'a `gameType` olarak girer, yani sonradan değiştirirsen o adım yeniden koşar. Yanlış tip
+hiçbir yerde hata vermez: harita yalnız kendi ailesinin modlarıyla başlatılabilir, diğerlerinde
+`start_match` reddedilir — sahadaki belirti **"maç başlamıyor"**dur.
+
 ⚠️ **Arena sildiysen/taşıdıysan aynı pencereden `Hepsini Çalıştır`** — sahne açık olmadan da koşar
 (o durumda `MapDefinition` adımı atlanır) ve kalıntı kayıtları temizler; kayıtlar elle düzenlenmez.
 
-> Arena ölçüsü **sunucuya gitmez** (maps.json'a yalnız `sceneName` + `modes` yazılır); arenanın
+> Arena ölçüsü **sunucuya gitmez** (maps.json'a yalnız `sceneName` + `gameType` + `modes` +
+> ağ nesneleri yazılır); arenanın
 > tek ölçü kaynağı **boyut dosyasıdır**. Export'u ise ölçü için değil,
 > **yeni `sceneName` tabloya girsin** diye çalıştırıyorsun — 6. adım atlanırsa `start_match`
 > sessizce reddedilir.

@@ -279,6 +279,12 @@ namespace VortexArena.Core.UI
             {
                 line = $"{NameOf(msg.killerId)} -> {victim}";
             }
+            else if (msg.killerId > 0 && msg.killerId == msg.victimId)
+            {
+                // Own blast (§10.3 gate 5, friendly fire on): killerId == victimId. Its own line —
+                // "öldü" would read as an environmental death and hide who did it.
+                line = $"{victim} kendini havaya uçurdu";
+            }
             else if (string.Equals(msg.weaponId, ArenaProtocol.WEAPON_ID_OBSTACLE))
             {
                 // §10.9 environmental death: since killerId is 0 the branch above does not match.

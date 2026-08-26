@@ -14,6 +14,9 @@ namespace VortexArena.Core.Arena
         [Tooltip("Build listesindeki sahne adıyla BİREBİR aynı (katalog anahtarı).")]
         [SerializeField] private string sceneName = "";
         [SerializeField] private string displayName = "";
+        [Tooltip("Oyun tipi — operatörün ilk seçimi. Bugünkü tüm arenalar Hızlı Savaş'tır.")]
+        // Default QuickBattle: existing assets resolve correctly WITHOUT being touched.
+        [SerializeField] private GameType gameType = GameType.QuickBattle;
 
         [Header("Uyumluluk")]
         [Tooltip("Bu haritanın desteklediği modId'ler; boş bırakılırsa tüm modlar sayılır.")]
@@ -37,6 +40,9 @@ namespace VortexArena.Core.Arena
 
         /// <summary>Name shown in the UI.</summary>
         public string DisplayName => displayName;
+
+        /// <summary>Game type the map belongs to (§11).</summary>
+        public GameType GameType => gameType;
 
         /// <summary>Supported modId list (empty = no restriction).</summary>
         public string[] SupportedModeIds => supportedModeIds;

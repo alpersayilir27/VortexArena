@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using VortexArena.Protocol;
 
 namespace VortexArena.Net.Editor
 {
@@ -19,6 +20,21 @@ namespace VortexArena.Net.Editor
     {
         /// <summary>The name of the serialized field — must match the one in <see cref="NetIdentity"/> exactly.</summary>
         private const string SCENE_ID_PROPERTY = "sceneId";
+
+        /// <summary>Baked scene ids stay in the LOWER half of the id space; the upper half is RESERVED
+        /// for the server's dynamically spawned objects. On overflow a scene object and a dynamic
+        /// object share an id and the server cannot tell which one a hit damaged.</summary>
+        private const uint MIN_ID = ArenaProtocol.NET_ID_SCENE_MIN;
+
+        /// <inheritdoc cref="MIN_ID"/>
+        private const uint MAX_ID = ArenaProtocol.NET_ID_SCENE_MAX;
+
+        /// <summary>Whether an id is addressable at all (0 = never assigned, above the range = would
+        /// collide with a server-allocated id).</summary>
+        internal static bool IsInRange(uint id)
+        {
+            return id >= MIN_ID && id <= MAX_ID;
+        }
 
         /// <summary>
         /// Collects every NetIdentity in the scene (INACTIVE included). Deterministic order: root object
@@ -42,35 +58,71 @@ namespace VortexArena.Net.Editor
             return result;
         }
 
-        /// <summary>The scene's largest sceneId + 1 (1 when the scene is empty; 0 is reserved for
-        /// "unassigned").</summary>
+        /// <summary>The scene's first free sceneId, always inside
+        /// <see cref="MIN_ID"/>..<see cref="MAX_ID"/>; <c>0</c> = the range is full.</summary>
         internal static uint NextFreeId(Scene scene)
         {
             return NextFreeId(CollectInScene(scene));
         }
 
         /// <summary>
-        /// max + 1 over an already collected list. A list-taking overload so a loop does not rescan the
-        /// scene over and over.
+        /// max + 1 over an already collected list, clamped into the scene range. A list-taking overload
+        /// so a loop does not rescan the scene over and over.
         /// </summary>
+        /// <returns><c>0</c> when every id in the range is taken — the caller must treat that as "no
+        /// room", NOT as a usable id.</returns>
         internal static uint NextFreeId(IReadOnlyList<NetIdentity> identities)
         {
+            var used = new HashSet<uint>();
             uint max = 0u;
-            if (identities == null)
-            {
-                return 1u;
-            }
 
-            for (int i = 0; i < identities.Count; i++)
+            if (identities != null)
             {
-                NetIdentity identity = identities[i];
-                if (identity != null && identity.SceneId > max)
+                for (int i = 0; i < identities.Count; i++)
                 {
-                    max = identity.SceneId;
+                    NetIdentity identity = identities[i];
+                    if (identity == null || !IsInRange(identity.SceneId))
+                    {
+                        continue;
+                    }
+
+                    used.Add(identity.SceneId);
+                    if (identity.SceneId > max)
+                    {
+                        max = identity.SceneId;
+                    }
                 }
             }
 
-            return max + 1u;
+            return ResolveFree(used, max + 1u);
+        }
+
+        /// <summary>First unused id at or after <paramref name="from"/>; once the top is reached the
+        /// scan wraps to reuse holes left by deleted objects. <c>0</c> = full range is taken.</summary>
+        private static uint ResolveFree(HashSet<uint> used, uint from)
+        {
+            if (from < MIN_ID)
+            {
+                from = MIN_ID;
+            }
+
+            for (uint id = from; id <= MAX_ID; id++)
+            {
+                if (!used.Contains(id))
+                {
+                    return id;
+                }
+            }
+
+            for (uint id = MIN_ID; id <= MAX_ID && id < from; id++)
+            {
+                if (!used.Contains(id))
+                {
+                    return id;
+                }
+            }
+
+            return 0u;
         }
 
         /// <summary>
@@ -102,10 +154,10 @@ namespace VortexArena.Net.Editor
         }
 
         /// <summary>
-        /// Repairs sceneIds that stayed 0 or COLLIDE in the scene: the FIRST CLAIMANT of an id keeps
-        /// it, the later ones get the next free id. Since the scan follows hierarchy order the result
-        /// is deterministic. Returns true when a repair happened; <paramref name="fixedCount"/> is the
-        /// number of changed components.
+        /// Repairs sceneIds that are OUT OF RANGE (0 or above <see cref="MAX_ID"/>) or COLLIDE in the
+        /// scene: the FIRST CLAIMANT of an id keeps it, the later ones get the next free id. Since the
+        /// scan follows hierarchy order the result is deterministic. Returns true when a repair
+        /// happened; <paramref name="fixedCount"/> is the number of changed components.
         /// </summary>
         internal static bool RepairScene(Scene scene, out int fixedCount)
         {
@@ -128,15 +180,21 @@ namespace VortexArena.Net.Editor
                     continue;
                 }
 
-                // 0 = never assigned; used.Add false = an earlier object already claimed this id.
-                if (identity.SceneId != 0u && used.Add(identity.SceneId))
+                // Out of range = never assigned (0) or reaching into the server's reserved half;
+                // used.Add false = an earlier object already claimed this id.
+                if (IsInRange(identity.SceneId) && used.Add(identity.SceneId))
                 {
                     continue;
                 }
 
-                while (used.Contains(next))
+                next = ResolveFree(used, next);
+                if (next == 0u)
                 {
-                    next++;
+                    Debug.LogError(
+                        $"[VortexArena] '{scene.name}': sahne kimliği aralığı ({MIN_ID}..{MAX_ID}) doldu — " +
+                        $"'{identity.name}' kimliksiz kaldı, bu obje ağda görünmez.",
+                        identity);
+                    continue;
                 }
 
                 if (AssignId(identity, next))

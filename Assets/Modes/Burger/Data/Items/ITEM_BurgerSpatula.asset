@@ -1,0 +1,54 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ce8397c73e29fe44daba1538ea3c98a1, type: 3}
+  m_Name: ITEM_BurgerSpatula
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.PropDefinition
+  displayName: Spatula
+  netItemId: 0
+  prefab: {fileID: 8401723314606368373, guid: 0f47df34d57c80b4f9c1dc58c406069c, type: 3}
+  holdMode: 0
+  grabPath: 1
+  instancing: 1
+  releaseMode: 1
+  primaryGripRight:
+    authored: 0
+    position: {x: 0, y: 0, z: 0}
+    fingerJoints: []
+    wristAuthored: 0
+    wristPosition: {x: 0, y: 0, z: 0}
+    wristRotation: {x: 0, y: 0, z: 0, w: 0}
+  primaryGripLeft:
+    authored: 0
+    position: {x: 0, y: 0, z: 0}
+    fingerJoints: []
+    wristAuthored: 0
+    wristPosition: {x: 0, y: 0, z: 0}
+    wristRotation: {x: 0, y: 0, z: 0, w: 0}
+  secondaryGripRight:
+    authored: 0
+    position: {x: 0, y: 0, z: 0}
+    fingerJoints: []
+    wristAuthored: 0
+    wristPosition: {x: 0, y: 0, z: 0}
+    wristRotation: {x: 0, y: 0, z: 0, w: 0}
+  secondaryGripLeft:
+    authored: 0
+    position: {x: 0, y: 0, z: 0}
+    fingerJoints: []
+    wristAuthored: 0
+    wristPosition: {x: 0, y: 0, z: 0}
+    wristRotation: {x: 0, y: 0, z: 0, w: 0}
+  secondaryGripRadius: 0.1
+  tracerColor: {r: 1, g: 0.85, b: 0.4, a: 0.9}
+  tracerWidth: 0.02
+  tracerLifetime: 0.1
+  tracerEveryNthRound: 3

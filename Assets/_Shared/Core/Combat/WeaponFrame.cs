@@ -137,6 +137,11 @@ namespace VortexArena.Core.Combat
                 distanceHandGrab = GetComponent<DistanceHandGrabInteractable>();
             }
 
+            if (!EnforceGrabPath())
+            {
+                return;
+            }
+
             if (distanceGrab == null && distanceHandGrab == null)
             {
                 // ⚠️ An ERROR, not a warning: with no grab component the frame is visible but the
@@ -160,6 +165,47 @@ namespace VortexArena.Core.Combat
 
             SizeGrabCollider(measured, local);
             BuildFrameVisual(measured, local);
+        }
+
+        /// <summary>The frame exists only for items whose grab path is <see cref="ItemGrabPath.DistanceGrab"/>
+        /// — the item's definition is the rule, the prefab is only the placement.
+        /// <para>⚠️ On a mismatch the ISDK components are <b>DESTROYED</b>, not filtered out: with an
+        /// empty candidate list the interactor still enters hover
+        /// (<c>Interactor.ShouldHover = HasCandidate || ComputeShouldSelect</c>) and <c>Select()</c>
+        /// DEQUEUES the press without selecting anything — the press is silently eaten and nothing says
+        /// why. "Ungrabbable" is expressed by the component's absence.</para>
+        /// <para>This is the runtime backstop; the setup guard reports the same mismatch at build
+        /// readiness, where it can actually be fixed.</para></summary>
+        /// <returns>False when the frame shut itself down (the caller stops setting up).</returns>
+        private bool EnforceGrabPath()
+        {
+            WeaponDefinition definition = _weapon.Definition;
+            if (definition == null || definition.GrabPath == ItemGrabPath.DistanceGrab)
+            {
+                return true;
+            }
+
+            if (distanceGrab != null)
+            {
+                Destroy(distanceGrab);
+                distanceGrab = null;
+            }
+
+            if (distanceHandGrab != null)
+            {
+                Destroy(distanceHandGrab);
+                distanceHandGrab = null;
+            }
+
+            Debug.LogError($"[WeaponFrame] '{definition.DisplayName}' tanımının alma yolu " +
+                           $"{definition.GrabPath} ama prefabında mesafeli kavrama çerçevesi var — " +
+                           "çerçeve kapatıldı ve bileşenler silindi. Çerçeve prefabdan da " +
+                           "KALDIRILMALI: ISDK'da 'alınamaz' filtreyle değil, bileşenin yokluğuyla " +
+                           "ifade edilir.", this);
+
+            gameObject.SetActive(false);
+            enabled = false;
+            return false;
         }
 
         private void OnEnable()

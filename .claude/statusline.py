@@ -3,10 +3,11 @@
 
 Reads the status JSON from stdin and prints ONE line:
 
-    Opus 5 (1M context) [high] | 31% ctx | 100.3k/1M | vortexarena
+    Opus 5 (1M context) | High | 31% ctx | 100.3k/1M | vortexarena
 
-Blocks are ` | ` separated. Model and folder are blue, the percentage is
-green, and only the raw token block is colourised by context fill.
+Blocks are ` | ` separated. Model and folder are blue, effort is its own
+block in a darker blue, the percentage is green, and only the raw token
+block is colourised by context fill.
 Stdlib only, no writes to stderr, and never raises: any block whose data is
 missing or corrupt is dropped and the rest still prints.
 """
@@ -18,6 +19,8 @@ import sys
 # ---------------------------------------------------------------- colours ---
 GRAY = "\x1b[38;5;245m"      # separators + low-fill tokens
 BLUE = "\x1b[38;5;75m"       # model block + workspace folder
+NAVY = "\x1b[38;2;0;153;255m"  # effort block — darker than BLUE; truecolor
+                               # because 256-colour has no step between 33/39
 GREEN = "\x1b[38;5;112m"     # "<n>% ctx" block (fixed, never ramps)
 YELLOW = "\x1b[38;5;220m"
 ORANGE = "\x1b[38;5;208m"
@@ -25,8 +28,8 @@ RED_BOLD = "\x1b[1m\x1b[38;5;196m"
 RESET = "\x1b[0m"
 
 DEFAULT_LIMIT = 200000
-EFFORT_SHORT = {"low": "low", "medium": "med", "high": "high",
-                "xhigh": "xhigh", "max": "max"}
+EFFORT_SHORT = {"low": "Low", "medium": "Med", "high": "High",
+                "xhigh": "XHigh", "max": "Max"}
 
 # The four fields that together make up occupied context. Dropping the cache
 # ones would under-report by an order of magnitude on a warm session.
@@ -206,7 +209,7 @@ def basename(path):
 def build_line(data):
     blocks = []
 
-    # 1) model + effort
+    # 1) model, 2) effort — separate blocks
     model = data.get("model")
     display_name = ""
     if isinstance(model, dict):
@@ -218,21 +221,22 @@ def build_line(data):
         # window is non-default, so 200k sessions match the built-in exactly.
         if "context" not in display_name.lower() and limit != DEFAULT_LIMIT:
             display_name = "%s (%s context)" % (display_name, fmt_tokens(limit))
-        effort = resolve_effort(data, data.get("transcript_path"))
-        if effort:
-            display_name = "%s [%s]" % (display_name, effort)
         blocks.append(BLUE + display_name + RESET)
+
+    effort = resolve_effort(data, data.get("transcript_path"))
+    if effort:
+        blocks.append(NAVY + effort + RESET)
 
     used = resolve_used(data, data.get("transcript_path"))
     if used is not None and limit > 0:
         ratio = float(used) / float(limit)
-        # 2) percentage — always green, independent of how full the window is
+        # 3) percentage — always green, independent of how full the window is
         blocks.append("%s%d%% ctx%s" % (GREEN, int(round(ratio * 100)), RESET))
-        # 3) raw tokens — the only block that ramps with fill
+        # 4) raw tokens — the only block that ramps with fill
         blocks.append("%s%s/%s%s" % (token_colour(ratio), fmt_tokens(used),
                                      fmt_tokens(limit), RESET))
 
-    # 4) workspace folder
+    # 5) workspace folder
     workspace = data.get("workspace")
     folder = ""
     if isinstance(workspace, dict):

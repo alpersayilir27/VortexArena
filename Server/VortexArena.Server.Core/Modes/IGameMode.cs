@@ -1,4 +1,6 @@
 #nullable enable
+using VortexArena.Protocol;
+
 namespace VortexArena.Server.Core.Modes;
 
 /// <summary>Implemented by every game mode and plugged into the MatchDirector.</summary>
@@ -21,6 +23,9 @@ public interface IGameMode
     /// <see cref="ModeRules.TeamDefault"/> gives today's TDM behaviour.</remarks>
     ModeRules Rules { get; }
 
+    /// <summary>Game family this mode belongs to (§11 maps.json gameType). Default: quick battle.</summary>
+    string GameType => "quickbattle";
+
     /// <summary>Default MATCH duration for load_match.roundSeconds — a default, not a lock: the admin
     /// can override it per match (§5.2).</summary>
     /// <remarks>⚠️ The name is the wire field's, not a promise about rounds: a round-based mode spends
@@ -29,6 +34,13 @@ public interface IGameMode
 
     /// <summary>Default score limit for load_match.scoreLimit (overridable the same way).</summary>
     int DefaultScoreLimit { get; }
+
+    /// <summary>true keeps the <c>finished</c> result screen up until the operator acts: the core's
+    /// <c>MATCH_END_SECONDS</c> auto-return to the lobby is switched OFF (§10.1).</summary>
+    /// <remarks>For a mode whose scoreboard is the match's product (round based play, §10.5) that timer
+    /// wipes the table exactly as the referee reads it out. The exit stays what it always was —
+    /// <c>return_to_lobby</c> / <c>abort_match</c> / a new <c>start_match</c>.</remarks>
+    bool HoldsResultForOperator => false;
 
     /// <summary>Called ONCE per match, on the first transition to Live.</summary>
     /// <remarks>⚠️ In a round based mode (<c>tournament</c>) later Live entries do NOT retrigger it —
@@ -56,4 +68,16 @@ public interface IGameMode
     /// <summary>Called after every validated hit, kill or not — for damage based
     /// scoring/statistics.</summary>
     void OnHitApplied(MatchDirector director, int attackerId, int targetId, float damage, bool killed) { }
+
+    /// <summary>An <c>object_event</c> that passed every gate (§10.10). <paramref name="kind"/> is the
+    /// object's kind; meaning comes from the <c>kind</c> + <c>msg.name</c> pair.</summary>
+    /// <remarks>⚠️ The RETURN VALUE answers ONE question — is the event relayed? <c>true</c> = "I handled
+    /// it, do not relay"; <c>false</c> = cosmetic, so the same <c>object_event</c> goes out to everyone.
+    /// Relaying a handled event would announce one fact twice and the client would play the presentation
+    /// twice.
+    /// <para>Writes go through the director (<c>SetObjectStage</c>/<c>SetObjectFlags</c>/
+    /// <c>SetObjectPayload</c>/<c>SpawnObject</c>/<c>DespawnObject</c>) — the mode never touches the
+    /// table — and each of those broadcasts its own <c>object_state</c>, because ONE event may change
+    /// several objects.</para></remarks>
+    bool OnObjectEvent(MatchDirector director, int playerId, int netId, string kind, ObjectEventMsg msg) => false;
 }

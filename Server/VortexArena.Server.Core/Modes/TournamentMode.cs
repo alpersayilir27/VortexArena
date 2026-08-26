@@ -8,6 +8,10 @@ namespace VortexArena.Server.Core.Modes;
 /// <para>⚠️ The round concept is not a rule field and never enters <see cref="ModeRules"/> — rounds are
 /// this class's internal state, unknown to the core (§10.1). Their only wire traces are
 /// <c>modeState</c> and the <c>health_update</c>s the mode asks for when a round CLOSES.</para>
+/// <para>Nothing between rounds runs on a timer: a closed round PARKS on its result until the operator
+/// sends <c>mode_continue</c> (<see cref="RoundStage.Review"/>), and a finished match parks on its
+/// scoreboard the same way (<see cref="HoldsResultForOperator"/>). Rounds are refereed on the floor, so
+/// the flow waits for the referee, not for a clock.</para>
 /// <para>Score means something else here: <c>scoreRed</c>/<c>scoreBlue</c> count rounds won. The
 /// ROUND has no clock of its own: <c>roundSeconds</c> bounds the whole MATCH, as in every other mode —
 /// a round is decided by elimination.</para></remarks>
@@ -19,10 +23,15 @@ public sealed class TournamentMode : IGameMode
     /// is the operator's only view of who is stuck.</remarks>
     private const double RegroupReportIntervalSeconds = 30.0;
 
+    /// <summary>Interval of the "waiting for the operator" console line during the round review.</summary>
+    /// <remarks>⚠️ NOT a timeout — see <see cref="RoundStage.Review"/>. It only reminds the operator that
+    /// the flow is parked on purpose, so a quiet server window is not read as a hang.</remarks>
+    private const double ReviewReportIntervalSeconds = 60.0;
+
     /// <summary>Where the between-rounds flow currently is.</summary>
     /// <remarks>⚠️ Not a copy of the core's pause reason: while the phase is not <c>Playing</c> the mode
-    /// can be ticked in three situations (the match's first countdown, our regroup, our countdown) with
-    /// different work in each. We set the pause, so we remember our own decision.</remarks>
+    /// can be ticked in four situations (the match's first countdown, our review, our regroup, our
+    /// countdown) with different work in each. We set the pause, so we remember our own decision.</remarks>
     private enum RoundStage
     {
         /// <summary>Flow not running: the match's first countdown, or mid-round.</summary>
@@ -32,7 +41,15 @@ public sealed class TournamentMode : IGameMode
         Regroup,
 
         /// <summary>Regroup over, round countdown running (still cancellable).</summary>
-        Countdown
+        Countdown,
+
+        /// <summary>Our own pause — the round has closed and the flow is PARKED on its result until the
+        /// operator sends <c>mode_continue</c> (§5.2).</summary>
+        /// <remarks>⚠️ There is no timeout and no automatic way out. The round result and the player
+        /// table are the referee's working data at exactly this moment; a counter (or "everyone is back
+        /// in base") opening the gate would take the table away mid-read. The operator's other exits are
+        /// <c>end_match</c> and <c>abort_match</c>.</remarks>
+        Review
     }
 
     private RoundStage _stage;
@@ -41,6 +58,9 @@ public sealed class TournamentMode : IGameMode
 
     /// <summary>Is the round in combat — the elimination scan runs only then; <c>false</c> during the
     /// countdown so an unstarted round cannot end on "everyone is dead".</summary>
+    /// <remarks>⚠️ It stays <c>false</c> for the WHOLE between-rounds flow (review → regroup → countdown)
+    /// and only <see cref="OnRoundStart"/> raises it. That is what keeps the parked review harmless: with
+    /// the scan off, an empty arena during the operator's read cannot close a second round.</remarks>
     private bool _roundLive;
 
     /// <summary>Has this round ever had BOTH teams on the field. Separates "a team left the fight"
@@ -67,7 +87,23 @@ public sealed class TournamentMode : IGameMode
     /// <see cref="RegroupReportIntervalSeconds"/>).</summary>
     private DateTime _nextRegroupReportAt;
 
+    /// <summary>Time of the next "waiting for the operator" console line (see
+    /// <see cref="ReviewReportIntervalSeconds"/>).</summary>
+    private DateTime _nextReviewReportAt;
+
+    /// <summary>The parked round's <c>roundend:…</c> string; empty outside
+    /// <see cref="RoundStage.Review"/>.</summary>
+    /// <remarks>Kept because the review is the one stage that must be able to RESTATE its
+    /// <c>modeState</c>: it lasts indefinitely, so an admin joining mid-review has to be told what the
+    /// arena is waiting on.</remarks>
+    private string _reviewResult = "";
+
     public string ModeId => "tournament";
+
+    /// <summary>The result screen waits for the operator (§10.1): the match ends on the same round the
+    /// referee is reading out, and the core's <c>MATCH_END_SECONDS</c> valve would wipe the table
+    /// mid-read. Same reason as the round review (<see cref="RoundStage.Review"/>).</summary>
+    public bool HoldsResultForOperator => true;
 
     /// <summary>The tournament rule shape.</summary>
     /// <remarks><c>Revive = None</c>: no revive within a round (§10.4). <c>RespawnDelay = 0</c> is its
@@ -101,6 +137,7 @@ public sealed class TournamentMode : IGameMode
         _matchOver = false;
         _outcome = MatchOutcome.Draw;
         _stage = RoundStage.None;
+        _reviewResult = "";
 
         // ⚠️ The operator's duration is the MATCH's, never a round's: a free-roam round is decided by
         // elimination in tens of seconds, and a per-round clock that restarts forever would leave an
@@ -126,6 +163,9 @@ public sealed class TournamentMode : IGameMode
         // budget is written back over it.
         director.SetTimeRemaining(_matchRemaining);
 
+        // §10.10: a new round starts behind intact covers — the previous round's breaks are undone.
+        director.TryResetObjectsForMode();
+
         director.SetModeState($"round:{_round}");
         Console.WriteLine($"[tournament] tur {_round} başladı " +
                           $"(kırmızı {director.ScoreRed} : mavi {director.ScoreBlue}).");
@@ -144,10 +184,18 @@ public sealed class TournamentMode : IGameMode
             return;
         }
 
-        // Not Playing: three situations reach here with different work — told apart by our own stage
+        // ⚠️ Consumed on EVERY non-playing tick, acted on only in Review: the flag is queued by the core
+        // for whichever stage we are in (§5.2), and one left unread here would sit in the queue and open
+        // the NEXT review with nobody touching a button.
+        var continueRequested = director.ConsumeModeContinue();
+
+        // Not Playing: four situations reach here with different work — told apart by our own stage
         // (see RoundStage).
         switch (_stage)
         {
+            case RoundStage.Review:
+                TickReview(director, continueRequested);
+                break;
             case RoundStage.Regroup:
                 TickRegroup(director);
                 break;
@@ -170,7 +218,8 @@ public sealed class TournamentMode : IGameMode
 
     // ---------------------------------------------------------------- round flow
 
-    /// <summary>Measures whether the round is over (10 Hz).</summary>
+    /// <summary>Measures whether the round is over (10 Hz); the only caller of
+    /// <see cref="EndRound"/>.</summary>
     /// <remarks>⚠️ Tick and not <see cref="OnKill"/>, because a team is also emptied by disconnects,
     /// where <c>OnKill</c> never fires. Two triggers would mean two code paths and a rule forgotten in
     /// one; a single scan is one source of truth, and its cost is negligible.
@@ -242,8 +291,12 @@ public sealed class TournamentMode : IGameMode
         }
     }
 
-    /// <summary>Closes the round: writes the point, checks for match end, otherwise moves to the
-    /// regroup.</summary>
+    /// <summary>Closes the round: writes the point, checks for match end, otherwise PARKS the flow on the
+    /// result for the operator (<see cref="RoundStage.Review"/>).</summary>
+    /// <remarks>⚠️ The round no longer chains into the regroup on its own. Everything that DECIDES
+    /// anything still runs here and only here — the point, the win limit, the round cap, the match clock
+    /// — so the review is a pure waiting room: it reads state, never writes it. Putting a decision behind
+    /// the operator's press would make the match's outcome depend on when a button was hit.</remarks>
     private void EndRound(MatchDirector director, string winnerTeam, string reason)
     {
         _roundLive = false;
@@ -265,10 +318,11 @@ public sealed class TournamentMode : IGameMode
         // latch swallows the second.
         var result = $"roundend:{(winnerTeam.Length > 0 ? winnerTeam : "draw")}:{_round}";
 
-        // ⚠️ Published BEFORE the match-end gates below, not only on the way into the regroup: the
-        // DECIDING round used to be the one round nobody was ever told they had won — the client jumped
-        // straight from the firefight to the match result. On the normal path the regroup overwrites
-        // this a tick later; when the match ends it is simply the last thing the players are told.
+        // ⚠️ Published BEFORE the match-end gates below, not only on the way into the review: the
+        // DECIDING round would otherwise be the one round nobody was ever told they had won — the client
+        // would jump straight from the firefight to the match result. On the normal path this value then
+        // STAYS up for the whole review; when the match ends it is simply the last thing the players are
+        // told.
         director.SetModeState(result);
 
         // ⚠️ One gate for both the win limit and the round cap, since both derive from the same number —
@@ -306,35 +360,88 @@ public sealed class TournamentMode : IGameMode
             return;
         }
 
-        _round++;
+        // ⚠️ _round is NOT incremented here: through the whole review the number the operator reads —
+        // console line, HUD heading, the `roundend:` token — must name the round that just CLOSED. It
+        // moves on in TickReview, at the moment the regroup actually opens.
 
-        // Regroup: everyone physically walks to their own base (free-roam — nobody is teleported, §10.4).
+        // The pause the review and the regroup share: everyone physically walks to their own base
+        // afterwards (free-roam — nobody is teleported, §10.4).
         if (!director.TryPauseForMode(result))
         {
             // abort_match / an operator pause may have come in between: the round flow is out of our
             // hands, so log it rather than fail silently.
-            Console.WriteLine("[tournament] toplanmaya geçilemedi (faz değişmiş) — tur akışı durdu.");
+            Console.WriteLine("[tournament] tur incelemesine geçilemedi (faz değişmiş) — tur akışı durdu.");
             return;
         }
 
         // ⚠️ TryPauseForMode ZEROES the clock — right where that clock belongs to the round, a lie here:
-        // the HUD would sit at 00:00 through the whole regroup and jump back up when the round opens,
-        // which reads as a bug.
+        // the HUD would sit at 00:00 through the whole wait and jump back up when the round opens, which
+        // reads as a bug.
         director.SetTimeRemaining(_matchRemaining);
 
         // Full health the MOMENT the round closes, not when the next one opens: the eliminated player
-        // walks to their base during the regroup, and leaving them on the death screen for that walk
-        // makes "the round is over" indistinguishable from "I am still dead". The return value needs no
-        // handling — the core refreshes the roster at the playing gate anyway, so a miss here only costs
-        // the early timing.
+        // waits out the review and then walks to their base, and leaving them on the death screen for
+        // all of it makes "the round is over" indistinguishable from "I am still dead" — an
+        // open-ended wait makes that worse, not better. The return value needs no handling — the core
+        // refreshes the roster at the playing gate anyway, so a miss here only costs the early timing.
         director.TryReviveRosterForMode();
 
-        _stage = RoundStage.Regroup;
-        ScheduleRegroupReport();
+        _reviewResult = result;
+        _stage = RoundStage.Review;
+        ScheduleReviewReport();
+
+        Console.WriteLine($"[tournament] tur {_round} sonucu operatör incelemesinde — " +
+                          "akış `mode_continue` gelene kadar bekliyor " +
+                          "(diğer çıkışlar: end_match, abort_match).");
     }
 
-    /// <summary>The between-rounds regroup (phase <c>paused</c>/<c>mode</c>): the new round's countdown
-    /// starts once everyone is in their own base zone and has sent <c>set_ready{true}</c>.</summary>
+    /// <summary>The parked round review (phase <c>paused</c>/<c>mode</c>, <c>modeState</c> still
+    /// <c>roundend:…</c>): does nothing until the operator sends <c>mode_continue</c> (§5.2).</summary>
+    /// <remarks>⚠️ Reads state, never writes it — every decision was already made in
+    /// <see cref="EndRound"/>. That is what makes an indefinite wait safe: no matter how long the
+    /// operator reads the table, the match is exactly where the round left it.
+    /// <para>⚠️ There is NO timeout, deliberately. The gate cannot be "everyone is back in base" either:
+    /// that is the NEXT stage's condition, and the players would open it while the operator is still
+    /// reading.</para></remarks>
+    private void TickReview(MatchDirector director, bool continueRequested)
+    {
+        // Restated every tick: the review has no end of its own, so an admin connecting into it has to be
+        // told what the arena is waiting on. Broadcasts only on a real change (SetModeState).
+        director.SetModeState(_reviewResult);
+
+        if (!continueRequested)
+        {
+            ReportReviewWaiting();
+            return;
+        }
+
+        _round++;
+        _reviewResult = "";
+        _stage = RoundStage.Regroup;
+        ScheduleRegroupReport();
+
+        Console.WriteLine($"[tournament] operatör devam dedi — tur {_round} için toplanmaya geçildi.");
+    }
+
+    /// <summary>Periodic reminder that the parked flow is waiting on purpose — without it a silent
+    /// server window during a long review reads as a hang.</summary>
+    private void ReportReviewWaiting()
+    {
+        var now = DateTime.UtcNow;
+        if (now < _nextReviewReportAt) return;
+
+        _nextReviewReportAt = now.AddSeconds(ReviewReportIntervalSeconds);
+        Console.WriteLine($"[tournament] tur {_round} sonucu hâlâ incelemede — operatörün devam " +
+                          "komutu bekleniyor.");
+    }
+
+    /// <summary>Schedules the first reminder (on every entry into the review).</summary>
+    private void ScheduleReviewReport() =>
+        _nextReviewReportAt = DateTime.UtcNow.AddSeconds(ReviewReportIntervalSeconds);
+
+    /// <summary>The between-rounds regroup (phase <c>paused</c>/<c>mode</c>, entered only from
+    /// <see cref="RoundStage.Review"/>): the new round's countdown starts once everyone is in their own
+    /// base zone and has sent <c>set_ready{true}</c>.</summary>
     /// <remarks>No new protocol message — the <c>ready</c> flag already means "I am ready" at the
     /// loading gate (§10.1). "Am I in the base" is the client's decision; the server keeps the ledger
     /// rather than refereeing (§10.3, same contract as <c>reviveAnchor</c>).
@@ -347,8 +454,9 @@ public sealed class TournamentMode : IGameMode
     {
         var (ready, total) = CountInBase(director);
 
-        // ⚠️ This is also what OVERWRITES the roundend state one tick after EndRound opened the pause —
-        // the client latches that value on arrival rather than polling for it (§10.1).
+        // ⚠️ This is also what OVERWRITES the roundend state the review held up — and the ONLY thing
+        // that does, which is why the result survives an arbitrarily long read. The client latches that
+        // value on arrival rather than polling for it (§10.1).
         director.SetModeState($"regroup:{ready}/{total}"); // broadcasts only if it CHANGED
 
         if (total == 0) return; // nobody left — wait for the operator's abort_match

@@ -8,7 +8,7 @@ Tümü paylaşılan `ArenaProtocol` statik sınıfında tanımlanır (`Assets/_S
 
 | Sabit | Değer | Açıklama |
 |---|---|---|
-| `PROTOCOL_VERSION` | `16` | hello/welcome'da taşınır; uyumsuzlukta log uyarısı (bağlantı **kesilmez** — `Server/VortexArena.Server.Core/LobbyService.cs` uyarıyı basıp devam eder). ⚠️ **Karışık sürüm desteklenmez** — sürüm artınca tüm başlıklara yeni APK kurulur; bağlantı reddedilmediği için bunu zorlayan tek şey APK turunun tamamlanmasıdır. v16 `identify` mesajını **her iki yönden de KALDIRIR**: admin→sunucu komutu da, sunucu→istemci bildirimi de yoktur. Kırıcı değildir ama sessizdir — eski bir admin komutu yollarsa yeni sunucu tipi `default` dalında yok sayar, düğme basılır ve hiçbir şey olmaz; eski bir başlığa da artık hiç bildirim gitmez. v15 `clear_calibration`'a **`keepSaved` (bool)** ekler (§5.2/§5.3, davranış §10.6): sıfırlama iki eyleme ayrılır — *hizalamayı geçersiz kıl* (gözlükteki kayıtlı çapa ve UUID korunur, `reload_calibration` çalışmaya devam eder) ve *cihaz kaydını da sil*. ⚠️ **Alanın YOKLUĞU `keepSaved:false` demektir** (sert kip): alanı tanımayan bir uç bugünkü davranışı sürdürür, sürpriz yapmaz. Karışık sürümde kaybolan şey bozuk çizim değil, operatörün *yumuşak* seçiminin sert uygulanmasıdır — kayıtlı çapa silinir ve o oyuncuda `reload_calibration` bir daha iş görmez. v14 **alan-dışını tele taşır**: `flags` bit7 = `FLAG_OUT_OF_BOUNDS` (§6.3) + yalnız adminlere giden `violation` akışı (§5.3, §10.9). Tel formatı **değişmez** (95 B / 88 B aynı, bit rezervden alındı, bant artışı sıfır) ama sürüm yine de artar: biti yazan **istemcidir**, yani eski APK'lı oyuncu onu hiç göndermez ve adminde alan dışına çıktığı **hiç görünmez** — kaybolan şey bozuk çizim değil, operatörün göremediği bir ihlaldir. ⚠️ **Bu bit CAN ERİTMEZ** (§10.9): ceza modeli yalnız `FLAG_IN_OBSTACLE`'a bağlıdır. v13 **kalibre modunu** (`set_calibration_mode` §5.2, `admin_state.calibrationMode` + `welcome.calibrationMode` §5.3, davranış §10.6), **zemin sapması bildirimini** (`set_calibration.floorOffset` §5.1 → `PlayerInfo.floorOffset` §5.3) ve **ölçüm başarısızlığı geri bildirimini** (`set_body_scale.error` §5.1 → `PlayerInfo.scaleError` §5.3, §10.8) getirir; tümüyle **eklemelidir**. Karışık sürümde: alanları göndermeyen eski istemcinin zemin sapması ve ölçüm gerekçesi operatöre hiç görünmez, `welcome.calibrationMode`'u okumayan başlık ise modu yok sayıp bugünkü davranışta (diskten çapa geri yükleme) kalır — kaybolan kural, bozuk çizim değil. v12 iskelet blob'undan **parmak eklemlerini çıkarır** (§6.9): hedef iskeletin 40 parmak eklemi tele hiç girmez, parmakları alıcı kendi sentezler. ⚠️ **Bu değişiklik KIRICIDIR ve sessizdir** — blob opak olduğu için eklem listesi uyuşmayan iki uç hata vermez, yalnız gövdeyi bozuk çizer; karışık sürümde belirti "uzak oyuncular garip duruyor"dur. v11 **engel ihlalini** taşır: `flags` bit5 = `FLAG_IN_OBSTACLE` (§6.3) + sunucu tarafında saniyelik can eritme (§10.9) — tümüyle **eklemelidir** (bayt düzeni değişmedi, bit rezervden alındı). Karışık sürümde: eski istemci biti hiç göndermez (o oyuncu duvarda ceza almaz) ve gelen biti yok sayar (admin halkası yanıp sönmez). v10 kumanda durumunu taşır: `flags` bit3/bit4 = **bayat el** (§6.3) + `status`/`PlayerInfo` üzerinde `ctrlL`/`ctrlR` (§5.1/§5.3) — tümüyle **eklemelidir** (bayt düzeni değişmedi, bitler rezervden alındı), bilmeyen uç bitleri yok sayar ve alanları `0` = "bildirilmedi" okur. v10 ayrıca `clear_calibration`'a **sunucu → istemci yönü** ekler (§5.2/§5.3): sıfırlama artık roster'a yazılan bir boole değil hedef başlığa iletilen bir komuttur. Bu yön de eklemelidir — tanımayan eski istemci mesajı yok sayar ve **yarım kalmış elle kalibrasyonu** (A alındı, B alınmadı) başlığında tutmaya devam eder, yani karışık sürümde bozulan tek şey operatörün o oyuncuyu sıfırlayamamasıdır. v9 gövde ölçeğini getirdi (`measure_body_scale` · `set_body_scale` · `PlayerInfo.bodyScale`, §10.8): tümüyle **eklemelidir**, eski istemci alanı bulamayınca `0` okur ve herkesi ölçeksiz çizer — yani karışık sürümde bozulan tek şey avatar boylarıdır. v8'de `lobby_state`'in `online` (bool) alanı yerini üç değerli `connection` + `reconnectSeconds`'a bıraktı (§5.3): alanı tanımayan eski admin her satırı "bağlı" çizer, yani kopan oyuncular hiç fark edilmez. v7'yi kırıcı yapan tel DÜZENİ değil **ANLAMIDIR**: baytlar v6 ile birebir aynı, ama `0x01`/`0x02`/`0x05` pozları, `0x03` atış yönleri ve `0x07`/`0x08` iskelet kökleri artık arena uzayı = dünya uzayı çerçevesinde okunur (§3). Eski istemci aynı baytları kendi sahne marker'ına göre çözer → iki taraf birbirini metrelerce kaymış, zeminin altında veya havada görür; belirti **"uzak oyuncular rastgele yerlere ışınlanıyor"**. v6'da bozulma iki yönlüydü: `0x07`/`0x08`'i tanımayan istemci uzak gövdeleri hiç çizemez, iskelet göndermeyen istemci de gövdesiz görünür (§6.9). v5'te bozulan tek yer `0x05` birleştirmesiydi (§6.8) |
+| `PROTOCOL_VERSION` | `18` | hello/welcome'da taşınır; uyumsuzlukta log uyarısı (bağlantı **kesilmez** — `Server/VortexArena.Server.Core/LobbyService.cs` uyarıyı basıp devam eder). ⚠️ **Karışık sürüm desteklenmez** — sürüm artınca tüm başlıklara yeni APK kurulur; bağlantı reddedilmediği için bunu zorlayan tek şey APK turunun tamamlanmasıdır. v18 **ağ nesnesi modelinin ikinci fazını** getirir: sahiplik ve obje pozu (`object_grab`/`object_release`/`object_rest` §5.1, `object_state`'in `owner`/`pos`/`rot`/`stage` alanları §5.3, UDP `0x09 ObjectPose` §6.12 ve `0x05`'in **obje bölümü** §6.8), obje olayları (`object_event`, **iki yönlü**) ve dinamik doğuş/ölüm (`object_spawn`/`object_despawn`) — kural §10.10, `kinds[]` girdisi `grab` + `events[]` kazanır (§11). ⚠️ **Bu artış tel DÜZENİNİ bozar:** `0x05`'in başlığı 7 B'den 8 B'ye çıkar (`objectCount`), yani eski istemci o paketin **tamamını** yanlış hizalar — karışık sürümde kaybolan şey kozmetik bir obje değil **snapshot'ın kendisidir**: uzak oyuncular çöp pozlara ışınlanır. Bozulma iki yönlüdür — eski APK `object_grab` göndermediği için hiçbir tutulabilir objeyi alamaz, yenilerin taşıdığı objeyi de sahnedeki yerinde donmuş görür. v17 **ağ nesnesi modelinin ilk fazını** getirir: sunucu artık oyuncu olmayan varlıkların (kırılabilir örtü, hedef tahtası) canını da tutar — `object_state` + `world_state` (§5.3), `hit_report.targetNetId` (§5.1), kural §10.10, `maps.json`'da `objects[]` + `kinds[]` (§11). Tel formatı **eklemelidir** ama karışık sürümde kaybolan şey kozmetik DEĞİLDİR: eski APK `targetNetId` göndermediği için hiçbir objeyi kıramaz, gelen `object_state`'i de yok saydığı için başkalarının kırdığı örtüyü **sağlam görmeye devam eder** — iki oyuncu aynı duvarın iki yanında farklı şey görür, biri kendini siperde sanırken diğeri onu açıkta vurur. v16 `identify` mesajını **her iki yönden de KALDIRIR**: admin→sunucu komutu da, sunucu→istemci bildirimi de yoktur. Kırıcı değildir ama sessizdir — eski bir admin komutu yollarsa yeni sunucu tipi `default` dalında yok sayar, düğme basılır ve hiçbir şey olmaz; eski bir başlığa da artık hiç bildirim gitmez. v15 `clear_calibration`'a **`keepSaved` (bool)** ekler (§5.2/§5.3, davranış §10.6): sıfırlama iki eyleme ayrılır — *hizalamayı geçersiz kıl* (gözlükteki kayıtlı çapa ve UUID korunur, `reload_calibration` çalışmaya devam eder) ve *cihaz kaydını da sil*. ⚠️ **Alanın YOKLUĞU `keepSaved:false` demektir** (sert kip): alanı tanımayan bir uç bugünkü davranışı sürdürür, sürpriz yapmaz. Karışık sürümde kaybolan şey bozuk çizim değil, operatörün *yumuşak* seçiminin sert uygulanmasıdır — kayıtlı çapa silinir ve o oyuncuda `reload_calibration` bir daha iş görmez. v14 **alan-dışını tele taşır**: `flags` bit7 = `FLAG_OUT_OF_BOUNDS` (§6.3) + yalnız adminlere giden `violation` akışı (§5.3, §10.9). Tel formatı **değişmez** (95 B / 88 B aynı, bit rezervden alındı, bant artışı sıfır) ama sürüm yine de artar: biti yazan **istemcidir**, yani eski APK'lı oyuncu onu hiç göndermez ve adminde alan dışına çıktığı **hiç görünmez** — kaybolan şey bozuk çizim değil, operatörün göremediği bir ihlaldir. ⚠️ **Bu bit CAN ERİTMEZ** (§10.9): ceza modeli yalnız `FLAG_IN_OBSTACLE`'a bağlıdır. v13 **kalibre modunu** (`set_calibration_mode` §5.2, `admin_state.calibrationMode` + `welcome.calibrationMode` §5.3, davranış §10.6), **zemin sapması bildirimini** (`set_calibration.floorOffset` §5.1 → `PlayerInfo.floorOffset` §5.3) ve **ölçüm başarısızlığı geri bildirimini** (`set_body_scale.error` §5.1 → `PlayerInfo.scaleError` §5.3, §10.8) getirir; tümüyle **eklemelidir**. Karışık sürümde: alanları göndermeyen eski istemcinin zemin sapması ve ölçüm gerekçesi operatöre hiç görünmez, `welcome.calibrationMode`'u okumayan başlık ise modu yok sayıp bugünkü davranışta (diskten çapa geri yükleme) kalır — kaybolan kural, bozuk çizim değil. v12 iskelet blob'undan **parmak eklemlerini çıkarır** (§6.9): hedef iskeletin 40 parmak eklemi tele hiç girmez, parmakları alıcı kendi sentezler. ⚠️ **Bu değişiklik KIRICIDIR ve sessizdir** — blob opak olduğu için eklem listesi uyuşmayan iki uç hata vermez, yalnız gövdeyi bozuk çizer; karışık sürümde belirti "uzak oyuncular garip duruyor"dur. v11 **engel ihlalini** taşır: `flags` bit5 = `FLAG_IN_OBSTACLE` (§6.3) + sunucu tarafında saniyelik can eritme (§10.9) — tümüyle **eklemelidir** (bayt düzeni değişmedi, bit rezervden alındı). Karışık sürümde: eski istemci biti hiç göndermez (o oyuncu duvarda ceza almaz) ve gelen biti yok sayar (admin halkası yanıp sönmez). v10 kumanda durumunu taşır: `flags` bit3/bit4 = **bayat el** (§6.3) + `status`/`PlayerInfo` üzerinde `ctrlL`/`ctrlR` (§5.1/§5.3) — tümüyle **eklemelidir** (bayt düzeni değişmedi, bitler rezervden alındı), bilmeyen uç bitleri yok sayar ve alanları `0` = "bildirilmedi" okur. v10 ayrıca `clear_calibration`'a **sunucu → istemci yönü** ekler (§5.2/§5.3): sıfırlama artık roster'a yazılan bir boole değil hedef başlığa iletilen bir komuttur. Bu yön de eklemelidir — tanımayan eski istemci mesajı yok sayar ve **yarım kalmış elle kalibrasyonu** (A alındı, B alınmadı) başlığında tutmaya devam eder, yani karışık sürümde bozulan tek şey operatörün o oyuncuyu sıfırlayamamasıdır. v9 gövde ölçeğini getirdi (`measure_body_scale` · `set_body_scale` · `PlayerInfo.bodyScale`, §10.8): tümüyle **eklemelidir**, eski istemci alanı bulamayınca `0` okur ve herkesi ölçeksiz çizer — yani karışık sürümde bozulan tek şey avatar boylarıdır. v8'de `lobby_state`'in `online` (bool) alanı yerini üç değerli `connection` + `reconnectSeconds`'a bıraktı (§5.3): alanı tanımayan eski admin her satırı "bağlı" çizer, yani kopan oyuncular hiç fark edilmez. v7'yi kırıcı yapan tel DÜZENİ değil **ANLAMIDIR**: baytlar v6 ile birebir aynı, ama `0x01`/`0x02`/`0x05` pozları, `0x03` atış yönleri ve `0x07`/`0x08` iskelet kökleri artık arena uzayı = dünya uzayı çerçevesinde okunur (§3). Eski istemci aynı baytları kendi sahne marker'ına göre çözer → iki taraf birbirini metrelerce kaymış, zeminin altında veya havada görür; belirti **"uzak oyuncular rastgele yerlere ışınlanıyor"**. v6'da bozulma iki yönlüydü: `0x07`/`0x08`'i tanımayan istemci uzak gövdeleri hiç çizemez, iskelet göndermeyen istemci de gövdesiz görünür (§6.9). v5'te bozulan tek yer `0x05` birleştirmesiydi (§6.8) |
 | `UDP_BEACON_PORT` | `47820` | Sunucu → broadcast (cosmos 47800/47801 ile bilerek çakışmaz) |
 | `CONTROL_PORT` | `47821` | WS TCP, endpoint `/ws` |
 | `STATE_PORT` | `47822` | UDP poz kanalı |
@@ -25,6 +25,12 @@ Tümü paylaşılan `ArenaProtocol` statik sınıfında tanımlanır (`Assets/_S
 | `SKELETON_MAX_BLOB_BYTES` | `1024` | Tek oyuncunun blob tavanı (§6.9). Bütçe değil **emniyet**: 34 + 1024 = 1058 B < `COMBINED_MAX_BYTES`, çünkü bu kanalda **parçalama yoktur**. Aşan blob hiç gönderilmez |
 | `SKELETON_MAX_ENTRIES_PER_PACKET` | `16` | Tek `0x08` datagramına yazılan en fazla girdi (§6.10). Asıl kısıt **bayt bütçesidir** (`COMBINED_MAX_BYTES`) — girdiler değişken uzunluklu; bu sayı `count`'un `u8` olmasının tavanıdır |
 | `PLAYER_ID_MAX` | `255` | `playerId` tahsis tavanı. **Ürün kotası değil, tel formatı tavanıdır** — `playerId` UDP paketlerinde `u8`. Eşzamanlı oyuncu/admin sayısına başka sınır YOKTUR (kota ileride lisanslamayla gelecek) |
+| `NET_ID_SCENE_MIN` / `NET_ID_SCENE_MAX` | `1` / `32767` | Sahne objesinin ağ kimliği aralığı (`NetIdentity.sceneId`, §10.10); sahne kaydında `SceneIdGuard` zorlar. `0` = atanmamış ve **hiçbir zaman adreslenmez**. ⚠️ Üst yarı (`32768..65535`) **rezervdir** — sunucunun çalışma zamanında dağıtacağı dinamik obje kimlikleri oraya düşecek; sahne bake'i o aralığa taşarsa bir sahne objesiyle bir dinamik obje aynı kimliği alır ve sunucu hasarı hangisine yazdığını bilemez |
+| `NET_ID_DYNAMIC_MIN` / `NET_ID_DYNAMIC_MAX` | `32768` / `65535` | Sunucunun **çalışma zamanında** dağıttığı obje kimliklerinin aralığı (§10.10) — sahne aralığının üstündeki yarı, ikisi asla çakışmaz. Kimlikler döner (havuz), ama despawn edilen bir kimlik **tur bitmeden yeniden verilmez**: verilirse yolda olan bir `object_event` ya da poz paketi kimliği devralan yeni objeye yazar ve kimse hata görmez |
+| `OBJECT_POSE_RATE_HZ` | `10` | Sahibin obje pozu gönderim frekansı (§6.12) — oyuncu pozunun (`POSE_RATE_HZ`) **yarısı**. Yarısı olmasının sebebi bant değil paket sayısıdır (`Docs/Sistem-Ozeti.md` §3.12); obje pozu ayrıca yalnız **uyanık ve tutulmayan** objede akar, yani tipik tikte hiç yoktur |
+| `OBJECT_REST_SPEED` | `0.05` m/s | Bırakılan objenin **durdu** sayılma hız eşiği (§10.10). Altına inip `OBJECT_REST_SECONDS` boyunca kalırsa sahip `object_rest{pos,rot}` yollar ve sahiplik biter |
+| `OBJECT_REST_SECONDS` | `0.3` | Durma eşiğinin altında kesintisiz geçirilmesi gereken süre. ⚠️ Tek karelik bir "durdum" yeterli değildir: sekmenin tepe noktasında hız anlık sıfırlanır, orada bırakılan obje havada donardı |
+| `OBJECT_MAX_ENTRIES_PER_PACKET` | `16` | Tek `0x05` datagramının obje bölümüne yazılan en fazla girdi (§6.8). 8 + 16×88 + 16×30 = 1896 B > MTU olduğu için gerçek kapı boyut kapısıdır (`COMBINED_MAX_BYTES`); bu sayı `objectCount`'un `u8` olmasının tavanı ve bir emniyettir |
 | `PLAYER_NUMBER_MIN` / `PLAYER_NUMBER_MAX` | `1` / `99` | Forma numarası aralığı (§2). `0` = atanmamış ve aralığın dışındadır. Numara **tüm kayıtlı cihazlar** arasında benzersizdir |
 | `CALIB_MODE_TWO_ANCHOR` / `CALIB_MODE_SAVED_ANCHOR` / `CALIB_MODE_ANCHOR_CLOUD` | `"two_anchor"` / `"saved_anchor"` / `"anchor_cloud"` | Kalibre modunun geçerli değerleri (§5.2/§10.6). Sunucu açılış varsayılanı `two_anchor`. ⚠️ `anchor_cloud` **rezervdir** — sunucu kabul etmez, loglayıp durumu değiştirmez; bilinmeyen/boş değer de aynı şekilde reddedilir (sessizce varsayılana düşmez: mod bir operatör kararıdır, tahmin edilmez) |
 | `CALIB_FLOOR_WARN_METERS` | `0.5` | Elle kalibrasyonda bildirilen zemin sapmasının (`set_calibration.floorOffset`) mutlak değeri bunu aşarsa sunucu adminlere duyuru basar (§10.6). Bir kapı değil **teşhis eşiğidir**: kalibrasyon yine kabul edilir, operatör gözlükte alan verisi temizliğine yönlendirilir |
@@ -167,14 +173,51 @@ kalıcı yazılır.
 > sunucu saniyede ~2400 WS mesajı serileştiriyordu ve bu yük hasar/can/faz ile **aynı güvenilir TCP
 > kanalını** paylaşıyordu. Atış bir sunum olayıdır — kaybı kozmetiktir, güvenilirlik gerektirmez.
 
-**`hit_report`** — istemci bir oyuncuya hasar verdiğinde (mermi, balta, ok, patlama, çevre — kaynağı fark etmez):
+**`hit_report`** — istemci bir oyuncuya **ya da bir ağ nesnesine** hasar verdiğinde (mermi, balta, ok, patlama, çevre — kaynağı fark etmez):
 ```json
-{ "type":"hit_report", "seq":124, "targetPlayerId":5, "weaponId":"ak47",
+{ "type":"hit_report", "seq":124, "targetPlayerId":5, "targetNetId":0, "weaponId":"ak47",
   "damage":25.0, "hitPos":[0.4,1.5,2.2] }
 ```
+İki hedef alanı **XOR'dur**: `targetNetId != 0` ise hedef bir ağ nesnesidir ve `targetPlayerId` okunmaz (§10.10). Tek mesaj olmasının sebebi hasarın **kaynağının** ikisinde de aynı olmasıdır — aynı mermi, aynı patlama, aynı istemci hesabı; ayrı bir `object_hit_report` aynı kapı listesini ikinci kez yazdırırdı.
+
 `hitPos` arena uzayında. **`damage` istemcinin hesapladığı değerdir ve sunucu onu aynen uygular** — sunucuda silah tablosu YOKTUR (§10.3). `weaponId` yalnız bir etikettir (kill feed / istatistik), doğrulanmaz: yeni bir silah/hasar kaynağı eklemek için sunucuya hiçbir şey tanıtmak gerekmez. Sunucu yalnız durum tutarlılığını kontrol eder (faz, atıcı/hedef canlı mı, dost ateşi). Geçerse hasarı uygular ve `health_update` yayınlar. **İstemci hasarı yerel uygulamaz** — `health_update` bekler.
 
 Alan etkisi (bomba, el bombası) ayrı bir mesaj tipi gerektirmez: patlamayı gören istemci **etkilenen her hedef için bir `hit_report`** yollar, mesafeye göre düşen hasarı kendisi hesaplar. Aynı şekilde yaydaki çekiş gücü, kafa vuruşu çarpanı veya düşme hasarı da istemci tarafında hesaplanıp `damage` alanına yazılır.
+
+**`object_grab`** `{ "type":"object_grab", "netId":41, "hand":1 }` (yalnız player) — istemci bir ağ
+nesnesini eline aldığında (§10.10). `hand`: `0` = sol, `1` = sağ.
+> ⚠️ **Cevabı yoktur ve eklenmez** — sonucu `object_state.owner` söyler. İstemci kavramayı **hemen**
+> yerel olarak yapar (iyimser tahmin); gelen `object_state`'te sahip kendisi değilse kavramayı
+> **geri alır**. Ayrı bir `object_grab_denied` mesajı yazmak aynı bilgiyi iki kanaldan taşırdı ve
+> ikisinin sırası garanti edilemezdi.
+
+**`object_release`** `{ "type":"object_release", "netId":41, "pos":[3.2,0.9,-1.4], "rot":[0,0,0,1] }`
+(yalnız **sahip**) — obje **elden çıktığında** (§10.10). Sunucu `Held`'i düşürür, `Awake`'i kaldırır,
+**sahipliği KORUR** ve `object_state` yayınlar. Taşınan poz elden çıkış pozudur — uçuş boyunca
+sahibin `0x09` akışı (§6.12) onun yerine geçer, akış hiç gelmezse tabloda kalan budur.
+
+**`object_rest`** `{ "type":"object_rest", "netId":41, "pos":[3.2,0.0,-1.4], "rot":[0,0,0,1] }`
+(yalnız **sahip**) — obje **durduğunda**. Sunucu `Awake`'i düşürür, `owner`'ı `0`'a çeker, taşınan
+pozu **dinlenme pozu** olarak tabloya yazar ve `object_state` yayınlar.
+> ⚠️ **İkiye ayrılmalarının sebebi aradaki penceredir:** tek mesajla (yalnız durunca) uçuş boyunca
+> tel "obje elde" demeye devam ederdi ve o sırada bağlanan oyuncu havada uçan objeyi bir elin ucuna
+> yapışmış çizerdi. Tek mesajla (yalnız bırakınca) ise objenin nereye düştüğü hiç kaydedilmezdi.
+> İki anın **iki farklı gerçeği** var; ikisi de güvenilir kanaldan gider.
+> ⚠️ **Uçuş boyunca sahiplik SÜRER** — poz akıtma hakkı sahibindir (§6.12) ve fırlatılan objeyi
+> havada başkasının kapması bir oyun kararıdır, protokolün kendiliğinden verdiği bir şey değil.
+> ⚠️ Sahip **kopar ya da ölürse** ikisi de hiç gelmez; sunucu sahipliği kendi bildiği son pozla
+> serbest bırakır (§10.10). Bu yüzden poz akışı kesilse de obje sahipsiz kilitli kalmaz.
+> ⚠️ **Durmayı istemci ölçer** (`OBJECT_REST_SPEED` / `OBJECT_REST_SECONDS`, §1), sunucu değil:
+> sunucunun fiziği yoktur. Ölçüyü "poz akışı kesildi" diye sunucuya yaptırmak **güvenilmez kanaldan
+> karar vermek** olurdu — birkaç kayıp paket objeyi havada dondururdu.
+
+**`object_event`** `{ "type":"object_event", "netId":41, "name":"cut", "i":[2], "f":[0.5], "s":"" }`
+(yalnız player) — objeye özel bir etkileşim (§10.10). Anlamı `kind` + `name` çiftinden çıkar; alan
+dizileri türün sözleşmesidir, protokol içeriklerini yorumlamaz.
+> ⚠️ **Her etkileşim için ayrı mesaj tipi AÇILMAZ** — N etkileşim N DTO + N handler demektir. Ama
+> metot adını tele koyan bir RPC de yazılmaz (§7): `name` **sunucuda doğrulanır**, o `kind`'ın izinli
+> olay listesinde (`kinds[].events[]`, §11) yoksa mesaj reddedilir. Yani telde serbest metin var,
+> sunucuda serbest metin **yok**.
 
 **`revive_request`** `{ "type":"revive_request" }` — ölü oyuncu, `respawn.delaySeconds` dolduktan **ve** modun canlanma şartını sağladıktan (taban bölgesine girme ya da sabit durma) sonra gönderir; sunucu koşulları doğrulayıp canlandırır (§10.4). Free-roam'da oyuncu ışınlanamadığı için canlanma bir **konum değişimi değil, durum değişimidir**.
 
@@ -219,6 +262,7 @@ durumunda bırakır; başarısız ölçümü ölçek olarak yazmak ise sessizce 
 - **`end_match`** `{ "type":"end_match" }` — maçı **normal yoldan** bitirir: faz `finished`, `match_end` yayınlanır, sonuç ekranı açılır ve `MATCH_END_SECONDS` sonra lobiye dönülür. ⚠️ **`abort_match` ile karıştırma:** iptal maçı yok sayıp doğrudan lobiye düşürür (`match_end` YOK, sonuç ekranı YOK); `end_match` ise "maç burada bitti" der. Kazananı **çekirdek** belirler, mod değil — takım skorlu maçta yüksek skor (eşitse berabere), oyuncu skorlu maçta en yüksek `score`'lu oyuncu (kimse puan almadıysa berabere). Modun `IsMatchOver`'ı **sorulmaz**: operatör bitirdiğinde modun şartı zaten sağlanmamıştır. `playing` **ve** duraklı fazlarda çalışır (tur arası toplanmada da bitirilebilir); lobide ve zaten bitmiş maçta loglanıp yok sayılır. ⚠️ **`PROTOCOL_VERSION` bu mesaj için ARTMAZ:** yalnız admin→sunucu yönünde yeni bir tip eklendi, oyuncu istemcisi onu ne gönderir ne okur; tanımayan eski bir sunucu bilinmeyen tipi zaten loglayıp yok sayar (kaybolan şey bir düğmenin işlevidir, bozuk bir maç değil) ve admin ile sunucu aynı depodan birlikte dağıtılır.
 - **`pause_match`** `{ "type":"pause_match" }` — koşan maçı dondurur: `playing` → `paused` + `phaseReason:"operator"` (§10.1). Süre durur, hasar kapanır, skorlar ve `modeState` **korunur**. **Yalnız `playing` iken iş yapar**; başka fazda loglanıp yok sayılır (duraklı bir maçı duraklatmanın anlamı yok).
 - **`resume_match`** `{ "type":"resume_match" }` — `paused`/`operator`'dan `playing`'e döner; süre kaldığı yerden akar, canlar/skorlar sıfırlanmaz. ⚠️ **Yalnız operatörün duraklattığı maç sürdürülebilir:** `phaseReason` `loading`/`countdown`/`mode`/`lobby` iken reddedilir. Sebep: o duraklamaların sahibi operatör değildir — modun istediği duraklamayı (`mode`) operatörün kaldırması modun ara durumunu bozar, geri sayımı elle bitirmek de yükleme kapısını atlar. Her duraklamayı kendi sahibi kaldırır.
+- **`mode_continue`** `{ "type":"mode_continue" }` — modun **park ettiği** akışa operatörün "devam" onayı. ⚠️ **`resume_match`'in işini YAPMAZ:** fazı kendisi değiştirmez, yalnız bekleyen bir bayrak bırakır; bayrağı modun kendi tiki okur ve akışı o sürdürür — yani duraklamayı yine **sahibi** kaldırır (§10.1) ve "her duraklamayı kendi sahibi kaldırır" kuralı delinmez. **Yalnız `paused` + `phaseReason:"mode"` iken kabul edilir**, başka fazda loglanıp yok sayılır. Bugünkü tek tüketicisi `tournament`'ın **tur incelemesi**dir (§10.5): tur biter, sonucu `modeState`'te asılı kalır ve akış bu komut gelene kadar toplanmaya geçmez. Bayrak **tüketilir** (okundu = silindi): operatörün basışı tek bir olaydır, ayakta kalan bir bayrak bir sonraki incelemeyi de atlardı. ⚠️ **`PROTOCOL_VERSION` bu mesaj için ARTMAZ** — `end_match` ile aynı gerekçe: yalnız admin→sunucu yönünde yeni bir tip, oyuncu istemcisi onu ne gönderir ne okur, tanımayan eski sunucu bilinmeyen tipi loglayıp yok sayar ve admin ile sunucu aynı depodan birlikte dağıtılır.
 - **`set_team`** `{ "type":"set_team", "playerId":5, "team":"blue" }` (`"red"|"blue"`) — hedef oyuncunun takımı. **Faz kapısı YOKTUR:** operatör `playing` dahil her fazda, sunucuya bağlı herkesin takımını değiştirebilir; değişiklik `lobby_state` ile yayılır ve istemcide anında geçerlidir (taban bölgesi, arayüz renkleri). Hedef admin ise reddedilir. Oyuncudan gelen `set_team` loglanıp yok sayılır — **oyuncu kendi takımını seçemez, bunun için protokol mesajı YOKTUR ve eklenmeyecektir.**
 - **`set_friendly_fire`** `{ "type":"set_friendly_fire", "enabled":true }` — dost ateşi anahtarı (§10.5). **Faz kapısı YOKTUR:** operatör `playing` dahil her fazda basabilir ve etkisi anlıktır — gerekçe `set_team` ile aynıdır: operatör sahadaki durumu maçı iptal etmeden düzeltebilmeli. Değer sunucuda yaşar (açılışta `false`), yürürlükteki kural şekline damgalanır ve koşan maçta `rules_update` ile herkese yayılır (§5.3). Maç başlangıcı, harita sahneleme ve lobiye dönüş anahtarı **sıfırlamaz** (süre/limit seçimiyle aynı sözleşme); sıfırlayan tek şey sunucunun yeniden başlatılmasıdır. Oyuncudan gelirse loglanıp yok sayılır.
   ⚠️ **Neden `set_selection` alanı değil:** o mesaj "boş/`0` = dokunulmadı" sözleşmesiyle çalışır ve bir `bool` "dokunulmadı"yı ifade edemez. Aynı sebeple seçim kilidine (§10.7 "ne zaman serbest") de takılmaz — bu bir sonraki maçın seçimi değil, o anın durumudur.
@@ -431,6 +475,25 @@ Fazlar ve alanların anlamı §10.1'de. `phase` yalnız üç değer alır: `paus
 
 **`kill_event`** `{ "type":"kill_event", "killerId":3, "victimId":5, "weaponId":"ak47" }`
 **`respawn`** `{ "type":"respawn", "playerId":5, "delaySeconds":5.0 }` — istemci `delaySeconds` sonra, modun canlanma şartını sağlayınca canlanır (§10.4). Sunucu sahne geometrisini bilmez; canlanma yeri diye bir alan taşınmaz.
+**`object_state`** `{ "type":"object_state", "netId":12, "kind":"crate_wood", "hp":40.0, "flags":0, "owner":0, "stage":0, "pos":[1.0,0.0,2.5], "rot":[0,0,0,1], "s":"" }` — sunucu-otoriter bir ağ nesnesinin durumu değiştiğinde (§10.10).
+> ⚠️ **`health_update`'in aksine BROADCAST'tir** ve öyle kalmalıdır: bir oyuncunun canı yalnız onu ve operatörü ilgilendirir, kırılan bir örtü ise **herkesin siperidir** — dar gönderim iki oyuncuya farklı bir dünya çizerdi. Fan-out da oyuncu sayısıyla değil objeye vurulmasıyla ölçeklenir.
+> `kind` mesajda taşınır ama **sahne objesinde** istemci onunla çizim yapmaz — türünü kendi prefabından bilir; alan orada bir **sağlamadır**: `netId`'nin sahnedeki karşılığı başka bir tür ise export ile sahne birbirinden kaymıştır ve istemci tek satır log basar (sessizce yanlış objeyi kırmaktansa). **Dinamik objede aynı alan çizimin kaynağıdır** — prefabı `NetSpawnCatalog`'dan o çözülür (`object_spawn`, aşağıda).
+> `owner` = objeyi tutan `playerId` (`0` = kimse, §10.10). `stage` = **türe özel aşama** (pişme derecesi, doluluk); anlamını yalnız `kind` verir, protokol yorumlamaz ve `0` her türde "başlangıç" demektir.
+> `pos`/`rot` = objenin **dinlenme pozu** (arena uzayı, `rot` xyzw). ⚠️ **Tutulan objede anlamsızdır ve okunmaz** — o obje sahibin eline bağlıdır, pozu sahibin el pozundan (`0x01`) çıkar. Sahne objesinin dinlenme pozu sahnede zaten vardır; alanlar **yalnız yer değiştirmiş** obje için doludur, yani kırılan bir örtü onları hiç kullanmaz.
+> `s` = **örnek başına serbest metin**; `modeState` gibi **modun yazıp modun okuduğu** bir alandır, çekirdek yorumlamaz ve boş/eksik olması normaldir. `stage`'in taşıyamadığı örnek verisi buradan gider (bir müşterinin siparişi gibi). ⚠️ Yeri burasıdır, `object_event` değil: `world_state` bu alanı taşır, olay taşımaz — geç katılan oyuncu bekleyen müşteriyi **siparişiyle** görmek zorundadır.
+
+**`object_spawn`** — gövdesi `object_state` ile **birebir aynıdır**, tek farkı `netId`'nin o ana kadar var olmamasıdır (§10.10): istemci prefabı `kind`'dan çözer (`NetSpawnCatalog`) ve objeyi `pos`/`rot`'ta yaratır.
+> ⚠️ **Ayrı bir tip olmasının sebebi alan farkı değil, bilinmeyen `netId`'nin ANLAMIDIR:** `object_state` bilinmeyen kimlikte "sahne ile export kaymış" diye log basar; aynı kimlik `object_spawn`'da doğrunun kendisidir. Tek tip olsaydı ikisi ayırt edilemez, gerçek bir sapma sessizce yeni obje doğurmaya başlardı.
+> ⚠️ **İstemcinin "spawn et" mesajı YOKTUR** ve eklenmez: doğuşun iki kaynağı vardır — mod (`director.SpawnObject`) ve `kind` kuralının kendisi (dağıtıcıya gelen `take` olayı gibi). Sunucu icat etmez, istemci de emretmez.
+
+**`object_despawn`** `{ "type":"object_despawn", "netId":40001 }` — obje dünyadan kalkar; istemci örneği yok eder. Sahne objesi **despawn edilmez** (kimliği sahnede bake'li, karşılığı silinemez) — mesaj yalnız dinamik kimlikler içindir.
+
+**`object_event`** — istemciden gelenle **aynı gövde** (§5.1), sunucudan **herkese** relay edilir (§10.10). Yalnız durumu değiştirmeyen **kozmetik** olaylar bu yolu kullanır; durumu değiştiren bir olayın sonucu `object_state`'tir ve aynı olay ayrıca yayınlanmaz — tek doğruluk.
+
+**`world_state`** `{ "type":"world_state", "sceneName":"<Arena>", "objects":[ … ] }` — `objects` girdileri `object_state` gövdesidir; **üç anda** gönderilir (§10.10): sahne sahnelenirken herkese, maç ortasında bağlanana `welcome`'dan hemen sonra yalnız ona, ve tur başı sıfırlamasında herkese. Sıfırlamanın da bu mesajla gitmesinin sebebi taşıdığı bilginin **aynı** olmasıdır — obje başına `object_state` yayınlamak aynı tabloyu N mesaja bölerdi. Sahnede hiç ağ nesnesi yoksa mesaj **hiç** gönderilmez.
+> ⚠️ İstemci mesajı **yalnız `sceneName` yüklü sahneyle eşleşiyorsa uygular**; eşleşmiyorsa atmaz, **tamponlar** ve sahne yüklenince yeniden dener. Mesaj sahne yüklemesinden önce varabilir ve o an `netId`'lerin karşılığı yoktur — tamponlanmazsa geç katılan oyuncu kırık örtüleri sağlam görür.
+> ⚠️ **Tamponda yalnız SONUNCUSU durur:** sahne değişiminde yarışan iki yükleme birbirinin durumunu yazmasın diye yeni `world_state` eskisinin yerine geçer, ve hiçbir zaman eşleşmeyen bayat bir mesaj kendiliğinden hiç uygulanmaz.
+
 **`match_end`** `{ "type":"match_end", "winnerTeam":"blue", "winnerPlayerId":0, "scoreRed":12, "scoreBlue":30 }`
 Kazanan **iki kanaldan biriyle** ifade edilir (`rules.scoring`, §10.5): takım skorlu modlarda `winnerTeam` (`"red"|"blue"|""`), bireysel skorlu modlarda `winnerPlayerId` (`0` = yok/berabere). Bir mod ikisini de doldurmaz; okuyan istemci dolu olana bakar.
 **`return_to_lobby`** `{ "type":"return_to_lobby", "modeId":"lobby", "sceneName":"<Lobi>", "sceneElapsed":0, "rules":{ … } }` — herkesi sunucunun **açık sahnesine** taşır. Şekli `load_match` ile aynıdır (§10.7): `sceneName` o an açık olan sahne, `modeId`/`rules` o sahnenin profili. Adı tarihseldir — yalnız "lobiye dön" değil, operatörün seçtiği arenayı sahnelemek için de kullanılır (§10.7 Sahneleme).
@@ -466,7 +529,7 @@ yeniden yüklemeyi dener** ve sonucu bildirir (§10.6): başarıda normal bir
   "calibrationMode":"two_anchor",
   "notice":"Ofis-PC: harita -> <Arena>", "adminCount":2 }
 ```
-- Gönderim anları: admin `hello` yanıtında (welcome'dan hemen sonra, geç katılan admin senkron başlasın), her `set_selection`'da, her admin komutunda (`start_match`/`abort_match`/`pause_match`/`resume_match`/`return_to_lobby`/`kick`/`set_team`/`set_friendly_fire`/`set_calibration_mode`), oyuncunun bildirdiği
+- Gönderim anları: admin `hello` yanıtında (welcome'dan hemen sonra, geç katılan admin senkron başlasın), her `set_selection`'da, her admin komutunda (`start_match`/`abort_match`/`pause_match`/`resume_match`/`mode_continue`/`return_to_lobby`/`kick`/`set_team`/`set_friendly_fire`/`set_calibration_mode`), oyuncunun bildirdiği
   zemin sapması eşiği aştığında, gövde ölçümü ya da kayıtlı hizalamanın yeniden yüklenmesi
   başarısız olduğunda (§10.6/§10.8) ve admin
   bağlanıp ayrıldığında. ⚠️ `pause_match`/`resume_match` için duyuru **yalnız komut gerçekten uygulandıysa** yayılır — reddedilen komut diğer operatörlerin ekranına olmamış bir eylemi yazmamalı.
@@ -734,6 +797,23 @@ Toplam: 12 B
 
 **Orijin neden gönderilmiyor:** tracer, alıcının **çizdiği silahın namlusundan** çıkmalıdır. Mutlak bir namlu konumu gönderilirse alıcı silahı interpole edilmiş el pozundan çizdiği için tracer çizilen namludan kaymış başlar — atıcının gerçeğine bir tık daha sadık, gözle daha bozuk bir sonuç. **Tutarlılık > sadakat.** Orijin `itemId` + o tik'teki el pozu + eşyanın statik `muzzle` ofsetinden türetilir; eşya çözülemezse el pozuna düşülür.
 
+**Atma (`kind=1`) sözleşmesi.** Olay bir **başlangıç koşuludur**, bir yörünge değil: alıcı yön +
+başlangıç hızıyla **kendi kopyasını yerel olarak simüle eder** ve uçuş boyunca tek bayt daha akmaz.
+Çıkış noktası atışla aynı sebeple gönderilmez (yukarıdaki *tutarlılık > sadakat*): olayın
+`serverTick`'indeki **el pozundan** türetilir. ⚠️ Simülasyonun ayrışmaması iki kurala bağlıdır:
+(1) atılabilir **yalnız statik geometriyle** çarpışır — avatarlar her istemcide interpolasyondan
+dolayı farklı yerdedir, onlara çarpsaydı kopyalar dağılırdı; (2) telde olmayan her başlangıç
+büyüklüğü (dönüş, açısal hız) **yönden deterministik türetilir**, rastgele verilmez. Atan da kendi
+simülasyonunu **niceliklenmiş** değerlerden (oktahedral yön, cm/sn hız) başlatır — yoksa tek ayrıksı
+kopya onunki olur. Kalan sapma kozmetiktir: **hasar her zaman atanın kopyasından** `hit_report` ile
+gider (§10.3), yani iki uç arasında "nereye düştü" farkı hasarı değiştirmez.
+
+**Yeni atılabilir türü protokol sürümü ARTIRMAZ:** bomba, molotof, flashbang, sis ve sonrakiler aynı
+9 bayttan geçer ve birbirinden `itemId` ile ayrılır (§6.6). Tür başına alan (fitil, yarıçap, etki)
+istemci kataloğunda yaşar — denge sayılarının sunucuya export edilmemesiyle aynı gerekçe (§10.3
+sonu). Hasarsız türler (flashbang, sis) hiç `hit_report` üretmez: her istemci **yalnız kendi
+oyuncusunu** değerlendirir, sunucu onları hiç görmez.
+
 ### 6.5 `0x04 EventBatch` (sunucu → tüm istemciler, 20 Hz; yalnız olay varken)
 
 ```
@@ -764,6 +844,16 @@ Alanlar §6.4 ile birebir aynı; `seq` **taşınmaz** (sunucu kopyayı zaten ay�
 |---|---|
 | `0` | **El boş** (rezerve — hiçbir eşyaya verilemez) |
 | `1..255` | Bir `ItemDefinition`'ın `netItemId`'si |
+
+⚠️ **Elde bir AĞ NESNESİ varsa bu bayt `0` kalır** (§10.10): o objeyi uzak taraf `object_state`'ten
+gelen kendi örneğiyle çizer. Baytı da doldurmak aynı elde iki obje çizdirir — biri ağ nesnesi, biri
+katalogdan üretilmiş kopya. **Parmaklar yine kavrama kaydından gelir** ama yolu bu bayt değildir:
+alıcının elinde objenin **kendi örneği** vardır ve kavrama kaydını o örnek taşır. Aynı bilgiyi hem
+bayta hem obje durumuna koymak iki doğruluk kaynağı olurdu ve ikisi gecikmede ayrışırdı.
+
+⚠️ Bu yüzden **`WorldSingle` bir eşyaya `netItemId` VERİLMEZ** ve editör bekçisi onu kimlik ararken
+atlar: sözleşme gereği hiç gönderilmeyecek bir sayı, kataloğa da erişilemeyecek bir satır yazardı.
+Bir eşya sonradan `PerViewerClone`'a çevrilirse bekçi kimliği o an ister.
 
 Eşleme tablosu Unity tarafındadır (`ItemDefinition.netItemId`, katalog `NetItemCatalog`) ve **sunucuya export EDİLMEZ** — sunucu bu baytı yalnız kopyalar, çözmez. Kimlikler `WeaponKitBuilder` tablosundan açıkça verilir; **katalog dizi indeksi kimlik olarak KULLANILMAZ** (dizi sırası değişince tüm eşyalar kayar — serialize edilen enum tuzağının aynısı). Editör bekçisi çakışan `netItemId`'de hata verir: çakışma derlemede patlamaz, sahada "elinde yanlış eşya çizildi" olarak görünürdü.
 
@@ -815,21 +905,26 @@ Sunucu tarafı ölçüm (**uplink**: poz varış aralığı + `seq` boşluğu) v
 ### 6.8 `0x05 SnapshotWithEvents` (sunucu → tüm istemciler, 20 Hz; snapshot + olaylar birlikte)
 
 ```
-[u8 0x05][u8 playerCount][u8 eventCount][u32 serverTick]
+[u8 0x05][u8 playerCount][u8 eventCount][u8 objectCount][u32 serverTick]
 oyuncu başına: SnapshotEntry (88 B, §6.3 ile birebir aynı)
 olay başına:   FireEventEntry (9 B, §6.5 ile birebir aynı)
-Başlık: 7 B
+obje başına:   ObjectPoseEntry (30 B, §6.12)
+Başlık: 8 B
 ```
+
+⚠️ **`objectCount` başlığı 7 B'den 8 B'ye çıkardı (v18) ve bu KIRICIDIR:** alanı bilmeyen okuyucu tüm gövdeyi bir bayt kaymış çözer, yani yalnız objeleri değil **snapshot'ın tamamını** kaybeder. Rezerv bitten bayrak almanın serbestliği (§6.3) burada geçmez — orada düzen sabit kalıyordu, burada değişiyor.
 
 **Varlık sebebi paket sayısıdır, bant değil.** Tipik bir maçta (10 oyuncu, 5 olay/tik) snapshot 886 B ve olay bloğu 45 B — ikisi tek datagrama rahat sığıyor, oysa ayrı gönderildiklerinde **tik başına hedef başına iki** datagram üretiliyordu. 10 oyuncu + 1 admin'de bu ~220 paket/sn'dir; bant kazancı ihmal edilebilir, kazanç **airtime**'dadır (`Docs/Sistem-Ozeti.md` §3.12).
 
 **Sunucunun birleştirme kapısı — üç koşulun HEPSİ gerekli:**
 
-1. O tik'te **olay var** (yoksa birleştirilecek bir şey yok, düz `0x02` gider).
+1. O tik'te **olay VEYA obje pozu var** (ikisi de yoksa birleştirilecek bir şey yok, düz `0x02` gider).
 2. Snapshot **tek parçaya sığıyor** (girdi sayısı `SNAPSHOT_MAX_ENTRIES_PER_PACKET`'i aşmıyor).
 3. Toplam boyut `COMBINED_MAX_BYTES` (1200 B) altında.
 
 Koşullar sağlanmazsa sunucu **bugünkü davranışa düşer**: `0x02` parçaları + `0x04`. ⚠️ **`0x02` ve `0x04` kaldırılmadı ve kaldırılmaz** — geri düşüş yolu onlardır.
+
+⚠️ **Geri düşüş yolunda obje pozu DÜŞER** (`0x02`/`0x04`'te obje bölümü yoktur ve açılmaz — ikisinin düzeni değişirse bu sefer onlar kırılır). Bu yalnız snapshot parçalanınca, yani **17+ oyuncuda** bağlar. Kaybolan şey objenin **son pozu değil, hareketinin akıcılığıdır**: dinlenme pozu güvenilir WS kanalından gelir (`object_release` → `object_state`), yani fırlatılan bir obje uzak başlıkta zıplayarak da olsa **doğru yerde** durur. Ayrı bir obje datagramı açmak bu akıcılığı satın alır ama tik başına hedef başına bir paket daha ödetirdi (`Docs/Sistem-Ozeti.md` §3.12) — pazarlık bilinçlidir.
 
 ⚠️ **Tik başına ya `0x05` ya `0x04` üretilir, ikisi birden ASLA.** §6.5'in kopya koruması "tik başına en fazla bir olay datagramı" değişmezine dayanıyor ve kimlik `serverTick`; aynı tik için iki olay datagramı çıkarsa istemci ikincisini birebir tekrar sanıp **düşürür**. Aynı sebeple **parçalanmış snapshot'ta olaylar bu pakete hiç girmez** — parçalar arasında olay bloğu çoğaltmak tam olarak bu değişmezi kırardı.
 
@@ -996,6 +1091,50 @@ olarak verir; denemeler artan aralıklarla yinelenir ve gövde dönünce sayaçl
   kaybettiğinde bir kare düşer; ona bakıp yeniden başlatmak, onarmaya çalıştığı arızayı **üretir**.
 - Operatör aynı onarımı `restart_body_tracking` ile elle de tetikleyebilir (§5.2).
 
+### 6.12 `0x09 ObjectPose` (istemci → sunucu, `OBJECT_POSE_RATE_HZ`; yalnız **sahip**)
+
+```
+[u8 0x09][u8 playerId][u16 netId][u16 seq]
+[pose : f32 px,py,pz, qx,qy,qz,qw]   (28 B)
+Toplam: 6 + 28 = 34 B
+```
+
+Aşağı yönü ayrı bir paket değildir: aynı poz `0x05`'in **obje bölümünde** taşınır (§6.8), girdi
+düzeni `ObjectPoseEntry`'dir:
+
+```
+[u16 netId][pose : f32 px,py,pz, qx,qy,qz,qw]   = 30 B
+```
+
+Pozlar **arena uzayında** (§3), `seq` obje başına sarmalanır — eski `seq` gelirse paket atılır
+(oyuncu pozuyla aynı sözleşme, §6.2).
+
+⚠️ **Obje `seq` defteri bayatlayınca DÜŞÜRÜLÜR.** Oyuncunun aksine obje kimlikleri tur/sahne
+sıfırlamasında yeniden kullanılır: defter kalıcı olsaydı yeni turun sıfırdan başlayan `seq`'i, eski
+turun yüksek değerinin arkasında **sarma noktasına kadar** kilitli kalır ve objenin pozu hiç akmazdı.
+Süre sunucunun kendi kararıdır, protokol sabiti değil.
+
+**Gönderme kapısı — üçü birden:**
+
+1. Gönderen o objenin **sahibi** (`object_state.owner == kendi playerId`'si).
+2. Obje **uyanık** (`flags` bit2 `Awake`) — durmuş obje paket üretmez.
+3. Obje **tutulmuyor** (`flags` bit0 `Held`).
+
+⚠️ **Tutulan obje poz paketi ÜRETMEZ** ve bu kural gevşetilmez: sahibin eli zaten `0x01` ile 20 Hz
+akıyor ve obje o ele **kanonik kavrama poziyle** bağlı. Objeyi ayrıca akıtmak aynı gerçeği iki
+kanaldan taşır, ikisi de gecikince el ile obje birbirinden ayrılır — ürün belirtisi "bıçak elin
+yanında uçuyor"dur.
+
+⚠️ **Sunucu bu pozu DOĞRULAMAZ**, sahipliği doğrular. Poz `hit_report.damage` ile aynı sınıftadır:
+ölçümü istemci yapar, otorite sunucudadır ama sunucunun elinde onu yanlışlayacak bir gerçek yoktur
+(sunucu metre bilmez, §10.10). Yanlış sahipten gelen paket **düşer** — sahiplik kontrolü relay'in
+recv thread'inde, maç kilidine girmeden yapılır (`Alive` deseni: kilitsiz okunan sahip haritası).
+
+⚠️ **Sunucu bu pozu tablonun DURUMU olarak yazmaz**, relay eder; tabloya yazan `object_release`'dir.
+Sebebi geç katılan oyuncudur: `world_state` **dinlenme** pozunu taşımalıdır, uçuşun ortasındaki bir
+kareyi değil. Ama sunucu son gördüğü pozu kilitsiz bir slotta **tutar** — sahip koparsa objeyi orada
+serbest bırakır (§10.10); tutmasaydı obje alındığı yere ışınlanırdı.
+
 ## 7. DTO tasarım kuralları
 
 - **Paylaşılan kaynak:** tüm DTO'lar + `ArenaProtocol` sabitleri + binary yazıcı/okuyucular `Assets/_Shared/Net/Protocol/` altında **saf C#** (`UnityEngine`'e referans YASAK — asmdef `noEngineReferences:true`; server csproj aynı dosyaları `<Compile Include>` ile derler, Unity API kullanılırsa server derlemesi kırılır = otomatik bekçi).
@@ -1074,14 +1213,15 @@ oyunu durdurmak isterse çekirdekten `phase = paused` + `phaseReason = "mode"` i
 | Değer | Faz | Anlamı / HUD |
 |---|---|---|
 | `round:<n>` | `playing` | Kaçıncı tur oynanıyor. HUD skor satırına "TUR n" yazar |
-| `roundend:<kazanan>:<n>` | `paused` + `mode` | **Biten** turun sonucu: `red` · `blue` · `draw` ve turun numarası. HUD "TUR KAZANILDI/KAYBEDİLDİ" şeridini açar |
+| `roundend:<kazanan>:<n>` | `paused` + `mode` | **Biten** turun sonucu: `red` · `blue` · `draw` ve turun numarası. HUD "TUR KAZANILDI/KAYBEDİLDİ" şeridini açar. Operatör incelemesi boyunca telde **asılı kalır** |
 | `regroup:<hazır>/<toplam>` | `paused` + `mode` | Turlar arası toplanma: kaç oyuncu tabanına döndü. HUD "TOPLANMA 2/6" yazar |
 
-⚠️ **`roundend:` YALNIZ tek bir yayında geçer** — toplanmayı **açan** `match_state`'tedir ve bir
-sonraki sunucu tikinde `regroup:…` onu ezer. İstemci onu **mandallar** (gelince şeridi açar),
-yoklamaz; yoklayan bir istemci sonucu hiç göremez. Numara süs değildir: onsuz aynı takımın kazandığı
-iki tur birebir aynı string olur ve mandal ikincisini "zaten gösterdim" diye yutar. Maçı **bitiren**
-turda bu değer hiç yayınlanmaz — orada faz `finished`'a gider ve sonucu `match_end` taşır.
+⚠️ **`roundend:` operatör `mode_continue` yollayana kadar durur** (§5.2) — turu kapatan `match_state`
+ile gelir ve onu ezen ilk şey, incelemenin bitişinde açılan `regroup:…`dır. İstemci onu yine
+**mandallar** (gelince şeridi açar) çünkü tur içinde bir kez yayınlanır; numara süs değildir: onsuz
+aynı takımın kazandığı iki tur birebir aynı string olur ve mandal ikincisini "zaten gösterdim" diye
+yutar. Maçı **bitiren** turda değer bir kez `playing` fazında yayınlanır, ardından faz `finished`'a
+gider ve sonucu `match_end` taşır.
 
 ⚠️ Bu tablo **çekirdeğin sözleşmesi değildir** — `MatchDirector` bu stringleri hiç ayrıştırmaz.
 Yeni bir tur tabanlı mod kendi sözlüğünü tanımlar ve buraya bir satır ekler.
@@ -1108,7 +1248,7 @@ turnuva gibi kendi ara durumu olan her yeni mod da çekirdek enum'unu büyütmek
 modlar çekirdeğe dokunamaz. Bunun yerine lobi `modeId:"lobby"` + `rules.fireWhilePaused:true`
 ile tanımlanır (§10.5, §10.7).
 
-- **`start_match` doğrulaması** (sırayla): `modeId` sunucudaki `IGameMode` kayıtlarında var; `sceneName` boş değil; **`sceneName` `config/maps.json` harita tablosunda var ve o harita `modeId`'yi destekliyor** (harita girdisindeki `modes` boşsa kısıt yok; **tablo boşsa — maps.json yoksa — bu adım tümüyle atlanır**); `sceneName` tüm çevrimiçi oyuncuların `hello.scenes` listesinde var. Geçmezse komut reddedilir ve konsola sebep yazılır (durum değişmez). İki oyuncu+ varken takımlar dengelenir (boş takım kalmaz); tek oyuncuyla ve **hiç oyuncu yokken** başlatmaya izin verilir (konsolda uyarı) — ikincisi admin gözlemcinin haritayı boş arenada açması için vardır.
+- **`start_match` doğrulaması** (sırayla): `modeId` sunucudaki `IGameMode` kayıtlarında var; `sceneName` boş değil; **`sceneName` `config/maps.json` harita tablosunda var ve o harita `modeId`'yi destekliyor** (harita girdisindeki `modes` boşsa kısıt yok; **tablo boşsa — maps.json yoksa — bu adım tümüyle atlanır**); **modun oyun tipi haritanın oyun tipiyle aynı** (`IGameMode.GameType` ↔ harita girdisindeki `gameType`, §11; iki taraftan biri boşsa `"quickbattle"` sayılır — eski export sessizce Hızlı Savaş'a düşer); `sceneName` tüm çevrimiçi oyuncuların `hello.scenes` listesinde var. Geçmezse komut reddedilir ve konsola sebep yazılır (durum değişmez). İki oyuncu+ varken takımlar dengelenir (boş takım kalmaz); tek oyuncuyla ve **hiç oyuncu yokken** başlatmaya izin verilir (konsolda uyarı) — ikincisi admin gözlemcinin haritayı boş arenada açması için vardır.
   ⚠️ **`lobby` bir `IGameMode` DEĞİLDİR** → `start_match{"lobby"}` "bilinmeyen mod" diye reddedilir. Yani **lobi türü seçiliyken maç başlatılamaz** (§10.7); bunun için ayrı bir kural yazılmaz, kayıtlı olmaması yeterlidir.
 - **Oyuncusuz maç (yalnız admin):** `load_match` yalnız adminlere gider, yükleme kapısında beklenecek `set_ready` olmadığı için doğrudan geri sayıma geçilir ve maç normal işler (skor 0, süre akar). Ayrım şu: **oyuncularla başlamış** bir maçta yükleme sırasında son oyuncu da düşerse sunucu maçı bırakıp açık sahneye döner; oyuncusuz **başlatılmış** maçta dönmez — çıkış operatörün `abort_match`/`return_to_lobby` komutudur.
 - **Mod/harita/parametre seçimi sunucuda yaşar (çoklu admin):** admin arayüzündeki seçiciler yerel bir değişkeni değil, `set_selection` ile sunucudaki ortak seçimi değiştirir; sunucu `admin_state` ile hepsine geri yayar. `start_match` kendi `modeId`/`sceneName`'i ile gelmeye devam eder (protokol yüzeyi genişledi ama kırılmadı) ama sunucu onu aynı zamanda ortak seçime yazar — böylece maç başladığında tüm admin panelleri aynı değeri gösterir. Seçim yalnız bir niyet beyanıdır: doğrulama `start_match` anında yapılır.
@@ -1118,6 +1258,7 @@ ile tanımlanır (§10.5, §10.7).
 - **`phaseReason:"countdown"`:** saniyede bir `countdown{seconds}` (5→1); 0'da faz `playing`.
 - **`playing`:** `match_state` 1 Hz; `timeRemaining` sunucuda azalır; `IGameMode.OnTick` çağrılır. **Hasar yalnız burada işlenir.**
 - **`finished`:** `match_end` yayınlanır ve **kazanan ekranı operatör bir şey seçene kadar durur.** Sayacı öldüren şey fazı değiştiren her komuttur: harita seçmek ya da harita seçicisindeki lobi satırı (sahneleme fazı `paused`/`lobby`'ye çeker, §10.7), `start_match`, `abort_match`/`return_to_lobby`. Operatör hiçbir şey yapmazsa `MATCH_END_SECONDS` sonra kendiliğinden `return_to_lobby` + faz `paused`/`lobby` gelir (skorlar/canlar sıfırlanır) — ama bu **emniyet subabıdır, akış değil**: tur/maç aralarını sahada hakem yönetir. `finished` iken operatör harita/mod seçebilir ve yeni maç başlatabilir.
+  ⚠️ **Sonucunu operatöre bırakan modda emniyet subabı KAPALIDIR** (`IGameMode.HoldsResultForOperator`; bugün yalnız `tournament`, §10.5): sayaç hiç işlemez, `finished` ekranı `return_to_lobby`/`abort_match`/`start_match` gelene kadar durur. Sebep, o modda sonuç tablosunun maçın ürünü olmasıdır — hakem takımlara skoru okurken ekranın altından lobiye kayması, tam da okunmak için üretilmiş veriyi siler. Diğer modlarda subap olduğu gibi kalır.
 - **`abort_match`** her durumdan `paused`/`lobby`'ye düşürür (`return_to_lobby` yayınlanır); `return_to_lobby` doğrudan aynı işi yapar.
 - **Duraklatma (`phaseReason:"operator"` / `"mode"`):** `playing` iken duraklatılan maç `paused`'a geçer — süre durur, hasar kapanır, `modeState` **korunur** (mod kaldığı yerden sürer). Devam edilince `playing`'e döner. ⚠️ Operatörün duraklatması ile modun duraklatması aynı fazı üretir ama gerekçeleri ayrıdır: turnuva "herkes tabana dönsün" derken (`mode`) operatör de duraklatırsa (`operator`) HUD'un doğru mesajı gösterebilmesi için ikisi karışmamalıdır.
   - Operatörün kapısı `pause_match` / `resume_match`'tir (§5.2) ve **yalnız kendi duraklatmasını kaldırabilir** (`phaseReason == "operator"`). `mode` gerekçesini kaldırma yetkisi modundur; `loading`/`countdown` zaten kendi koşullarıyla biter.
@@ -1131,8 +1272,11 @@ paused/loading → paused/countdown → playing                     ◄── TU
                         ▲   │             │
                         │   │             │ mod turu bitirdi (eleme / süre)
                         │   │             ▼
-                        │   │    maç bitti mi? ──evet──► finished (normal yol)
+                        │   │    maç bitti mi? ──evet──► finished (normal yol; subap KAPALI)
                         │   │             │ hayır
+                        │   │             ▼
+                        │   │    paused/mode · modeState="roundend:red:3"   ◄── OPERATÖR İNCELEMESİ
+                        │   │             │ operatör `mode_continue` yolladı
                         │   │             ▼
                         │   └───►paused/mode · modeState="regroup:2/6"
                         └─────────────────┘ modun şartı sağlandı → yeni tur
@@ -1142,15 +1286,22 @@ paused/loading → paused/countdown → playing                     ◄── TU
 
 - Duraklamayı **mod koydu** (`phaseReason:"mode"`), kaldırma yetkisi de onundur — `resume_match`
   bu duraklamayı kaldırmaz (§5.2). Duraklama boyunca **süre işlemez ve hasar yoktur** (faz `paused`).
+- **Tur biter bitmez akış PARK EDER** (operatör incelemesi): faz `paused`/`mode`'a geçer, `modeState`
+  `roundend:<kazanan>:<n>` olarak **asılı kalır** ve mod kendiliğinden toplanmaya geçmez. Kapı tek
+  komuttur: `mode_continue` (§5.2). Zaman aşımı **YOKTUR** — sayaçla açılan bir kapı, tam da operatör
+  skorları okurken tabloyu elinden alırdı. ⚠️ Turu **kim kazandı** kararı burada değil, turun
+  kapanışında verilmiştir: inceleme skoru değiştirmez, yalnız okunmasını bekler; operatörün oradaki
+  diğer çıkışları `end_match` ve `abort_match`'tir.
 - Yeni tur, çekirdeğin **mevcut geri sayımına** girer (`phaseReason:"countdown"`,
   `countdownSeconds` uzunluğunda) ve oradan `playing`'e döner. Yeni bir faz/gerekçe **eklenmedi.**
-- Tur **BİTER BİTMEZ** — toplanma duraklaması açılır açılmaz, geri sayım beklenmeden — sunucu
-  **her oyuncuya `health_update{hp:PLAYER_MAX_HP, attackerId:0}` gönderir**; ölüye de, yarası açık
+- Tur **BİTER BİTMEZ** — mod duraklaması (operatör incelemesi) açılır açılmaz, incelemenin ve geri
+  sayımın bitmesi beklenmeden — sunucu **her oyuncuya
+  `health_update{hp:PLAYER_MAX_HP, attackerId:0}` gönderir**; ölüye de, yarası açık
   hayatta kalana da. Canların dolması sunucu içi bir tazeleme değil, **telde görünen bir olaydır**.
   ⚠️ Gönderilmezse tur içinde ölmüş oyuncu istemcide **ölüm ekranında kalır** ve hayatta kalan
   **bir önceki turdan kalan canını görür**: maç içi tur geçişinde `load_match` yoktur, yani
   istemcinin kendini sıfırlayacağı ikinci bir yol da yoktur.
-  ⚠️ **Tur bitişi, tur başlangıcı değil:** arada toplanma + geri sayım vardır ve oyuncu o süre
+  ⚠️ **Tur bitişi, tur başlangıcı değil:** arada operatör incelemesi + toplanma + geri sayım vardır ve oyuncu o süre
   boyunca tabanına *yürür*. Tazeleme `playing` kapısına bırakılırsa oyuncu bu yürüyüşün tamamını
   ölüm ekranında geçirir; "tur bitti" ile "hâlâ ölüyüm" ayırt edilemez. Erken tazeleme geri
   alınamaz: hasar `playing` ister (§10.3) ve engel sayacı yalnız `playing` tiklerinde ilerler
@@ -1176,7 +1327,7 @@ paused/loading → paused/countdown → playing                     ◄── TU
 
 Oyuncu başına: `hp` (0..`PLAYER_MAX_HP`), `alive`, `team`, `kills`, `deaths`, `score`, ölüm zamanı. `playing`'e girerken herkes `hp=PLAYER_MAX_HP`, `alive=1`. Snapshot'taki `SnapshotEntry.flags` bit0 (`FLAG_ALIVE`) bu `alive` alanından beslenir — maç dışında (`paused`/`lobby`) herkes canlı sayılır.
 
-⚠️ **Takımdaş öldürme skor YAZMAZ.** Dost ateşi açıkken (§5.2) takım arkadaşını öldüren vuruşta `IGameMode.OnKill` **hiç çağrılmaz** — skorun tek yazarı orası olduğu için ne takım skoru ne bireysel skor işler. `kills`/`deaths` sayaçları ve `kill_event` (kill feed) normal işlemeye devam eder: olay gerçekleşti, yalnız ödülü yok. **Ceza (−1) YOKTUR.** Kapı modun içinde değil çağrı yerindedir, böylece her yeni mod ona kendiliğinden uyar; takımsız modları etkilemez (boş takım takımdaş sayılmaz).
+⚠️ **Takımdaş öldürme ve KENDİNİ öldürme skor YAZMAZ.** Dost ateşi açıkken (§5.2) takım arkadaşını ya da kendini öldüren vuruşta `IGameMode.OnKill` **hiç çağrılmaz** — skorun tek yazarı orası olduğu için ne takım skoru ne bireysel skor işler. `kills`/`deaths` sayaçları ve `kill_event` (kill feed) normal işlemeye devam eder: olay gerçekleşti, yalnız ödülü yok. Kendine vuruşun tek farkı: `deaths` artar ama **`kills` ARTMAZ** (öldüren ile ölen aynı kayıt — kendini öldürene öldürme yazmak K/D'yi şişirir); `kill_event.killerId == victimId` gider ve kill feed "kendini öldürdü" satırını ondan çizer. **Ceza (−1) YOKTUR.** Kapı modun içinde değil çağrı yerindedir, böylece her yeni mod ona kendiliğinden uyar. ⚠️ İki durum **ayrı** kontrol edilir: boş takım takımdaş sayılmadığı için takımsız modda (`teamMode:"none"`) kendini öldürme "takımdaş" testinden geçemez — geçseydi FFA'da kendini havaya uçuran oyuncu kendine puan yazardı.
 
 `score` = **bireysel maç skoru**. Yazarı yalnız `IGameMode`'dur (`MatchDirector`'ın skor defteri üzerinden); `kills` ile aynı şey DEĞİLDİR — bir mod öldürme başına 1, bir başkası objektif başına 5 yazabilir, Silah Yarışı'nda aynı alan "seviye" anlamına gelir. Maç kurulurken ve açık sahneye dönerken 0'lanır.
 
@@ -1215,15 +1366,20 @@ yapılır, sunucu hakemlik değil **defter tutar**: canı düşürür, ölümü 
 kontrolleridir — kaldırılırlarsa çift ölüm / maç dışı hasar gibi hatalar üretilir:
 
 1. Faz `playing` mi? (**tek hasar kapısı budur**, §10.1)
-2. Atıcı çevrimiçi + `role=player` + `alive` + **`calibrated`** mi? (§10.6: kalibresiz oyuncu ateş edemez)
+2. Atıcı çevrimiçi + `role=player` + **`calibrated`** mi, ve **ölüm sonrası penceresinin içinde** mi? (§10.6: kalibresiz oyuncu ateş edemez.) ⚠️ Atıcının `alive` olması **şart değildir**: elden çıkmış bir hasar kaynağı (havadaki bomba, yanan bir alan) sahibi öldükten sonra da etki eder ve hasarı **normal sayılır** — skor ve kill dahil. Ölçüt ölüm anından itibaren `PosthumousDamageSeconds`'tır (**sunucu sabiti, telde yoktur**; fitil + uçuş süresini bol karşılar). Pencere dışındaki rapor "atıcı ölü" diye düşer — kapının var olma sebebi budur: yeniden bağlanıp kendini hâlâ canlı sanan bir istemci kimseye hasar veremez. ⚠️ Süreli etkiler (alan hasarı havuzu) pencereden uzun yaşayamaz: son tikleri sessizce reddedilir, ikisi birlikte ayarlanır.
 3. Hedef var, çevrimiçi, `alive` + **`calibrated`** mi? (aynı karede gelen iki ölümcül vuruş çift `kill_event` yazmasın; kalibresiz oyuncu hasar YEMEZ — §10.6)
 4. Hedef **doğma koruması altında değil** mi? (§10.4: canlanan oyuncu `SpawnProtectionSeconds` boyunca hasar almaz. ⚠️ Kapı **sunucudadır** — istemci korumayı yalnız çizer, atış kararını ona dayandırmaz: atıcının ekranında kalkan bir kare geç sönse bile vuruş burada düşer)
-5. Hedef atıcının kendisi değil ve **takım arkadaşı değil** mi? Kural: `rules.friendlyFire == false` iken *takım arkadaşı* vurulamaz, ve **boş takım asla takım arkadaşı sayılmaz** — takımsız modda (§10.5 `teamMode:"none"`) herkesin takımı `""` olduğu için `"" == ""` karşılaştırması tüm vuruşları reddederdi. `friendlyFire == true` ise bu adım hiç uygulanmaz. ⚠️ **Bu kapının değerini mod değil OPERATÖR belirler** (`set_friendly_fire`, §5.2) ve maç ortasında değişebilir — kapı her `hit_report`'ta yürürlükteki değeri okur. Geçen bir takımdaş vuruşu öldürücü olursa skor yazılmaz (§10.2).
+5. Hedef, **atıcının kendisi ya da takım arkadaşı** ise `rules.friendlyFire` açık mı? Kural: `rules.friendlyFire == false` iken *kendine vuruş* ve *takım arkadaşı* vuruşu reddedilir, ve **boş takım asla takım arkadaşı sayılmaz** — takımsız modda (§10.5 `teamMode:"none"`) herkesin takımı `""` olduğu için `"" == ""` karşılaştırması tüm vuruşları reddederdi. `friendlyFire == true` ise bu adım hiç uygulanmaz. ⚠️ **Bu kapının değerini mod değil OPERATÖR belirler** (`set_friendly_fire`, §5.2) ve maç ortasında değişebilir — kapı her `hit_report`'ta yürürlükteki değeri okur. ⚠️ **Kendine vuruş takımdan bağımsızdır:** takımsız modda (`teamMode:"none"`) takımdaş yoktur ama "kendi bombamın hasarını alır mıyım" sorusunun cevabı yine **aynı anahtardır** — orada da okunur. Geçen bir takımdaş **ya da kendine** vuruşu öldürücü olursa skor yazılmaz (§10.2).
 6. `damage` sonlu ve pozitif bir sayı mı? (NaN/∞ canı kalıcı bozar; sayı denetimi, hile denetimi değil)
 
 Geçerse: `hp -= damage` (istemcinin bildirdiği değer) → `health_update{playerId, hp, attackerId}`
 **herkese** yayınlanır. `hp ≤ 0` ise `alive=0`, `kill_event{killerId, victimId, weaponId}` +
 `IGameMode.OnKill` (skor) + kurbana `respawn{delaySeconds:RESPAWN_DELAY}`.
+
+**Hedef bir AĞ NESNESİ ise** (`targetNetId != 0`) yukarıdaki liste koşmaz; kapılar §10.10'dadır ve
+**bilerek farklıdır**: faz kapısı `playing` **veya** `rules.fireWhilePaused`'dur (lobideki hedef
+tahtası vurulabilsin), doğma koruması ve dost ateşi kapıları hiç yoktur (objenin takımı yoktur),
+sonucu `health_update` değil `object_state`'tir ve **skor/kill yazılmaz**.
 
 Atış hızı denetimi, `weaponId` beyaz listesi ve sunucu-otoriter silah tablosu **YOKTUR** ve
 eklenmez: pompalı saçması, bomba parçası ve ok yaylımı gibi meşru "hızlı art arda vuruş"
@@ -1331,10 +1487,10 @@ yollar. Amaç tek: **istemci modun ne olduğunu TAHMİN ETMESİN.** Kural telden
 | Alan | Değerler | Varsayılan | Anlamı |
 |---|---|---|---|
 | `teamMode` | `"two"` \| `"none"` | `"two"` | `"two"`: kırmızı/mavi, sunucu takımları dengeler, slot takım içi. `"none"`: takım yok (`team:""`), slot tek havuzdan |
-| `scoring` | `"team"` \| `"player"` | `"team"` | Skor kime yazılır: `match_state.scoreRed/scoreBlue` mi, `lobby_state → PlayerInfo.score` mü (§10.2) |
+| `scoring` | `"team"` \| `"player"` \| `"shared"` | `"team"` | Skor kime yazılır: `match_state.scoreRed/scoreBlue` mi, `lobby_state → PlayerInfo.score` mü (§10.2), yoksa **ikisi birden** mi. `"shared"` = kooperatif: herkesin katkısı `PlayerInfo.score`'a, ortak toplam `scoreRed`'e yazılır ve `scoreBlue` **daima 0**'dır (takım yok, ikinci kanal ortak toplamın karşısına konacak bir şey taşımaz). Kazanan yoktur — bak aşağıdaki kazanan kuralı |
 | `friendlyFire` | `true` \| `false` | `false` | `false` = takım arkadaşı vurulamaz (§10.3, dost ateşi kapısı). Boş takım asla takım arkadaşı sayılmaz. ⚠️ **Bir mod kuralı DEĞİL, operatör anahtarıdır** — aşağı bak |
 | `reviveAnchor` | `"base"` \| `"standstill"` \| `"none"` | `"base"` | Canlanma şartı (§10.4/2). `"none"` = tur içinde canlanma yok; `revive_request` reddedilir ve kuralı delen bir operatör komutu YOKTUR — ölü oyuncuyu yalnız yeni tur canlandırır |
-| `weaponSource` | `"weaponcanvas"` \| `"random"` | `"weaponcanvas"` | Silah nereden gelir: `"weaponcanvas"` = sahnedeki **çerçeveler** (silah çerçeveden ayrılmaz ve tükenmez; seçilen silah grip'e basılınca oyuncunun eline **klonlanır**), `"random"` = modun dağıtımı. **Tümüyle istemci sunumu** — sunucuda karşılığı yok (§10.3: silah tablosu yoktur) |
+| `weaponSource` | `"weaponcanvas"` \| `"random"` \| `"none"` | `"weaponcanvas"` | Silah nereden gelir: `"weaponcanvas"` = sahnedeki **çerçeveler** (silah çerçeveden ayrılmaz ve tükenmez; seçilen silah grip'e basılınca oyuncunun eline **klonlanır**), `"random"` = modun dağıtımı, `"none"` = **silah yok** (çerçeve gizlenir, hiçbir grant koşmaz, tetik sessizdir — **atılabilir eşya dahil**: o da aynı ateş kapısını okur, yani "ateşlenecek hiçbir şey yok" demektir). **Tümüyle istemci sunumu** — sunucuda karşılığı yok (§10.3: silah tablosu yoktur) |
 | `respawnDelay` | saniye | `RESPAWN_DELAY` (5) | `respawn.delaySeconds` ve sunucudaki `revive_request` gecikme eşiği. **`0` geçerli bir değerdir** (anında canlanma) ve varsayılana çekilmez — alan hiç gönderilmezse DTO'nun kendi başlangıcı geçerli olduğu için "yazılmadı" ile "sıfır yazıldı" karışmaz |
 | `fireWhilePaused` | `true` \| `false` | `false` | Faz `playing` değilken silah ateşlenebilir mi. `true` = lobi gibi serbest atış alanı: namlu alevi/ses relay edilir (§10.3) ama **hasar yine yoktur** (`hit_report` kapısı `playing`). Bu alan sayesinde istemcide `if (modeId == "lobby")` zinciri doğmaz |
 
@@ -1356,7 +1512,11 @@ yollar. Amaç tek: **istemci modun ne olduğunu TAHMİN ETMESİN.** Kural telden
   tanımadığı bir `teamMode` görürse takımlı TDM gibi davranır, bağlantı kopmaz. Bu yüzden yeni bir
   kural değeri eklemek `PROTOCOL_VERSION`'ı **artırmaz**.
 - **Kazanan ifadesi `scoring`'e bağlıdır:** `"team"` → `match_end.winnerTeam`, `"player"` →
-  `match_end.winnerPlayerId`.
+  `match_end.winnerPlayerId`, `"shared"` → **ikisi de boş** (kooperatif oyunda kazanan yoktur;
+  sonuç ortak toplam + sıralamadır).
+- ⚠️ **"Hasar kapalı" diye bir alan YOKTUR ve eklenmez:** silahsız oyunda (`weaponSource:"none"`)
+  hiç `hit_report` gönderilmez, yani hasarı kapatan şey silahın yokluğudur. Ayrı bir anahtar,
+  yalnız ikisinin çelişebileceği bir durum üretirdi.
 **Kayıtlı modlar** (sunucuda `MatchDirector.RegisterModes()`; `start_match.modeId` bunlardan biri
 olmalı, tanınmayan `modeId` reddedilir):
 
@@ -1365,6 +1525,70 @@ olmalı, tanınmayan `modeId` reddedilir):
 | `tdm` | Takım Ölüm Maçı | `two` | `team` | `base` | `weaponcanvas` | `5` | `false` | 300 sn / 30 |
 | `ffa` | Herkes Tek | `none` | `player` | `standstill` | `random` | `0` | `false` | 300 sn / 20 |
 | `tournament` | Turnuva | `two` | `team` | **`none`** | `weaponcanvas` | `0` | `false` | 120 sn / 4 tur |
+| `burger` | Hamburgerci | `none` | `shared` | `none` | **`none`** | `0` | `false` | 600 sn / limitsiz |
+
+> **`burger` — Çocuk Oyunları ailesinin ilk turu.** Tablodaki tek **`gameType:"kids"`** modudur, yani
+> yalnız `gameType` alanı `kids` olan haritalarda başlatılabilir (§10.1 üçüncü kapı, §11). Silah yok
+> (dolayısıyla hasar da yok — atılabilir eşya dahil), takım yok, canlanma yok; bitişi **yalnız
+> süredir** ve **kazananı yoktur** (`shared` skorda iki kazanan alanı da boş kalır). Sonuç ekranı
+> operatör kapatana kadar durur.
+>
+> **Skor iki kanala birden yazılır** (`scoring:"shared"`, §10.2): servisi yapan oyuncunun katkısı
+> `PlayerInfo.score`'a, aynı miktar ortak toplam olarak `match_state.scoreRed`'e girer; `scoreBlue`
+> **her zaman `0`** kalır ve takım gibi okunmaz.
+>
+> **`modeState` biçimi:** `h:<mutlu>;u:<mutsuz>` (`"h:3;u:1"`). Çekirdek yorumlamaz (§10.1); oyuncu
+> HUD'ı ve admin sahne üstü HUD'ı aynı dizeyi okur. ⚠️ Bilinmeyen anahtar **atlanır**, hata değildir —
+> alan sonradan yeni sayaç kazanabilsin diye.
+>
+> **Tür ve olay tablosu** (`kinds[]`, §11; `<malzeme>` = `bun_whole` · `patty` · `cheese` · `bacon` ·
+> `lettuce` · `onion` · `pickle` · `tomato` · `sauce`):
+>
+> | `kind` | `grab` | olay (`policy`) | `stage` | `s` |
+> |---|---|---|---|---|
+> | `dispenser_<malzeme>` | `none` | `take` (`anyone`) | — | — |
+> | `bun_whole` | `anyone` | `cut` (`anyone`) | — | — |
+> | `bun_bottom` · `bun_top` · `cheese` · `bacon` · `lettuce` · `onion` · `pickle` · `tomato` · `sauce` | `anyone` | — | — | — |
+> | `patty` | `anyone` | `grill` (`anyone`) | `0` çiğ · `1` pişmiş · `2` yanmış | — |
+> | `board` | `anyone` | `serve` (`anyone`) | — | — |
+> | `knife` · `spatula` | `anyone` | — | — | — |
+> | `customer` | `none` | — | `0` geliyor · `1` bekliyor · `2` mutlu · `3` mutsuz | `slot:<n>;r:<tarif>` |
+>
+> Olayların yükü: `take` → `i:[el]` (`0` sol, `1` sağ), sonucu **sahibi isteyen olan** yeni bir
+> malzeme objesidir. `cut` → yükü yok; sunucu bütünü despawn edip aynı pozda iki yarım doğurur.
+> `grill` → `i:[1]` sayaç başlat / `i:[0]` durdur. `serve` → `i:[müşteri netId, malzeme netId'leri
+> **alttan üste**]`.
+>
+> **Servis jesti ÜST EKMEĞİ koymaktır.** `serve` iki anda denenir — bankodaki bir tahtaya üst ekmek
+> konduğunda, ya da bitmiş bir tahta slota bırakıldığında — ve ikisinde de yığının **en üstü**
+> `bun_top` olmak zorundadır. ⚠️ Birinci an olmadan döngü kapanmaz: slotta duran bir tahta bir daha
+> "dinlenmeye" geçmez, yani müşterinin önünde kurulan bir hamburger asla teslim edilemezdi. Kapalılık
+> şartı da her malzemede yeniden reddedilmeyi önler. ⚠️ Malzeme yığını tahtaya **bağlanmaz**: dolu bir
+> tahtayı taşımak malzemeleri yerinde bırakır — bu yüzden tahta müşterinin önünde durur, hamburger
+> orada kurulur.
+>
+> **Yanlış servisin cevabı, olayın kendisidir:** tarif tutmazsa mod hiçbir şey yazmaz ve `serve`
+> herkese relay edilir (kozmetik dal) — istemci bunu red sesi/HUD uyarısı olarak oynar. Doğru servis
+> ise `object_state` üretir. ⚠️ Ayrı bir `rejected` olayı **yoktur**: iki sonuç zaten iki ayrı mesaj
+> tipiyle ayrılıyor, üçüncü bir ad yalnız senkron tutulacak ikinci bir sözleşme olurdu.
+>
+> ⚠️ **Üçünün de `policy`'si `anyone`, çünkü olayı gönderen objenin sahibi DEĞİLDİR:** ekmek tahtada,
+> köfte ızgarada, tahta bankoda **serbest** durur (`owner == 0`) — bıçağı/spatulayı tutan başka bir
+> objedir. `owner` politikası bu üç olayı hiç geçirmezdi. Yerine mod tarafında **objenin serbest
+> olması** aranır; birinin elindeki ekmek kesilmez.
+>
+> **Malzeme temizliği sayıyla yapılır, süreyle değil:** her `take` bir obje doğurur ve yalnız doğru
+> servis onları siler, yani yere düşenler birikir. Mod canlı malzeme sayısına bir tavan koyar; taşınca
+> en eski **SERBEST** malzeme `object_despawn` edilir. ⚠️ Elde olana asla dokunulmaz (oyuncunun
+> tuttuğu şey elinde yok olamaz), bu yüzden tavan bir garanti değil bir eğilimdir.
+>
+> ⚠️ **Sipariş `s` alanından gider, olaydan değil** (§10.10): maçın ortasında bağlanan başlık bekleyen
+> müşteriyi siparişiyle birlikte `world_state`'ten kurar.
+>
+> ⚠️ **Müşterinin yürüyüşü telde YOKTUR:** `customer` objesi poz paketi göndermez/almaz. Yol sahnede
+> bake'lidir (`CustomerPath` + banko slotları); istemci `stage` + `s`'teki slot numarasından
+> deterministik olarak yürütür. Sunucu metre bilmez (§10.10), müşterinin nerede olduğunu da bilmez —
+> yalnız **hangi aşamada** olduğunu bilir.
 
 > ⚠️ **`friendlyFire` bu tabloda YOKTUR:** artık bir mod kuralı değil **operatör anahtarıdır**
 > (§5.2) ve üç modda da aynı kaynaktan gelir. Modlar onu bildirmez.
@@ -1386,8 +1610,10 @@ olmalı, tanınmayan `modeId` reddedilir):
 > | Bağlantısı kopan ne sayılır? | **Ölü.** Sahadan düşen oyuncu tur içinde geri gelmeyeceği için takımını ayakta tutmaz; bir takımın **tümü** düşerse tur karşı tarafa yazılır, ikisi birden düşerse puansız kapanır. ⚠️ Tek istisna **hiç çatışmaya dönüşmemiş** tur (admin harita önizlemesi, kimsenin katılmadığı maç): orada boşluk "kazanılacak bir tur"un yokluğudur, çıkışı operatörün `end_match`/`abort_match`'idir |
 > | Ayakta sayımında kim sayılır? | Yalnız `alive` **ve** `calibrated` oyuncular (§10.6) — tek kural, elemede de aynısı. Kalibresiz oyuncu ne vurur ne vurulur, yani savaş dışıdır; tur artık **yalnız** elemeyle bittiği için onu "ayakta" saymak, kimsenin öldüremediği bir oyuncunun turu (ve onunla maçı) süresiz açık tutması demek olurdu |
 > | Eleme neden `OnKill` ile değil tik ile ölçülür? | Takım **bağlantı kopmasıyla** da boşalır ve o yolda `OnKill` hiç çağrılmaz. Tek tarama = tek doğruluk kaynağı |
-> | Turlar arası ne olur? | `paused`/`mode`, `modeState:"regroup:<h>/<t>"`. Geri sayım **yalnız** herkes kendi taban bölgesine girip `set_ready{true}` yollayınca başlar — zaman aşımı YOKTUR, bekleme süresizdir |
-> | Biten turu kim kazandı, oyuncu nereden öğrenir? | Toplanmayı **açan** `match_state`'in `modeState`'i `roundend:<kazanan>:<n>`dir (§10.1); ayrı bir mesaj YOKTUR — skor zaten aynı yayında güncel gidiyor ve ikinci bir gönderici doğurmaya değmez. ⚠️ **Maçı bitiren tur da yayınlar:** değer toplanmadan ÖNCE, turu kapatan aynı tikte gönderilir — sonra ya toplanma onu ezer ya da `match_end` gelir. Aksi hâlde maçı belirleyen tur, oyuncunun kazandığı söylenmeyen tek tur olurdu |
+> | Turlar arası ne olur? | **İki basamak, ikisi de `paused`/`mode`.** Önce **operatör incelemesi** (`modeState:"roundend:<kazanan>:<n>"`): sonuç ekranda asılı kalır, mod kendiliğinden ilerlemez, kapı `mode_continue`'dur (§5.2). Sonra **toplanma** (`modeState:"regroup:<h>/<t>"`): geri sayım **yalnız** herkes kendi taban bölgesine girip `set_ready{true}` yollayınca başlar. İkisinde de zaman aşımı YOKTUR, bekleme süresizdir |
+> | Tur bitince neden kendiliğinden devam etmiyor? | Tur sonu **hakemin** karar anıdır: skoru ve oyuncu istatistiklerini admin panelinden okur, gerekirse müdahale eder (isim/takım düzeltmesi, kalibrasyon, `kick`). Sayaçla ya da "herkes tabanına döndü" ile açılan bir kapı, tabloyu tam okunurken elinden alırdı. Bu yüzden ilerleten tek şey operatörün `mode_continue`'udur; oradaki diğer çıkışlar `end_match` ve `abort_match`'tir |
+> | Maç bitince lobiye ne zaman dönülür? | **Kendiliğinden DÖNÜLMEZ.** `finished` fazının `MATCH_END_SECONDS` emniyet subabı bu modda kapalıdır (`HoldsResultForOperator`, §10.1): sonuç ekranı operatör `return_to_lobby`/`abort_match` yollayana ya da yeni maç başlatana kadar durur. Gerekçe tur incelemesiyle aynıdır — sonuç tablosu maçın ürünüdür |
+> | Biten turu kim kazandı, oyuncu nereden öğrenir? | Turu **kapatan** `match_state`'in `modeState`'i `roundend:<kazanan>:<n>`dir (§10.1) ve **operatör incelemesi boyunca orada durur**; ayrı bir mesaj YOKTUR — skor zaten aynı yayında güncel gidiyor ve ikinci bir gönderici doğurmaya değmez. ⚠️ **Maçı bitiren tur da yayınlar:** değer turu kapatan aynı tikte gönderilir — sonra ya inceleme sonundaki toplanma onu ezer ya da `match_end` gelir. Aksi hâlde maçı belirleyen tur, oyuncunun kazandığı söylenmeyen tek tur olurdu |
 > | Geri sayımda biri tabandan çıkarsa? | Geri sayım **iptal edilir**, faz `paused`/`mode`'a döner ve sayaç sıfırdan başlar. Kural "tabanda **bekle**"dir, "tabana uğra" değil. ⚠️ İptalin **istisnası yoktur**: geri sayım her koşulda geri alınabilir |
 > | Toplanma takılırsa ne olur? | Çıkış operatöründür: takılan oyuncuyu **atar** (`kick`), maçı o anki skorla bitirir (`end_match`) ya da sonuçsuz kaldırır (`abort_match`). Atılan/kopan oyuncu toplamdan düştüğü için kalanlar hazırsa tur o an başlar — sayım her tikte çevrimiçi oyunculardan yeniden yapılır. Bekleme uzarsa sunucu konsoluna 30 sn'de bir "toplanma bekleniyor (h/t) — tabanına dönmeyenler: …" satırı düşer; bu bir **teşhis** satırıdır, tur başlatmaz |
 > | Cephane? | Şarjör + yedek şarjör (`weaponSource:"weaponcanvas"`), **her tur başında herkes tam dolu** — istemci geri sayımda doldurur. Sunucunun bundan haberi yoktur (§10.3: silah tablosu yok) |
@@ -1930,6 +2156,216 @@ okunamıyorsa muhafaza kendini kapatır ve "alan dışı" sorusunu cevaplamaz (a
 (`lobby_state.calibrated` ile birlikte okunur). Gönderende susturmak, susmanın sebebini operatörden
 gizlerdi.
 
+### 10.10 Ağ nesneleri (`netId`) — oyuncu olmayan varlıklar
+
+Oyuncu olmayan her ağ varlığı (kırılabilir örtü, hedef tahtası, ileride taşınan malzeme) **tek
+modelle** taşınır: kimliği `netId`, türü `kind`, durumu sunucuda.
+
+**Kimlik.** Sahne objesinin `netId`'si sahnede **bake'lidir** (`NetIdentity.sceneId`; aralık §1
+`NET_ID_SCENE_MIN`/`NET_ID_SCENE_MAX`) ve sunucuya `maps.json` ile gelir — sunucu sahneyi hiç açmaz,
+metre bilmediği gibi geometriyi de bilmez. ⚠️ Kimlik **sahne başına** benzersizdir, sunucu genelinde
+değil: iki arenada aynı `netId` bulunur ve bu doğrudur, çünkü aynı anda tek sahne yüklüdür.
+
+**Otorite** oyuncu modeliyle birebir aynı ikiye ayrılır:
+
+| Ne | Kim yazar | Nasıl duyurulur |
+|---|---|---|
+| Varlık, `hp`, `flags`, `owner`, `stage`, `s` | yalnız sunucu (`WorldObjectTable`) | `object_state` · `world_state` · `object_spawn`/`object_despawn` |
+| Hareket hâlindeki poz | **sahip istemci** (`owner`) | UDP `0x09` → `0x05` obje bölümü (§6.12) |
+| Dinlenme pozu | sunucu, ama **sahibin bildirdiği değerle** | `object_rest` → `object_state` |
+| Efekt, ses, collider, materyal | her istemci kendi başına | — |
+
+⚠️ Poz satırı otoritenin **istisnası değil, oyuncu modelinin aynısıdır**: oyuncunun pozunu da
+kendi başlığı yazar (§6.2), sunucu onu doğrulamadan dağıtır. Sunucu metre bilmez — objenin duvarın
+içinde olup olmadığını yargılayacak geometrisi yoktur.
+
+⚠️ **Obje durumunu istemci YAZMAZ.** Vuran istemci yalnız `hit_report` yollar; kırılma kararı
+sunucunundur. "Ben vurdum, ben kırayım" kısayolu iki başlıkta farklı siper üretir — ve fark tam da
+oyuncunun arkasına saklandığı şeyde ortaya çıkar.
+
+**Tür (`kind`)** `maps.json`'ın kök `kinds[]` tablosundan gelir; girdi `kind` + `maxHp` + `grab` +
+`events[]` taşır (§11). Bilinmeyen `kind` → obje tabloya alınmaz + tek satır log. **`maxHp == 0` =
+hasar almaz**: kimliği olan ama canı olmayan dekoratif bir ağ nesnesi meşrudur — tutulabilir objeler
+tipik olarak böyledir.
+
+⚠️ **Kural türde durur, objede değil.** "Bu obje alınabilir mi", "hangi olayları kabul eder" tek
+yerde, tür tablosunda yazar; sahne listesi yalnız *hangi kimlikte hangi tür var* der. Aynı tür on
+arenada geçtiği için kuralı objeye kopyalamak on ayrı doğruluk kaynağı üretirdi.
+
+**`flags` bit sözleşmesi** (çekirdek, türden bağımsız):
+
+| bit | Ad | Anlamı |
+|---|---|---|
+| 0 | `Held` | Obje bir oyuncunun elinde: pozu `owner`'ın el pozundan çıkar, `pos`/`rot` okunmaz |
+| 1 | `Broken` | Obje kırıldı: istemci collider'ını kapatır, kırık sunumuna geçer |
+| 2 | `Awake` | Obje hareket hâlinde: sahibi `0x09` poz akıtır (§6.12), uzak taraf interpole eder |
+| 3 | `HeldRight` | `Held` iken tutan el **sağ** (temiz = sol). Tek başına anlamsızdır |
+| 4+ | — | Türe özel; tüketicisi geldiğinde `NetObjectKind`'da **adlandırılır** (istemci sunumu adla okusun, bit numarasıyla değil) |
+
+⚠️ Bitlerin yerleri sabittir ve **yeniden numaralandırılmaz**: bir bit kaydırması hata vermez, yalnız
+yanlış objeyi kırık çizer. Türe özel alanın v18'de bit3'ten bit4'e kayması bu kuralın istisnası
+değil, **kural yürürlüğe girmeden yapılmış son düzeltmedir** — bit3'ü sahiplenmiş bir tür yoktu ve
+tutan elin yeri çekirdektedir (her tutulabilir türde aynı anlama gelir, türe özel olamaz).
+
+**Can görünümü.** `maxHp > 0` olan obje canını `object_state.hp` ile taşır; istemci sunumu
+**hasar oranını** materyale yazar (`_DamageAmount`, `MaterialPropertyBlock`): `1 - hp/maxHp`, yani
+`0` = sağlam, `1` = yok olmuş. "Hasarlı ama ayakta" görünümü **bu orandan** çıkar — ayrı bir aşama
+alanı yoktur. `Broken` ayrı bir bayraktır çünkü onunla birlikte collider da kapanır: görünüm ile
+çarpışma aynı anda değişmek zorundadır. ⚠️ `object_state` gerçek bir değişimdir, sunum efekt/ses
+oynatabilir; `world_state` **anlık görüntüdür** ve efektsiz uygulanır — yoksa geç katılan oyuncu
+katılmadan önce olmuş patlamayı görürdü.
+
+**Vuruş kapıları** (sırayla; biri düşerse konsola tek satır + sessiz red):
+
+1. Faz `playing` **VEYA** `rules.fireWhilePaused`. ⚠️ Oyuncu hasarının kapısından (**yalnız**
+   `playing`, §10.3) bilerek farklıdır: lobide hedef tahtası vurulabilir, oyuncu vurulamaz.
+2. Atıcı çevrimiçi + `role=player` + `calibrated` + ölüm sonrası penceresinin içinde — oyuncu
+   yolundaki kapının aynısı (§10.3/2).
+3. `netId` tabloda var mı, `maxHp > 0` mı, **`Broken` değil** mi? (Kırılmış objeye gelen ikinci
+   vuruş sessizce düşer: aynı karede iki mermi çift kırılma yayınlamasın.)
+4. `damage` sonlu ve pozitif mi?
+
+Alan etkisi (patlama) **ayrı bir mesaj türü değildir**: yarıçaptaki her ağ nesnesi için ayrı
+`hit_report{targetNetId}` gider ve kapılar her biri için aynen koşar.
+
+Geçerse `hp = max(0, hp - damage)`; `hp == 0` ise `Broken` biti kalkar → **herkese** `object_state`.
+Skor, kill feed ve `IGameMode.OnKill` **hiç çalışmaz**: obje kırmak bir oyun olayı değil bir dünya
+durumudur.
+
+⚠️ **Doğma koruması ve dost ateşi kapıları objede YOKTUR** ve eklenmez: ikisi de oyuncular arası bir
+ilişkiyi yargılar, objenin takımı yoktur. `friendlyFire` kapalıyken kendi takımının siperini
+kırabilmek **kuraldır**, kaçak değil.
+
+**Sıfırlama = her sahne SAHNELEMESİ.** `load_match` ve lobiye dönüş tabloyu haritanın `objects[]`
+listesinden **sıfırdan** kurar: her obje tam canla, bayraksız. ⚠️ **Aynı haritada ikinci maç da
+sıfırlar** — istemci sahneyi yeniden yüklediği için objeleri zaten sağlam çizer; tablo tazelenmezse
+sunucu kırık, istemci sağlam sanar. Tur tabanlı modlar tur başında `TryResetObjectsForMode()` ile
+aynı sıfırlamayı tetikler ve `world_state` yayınlar — turnuvanın ikinci turu kırık siperlerle
+başlamaz.
+
+**Geç katılan** `welcome`'dan hemen sonra yalnız kendisine `world_state` alır; sahne henüz yüklü
+değilse istemci mesajı tamponlar (§5.3).
+
+#### Sahiplik (`owner`)
+
+Tutulabilirlik türün `grab` alanıyla açılır: `"none"` (varsayılan — alınamaz) · `"anyone"` (boştaki
+objeyi ilk isteyen alır).
+
+**Kural — dört cümle:**
+
+1. **Sahibi sunucu verir.** `object_grab` gelince obje boştaysa (`owner == 0`) sahiplik istekliye
+   yazılır, `Held` (+ gerekirse `HeldRight`) kalkar ve **herkese** `object_state` gider.
+2. **Çalma yoktur.** Obje doluyken gelen `object_grab` sessizce düşer — istekliye ayrıca bir red
+   gitmez, o zaten yayınlanan `object_state`'te sahibin kendisi olmadığını görüp yerel kavramasını
+   geri alır.
+3. **Sahiplik iki adımda biter** (§5.1): `object_release` (obje elden çıkınca) → `Held` düşer,
+   `Awake` kalkar, **sahip durur**; `object_rest` (obje durunca) → `Awake` düşer, `owner = 0`,
+   bildirilen poz dinlenme pozu olur. ⚠️ Aradaki uçuş penceresinde obje **sahipli ama tutulmuyordur**
+   — poz akıtma hakkını veren tam olarak bu durumdur.
+4. **Sahip koparsa sunucu serbest bırakır.** Bağlantı `left`'e düştüğünde ya da oyuncu öldüğünde o
+   oyuncunun tuttuğu her obje **son bilinen pozunda** (§6.12'deki kilitsiz slot) bırakılır. ⚠️ Bu
+   kapı olmadan bir oyuncunun kopması objeyi **kalıcı olarak kilitler** — kimse alamaz, kimse
+   göremez, tur sıfırlamasına kadar oyun malzemesi eksilir.
+
+⚠️ **Teklik ayrı bir kilit DEĞİLDİR, sahipliğin kendisidir.** "Aynı anda tek kişi tutsun" diye ikinci
+bir mekanizma yazılmaz; tek örnek vardır, sahibi bir kişidir. Silahlar bu yolu **kullanmaz** — onlar
+her oyuncuya kopyalanır ve ağ nesnesi değildir (`Docs/Sistem-Ozeti.md` §4, eşya eksenleri).
+
+⚠️ **Tutulan ağ nesnesi `itemL`/`itemR` baytını KULLANMAZ** (`0` kalır, §6.6): uzak el "elinde ne
+var"ı objenin **kendi örneğinden** çizer. İkisini birden doldurmak aynı objeyi iki kez çizdirir —
+biri ağ nesnesi, biri katalogdan üretilmiş kopya.
+
+⚠️ **Kavrama pozu türün prefabında SABİT olmak zorundadır.** Obje ele kanonik pozla bağlanır; serbest
+kavrama her istemcide farklı bir ofset demektir ve obje uzak başlıkta elin yanında durur.
+
+#### Obje olayları (`object_event`)
+
+Sunucu gelen olayı **üç kapıdan** geçirir (biri düşerse sessiz red + tek satır log):
+
+1. `netId` tabloda var mı?
+2. `name`, o `kind`'ın `events[]` listesinde var mı? (Liste yoksa hiçbir olay kabul edilmez.)
+3. Olayın **politikası** (`owner`) gerektiriyorsa gönderen o objenin sahibi mi, ve **faz kapısı**
+   (`playing` / lobide de serbest) açık mı?
+
+Geçen olayın sonucu **ikisinden biridir**, ikisi birden değil:
+
+- **Durum değişir** → sunucu `hp`/`flags`/`stage`/`s`'i yazar ve **yazan çağrının kendisi**
+  `object_state` yayınlar. ⚠️ Kaynağı olay olan bir durum değişimi **ayrıca olay olarak
+  yayınlanmaz**: aynı gerçeği iki mesajla duyurmak istemcide iki kez oynayan bir sunum üretir.
+- **Durum değişmez** (kozmetik) → aynı `object_event` herkese relay edilir.
+
+**Duyuran, yazandır.** Durumu değiştiren her yol (`hit_report` hasarı, mod tarafındaki
+`SetObjectStage`/`SetObjectFlags`/`SetObjectPayload`, `SpawnObject`/`DespawnObject`) sonucu **kendi**
+yayınlar; olayın döndürdüğü değer yalnız **relay edilsin mi** sorusunu cevaplar.
+⚠️ Bunun sebebi bir olayın **birden çok objeyi** değiştirebilmesidir: doğru servis müşteriyi,
+malzemeleri ve skoru birden değiştirir — "olayın objesini yayınla" kısayolu yalnız birini duyurur,
+diğerleri iki başlıkta farklı görünürdü.
+
+Olayı yorumlayan **moddur**: `IGameMode.OnObjectEvent(...)` — kırılabilir objeler bu kancaya hiç
+ihtiyaç duymaz, kanca ilk tüketicisiyle birlikte doğar.
+
+⚠️ **Güvenilmez/kozmetik bir olay için WS kullanılmaz** (sıçrama sesi, kıvılcım): oranın kanalı UDP
+`0x04`'tür. WS güvenilir ve sıralıdır; kaybı zararsız olan bir şeyi oraya koymak hasar/faz
+mesajlarıyla aynı kuyruğu paylaştırır (§5.1'deki `shot_fired` gerekçesinin aynısı).
+
+#### Örnek verisi (`s`)
+
+`stage` bir **sayıdır** ve türün aşamasını anlatır; bir örneğin kendine ait metni (bir müşterinin
+siparişi, bir slot numarası) oraya sığmaz. Onun yeri `object_state.s`'tir: **modun yazıp modun
+okuduğu** serbest metin, tıpkı `modeState` gibi — çekirdek biçimini bilmez, doğrulamaz, boş
+bırakılabilir.
+
+- **Yazan yalnız sunucudur** (`stage`/`flags` ile aynı otorite satırı); istemci bu alana yazamaz,
+  değiştirmek istediğini `object_event` ile bildirir.
+- **`world_state` onu taşır.** Alanın olay yerine burada durmasının tek sebebi budur: geç katılan
+  başlık bekleyen müşteriyi siparişiyle görmek zorundadır, olay ise geçmişte kalır.
+- ⚠️ **Çekirdeğe biçim ekleme.** İki mod aynı anahtarı farklı anlamda kullanabilir ve bu doğrudur;
+  ortak bir şema tanımlamak, modun kendi verisini çekirdeğin sürümüne bağlardı.
+
+#### Dinamik doğuş ve ölüm
+
+Çalışma zamanında doğan objenin kimliğini **sunucu tahsis eder** (`NET_ID_DYNAMIC_MIN`..`_MAX`, §1) —
+sahne kimlikleriyle çakışması imkânsızdır. İstemci prefabı `kind`'dan çözer (`NetSpawnCatalog`);
+katalogda karşılığı olmayan `kind` → obje yaratılmaz + tek satır log.
+
+**Doğuşun iki kaynağı vardır ve üçüncüsü yoktur:** modun kendisi (`director.SpawnObject(kind, pose)`)
+ve türün kuralı (dağıtıcı objeye gelen `take` olayı gibi). ⚠️ **İstemci spawn isteyemez** — isteyebilse
+"sunucu icat etmez" kuralı anlamını yitirir ve bozuk bir başlık arenayı objeyle doldurabilirdi.
+
+Obje **doğrudan bir elde** de doğabilir: aynı çağrı sahip + tutan el ile verilir, obje `Held`
+(gerekirse `HeldRight`) bayrağıyla ve `owner` dolu gelir. ⚠️ **Ayrı bir "eline ver" mesajı yoktur:**
+`object_spawn` gövdesi zaten `owner` + `flags` taşıdığı için doğuş ile kavrama tek mesajda
+biter — ikinci mesaj, arada objeyi yere düşmüş gösteren bir kare bırakırdı.
+⚠️ **Eli bayrak söyler, istemci de onu ÜSTLENİR:** sahip istemcide kimse bir tuşa basmadığı için
+kavrama yerel olarak başlamaz; obje `Held` + kendi `playerId`'siyle geldiğinde bit3'ün gösterdiği el
+üstlenilir. Üstlenilmezse obje sahibi görünen ama hiçbir elin sürmediği bir hâlde havada kalır. Bu
+yolda **`object_grab` gönderilmez** — o mesaj istemcinin *istemesidir*, burada sunucu çoktan karar
+vermiştir.
+
+⚠️ **Geç katılanın `world_state`'i dinamik objeleri de taşır** ve istemci **dinamik aralıktaki**
+bilinmeyen bir kimliği doğuş sayar; **sahne aralığındaki** bilinmeyen kimlik ise "export ile sahne
+kaymış" logudur. İki aralığın ayrılmasının günlük faydası tam olarak budur — aksi hâlde maçın
+ortasında bağlanan oyuncu, o ana kadar doğmuş hiçbir malzemeyi göremezdi.
+
+⚠️ **Anlamsız poz da geçerli bir poz olmak zorundadır.** Elde doğan objenin dinlenme pozu okunmaz ama
+tele yine girer ve istemci objeyi onunla yaratır; dörtlüsü sıfır olan bir "poz" dönüş değildir ve
+karşı tarafta bozuk bir transform + konsol seli üretir. Sunucu doğuşta dejenere dönüşü **birim
+dönüşe** çeker; kural çağıranda değil kaynakta durur, çünkü `default` yazmak doğal olandır.
+
+Despawn edilen kimlik havuza döner ama **tur bitmeden yeniden verilmez** (§1): yolda olan bir poz
+paketi ya da olay, kimliği devralan yeni objeye yazardı ve hiçbir yerde hata görünmezdi.
+
+Tur/sahne sıfırlaması dinamik objelerin **hepsini** siler — tablo haritanın `objects[]` listesinden
+sıfırdan kurulur, yani ikinci tur ilk turun malzemeleriyle başlamaz.
+
+**Bu fazda bilerek YOK:**
+
+- **Objenin parent'lanması** (`TrySetParent` karşılığı): tutulan obje sahibin eline bağlanır, telde
+  başka bir parent ilişkisi taşınmaz. İhtiyacı olan sunum kendi tarafında çözer.
+- **Obje → obje etkileşiminin telde ayrı bir temsili:** iki objenin ilişkisi (tabaktaki köfte) modun
+  durumudur, `stage` ve `object_event` ile ifade edilir.
+- **İstemcinin yazdığı `stage`:** aşamayı sunucu yazar; istemci yalnız olay bildirir.
+
 ## 11. Sunucu config dosyaları
 
 `Server/config/` altındaki üç dosya; kaynakları FARKLIDIR:
@@ -1938,10 +2374,28 @@ gizlerdi.
 |---|---|---|
 | `server.json` | **Elle** | Portlar + `venueName` + `tickHz` + `venue` + `lobbyScene`; yoksa varsayılanlarla oluşturulur (§1 sabitleri). `venue` = açılışta seçilecek mekan (boş = konsolda sorulur). `lobbyScene` = lobi sahnesi (§10.7); **boş = seçilen mekanın lobi haritası otomatik bulunur**. ⚠️ Çözülemezse sunucu **açılmaz** (aşağı). |
 | `devices.json` | **Sunucu üretir** | `deviceId → { "name":"ertu", "number":7 }`; ilk bağlantıda ve `set_identity`'de yazılır (§2). Eski v1 biçimi (`deviceId → "ad"`) okunur — numara `0` sayılır — ve ilk yazımda yeni biçime yükseltilir. UTF-8, BOM'suz. |
-| `maps.json` | **Unity export** | `MapDefinition` SO'larından: `sceneName`, `venue`, `modes` (§10.1, §11.1). Arena ölçüsü YOKTUR — sunucu metre kullanmaz, ölçü istemcide sahnenin `ArenaBoundary`'sinde kalır. |
+| `maps.json` | **Unity export** | `MapDefinition` SO'larından: `sceneName`, `venue`, `gameType`, `modes` (§10.1, §11.1) + harita başına `objects[]` ve kökte `kinds[]` (§10.10). Arena ölçüsü YOKTUR — sunucu metre kullanmaz, ölçü istemcide sahnenin `ArenaBoundary`'sinde kalır. |
 
 > **`weapons.json` YOKTUR:** sunucu silah tanımı tutmaz, hasarı istemci bildirir (§10.3). Silah
 > istatistikleri yalnız Unity'deki `WeaponDefinition` SO'larındadır.
+>
+> **`gameType` = OYUN TİPİ** (`"quickbattle"` \| `"kids"`): haritayı hangi oyun ailesinin
+> kullandığı. `modes` ile karıştırılmaz — `modes` **tur tipini** (`tdm`/`ffa`/`tournament`) süzer,
+> `gameType` bir üst katmandır ve operatörün ilk seçimidir. Sunucudaki tüketicisi `start_match`
+> doğrulamasıdır (§10.1): modun tipiyle haritanın tipi uyuşmazsa komut reddedilir. **Boş = eski
+> export** → `"quickbattle"` sayılır, yani bugünkü arenalar tek satır iş bile gerektirmez.
+>
+
+> **Ağ nesneleri `maps.json`'a iki yerden girer** (§10.10): harita girdisinde
+> `objects:[{ "sceneId":12, "kind":"crate_wood" }]` — o sahnede hangi kimlikte hangi tür var — ve
+> kökte `kinds:[{ "kind":"crate_wood", "maxHp":60, "grab":"none", "events":[] }]` — türün kuralları.
+> `grab` ∈ `"none"` \| `"anyone"` (§10.10); `events[]` girdisi
+> `{ "name":"cut", "policy":"owner", "phaseGate":"playing" }` — `policy` ∈ `"anyone"` \| `"owner"`,
+> `phaseGate` ∈ `"playing"` \| `"any"`. **Boş/eksik alan = eski export** → `grab:"none"`,
+> `events:[]`, yani bugünkü arenalar tek satır iş gerektirmez. ⚠️ **Ayrılmalarının sebebi
+> tekrar değil sahiplik:** kimlik listesi sahneye, tür kuralı içeriğe aittir; aynı tür on arenada
+> geçer ve canı tek yerden değişir. Sahne listesini export sahne AÇMADAN üretir — kaynağı sahne
+> kaydında yazılan `Data/<SahneAdı>_objects.json`'dur (ölçü dosyası deseninin aynısı).
 >
 > ⚠️ **Açık sahne çözülemezse sunucu AÇILMAZ (fail-fast).** `lobbyScene` boş **ve** seçilen mekanda
 > `modes == ["lobby"]` olan harita yoksa, ya da verilen `lobbyScene` `maps.json`'da bulunmuyorsa

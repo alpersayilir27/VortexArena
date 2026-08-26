@@ -68,6 +68,19 @@ namespace VortexArena.Core.Arena
             return unit.sqrMagnitude < 0.5f ? Vector3.forward : unit;
         }
 
+        /// <summary>
+        /// Converts a <b>DIRECTION</b> from arena to world — the counterpart of
+        /// <see cref="WorldToArenaDirection"/> and subject to the same normalization contract.
+        /// <para>⚠️ A direction must NOT go through <see cref="ArenaToWorld(Vector3)"/>: that gate is
+        /// for POSITIONS, and the day the spaces stop coinciding it would add the translation to a
+        /// direction — silently, since both are the identity today.</para>
+        /// </summary>
+        public static Vector3 ArenaToWorldDirection(Vector3 arenaDirection)
+        {
+            Vector3 unit = arenaDirection.normalized;
+            return unit.sqrMagnitude < 0.5f ? Vector3.forward : unit;
+        }
+
         /// <summary>Converts a world pose into arena space (spaces coincide → identity).</summary>
         public static Pose WorldToArena(in Pose worldPose)
         {

@@ -20,7 +20,9 @@ namespace VortexArena.Core.Combat
     /// frozen in its frame and the player SELECTS it from up to <c>maxGrabDistance</c>
     /// (<see cref="SelectWeapon"/>); grip summons a CLONE, releasing only HIDES it, so the same
     /// instance returns with the same ammo (<see cref="WeaponGrantKind.Persistent"/>). Two-handed:
-    /// ONE clone per player; one-handed: one clone PER HAND (dual wield).</item> </list>
+    /// ONE clone per player; one-handed: one clone PER HAND (dual wield).</item>
+    /// <item><b>None</b> (<see cref="ModeRuntime.IsWeaponless"/>): no source at all — both paths
+    /// above are closed and the racks are swept away.</item> </list>
     /// <para>⚠️ There is NO component that places weapons in the scene and none is written — with
     /// <c>WeaponCanvas</c>, placement is an ARENA decision made when the map is designed. This
     /// class only knows the TAKING path; an empty scene simply gives nothing and that is not an
@@ -38,8 +40,11 @@ namespace VortexArena.Core.Combat
     public class WeaponGranter : MonoBehaviour
     {
         /// <summary>Grip threshold on the analog <c>PrimaryHandTrigger</c>; a half press does not
-        /// count as held, so the weapon does not flicker.</summary>
-        private const float GripThreshold = 0.55f;
+        /// count as held, so the weapon does not flicker.
+        /// <para>Public because <see cref="WristHolster"/> reads the same button for taking the
+        /// throwable: two thresholds would drift and "the bomb comes at a different press depth than
+        /// the weapon" is not a diagnosable symptom.</para></summary>
+        public const float GripThreshold = 0.55f;
 
         private const float RigRescanSeconds = 1f;
 
@@ -71,6 +76,15 @@ namespace VortexArena.Core.Combat
         private Weapon _summonedLeft;
         private Weapon _summonedRight;
 
+        /// <summary>Weapon parked by <see cref="StowHeld"/> while the hand holds a throwable —
+        /// DISPOSABLE grants only.
+        /// <para>⚠️ The frame clone is NOT kept here: it already survives being taken away
+        /// (<see cref="StowSummoned"/> hides, never destroys), so the throwable gate alone parks it and
+        /// the tick brings the same instance back. A disposable grant has no such slot — the tick would
+        /// DESTROY it and hand back a differently rolled weapon.</para></summary>
+        private Weapon _stowedLeft;
+        private Weapon _stowedRight;
+
         /// <summary>Secondary-grip LATCH: which hand is bound to which weapon's front socket.
         /// <para>⚠️ ESTABLISHING the link and MAINTAINING it are different rules, and this field is
         /// that distinction. Establishing checks distance
@@ -101,13 +115,13 @@ namespace VortexArena.Core.Combat
         /// (see <see cref="ApplyRules"/>).</summary>
         private bool _appliedRandomGrant;
 
-        /// <summary>Last applied "the mode distributes weapons" state
-        /// (<see cref="ModeDistributesWeapons"/>).
+        /// <summary>Last applied "scene racks must be hidden" state
+        /// (<see cref="HidesSceneWeapons"/>).
         /// <para>⚠️ <see cref="_appliedRandomGrant"/> alone is NOT enough: going from a staged arena
         /// into an FFA match keeps the source at <c>random</c> and only this flag changes. Untracked,
         /// the weapon the player picked from a rack during staging would carry into the match and
         /// silently break the "mode hands out a random weapon" rule.</para></summary>
-        private bool _appliedModeDistributes;
+        private bool _appliedHidesSceneWeapons;
 
         // ------------------------------------------------------------- hands / selection gate
 
@@ -121,8 +135,13 @@ namespace VortexArena.Core.Combat
         /// <summary>Are BOTH hands empty RIGHT NOW — live, unlatched. This is what the player SEES:
         /// <see cref="WeaponFrame"/>'s aim ray and the distance-grab reticle
         /// (<see cref="ControllerModelHider.SetGrabVisualsSuppressed"/>). Permission to actually take
-        /// a weapon is <see cref="CanSelectWith"/> — do not confuse the two.</summary>
-        public static bool HandsFree => LeftHandWeapon == null && RightHandWeapon == null;
+        /// a weapon is <see cref="CanSelectWith"/> — do not confuse the two.
+        /// <para>⚠️ A hand holding a THROWABLE counts as full even though no <see cref="Weapon"/>
+        /// lives in it (<see cref="IsThrowableHeld"/>): the bomb is not in <see cref="Weapon.Active"/>,
+        /// so a scan-only answer would draw the rack's aim ray out of a full hand.</para></summary>
+        public static bool HandsFree =>
+            LeftHandWeapon == null && RightHandWeapon == null &&
+            !_throwableLeft && !_throwableRight;
 
         /// <summary>May THIS hand take a weapon from a frame: were both hands empty at the moment
         /// this hand's grip press BEGAN.
@@ -141,20 +160,24 @@ namespace VortexArena.Core.Combat
         /// with a NULL interactable, and <c>Select()</c> then DEQUEUES the press and selects nothing.
         /// Hide the VISUALS instead; the candidate list stays whole.</para>
         /// <para>An unresolved hand (Editor session, no controller) passes while EITHER latch is
-        /// open: failing closed would make the rack untestable in the Editor.</para></summary>
+        /// open: failing closed would make the rack untestable in the Editor.</para>
+        /// <para>⚠️ A hand holding a THROWABLE is closed outright, latch or not: the rack must not put
+        /// a weapon into the hand carrying the bomb. The latch cannot express it — the press that TAKES
+        /// the bomb starts from empty hands, so it would leave the gate open for that whole press.</para>
+        /// </summary>
         public static bool CanSelectWith(OVRInput.Controller hand)
         {
             if (hand == OVRInput.Controller.LTouch)
             {
-                return _canSelectLeft;
+                return _canSelectLeft && !_throwableLeft;
             }
 
             if (hand == OVRInput.Controller.RTouch)
             {
-                return _canSelectRight;
+                return _canSelectRight && !_throwableRight;
             }
 
-            return _canSelectLeft || _canSelectRight;
+            return (_canSelectLeft && !_throwableLeft) || (_canSelectRight && !_throwableRight);
         }
 
         // Per-hand latch plus the previous frame's grip, so the press EDGE can be seen. Static
@@ -163,6 +186,144 @@ namespace VortexArena.Core.Combat
         private static bool _canSelectRight = true;
         private static bool _gripWasHeldLeft;
         private static bool _gripWasHeldRight;
+
+        // Per-hand "a throwable occupies this hand" flag, written by WristHolster. Static for the same
+        // reason as the latches above (the gates reading it are static) and reset in Awake.
+        private static bool _throwableLeft;
+        private static bool _throwableRight;
+
+        /// <summary>Does a throwable occupy this hand — the gate that keeps every weapon path off it
+        /// (grant, frame summon, front grip, rack selection).</summary>
+        public static bool IsThrowableHeld(OVRInput.Controller hand)
+        {
+            return hand == OVRInput.Controller.LTouch ? _throwableLeft
+                 : hand == OVRInput.Controller.RTouch && _throwableRight;
+        }
+
+        /// <summary><see cref="WristHolster"/> reports that a throwable entered/left a hand.
+        /// <para>⚠️ Separate from <see cref="StowHeld"/> on purpose: the bomb may be taken into an EMPTY
+        /// hand, where there is nothing to stow but the hand must still be closed to weapons — the
+        /// granter would otherwise drop a random weapon into it on the very next frame (grip is held
+        /// while carrying the bomb).</para></summary>
+        public static void SetThrowableHeld(OVRInput.Controller hand, bool held)
+        {
+            if (hand == OVRInput.Controller.LTouch)
+            {
+                _throwableLeft = held;
+            }
+            else if (hand == OVRInput.Controller.RTouch)
+            {
+                _throwableRight = held;
+            }
+        }
+
+        /// <summary><b>Parks the weapon in this hand TEMPORARILY</b> — it does not fall, is not
+        /// destroyed and is not re-rolled; the SAME instance returns with
+        /// <see cref="RestoreStowed"/>. Called when the hand takes a throwable.
+        /// <para>Two sources, two mechanics: a frame clone only needs hiding (the tick re-summons the
+        /// same instance once the hand frees up), a DISPOSABLE grant is moved into its own slot
+        /// (<see cref="_stowedLeft"/>) because the tick's normal answer to "not in hand" is
+        /// <c>Destroy</c>, which would hand back a different random weapon.</para>
+        /// <para>A two-handed weapon's front-grip link breaks by itself: the stowed weapon is no longer
+        /// held, and the hand taking the bomb is closed to the front grip
+        /// (<see cref="IsThrowableHeld"/>). Re-taking it is the player's job after the throw.</para>
+        /// <para>Empty hand = no-op; a second call is harmless.</para></summary>
+        /// <returns><c>true</c> if something was actually parked.</returns>
+        public static bool StowHeld(OVRInput.Controller hand)
+        {
+            if (Instance == null ||
+                (hand != OVRInput.Controller.LTouch && hand != OVRInput.Controller.RTouch))
+            {
+                return false;
+            }
+
+            return Instance.StowHand(hand);
+        }
+
+        /// <summary>Gives back what <see cref="StowHeld"/> parked, into the SAME hand. No-op when
+        /// nothing is stowed (the hand was empty, or the frame clone came back on its own).
+        /// <para>⚠️ The stowed disposable weapon returns with a FULL magazine, because
+        /// <see cref="Weapon.GrantTo"/> refills a Disposable grant by contract. That matches the source
+        /// itself: a disposable weapon has no reload, and releasing grip already yields a fresh full
+        /// one — only the random roll is skipped here.</para></summary>
+        public static bool RestoreStowed(OVRInput.Controller hand)
+        {
+            if (Instance == null ||
+                (hand != OVRInput.Controller.LTouch && hand != OVRInput.Controller.RTouch))
+            {
+                return false;
+            }
+
+            return Instance.RestoreHand(hand);
+        }
+
+        private bool StowHand(OVRInput.Controller hand)
+        {
+            bool left = hand == OVRInput.Controller.LTouch;
+
+            Weapon summoned = GetSummoned(hand);
+            if (summoned != null && summoned.GrantedHand == hand && summoned.gameObject.activeSelf)
+            {
+                StowSummoned(hand);
+                return true;
+            }
+
+            Weapon granted = left ? _grantedLeft : _grantedRight;
+            if (granted == null)
+            {
+                return false;
+            }
+
+            granted.Revoke();
+            granted.gameObject.SetActive(false);
+
+            if (left)
+            {
+                _stowedLeft = granted;
+                _grantedLeft = null;
+            }
+            else
+            {
+                _stowedRight = granted;
+                _grantedRight = null;
+            }
+
+            return true;
+        }
+
+        private bool RestoreHand(OVRInput.Controller hand)
+        {
+            bool left = hand == OVRInput.Controller.LTouch;
+            Weapon stowed = left ? _stowedLeft : _stowedRight;
+            if (stowed == null)
+            {
+                return false;
+            }
+
+            if (left)
+            {
+                _stowedLeft = null;
+                _grantedLeft = stowed;
+            }
+            else
+            {
+                _stowedRight = null;
+                _grantedRight = stowed;
+            }
+
+            // First-frame pose, same solver as Grant: without it the weapon shows at the world origin
+            // for one frame before ApplyCanonicalGrip takes over.
+            if (TryResolvePalm(hand, out Pose palm))
+            {
+                SolveInitialGrip(stowed.Definition, hand, palm,
+                    out Vector3 position, out Quaternion rotation);
+                stowed.transform.SetPositionAndRotation(position, rotation);
+            }
+
+            stowed.gameObject.SetActive(true);
+            stowed.GrantTo(hand, WeaponGrantKind.Disposable);
+            return true;
+        }
 
         /// <summary>The weapon a hand holds, scanned from <see cref="Weapon.Active"/> so EVERY
         /// source counts — a stowed frame clone is inactive and drops out of that list by itself.
@@ -216,6 +377,8 @@ namespace VortexArena.Core.Combat
             _canSelectRight = true;
             _gripWasHeldLeft = false;
             _gripWasHeldRight = false;
+            _throwableLeft = false;
+            _throwableRight = false;
 
             // Persistent singleton: subscribe in Awake/OnDestroy so rule/scene events are not
             // missed while the object is disabled (PlayerCombatState pattern).
@@ -248,6 +411,8 @@ namespace VortexArena.Core.Combat
             ControllerModelHider.SetGrabVisualsSuppressed(this, false);
             _canSelectLeft = true;
             _canSelectRight = true;
+            _throwableLeft = false;
+            _throwableRight = false;
 
             Instance = null;
         }
@@ -275,6 +440,22 @@ namespace VortexArena.Core.Combat
             // effect, and the latch deliberately stays open across a press that fills the hand.
             ControllerModelHider.SetGrabVisualsSuppressed(this, !HandsFree);
 
+            // ⚠️ Weaponless mode (§10.5 weaponSource:"none") closes BOTH delivery paths at once,
+            // above them: neither a grant nor a frame clone may reach a hand. The sweep is repeated
+            // here for rules that arrive AFTER the scene (late join); the racks it hides take their
+            // WeaponFrame children down with them, so the frame needs no branch of its own.
+            if (ModeRuntime.IsWeaponless)
+            {
+                if (!_swept)
+                {
+                    SweepScene();
+                }
+
+                RevokeAll();
+                StowAllSummoned();
+                return;
+            }
+
             // The frame path runs when the mode's source is the rack OR the player has SELECTED
             // one (only possible in the free playground: racks are hidden in a running match).
             // ⚠️ RevokeAll is unconditional: in the free playground both paths are open, so at the
@@ -289,7 +470,7 @@ namespace VortexArena.Core.Combat
 
             // The sweep happens on scene load; if the rules arrived AFTER the scene (late join)
             // it is compensated here. ⚠️ No sweep in the free playground (see SweepScene).
-            if (!_swept && ModeDistributesWeapons)
+            if (!_swept && HidesSceneWeapons)
             {
                 SweepScene();
             }
@@ -366,6 +547,11 @@ namespace VortexArena.Core.Combat
         /// <c>random</c> AND a match is set up (FFA). The free playground is excluded.</summary>
         private static bool ModeDistributesWeapons => IsRandomGrant && !IsFreePlayground;
 
+        /// <summary>Scene racks must not be takeable: either the mode hands weapons out, or the mode
+        /// has no weapons at all (<see cref="ModeRuntime.IsWeaponless"/>). Both answers are the same
+        /// sweep; only the reason differs.</summary>
+        private static bool HidesSceneWeapons => ModeDistributesWeapons || ModeRuntime.IsWeaponless;
+
         /// <summary>May the player hold a weapon right now: must be CALIBRATED.
         /// <para>⚠️ DEATH IS NOT A GATE HERE and is not added back. A dead player keeps the weapon
         /// in hand and may take one from a frame: in a round-based mode death parks the player in
@@ -417,17 +603,17 @@ namespace VortexArena.Core.Combat
             // with the same source (every load_match), and resetting unconditionally would silently
             // refill a half magazine mid-match.
             bool random = IsRandomGrant;
-            bool distributes = ModeDistributesWeapons;
+            bool hides = HidesSceneWeapons;
 
-            if (random != _appliedRandomGrant || distributes != _appliedModeDistributes)
+            if (random != _appliedRandomGrant || hides != _appliedHidesSceneWeapons)
             {
                 _appliedRandomGrant = random;
-                _appliedModeDistributes = distributes;
+                _appliedHidesSceneWeapons = hides;
                 _selected = null;
                 DestroySummoned();
             }
 
-            if (distributes)
+            if (hides)
             {
                 SweepScene();
                 return;
@@ -441,8 +627,8 @@ namespace VortexArena.Core.Combat
 
         /// <summary>Hides weapons standing in the scene: if the mode hands out weapons, scene
         /// instances must not look takeable.
-        /// <para>⚠️ Runs only with a match SET UP (<see cref="ModeDistributesWeapons"/>), never
-        /// while there is none. Staging an arena from the lobby keeps the lobby rule shape
+        /// <para>⚠️ Runs only when the rule demands it (<see cref="HidesSceneWeapons"/>): with a match
+        /// SET UP, or in a weaponless mode. Staging an arena from the lobby keeps the lobby rule shape
         /// (<c>random</c>), so a gate of "is the source random" alone would hide the racks before
         /// the match and leave the player with neither a weapon nor free fire — the whole point of
         /// the lobby profile. In the free playground both paths stay open: pick from a rack, or get
@@ -470,7 +656,7 @@ namespace VortexArena.Core.Combat
             }
         }
 
-        /// <summary>Undoes the sweep (the rule left RandomGrant). After a scene change the list is
+        /// <summary>Undoes the sweep (the rule no longer hides the racks). After a scene change the list is
         /// already empty; dead references are skipped via Unity null.</summary>
         private void RestoreScene()
         {
@@ -502,6 +688,19 @@ namespace VortexArena.Core.Combat
             }
 
             bool gripHeld = OVRInput.Get(OVRInput.Axis1D.PrimaryHandTrigger, hand) >= GripThreshold;
+
+            // ⚠️ A hand carrying a throwable holds grip the whole time, so without this branch the
+            // next line would grant a random weapon INTO the hand holding the bomb. Nothing is revoked
+            // here either: StowHeld already moved that weapon into the stow slot, and Revoke DESTROYS.
+            if (IsThrowableHeld(hand))
+            {
+                if (IsTwoHandHeld(otherHandWeapon))
+                {
+                    otherHandWeapon.SetSecondaryHand(ResolveSecondaryHand(otherHandWeapon, hand, false));
+                }
+
+                return;
+            }
 
             if (IsTwoHandHeld(otherHandWeapon))
             {
@@ -675,6 +874,13 @@ namespace VortexArena.Core.Combat
         {
             Revoke(ref _grantedLeft);
             Revoke(ref _grantedRight);
+
+            // ⚠️ The stowed instance dies WITH the granted ones: every path that empties the hands
+            // (death sweep, calibration lost, scene change, rule change) must reach it too, or a
+            // disposable weapon would live on hidden under the DDOL root for the rest of the session
+            // and come back into a hand that is no longer allowed to hold one.
+            Revoke(ref _stowedLeft);
+            Revoke(ref _stowedRight);
         }
 
         // -------------------------------------------------------------- framed weapon
@@ -786,8 +992,11 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
-            bool leftHeld = OVRInput.Get(OVRInput.Axis1D.PrimaryHandTrigger, OVRInput.Controller.LTouch) >= GripThreshold;
-            bool rightHeld = OVRInput.Get(OVRInput.Axis1D.PrimaryHandTrigger, OVRInput.Controller.RTouch) >= GripThreshold;
+            // ⚠️ A hand holding a throwable counts as NOT gripping here: that single substitution
+            // stows the clone (one-handed), moves the main hand to the free one (two-handed) and keeps
+            // the bomb hand off the front grip — with no branch of its own in the three paths below.
+            bool leftHeld = IsHandGripping(OVRInput.Controller.LTouch);
+            bool rightHeld = IsHandGripping(OVRInput.Controller.RTouch);
 
             if (!leftHeld && !rightHeld)
             {
@@ -816,6 +1025,16 @@ namespace VortexArena.Core.Combat
         /// front-grip candidate.</summary>
         private void TickTwoHandSummon(bool leftHeld, bool rightHeld)
         {
+            // ⚠️ A parked clone does NOT migrate to the free hand: it was stowed to come back to the
+            // hand it left (StowHeld). Without this the rifle would hop into the other hand the moment
+            // the player grabs the bomb and stay there after the throw.
+            if ((IsThrowableHeld(OVRInput.Controller.LTouch) && _summonedLeft != null) ||
+                (IsThrowableHeld(OVRInput.Controller.RTouch) && _summonedRight != null))
+            {
+                StowAllSummoned();
+                return;
+            }
+
             OVRInput.Controller hand;
             if (leftHeld && rightHeld)
             {
@@ -850,8 +1069,15 @@ namespace VortexArena.Core.Combat
 
             // ⚠️ The front grip is written AFTER SummonTo: GrantTo clears the second hand, so the
             // reverse order would erase the value on the same frame.
-            bool otherGrip = OVRInput.Get(OVRInput.Axis1D.PrimaryHandTrigger, other) >= GripThreshold;
-            weapon.SetSecondaryHand(ResolveSecondaryHand(weapon, other, otherGrip));
+            weapon.SetSecondaryHand(ResolveSecondaryHand(weapon, other, IsHandGripping(other)));
+        }
+
+        /// <summary>Is this hand pressing grip AND free to use it for a weapon — a hand carrying a
+        /// throwable is holding grip for the bomb, not for a weapon.</summary>
+        private static bool IsHandGripping(OVRInput.Controller hand)
+        {
+            return !IsThrowableHeld(hand) &&
+                   OVRInput.Get(OVRInput.Axis1D.PrimaryHandTrigger, hand) >= GripThreshold;
         }
 
         private void TickOneHandSummon(OVRInput.Controller hand, bool gripHeld)
@@ -1192,6 +1418,27 @@ namespace VortexArena.Core.Combat
 
             eyeY = rig.centerEyeAnchor.position.y;
             floorY = rig.trackingSpace.position.y;
+            return true;
+        }
+
+        /// <summary>Local player's HEAD world position — the HMD's centre eye anchor, the same point
+        /// <c>ObstacleViolationProbe</c> measures the head rule from; <c>false</c> with no rig.
+        /// <para>Exists because the local rig carries NO hit box collider: everything that has to ask
+        /// "where is the player" about the LOCAL player (self blast damage,
+        /// <c>ArenaCombat.ReportAreaSelfHit</c>) has nothing to raycast against and reads this
+        /// instead.</para>
+        /// <para>⚠️ Rig discovery is <see cref="ResolveRig"/> again — no second search path (rationale
+        /// in <see cref="ResolveHandAnchor"/>).</para></summary>
+        public static bool TryResolveHead(out Vector3 headWorld)
+        {
+            OVRCameraRig rig = Instance != null ? Instance.ResolveRig() : null;
+            if (rig == null || rig.centerEyeAnchor == null)
+            {
+                headWorld = default;
+                return false;
+            }
+
+            headWorld = rig.centerEyeAnchor.position;
             return true;
         }
 
