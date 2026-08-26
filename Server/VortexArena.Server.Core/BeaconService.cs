@@ -36,11 +36,20 @@ public sealed class BeaconService
         _loop = Task.Run(() => LoopAsync(token));
     }
 
-    public void Stop()
+    /// <summary>Cancel → drain → dispose. Idempotent: a second call is a no-op.</summary>
+    /// <remarks>No resource to close afterwards — the UdpClient is created and disposed per round
+    /// inside the loop, nothing outlives it.</remarks>
+    public async Task StopAsync()
     {
-        _cts?.Cancel();
+        var cts = _cts;
+        var loop = _loop;
         _cts = null;
         _loop = null;
+        if (cts == null && loop == null) return;
+
+        cts?.Cancel();
+        await ServiceShutdown.DrainAsync("beacon", loop);
+        cts?.Dispose();
     }
 
     private async Task LoopAsync(CancellationToken token)

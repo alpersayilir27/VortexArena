@@ -102,5 +102,51 @@ namespace VortexArena.Core
 
             return result;
         }
+
+        /// <summary>Maps belonging to a game type (§11) — the operator's FIRST pick list.</summary>
+        public List<MapDefinition> MapsForGameType(GameType type)
+        {
+            var result = new List<MapDefinition>();
+            if (maps == null)
+            {
+                return result;
+            }
+
+            for (int i = 0; i < maps.Length; i++)
+            {
+                MapDefinition map = maps[i];
+                if (map != null && map.GameType == type && !result.Contains(map))
+                {
+                    result.Add(map);
+                }
+            }
+
+            return result;
+        }
+
+        /// <summary>Round types startable on <paramref name="map"/>: a startable mode (not a lobby
+        /// profile) of the SAME game type that the map also lists as supported.</summary>
+        public List<ModeDefinition> ModesForMap(MapDefinition map)
+        {
+            var result = new List<ModeDefinition>();
+            if (map == null || modes == null)
+            {
+                return result;
+            }
+
+            for (int i = 0; i < modes.Length; i++)
+            {
+                ModeDefinition mode = modes[i];
+                if (mode == null || mode.IsLobbyProfile || mode.GameType != map.GameType ||
+                    !map.SupportsMode(mode.ModeId) || result.Contains(mode))
+                {
+                    continue;
+                }
+
+                result.Add(mode);
+            }
+
+            return result;
+        }
     }
 }

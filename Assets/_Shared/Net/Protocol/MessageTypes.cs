@@ -13,6 +13,15 @@ namespace VortexArena.Protocol
         public const string HitReport = "hit_report";
         public const string ReviveRequest = "revive_request"; // free-roam revive request (§10.4)
         public const string SetCalibration = "set_calibration"; // the headset reports its own alignment (§10.6)
+        // Picking up a network object (§10.10). NO reply — the result is object_state.owner.
+        public const string ObjectGrab = "object_grab";
+        // Owner only: the object LEFT THE HAND; ownership survives the flight (§10.10).
+        public const string ObjectRelease = "object_release";
+        // Owner only: the thrown object STOPPED — ownership ends here (§10.10).
+        public const string ObjectRest = "object_rest";
+        // Object-specific interaction (§10.10). BOTH directions: the client raises it, the server
+        // relays the cosmetic ones to everyone.
+        public const string ObjectEvent = "object_event";
         public const string SetBodyScale = "set_body_scale"; // the headset reports its own body scale (§10.8)
 
         // Admin only → Server
@@ -22,6 +31,8 @@ namespace VortexArena.Protocol
         public const string EndMatch = "end_match";
         public const string PauseMatch = "pause_match"; // freezes a running match (§5.2)
         public const string ResumeMatch = "resume_match"; // lifts the operator pause only
+        // "Carry on" for a mode that parked the flow; queues a flag the mode's own tick consumes (§5.2)
+        public const string ModeContinue = "mode_continue";
         public const string SetTeam = "set_team";
         public const string Kick = "kick";
         public const string ReturnToLobby = "return_to_lobby"; // the server → client direction uses the same type
@@ -51,6 +62,17 @@ namespace VortexArena.Protocol
         public const string KillEvent = "kill_event";
         public const string Respawn = "respawn";
         public const string MatchEnd = "match_end";
+        // A network object's server-authoritative state changed (§10.10). TO EVERYONE — unlike
+        // health_update: a broken cover is everyone's cover.
+        public const string ObjectState = "object_state";
+        // A network object born at runtime (§10.10); the body is IDENTICAL to object_state. A separate
+        // type because of what an unknown netId MEANS: a drift log there, the truth itself here.
+        public const string ObjectSpawn = "object_spawn";
+        // A dynamic object leaves the world (§10.10); scene objects are never despawned.
+        public const string ObjectDespawn = "object_despawn";
+        // Every network object of the loaded scene at once (§10.10): to everyone on a scene load, to a
+        // late joiner right after welcome.
+        public const string WorldState = "world_state";
         public const string Ping = "ping"; // "send me a status" trigger — MEASURES NO LATENCY (UDP 0x06 does)
         public const string Kicked = "kicked";
         public const string AdminState = "admin_state"; // admins only: shared selection + announcement

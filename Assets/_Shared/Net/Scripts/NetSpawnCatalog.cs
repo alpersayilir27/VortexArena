@@ -5,11 +5,12 @@ using UnityEngine;
 namespace VortexArena.Net
 {
     /// <summary>
-    /// id → prefab records (asset: <c>_Shared/Data/NetSpawnCatalog.asset</c>).
+    /// id → prefab records (asset: <c>_Shared/Data/Resources/NetSpawnCatalog.asset</c>, loaded by
+    /// <c>NetObjectSpawner</c>).
     /// <para>
-    /// RESERVED GROUNDWORK: future SERVER-COMMANDED spawns (pickup, door, shared FX) resolve here — the
-    /// server sends a string id only, the prefab choice stays on the client (the protocol carries no
-    /// asset references). v1 keeps only the RemoteAvatar + FX records.
+    /// SERVER-COMMANDED spawns resolve here: a dynamically born network object (§10.10) is looked up by
+    /// its <c>kind</c> — the server sends a string only, the prefab choice stays on the client (the
+    /// protocol carries no asset references). A <c>kind</c> with no record here is not instantiated.
     /// </para>
     /// All queries tolerate null/empty entries (a missing asset reference must not break the UI).
     /// </summary>

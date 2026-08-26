@@ -10,10 +10,11 @@ using VortexArena.Protocol;
 
 namespace VortexArena.Core.Combat
 {
-    /// <summary>Shot presentation for REMOTE players: listens to the server's 20 Hz event channel
+    /// <summary>Event presentation for REMOTE players: listens to the server's 20 Hz event channel
     /// (<c>NetEvents.OnRemoteFireEvent</c>, §6.4/6.5), plays muzzle flash + spatial audio and draws
-    /// the trail through <see cref="ShotTracer"/>. Our own shot NEVER arrives here (the channel
-    /// filters the shooter, §6.5); local shot FX stays in Weapon/WeaponAudio.
+    /// the trail through <see cref="ShotTracer"/> for a shot, and starts a locally simulated
+    /// <see cref="Throwable"/> for a throw. Our own event NEVER arrives here (the channel filters the
+    /// sender, §6.5); local shot FX stays in Weapon/WeaponAudio.
     /// <para>⚠️ The event carries NO muzzle POSITION, on purpose (§6.4): the tracer must leave the
     /// muzzle of the gun the RECEIVER draws. An absolute position on the wire would start the
     /// tracer offset from the drawn muzzle, because the receiver draws the gun from an interpolated
@@ -206,7 +207,7 @@ namespace VortexArena.Core.Combat
                 PendingShot shot = _pending[i];
                 if (now - shot.playAtMs >= 0)
                 {
-                    PlayFireEvent(shot.evt);
+                    PlayFireEvent(shot.evt, CatchUpSeconds(now, shot.playAtMs));
                     continue;
                 }
 
@@ -237,9 +238,10 @@ namespace VortexArena.Core.Combat
         /// right moment already makes the drawn muzzle that tick's muzzle.</para></summary>
         private void HandleFireEvent(RemoteFireEvent evt)
         {
-            // Cheap rejects BEFORE queuing so an event that will not play never waits.
-            // KIND_THROW belongs to a later phase and is silently skipped here.
-            if (evt.kind != FireEventEntry.KIND_SHOT)
+            // Cheap rejects BEFORE queuing so an event that will not play never waits. Shots and
+            // throws share this timing path: a throw must also start on ITS OWN tick, otherwise the
+            // remote copy leaves a hand pose that is already 100 ms old.
+            if (evt.kind != FireEventEntry.KIND_SHOT && evt.kind != FireEventEntry.KIND_THROW)
             {
                 return;
             }
@@ -252,11 +254,17 @@ namespace VortexArena.Core.Combat
             int now = System.Environment.TickCount;
 
             RemotePlayerRegistry registry = RemotePlayerRegistry.Instance;
-            if (registry == null || !registry.TryGetPlaybackTimeMs(evt.serverTick, out int playAtMs) ||
-                now - playAtMs >= 0)
+            if (registry == null || !registry.TryGetPlaybackTimeMs(evt.serverTick, out int playAtMs))
             {
-                // No mapping, or already due → waiting is pointless.
-                PlayFireEvent(evt);
+                // No mapping → we cannot tell how late the event is; a throw then starts from "now".
+                PlayFireEvent(evt, 0f);
+                return;
+            }
+
+            if (now - playAtMs >= 0)
+            {
+                // Already due → waiting is pointless; the lateness becomes the throw's catch-up.
+                PlayFireEvent(evt, CatchUpSeconds(now, playAtMs));
                 return;
             }
 
@@ -271,17 +279,21 @@ namespace VortexArena.Core.Combat
                 // tracer is undiagnosable, one playing 100 ms early is visible and harmless.
                 PendingShot oldest = _pending[0];
                 _pending.RemoveAt(0);
-                PlayFireEvent(oldest.evt);
+                PlayFireEvent(oldest.evt, CatchUpSeconds(now, oldest.playAtMs));
             }
 
             _pending.Add(new PendingShot { evt = evt, playAtMs = playAtMs });
         }
 
-        /// <summary>PRESENTATION of one remote shot (§6.5): origin, muzzle flash, spatial audio,
-        /// tracer. Timing belongs to <see cref="HandleFireEvent"/>; only due events reach here.</summary>
-        private void PlayFireEvent(in RemoteFireEvent evt)
+        /// <summary>PRESENTATION of one remote event (§6.5): origin, muzzle flash, spatial audio,
+        /// tracer for a shot; a locally simulated copy for a throw. Timing belongs to
+        /// <see cref="HandleFireEvent"/>; only due events reach here.</summary>
+        /// <param name="catchUpSeconds">How long the event's playback time is already past — a throw
+        /// starts from the event's tick, not from "now".</param>
+        private void PlayFireEvent(in RemoteFireEvent evt, float catchUpSeconds)
         {
-            Vector3 worldDir = ArenaToWorldDirection(evt.arenaDirection);
+            // ⚠️ The DIRECTION gate, not ArenaToWorld(Vector3) — that one carries the translation.
+            Vector3 worldDir = ArenaSpace.ArenaToWorldDirection(evt.arenaDirection);
             if (worldDir.sqrMagnitude < 1e-6f)
             {
                 return;
@@ -292,9 +304,19 @@ namespace VortexArena.Core.Combat
             float now = Time.unscaledTime;
             PlayerFx fx = GetOrCreatePlayer(evt.playerId);
             fx.LastEventTime = now;
-            fx.ShotCount++;
 
             ItemDefinition item = ResolveItem(evt.itemId);
+
+            if (evt.kind == FireEventEntry.KIND_THROW)
+            {
+                PlayThrowEvent(fx, evt, worldDir, now, catchUpSeconds, item);
+                PrunePlayers(now);
+                return;
+            }
+
+            // Counted per SHOT: a throw draws no tracer, so counting it would shift the
+            // TracerEveryNthRound rhythm.
+            fx.ShotCount++;
 
             // Recoil fires BEFORE origin resolution: the early return below (no pose at all) drops
             // the rest of the visuals but is no reason for the gun not to kick. Non-weapon items
@@ -308,7 +330,7 @@ namespace VortexArena.Core.Combat
                 }
             }
 
-            if (!TryResolveOrigin(fx, evt, now, out Vector3 origin))
+            if (!TryResolveOrigin(fx, evt, now, useMuzzle: true, out Vector3 origin))
             {
                 // No muzzle, hand or head pose yet: we do not know where to put the effect.
                 return;
@@ -332,6 +354,35 @@ namespace VortexArena.Core.Combat
 
             DrawTracer(fx, item, origin, worldDir, evt.magnitude);
             PrunePlayers(now);
+        }
+
+        // ---------------------------------------------------------------------- throw
+
+        /// <summary>Remote presentation of a throw (§6.4 throw contract): no tracer, no muzzle flash,
+        /// no recoil, no shot sound — the receiver starts its OWN ballistic copy and every later
+        /// visual (spin, blast, sound) comes from that copy, not from the wire.
+        /// <para>⚠️ The origin is the HAND pose, never a muzzle: a throwable leaves the hand, and the
+        /// item drawn in it has no muzzle to begin with.</para>
+        /// <para>Our own throw never arrives here — <c>UdpStateChannel.DispatchFireEvents</c> drops
+        /// events whose <c>playerId</c> is ours (§6.5), for both kinds. Without that filter the
+        /// thrower would see two bombs.</para></summary>
+        private void PlayThrowEvent(PlayerFx fx, in RemoteFireEvent evt, Vector3 worldDir, float now,
+            float catchUpSeconds, ItemDefinition item)
+        {
+            if (!(item is ThrowableDefinition throwable))
+            {
+                // Uncatalogued or non-throwable item: there is nothing to simulate or draw.
+                return;
+            }
+
+            if (!TryResolveOrigin(fx, evt, now, useMuzzle: false, out Vector3 origin))
+            {
+                return;
+            }
+
+            // magnitude is already m/s here: the wire carries cm/s and UdpStateChannel divides by
+            // 100 for both kinds (§6.4).
+            Throwable.SpawnAndArm(throwable, origin, worldDir, evt.magnitude, false, catchUpSeconds);
         }
 
         // --------------------------------------------------------------------- tracer
@@ -446,7 +497,9 @@ namespace VortexArena.Core.Combat
 
         /// <summary>Start point of the effect/tracer (§6.4): drawn muzzle → hand pose → head pose.
         /// False if none exists.</summary>
-        private bool TryResolveOrigin(PlayerFx fx, in RemoteFireEvent evt, float now, out Vector3 origin)
+        /// <param name="useMuzzle">Shots leave the muzzle; a throw leaves the HAND and skips it.</param>
+        private bool TryResolveOrigin(PlayerFx fx, in RemoteFireEvent evt, float now, bool useMuzzle,
+            out Vector3 origin)
         {
             origin = default;
 
@@ -474,11 +527,14 @@ namespace VortexArena.Core.Combat
                 }
             }
 
-            Transform muzzle = ResolveMuzzle(fx, evt, now);
-            if (muzzle != null)
+            if (useMuzzle)
             {
-                origin = muzzle.position;
-                return true;
+                Transform muzzle = ResolveMuzzle(fx, evt, now);
+                if (muzzle != null)
+                {
+                    origin = muzzle.position;
+                    return true;
+                }
             }
 
             if (hasHand)
@@ -661,12 +717,11 @@ namespace VortexArena.Core.Combat
 
         // ---------------------------------------------------------------------- helpers
 
-        /// <summary>Converts an arena-space DIRECTION to world. Arena space coincides with world
-        /// space (<see cref="ArenaSpace"/>) so this is the identity; the helper exists to keep "this
-        /// value came from ARENA space" visible at the call sites.</summary>
-        private static Vector3 ArenaToWorldDirection(Vector3 arenaDirection)
+        /// <summary>How late the event is, in seconds (TickCount axis, never negative).</summary>
+        private static float CatchUpSeconds(int nowMs, int playAtMs)
         {
-            return ArenaSpace.ArenaToWorld(arenaDirection);
+            int lateMs = nowMs - playAtMs;
+            return lateMs > 0 ? lateMs / 1000f : 0f;
         }
 
         /// <summary>Resolves the event's <c>itemId</c> (§6.6) to an item definition. That byte is

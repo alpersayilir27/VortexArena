@@ -1,6 +1,8 @@
 #nullable enable
+using System.Collections.Concurrent;
 using VortexArena.Protocol;
 using VortexArena.Server.Core.Modes;
+using VortexArena.Server.Core.World;
 
 namespace VortexArena.Server.Core;
 
@@ -63,6 +65,13 @@ public enum StageOutcome
 /// <summary>Staging result + human-readable reason when rejected (goes into the admin announcement).</summary>
 public readonly record struct StageSceneResult(StageOutcome Outcome, string Reason = "");
 
+/// <summary>One object's ownership as the lock-free mirror carries it (§6.12): who owns it and whether it
+/// is still IN a hand.</summary>
+/// <remarks><c>Held</c> travels along because the <c>0x09</c> gate needs BOTH facts: between
+/// <c>object_release</c> and <c>object_rest</c> the object is owned but NOT held, and that is the only
+/// window where a pose packet is accepted (a held object hangs off the hand, which already streams).</remarks>
+internal readonly record struct ObjectOwnership(int PlayerId, bool Held);
+
 /// <summary>Server-authoritative match flow (§10): phase machine, per-player load_match, countdown,
 /// match_state broadcast, hit validation, scoring and free-roam revive. The client is
 /// presentation+input; it applies no damage, keeps no score, changes no phase.</summary>
@@ -90,6 +99,20 @@ public sealed class MatchDirector
     private readonly MapTable _maps;
 
     private readonly Dictionary<string, IGameMode> _modes = new(StringComparer.Ordinal);
+
+    /// <summary>Network object state of the staged scene (§10.10); guarded by <see cref="_gate"/> — it
+    /// has no lock of its own, so every touch happens under the lock.</summary>
+    private readonly WorldObjectTable _objects = new();
+
+    /// <summary>netId → ownership, kept in step with <see cref="_objects"/> but readable WITHOUT the
+    /// lock: StateHost validates <c>0x09</c> ownership on the recv thread (§6.12) and must never stall
+    /// the 20 Hz pose intake behind the match lock (the <c>Alive</c> pattern).</summary>
+    private readonly ConcurrentDictionary<int, ObjectOwnership> _objectOwners = new();
+
+    /// <summary>Last pose seen on <c>0x09</c> per object (§6.12). The server does NOT write it into the
+    /// table as state — it is the pose an object is FREED at when its owner drops or dies; without it
+    /// the object would teleport back to where it was picked up.</summary>
+    private readonly ConcurrentDictionary<int, PoseData> _lastObjectPoses = new();
 
     /// <summary>"Clear ready flag" work collected under the lock; applied OUTSIDE it because
     /// registry.SetReady raises an event (lobby_state broadcast).</summary>
@@ -122,6 +145,14 @@ public sealed class MatchDirector
     /// while someone keeps firing at a dead target (real players do this).</summary>
     private const double RejectLogIntervalSeconds = 2.0;
 
+    /// <summary>§10.3 gate 2: how long a DEAD shooter's damage still counts. A thrown bomb leaves the
+    /// hand before its owner dies; dropping the blast would cancel a throw for a death that happened
+    /// after it. Covers fuse + flight with room to spare — and the window is the reason the gate
+    /// exists at all: outside it, a reconnecting client that still thinks it is alive damages nobody.
+    /// <para>⚠️ Server-side only, never on the wire. A timed effect (damage pool) must not outlive
+    /// it — its last ticks would be rejected silently.</para></summary>
+    private const double PosthumousDamageSeconds = 10.0;
+
     // Log state — NOT match state, hence kept here (not in PlayerState) under its own small lock.
     // _rejectLogGate NEVER takes _gate (only the _gate → _rejectLogGate direction exists).
     private readonly object _rejectLogGate = new();
@@ -134,6 +165,12 @@ public sealed class MatchDirector
     /// <summary>The mode's own sub-state (§10.1 <c>modeState</c>). The core does NOT interpret it, only
     /// carries it; the client HUD reads it. Preserved across pauses so the mode can resume.</summary>
     private string _modeState = "";
+
+    /// <summary>An operator <c>mode_continue</c> waiting to be picked up (§5.2).</summary>
+    /// <remarks>⚠️ The core does NOT act on it — it only carries the press to the mode's next tick,
+    /// which CONSUMES it (<see cref="ConsumeModeContinue"/>). Handling it here would make the core the
+    /// second owner of a pause the mode set (§10.1).</remarks>
+    private bool _modeContinuePending;
 
     private string _modeId = "";
     private string _sceneName = "";
@@ -225,6 +262,9 @@ public sealed class MatchDirector
         // (before any EnterLobbyLocked ran) carries the right scene/modId/rules.
         _modeId = _lobbyScene.Length > 0 ? ArenaProtocol.LOBBY_MODE_ID : "";
         SetSceneLocked(_lobbyScene);
+        // The startup lobby is a staging too (§10.10): without it the first welcome would carry no
+        // world_state and the lobby's objects would stay unknown until the first map change.
+        RebuildObjectsLocked(_lobbyScene);
         ApplyRulesLocked(ModeRules.LobbyProfile);
         RefreshShotRelayLocked();
     }
@@ -282,6 +322,7 @@ public sealed class MatchDirector
         Register(new TdmMode());
         Register(new FfaMode());
         Register(new TournamentMode());
+        Register(new BurgerMode());
     }
 
     private void Register(IGameMode mode) => _modes[mode.ModeId] = mode;
@@ -413,6 +454,24 @@ public sealed class MatchDirector
         }
     }
 
+    /// <summary>Adds to BOTH the player's individual score and the shared total in one call
+    /// (<c>scoring:"shared"</c>, §10.5/§10.2) — two writes that can never drift apart because there is no
+    /// way to do one without the other.</summary>
+    /// <remarks>⚠️ The shared total rides on <c>scoreRed</c> and <c>scoreBlue</c> STAYS 0: with
+    /// <c>teams:"none"</c> there is no second side, so nothing may read this pair as a team score.</remarks>
+    public void AddSharedScore(int playerId, int amount)
+    {
+        if (playerId <= 0 || amount == 0) return;
+        lock (_gate)
+        {
+            if (!_registry.TryGetByPlayerId(playerId, out var player)) return;
+            if (player.Role != "player") return;
+            player.Score += amount;
+            _rosterRefreshFor = player;
+            _scoreRed += amount;
+        }
+    }
+
     /// <summary>A player's individual score; 0 when the player is unknown.</summary>
     public int ScoreOf(int playerId)
     {
@@ -493,11 +552,22 @@ public sealed class MatchDirector
         _loop = Task.Run(() => TickLoopAsync(token));
     }
 
-    public void Stop()
+    /// <summary>Cancel → drain the tick → drop the pending outbox. Idempotent.</summary>
+    /// <remarks>⚠️ The outbox is dropped, not flushed: whatever the last tick queued would go out
+    /// while the control host is already closing the sockets. Cleared under <c>_gate</c> (lock
+    /// contract) and nothing is sent while holding it.</remarks>
+    public async Task StopAsync()
     {
-        _cts?.Cancel();
+        var cts = _cts;
+        var loop = _loop;
         _cts = null;
         _loop = null;
+        if (cts == null && loop == null) return;
+
+        cts?.Cancel();
+        await ServiceShutdown.DrainAsync("match", loop);
+        lock (_gate) _pendingOutbox.Clear();
+        cts?.Dispose();
     }
 
     private async Task TickLoopAsync(CancellationToken token)
@@ -572,6 +642,9 @@ public sealed class MatchDirector
             // TickViolationFeedLocked): the penalty applies only in `playing`, but the operator must also
             // see a player leaving the arena in the lobby and during the countdown.
             TickViolationFeedLocked(outbox, now);
+            // Also outside the switch, for the same reason: an object held in the lobby must be freed
+            // when its owner drops, not only during a match.
+            TickObjectOwnersLocked(outbox);
 
             modeToStart = _matchStartPending ? _mode : null;
             modeToRoundStart = _roundStartPending ? _mode : null;
@@ -889,7 +962,12 @@ public sealed class MatchDirector
         // client would draw the shield on a ghost (§10.4).
         victim.SpawnProtectedUntil = DateTime.MinValue;
         victim.Deaths++;
-        if (killer != null) killer.Kills++;
+        // §10.10: a dead owner never sends object_release — freeing here is what keeps a held object from
+        // being locked away until the round resets.
+        ReleaseObjectsOfLocked(outbox, victim.PlayerId);
+        // A suicide adds a death but NO kill (§10.2): killer and victim are the same record, and
+        // crediting it would inflate K/D. The kill_event still goes out with killerId == victimId.
+        if (killer != null && !ReferenceEquals(killer, victim)) killer.Kills++;
         _rosterRefreshFor = victim; // deaths + alive changed → refresh lobby_state (§5.3)
 
         QueueBroadcastLocked(outbox, JsonUtil.Serialize(new KillEventMsg
@@ -909,8 +987,16 @@ public sealed class MatchDirector
         }), victim.Name));
     }
 
+    /// <summary>The <c>finished</c> safety valve: back to the lobby after <c>MATCH_END_SECONDS</c> if the
+    /// operator chose nothing (§10.1).</summary>
+    /// <remarks>⚠️ Switched OFF for a mode that holds its result
+    /// (<see cref="IGameMode.HoldsResultForOperator"/>): there the scoreboard is the match's product and
+    /// a timer would wipe it exactly as it is being read out. The exit stays
+    /// <c>return_to_lobby</c>/<c>abort_match</c>/a new <c>start_match</c>.</remarks>
     private void TickEndLocked(List<Outgoing> outbox, DateTime now)
     {
+        if (_mode is { HoldsResultForOperator: true }) return;
+
         if ((now - _phaseEnteredAt).TotalSeconds < ArenaProtocol.MATCH_END_SECONDS) return;
         EnterLobbyLocked(outbox, now);
     }
@@ -956,6 +1042,12 @@ public sealed class MatchDirector
             if (!MapTable.SupportsMode(known, modeId))
             {
                 Console.WriteLine($"[match] start_match reddedildi: '{sceneName}' haritası '{modeId}' modunu desteklemiyor (desteklenen: {string.Join(", ", known.modes)}).");
+                return;
+            }
+            if (!MapTable.MatchesGameType(known, mode.GameType))
+            {
+                var mapGameType = string.IsNullOrWhiteSpace(known.gameType) ? MapTable.DefaultGameType : known.gameType;
+                Console.WriteLine($"[match] start_match reddedildi: '{sceneName}' haritası '{mode.GameType}' oyun tipinde değil (haritanın tipi: {mapGameType}).");
                 return;
             }
         }
@@ -1037,6 +1129,10 @@ public sealed class MatchDirector
 
             var rulesInfo = _rules.ToInfo();
 
+            // §10.10: staging the scene resets the world objects — before load_match goes out, so the
+            // world_state that follows describes the scene the clients are about to load.
+            RebuildObjectsLocked(_sceneName);
+
             foreach (var player in players)
             {
                 ResetMatchStateLocked(player);
@@ -1080,6 +1176,7 @@ public sealed class MatchDirector
                 outbox.Add(new Outgoing(adminConnection, adminLoad, admin.Name));
             }
 
+            QueueWorldStateLocked(outbox);
             SetPhaseLocked(Phase.Paused, PauseReason.Loading, DateTime.UtcNow);
             QueueBroadcastLocked(outbox, JsonUtil.Serialize(BuildMatchStateLocked()));
         }
@@ -1157,22 +1254,31 @@ public sealed class MatchDirector
 
     /// <summary>Who is ahead RIGHT NOW, on the channel the mode's rules use (§10.2). Draw when nobody
     /// leads — inventing a winner from a 0-0 board would be worse than saying "berabere".</summary>
-    private MatchOutcome DecideOutcomeLocked()
+    private MatchOutcome DecideOutcomeLocked() => _rules.Scoring switch
     {
-        if (_rules.Scoring == ScoreKind.Player)
-        {
-            var leaderId = 0;
-            var best = 0;
-            foreach (var player in ConnectedPlayersLocked())
-            {
-                if (player.Score <= best) continue;
-                best = player.Score;
-                leaderId = player.PlayerId;
-            }
+        ScoreKind.Player => DecidePlayerOutcomeLocked(),
+        // Shared score: the common total rides on scoreRed but is NOT a team score — naming a winner
+        // from it would turn it into one (§10.5: no winner in co-op).
+        ScoreKind.PlayerAndShared => MatchOutcome.Draw,
+        _ => DecideTeamOutcomeLocked()
+    };
 
-            return leaderId > 0 ? MatchOutcome.Player(leaderId) : MatchOutcome.Draw;
+    private MatchOutcome DecidePlayerOutcomeLocked()
+    {
+        var leaderId = 0;
+        var best = 0;
+        foreach (var player in ConnectedPlayersLocked())
+        {
+            if (player.Score <= best) continue;
+            best = player.Score;
+            leaderId = player.PlayerId;
         }
 
+        return leaderId > 0 ? MatchOutcome.Player(leaderId) : MatchOutcome.Draw;
+    }
+
+    private MatchOutcome DecideTeamOutcomeLocked()
+    {
         if (_scoreRed > _scoreBlue) return MatchOutcome.Team("red");
         return _scoreBlue > _scoreRed ? MatchOutcome.Team("blue") : MatchOutcome.Draw;
     }
@@ -1208,6 +1314,31 @@ public sealed class MatchDirector
         return true;
     }
 
+    /// <summary><c>mode_continue</c> (§5.2) — the operator's "carry on" for a mode that parked the round
+    /// flow (the tournament's round review, §10.5).</summary>
+    /// <remarks>⚠️ Deliberately NOT a phase transition: it only queues a flag. The mode reads it on its
+    /// next tick and lifts its OWN pause — so "every pause is lifted by its owner" still holds, which is
+    /// exactly why <c>resume_match</c> was not widened to cover this instead.
+    /// <para>Accepted only in <see cref="PauseReason.Mode"/>: in any other phase there is no parked flow
+    /// and a flag left standing would fire the NEXT hold.</para></remarks>
+    public bool ModeContinue()
+    {
+        lock (_gate)
+        {
+            if (_phase != Phase.Paused || _pauseReason != PauseReason.Mode)
+            {
+                Console.WriteLine($"[match] mode_continue reddedildi: durum {PhaseWire(_phase)}" +
+                                  $"{(_pauseReason != PauseReason.None ? "/" + ReasonWire(_pauseReason) : "")} " +
+                                  "(bekleyen bir mod akışı yok).");
+                return false;
+            }
+
+            _modeContinuePending = true;
+            Console.WriteLine("[match] mode_continue — mod akışı sürdürülecek.");
+            return true;
+        }
+    }
+
     // ---- Mode commands (§10.1 "round-based modes") ----
     //
     // All three are called from IGameMode hooks: OUTSIDE the lock and SYNCHRONOUSLY (OnTick is void, a
@@ -1217,6 +1348,24 @@ public sealed class MatchDirector
     // ⚠️ The core knows NOTHING about rounds. "Round" here is only in the names; the meaning lives in the
     // mode. Without these three a mode would have to either send its own messages (a second sender) or
     // write the phase directly (a second authority).
+
+    /// <summary>Reads AND clears a pending operator <c>mode_continue</c> (§5.2); <c>false</c> when none
+    /// is waiting.</summary>
+    /// <remarks>⚠️ Consuming, not peeking: the press is a single event. A flag left standing would be
+    /// read again at the mode's next hold and skip it without anyone touching a button.
+    /// <para>Called from a mode hook, so a mode that parks its flow in more than one stage must consume
+    /// on every tick and act only where the press means something — otherwise a press landing in the
+    /// wrong stage still queues up for the next one.</para></remarks>
+    public bool ConsumeModeContinue()
+    {
+        lock (_gate)
+        {
+            if (!_modeContinuePending) return false;
+
+            _modeContinuePending = false;
+            return true;
+        }
+    }
 
     /// <summary>Requests a mode pause (§10.1): <see cref="Phase.Playing"/> → <see cref="Phase.Paused"/> +
     /// <see cref="PauseReason.Mode"/>, with the reason written into <paramref name="modeState"/>.</summary>
@@ -1263,6 +1412,34 @@ public sealed class MatchDirector
 
             ReviveRosterLocked(_pendingOutbox);
             return true;
+        }
+    }
+
+    /// <summary>Round boundary: pulls every network object back to full health and no flags, then
+    /// broadcasts <c>world_state</c> (§10.10); <c>false</c> when nothing needed resetting.</summary>
+    /// <remarks>Its consumer is <c>TournamentMode.OnRoundStart</c>: the second round of a tournament must
+    /// not start behind covers the first round broke. Called from a mode hook, i.e. OUTSIDE the lock —
+    /// the message therefore goes into <see cref="_pendingOutbox"/> (a mode cannot await).</remarks>
+    public bool TryResetObjectsForMode()
+    {
+        lock (_gate)
+        {
+            if (!_objects.ResetLocked()) return false;
+
+            SyncAllOwnersLocked();
+            _lastObjectPoses.Clear();
+            QueueBroadcastLocked(_pendingOutbox, BuildWorldStateJsonLocked());
+            return true;
+        }
+    }
+
+    /// <summary>Full <c>world_state</c> JSON for a single late joiner (§10.10, right after
+    /// <c>welcome</c>); <c>null</c> when the staged scene has no network objects.</summary>
+    public string? BuildWorldStateJson()
+    {
+        lock (_gate)
+        {
+            return _objects.Count == 0 ? null : BuildWorldStateJsonLocked();
         }
     }
 
@@ -1475,6 +1652,7 @@ public sealed class MatchDirector
             // in the lobby wait.
             SetPhaseLocked(Phase.Paused, PauseReason.Lobby, DateTime.UtcNow);
 
+            RebuildObjectsLocked(_sceneName); // §10.10: every staging resets
             QueueBroadcastLocked(outbox, JsonUtil.Serialize(new ReturnToLobbyMsg
             {
                 modeId = _modeId,
@@ -1482,6 +1660,7 @@ public sealed class MatchDirector
                 sceneElapsed = SceneElapsedLocked,
                 rules = _rules.ToInfo()
             }));
+            QueueWorldStateLocked(outbox);
         }
 
         Console.WriteLine($"[match] lobi sahnesi -> '{target}' (tüm istemciler yüklüyor).");
@@ -1495,14 +1674,24 @@ public sealed class MatchDirector
     // (§6.4/6.5). The only share here is the ShotRelayOpen flag — 10 shots/s/player was drowning the
     // authoritative WS channel; damage (hit_report) deliberately STAYED on WS (§10.3).
 
-    /// <summary>hit_report path (§10.3, in order): phase → shooter → target → spawn protection → team →
-    /// damage number. Any failure means one log line + silent rejection (no reply to the client).</summary>
+    /// <summary>hit_report path (§10.3, in order): phase → shooter → target → spawn protection →
+    /// self/team → damage number. Any failure means one log line + silent rejection (no reply to the
+    /// client).</summary>
     /// <remarks>These are state-consistency checks, NOT anti-cheat — the product runs in a supervised
     /// private space, so cheat protection is deliberately absent (§10.3). The client computes damage and
     /// the server applies it as-is; there is no weapon table, no weaponId whitelist and no fire-rate check
     /// (they would silently drop legitimate pellet/explosion/burst hits).</remarks>
     public async Task HandleHitReportAsync(PlayerState shooter, HitReportMsg msg)
     {
+        // §10.10: a network object target takes a separate path and targetPlayerId is not read. Spawn
+        // protection, friendly fire, score, kill feed and IGameMode.OnKill do NOT run there — an object
+        // has no team and breaking one is a world state, not a game event.
+        if (msg.targetNetId != 0)
+        {
+            await HandleObjectHitAsync(shooter, msg);
+            return;
+        }
+
         // Registry lookup is lock-free (ConcurrentDictionary) — done before taking the lock.
         if (!_registry.TryGetByPlayerId(msg.targetPlayerId, out var target))
         {
@@ -1515,6 +1704,7 @@ public sealed class MatchDirector
         float appliedDamage;
         var killed = false;
         var teamKill = false;
+        var selfHit = false;
         string weaponId;
 
         lock (_gate)
@@ -1526,21 +1716,9 @@ public sealed class MatchDirector
                 RejectHit(shooter, msg.targetPlayerId, $"faz {PhaseWire(_phase)}");
                 return;
             }
-            if (!shooter.IsConnected || shooter.Role != "player" || !shooter.Alive)
+            if (!ShooterGateOkLocked(shooter, out var shooterReason))
             {
-                RejectHit(shooter, msg.targetPlayerId, "atıcı ölü/oyuncu değil");
-                return;
-            }
-            // §10.6: an uncalibrated player cannot fire. With a broken alignment, where they aim and where
-            // they actually point differ — counting the hit would produce unfair deaths.
-            if (!shooter.Calibrated)
-            {
-                RejectHit(shooter, msg.targetPlayerId, "atıcı kalibresiz");
-                return;
-            }
-            if (target.PlayerId == shooter.PlayerId)
-            {
-                RejectHit(shooter, msg.targetPlayerId, "kendini hedefledi");
+                RejectHit(shooter, msg.targetPlayerId, shooterReason);
                 return;
             }
             if (!target.IsConnected || target.Role != "player" || !target.Alive)
@@ -1564,10 +1742,13 @@ public sealed class MatchDirector
                 RejectHit(shooter, msg.targetPlayerId, "hedef doğma koruması altında");
                 return;
             }
+            // §10.3 gate 5. TWO separate tests on purpose: an empty team is never a teammate, so in a
+            // team-less mode a self-hit would slip past the teammate test — and then score.
+            selfHit = target.PlayerId == shooter.PlayerId;
             teamKill = AreTeammates(shooter, target);
-            if (!_rules.FriendlyFire && teamKill)
+            if (!_rules.FriendlyFire && (selfHit || teamKill))
             {
-                RejectHit(shooter, msg.targetPlayerId, "dost ateşi yok");
+                RejectHit(shooter, msg.targetPlayerId, selfHit ? "kendine vuruş — dost ateşi yok" : "dost ateşi yok");
                 return;
             }
             // The CLIENT computes damage (distance falloff, bow draw strength, headshot…) and the server
@@ -1614,11 +1795,417 @@ public sealed class MatchDirector
         // the only score writer, so the rule stays in one place and every new mode obeys it for free.
         // `kills`/`deaths` counters and the kill feed line still run: the event happened, only the reward
         // is gone. A penalty (−1) is deliberately absent.
-        if (!teamKill) mode?.OnKill(this, shooter.PlayerId, target.PlayerId, weaponId);
-        Console.WriteLine($"[match] öldürme{(teamKill ? " (TAKIMDAŞ — skor yazılmadı)" : "")}: " +
+        // Blowing yourself up scores nothing either, and for the same reason — plus it is a SEPARATE
+        // test: with no teams, `teamKill` is false for a suicide (§10.2).
+        if (!teamKill && !selfHit) mode?.OnKill(this, shooter.PlayerId, target.PlayerId, weaponId);
+        var scorelessNote = selfHit ? " (KENDİNİ — skor yazılmadı)"
+            : teamKill ? " (TAKIMDAŞ — skor yazılmadı)" : "";
+        Console.WriteLine($"[match] öldürme{scorelessNote}: " +
                           $"{shooter.Name} → {target.Name} ({weaponId}) — skor kırmızı {ScoreRed} : mavi {ScoreBlue}");
         // The match-end check runs in the tick loop (≤100 ms); no phase change here.
     }
+
+    /// <summary>§10.3 gate 2 / §10.10 gate 2 — the SHOOTER side, shared by both hit paths so the two
+    /// cannot drift apart: connected player, inside the posthumous window, calibrated.</summary>
+    /// <remarks>The shooter need NOT be alive: damage that already left the hand (a bomb in the air)
+    /// still lands, but only inside <see cref="PosthumousDamageSeconds"/> — see that constant.
+    /// <para>§10.6: an uncalibrated player cannot fire. With a broken alignment, where they aim and where
+    /// they actually point differ.</para></remarks>
+    private bool ShooterGateOkLocked(PlayerState shooter, out string reason)
+    {
+        if (!shooter.IsConnected || shooter.Role != "player")
+        {
+            reason = "atıcı bağlantısız/oyuncu değil";
+            return false;
+        }
+        if (!shooter.Alive && (DateTime.UtcNow - shooter.DiedAt).TotalSeconds > PosthumousDamageSeconds)
+        {
+            reason = "atıcı ölü";
+            return false;
+        }
+        if (!shooter.Calibrated)
+        {
+            reason = "atıcı kalibresiz";
+            return false;
+        }
+        reason = "";
+        return true;
+    }
+
+    /// <summary>hit_report against a network object (§10.10, in order): phase → shooter → object →
+    /// damage number. A rejection is one console line, no reply.</summary>
+    /// <remarks>⚠️ Spawn protection and friendly fire are deliberately ABSENT: both judge a relation
+    /// between players and an object has no team — breaking your own team's cover with friendly fire off
+    /// is the RULE, not a leak. Score, kill feed and <see cref="IGameMode.OnKill"/> stay out for the same
+    /// reason.</remarks>
+    private async Task HandleObjectHitAsync(PlayerState shooter, HitReportMsg msg)
+    {
+        var outbox = new List<Outgoing>();
+        lock (_gate)
+        {
+            // ⚠️ WIDER than the player path's "playing only" gate (§10.3): with fireWhilePaused a target
+            // board in the lobby is hittable while a player still is not.
+            if (_phase != Phase.Playing && !_rules.FireWhilePaused)
+            {
+                RejectObjectHit(shooter, msg.targetNetId, $"faz {PhaseWire(_phase)}");
+                return;
+            }
+            if (!ShooterGateOkLocked(shooter, out var shooterReason))
+            {
+                RejectObjectHit(shooter, msg.targetNetId, shooterReason);
+                return;
+            }
+            if (!_objects.ApplyDamageLocked(msg.targetNetId, msg.damage, out var entry, out var reason))
+            {
+                RejectObjectHit(shooter, msg.targetNetId, reason);
+                return;
+            }
+            // To EVERYONE (§10.10): a broken cover is everyone's cover.
+            QueueBroadcastLocked(outbox, JsonUtil.Serialize(WorldObjectTable.ToStateMsg(entry)));
+        }
+        await FlushAsync(outbox);
+    }
+
+    // ---- Object ownership, events, dynamic spawn (§10.10) ----
+
+    /// <summary>object_grab (§10.10): the object exists → its kind is grabbable → it is free. On success
+    /// the owner is written and <c>object_state</c> goes to EVERYONE.</summary>
+    /// <remarks>⚠️ A rejection is SILENT toward the client and always will be: the result is
+    /// <c>object_state.owner</c>, and a separate denial would carry the same fact on a second channel
+    /// whose ordering against the broadcast is not guaranteed.</remarks>
+    public async Task HandleObjectGrabAsync(PlayerState player, ObjectGrabMsg msg)
+    {
+        var outbox = new List<Outgoing>();
+        lock (_gate)
+        {
+            if (!ObjectSenderOkLocked(player, MessageTypes.ObjectGrab, msg.netId)) return;
+            if (!_objects.TryGrabLocked(msg.netId, player.PlayerId, msg.hand == 1, out var entry, out var reason))
+            {
+                RejectObject(player, MessageTypes.ObjectGrab, msg.netId, reason);
+                return;
+            }
+
+            SyncOwnerLocked(entry);
+            QueueBroadcastLocked(outbox, JsonUtil.Serialize(WorldObjectTable.ToStateMsg(entry)));
+        }
+        await FlushAsync(outbox);
+    }
+
+    /// <summary>object_release (§10.10): the object leaves the OWNER's hand. Ownership is KEPT — the
+    /// flight is the thrower's to stream (§6.12) — and <c>object_state</c> goes to everyone.</summary>
+    /// <remarks>⚠️ This does not end ownership; <c>object_rest</c> does. Ending it here would leave the
+    /// flying object without a pose source, and nobody would see where it landed.</remarks>
+    public async Task HandleObjectReleaseAsync(PlayerState player, ObjectReleaseMsg msg)
+    {
+        var outbox = new List<Outgoing>();
+        lock (_gate)
+        {
+            if (!ObjectSenderOkLocked(player, MessageTypes.ObjectRelease, msg.netId)) return;
+            if (!_objects.TryReleaseLocked(msg.netId, player.PlayerId, msg.pos, msg.rot,
+                    out var entry, out var reason))
+            {
+                RejectObject(player, MessageTypes.ObjectRelease, msg.netId, reason);
+                return;
+            }
+
+            // The Held bit changed, so the lock-free mirror must follow: the 0x09 gate opens exactly
+            // here (owned but no longer held) and the pose stream starts.
+            SyncOwnerLocked(entry);
+            QueueBroadcastLocked(outbox, JsonUtil.Serialize(WorldObjectTable.ToStateMsg(entry)));
+        }
+        await FlushAsync(outbox);
+    }
+
+    /// <summary>object_rest (§10.10): the object STOPPED, so the OWNER's part is over. <c>Awake</c> drops,
+    /// the reported pose becomes the resting pose and <c>object_state</c> goes to everyone.</summary>
+    public async Task HandleObjectRestAsync(PlayerState player, ObjectRestMsg msg)
+    {
+        var outbox = new List<Outgoing>();
+        lock (_gate)
+        {
+            if (!ObjectSenderOkLocked(player, MessageTypes.ObjectRest, msg.netId)) return;
+            if (!_objects.TryRestLocked(msg.netId, player.PlayerId, msg.pos, msg.rot,
+                    out var entry, out var reason))
+            {
+                RejectObject(player, MessageTypes.ObjectRest, msg.netId, reason);
+                return;
+            }
+
+            SyncOwnerLocked(entry);
+            _lastObjectPoses.TryRemove(entry.NetId, out _);
+            QueueBroadcastLocked(outbox, JsonUtil.Serialize(WorldObjectTable.ToStateMsg(entry)));
+        }
+        await FlushAsync(outbox);
+    }
+
+    /// <summary>object_event (§10.10, in order): the object exists → the kind accepts this
+    /// <c>name</c> → the policy's owner requirement → the phase gate. Then the MODE interprets it and its
+    /// answer decides ONE thing — whether the same <c>object_event</c> is relayed to everyone.</summary>
+    /// <remarks>⚠️ Any <c>object_state</c> was already published by the writing call
+    /// (<c>SetObjectStage</c>/<c>SetObjectFlags</c>/<c>SetObjectPayload</c>/<c>SpawnObject</c>/
+    /// <c>DespawnObject</c>): one event may change SEVERAL objects, so publishing "the event's object"
+    /// here would announce only one of them. Relaying on top of that would announce one fact twice and
+    /// the client would play the presentation twice.
+    /// <para>The mode hook runs OUTSIDE the lock (hook contract) and may spawn/despawn while it runs, so
+    /// the outcome message is queued into <see cref="_pendingOutbox"/> as well — that keeps it BEHIND
+    /// whatever the hook queued, instead of racing ahead of it on a second sender. That queue is also why
+    /// this handler is SYNCHRONOUS: it sends nothing itself, the tick loop dispatches.</para></remarks>
+    public void HandleObjectEvent(PlayerState player, ObjectEventMsg msg)
+    {
+        IGameMode? mode;
+        string kind;
+        lock (_gate)
+        {
+            if (!ObjectSenderOkLocked(player, MessageTypes.ObjectEvent, msg.netId)) return;
+            if (!_objects.TryGetLocked(msg.netId, out var entry))
+            {
+                RejectObject(player, MessageTypes.ObjectEvent, msg.netId, $"netId {msg.netId} bu sahnede yok");
+                return;
+            }
+            // Free text on the wire, none on the server (§10.10 gate 2): an unlisted name is rejected.
+            if (!_maps.Kinds.TryGetEvent(entry.Kind, msg.name, out var rule))
+            {
+                RejectObject(player, MessageTypes.ObjectEvent, msg.netId,
+                    $"'{entry.Kind}' türü '{msg.name}' olayını kabul etmiyor");
+                return;
+            }
+            if (string.Equals(rule.policy, ArenaProtocol.OBJECT_EVENT_POLICY_OWNER, StringComparison.OrdinalIgnoreCase)
+                && entry.Owner != player.PlayerId)
+            {
+                RejectObject(player, MessageTypes.ObjectEvent, msg.netId,
+                    $"'{msg.name}' yalnız sahibine açık (owner {entry.Owner})");
+                return;
+            }
+            if (!string.Equals(rule.phaseGate, ArenaProtocol.OBJECT_PHASE_GATE_ANY, StringComparison.OrdinalIgnoreCase)
+                && _phase != Phase.Playing)
+            {
+                RejectObject(player, MessageTypes.ObjectEvent, msg.netId, $"faz {PhaseWire(_phase)}");
+                return;
+            }
+
+            kind = entry.Kind;
+            mode = _mode;
+        }
+
+        var stateChanged = mode?.OnObjectEvent(this, player.PlayerId, msg.netId, kind, msg) ?? false;
+
+        // The mode already broadcast every state it wrote; nothing left to announce.
+        if (stateChanged) return;
+
+        lock (_gate)
+        {
+            // Cosmetic: the same body goes back out to everyone, sender included (it ignores its own).
+            QueueBroadcastLocked(_pendingOutbox, JsonUtil.Serialize(msg));
+        }
+    }
+
+    /// <summary>Common sender gate of the three object messages: a connected PLAYER. Admins and
+    /// pre-hello connections have no hands.</summary>
+    private bool ObjectSenderOkLocked(PlayerState player, string type, int netId)
+    {
+        if (player.IsConnected && player.Role == "player") return true;
+
+        RejectObject(player, type, netId, "gönderen bağlantısız/oyuncu değil");
+        return false;
+    }
+
+    /// <summary>Mirrors one entry's ownership into the lock-free map read by StateHost (§6.12).</summary>
+    private void SyncOwnerLocked(NetObjectEntry entry)
+    {
+        if (entry.Owner == 0) _objectOwners.TryRemove(entry.NetId, out _);
+        else _objectOwners[entry.NetId] = new ObjectOwnership(entry.Owner,
+            (entry.Flags & ArenaProtocol.OBJECT_FLAG_HELD) != 0);
+    }
+
+    /// <summary>Rebuilds the lock-free owner map from the table; used after a rebuild/reset, where owners
+    /// disappear wholesale.</summary>
+    private void SyncAllOwnersLocked()
+    {
+        _objectOwners.Clear();
+        foreach (var entry in _objects.OwnedLocked()) SyncOwnerLocked(entry);
+    }
+
+    /// <summary>Frees every object held by this player and broadcasts one <c>object_state</c> each
+    /// (§10.10): the owner died, dropped or was kicked and will never send <c>object_release</c>.</summary>
+    private void ReleaseObjectsOfLocked(List<Outgoing> outbox, int playerId)
+    {
+        var released = _objects.ReleaseOwnedByLocked(playerId, LastObjectPose);
+        foreach (var entry in released)
+        {
+            SyncOwnerLocked(entry);
+            _lastObjectPoses.TryRemove(entry.NetId, out _);
+            QueueBroadcastLocked(outbox, JsonUtil.Serialize(WorldObjectTable.ToStateMsg(entry)));
+        }
+    }
+
+    private PoseData? LastObjectPose(int netId) =>
+        _lastObjectPoses.TryGetValue(netId, out var pose) ? pose : null;
+
+    /// <summary>Sweep for owners the server will never hear from again (§10.10): a record that dropped to
+    /// <c>left</c> or was removed entirely (kick).</summary>
+    /// <remarks>⚠️ A sweep and not an event hook because the two ways out differ: <c>left</c> is raised by
+    /// the registry, but a KICKED player's record is gone, so no event could name the owner any more —
+    /// and the object would stay locked until the round reset. Death is handled at its own single writer
+    /// (<see cref="KillPlayerLocked"/>), so it never reaches this sweep.</remarks>
+    private void TickObjectOwnersLocked(List<Outgoing> outbox)
+    {
+        if (_objectOwners.IsEmpty) return;
+
+        List<int>? lost = null;
+        foreach (var pair in _objectOwners)
+        {
+            var playerId = pair.Value.PlayerId;
+            var gone = !_registry.TryGetByPlayerId(playerId, out var owner)
+                       || owner.Connection == PlayerConnection.Left;
+            if (!gone) continue;
+            (lost ??= new List<int>()).Add(playerId);
+        }
+        if (lost == null) return;
+
+        foreach (var playerId in lost.Distinct()) ReleaseObjectsOfLocked(outbox, playerId);
+    }
+
+    /// <summary>May this player stream the object's pose (§6.12)? Owner, and the object is NOT in a hand
+    /// — the flight window between <c>object_release</c> and <c>object_rest</c>. Read LOCK-FREE from
+    /// StateHost's recv thread: the pose gate must not queue behind the match lock.</summary>
+    /// <remarks>⚠️ A HELD object is rejected on purpose: its pose comes from the owner's hand, which
+    /// already streams at 20 Hz (<c>0x01</c>). Carrying it on both channels drifts the hand and the
+    /// object apart — the symptom is "the knife floats next to the hand".</remarks>
+    public bool IsObjectOwner(int netId, int playerId) =>
+        playerId != 0 && _objectOwners.TryGetValue(netId, out var owner)
+                      && owner.PlayerId == playerId && !owner.Held;
+
+    /// <summary>Records the pose last seen on <c>0x09</c> (§6.12). Written from the recv thread, so the
+    /// map is concurrent and the match lock is never taken here.</summary>
+    /// <remarks>⚠️ This is NOT the object's state: <c>world_state</c> must carry a RESTING pose, and this
+    /// one is a frame from mid-flight. Its only reader is the "owner dropped" release path.</remarks>
+    public void RecordObjectPose(int netId, PoseData pose) => _lastObjectPoses[netId] = pose;
+
+    /// <summary>Creates a runtime network object and announces it with <c>object_spawn</c> (§10.10);
+    /// returns the allocated <c>netId</c>, or <c>0</c> when rejected (unknown kind / range exhausted).</summary>
+    /// <remarks>Called from a mode hook, i.e. OUTSIDE the lock — the message therefore goes into
+    /// <see cref="_pendingOutbox"/> (a mode cannot await), like <see cref="TryResetObjectsForMode"/>.
+    /// <para>⚠️ There is no client-side spawn request and there will not be: the two sources of a spawn
+    /// are the mode and the kind's own rule.</para>
+    /// <para>With <paramref name="owner"/> set the object is born DIRECTLY IN A HAND; there is no separate
+    /// "hand it over" message, because the <c>object_spawn</c> body already carries <c>owner</c> +
+    /// <c>flags</c> — a second message would leave a frame showing the object on the floor.</para></remarks>
+    public int SpawnObject(string kind, PoseData pose, int owner = 0, bool rightHand = false,
+        string? payload = null)
+    {
+        lock (_gate)
+        {
+            if (!_objects.TrySpawnLocked(kind, pose, owner, rightHand, payload, out var entry, out var reason))
+            {
+                Console.WriteLine($"[world] object_spawn reddedildi ('{kind}'): {reason}.");
+                return 0;
+            }
+
+            if (owner != 0) SyncOwnerLocked(entry);
+
+            // Same body as object_state, only the type differs (§5.3): an unknown netId is a drift
+            // warning there and the truth itself here.
+            var spawn = WorldObjectTable.ToStateMsg(entry);
+            spawn.type = MessageTypes.ObjectSpawn;
+            QueueBroadcastLocked(_pendingOutbox, JsonUtil.Serialize(spawn));
+            return entry.NetId;
+        }
+    }
+
+    /// <summary>Removes a runtime object and announces <c>object_despawn</c> (§10.10); false = unknown id
+    /// or a scene object (whose id is baked into the scene and cannot be removed).</summary>
+    public bool DespawnObject(int netId)
+    {
+        lock (_gate)
+        {
+            if (!_objects.TryDespawnLocked(netId, out _, out var reason))
+            {
+                Console.WriteLine($"[world] object_despawn reddedildi (netId {netId}): {reason}.");
+                return false;
+            }
+
+            _objectOwners.TryRemove(netId, out _);
+            _lastObjectPoses.TryRemove(netId, out _);
+            QueueBroadcastLocked(_pendingOutbox, JsonUtil.Serialize(new ObjectDespawnMsg { netId = netId }));
+            return true;
+        }
+    }
+
+    /// <summary>Writes an object's per-kind stage (§10.10) and broadcasts the resulting
+    /// <c>object_state</c>; false = unknown id or unchanged value (then nothing is published).</summary>
+    /// <remarks>⚠️ The WRITER announces: one event may change several objects (a valid serve touches the
+    /// customer, the ingredients and the score at once), so "publish the event's object" would announce
+    /// only one of them.</remarks>
+    public bool SetObjectStage(int netId, int stage)
+    {
+        lock (_gate)
+        {
+            if (!_objects.SetStageLocked(netId, stage, out var entry)) return false;
+            QueueBroadcastLocked(_pendingOutbox, JsonUtil.Serialize(WorldObjectTable.ToStateMsg(entry)));
+            return true;
+        }
+    }
+
+    /// <summary>Sets/clears object flag bits (§10.10) and broadcasts the resulting <c>object_state</c>;
+    /// false = unknown id or nothing changed. Same writer-announces rule as
+    /// <see cref="SetObjectStage"/>.</summary>
+    public bool SetObjectFlags(int netId, int setMask, int clearMask)
+    {
+        lock (_gate)
+        {
+            if (!_objects.SetFlagsLocked(netId, setMask, clearMask, out var entry)) return false;
+            QueueBroadcastLocked(_pendingOutbox, JsonUtil.Serialize(WorldObjectTable.ToStateMsg(entry)));
+            return true;
+        }
+    }
+
+    /// <summary>Writes an object's mode-defined per-instance text (§10.10) and broadcasts the resulting
+    /// <c>object_state</c>; false = unknown id or unchanged value. Same writer-announces rule as
+    /// <see cref="SetObjectStage"/>.</summary>
+    public bool SetObjectPayload(int netId, string payload)
+    {
+        lock (_gate)
+        {
+            if (!_objects.SetPayloadLocked(netId, payload, out var entry)) return false;
+            QueueBroadcastLocked(_pendingOutbox, JsonUtil.Serialize(WorldObjectTable.ToStateMsg(entry)));
+            return true;
+        }
+    }
+
+    /// <summary>Reads one object's state for a mode; false = no such object (outputs stay default).</summary>
+    /// <remarks>⚠️ Returns COPIES, never the <see cref="NetObjectEntry"/>: mode hooks run OUTSIDE the
+    /// lock, so a leaked reference would be read while another thread writes it.</remarks>
+    public bool TryReadObject(int netId, out string kind, out int stage, out int owner, out int flags,
+        out PoseData pose, out bool hasPose)
+    {
+        lock (_gate)
+        {
+            if (!_objects.TryGetLocked(netId, out var entry))
+            {
+                kind = "";
+                stage = 0;
+                owner = 0;
+                flags = 0;
+                pose = default;
+                hasPose = false;
+                return false;
+            }
+
+            kind = entry.Kind;
+            stage = entry.Stage;
+            owner = entry.Owner;
+            flags = entry.Flags;
+            pose = entry.Pose;
+            hasPose = entry.HasPose;
+            return true;
+        }
+    }
+
+    /// <summary>Rejected object message: one console line, nothing sent back (§10.10).</summary>
+    /// <remarks>NOT throttled like the hit path: grabs and interactions are hand-driven, a few per
+    /// second at most — and a silently dropped grab with no trace is the harder bug to find.</remarks>
+    private void RejectObject(PlayerState player, string type, int netId, string reason) =>
+        Console.WriteLine($"[world] {type} reddedildi ({player.Name} → netId {netId}): {reason}.");
 
     /// <summary>revive_request (§10.4): revives when phase is Live + the player is dead + the delay has
     /// elapsed. Failing conditions are ignored SILENTLY — the client retries about once a second until
@@ -1794,6 +2381,9 @@ public sealed class MatchDirector
         _matchStartPending = false;
         _roundStartPending = false;
         _matchStarted = false;
+        // The mode that would have consumed it is gone; carrying the press into the NEXT match would
+        // skip that match's first hold.
+        _modeContinuePending = false;
 
         foreach (var player in _registry.Snapshot())
         {
@@ -1801,6 +2391,8 @@ public sealed class MatchDirector
             ResetMatchStateLocked(player);
             QueueReadyClearLocked(player);
         }
+
+        RebuildObjectsLocked(_sceneName); // §10.10: every staging resets
 
         var returnMsg = new ReturnToLobbyMsg
         {
@@ -1810,6 +2402,7 @@ public sealed class MatchDirector
             rules = _rules.ToInfo()
         };
         QueueBroadcastLocked(outbox, JsonUtil.Serialize(returnMsg));
+        QueueWorldStateLocked(outbox);
         QueueBroadcastLocked(outbox, JsonUtil.Serialize(BuildMatchStateLocked()));
 
         // ⚠️ The match ledger does NOT close here, it is only flagged (§10.2): the cleanup runs AFTER this
@@ -2014,6 +2607,38 @@ public sealed class MatchDirector
         }
     }
 
+    /// <summary>Rebuilds the network object table for the scene being staged (§10.10): every object at
+    /// full health, no flags.</summary>
+    /// <remarks>⚠️ Deliberately NOT hooked to <see cref="SetSceneLocked"/>, which returns early when the
+    /// same scene is staged again: a SECOND match on the same map must reset too. The client reloads the
+    /// scene and draws its objects intact either way, so a stale table would leave the server holding
+    /// covers the players see standing.
+    /// <para>An unknown scene empties the table — the server invents no objects.</para></remarks>
+    private void RebuildObjectsLocked(string sceneName)
+    {
+        var map = _maps.TryGet(sceneName, out var found) ? found : null;
+        _objects.RebuildLocked(map, _maps.Kinds);
+        // The lock-free mirrors describe the OLD scene now; a stale owner would let a dropped 0x09
+        // packet pass ownership validation for an object that no longer exists.
+        _objectOwners.Clear();
+        _lastObjectPoses.Clear();
+    }
+
+    /// <summary>Queues a full <c>world_state</c> to everyone; silent when the scene has no network
+    /// objects (§10.10) — an empty snapshot tells the client nothing.</summary>
+    private void QueueWorldStateLocked(List<Outgoing> outbox)
+    {
+        if (_objects.Count == 0) return;
+
+        QueueBroadcastLocked(outbox, BuildWorldStateJsonLocked());
+    }
+
+    private string BuildWorldStateJsonLocked() => JsonUtil.Serialize(new WorldStateMsg
+    {
+        sceneName = _sceneName,
+        objects = _objects.BuildStatesLocked()
+    });
+
     /// <summary>Queues <c>health_update</c> ONLY to the subject player + admins (§10.3).</summary>
     /// <remarks>Why not a broadcast: the message has two consumers and both are narrow —
     /// <c>PlayerCombatState</c> already discards every message outside its own <c>playerId</c>, and the
@@ -2144,7 +2769,15 @@ public sealed class MatchDirector
     /// RejectLogIntervalSeconds (so the console does not drown while someone keeps firing at a dead
     /// target). Suppressed lines are not swallowed: their count is appended to the next printed line.
     /// Phase/kill/match-end/revive lines are NOT throttled (they are rare).</summary>
-    private void RejectHit(PlayerState shooter, int targetPlayerId, string reason)
+    private void RejectHit(PlayerState shooter, int targetPlayerId, string reason) =>
+        RejectHitLog(shooter, targetPlayerId.ToString(), reason);
+
+    /// <summary>Network object target (§10.10): the label is a netId, the throttle is the shooter's
+    /// same one — one player spraying a broken cover must not drown the console either.</summary>
+    private void RejectObjectHit(PlayerState shooter, int netId, string reason) =>
+        RejectHitLog(shooter, $"netId {netId}", reason);
+
+    private void RejectHitLog(PlayerState shooter, string target, string reason)
     {
         int suppressed;
         lock (_rejectLogGate)
@@ -2161,6 +2794,6 @@ public sealed class MatchDirector
             _suppressedRejects.Remove(shooter.PlayerId);
         }
         var tail = suppressed > 0 ? $" (+{suppressed} bastırıldı)" : "";
-        Console.WriteLine($"[match] hit_report reddedildi ({shooter.Name} → {targetPlayerId}): {reason}.{tail}");
+        Console.WriteLine($"[match] hit_report reddedildi ({shooter.Name} → {target}): {reason}.{tail}");
     }
 }

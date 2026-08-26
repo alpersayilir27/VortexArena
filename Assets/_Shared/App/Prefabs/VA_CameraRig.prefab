@@ -126,6 +126,56 @@ Transform:
   - {fileID: 2947731797502556815}
   m_Father: {fileID: 1878723380913562720}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &90770108700450292
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 6542367850718168981}
+  - component: {fileID: 1401997378781352581}
+  m_Layer: 0
+  m_Name: WristHolster
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &6542367850718168981
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 90770108700450292}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 8533244126985759826}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1401997378781352581
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 90770108700450292}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8857098fc74f5b6479f71e4c862a2d39, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.WristHolster
+  throwable: {fileID: 11400000, guid: 8f53199a885f7cb45b59c7411ba363a0, type: 2}
+  socketIndicatorPrefab: {fileID: 7854560880376907916, guid: c8100365a9515e243868583b240b9804, type: 3}
+  acceptRadius: 0.12
+  localOffset: {x: 0, y: -0.02, z: -0.1}
+  localEuler: {x: 0, y: 0, z: 0}
+  refillClip: {fileID: 0}
 --- !u!1 &143541157162983047
 GameObject:
   m_ObjectHideFlags: 0
@@ -8010,7 +8060,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Meta.XR.BuildingBlocks::Meta.XR.BuildingBlocks.BuildingBlock
   blockId: 5817f7c0-f2a5-45f9-a5ca-64264e0166e8
-  instanceId: 508b0d34-6318-4392-9b3e-0a248ce5339e
+  instanceId: 92aa6acb-6cab-4b69-a1bf-7ae084e720c6
   version: 1
   installationRoutineCheckpoint:
     _installationRoutineId: 
@@ -8742,6 +8792,7 @@ Transform:
   m_Children:
   - {fileID: 6938282271075570480}
   - {fileID: 4932967236195108406}
+  - {fileID: 6542367850718168981}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &6384829237943440420
@@ -8757,7 +8808,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Meta.XR.BuildingBlocks::Meta.XR.BuildingBlocks.BuildingBlock
   blockId: e47682b9-c270-40b1-b16d-90b627a5ce1b
-  instanceId: 618b4a38-59da-48bc-af37-56e40eba089b
+  instanceId: b3bb3f6b-52c6-4906-a2bb-80f5d402372b
   version: 1
   installationRoutineCheckpoint:
     _installationRoutineId: 
@@ -10729,7 +10780,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Meta.XR.BuildingBlocks::Meta.XR.BuildingBlocks.BuildingBlock
   blockId: 5817f7c0-f2a5-45f9-a5ca-64264e0166e8
-  instanceId: fca0daa9-254a-41c6-b8d5-81f90c422c0a
+  instanceId: b16e7075-d873-4b38-95a2-12fd93dcd32d
   version: 1
   installationRoutineCheckpoint:
     _installationRoutineId: 
@@ -11693,7 +11744,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Meta.XR.BuildingBlocks::Meta.XR.BuildingBlocks.BuildingBlock
   blockId: 81f55626-5fad-45e9-a1df-184f330da7ba
-  instanceId: ddf10446-f59e-4611-96e7-207d1a9ab324
+  instanceId: 2981f71e-3c8e-4e39-ab74-5f8dc3e744f4
   version: 1
   installationRoutineCheckpoint:
     _installationRoutineId: 2063f481-1b63-4eda-9ee8-a00df98536bc

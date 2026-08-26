@@ -34,6 +34,9 @@ namespace VortexArena.App.Admin
     /// (<see cref="ApplyOpenScene"/>): they diverge after a match ends, and bound to the selection
     /// the operator could never restage that arena, since <see cref="TMP_Dropdown"/> fires no
     /// <c>onValueChanged</c> for the selected row. Hence also no "already selected" early-out.</para>
+    /// <para>Game type (§11) sits ABOVE mode/map as a purely LOCAL filter — it never goes on the
+    /// wire — and its selector is drawn only when the catalog holds more than one type
+    /// (<see cref="CollectGameTypes"/>).</para>
     /// <para>List choices are dropdowns, numbers are steppers: mode/map grow with the catalog, while
     /// duration/limit have no list to browse. The dropdown template lives in the prefab; this class
     /// only fills options and syncs the cursor.</para>
@@ -100,6 +103,14 @@ namespace VortexArena.App.Admin
         private AdminPreferencesTab _tab = AdminPreferencesTab.Match;
 
         [Header("MAÇ bölümü (ortak)")]
+
+        /// <summary>Game type selector (§11) — the layer above mode/map. ⚠️ Options are filled by
+        /// CODE; the prefab list is a template and is cleared at runtime.</summary>
+        [SerializeField] private TMP_Dropdown _gameTypeDropdown;
+
+        [Tooltip("Oyun tipi satırının kökü (etiket + açılır liste). Katalogda tek oyun tipi varsa " +
+                 "bu obje kapatılır — satır hiç çizilmez.")]
+        [SerializeField] private GameObject _gameTypeRow;
 
         /// <summary>Mode selector. ⚠️ Options are filled by CODE from the catalog; the prefab list
         /// is a template and is cleared at runtime. Caption text is the dropdown's own.</summary>
@@ -272,6 +283,18 @@ namespace VortexArena.App.Admin
         private int _modeIndex;
         private int _mapIndex;
 
+        /// <summary>Selected game type (§11). ⚠️ LOCAL filter only — it is never sent:
+        /// <c>set_selection</c>/<c>start_match</c> still carry just <c>modeId + sceneName</c>.</summary>
+        private GameType _gameType = GameType.QuickBattle;
+
+        /// <summary>Game types present in the catalog, in enum order
+        /// (<see cref="CollectGameTypes"/>).</summary>
+        private readonly List<GameType> _gameTypes = new List<GameType>();
+
+        /// <summary>Is the game type selector drawn at all? With a single type in the catalog the
+        /// row is hidden, so today's operator flow gains no extra step.</summary>
+        private bool HasGameTypeRow => _gameTypes.Count > 1;
+
         /// <summary>Output endpoints read from Windows. ⚠️ Not cached — refreshed on every panel
         /// open, because a stale list would offer a device that no longer exists.</summary>
         private readonly List<AudioOutputDevice> _audioDevices = new List<AudioOutputDevice>();
@@ -299,9 +322,10 @@ namespace VortexArena.App.Admin
                 _root.SetActive(false); // visibility is decided by Apply()
             }
 
-            AdminContent.CollectModes(_modes);
-            RebuildModeOptions(); // mode list comes from the catalog and never changes afterwards -> once
-            RefreshMapList();     // builds the map options itself (mode + venue filter)
+            CollectGameTypes();       // filters both lists below (§11)
+            RebuildGameTypeOptions();
+            RefreshModeList();    // catalog modes of the selected game type
+            RefreshMapList();     // builds the map options itself (mode + venue + game type filter)
             RefreshAudioDeviceList();
             ResetMatchParametersToModeDefaults();
             Apply();
@@ -316,6 +340,7 @@ namespace VortexArena.App.Admin
             Wire(_closeButton, AdminSession.ClosePanel);
             WireTabs();
 
+            WireDropdown(_gameTypeDropdown, SelectGameType);
             WireDropdown(_modeDropdown, SelectMode);
             WireDropdown(_mapDropdown, SelectMap);
             Wire(_durationPrev, DurationPrev);
@@ -643,6 +668,28 @@ namespace VortexArena.App.Admin
         /// change.</para>
         /// <para>If the selection is refused (match running, stale index) <see cref="Apply"/> pulls
         /// the cursor back — the dropdown already moved its own value.</para></summary>
+        /// <summary>Game type selected (§11) — rebuilds both lists below it. Nothing is sent: the
+        /// game type is a local filter, and the operator's next mode/map touch publishes as usual.
+        /// <para>Passes the same gate as mode/map (<see cref="GuardSelectionChange"/>): the rebuilt
+        /// lists would move the selection, which is a scene command while a match is set up.</para></summary>
+        private void SelectGameType(int index)
+        {
+            HideDropdown(_gameTypeDropdown);
+
+            if (index < 0 || index >= _gameTypes.Count || _gameTypes[index] == _gameType ||
+                !GuardSelectionChange())
+            {
+                Apply();
+                return;
+            }
+
+            _gameType = _gameTypes[index];
+            RefreshModeList(); // both lists are filtered by game type; mode first, the map list follows it
+            RefreshMapList();
+            ResetMatchParametersToModeDefaults();
+            Apply();
+        }
+
         private void SelectMode(int index)
         {
             HideDropdown(_modeDropdown);
@@ -913,6 +960,8 @@ namespace VortexArena.App.Admin
 
             if (!string.IsNullOrEmpty(sharedMode) && sharedMode != SelectedModeId)
             {
+                AlignGameTypeToRemoteMode(sharedMode);
+
                 int index = IndexOfMode(sharedMode);
                 if (index >= 0)
                 {
@@ -978,6 +1027,33 @@ namespace VortexArena.App.Admin
             Apply();
         }
 
+        /// <summary>Pulls the local game type to the one the remote <paramref name="modeId"/> belongs
+        /// to, so a selection made by another admin stays visible here (§11). Unknown modes are left
+        /// alone — the cursor simply stays put, as before.
+        /// <para>⚠️ Applies remote state, so it neither guards
+        /// (<see cref="GuardSelectionChange"/>) nor publishes: echoing back would make two admins
+        /// bounce the selection off each other.</para></summary>
+        private void AlignGameTypeToRemoteMode(string modeId)
+        {
+            if (IndexOfMode(modeId) >= 0)
+            {
+                return;
+            }
+
+            // Not in the filtered list: the remote selection may belong to another game type.
+            ModeDefinition mode = AdminContent.Catalog != null
+                ? AdminContent.Catalog.FindMode(modeId)
+                : null;
+            if (mode == null || mode.GameType == _gameType)
+            {
+                return;
+            }
+
+            _gameType = mode.GameType;
+            RefreshModeList();
+            RefreshMapList(); // the caller writes the cursors AFTER both lists are rebuilt
+        }
+
         private int IndexOfMode(string modeId)
         {
             for (int i = 0; i < _modes.Count; i++)
@@ -1004,6 +1080,28 @@ namespace VortexArena.App.Admin
             return -1;
         }
 
+        /// <summary>Rebuilds the mode list for the selected game type (§11). The catalog's modes
+        /// never change; only the game type filter does, so the cursor keeps the selected mode when
+        /// it survives and falls back to the first row otherwise.</summary>
+        private void RefreshModeList()
+        {
+            string previous = SelectedModeId;
+
+            AdminContent.CollectModes(_modes);
+            for (int i = _modes.Count - 1; i >= 0; i--)
+            {
+                if (_modes[i] == null || _modes[i].GameType != _gameType)
+                {
+                    _modes.RemoveAt(i);
+                }
+            }
+
+            int index = string.IsNullOrEmpty(previous) ? -1 : IndexOfMode(previous);
+            _modeIndex = index >= 0 ? index : 0;
+
+            RebuildModeOptions();
+        }
+
         /// <summary>Rebuilds the map list from the selected mode plus the server's venue. If the
         /// selected map survives, the cursor stays on it: the list also rebuilds when the venue
         /// filter arrives, and resetting to the top would change the shown map for no visible
@@ -1014,6 +1112,16 @@ namespace VortexArena.App.Admin
             string previous = SelectedSceneName;
 
             AdminContent.CollectMaps(modeId, _maps);
+
+            // Game type filter ON TOP of AdminContent's mode+venue filter (§11) — CollectMaps keeps
+            // its contract. With one game type in the catalog this removes nothing.
+            for (int i = _maps.Count - 1; i >= 0; i--)
+            {
+                if (_maps[i] == null || _maps[i].GameType != _gameType)
+                {
+                    _maps.RemoveAt(i);
+                }
+            }
 
             // The lobby row refreshes WITH the list: when the venue filter changes the lobby changes
             // too, since each venue has its own (§10.7).
@@ -1059,6 +1167,75 @@ namespace VortexArena.App.Admin
         /// <summary>Scratch buffer for option labels — shareable because
         /// <see cref="TMP_Dropdown.AddOptions(List{string})"/> copies into its own list.</summary>
         private readonly List<string> _optionScratch = new List<string>();
+
+        /// <summary>Distinct game types of the catalog's maps, in ENUM order — a stable order keeps
+        /// the rows from moving between sessions. Read once: the catalog cannot change at
+        /// runtime.</summary>
+        private void CollectGameTypes()
+        {
+            _gameTypes.Clear();
+
+            MapDefinition[] maps = AdminContent.Catalog != null ? AdminContent.Catalog.Maps : null;
+            if (maps == null)
+            {
+                return;
+            }
+
+            var all = (GameType[])System.Enum.GetValues(typeof(GameType));
+            for (int i = 0; i < all.Length; i++)
+            {
+                for (int m = 0; m < maps.Length; m++)
+                {
+                    if (maps[m] == null || string.IsNullOrEmpty(maps[m].SceneName) ||
+                        maps[m].GameType != all[i])
+                    {
+                        continue;
+                    }
+
+                    _gameTypes.Add(all[i]);
+                    break;
+                }
+            }
+
+            // The default type may be absent from this catalog; without this the lists below would
+            // filter down to nothing and the panel would look empty.
+            if (_gameTypes.Count > 0 && !_gameTypes.Contains(_gameType))
+            {
+                _gameType = _gameTypes[0];
+            }
+        }
+
+        /// <summary>Fills the game type selector, or hides its row when the catalog has a single
+        /// type. ⚠️ With no row bound the selector itself is hidden: a control left on screen would
+        /// still show the prefab's template options.</summary>
+        private void RebuildGameTypeOptions()
+        {
+            GameObject row = _gameTypeRow != null ? _gameTypeRow
+                : _gameTypeDropdown != null ? _gameTypeDropdown.gameObject : null;
+            if (row != null && row.activeSelf != HasGameTypeRow)
+            {
+                row.SetActive(HasGameTypeRow);
+            }
+
+            if (!HasGameTypeRow)
+            {
+                return;
+            }
+
+            _optionScratch.Clear();
+            for (int i = 0; i < _gameTypes.Count; i++)
+            {
+                _optionScratch.Add(GameTypeLabel(_gameTypes[i]));
+            }
+
+            FillDropdown(_gameTypeDropdown, _optionScratch, NoModesLabel);
+            SyncDropdown(_gameTypeDropdown, _gameTypes.IndexOf(_gameType), _gameTypes.Count);
+        }
+
+        private static string GameTypeLabel(GameType type)
+        {
+            return type == GameType.Kids ? "Çocuk Oyunları" : "Hızlı Savaş";
+        }
 
         private void RebuildModeOptions()
         {
@@ -1345,6 +1522,11 @@ namespace VortexArena.App.Admin
 
             // The visible text is the dropdown's own captionText (options were written in
             // RebuildModeOptions/RebuildMapOptions); only the cursor is synced here.
+            if (HasGameTypeRow)
+            {
+                SyncDropdown(_gameTypeDropdown, _gameTypes.IndexOf(_gameType), _gameTypes.Count);
+            }
+
             SyncDropdown(_modeDropdown, _modeIndex, _modes.Count);
             SyncMapDropdown();
 
@@ -1627,10 +1809,12 @@ namespace VortexArena.App.Admin
 
             // Disabled on an empty list too: a dropdown that only shows "no catalog" looks like
             // there is something to pick. The lobby row alone still counts as pickable.
+            SetInteractable(_gameTypeDropdown, open && HasGameTypeRow);
             SetInteractable(_modeDropdown, open && _modes.Count > 0);
             SetInteractable(_mapDropdown, open && (_maps.Count > 0 || HasLobbyRow));
 
             Color valueColor = open ? UiKit.Title : UiKit.Faint;
+            SetCaptionColor(_gameTypeDropdown, valueColor);
             SetCaptionColor(_modeDropdown, valueColor);
             SetCaptionColor(_mapDropdown, valueColor);
         }

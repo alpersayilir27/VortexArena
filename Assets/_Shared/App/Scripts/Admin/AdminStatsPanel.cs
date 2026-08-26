@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Text;
 using TMPro;
@@ -86,6 +87,8 @@ namespace VortexArena.App.Admin
         [Tooltip("Açılıp kapanan kart — panel kapalıyken bu obje devre dışı bırakılır.")]
         [SerializeField] private GameObject _root;
         [SerializeField] private Button _closeButton;
+        [Tooltip("Kapat düğmesinin yazısı — tur sonu beklerken TURA DEVAM'a döner. Boş bırakılabilir.")]
+        [SerializeField] private TextMeshProUGUI _closeLabel;
         [SerializeField] private TextMeshProUGUI _headline;
         [SerializeField] private TextMeshProUGUI _teamSummary;
         [SerializeField] private TextMeshProUGUI _matchSummary;
@@ -169,6 +172,16 @@ namespace VortexArena.App.Admin
         /// button would stay red after the press ends.</summary>
         private bool _clearAllHoldPainted;
 
+        /// <summary>Was the panel open on the previous refresh — the CLOSE transition is what releases a
+        /// parked round (see <see cref="Apply"/>).</summary>
+        private bool _wasOpen;
+
+        /// <summary>Authored look of the close button's label, restored when no round is parked.</summary>
+        private string _closeDefaultText = "";
+
+        /// <inheritdoc cref="_closeDefaultText"/>
+        private Color _closeDefaultColor = Color.white;
+
         private float WideRowHeight => HeightOf(ref _wideRowHeight, _rowPrefab);
 
         private float NarrowRowHeight => HeightOf(ref _narrowRowHeight, NarrowPrefab);
@@ -195,7 +208,15 @@ namespace VortexArena.App.Admin
 
         private void Start()
         {
+            if (_closeLabel != null)
+            {
+                _closeDefaultText = _closeLabel.text;
+                _closeDefaultColor = _closeLabel.color;
+            }
+
             // ⚠️ No persistent onClick entries in the prefab (see AdminPreferencesPanel.WireButtons).
+            // ⚠️ The button still only CLOSES: releasing a parked round hangs off the close transition in
+            // Apply(), so the I key does exactly what the button does.
             Wire(_closeButton, AdminSession.ClosePanel);
             Wire(_calibrateAllButton, ReloadAllCalibrations);
             Wire(_measureAllButton, () => AdminCommands.MeasureBodyScale(0));
@@ -310,6 +331,20 @@ namespace VortexArena.App.Admin
             }
 
             bool open = AdminSession.OpenPanel == AdminPanelKind.Stats;
+            bool waiting = RoundReviewWaiting();
+
+            // ⚠️ CLOSING the panel IS the operator's "carry on" for a parked round (§10.5): the round
+            // stopped precisely so this table could be read, so putting it away is them saying they are
+            // done. Hung off the transition rather than the close button, so the `I` key means the same
+            // thing — and read BEFORE anything else, while `waiting` still describes the server the
+            // operator was looking at.
+            if (_wasOpen && !open && waiting)
+            {
+                AdminCommands.ModeContinue();
+            }
+
+            _wasOpen = open;
+
             if (_root.activeSelf != open)
             {
                 _root.SetActive(open);
@@ -332,6 +367,7 @@ namespace VortexArena.App.Admin
 
             // BEFORE the roster: the destructive button must look right even with no player list.
             ApplyClearAllButton();
+            ApplyCloseButton(waiting);
 
             AdminRoster roster = AdminRoster.Instance;
             if (!open || roster == null)
@@ -606,6 +642,32 @@ namespace VortexArena.App.Admin
             }
         }
 
+        /// <summary>Is the server parked on a closed round waiting for the operator (§10.5)?</summary>
+        /// <remarks>⚠️ Keyed on <c>modeState</c>, never on <c>modeId</c>: the vocabulary belongs to the
+        /// mode (§10.1), so a hardcoded "tournament" here would go stale the day a second round-based
+        /// mode lands — and would be a second place deciding what a mode string means.</remarks>
+        private static bool RoundReviewWaiting()
+        {
+            AdminRoster roster = AdminRoster.Instance;
+            return roster != null &&
+                   roster.Phase == ArenaProtocol.PHASE_PAUSED &&
+                   roster.PhaseReason == ArenaProtocol.PAUSE_REASON_MODE &&
+                   roster.ModeState.StartsWith("roundend:", StringComparison.Ordinal);
+        }
+
+        /// <summary>Renames the close button while a round is parked: closing the panel is what releases
+        /// it, so the button has to say so rather than look like a plain dismiss.</summary>
+        private void ApplyCloseButton(bool waiting)
+        {
+            if (_closeLabel == null)
+            {
+                return;
+            }
+
+            _closeLabel.text = waiting ? "TURA DEVAM" : _closeDefaultText;
+            _closeLabel.color = waiting ? UiKit.Good : _closeDefaultColor;
+        }
+
         private void RefreshMatchInfo(AdminRoster roster)
         {
             ArenaClient client = ArenaClient.Instance;
@@ -630,7 +692,74 @@ namespace VortexArena.App.Admin
             _sb.Append($"Sunucu: {endpoint} · poz akışı " +
                        (age >= 0f ? $"{age:0.0} sn önce" : "yok") +
                        $" · bağlı admin {roster.AdminCount}");
+
+            AppendCustomerCounts(roster.ModeState);
+
+            // Says out loud that the arena is stopped ON PURPOSE and names the way out: a parked round
+            // has no timer, so a silent panel would read as a hang.
+            if (RoundReviewWaiting())
+            {
+                _sb.AppendLine();
+                _sb.Append("TUR SONU — akış bekliyor: paneli kapatmak sıradaki tura geçirir " +
+                           "(diğer çıkışlar: maçı bitir, maçı iptal et).");
+            }
+
             _matchSummary.text = _sb.ToString();
+        }
+
+        /// <summary>Co-op customer counters, when the running mode publishes them (<c>h:</c>/<c>u:</c> in
+        /// <c>modeState</c>): the operator must read the same numbers the players see on their HUD.</summary>
+        /// <remarks>⚠️ Keyed on the <c>modeState</c> TOKENS, never on <c>modeId</c> — same rule as
+        /// <see cref="RoundReviewWaiting"/>: the vocabulary belongs to the mode (§10.1), so a second
+        /// co-op mode publishing the same counters lights this line up for free.
+        /// <para>Neither key present = the line is not drawn at all; an unknown token is skipped rather
+        /// than treated as an error, so the mode can grow its state string without touching this.</para></remarks>
+        private void AppendCustomerCounts(string modeState)
+        {
+            if (string.IsNullOrEmpty(modeState))
+            {
+                return;
+            }
+
+            int happy = 0;
+            int unhappy = 0;
+            bool any = false;
+
+            string[] tokens = modeState.Split(';');
+            for (int i = 0; i < tokens.Length; i++)
+            {
+                string token = tokens[i];
+                int sep = token.IndexOf(':');
+                if (sep <= 0 || sep == token.Length - 1)
+                {
+                    continue;
+                }
+
+                string key = token.Substring(0, sep).Trim();
+                if (!int.TryParse(token.Substring(sep + 1).Trim(), out int value) || value < 0)
+                {
+                    continue;
+                }
+
+                if (string.Equals(key, "h", StringComparison.Ordinal))
+                {
+                    happy = value;
+                    any = true;
+                }
+                else if (string.Equals(key, "u", StringComparison.Ordinal))
+                {
+                    unhappy = value;
+                    any = true;
+                }
+            }
+
+            if (!any)
+            {
+                return;
+            }
+
+            _sb.AppendLine();
+            _sb.Append($"Müşteri: mutlu {happy} · mutsuz {unhappy}");
         }
 
         private static int AliveCount(IReadOnlyList<AdminPlayerView> players)

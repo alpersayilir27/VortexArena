@@ -27,6 +27,12 @@ namespace VortexArena.Core
         WeaponCanvas,
 
         /// <summary>A random weapon handed out by the mode.</summary>
-        RandomGrant
+        RandomGrant,
+
+        /// <summary>No weapon at all: the frame is hidden, no grant runs and the trigger is silent.
+        /// Wire name <c>"none"</c> (§10.5).
+        /// <para>⚠ Appended at the END — inserting it between the values above would shift the stored
+        /// index of every <see cref="ModeDefinition"/> asset.</para></summary>
+        None
     }
 }

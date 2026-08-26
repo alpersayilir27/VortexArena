@@ -1494,6 +1494,16 @@ namespace VortexArena.Core.Player
                 return;
             }
 
+            // ⚠️ A WorldSingle item is NEVER instantiated here: only one instance of it exists and it is
+            // the network object itself, placed in this player's hand by NetObjectGrabBridge. Building a
+            // copy would show two of the same knife, the copy lagging behind. Its byte is already
+            // suppressed (HeldItems), so this is the belt to that braces — a byte from an older client
+            // must not sneak a second object in.
+            if (definition.IsWorldSingle)
+            {
+                return;
+            }
+
             EnsureItemRoots();
 
             // Built under the inactive staging root → none of the prefab's Awakes run.

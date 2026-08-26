@@ -37,7 +37,7 @@ sessizce yalan olur.
 ## Serialize edilen veri
 
 - ⚠️ **Serialize edilen enum'a yeni değer SONA eklenir** (Unity sayısal indeks saklar):
-  `Team`, `HitZone` (`Body` sıfırda kalır), `ModeTeamMode`, `ModeScoreKind`,
+  `Team`, `HitZone` (`Body` sıfırda kalır), `GameType`, `ModeTeamMode`, `ModeScoreKind`,
   `ModeReviveAnchor`, `ModeWeaponSource`, `ModeAudioEvent`.
 - Gerekçe ve diğer serileştirme tuzakları: `Docs/Gelistirici/Yapma-Listesi.md`
   "Serialize edilen veriler" bölümü.

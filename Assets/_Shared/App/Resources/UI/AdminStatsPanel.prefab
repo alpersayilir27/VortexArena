@@ -1192,6 +1192,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: VortexArena.App::VortexArena.App.Admin.AdminStatsPanel
   _root: {fileID: 8281541372172627421}
   _closeButton: {fileID: 1348636367209415480}
+  _closeLabel: {fileID: 4635632089075528076}
   _headline: {fileID: 5949343027531466654}
   _teamSummary: {fileID: 4162412764269523490}
   _matchSummary: {fileID: 573624149789898251}

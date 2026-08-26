@@ -245,7 +245,7 @@ namespace VortexArena.Core.Combat
 
         private float _nextScanAt;
 
-        /// <summary>"Once per session" warning log for weapons with a missing pose.</summary>
+        /// <summary>"Once per session" warning log for items with a missing pose.</summary>
         private readonly HashSet<string> _warned = new HashSet<string>();
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -331,14 +331,23 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
-            Weapon weapon = FindWeaponUsing(hand, out GripSocketKind kind);
-            ItemDefinition definition = weapon != null ? weapon.Definition : null;
+            // ONE question, whatever the item is: what does this hand hold. ⚠️ The slot is only
+            // followed when it was claimed for THIS controller — an unresolved controller still fills
+            // the slot for the wire (§6.6), but posing a hand we cannot place would put the item on
+            // the wrong one.
+            HeldItems.Slot slot = rightHand ? HeldItems.RightHand : HeldItems.LeftHand;
+            bool poseable = slot.Controller == hand;
+
+            ItemDefinition definition = poseable ? slot.Definition : null;
+            Transform itemTransform = poseable ? slot.Instance : null;
+            GripSocketKind kind = poseable ? slot.Kind : GripSocketKind.Primary;
+
             bool hasGrip = definition != null && definition.HasGrip(kind, rightHand);
 
-            if (weapon != null && !hasGrip)
+            if (definition != null && !hasGrip)
             {
-                // Weapon with no authored grip: the hand falls back to idle.
-                WarnMissingPose(weapon, kind, rightHand);
+                // Item with no authored grip: the hand falls back to idle.
+                WarnMissingPose(definition, kind, rightHand);
             }
 
             // The hand's placement on the controller is PART of the grip: an authored slot brings its
@@ -354,7 +363,7 @@ namespace VortexArena.Core.Combat
 
             if (hasGrip)
             {
-                LockToItemGrip(synthetic, weapon.transform, grip, anchorToWrist);
+                LockToItemGrip(synthetic, itemTransform, grip, anchorToWrist);
                 state.WristLocked = true;
             }
             else
@@ -535,38 +544,9 @@ namespace VortexArena.Core.Combat
             }
         }
 
-        /// <summary>
-        /// Finds the weapon USING this hand; <see cref="GripSocketKind.Primary"/> for the main hand,
-        /// <see cref="GripSocketKind.Secondary"/> for the foregrip. First match wins (the same hand
-        /// bound to two weapons is already a bug one layer up).
-        /// </summary>
-        private static Weapon FindWeaponUsing(OVRInput.Controller hand, out GripSocketKind kind)
-        {
-            for (int i = 0; i < Weapon.Active.Count; i++)
-            {
-                Weapon weapon = Weapon.Active[i];
-                if (weapon == null || !weapon.IsHeld)
-                {
-                    continue;
-                }
-
-                if (weapon.MainHand == hand)
-                {
-                    kind = GripSocketKind.Primary;
-                    return weapon;
-                }
-
-                if (weapon.SecondaryHand == hand)
-                {
-                    kind = GripSocketKind.Secondary;
-                    return weapon;
-                }
-            }
-
-            kind = GripSocketKind.Primary;
-            return null;
-        }
-
+        // ⚠️ No weapon scan here any more: what a hand holds is answered by the HeldItems slot,
+        // whatever category put it there. A scan would find weapons only — the bomb (and every later
+        // hand-held prop) needed its own branch beside it, in a file that owns neither.
 
         // ------------------------------------------------------------ hand resolution (ISDK)
 
@@ -652,23 +632,23 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// <b>One</b> warning per session for a weapon with no authored grip.
+        /// <b>One</b> warning per session for an item with no authored grip.
         /// <para>
         /// ⚠️ Logging unconditionally in the loop produces two lines per frame (~140/s) and would drown
         /// the console; since the key is (definition + grip point + hand), every missing pose still
         /// shows up individually.
         /// </para>
         /// </summary>
-        private void WarnMissingPose(Weapon weapon, GripSocketKind kind, bool rightHand)
+        private void WarnMissingPose(ItemDefinition definition, GripSocketKind kind, bool rightHand)
         {
-            string weaponName = weapon.Definition != null ? weapon.Definition.name : weapon.name;
-            string key = $"{weaponName}|{kind}|{(rightHand ? "R" : "L")}";
+            string itemName = definition.name;
+            string key = $"{itemName}|{kind}|{(rightHand ? "R" : "L")}";
             if (!_warned.Add(key))
             {
                 return;
             }
 
-            Debug.LogWarning($"[HandGripPoser] '{weaponName}' silahının " +
+            Debug.LogWarning($"[HandGripPoser] '{itemName}' eşyasının " +
                              $"'{kind}' kavraması {(rightHand ? "SAĞ" : "SOL")} el için " +
                              "stüdyoda YAZILMAMIŞ; el idle duruşunda kalıyor.");
         }

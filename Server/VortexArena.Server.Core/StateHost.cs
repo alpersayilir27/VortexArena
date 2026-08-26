@@ -9,7 +9,7 @@ namespace VortexArena.Server.Core;
 
 /// <summary>UDP state channel (statePort): 0x00 UdpHello registration (§6.1), 0x01 PoseUpdate
 /// intake (§6.2), 0x02 Snapshot broadcast at 20 Hz (§6.3), 0x03 FireEvent intake + 0x04 EventBatch
-/// relay (§6.4/6.5).
+/// relay (§6.4/6.5), 0x09 ObjectPose intake → the object section of 0x05 (§6.12/6.8).
 /// <para><b>Thread contract:</b> recv and broadcast (20 Hz timer) run on SEPARATE threads. The recv
 /// thread NEVER takes <see cref="MatchDirector"/>'s match lock (§10.3) — it reads the gate from the
 /// <see cref="MatchDirector.ShotRelayOpen"/> volatile flag and player state from
@@ -28,6 +28,20 @@ public sealed class StateHost
     /// <para><see cref="ConcurrentQueue{T}"/> instead of a lock: the recv path shares its thread
     /// with the 20 Hz pose intake, so blocking on a lock would stall that stream too.</para></summary>
     private readonly ConcurrentQueue<FireEventEntry> _events = new();
+
+    /// <summary>This tick's object poses (§6.12), netId → pose: written by the recv thread, drained and
+    /// CLEARED by the 20 Hz broadcast thread.
+    /// <para>A map, not a queue: a pose is a STATE, so the tick's last one wins and an object that sent
+    /// twice takes one entry. Cleared on every tick — a stale pose must not be sent again next tick.</para></summary>
+    private readonly Dictionary<ushort, PoseData> _objectPoses = new();
+
+    /// <summary>Guards <see cref="_objectPoses"/> only. Deliberately NOT the match lock: the ownership
+    /// check on this path is lock-free (§6.12) and blocking here would stall the pose intake.</summary>
+    private readonly object _objectPoseGate = new();
+
+    /// <summary>Last accepted <c>0x09</c> seq + arrival stamp per object; touched by the recv thread
+    /// ONLY, so no lock (same as the fire-event seq fields).</summary>
+    private readonly Dictionary<ushort, (ushort Seq, long Stamp)> _objectSeq = new();
 
     private UdpClient? _udp;
     private CancellationTokenSource? _cts;
@@ -62,6 +76,12 @@ public sealed class StateHost
     /// loss must not drop the body, but a truly silent sender must not stay on air.</para>
     /// </summary>
     private const double SkeletonStaleMs = 500.0;
+
+    /// <summary>An object's <c>0x09</c> seq counter is forgotten after this silence.
+    /// <para><b>Why it exists:</b> a netId is reused after a round/scene reset (the table is rebuilt from
+    /// the map), and the previous round's high seq would lock the new object's stream out until the
+    /// counter wrapped — the object would simply never move for anyone.</para></summary>
+    private const double ObjectSeqStaleMs = 2000.0;
 
     // ---- Telemetry counters ----
     // TX counters: only the broadcast thread writes and reads them → no lock needed.
@@ -111,14 +131,26 @@ public sealed class StateHost
         _snapshotLoop = Task.Run(() => SnapshotLoopAsync(udp, token));
     }
 
-    public void Stop()
+    /// <summary>Cancel → drain BOTH loops → close the socket → dispose. Idempotent.</summary>
+    /// <remarks>⚠️ Order matters: closing the UdpClient while the recv loop is still in
+    /// <c>ReceiveAsync</c> (or the broadcast loop mid-send) turns a clean shutdown into an
+    /// ObjectDisposedException race.</remarks>
+    public async Task StopAsync()
     {
-        _cts?.Cancel();
-        _udp?.Close();
-        _udp = null;
+        var cts = _cts;
+        var loop = _loop;
+        var snapshotLoop = _snapshotLoop;
+        var udp = _udp;
         _cts = null;
         _loop = null;
         _snapshotLoop = null;
+        _udp = null;
+        if (cts == null && loop == null && snapshotLoop == null && udp == null) return;
+
+        cts?.Cancel();
+        await ServiceShutdown.DrainAsync("state", loop, snapshotLoop);
+        udp?.Close();
+        cts?.Dispose();
     }
 
     private async Task ReceiveLoopAsync(UdpClient udp, CancellationToken token)
@@ -163,6 +195,10 @@ public sealed class StateHost
                 case UdpPacketType.RttProbe:
                     if (data.Length < RttProbe.SIZE) { Interlocked.Increment(ref _rxRejected); break; }
                     await HandleRttProbeAsync(udp, data, result.RemoteEndPoint, token);
+                    break;
+                case UdpPacketType.ObjectPose:
+                    if (data.Length < ObjectPose.SIZE) { Interlocked.Increment(ref _rxRejected); break; }
+                    HandleObjectPose(data, result.RemoteEndPoint);
                     break;
                 case UdpPacketType.SkeletonUpdate:
                     if (data.Length < SkeletonUpdate.HEADER_SIZE) { Interlocked.Increment(ref _rxRejected); break; }
@@ -373,6 +409,54 @@ public sealed class StateHost
         }
     }
 
+    /// <summary>0x09 ObjectPose intake (§6.12): registered endpoint → the sender OWNS the object → a
+    /// fresh seq. The pose enters this tick's object section and the director's "last seen" slot.
+    /// <para>⚠️ <b>Ownership is validated, the pose is NOT</b>: the server knows no metres, so it has
+    /// nothing to falsify it with (same class as <c>hit_report.damage</c>). A packet from the wrong owner
+    /// is dropped silently.</para>
+    /// <para>⚠️ The check reads the director's LOCK-FREE owner map — this path must never enter the match
+    /// lock, or the whole pose intake would queue behind it.</para></summary>
+    private void HandleObjectPose(byte[] data, IPEndPoint remote)
+    {
+        ObjectPose msg;
+        using (var ms = new MemoryStream(data, 0, data.Length, writable: false))
+        using (var reader = new BinaryReader(ms))
+        {
+            reader.ReadByte(); // type byte already consumed by the dispatcher
+            msg = ObjectPose.Read(reader);
+        }
+
+        if (!_registry.TryGetByPlayerId(msg.playerId, out var state))
+        {
+            Interlocked.Increment(ref _rxRejected);
+            return;
+        }
+
+        // Same spoof gate as the pose channel (§6.1) plus ownership (§6.12).
+        if (state.UdpEndpoint == null || !state.UdpEndpoint.Equals(remote)
+            || !_matchDirector.IsObjectOwner(msg.netId, state.PlayerId))
+        {
+            Interlocked.Increment(ref _rxRejected);
+            return;
+        }
+
+        var stamp = Stopwatch.GetTimestamp();
+        // u16 wrap-safe ordering, per object (§6.12) — a pose is a state, so an old one is worthless.
+        if (_objectSeq.TryGetValue(msg.netId, out var last)
+            && StampToMs(stamp - last.Stamp) <= ObjectSeqStaleMs
+            && (short)(msg.seq - last.Seq) <= 0)
+        {
+            Interlocked.Increment(ref _rxRejected);
+            return;
+        }
+
+        _objectSeq[msg.netId] = (msg.seq, stamp);
+        lock (_objectPoseGate) _objectPoses[msg.netId] = msg.pose;
+        // Kept apart from the broadcast buffer: this one survives the tick and is where the object is
+        // freed if its owner drops or dies (§10.10).
+        _matchDirector.RecordObjectPose(msg.netId, msg.pose);
+    }
+
     /// <summary>0x03 FireEvent intake (§6.4): accepted only from a 0x00-registered endpoint, exact
     /// duplicates suppressed; events passing the relay gate enter <see cref="_events"/> and go out
     /// as a 0x04 batch on the next 20 Hz tick.
@@ -471,6 +555,7 @@ public sealed class StateHost
         // Event buffer lives outside the loop to avoid a per-tick allocation (20 Hz × session).
         var eventBuffer = new List<FireEventEntry>(ArenaProtocol.EVENT_MAX_ENTRIES_PER_PACKET);
         var eventsThisSecond = 0;
+        var objectBuffer = new List<ObjectPoseEntry>(ArenaProtocol.OBJECT_MAX_ENTRIES_PER_PACKET);
 
         // ---- Skeleton channel (§6.10) ----
         // Runs INSIDE the snapshot loop but at a SEPARATE cadence: a second timer/thread would only
@@ -587,23 +672,30 @@ public sealed class StateHost
             // ⚠️ Events are drained BEFORE the snapshot: the combine decision (§6.8) needs the event
             // count. Send order is unchanged — the snapshot still goes first.
             var eventCount = DrainEvents(eventBuffer);
+            // Object poses ride the same packet (§6.12) — drained here for the same reason as the
+            // events: the combine decision needs the count.
+            var objectCount = DrainObjectPoses(objectBuffer);
 
             // §6.8 combine gate. ALL three conditions required:
-            //   1) events exist — otherwise nothing to combine, a plain 0x02 goes out,
+            //   1) an event OR an object pose exists — otherwise nothing to combine, a plain 0x02 goes out,
             //   2) the snapshot fits one fragment — if fragmented, whichever fragment carried the
             //      event block would break the "at most one event datagram per tick" invariant (§6.5),
             //   3) total size under COMBINED_MAX_BYTES.
+            // ⚠️ Failing the gate DROPS this tick's object poses: 0x02/0x04 have no object section and
+            // none is added (§6.8). What is lost is the smoothness of the motion, not the final pose —
+            // that arrives over WS as object_release → object_state.
             var combinedBytes = SnapshotWithEvents.HEADER_SIZE
                                 + entries.Count * SnapshotEntry.SIZE
-                                + eventCount * FireEventEntry.SIZE;
-            var combine = eventCount > 0
+                                + eventCount * FireEventEntry.SIZE
+                                + objectCount * ObjectPoseEntry.SIZE;
+            var combine = (eventCount > 0 || objectCount > 0)
                           && entries.Count <= ArenaProtocol.SNAPSHOT_MAX_ENTRIES_PER_PACKET
                           && combinedBytes <= ArenaProtocol.COMBINED_MAX_BYTES;
 
             packets.Clear();
             if (combine)
             {
-                packets.Add(BuildCombinedPacket(entries, eventBuffer, serverTick));
+                packets.Add(BuildCombinedPacket(entries, eventBuffer, objectBuffer, serverTick));
             }
             else
             {
@@ -821,20 +913,41 @@ public sealed class StateHost
         return output.Count;
     }
 
+    /// <summary>Takes this tick's object poses into the packet and CLEARS the collection (§6.12).
+    /// <para>⚠️ Cleared even when the <see cref="ArenaProtocol.OBJECT_MAX_ENTRIES_PER_PACKET"/> cap cuts
+    /// entries off: unlike an event, a pose is a state — carrying it to the next tick would broadcast a
+    /// position the object has already left. The owner sends again 100 ms later anyway.</para></summary>
+    private int DrainObjectPoses(List<ObjectPoseEntry> output)
+    {
+        output.Clear();
+        lock (_objectPoseGate)
+        {
+            foreach (var pair in _objectPoses)
+            {
+                if (output.Count >= ArenaProtocol.OBJECT_MAX_ENTRIES_PER_PACKET) break;
+                output.Add(new ObjectPoseEntry { netId = pair.Key, pose = pair.Value });
+            }
+            _objectPoses.Clear();
+        }
+        return output.Count;
+    }
+
     /// <summary>Single 0x05 datagram: snapshot + events together (§6.8). The caller has already
     /// validated the three combine-gate conditions.</summary>
     private static byte[] BuildCombinedPacket(List<SnapshotEntry> entries,
-        List<FireEventEntry> events, uint serverTick)
+        List<FireEventEntry> events, List<ObjectPoseEntry> objects, uint serverTick)
     {
         var combined = new SnapshotWithEvents
         {
             serverTick = serverTick,
             players = entries.ToArray(),
-            events = events.ToArray()
+            events = events.ToArray(),
+            objects = objects.ToArray()
         };
         using var ms = new MemoryStream(SnapshotWithEvents.HEADER_SIZE
                                         + entries.Count * SnapshotEntry.SIZE
-                                        + events.Count * FireEventEntry.SIZE);
+                                        + events.Count * FireEventEntry.SIZE
+                                        + objects.Count * ObjectPoseEntry.SIZE);
         using var writer = new BinaryWriter(ms);
         combined.Write(writer);
         return ms.ToArray();

@@ -42,7 +42,8 @@ Hepsi bağlantı yokken sessizce no-op'tur.
 
 | Metot | Döner | Açıklama |
 |---|---|---|
-| ✅ `TryGetTargetPlayerId(Collider, out int playerId)` | `bool` | Çarpılan collider'ın arkasında ağ oyuncusu var mı. `false` → **hasar yok** (istemcide can tutulmaz) |
+| ✅ `TryGetTargetPlayerId(Collider, out int playerId)` | `bool` | Çarpılan collider'ın arkasında ağ oyuncusu var mı. `false` → oyuncu değil; hedef bir **ağ nesnesi** olabilir, sırada o var |
+| ✅ `TryGetTargetNetId(Collider, out int netId)` | `bool` | Çarpılan collider'ın arkasında ağ nesnesi var mı (kırılabilir siper, hedef tahtası). İkisi de `false` → **hasar diye bir şey yok**: o hedefin canı hiçbir yerde tutulmuyor |
 | ✅ `IsHeadshot(Collider)` | `bool` | Kafa kutusuna mı isabet etti. **Çarpanı sen uygularsın** |
 | ✅ `GetHitZone(Collider)` | `HitZone` | İsabet bölgesi (`Body`/`Head`/`Stomach`/`Leg`); ağ oyuncusu değilse `Body`. Çarpanı `WeaponDefinition.GetZoneMultiplier(zone)` verir, **uygulamak sana ait** |
 
@@ -52,13 +53,16 @@ Hepsi bağlantı yokken sessizce no-op'tur.
 |---|---|
 | ✅ `ReportShot(Vector3 worldMuzzlePos, Vector3 worldDir, string weaponId)` | Atışı diğer oyunculara relay ettirir (namlu alevi/ses). Hasarla ilgisi yok, sunucu doğrulamaz |
 | ⚠️ `ReportHit(int targetPlayerId, Vector3 worldHitPoint, float damage, string weaponId)` | Vuruşu bildirir. **Hasarı sen belirlersin**, sunucu aynen uygular. Canı yerelde düşürme |
-| ✅ `ReportRaycastHit(in RaycastHit, float damage, string weaponId)` | Hitscan kısayolu. `false` → hedef ağ oyuncusu değil, **hasar uygulanmaz**; dönüş değeri yalnız sunum kararı içindir (gövde efekti mi, duvar efekti mi) |
-| ⚠️ `ReportAreaHit(Vector3 center, float radius, float damage, string weaponId, float edgeScale = 0.25f, int layerMask = ~0)` | Yarıçaptaki her oyuncuya ayrı vuruş; merkeze uzaklıkla doğrusal düşer. **Duvar arkası kontrolü yok** |
+| ⚠️ `ReportObjectHit(int targetNetId, Vector3 worldHitPoint, float damage, string weaponId)` | Ağ nesnesine vuruşu bildirir (aynı `hit_report`, yalnız hedef alanı farklı). Kırılma kararı **sunucunun**; `Hp`/`Flags`'i yerelde yazma |
+| ✅ `ReportRaycastHit(in RaycastHit, float damage, string weaponId)` | Hitscan kısayolu: hedef **oyuncu da ağ nesnesi de** olsa kendiliğinden raporlar. ⚠️ Dönüş değeri yalnız *"ağ oyuncusu muydu"* sorusunun cevabıdır (gövde efekti mi, duvar efekti mi) — ağ nesnesine hasar gider ama `false` döner |
+| ⚠️ `ReportAreaHit(Vector3 center, float radius, float damage, string weaponId, float edgeScale = 0.25f, int layerMask = ~0, bool requireLineOfSight = false)` | Yarıçaptaki her oyuncuya **ve her ağ nesnesine** ayrı vuruş; merkeze uzaklıkla doğrusal düşer. Dönen sayı **yalnız oyuncu** isabetidir. Duvar arkası kontrolü varsayılan olarak **kapalı** |
+| ⚠️ `ReportAreaSelfHit(Vector3 center, float radius, float damage, string weaponId, float edgeScale = 0.25f, bool requireLineOfSight = false)` | Patlamanın **yerel oyuncuya** düşen payı — ayrı kapıdır çünkü kendi rig'inde isabet kutusu yoktur, `ReportAreaHit` onu asla bulamaz. Dost ateşi kapalıysa hiç göndermez |
 
 **Hasar geçerlilik kuralı:** pozitif ve sonlu olmalı. `NaN`/`∞`/negatif hem burada hem sunucuda
 reddedilir (NaN'a düşen can bir daha 0'ın altına inemez → oyuncu ölümsüz kalırdı).
 
-**İsabet göstergesi hazır gelir:** `ReportHit` (dolayısıyla `ReportRaycastHit`/`ReportAreaHit`)
+**İsabet göstergesi hazır gelir:** `ReportHit` ve `ReportObjectHit` (dolayısıyla
+`ReportRaycastHit`/`ReportAreaHit`)
 vuruş noktasında bir X çizer (`HitMarker`) ve onu **yalnız vuran oyuncu görür** — kendi
 göstergeni kurma, aynı vuruşta iki X çizilir. Gösterge *bildirimin yapıldığını* söyler, hasarın
 uygulandığını değil (sunucu vuruşu reddedebilir: dost ateşi kapalı, faz `playing` değil).
@@ -392,6 +396,117 @@ oyuncunun takımı boşsa (takımsız mod). Aynı takımdan birden çok bölge k
 
 ---
 
+## Ağ nesneleri (`netId`)
+
+Oyuncu olmayan varlıklar: durumu sunucuda, sunumu sende. Kural
+`Docs/ArenaNet-Protokol.md` §10.10; reçeteler `Yemek-Kitabi.md` §11.4-§11.6.
+
+### NetObject
+
+`VortexArena.Net.NetObject` — sahne/dinamik objenin ağa bakan yüzü.
+
+| Üye | Tip | Açıklama |
+|---|---|---|
+| ✅ `NetId` / `Kind` | `int` / `NetObjectKind` | Kimlik ve tür |
+| ✅ `Hp` / `MaxHp` / `HealthRatio` | `float` | `MaxHp == 0` = hasar almaz; oran `0..1` |
+| ✅ `Flags` / `IsBroken` / `IsHeld` / `HeldByRightHand` / `IsAwake` | `int` / `bool` | Çekirdek bitler (bit0-3) |
+| ✅ `HasKindFlag(string)` | `bool` | **Türe özel** bayrak (bit4+) — ⚠️ bit numarasıyla değil **adla** okunur |
+| ✅ `Owner` / `IsMine` | `int` / `bool` | Objeyi tutan `playerId` (`0` = kimse) |
+| ✅ `Stage` | `int` | Türe özel aşama; `0` her türde "başlangıç". ⛔ İstemci yazmaz |
+| ✅ `RestPosition` / `RestRotation` / `HasRestPose` | `Vector3` / `Quaternion` / `bool` | Dinlenme pozu — ⚠️ **arena uzayında** |
+| ✅ `StateChanged` | `Action<NetObject, NetStateOrigin>` | Sunumun tek kancası; `Snapshot` kaynağında efekt oynatma |
+| ⚠️ `OwnerChanged` | `Action<NetObject, int>` | **`StateChanged`'den ÖNCE** tetiklenir: iyimser kavramanın geri alınması sunum tepki vermeden olsun diye |
+| ✅ `EventReceived` | `Action<ObjectEventMsg>` | Sunucudan relay edilen **kozmetik** olay |
+| ⛔ `BindDynamicId(int)` | `bool` | `NetObjectSpawner`'ın işi — sahne objesinin kimliği bake'lidir |
+
+### NetObjectSync — yukarı yön
+
+`VortexArena.Net.NetObjectSync` — **statik**. Bağlantı yokken sessizce no-op.
+
+| Metot | Ne yapar |
+|---|---|
+| ✅ `SendGrab(int netId, bool rightHand)` | Kavramayı bildirir. **Cevabı yoktur** — sonucu yayınlanan `object_state.owner` söyler; kavramayı yerelde hemen yap, sahip sen değilsen `OwnerChanged`'de geri al |
+| ⚠️ `SendRelease(int netId, Vector3 arenaPos, Quaternion arenaRot)` | **Obje ELDEN ÇIKTI:** `Held` düşer, `Awake` kalkar, **sahiplik sürer** (uçuş penceresi başlar) |
+| ⚠️ `SendRest(int netId, Vector3 arenaPos, Quaternion arenaRot)` | **Obje DURDU:** `Awake` düşer, `owner = 0`, bildirilen poz dinlenme pozu olur |
+| ✅ `SendEvent(int netId, string name, int[] i = null, float[] f = null, string s = null)` | Objeye özel etkileşim; `name` türün izinli listesinde yoksa sunucu reddeder |
+| ⛔ `SpawnRequested` / `DespawnRequested` / `RegisterSpawned` | `NetObjectSpawner`'ın yüzeyi |
+
+> ⚠️ **İkisi karıştırılmaz:** `SendRelease` elden çıkış, `SendRest` durmadır. Yalnız `SendRelease`
+> yollanırsa obje sahipli kalır ve uçuşun son karesinde **havada donar**; yalnız `SendRest`
+> yollanırsa uçuş boyunca tel "obje elde" der ve o sırada bağlanan oyuncu objeyi bir elin ucunda
+> görür. İkisini de **sen yollamak zorunda değilsin**: `NetObjectPoseSender` durmayı ölçüp
+> `SendRest`'i, `NetObjectGrabBridge` bırakmayı görüp `SendRelease`'i kendisi yollar.
+
+### Poz kanalı ve uzak pozlar
+
+| Üye | Açıklama |
+|---|---|
+| ⚠️ `UdpStateChannel.SendObjectPose(int netId, Pose arenaPose)` | `0x09`; yalnız **sahip** + **uyanık** + **tutulmuyor**. Tutulan obje poz paketi ÜRETMEZ — el zaten akıyor, obje ona kanonik pozla bağlı |
+| ✅ `RemoteObjectRegistry.Instance.TryGetInterpolatedPose(int netId, out Pose arenaPose)` | Uzak objenin yumuşatılmış pozu (oyuncu pozuyla **aynı saat**). Kendi sahip olduğun objede `false` |
+| ✅ `RemoteObjectRegistry.Instance.IsStreaming(int netId)` | O obje için canlı akış var mı |
+| ⛔ `IngestFromNetThread` | Ağ katmanının işi |
+
+### NetObjectKind — tür sorguları
+
+| Üye | Açıklama |
+|---|---|
+| ✅ `Kind` / `MaxHp` / `IsDamageable` | Telde giden ad ve can |
+| ✅ `Grab` / `IsGrabbable` | `None` (varsayılan) / `Anyone` |
+| ✅ `Events` | İzinli olay listesi (`NetObjectEventRule`: `Name` · `Policy` · `PhaseGate`) |
+| ✅ `FindEvent(string)` | Tek kuralı bulur (yoksa `null`) |
+| ✅ `TryGetFlagBit` / `TryGetFlagMask` | Türe özel bayrağın adı → bit/maske (bit4+) |
+
+---
+
+## Elle tutulan eşya (kavrama eksenleri)
+
+`VortexArena.Core.Combat` — eşyanın nasıl yaşadığını **üç bağımsız eksen** söyler; hepsi
+`ItemDefinition`'da serialize edilir ve ⚠️ **0. indeksleri bugünkü davranıştır**.
+
+| Üye | Değerler | Açıklama |
+|---|---|---|
+| ✅ `ItemDefinition.GrabPath` | `DistanceGrab` · `ProximitySocket` · `WristHolster` · `None` | Eşya ele **nasıl gelir**. ⚠️ `DistanceGrab` değilse prefabda mesafeli kavrama bileşeni bulunmaz (`Yapma-Listesi`) |
+| ✅ `ItemDefinition.Instancing` / `IsWorldSingle` | `PerViewerClone` · `WorldSingle` | **Ne gelir:** her bakanın kendi kopyası mı, tek örnek mi. `WorldSingle`'da eşya baytı `0` kalır |
+| ✅ `ItemDefinition.ReleaseMode` | `Return` · `Physics` | Bırakılınca yerine mi oturur, serbest mi düşer |
+
+`VortexArena.Core.Combat.GripSocket` — yakınlık kavrama soketi (eşyanın **nereden** alındığı).
+
+| Üye | Açıklama |
+|---|---|
+| ✅ `AcceptRadius` | Kabul yarıçapı (m, taban 1 cm) — ⚠️ oyuncunun gördüğü küre **bu** hacimdir |
+| ✅ `Accepts(bool rightHand)` | Bu soket o eli kabul ediyor mu |
+| ✅ `TryMeasure(OVRInput.Controller, out float distance)` | Kumanda **anchor'ından** uzaklık (bilekten değil) |
+| ✅ `IsInside(OVRInput.Controller)` / `TryResolveHand(out …)` | Yarıçapın içindeki el (iki el varsa **yakın olan**) |
+| ✅ `Tick(bool available)` / `Hide()` | Göstergenin bir karesi / gizlenmesi |
+| ⚠️ `Configure(GameObject indicatorPrefab, float radius, bool acceptsLeft, bool acceptsRight)` | Soketi **kodla** süren yol (`WristHolster` bunu kullanır) — ikinci bir yakınlık uygulaması yazma |
+
+> Kavrama pozu (elin nasıl duracağı) burada DEĞİL `ItemDefinition`'ın kavrama kayıtlarındadır ve
+> stüdyoda yazılır. Soket "nereden alınır", kayıt "alınınca nasıl durur" sorusunun cevabıdır.
+
+---
+
+## Sunucu: ağ nesnesi kancaları
+
+`VortexArena.Server.Core` — yalnız **mod** kodundan çağrılır.
+
+| Üye | Açıklama |
+|---|---|
+| ⚠️ `IGameMode.OnObjectEvent(MatchDirector director, int playerId, int netId, string kind, ObjectEventMsg msg)` | Bütün kapılardan geçmiş bir `object_event`. **Varsayılan gövdesi vardır** (mevcut modlar değişmez). Dönüş yalnız **relay** sorusunu cevaplar: `true` = "ben hallettim, relay etme"; `false` = kozmetik → aynı olay herkese relay edilir |
+| ✅ `MatchDirector.SpawnObject(string kind, PoseData pose, int owner = 0, bool rightHand = false, string payload = null)` | Çalışma zamanında obje doğurur; dönen `netId` `0` ise reddedilmiştir (bilinmeyen `kind` / tükenen aralık). `owner` verilirse obje **doğrudan o elde** doğar (`Held` + gerekirse `HeldRight`) |
+| ✅ `MatchDirector.DespawnObject(int netId)` | Objeyi kaldırır; sahne objesinde `false` (kimliği sahnede bake'li) |
+| ✅ `MatchDirector.SetObjectStage(int netId, int stage)` | Türe özel aşamayı yazar ve sonucu **kendisi yayınlar** |
+| ✅ `MatchDirector.SetObjectFlags(int netId, int setMask, int clearMask)` | Bayrak bitleri; aynı şekilde kendi yayınını yapar |
+| ✅ `MatchDirector.SetObjectPayload(int netId, string payload)` | Örnek verisi (`object_state.s`); aynı şekilde kendi yayınını yapar |
+| ✅ `MatchDirector.TryReadObject(int netId, out string kind, out int stage, out int owner, out int flags, out PoseData pose, out bool hasPose)` | Modun tabloyu **okuma** kapısı; kopya değer döner (kanca kilit dışında koşar, `NetObjectEntry` referansı dışarı verilmez) |
+| ✅ `MatchDirector.AddSharedScore(int playerId, int amount)` | `scoring:"shared"` skorunun **yazan** yolu: bireysel katkı + ortak toplam tek çağrıdan; `scoreBlue`'ya dokunulmaz |
+
+> ⛔ Mod `WorldObjectTable`'a doğrudan dokunmaz; yazma yolu yukarıdaki metotlardır.
+> ⛔ **İstemci spawn isteyemez** — doğuşun iki kaynağı moddur ve türün kuralıdır.
+> ⚠️ **Duyuran = yazan.** Bir olay birden çok objeyi değiştirebilir (doğru servis müşteriyi, malzemeleri
+> ve skoru birden değiştirir); "olayın objesini yayınla" kısayolu yalnız birini duyururdu.
+
+---
+
 ## ModeHudBase
 
 `VortexArena.Core.UI.ModeHudBase` — mod HUD'larının takım-agnostik tabanı.
@@ -444,7 +559,7 @@ tabanda **değildir** (aşağıdaki nota bak).
 > | Bileşen | Çağrılar |
 > |---|---|
 > | `VortexArena.Core.UI.TeamScorePanel` | `SetScore(int red, int blue)` · `SetRoundLabel(string)` (tur kavramı yoksa hiç çağrılmaz) · `Clear()` (lobiye dönüşte) |
-> | `VortexArena.Core.UI.RoundResultBanner` | `Show(string text, RoundOutcome)` — `Won`/`Lost`/`Draw` yalnız **tonu** seçer, metin modundur · `Hide()` |
+> | `VortexArena.Core.UI.RoundResultBanner` | `Show(string text, RoundOutcome, bool sticky = false)` — `Won`/`Lost`/`Draw` yalnız **tonu** seçer, metin modundur; `sticky` şeridi sayaçsız açık bırakır (sunucunun telde TUTTUĞU sonuç için — süresi bilinmeyen bir bekleme okuma süresine sığmaz), indiren `Hide()` olur · `Hide()` |
 >
 > Panel takımsız modda kendini gizler (`ModeRuntime.IsTeamless`), yani takımsız bir HUD'da alanı boş
 > bırakmak yeterlidir. Şerit süresini kendi tutar (prefab alanı, bugün 3 sn) — modun kapatması gerekmez.
@@ -487,6 +602,9 @@ tabanda **değildir** (aşağıdaki nota bak).
 | `INTERP_DELAY_MS` | `100` | Uzak poz interpolasyon gecikmesi |
 | `PLAYER_ID_MAX` | `255` | `playerId` UDP'de `u8` |
 | `LOADING_TIMEOUT` | `20` | Sahne yükleme kapısı |
+| `OBJECT_POSE_RATE_HZ` | `10` | Sahibin obje pozu gönderim hızı (oyuncu pozunun yarısı) |
+| `OBJECT_REST_SPEED` / `OBJECT_REST_SECONDS` | `0.05` m/s / `0.3` | Objenin "durdu" eşiği ve altında kesintisiz kalması gereken süre — ⚠️ tek karelik durma yeterli değildir (sekmenin tepesinde hız sıfırlanır) |
+| `NET_ID_SCENE_MIN`/`_MAX` · `NET_ID_DYNAMIC_MIN`/`_MAX` | `1`/`32767` · `32768`/`65535` | Sahne kimlikleri ve sunucunun çalışma zamanında dağıttıkları; ikisi asla çakışmaz |
 
 > **Eşzamanlı oyuncu kotası YOKTUR.** Tek tavan `PLAYER_ID_MAX` ve o bir ürün kararı değil,
 > protokol sonucudur.
@@ -498,7 +616,7 @@ tabanda **değildir** (aşağıdaki nota bak).
 | Menü | Ne yapar |
 |---|---|
 | `Tools > VortexArena > Development > Dev` | Rol (player · admin) · sunucu hedefi · Play başlangıcı · sunucusuz sandbox. Kısayol **Ctrl+Alt+R** (iki rolü çevirir) |
-| `Tools > VortexArena > Weapons > Kavrama Pozu Stüdyosu` | Silahın elde nasıl duracağını **gözlüksüz** yazar (`GripPoseStudio`). `WPN_*`'ı prefab kipinde aç → *Ana/Ön Kabza Ellerini Oluştur* → kumanda çerçevelerini kabzalara oturt → el modelini o kumandanın üstüne yerleştir (taşı **ve çevir** — silah kımıldamaz) → parmakları o silaha göre rigle (penceredeki eklem listesinden seç, Scene View'da çevir) → **Kaydet**. Kayıt `WD_*.asset`'e gider (kumanda anchor'ının eşyaya göre KONUMU + el modelinin kumandaya göre POZU + riglenmiş parmak eklemleri); prefaba hiçbir şey yazılmaz, eller stage'in ayrı kökleridir. *Kopya Al* elin GÖRSELİNİ (yerleşim + parmak rigi) başka bir silahtan aynen alır — listede yalnız aynı kavrama noktasının aynı eli yazılmış silahlar çıkar, silahın kumandaya göre yeri kopyalanmaz. Kaydet ayrıca **silah kitini eşitler** (`Configure All Build Elements`'a gitmeye gerek yok); kit açık prefabı yeniden yazdığı için tezgâhtaki eller kalkabilir, *Elleri Oluştur* onları kayıttan aynı yere getirir. ⚠️ Kumanda kökü yalnız TAŞINIR — anchor kaydı dönüş taşımaz, silahın dönüşü ana kumandadan gelir (çevrilen kök geri hizalanır); dönüş yazılabilen tek şey **el modelidir** ve o silahı çevirmez |
+| `Tools > VortexArena > Items > Kavrama Pozu Stüdyosu` | **Elde tutulan her eşyanın** (silah, bomba, ileride mutfak eşyası) elde nasıl duracağını **gözlüksüz** yazar (`GripPoseStudio`). Hedef bir **eşya tanımıdır**; prefabı prefab kipinde aç → *Ana/Ön Kabza Ellerini Oluştur* → kumanda çerçevelerini kabzalara oturt → el modelini o kumandanın üstüne yerleştir (taşı **ve çevir** — eşya kımıldamaz) → parmakları o eşyaya göre rigle (penceredeki eklem listesinden seç, Scene View'da çevir) → **Kaydet**. Tanım iki yoldan çözülür: prefabın üstünde tanımı taşıyan bileşen (`IItemHolder` — `Weapon`), yoksa `prefab` alanı bu prefabı gösteren `ItemDefinition` (**ters arama** — bombanın yolu budur, `Throwable` tanımını çalışma zamanında alır). ⚠️ Aynı prefabı gösteren iki tanım varsa stüdyo **yazmaz**, tanımı elle seçmeni ister. Kayıt tanım asset'ine gider (kumanda anchor'ının eşyaya göre KONUMU + el modelinin kumandaya göre POZU + riglenmiş parmak eklemleri); prefaba hiçbir şey yazılmaz, eller stage'in ayrı kökleridir. *Kopya Al* elin GÖRSELİNİ (yerleşim + parmak rigi) başka bir eşyadan aynen alır — listede yalnız aynı kavrama noktasının aynı eli yazılmış eşyalar çıkar, eşyanın kumandaya göre yeri kopyalanmaz. Kaydet ayrıca **eşitleme koşturur** (`Configure All Build Elements`'a gitmeye gerek yok): silahsa silah kiti, değilse yalnız eşya kataloğu; kit açık prefabı yeniden yazdığı için tezgâhtaki eller kalkabilir, *Elleri Oluştur* onları kayıttan aynı yere getirir. ⚠️ Kumanda kökü yalnız TAŞINIR — anchor kaydı dönüş taşımaz, silahın dönüşü ana kumandadan gelir (çevrilen kök geri hizalanır); dönüş yazılabilen tek şey **el modelidir** ve o silahı çevirmez |
 | `Tools > VortexArena > Arena > Template Temellerini Yükle` | Aktif sahneye altyapı prefab ÖRNEKLERİ + `ArenaCalibrator` ve `ArenaBoundary`'nin rig alanlarını bağlama + boyut dosyası bağlama; idempotent (`TemplateBasicsLoader`). ⚠️ Kalibrasyon işaretçisi koymaz — onlar maketle gelir |
 | `Tools > VortexArena > Arena > JSON'dan DimensionMesh Üret` | Boyut dosyasından ölçü maketi (`Plane` + `Columns/*` + kalibrasyon işaretçileri `anchor_a`/`anchor_b`), **`ArenaBoundary`'nin altına yerel-kimlikte** (muhafaza yoksa sahne köküne, dönüşsüz); idempotent (`DimensionMeshBuilder`). ⚠️ Her arenada zorunlu: sahnenin kalibrasyon işaretçilerinin tek kaynağı budur |
 | `Tools > VortexArena > Arena > DimensionMesh'i JSON'a Çevir` | Maketi (köşeler + kalibrasyon işaretçileri) okuyup kaynak boyut dosyasının üstüne yazar; doğrulanamayan çıktıda dosyaya dokunmaz, işaretçi yoksa `calibration` korunur (`DimensionMeshReader`) |

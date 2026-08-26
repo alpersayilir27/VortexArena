@@ -19,7 +19,7 @@ Kalan iş silahları tek tek geçmek. Tam reçete: `Docs/Gelistirici/Yemek-Kitab
 
 **İş akışı (editörde, prefab kipinde; Play ve APK gerekmez):**
 
-1. `Tools > VortexArena > Weapons > Kavrama Pozu Stüdyosu` → pencereyi aç.
+1. `Tools > VortexArena > Items > Kavrama Pozu Stüdyosu` → pencereyi aç.
 2. `WPN_*` prefabını **prefab kipinde** aç.
 3. **Ana Kabza Ellerini Oluştur** (+ iki elli silahta **Ön Kabza Ellerini Oluştur**).
 4. Kumanda çerçevelerini Scene View'da kabzalara oturt; el modelini o kumandanın üstüne yerleştir
@@ -75,19 +75,10 @@ Silah sabit ana eli mi izleyecek (bugünkü davranış), yoksa iki elin doğrult
 ⚠️ **Tel formatını ETKİLEMEZ**: iki elin pozu da telde olduğu için uzak istemci aynı kuralı kendi
 tarafında yeniden uygular. Yani playtest'te serbestçe değiştirilebilir, protokol sabit kalır.
 
-## 4. Faz 4 — bomba (gelecek)
+## 4. Faz 4 — bomba
 
-- `ThrowableDefinition : ItemDefinition`. Bileklikten alma = yalnız `itemId`, altyapı **hazır**
-  (Faz 2 bedavaya kapsıyor); bileklik kılıfı avatarın parçası, telde karşılığı yok.
-- Atış = `0x04` `kind=1` (yön + hız). `ArenaCombat.ReportThrow` **yazıldı ve bekliyor**;
-  `RemoteShotFx` `KIND_THROW`'u şu an sessizce atıyor (yorumla işaretli) — tüketiciyi orada aç.
-- Her istemci aynı balistiği **yerel simüle eder** (yerçekimi tek kuvvet → deterministik, akış
-  gerekmez). Patlama mevcut yoldan: `ArenaCombat.ReportAreaHit` → hedef başına bir `hit_report`.
-- Kavrama tarafında iş yok: bomba tek elli, ön kabza kapısı/göstergesi (`Weapon` içinde) çift
-  elli olmayan eşyada zaten hiç açılmaz; bombanın kendi bileşeni gerekirse aynı `secondaryGripRadius`
-  sözleşmesini okur.
-- Kırılabilir objelere hasar bu planın DIŞINDA (`agsal-kirilabilir-objeler.md`);
-  ⚠️ `hit_report`'a bu plandan alan **eklenmedi ve eklenmez** — spekülatif tel alanı kalıcı borçtur.
+Kendi dosyasında: `bomba.md` (ağ nesnesi değil; kendine hasar = dost ateşi anahtarı; protokol
+sürümü sabit). Bu plandan `hit_report`'a alan **eklenmez** — spekülatif tel alanı kalıcı borçtur.
 
 ## 5. Dağıtım — ⚠️ ÜÇÜ BİRLİKTE
 

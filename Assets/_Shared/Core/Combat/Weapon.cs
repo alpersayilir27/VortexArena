@@ -46,7 +46,7 @@ namespace VortexArena.Core.Combat
     /// component: <see cref="IsHandOnSecondaryGrip"/> is the single answer to "is this hand's
     /// controller inside the socket", and <see cref="TickSecondaryGripIndicator"/> draws that same
     /// sphere from the catalog prefab.</para></summary>
-    public class Weapon : MonoBehaviour
+    public class Weapon : MonoBehaviour, IItemHolder
     {
         // Analog trigger hysteresis: jitter around the threshold must not double-count a press.
         private const float TriggerPressThreshold = 0.55f;
@@ -118,6 +118,9 @@ namespace VortexArena.Core.Combat
         public byte NetItemId => definition != null && definition.HasNetItemId ? definition.NetItemId : (byte)0;
 
         public WeaponDefinition Definition => definition;
+
+        // Explicit: the public property stays WeaponDefinition-typed for weapon callers.
+        ItemDefinition IItemHolder.Definition => definition;
 
         public Transform ModelPivot => modelPivot;
 
@@ -1458,21 +1461,20 @@ namespace VortexArena.Core.Combat
 
         // ------------------------------------------------------------------ network
 
-        /// <summary>§6.6: the ONE place that reports what the LOCAL player holds to
-        /// <see cref="HeldItems"/>.
-        /// <para>Static and central because <c>HeldItems</c> describes the WHOLE player (two slots
-        /// + grip bits), not a single weapon — dual wielding is legitimate. Per-weapon reporting
-        /// would let the second weapon overwrite the first's slot, leaving the result dependent on
-        /// arbitrary ordering.</para>
-        /// <para>⚠️ Runs on <see cref="ActiveChanged"/>, NOT every frame: what is in hand changes
-        /// at human speed and scanning <see cref="Active"/> per frame buys
-        /// nothing.</para></summary>
+        /// <summary>§6.6: turns the weapons in hand into <see cref="HeldItems"/> slot claims.
+        /// <para>Static and central because two weapons can want the same hand — dual wielding is
+        /// legitimate and the conflict must be judged in one place, not by whichever weapon reported
+        /// last.</para>
+        /// <para>⚠️ Only WEAPON slots are touched (<see cref="HeldItems.ReleaseAll{T}"/>): what a
+        /// holster or a world object put in a hand is not this collector's business. That is the whole
+        /// point of the slot registry — a new kind of held item must not reopen this file.</para>
+        /// <para>⚠️ Runs on <see cref="ActiveChanged"/>, NOT every frame: what is in hand changes at
+        /// human speed and scanning <see cref="Active"/> per frame buys nothing.</para></summary>
         private static void RefreshHeldItems()
         {
-            byte left = 0;
-            byte right = 0;
-            bool gripLinked = false;
-            bool primaryRight = false;
+            // Drop every weapon claim first: a weapon that left Active (destroyed, stowed, disabled)
+            // would otherwise keep a hand claimed with nothing to re-report it.
+            HeldItems.ReleaseAll<Weapon>();
 
             for (int i = 0; i < Active.Count; i++)
             {
@@ -1482,63 +1484,68 @@ namespace VortexArena.Core.Combat
                     continue;
                 }
 
-                byte id = weapon.NetItemId;
-                if (id == 0)
+                if (weapon.NetItemId == 0)
                 {
                     // An id-less weapon is never drawn remotely; staying silent would show as an
-                    // undiagnosable "empty hands" in the field.
+                    // undiagnosable "empty hands" in the field. ⚠️ It still claims the hand: the hand
+                    // is not free and the fingers must still take the authored grip — only the wire
+                    // byte stays 0.
                     WarnMissingNetItemId(weapon);
-                    continue;
                 }
 
-                weapon.GetHeldHands(out bool wantsLeft, out bool wantsRight);
-
-                if (wantsLeft && wantsRight)
+                if (!weapon.ClaimHands())
                 {
-                    // Two-handed writes the SAME id into BOTH slots + GRIP_LINKED: "same id in two
-                    // slots" alone does not mean two-handed (dual pistols); only the flag does.
-                    if (left != 0 || right != 0)
-                    {
-                        WarnHandConflict(weapon);
-                        continue;
-                    }
-
-                    left = id;
-                    right = id;
-                    gripLinked = true;
-                    primaryRight = weapon.IsMainHandRight;
-                    continue;
-                }
-
-                if (wantsLeft)
-                {
-                    if (left != 0)
-                    {
-                        WarnHandConflict(weapon);
-                        continue;
-                    }
-
-                    left = id;
-                }
-                else if (wantsRight)
-                {
-                    if (right != 0)
-                    {
-                        WarnHandConflict(weapon);
-                        continue;
-                    }
-
-                    right = id;
+                    WarnHandConflict(weapon);
                 }
             }
+        }
 
-            if (left == 0 && right == 0)
+        /// <summary>Claims this weapon's hand(s) in <see cref="HeldItems"/>; <c>false</c> when a hand
+        /// was already taken by something else.
+        /// <para>A two-handed hold claims BOTH hands with the SAME instance — that is what makes
+        /// <c>GRIP_LINKED</c> derivable (two pistols of one type are two instances and correctly not
+        /// linked), and the main hand's slot carries <see cref="GripSocketKind.Primary"/>, which is
+        /// where <c>FLAG_PRIMARY_RIGHT</c> comes from.</para>
+        /// <para>⚠️ A half-claimed weapon is rolled back: leaving one hand on a weapon whose other
+        /// hand was refused would report a one-handed hold for a two-handed grip.</para>
+        /// <para>⚠️ The CONTROLLER goes into the slot as-is, <c>None</c> included: the wire needs a
+        /// hand for an unresolved controller (<see cref="IsMainHandRight"/>) while the pose must not
+        /// lock a hand that is not really there — the slot keeps both answers apart.</para></summary>
+        private bool ClaimHands()
+        {
+            if (definition == null)
             {
-                HeldItems.Clear();
-                return;
+                return true;
             }
 
-            HeldItems.Report(left, right, gripLinked, primaryRight);
+            GetHeldHands(out bool wantsLeft, out bool wantsRight);
+
+            if (wantsLeft && wantsRight)
+            {
+                bool mainRight = IsMainHandRight;
+                bool claimed =
+                    HeldItems.Report(this, true, definition, transform,
+                        mainRight ? GripSocketKind.Primary : GripSocketKind.Secondary,
+                        mainRight ? MainHand : SecondaryHand) &&
+                    HeldItems.Report(this, false, definition, transform,
+                        mainRight ? GripSocketKind.Secondary : GripSocketKind.Primary,
+                        mainRight ? SecondaryHand : MainHand);
+
+                if (!claimed)
+                {
+                    HeldItems.Release(this);
+                }
+
+                return claimed;
+            }
+
+            if (wantsLeft || wantsRight)
+            {
+                return HeldItems.Report(this, wantsRight, definition, transform,
+                    GripSocketKind.Primary, MainHand);
+            }
+
+            return true;
         }
 
         /// <summary>Which hand(s) hold this weapon: main hand + optional front-grip hand when
