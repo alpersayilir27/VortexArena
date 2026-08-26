@@ -121,6 +121,11 @@ public sealed class LobbyService
         };
         await SendSafeAsync(connection, JsonUtil.Serialize(welcome), state.Name);
 
+        // §10.10: to THIS connection only — a late joiner must not see covers others already broke as
+        // intact. null = the staged scene has no network objects.
+        var worldState = _director.BuildWorldStateJson();
+        if (worldState != null) await SendSafeAsync(connection, worldState, state.Name);
+
         // A late-joining admin gets the shared selection right after welcome (§5.3): its panel must
         // show the mode/map the other operator picked, not its own default.
         if (state.Role == "admin")
@@ -916,11 +921,20 @@ public sealed class LobbyService
         _netStatsLoop = Task.Run(() => NetStatsLoopAsync(_netStatsCts.Token));
     }
 
-    public void Stop()
+    /// <summary>Cancel → drain → dispose. Idempotent: a second call is a no-op.</summary>
+    /// <remarks>Stopped FIRST during shutdown: a telemetry broadcast to admins whose sockets are
+    /// about to close has no reader left.</remarks>
+    public async Task StopAsync()
     {
-        _netStatsCts?.Cancel();
+        var cts = _netStatsCts;
+        var loop = _netStatsLoop;
         _netStatsCts = null;
         _netStatsLoop = null;
+        if (cts == null && loop == null) return;
+
+        cts?.Cancel();
+        await ServiceShutdown.DrainAsync("lobby", loop);
+        cts?.Dispose();
     }
 
     /// <summary>Per-player ping/jitter/loss — values the CLIENT measures and reports via

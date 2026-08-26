@@ -6,6 +6,14 @@ namespace VortexArena.Protocol
         /// <summary>
         /// Wire version. A mismatch does NOT reject the connection (warning only), so every bump needs
         /// a full APK round on all headsets. Per-version notes: Docs/ArenaNet-Protokol.md §1.
+        /// <para>⚠️ v18 (object ownership, poses, events, dynamic spawn — §10.10) BREAKS THE WIRE
+        /// LAYOUT: the <c>0x05</c> header grew from 7 B to 8 B (<c>objectCount</c>), so an old client
+        /// misaligns the WHOLE datagram and loses the snapshot itself, not just objects — remote players
+        /// teleport to garbage poses.</para>
+        /// <para>⚠️ v17 (network objects, §10.10) is additive on the wire but NOT cosmetic when mixed:
+        /// an old client sends no <c>targetNetId</c>, so it can break nothing, and it ignores
+        /// <c>object_state</c>, so it keeps seeing a cover others already broke — two players on either
+        /// side of the same wall see different worlds.</para>
         /// <para>v16 <c>identify</c> REMOVED (both directions) · v15 <c>clear_calibration.keepSaved</c>
         /// (§5.2/§10.6) · v14 out-of-bounds bit + admin
         /// <c>violation</c> (§5.3/§6.3) · v13 calibration mode + diagnostics (§5.2/§10.6/§10.8) ·
@@ -21,7 +29,7 @@ namespace VortexArena.Protocol
         /// <para>v5 net telemetry + packet combining (<c>0x05</c>) · v4 held item on the wire, shot
         /// events moved to UDP · v3 phase machine · v2 <c>set_identity</c>.</para>
         /// </summary>
-        public const int PROTOCOL_VERSION = 16;
+        public const int PROTOCOL_VERSION = 18;
         public const string APP_ID = "VortexArena";
 
         // ---- Calibration mode (§5.2/§10.6): how headsets align AT STARTUP. ----
@@ -108,6 +116,86 @@ namespace VortexArena.Protocol
         /// <summary><c>playerId</c> ceiling. <b>Wire-format limit, NOT a product quota</b> — playerId is
         /// a <c>u8</c> (0 reserved). Concurrent player/admin counts have no other limit.</summary>
         public const int PLAYER_ID_MAX = 255;
+
+        /// <summary>Network id range of a SCENE object (<c>NetIdentity.sceneId</c>, §10.10); <c>0</c> =
+        /// unassigned and never addressable. Enforced at scene save by <c>SceneIdGuard</c>.
+        /// <para>⚠️ The upper half (<c>32768..65535</c>) is RESERVED for ids the server will allocate at
+        /// runtime for dynamic objects. A scene bake spilling into it would give a scene object and a
+        /// dynamic object the same id, and the server could not tell which one it damaged.</para></summary>
+        public const int NET_ID_SCENE_MIN = 1;
+
+        /// <inheritdoc cref="NET_ID_SCENE_MIN"/>
+        public const int NET_ID_SCENE_MAX = 32767;
+
+        /// <summary>Network id range the server allocates at RUNTIME for dynamic objects (§10.10) — the
+        /// half above the scene range, so the two can never collide. Ids return to a pool, but a
+        /// despawned id is NOT reissued before the round ends: an in-flight <c>object_event</c> or pose
+        /// packet would land on the object that inherited the id, and nobody would see an error.</summary>
+        public const int NET_ID_DYNAMIC_MIN = 32768;
+
+        /// <inheritdoc cref="NET_ID_DYNAMIC_MIN"/>
+        public const int NET_ID_DYNAMIC_MAX = 65535;
+
+        /// <summary>How often the OWNER streams an object pose (<c>0x09</c>, §6.12) — half of
+        /// <see cref="POSE_RATE_HZ"/>. The reason is packet count, not bandwidth
+        /// (<c>Docs/Sistem-Ozeti.md</c> §3.12); object poses also flow only for an AWAKE and UNHELD
+        /// object, so a typical tick carries none.</summary>
+        public const int OBJECT_POSE_RATE_HZ = 10;
+
+        /// <summary>Speed threshold (m/s) under which a released object counts as stopped (§10.10);
+        /// staying under it for <see cref="OBJECT_REST_SECONDS"/> makes the owner send
+        /// <c>object_rest{pos,rot}</c>, which ends ownership.</summary>
+        public const float OBJECT_REST_SPEED = 0.05f;
+
+        /// <summary>Uninterrupted time under <see cref="OBJECT_REST_SPEED"/> before "stopped".
+        /// <para>⚠️ A single frame of "I stopped" is NOT enough: speed hits zero at the apex of a bounce,
+        /// and an object released there would freeze in mid-air.</para></summary>
+        public const float OBJECT_REST_SECONDS = 0.3f;
+
+        /// <summary>Max object entries in the object section of one <c>0x05</c> datagram (§6.8). ⚠️ The
+        /// real gate is the byte budget (<see cref="COMBINED_MAX_BYTES"/>) — 8 + 16×88 + 16×30 = 1896 B
+        /// exceeds the MTU; this number is the <c>u8</c> ceiling of <c>objectCount</c> and a safety
+        /// net.</summary>
+        public const int OBJECT_MAX_ENTRIES_PER_PACKET = 16;
+
+        // ---- object_state.flags core bits (§10.10). Positions are FIXED and never renumbered: a
+        // shifted bit does not fail, it draws the wrong object broken. Bit4+ is per kind. ----
+
+        /// <summary>Held by a player: the pose comes from <c>owner</c>'s hand pose, <c>pos</c>/<c>rot</c>
+        /// are not read.</summary>
+        public const int OBJECT_FLAG_HELD = 1 << 0;
+
+        /// <summary>Broken: the client disables the collider and switches to the broken presentation.</summary>
+        public const int OBJECT_FLAG_BROKEN = 1 << 1;
+
+        /// <summary>Moving: the owner streams <c>0x09</c> poses (§6.12), the remote side
+        /// interpolates.</summary>
+        public const int OBJECT_FLAG_AWAKE = 1 << 2;
+
+        /// <summary>The holding hand is the RIGHT one (clear = left). Meaningless without
+        /// <see cref="OBJECT_FLAG_HELD"/>.</summary>
+        public const int OBJECT_FLAG_HELD_RIGHT = 1 << 3;
+
+        // ---- Kind rule values from maps.json `kinds[]` (§10.10/§11). Carried as strings; an
+        // empty/unknown value reads as the restrictive default (grab "none", no events). ----
+
+        /// <summary>Default: the object cannot be picked up.</summary>
+        public const string OBJECT_GRAB_NONE = "none";
+
+        /// <summary>A free object goes to the first asker (no stealing, §10.10).</summary>
+        public const string OBJECT_GRAB_ANYONE = "anyone";
+
+        /// <summary><c>events[].policy</c>: anyone may raise the event.</summary>
+        public const string OBJECT_EVENT_POLICY_ANYONE = "anyone";
+
+        /// <summary><c>events[].policy</c>: only the object's owner may raise the event.</summary>
+        public const string OBJECT_EVENT_POLICY_OWNER = "owner";
+
+        /// <summary><c>events[].phaseGate</c>: accepted only while <see cref="PHASE_PLAYING"/>.</summary>
+        public const string OBJECT_PHASE_GATE_PLAYING = "playing";
+
+        /// <summary><c>events[].phaseGate</c>: accepted in every phase (lobby included).</summary>
+        public const string OBJECT_PHASE_GATE_ANY = "any";
 
         /// <summary>Close-frame reason used when kicking (§5.4). Second line of defence: if the `kicked`
         /// JSON loses the race with the close, the client would reconnect by itself.</summary>

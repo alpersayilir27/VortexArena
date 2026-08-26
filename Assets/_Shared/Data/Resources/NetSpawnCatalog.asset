@@ -1,0 +1,39 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6b5ab8c80607dd34e90141cf698beb6a, type: 3}
+  m_Name: NetSpawnCatalog
+  m_EditorClassIdentifier: VortexArena.Net::VortexArena.Net.NetSpawnCatalog
+  entries:
+  - id: bun_whole
+    prefab: {fileID: 612617618936046134, guid: 5c9ac241605dce549a9b684651bb72e3, type: 3}
+  - id: bun_bottom
+    prefab: {fileID: 8670508408500092814, guid: 3218ca5352145f0409efc1134cea9410, type: 3}
+  - id: bun_top
+    prefab: {fileID: 5744946371121021999, guid: 107cdd6a1b597a24c9b74f94506c8985, type: 3}
+  - id: patty
+    prefab: {fileID: 7856095617283306508, guid: 6c70a7a2d3a76514f87301bcd87c74ff, type: 3}
+  - id: cheese
+    prefab: {fileID: 1540714885434036677, guid: d919cbf58d767f4438690e5f278d0452, type: 3}
+  - id: bacon
+    prefab: {fileID: 5915532217416701474, guid: 6509653801e46964cb88959d7adaf710, type: 3}
+  - id: lettuce
+    prefab: {fileID: 8076483368590988634, guid: f4629d5fded4c22468cb92ff34d9c6b2, type: 3}
+  - id: onion
+    prefab: {fileID: 4155846431303294836, guid: c2959f81ad5893445b59bf78aa8a63e3, type: 3}
+  - id: pickle
+    prefab: {fileID: 4004868710052603611, guid: 2558c74778a1c0540a9f1ee32b5e55ed, type: 3}
+  - id: tomato
+    prefab: {fileID: 683491793393699463, guid: 4ac1293c49f31ef4f9a09c310a6b2840, type: 3}
+  - id: sauce
+    prefab: {fileID: 951370016390284948, guid: c697235545c57d547969d7603a1fe054, type: 3}
+  - id: customer
+    prefab: {fileID: 749250250015823784, guid: b42a15d47f0bdb848934ae8ac643de06, type: 3}

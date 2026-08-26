@@ -11,45 +11,45 @@ using VortexArena.Core.Player;
 
 namespace VortexArena.Core.Editor
 {
-    /// <summary><c>Tools &gt; VortexArena &gt; Weapons &gt; Kavrama Pozu Stüdyosu</c> — a bench for
-    /// authoring how a weapon sits in the hand WITHOUT putting on a headset. It exists for feedback
+    /// <summary><c>Tools &gt; VortexArena &gt; Items &gt; Kavrama Pozu Stüdyosu</c> — a bench for
+    /// authoring how an item sits in the hand WITHOUT putting on a headset. It exists for feedback
     /// time: a grip is not a number with one right value but the answer to "does the palm touch the
     /// grip, does the index finger reach the trigger", and asking that via an APK build took minutes
     /// per attempt.
-    /// <para>Flow: open a <c>WPN_*</c> prefab in PREFAB MODE → the window picks up the stage →
+    /// <para>Flow: open the item's prefab in PREFAB MODE → the window picks up the stage →
     /// <b>Elleri Oluştur</b> → controller roots appear (controller model + ghost hand beneath) → MOVE
-    /// the roots onto the grips, SEAT the hand model on its controller (move + rotate — the weapon
-    /// does not follow), then RIG the fingers per weapon (pick a joint in the window's finger list,
+    /// the roots onto the grips, SEAT the hand model on its controller (move + rotate — the item
+    /// does not follow), then RIG the fingers per item (pick a joint in the window's finger list,
     /// rotate it in Scene View) → optionally <b>Karşı Ele Aynala</b> → <b>Kaydet</b>.</para>
-    /// <para>⚠️ There are no finger PRESETS: the pose is authored bone by bone for THIS weapon,
+    /// <para>⚠️ There are no finger PRESETS: the pose is authored bone by bone for THIS item,
     /// because a shared "trigger/wrap" table cannot fit grips whose geometry differs — on some
     /// weapons it left the fingers inside the body. The record holds the joints
     /// (<see cref="HandJointRotation"/>); the only shared pose left is the idle hand.</para>
     /// <para>⚠️ The root the user drags is the CONTROLLER (anchor) frame: <c>[VA El_*]</c> represents
-    /// where <c>OVRCameraRig.left/rightHandAnchor</c> sits on the weapon, and the record is that
+    /// where <c>OVRCameraRig.left/rightHandAnchor</c> sits on the item, and the record is that
     /// root's POSITION relative to the item (<see cref="ItemGripPose"/>: anchor space, no rotation).
-    /// In game the weapon is ALWAYS aligned with the controller, so the roots are kept aligned
+    /// In game the item is ALWAYS aligned with the controller, so the roots are kept aligned
     /// (<see cref="KeepRootsAligned"/>) and only MOVED.</para>
     /// <para>Two children hang under the root. The Quest 3 controller model is LOCKED at identity —
     /// exactly how it sits under the anchor in game, so it is the alignment reference. The ISDK ghost
     /// hand is AUTHORABLE: its local pose is where the hand model sits on that controller, it is
-    /// saved per weapon per hand (<see cref="CaptureWrist"/>), and a slot that has none falls back to
+    /// saved per item per hand (<see cref="CaptureWrist"/>), and a slot that has none falls back to
     /// the shared definition (<see cref="ItemGripAuthority.ResolveAnchorToWrist(bool)"/> —
     /// <see cref="ApplyGhostOffset"/>). ⚠️ Whatever ends up there is the SAME value the game locks the
     /// real wrist to, which is what makes the bench and the headset show the same hand; the studio
     /// must not compute one of its own.</para>
-    /// <para>⚠️ Moving/rotating the ghost NEVER moves the weapon — that is the whole point of keeping
-    /// it a separate child: some weapons are held from the side, some from below, while the weapon's
+    /// <para>⚠️ Moving/rotating the ghost NEVER moves the item — that is the whole point of keeping
+    /// it a separate child: some items are held from the side, some from below, while the item's
     /// own placement on the controller must stay put.</para>
-    /// <para>⚠️ If the record carried a rotation, anyone rotating the root would skew the weapon off
+    /// <para>⚠️ If the record carried a rotation, anyone rotating the root would skew the item off
     /// the controller in game. The front grip carries none either: the second hand's controller is
-    /// taken as weapon-aligned and the synthetic wrist locks its delta beyond it.</para>
+    /// taken as item-aligned and the synthetic wrist locks its delta beyond it.</para>
     /// <para>⚠️ Hands never go INSIDE the prefab: each is a separate ROOT object of the prefab stage
     /// scene (<see cref="HideFlags.DontSave"/>), because prefab mode writes only the tree under
     /// <c>prefabContentsRoot</c>. Parented under the prefab, the first save would embed a hand model
-    /// in the weapon and it would float in the arena.</para>
+    /// in the item and it would float in the arena.</para>
     /// <para>⚠️ NOTHING is written into the prefab contents (pose node, hand rig, marker): the record
-    /// lives only in <c>WD_*.asset</c>. A second description in the prefab would raise "which one
+    /// lives only in the definition asset. A second description in the prefab would raise "which one
     /// applies" for everyone who opens it.</para>
     /// <para>⚠️ No dialogs (same reason as <c>WeaponKitBuilder</c>): a modal blocks Unity's main
     /// thread and times out under CLI/pipeline. Results go to <see cref="Debug.Log"/>.</para>
@@ -107,6 +107,11 @@ namespace VortexArena.Core.Editor
         /// <summary>Target picked while no stage is open (only used by "open prefab").</summary>
         [SerializeField] private GameObject _prefab;
 
+        /// <summary>Definition picked BY HAND — only used when the prefab does not resolve to exactly
+        /// one definition (⚠️ two definitions pointing at the same prefab: writing to "the first one"
+        /// would put the grip on the wrong asset and nobody would notice).</summary>
+        [SerializeField] private ItemDefinition _definitionOverride;
+
         /// <summary>Were there LIVE hands last frame — for the "hands disappeared" notice.
         /// ⚠️ Not serialized: it only describes a frame-to-frame delta, and persisting it would warn
         /// on every startup after a domain reload (hands are <c>DontSave</c> and die there).</summary>
@@ -126,12 +131,27 @@ namespace VortexArena.Core.Editor
         /// console.</summary>
         private static bool _ghostProviderWarned;
 
+        /// <summary>How long a reverse prefab→definition lookup stays valid (s).</summary>
+        private const double LookupRefreshSeconds = 2d;
+
+        /// <summary>Prefab asset path the cached reverse lookup answers for.</summary>
+        private static string _lookupPath;
+
+        /// <summary>Cached reverse lookup result; <c>null</c> when none or ambiguous.</summary>
+        private static ItemDefinition _lookupDefinition;
+
+        /// <summary>More than one definition points at <see cref="_lookupPath"/>.</summary>
+        private static bool _lookupAmbiguous;
+
+        /// <summary>When the cache was built (<c>EditorApplication.timeSinceStartup</c>).</summary>
+        private static double _lookupTime;
+
         // ---------------------------------------------------------------------------- window
 
-        // The ONLY item under the Weapons menu: the weapon kit and net item catalog run inside
-        // Configure All Build Elements' sync. The studio stays in the menu because a grip is
-        // authored by eye.
-        [MenuItem("Tools/VortexArena/Weapons/Kavrama Pozu Stüdyosu", false, 20)]
+        // Lives under Items, not Weapons: the bench now authors the grip of ANY item. Kit/catalog
+        // sync still runs inside Configure All Build Elements; the studio stays in the menu because
+        // a grip is authored by eye.
+        [MenuItem("Tools/VortexArena/Items/Kavrama Pozu Stüdyosu", false, 20)]
         private static void Open()
         {
             GripPoseStudio window = GetWindow<GripPoseStudio>();
@@ -239,7 +259,7 @@ namespace VortexArena.Core.Editor
         }
 
         /// <summary>Restores hands that Unity's prefab save hid (rationale in
-        /// <see cref="InstallCleanupHooks"/>) and keeps the roots weapon-aligned
+        /// <see cref="InstallCleanupHooks"/>) and keeps the roots item-aligned
         /// (<see cref="KeepRootsAligned"/>). Runs every editor tick, so it must stay cheap: it never
         /// writes to an intact hand and only repaints the hierarchy when it actually fixed
         /// something.</summary>
@@ -252,10 +272,10 @@ namespace VortexArena.Core.Editor
             }
 
             List<GripHandAuthoring> hands = FindHands(stage.scene);
-            Transform weaponRoot = StageWeaponRoot(stage);
-            if (weaponRoot != null)
+            Transform itemRoot = StageItemRoot(stage);
+            if (itemRoot != null)
             {
-                KeepRootsAligned(weaponRoot, hands);
+                KeepRootsAligned(itemRoot, hands);
             }
 
             bool restored = false;
@@ -287,16 +307,19 @@ namespace VortexArena.Core.Editor
             }
         }
 
-        /// <summary>Auto-fills the target when a <c>WPN_*</c> prefab is selected in the Project
-        /// window (for the button that opens prefab mode).</summary>
+        /// <summary>Auto-fills the target from the Project window: an item prefab that resolves to a
+        /// definition, or the definition asset itself (its prefab is the bench target).</summary>
         private void OnSelectionChange()
         {
             GameObject candidate = Selection.activeGameObject;
-            if (candidate != null &&
-                PrefabUtility.IsPartOfPrefabAsset(candidate) &&
-                candidate.GetComponent<Weapon>() != null)
+            if (candidate != null && PrefabUtility.IsPartOfPrefabAsset(candidate) &&
+                ResolveDefinition(candidate, out _) != null)
             {
                 _prefab = candidate;
+            }
+            else if (Selection.activeObject is ItemDefinition selected && selected.Prefab != null)
+            {
+                _prefab = selected.Prefab;
             }
 
             Repaint();
@@ -318,28 +341,28 @@ namespace VortexArena.Core.Editor
             }
 
             PrefabStage stage = CurrentStage();
-            Transform weaponRoot = StageWeaponRoot(stage);
+            Transform itemRoot = StageItemRoot(stage);
 
-            if (weaponRoot == null)
+            if (itemRoot == null)
             {
-                DrawNoStageGui(stage);
+                DrawNoStageGui();
                 return;
             }
 
-            DrawStageGui(stage, weaponRoot);
+            DrawStageGui(stage, itemRoot);
         }
 
         /// <summary>With prefab mode closed there is one job: open the target in prefab mode.
         /// <para>⚠️ The old scene-based bench does not come back: hand placement is measured against
-        /// the weapon, and prefab mode already provides that reference (the prefab root) at the
-        /// weapon's own scale. A second weapon copy in a scene would blur which instance the record
-        /// was taken from.</para></summary>
-        private void DrawNoStageGui(PrefabStage stage)
+        /// the item, and prefab mode already provides that reference (the prefab root) at the
+        /// item's own scale. A second copy of the item in a scene would blur which instance the
+        /// record was taken from.</para></summary>
+        private void DrawNoStageGui()
         {
             _prefab = (GameObject)EditorGUILayout.ObjectField(
-                "Silah prefabı", _prefab, typeof(GameObject), false);
+                "Eşya prefabı", _prefab, typeof(GameObject), false);
 
-            bool usable = _prefab != null && ResolveDefinition(_prefab) != null;
+            bool usable = _prefab != null && ResolveDefinition(_prefab, out _) != null;
 
             using (new EditorGUI.DisabledScope(!usable))
             {
@@ -349,47 +372,78 @@ namespace VortexArena.Core.Editor
                 }
             }
 
-            if (stage != null)
+            if (_prefab == null)
             {
                 EditorGUILayout.HelpBox(
-                    "Açık prefab kipinde Weapon bileşeni yok — bu bir silah prefabı değil.",
-                    MessageType.Warning);
-            }
-            else if (_prefab == null)
-            {
-                EditorGUILayout.HelpBox(
-                    "Hedef yok: proje penceresinden bir WPN_* prefabı seç (ya da yukarıdaki alana " +
-                    "sürükle), sonra prefab kipinde aç.",
+                    "Hedef yok: proje penceresinden bir eşya prefabı ya da eşya tanımı seç (ya da " +
+                    "yukarıdaki alana sürükle), sonra prefab kipinde aç.",
                     MessageType.Info);
             }
             else if (!usable)
             {
                 EditorGUILayout.HelpBox(
-                    "Bu prefabın Weapon bileşeni ya da tanımı (WeaponDefinition) yok — " +
-                    "kaydedilecek asset bulunamaz.",
+                    "Bu prefabı gösteren bir eşya tanımı yok — tanımın Prefab alanı bu prefabı " +
+                    "göstermeli (silahlarda Weapon bileşenindeki tanım da yeter).",
                     MessageType.Warning);
             }
 
             EditorGUILayout.HelpBox(
                 "Akış: prefabı prefab kipinde aç → Elleri Oluştur → kumanda köklerini kabzalara oturt " +
-                "→ el modelini kumandanın üstünde yerleştir (taşı/çevir — silah kımıldamaz) → " +
-                "parmakları bu silaha göre rigle (eklemi listeden seç, Scene View'da çevir) → " +
+                "→ el modelini kumandanın üstünde yerleştir (taşı/çevir — eşya kımıldamaz) → " +
+                "parmakları bu eşyaya göre rigle (eklemi listeden seç, Scene View'da çevir) → " +
                 "(istersen) Aynala → Kaydet.",
                 MessageType.None);
         }
 
-        private void DrawStageGui(PrefabStage stage, Transform weaponRoot)
+        private void DrawStageGui(PrefabStage stage, Transform itemRoot)
         {
-            WeaponDefinition definition = ResolveDefinition(weaponRoot.gameObject);
+            ItemDefinition definition = ResolveDefinition(itemRoot.gameObject, out bool ambiguous);
 
-            EditorGUILayout.LabelField("Hedef", weaponRoot.name);
+            EditorGUILayout.LabelField("Hedef", itemRoot.name);
+
+            // The definition is SHOWN, not just used: until now the bench wrote to whatever the
+            // Weapon component pointed at, with no way to see which asset that was.
+            if (definition != null)
+            {
+                using (new EditorGUI.DisabledScope(true))
+                {
+                    EditorGUILayout.ObjectField("Eşya tanımı", definition, typeof(ItemDefinition), false);
+                }
+            }
+            else
+            {
+                _definitionOverride = (ItemDefinition)EditorGUILayout.ObjectField(
+                    "Eşya tanımı", _definitionOverride, typeof(ItemDefinition), false);
+                definition = MatchingOverride(_definitionOverride, itemRoot);
+            }
+
+            // ⚠️ The most specific complaint first, and every box disappears once a valid definition
+            // is picked by hand: the pick IS the answer, and a warning that survives being satisfied
+            // reads as unsolvable.
+            if (definition == null && _definitionOverride != null)
+            {
+                EditorGUILayout.HelpBox(
+                    "Seçilen tanımın Prefab alanı bu prefabı göstermiyor — kavrama yanlış asset'e " +
+                    "yazılırdı, yazılmadı.",
+                    MessageType.Warning);
+            }
+            else if (definition == null && ambiguous)
+            {
+                EditorGUILayout.HelpBox(
+                    "Bu prefabı gösteren birden çok eşya tanımı var — hangisine yazılacağı belirsiz. " +
+                    "Yazılacak tanımı yukarıdan elle seç.",
+                    MessageType.Warning);
+            }
+            else if (definition == null)
+            {
+                EditorGUILayout.HelpBox(
+                    "Bu prefabı gösteren eşya tanımı bulunamadı — kavrama alanları yazılamaz. " +
+                    "Tanımın Prefab alanı bu prefabı göstermeli (ya da yukarıdan elle seç).",
+                    MessageType.Warning);
+            }
 
             if (definition == null)
             {
-                EditorGUILayout.HelpBox(
-                    "Prefabın Weapon bileşeninde tanım (WeaponDefinition) yok — kavrama alanları " +
-                    "yazılamaz.",
-                    MessageType.Warning);
                 return;
             }
 
@@ -401,14 +455,14 @@ namespace VortexArena.Core.Editor
             {
                 if (GUILayout.Button("Ana Kabza Ellerini Oluştur", GUILayout.Height(24f)))
                 {
-                    CreateHandPair(stage, weaponRoot, definition, GripSocketKind.Primary);
+                    CreateHandPair(stage, itemRoot, definition, GripSocketKind.Primary);
                 }
 
                 using (new EditorGUI.DisabledScope(!definition.IsTwoHanded))
                 {
                     if (GUILayout.Button("Ön Kabza Ellerini Oluştur", GUILayout.Height(24f)))
                     {
-                        CreateHandPair(stage, weaponRoot, definition, GripSocketKind.Secondary);
+                        CreateHandPair(stage, itemRoot, definition, GripSocketKind.Secondary);
                     }
                 }
             }
@@ -440,7 +494,7 @@ namespace VortexArena.Core.Editor
                 // hand to the same place.
                 EditorGUILayout.HelpBox(
                     "Eller tezgâhtan kalktı (prefab kipi içeriği yeniden yüklenmiş olabilir). " +
-                    "Yeniden oluştur: kavraması yazılmış bir silahta eller kayıttan aynı yere gelir.",
+                    "Yeniden oluştur: kavraması yazılmış bir eşyada eller kayıttan aynı yere gelir.",
                     MessageType.Info);
             }
 
@@ -451,7 +505,7 @@ namespace VortexArena.Core.Editor
                 {
                     if (GUILayout.Button("Kaydet", GUILayout.Height(26f)))
                     {
-                        SaveHands(weaponRoot, definition, hands);
+                        SaveHands(itemRoot, definition, hands);
                     }
 
                     if (GUILayout.Button("Elleri Temizle", GUILayout.Height(26f)))
@@ -463,7 +517,7 @@ namespace VortexArena.Core.Editor
             }
         }
 
-        private void DrawHandList(WeaponDefinition definition, List<GripHandAuthoring> hands)
+        private void DrawHandList(ItemDefinition definition, List<GripHandAuthoring> hands)
         {
             EditorGUILayout.Space();
             EditorGUILayout.LabelField("Tezgâhtaki eller", EditorStyles.boldLabel);
@@ -497,11 +551,11 @@ namespace VortexArena.Core.Editor
                         GUILayout.Width(140f));
 
                     // Two selectable things, two different answers: the controller root places the
-                    // WEAPON, the hand model places the HAND on that controller. The buttons exist
+                    // ITEM, the hand model places the HAND on that controller. The buttons exist
                     // because a click in Scene View always lands on the root (the meshes bounce
                     // there), so the hand model would otherwise be reachable only via the hierarchy.
                     if (GUILayout.Button(new GUIContent("Kumanda",
-                            "Kumanda kökü — silahın kumandaya göre yeri buradan yazılır (yalnız taşı).")))
+                            "Kumanda kökü — eşyanın kumandaya göre yeri buradan yazılır (yalnız taşı).")))
                     {
                         Selection.activeGameObject = hand.gameObject;
                         SceneView.lastActiveSceneView?.FrameSelected();
@@ -512,7 +566,7 @@ namespace VortexArena.Core.Editor
                     {
                         if (GUILayout.Button(new GUIContent("El Modeli",
                                 "Hayalet el — elin kumanda üstündeki yeri ve AÇISI (taşı + çevir). " +
-                                "Silahın duruşunu değiştirmez.")))
+                                "Eşyanın duruşunu değiştirmez.")))
                         {
                             Selection.activeGameObject = ghost;
                             SceneView.lastActiveSceneView?.FrameSelected();
@@ -521,7 +575,7 @@ namespace VortexArena.Core.Editor
 
                     if (GUILayout.Button(new GUIContent("Kopya Al",
                             "Bu elin görselini (kumanda üstündeki yerleşimi + parmak rigi) başka " +
-                            "bir silahtan aynen alır. Silahın kumandaya göre yerine DOKUNMAZ.")))
+                            "bir eşyadan aynen alır. Eşyanın kumandaya göre yerine DOKUNMAZ.")))
                     {
                         ShowCopyMenu(hand, definition, GUILayoutUtility.GetLastRect());
                     }
@@ -534,17 +588,17 @@ namespace VortexArena.Core.Editor
             }
         }
 
-        // ------------------------------------------------------------------ copy from weapon
+        // -------------------------------------------------------------------- copy from item
 
-        /// <summary>Drops down the list of weapons this hand's LOOK can be copied from.
+        /// <summary>Drops down the list of items this hand's LOOK can be copied from.
         /// <para>⚠️ Only definitions that have <b>this very slot</b> (same grip point, same hand)
-        /// authored are listed, and a weapon whose record holds neither a seat nor a finger rig is
+        /// authored are listed, and an item whose record holds neither a seat nor a finger rig is
         /// left out too: an entry that copies nothing would read as "I picked it and nothing
         /// happened". A slot with no source at all shows a disabled line instead of an empty
         /// menu — an empty dropdown looks like a broken button.</para>
-        /// <para>⚠️ The current weapon is excluded: "copy from myself" would silently mean "revert
+        /// <para>⚠️ The current item is excluded: "copy from myself" would silently mean "revert
         /// to the last save", which is a different operation and not what the button says.</para></summary>
-        private static void ShowCopyMenu(GripHandAuthoring hand, WeaponDefinition current, Rect from)
+        private static void ShowCopyMenu(GripHandAuthoring hand, ItemDefinition current, Rect from)
         {
             if (hand == null)
             {
@@ -559,7 +613,7 @@ namespace VortexArena.Core.Editor
             if (sources.Count == 0)
             {
                 menu.AddDisabledItem(new GUIContent(
-                    $"(bu eli yazılmış başka silah yok: {kind} · {(rightHand ? "sağ" : "sol")})"));
+                    $"(bu eli yazılmış başka eşya yok: {kind} · {(rightHand ? "sağ" : "sol")})"));
                 menu.DropDown(from);
                 return;
             }
@@ -621,14 +675,14 @@ namespace VortexArena.Core.Editor
 
         /// <summary>Copies the source's LOOK for this slot onto the bench hand: the hand model's
         /// seat on the controller + the rigged finger joints.
-        /// <para>⚠️ The controller root is NOT touched. That root is where the WEAPON sits on the
-        /// controller and it is this weapon's own geometry — taking it from another weapon would
-        /// move the gun in the hand, and the tell in game ("the weapon comes in crooked") is far
+        /// <para>⚠️ The controller root is NOT touched. That root is where the ITEM sits on the
+        /// controller and it is this item's own geometry — taking it from another item would
+        /// move the item in the hand, and the tell in game ("it comes in crooked") is far
         /// from the button that caused it.</para>
         /// <para>⚠️ BOTH halves are written, even when the source has only one: the copy makes this
-        /// hand exactly that weapon's hand, so a source with no seat re-seats to the shared default
+        /// hand exactly that item's hand, so a source with no seat re-seats to the shared default
         /// (the menu labels say which half is missing). Half-copying would leave a hand that
-        /// matches neither weapon.</para>
+        /// matches neither item.</para>
         /// <para>⚠️ Nothing goes to disk here — the bench is what changed, and <b>Kaydet</b> stays
         /// the single writer (<see cref="SaveHands"/>).</para></summary>
         private static void CopyHandFrom(GripHandAuthoring hand, ItemDefinition source)
@@ -645,7 +699,7 @@ namespace VortexArena.Core.Editor
             hand.ApplyPose(grip.fingerJoints);
 
             Debug.Log($"{LOG} {hand.Kind}/{(hand.RightHand ? "sağ" : "sol")} elin görseli " +
-                      $"'{source.name}' kaydından kopyalandı (yerleşim + parmaklar). Silahın " +
+                      $"'{source.name}' kaydından kopyalandı (yerleşim + parmaklar). Eşyanın " +
                       "kumandaya göre yeri değişmedi — kalıcı olması için Kaydet.", source);
 
             SceneView.RepaintAll();
@@ -696,7 +750,7 @@ namespace VortexArena.Core.Editor
 
                     if (GUILayout.Button(new GUIContent("El Yerleşimini Sıfırla",
                             "El modelini kumandanın üstündeki paylaşılan varsayılan yerine " +
-                            "döndürür (silahın duruşuna dokunmaz).")))
+                            "döndürür (eşyanın duruşuna dokunmaz).")))
                     {
                         // default record = "no seat authored" → shared definition.
                         ApplyGhostOffset(hand, default);
@@ -782,16 +836,14 @@ namespace VortexArena.Core.Editor
             return PrefabStageUtility.GetCurrentPrefabStage();
         }
 
-        /// <summary>Root of the weapon in the open prefab stage; <c>null</c> if it is not a weapon.</summary>
-        private static Transform StageWeaponRoot(PrefabStage stage)
+        /// <summary>Root of the prefab open in prefab mode. ⚠️ No definition check here: this runs
+        /// every editor tick (<see cref="RestoreHandFlags"/>) and a project-wide asset scan per tick
+        /// would be a real cost — the definition is resolved once in the GUI. Hands only exist in a
+        /// stage the bench opened, so aligning to any open stage's root is harmless.</summary>
+        private static Transform StageItemRoot(PrefabStage stage)
         {
             GameObject root = stage != null ? stage.prefabContentsRoot : null;
-            if (root == null || root.GetComponent<Weapon>() == null)
-            {
-                return null;
-            }
-
-            return root.transform;
+            return root != null ? root.transform : null;
         }
 
         internal static string HandRootName(GripSocketKind kind, bool rightHand)
@@ -887,14 +939,14 @@ namespace VortexArena.Core.Editor
 
         // --------------------------------------------------------------- building hands
 
-        private static void CreateHandPair(PrefabStage stage, Transform weaponRoot,
-            WeaponDefinition definition, GripSocketKind kind)
+        private static void CreateHandPair(PrefabStage stage, Transform itemRoot,
+            ItemDefinition definition, GripSocketKind kind)
         {
             // ⚠️ Both hands are attempted INDEPENDENTLY: letting a failed right hand also skip the
             // left would look like "the left hand is never added" and hide the real error. Each
             // failure already logs its own line.
-            GripHandAuthoring right = EnsureHand(stage, weaponRoot, definition, kind, true);
-            GripHandAuthoring left = EnsureHand(stage, weaponRoot, definition, kind, false);
+            GripHandAuthoring right = EnsureHand(stage, itemRoot, definition, kind, true);
+            GripHandAuthoring left = EnsureHand(stage, itemRoot, definition, kind, false);
 
             GripHandAuthoring focus = right != null ? right : left;
             if (focus != null)
@@ -922,15 +974,16 @@ namespace VortexArena.Core.Editor
         /// <summary>Builds the hand for one grip point (returns the existing one if present).
         /// <para>⚠️ The root is the CONTROLLER frame and the ghost hand is its CHILD; BOTH are part of
         /// the record and mean different things: the root's item-local position decides where the
-        /// WEAPON sits on the controller (<see cref="AnchorInItem"/>), the ghost's local pose decides
+        /// ITEM sits on the controller (<see cref="AnchorInItem"/>), the ghost's local pose decides
         /// where the HAND MODEL sits on that controller (<see cref="CaptureWrist"/>). Every other
         /// child is a pure visual and a click on it is redirected to the root
         /// (<see cref="RedirectSelectionToHandRoot"/>).</para>
         /// <para>⚠️ Local scale is pinned to 1: the hand is a scene root, not under the prefab, so
-        /// the weapon's own 0.8 scale never leaks into it — otherwise "does the palm wrap the grip"
-        /// would be answered at a 25% wrong ratio, which is the tool's whole job.</para></summary>
-        private static GripHandAuthoring EnsureHand(PrefabStage stage, Transform weaponRoot,
-            WeaponDefinition definition, GripSocketKind kind, bool rightHand)
+        /// the item's own scale (0.8 on <c>WPN_*</c> roots) never leaks into it — otherwise "does the
+        /// palm wrap the grip" would be answered at a 25% wrong ratio, which is the tool's whole
+        /// job.</para></summary>
+        private static GripHandAuthoring EnsureHand(PrefabStage stage, Transform itemRoot,
+            ItemDefinition definition, GripSocketKind kind, bool rightHand)
         {
             GripHandAuthoring existing = FindHand(FindHands(stage.scene), kind, rightHand);
             if (existing != null)
@@ -1000,7 +1053,7 @@ namespace VortexArena.Core.Editor
             // ⚠️ The finger pose goes through the puppet, NOT ISDK's HandGhost.SetPose: SetPose wants
             // a HandPose object whose joint array would be a second finger source — the only source
             // is the record itself (and an empty record means the idle hand).
-            Pose start = ResolveStartPose(weaponRoot, definition, kind, rightHand);
+            Pose start = ResolveStartPose(itemRoot, definition, kind, rightHand);
             root.transform.SetPositionAndRotation(start.position, start.rotation);
 
             authoring.ApplyPose(recorded.fingerJoints);
@@ -1122,32 +1175,32 @@ namespace VortexArena.Core.Editor
 
         /// <summary>Starting pose of the controller root — position from three sources IN ORDER:
         /// (1) the record in the definition, (2) roughly the centre of the grip part, (3) slightly
-        /// above the weapon. Rotation is ALWAYS the weapon's (the record carries none).
+        /// above the item. Rotation is ALWAYS the item's (the record carries none).
         /// <para>⚠️ (1) is the exact inverse of the record: "build hands → touch nothing → save"
         /// must not change the stored value. If that identity breaks, one of the space directions is
         /// flipped and the only places to look are <see cref="AnchorInItem"/> and this
         /// recomposition.</para>
         /// <para>⚠️ The composition is UNSCALED (no <c>TransformPoint</c>): the record is in METRES
         /// and <c>WPN_*</c> roots are 0.8 scaled, so a scaled composition puts the root 1/0.8 too far
-        /// from the weapon.</para></summary>
-        private static Pose ResolveStartPose(Transform weaponRoot, WeaponDefinition definition,
+        /// from the item.</para></summary>
+        private static Pose ResolveStartPose(Transform itemRoot, ItemDefinition definition,
             GripSocketKind kind, bool rightHand)
         {
             if (definition.HasGrip(kind, rightHand))
             {
                 Vector3 local = definition.GetGrip(kind, rightHand).position;
-                return new Pose(weaponRoot.position + weaponRoot.rotation * local, weaponRoot.rotation);
+                return new Pose(itemRoot.position + itemRoot.rotation * local, itemRoot.rotation);
             }
 
             // No cache needed: this scan runs ONCE per grip point while building a hand.
-            Renderer part = SearchWeaponPart(weaponRoot,
+            Renderer part = SearchGripPart(itemRoot,
                 kind == GripSocketKind.Primary ? GRIP_KEYS : FOREGRIP_KEYS);
 
             Vector3 position = part != null
                 ? part.bounds.center
-                : weaponRoot.position + Vector3.up * 0.1f;
+                : itemRoot.position + Vector3.up * 0.1f;
 
-            return new Pose(position, weaponRoot.rotation);
+            return new Pose(position, itemRoot.rotation);
         }
 
         /// <summary>Local POSITION of the controller root relative to the item — the ONLY way the
@@ -1157,15 +1210,15 @@ namespace VortexArena.Core.Editor
         /// METRES and must not be shrunk by the item's visual scale (0.8 on <c>WPN_*</c> roots). The
         /// recomposition in <see cref="ResolveStartPose"/> mirrors this, keeping both ends on one
         /// contract.</para></summary>
-        private static Vector3 AnchorInItem(Transform weaponRoot, Transform handRoot)
+        private static Vector3 AnchorInItem(Transform itemRoot, Transform handRoot)
         {
-            return Quaternion.Inverse(weaponRoot.rotation) * (handRoot.position - weaponRoot.position);
+            return Quaternion.Inverse(itemRoot.rotation) * (handRoot.position - itemRoot.position);
         }
 
-        /// <summary>Keeps the roots weapon-aligned: the record carries no rotation, so rotating a
+        /// <summary>Keeps the roots item-aligned: the record carries no rotation, so rotating a
         /// root has no in-game meaning and it is snapped back, keeping bench and game in sync. Runs
         /// every editor tick and writes only to a root that drifted.</summary>
-        private static void KeepRootsAligned(Transform weaponRoot, List<GripHandAuthoring> hands)
+        private static void KeepRootsAligned(Transform itemRoot, List<GripHandAuthoring> hands)
         {
             for (int i = 0; i < hands.Count; i++)
             {
@@ -1175,9 +1228,9 @@ namespace VortexArena.Core.Editor
                     continue;
                 }
 
-                if (Quaternion.Angle(hand.transform.rotation, weaponRoot.rotation) > 0.01f)
+                if (Quaternion.Angle(hand.transform.rotation, itemRoot.rotation) > 0.01f)
                 {
-                    hand.transform.rotation = weaponRoot.rotation;
+                    hand.transform.rotation = itemRoot.rotation;
                 }
             }
         }
@@ -1264,7 +1317,7 @@ namespace VortexArena.Core.Editor
         /// ghosts share one joint convention, so the same local rotations produce the mirrored pose —
         /// which is why that half is a copy and not a negation.
         /// <para>The hand model's SEAT is genuinely reflected, because it lives in the controller
-        /// root's frame and that frame is weapon-aligned on both hands:
+        /// root's frame and that frame is item-aligned on both hands:
         /// <c>p=(x,y,z) → (−x,y,z)</c> and <c>q=(x,y,z,w) → (x,−y,−z,w)</c> (reflection across the
         /// plane whose normal is X). Identity maps to identity, so a hand that was never re-seated
         /// mirrors to the same default.</para>
@@ -1282,21 +1335,21 @@ namespace VortexArena.Core.Editor
             }
 
             PrefabStage stage = CurrentStage();
-            Transform weaponRoot = StageWeaponRoot(stage);
-            if (weaponRoot == null)
+            Transform itemRoot = StageItemRoot(stage);
+            if (itemRoot == null)
             {
-                Debug.LogWarning($"{LOG} Aynalama için prefab kipi açık olmalı (referans silahın " +
+                Debug.LogWarning($"{LOG} Aynalama için prefab kipi açık olmalı (referans eşyanın " +
                                  "kökü).");
                 return false;
             }
 
-            WeaponDefinition definition = ResolveDefinition(weaponRoot.gameObject);
+            ItemDefinition definition = ResolveDefinition(itemRoot.gameObject, out _);
             if (definition == null)
             {
                 return false;
             }
 
-            Vector3 local = AnchorInItem(weaponRoot, source.transform);
+            Vector3 local = AnchorInItem(itemRoot, source.transform);
             var mirroredPosition = new Vector3(-local.x, local.y, local.z);
 
             Pose wrist = CaptureWrist(source);
@@ -1305,7 +1358,7 @@ namespace VortexArena.Core.Editor
                 new Quaternion(wrist.rotation.x, -wrist.rotation.y, -wrist.rotation.z,
                     wrist.rotation.w));
 
-            GripHandAuthoring opposite = EnsureHand(stage, weaponRoot, definition,
+            GripHandAuthoring opposite = EnsureHand(stage, itemRoot, definition,
                 source.Kind, !source.RightHand);
             if (opposite == null)
             {
@@ -1313,8 +1366,8 @@ namespace VortexArena.Core.Editor
             }
 
             opposite.transform.SetPositionAndRotation(
-                weaponRoot.position + weaponRoot.rotation * mirroredPosition,
-                weaponRoot.rotation);
+                itemRoot.position + itemRoot.rotation * mirroredPosition,
+                itemRoot.rotation);
             opposite.transform.localScale = Vector3.one;
             SeatGhost(opposite, mirroredWrist);
             opposite.ApplyPose(CaptureFingers(source));
@@ -1338,11 +1391,11 @@ namespace VortexArena.Core.Editor
         /// record lives only in the definition, and the hands are separate stage-scene roots anyway.</para>
         /// <para>⚠️ Never writes in Play mode: the record goes to disk via <c>AssetDatabase</c> and a
         /// value written during Play becomes ambiguous at the next domain reload.</para>
-        /// <para>A successful write also runs the weapon kit (<see cref="RunWeaponKit"/>): the record
-        /// is not a product on its own — the socket indicator, the WPN prefabs and the catalog derive
-        /// from it, and leaving that to a second tool made "I saved but nothing changed in game" a
-        /// silent step.</para></summary>
-        private static bool SaveHands(Transform weaponRoot, WeaponDefinition definition,
+        /// <para>A successful write also runs the matching sync (<see cref="RunPostSaveSync"/>): the
+        /// record is not a product on its own — the socket indicator, the WPN prefabs and the item
+        /// catalog derive from it, and leaving that to a second tool made "I saved but nothing
+        /// changed in game" a silent step.</para></summary>
+        private static bool SaveHands(Transform itemRoot, ItemDefinition definition,
             List<GripHandAuthoring> hands)
         {
             if (EditorApplication.isPlaying)
@@ -1364,7 +1417,7 @@ namespace VortexArena.Core.Editor
                     continue;
                 }
 
-                Vector3 local = AnchorInItem(weaponRoot, hand.transform);
+                Vector3 local = AnchorInItem(itemRoot, hand.transform);
                 definition.EditorSetGrip(hand.Kind, hand.RightHand, local, CaptureWrist(hand),
                     CaptureFingers(hand));
                 written++;
@@ -1379,13 +1432,13 @@ namespace VortexArena.Core.Editor
             EditorUtility.SetDirty(definition);
             AssetDatabase.SaveAssets();
 
-            Debug.Log($"{LOG} '{weaponRoot.name}' kavraması yazıldı: {written} el → " +
+            Debug.Log($"{LOG} '{itemRoot.name}' kavraması yazıldı: {written} el → " +
                       $"{definition.name}.asset", definition);
 
             // ⚠️ delayCall: the kit rewrites the WPN prefab on disk and the open prefab stage
             // reloads its contents. In the MIDDLE of OnGUI the window would keep drawing a destroyed
-            // weaponRoot (MissingReferenceException) — the kit runs after the frame ends.
-            EditorApplication.delayCall += RunWeaponKit;
+            // itemRoot (MissingReferenceException) — the sync runs after the frame ends.
+            EditorApplication.delayCall += () => RunPostSaveSync(definition);
             return true;
         }
 
@@ -1415,43 +1468,149 @@ namespace VortexArena.Core.Editor
             return captured;
         }
 
-        /// <summary>Weapon kit sync run right after a save, so the user does not have to open
-        /// <c>Configure All Build Elements</c> and press "Hepsini Çalıştır" by hand: the record
-        /// only becomes visible in game through the kit (<c>VA_GripSocket</c>, the WPN prefabs, the
-        /// catalog).
+        /// <summary>Sync run right after a save so the record becomes visible without opening
+        /// <c>Configure All Build Elements</c> by hand.
+        /// <para>A weapon needs the whole weapon kit (<c>VA_GripSocket</c>, the WPN prefabs, the
+        /// catalog); any other item needs only the <c>netItemId</c> → definition catalog. ⚠️ The
+        /// weapon kit is NOT run for a non-weapon: it looks for the <c>WPN_*</c> contract and would
+        /// report its absence as a problem.</para>
         /// <para>⚠️ The exception is swallowed and only logged (same reason as
-        /// <c>BuildElementsConfigurator.SyncWeaponKit</c>): a slip in the kit must not make an
+        /// <c>BuildElementsConfigurator.SyncWeaponKit</c>): a slip in the sync must not make an
         /// already-written record look like a failed save.</para>
-        /// <para>⚠️ The bench empties: the kit rewrites the open <c>WPN_*</c> prefab, the prefab
-        /// stage reloads its contents and the <c>DontSave</c> hand roots die with it. This is not a
-        /// loss — the record is on disk and <i>Elleri Oluştur</i> brings the hands back to the very
-        /// same place (the window says so in its notice).</para>
-        /// <para>⚠️ No dialog and no progress bar here: a modal blocks Unity's main thread and times
-        /// out under CLI. The kit writes its own summary line to the console.</para></summary>
-        private static void RunWeaponKit()
+        /// <para>⚠️ The bench empties on the weapon path: the kit rewrites the open prefab, the stage
+        /// reloads its contents and the <c>DontSave</c> hand roots die with it. Not a loss — the
+        /// record is on disk and <i>Elleri Oluştur</i> brings the hands back to the same place.</para>
+        /// <para>⚠️ No dialog and no progress bar: a modal blocks Unity's main thread and times out
+        /// under CLI.</para></summary>
+        private static void RunPostSaveSync(ItemDefinition definition)
         {
             try
             {
-                WeaponKitBuilder.BuildAll();
+                if (definition is WeaponDefinition)
+                {
+                    WeaponKitBuilder.BuildAll();
+                    return;
+                }
+
+                Debug.Log($"{LOG} Eşya kataloğu eşitlendi — {NetItemIdGuard.Rebuild()}");
             }
             catch (Exception e)
             {
-                Debug.LogError($"{LOG} Kavrama kaydı yazıldı ama silah kiti eşitlemesi hata verdi — " +
-                               "kayıt diskte, kit eşitlenmedi (Tools > VortexArena > Build > " +
-                               "Configure All Build Elements > Hepsini Çalıştır ile tekrar " +
-                               "dene): " + e);
+                Debug.LogError($"{LOG} Kavrama kaydı yazıldı ama eşitleme hata verdi — kayıt diskte, " +
+                               "eşitleme yapılmadı (Tools > VortexArena > Build > Configure All " +
+                               "Build Elements > Hepsini Çalıştır ile tekrar dene): " + e);
             }
         }
 
-        private static WeaponDefinition ResolveDefinition(GameObject root)
+        /// <summary>Which definition does this prefab's grip get written to — the bench's real target.
+        /// <para>Order: (1) a component that carries the definition on the prefab
+        /// (<see cref="IItemHolder"/>), (2) reverse lookup — the definition whose <c>Prefab</c> field
+        /// points at this prefab. (1) comes first so a weapon resolves exactly as it did before, even
+        /// if its definition's own prefab field is empty.</para>
+        /// <para>⚠️ Two definitions pointing at the same prefab is NOT resolved silently: the caller
+        /// gets <c>null</c> + <paramref name="ambiguous"/> and must ask the user. "Take the first"
+        /// would write the grip onto the wrong asset with no tell.</para></summary>
+        private static ItemDefinition ResolveDefinition(GameObject root, out bool ambiguous)
         {
+            ambiguous = false;
             if (root == null)
             {
                 return null;
             }
 
-            var weapon = root.GetComponent<Weapon>();
-            return weapon == null ? null : weapon.Definition;
+            var holder = root.GetComponent<IItemHolder>();
+            if (holder != null && holder.Definition != null)
+            {
+                return holder.Definition;
+            }
+
+            return DefinitionForPrefab(PrefabAssetPath(root), out ambiguous);
+        }
+
+        /// <summary>Asset path of the prefab this object belongs to: the open stage's asset while in
+        /// prefab mode, the asset itself in the Project window. Empty for a plain scene object.</summary>
+        private static string PrefabAssetPath(GameObject root)
+        {
+            PrefabStage stage = PrefabStageUtility.GetPrefabStage(root);
+            if (stage != null)
+            {
+                return stage.assetPath;
+            }
+
+            return AssetDatabase.GetAssetPath(root);
+        }
+
+        /// <summary>Definitions whose <c>Prefab</c> points at <paramref name="assetPath"/>, cached.
+        /// <para>⚠️ Cached because it is asked from <c>OnGUI</c> (twice per frame): a project-wide
+        /// <c>FindAssets</c> per repaint is pure waste. The cache expires on a timer so a definition
+        /// created while the window is open shows up on its own — the alternative, invalidating on
+        /// asset events, is a second contract for one scan of a dozen assets.</para></summary>
+        private static ItemDefinition DefinitionForPrefab(string assetPath, out bool ambiguous)
+        {
+            if (string.IsNullOrEmpty(assetPath))
+            {
+                ambiguous = false;
+                return null;
+            }
+
+            if (assetPath != _lookupPath ||
+                EditorApplication.timeSinceStartup - _lookupTime > LookupRefreshSeconds)
+            {
+                RebuildLookup(assetPath);
+            }
+
+            ambiguous = _lookupAmbiguous;
+            return _lookupDefinition;
+        }
+
+        private static void RebuildLookup(string assetPath)
+        {
+            _lookupPath = assetPath;
+            _lookupTime = EditorApplication.timeSinceStartup;
+            _lookupDefinition = null;
+            _lookupAmbiguous = false;
+
+            string[] guids = AssetDatabase.FindAssets("t:ItemDefinition");
+            for (int i = 0; i < guids.Length; i++)
+            {
+                var definition = AssetDatabase.LoadAssetAtPath<ItemDefinition>(
+                    AssetDatabase.GUIDToAssetPath(guids[i]));
+                if (definition == null || definition.Prefab == null)
+                {
+                    continue;
+                }
+
+                if (!string.Equals(AssetDatabase.GetAssetPath(definition.Prefab), assetPath,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (_lookupDefinition != null)
+                {
+                    _lookupAmbiguous = true;
+                    _lookupDefinition = null;
+                    return;
+                }
+
+                _lookupDefinition = definition;
+            }
+        }
+
+        /// <summary>The hand-picked definition, but only when it really belongs to this prefab.
+        /// ⚠️ Without the check the override becomes a way to write one item's grip onto another
+        /// item's asset — the exact silent failure the ambiguity guard exists for.</summary>
+        private static ItemDefinition MatchingOverride(ItemDefinition candidate, Transform itemRoot)
+        {
+            if (candidate == null || candidate.Prefab == null)
+            {
+                return null;
+            }
+
+            return string.Equals(AssetDatabase.GetAssetPath(candidate.Prefab),
+                PrefabAssetPath(itemRoot.gameObject), StringComparison.OrdinalIgnoreCase)
+                ? candidate
+                : null;
         }
 
         // -------------------------------------------------------------------- hand branch
@@ -1519,16 +1678,17 @@ namespace VortexArena.Core.Editor
 
         // ------------------------------------------------------------------- part search
 
-        /// <summary>First <see cref="Renderer"/> in the weapon's subtree whose name contains one of
+        /// <summary>First <see cref="Renderer"/> in the item's subtree whose name contains one of
         /// the keys, tried IN ORDER (specific keys come first).
-        /// <para>Only consumer is <see cref="ResolveStartPose"/>: on a weapon with no record, the
-        /// rough centre of the grip / front-grip part decides where the hand opens.</para></summary>
-        private static Renderer SearchWeaponPart(Transform weaponRoot, string[] keywords)
+        /// <para>Only consumer is <see cref="ResolveStartPose"/>: on an item with no record, the
+        /// rough centre of the grip / front-grip part decides where the hand opens. On a non-weapon
+        /// item no match is expected — it falls back to the root +10 cm, which is harmless.</para></summary>
+        private static Renderer SearchGripPart(Transform itemRoot, string[] keywords)
         {
             Renderer found = null;
             for (int i = 0; i < keywords.Length && found == null; i++)
             {
-                found = SearchPartRenderer(weaponRoot, keywords[i]);
+                found = SearchPartRenderer(itemRoot, keywords[i]);
             }
 
             return found;

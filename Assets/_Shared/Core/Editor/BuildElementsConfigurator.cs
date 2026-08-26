@@ -1351,6 +1351,92 @@ namespace VortexArena.Core.Editor
             return true;
         }
 
+        /// <summary>Whether the network object kinds (§10.10) are consistent: every
+        /// <c>NetObjectKind.kind</c> is filled and unique, and every kind used by an exported scene
+        /// list exists.</summary>
+        /// <remarks>⚠️ READ ONLY and it OPENS NO SCENE — the baked ids are only in the scene file, so
+        /// the source is the <c>Data/&lt;Scene&gt;_objects.json</c> written at scene save. Both the
+        /// kind scan and the parse go through <see cref="ServerConfigExporter"/>, never reimplemented
+        /// here.
+        /// <para>A project with NO NetObjectKind is CLEAN: not using network objects yet is not an
+        /// error.</para>
+        /// <para>⚠️ Exceptions are NOT swallowed — <c>BuildReadiness.Check</c> already does.</para>
+        /// </remarks>
+        internal static bool AreNetObjectsReady(out string detail)
+        {
+            var probe = new ServerConfigExportResult();
+            List<ServerConfigExporter.NetKindRow> kinds = ServerConfigExporter.CollectKinds(probe);
+
+            if (probe.Warnings.Count > 0)
+            {
+                detail = probe.Warnings[0];
+                return false;
+            }
+
+            var known = new HashSet<string>(StringComparer.Ordinal);
+            for (int i = 0; i < kinds.Count; i++)
+            {
+                known.Add(kinds[i].Kind);
+            }
+
+            string[] files = Directory.GetFiles(
+                Application.dataPath, "*" + ServerConfigExporter.ObjectsFileSuffix, SearchOption.AllDirectories);
+
+            int objectCount = 0;
+            var problems = new List<string>();
+
+            for (int i = 0; i < files.Length; i++)
+            {
+                string sceneName = Path.GetFileName(files[i]);
+                sceneName = sceneName.Substring(
+                    0, sceneName.Length - ServerConfigExporter.ObjectsFileSuffix.Length);
+
+                ServerConfigExporter.SceneObjectRow[] rows =
+                    ServerConfigExporter.ReadObjectRows(files[i], out string error);
+
+                if (rows == null)
+                {
+                    problems.Add($"'{sceneName}' obje listesi okunamadı ({error})");
+                    continue;
+                }
+
+                for (int r = 0; r < rows.Length; r++)
+                {
+                    objectCount++;
+                    string kind = rows[r]?.kind;
+                    if (string.IsNullOrWhiteSpace(kind))
+                    {
+                        problems.Add($"'{sceneName}' içinde kind'ı boş satır var");
+                    }
+                    else if (!known.Contains(kind))
+                    {
+                        problems.Add($"'{sceneName}' → '{kind}' türü NetObjectKind olarak yok");
+                    }
+                }
+            }
+
+            if (problems.Count > 0)
+            {
+                var picked = new List<string>(2);
+                for (int i = 0; i < problems.Count && picked.Count < 2; i++)
+                {
+                    picked.Add(problems[i]);
+                }
+
+                detail = string.Join(" · ", picked) + $" (toplam {problems.Count} sorun)";
+                return false;
+            }
+
+            if (kinds.Count == 0)
+            {
+                detail = "Projede NetObjectKind yok — bu proje henüz ağ nesnesi kullanmıyor.";
+                return true;
+            }
+
+            detail = $"{kinds.Count} tür, {files.Length} sahnede {objectCount} obje tanımlı.";
+            return true;
+        }
+
         /// <summary>Picks the first two CHANGE lines from the dry-run report.</summary>
         /// <remarks>⚠️ Only change prefixes are taken: warning and status lines do not enter the
         /// counter, so showing them in the detail would mislead.</remarks>

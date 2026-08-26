@@ -40,6 +40,29 @@ namespace VortexArena.Core.Combat
         [Tooltip("OneHand (tabanca/bomba) / TwoHand (tüfek).")]
         [SerializeField] private ItemHoldMode holdMode = ItemHoldMode.OneHand;
 
+        // ⚠️ THREE INDEPENDENT axes, deliberately not one "item type" enum: the first item that breaks
+        // the pattern (grabbed from a distance but physical; grabbed up close but cloned) would split
+        // the single enum into a matrix. Each is a separate question with its own consumer.
+        // ⚠️ The first value of each is the one an asset written BEFORE these fields existed reads
+        // (Unity stores the numeric index and a missing field deserializes to 0) — those defaults ARE
+        // today's weapon behaviour, so the enum order is a contract, not cosmetics.
+        [Header("Alma yolu / örnekleme / bırakma")]
+        [Tooltip("Eşya ele NASIL gelir. ⚠️ Varsayılan DistanceGrab'dır: bu alan eklenmeden önce " +
+                 "kaydedilmiş her tanım onu okur, yani silahların bugünkü davranışı korunur. " +
+                 "DistanceGrab DIŞINDA bir yol seçildiyse prefabda mesafeli kavrama bileşeni " +
+                 "BULUNMAMALI — kurulum bekçisi bunu hata olarak bildirir.")]
+        [SerializeField] private ItemGrabPath grabPath = ItemGrabPath.DistanceGrab;
+
+        [Tooltip("Ele gelen NE. PerViewerClone: sahnedeki asıl donuk durur, ele kopya gelir " +
+                 "(varsayılan; silah/bomba). WorldSingle: tek örnek vardır, ele o objenin kendisi " +
+                 "gelir ve sahiplik devredilir — bu eşyanın tel baytı 0 kalır, uzak el objeyi kendi " +
+                 "ağ nesnesi örneğinden çizer.")]
+        [SerializeField] private ItemInstancing instancing = ItemInstancing.PerViewerClone;
+
+        [Tooltip("Bırakınca ne olur. Return: yerine döner (varsayılan; silah). Physics: rigidbody " +
+                 "serbest kalır (bomba, fırlatılan prop).")]
+        [SerializeField] private ItemReleaseMode releaseMode = ItemReleaseMode.Return;
+
         // ⚠️ ALL FOUR RECORDS ARE IN THE SAME SPACE: each is the hand's CONTROLLER ANCHOR position
         // local to the ITEM (item → anchor; ItemGripPose — the anchor record has no rotation, the
         // weapon is always aligned with the controller). Written in one direction only; describing a
@@ -144,6 +167,23 @@ namespace VortexArena.Core.Combat
 
         /// <summary>Is it two-handed (shortcut).</summary>
         public bool IsTwoHanded => holdMode == ItemHoldMode.TwoHand;
+
+        /// <summary>How the item gets into the hand (<see cref="ItemGrabPath"/>). Consumers:
+        /// <c>WeaponFrame</c> (distance), <c>WristHolster</c> (wrist), <c>NetObjectGrabBridge</c>
+        /// (socket) — and the editor guard that compares this rule against the prefab.</summary>
+        public ItemGrabPath GrabPath => grabPath;
+
+        /// <summary>Whether the hand gets a clone or the object itself (<see cref="ItemInstancing"/>).</summary>
+        public ItemInstancing Instancing => instancing;
+
+        /// <summary>What happens on release (<see cref="ItemReleaseMode"/>).</summary>
+        public ItemReleaseMode ReleaseMode => releaseMode;
+
+        /// <summary>Single instance, ownership handed over (shortcut).
+        /// <para>⚠️ Also the gate that keeps this item's <c>itemL</c>/<c>itemR</c> byte at <b>0</b>
+        /// (§6.6) and stops the remote avatar building a second copy — one object must not exist both
+        /// as a network instance and as a byte-driven clone.</para></summary>
+        public bool IsWorldSingle => instancing == ItemInstancing.WorldSingle;
 
         /// <summary>
         /// The <b>authored</b> record of the requested grip point for the requested hand.

@@ -544,9 +544,19 @@ namespace VortexArena.App
 
         /// <summary>Result card's score line: team score in team-scored modes, the player's own
         /// score in player-scored ones (<c>scoreRed</c>/<c>scoreBlue</c> are always 0 there,
-        /// §10.2).</summary>
+        /// §10.2), own + shared total in co-op.</summary>
         private string ScoreLine(MatchEndMsg msg)
         {
+            // ⚠️ BEFORE the team branch: co-op also carries a scoreRed, but scoreBlue is always 0
+            // there (§10.5), so the team line would read "KIRMIZI n — 0 MAVİ".
+            if (ModeRuntime.Scoring == ModeScoreKind.PlayerAndShared)
+            {
+                PlayerInfo shared = FindSelf();
+                return shared != null
+                    ? $"SEN {shared.score} · TOPLAM {msg.scoreRed}"
+                    : $"TOPLAM {msg.scoreRed}";
+            }
+
             if (ModeRuntime.Scoring != ModeScoreKind.Player)
             {
                 return $"KIRMIZI {msg.scoreRed} — {msg.scoreBlue} MAVİ";

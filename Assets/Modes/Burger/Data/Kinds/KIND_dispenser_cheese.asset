@@ -1,0 +1,22 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cd921340369a1fe49b43ee86286a4e85, type: 3}
+  m_Name: KIND_dispenser_cheese
+  m_EditorClassIdentifier: VortexArena.Net::VortexArena.Net.NetObjectKind
+  kind: dispenser_cheese
+  maxHp: 0
+  grab: 0
+  events:
+  - name: take
+    policy: 0
+    phaseGate: 0
+  flagNames: []

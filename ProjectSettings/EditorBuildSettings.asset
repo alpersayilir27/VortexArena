@@ -37,10 +37,13 @@ EditorBuildSettings:
     guid: 2887948de3263f74ca5bed53086b3fc7
   - enabled: 1
     path: Assets/Arenas/Venues/Outdoor14x16/Scenes/Dust_B_Outdoor14x16/Dust_B_Outdoor14x16.unity
-    guid: a3d8282e86f276c4eb9844c73dccc9f2
+    guid: ad720a134d79a554f864a8fb8fb678d7
   - enabled: 1
     path: Assets/Arenas/Venues/Outdoor14x16/Scenes/Mirage_A_Outdoor14x16/Mirage_A_Outdoor14x16.unity
-    guid: 66aa06b0c30a9b748b816f11dcab1bea
+    guid: 2a787805442646844b415c4ed4bc75c7
+  - enabled: 1
+    path: Assets/Arenas/Venues/Outdoor14x16/Scenes/Burger_Outdoor14x16/Burger_Outdoor14x16.unity
+    guid: 13f05aab672c14a4dae1de58e64f6197
   m_configObjects:
     com.unity.dt.app-ui: {fileID: 11400000, guid: 1b1c20d82303e4b5781c3ef50ac1449f, type: 2}
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}

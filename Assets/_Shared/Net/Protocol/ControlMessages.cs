@@ -96,6 +96,13 @@ namespace VortexArena.Protocol
         public string type = MessageTypes.HitReport;
         public int seq;
         public int targetPlayerId;
+
+        /// <summary>Network object target (§10.10); <c>0</c> = the target is a player.
+        /// <para>⚠️ XOR with <see cref="targetPlayerId"/>: non-zero here means the other field is not
+        /// read. One message for both because the SOURCE of the damage is the same — same bullet, same
+        /// blast, same client-side arithmetic; a separate object_hit_report would spell the gate list
+        /// out twice.</para></summary>
+        public int targetNetId;
         public string weaponId;
         public float damage;
         public float[] hitPos;
@@ -567,6 +574,146 @@ namespace VortexArena.Protocol
         public string type = MessageTypes.Respawn;
         public int playerId;
         public float delaySeconds;
+    }
+
+    /// <summary>A network object's server-authoritative state (§10.10).
+    /// <para>⚠️ <b>A broadcast</b>, deliberately unlike <see cref="HealthUpdateMsg"/>: a player's health
+    /// concerns only that player and the operator, but a broken cover is EVERYONE's cover — a narrow
+    /// send would draw two players a different world.</para>
+    /// <para>⚠️ <c>object_spawn</c> has <b>NO DTO of its own</b>: its body is identical, the server
+    /// sends this class with <c>type = MessageTypes.ObjectSpawn</c>.</para></summary>
+    [Serializable]
+    public class ObjectStateMsg
+    {
+        public string type = MessageTypes.ObjectState;
+
+        /// <summary>Scene objects carry their baked id (<see cref="ArenaProtocol.NET_ID_SCENE_MIN"/>..
+        /// <see cref="ArenaProtocol.NET_ID_SCENE_MAX"/>); above that is reserved for server-allocated
+        /// dynamic ids.</summary>
+        public int netId;
+
+        /// <summary>Object kind. The client does NOT draw from this — it knows the scene object's kind
+        /// from its own prefab; the field is a CHECK: a different kind here means the export and the
+        /// scene have drifted apart, and breaking the wrong object silently is the alternative.</summary>
+        public string kind;
+
+        public float hp;
+
+        /// <summary>Core bit contract (§10.10): <see cref="ArenaProtocol.OBJECT_FLAG_HELD"/>,
+        /// <c>_BROKEN</c>, <c>_AWAKE</c>, <c>_HELD_RIGHT</c> (bit0..bit3); bit4+ is per kind.
+        /// ⚠️ Bit positions are never renumbered — a shift does not fail, it draws the wrong object
+        /// broken.</summary>
+        public int flags;
+
+        /// <summary>The <c>playerId</c> holding the object; <c>0</c> = nobody (§10.10).</summary>
+        public int owner;
+
+        /// <summary>Per-kind stage (doneness, fill level); only <c>kind</c> gives it meaning and
+        /// <c>0</c> is "initial" in every kind. The protocol does not interpret it.</summary>
+        public int stage;
+
+        /// <summary>The object's RESTING pose in arena space (<c>rot</c> is xyzw).
+        /// <para>⚠️ Meaningless and NOT READ on a held object — that one hangs off the owner's hand
+        /// pose (<c>0x01</c>).</para></summary>
+        public float[] pos;
+
+        /// <inheritdoc cref="pos"/>
+        public float[] rot;
+
+        /// <summary>Free text per instance, like <c>modeState</c>: the mode writes it and the mode reads
+        /// it, the core never interprets it and empty is normal. Carries the per-instance data
+        /// <c>stage</c> cannot (a customer's order).
+        /// <para>⚠️ It lives on the object STATE and not on an event because <c>world_state</c> carries
+        /// it: a late joiner has to see the waiting customer WITH their order.</para></summary>
+        public string s;
+    }
+
+    /// <summary>Picking up a network object (§10.10); players only. <c>hand</c>: <c>0</c> = left,
+    /// <c>1</c> = right.
+    /// <para>⚠️ <b>It has no reply</b> and never will: the result is <c>object_state.owner</c>. The
+    /// client grabs locally at once (optimistic) and undoes the grab if the arriving
+    /// <see cref="ObjectStateMsg"/> names someone else — a separate denial message would carry the same
+    /// fact on a second channel with no ordering guarantee between them.</para></summary>
+    [Serializable]
+    public class ObjectGrabMsg
+    {
+        public string type = MessageTypes.ObjectGrab;
+        public int netId;
+        public int hand;
+    }
+
+    /// <summary>The object LEFT THE HAND (§10.10); the OWNER only. The server clears <c>Held</c>, sets
+    /// <c>Awake</c>, <b>KEEPS ownership</b> and broadcasts <see cref="ObjectStateMsg"/>. The pose is the
+    /// release pose in arena space (<c>rot</c> is xyzw) — during the flight the owner's <c>0x09</c>
+    /// stream (§6.12) supersedes it, and it is what stays in the table if no stream ever arrives.
+    /// <para>⚠️ <b>Split from <see cref="ObjectRestMsg"/> because of the window in between:</b> a single
+    /// message sent on stop would keep the wire saying "held" through the whole flight (a late joiner
+    /// would draw a flying object stuck to a hand); sent on release only, where the object landed would
+    /// never be recorded.</para></summary>
+    [Serializable]
+    public class ObjectReleaseMsg
+    {
+        public string type = MessageTypes.ObjectRelease;
+        public int netId;
+        public float[] pos;
+        public float[] rot;
+    }
+
+    /// <summary>The object STOPPED (§10.10); the OWNER only. The server clears <c>Awake</c>, sets
+    /// <c>owner = 0</c>, writes the carried pose into the table as the object's <b>resting pose</b>
+    /// (arena space, <c>rot</c> is xyzw) and broadcasts <see cref="ObjectStateMsg"/>.
+    /// <para>Same body as <see cref="ObjectReleaseMsg"/>, a separate class on purpose: the two moments
+    /// carry two different facts ("it left my hand" vs "it came to rest").</para>
+    /// <para>⚠️ <b>The CLIENT measures the stop</b> (<see cref="ArenaProtocol.OBJECT_REST_SPEED"/> /
+    /// <see cref="ArenaProtocol.OBJECT_REST_SECONDS"/>) — the server has no physics.</para></summary>
+    [Serializable]
+    public class ObjectRestMsg
+    {
+        public string type = MessageTypes.ObjectRest;
+        public int netId;
+        public float[] pos;
+        public float[] rot;
+    }
+
+    /// <summary>An object-specific interaction (§10.10). <b>Both directions</b>: a player raises it, and
+    /// the server relays the cosmetic ones to everyone with the same body. The meaning comes from the
+    /// <c>kind</c> + <c>name</c> pair; the arrays are the kind's own contract and the protocol does not
+    /// interpret them.
+    /// <para>⚠️ <b>No new message type per interaction</b> (N interactions = N DTOs + N handlers), but no
+    /// method name on the wire either (§7): <c>name</c> is VALIDATED on the server against that kind's
+    /// <c>kinds[].events[]</c> list (§11) — free text on the wire, none on the server.</para></summary>
+    [Serializable]
+    public class ObjectEventMsg
+    {
+        public string type = MessageTypes.ObjectEvent;
+        public int netId;
+        public string name;
+        public int[] i;
+        public float[] f;
+        public string s;
+    }
+
+    /// <summary>A dynamic object leaves the world (§10.10); the client destroys its instance. Scene
+    /// objects are never despawned — their id is baked into the scene.</summary>
+    [Serializable]
+    public class ObjectDespawnMsg
+    {
+        public string type = MessageTypes.ObjectDespawn;
+        public int netId;
+    }
+
+    /// <summary>Every network object of the loaded scene at once (§10.10): to everyone on a scene load,
+    /// to a late joiner right after <see cref="WelcomeMsg"/>.
+    /// <para>⚠️ Applied only while <c>sceneName</c> matches the loaded scene; otherwise BUFFERED and
+    /// retried on scene load — it can arrive before the load, when the <c>netId</c>s have no counterpart
+    /// yet. Only the LAST one is kept, so two racing loads cannot write each other's state and a stale
+    /// message simply never applies.</para></summary>
+    [Serializable]
+    public class WorldStateMsg
+    {
+        public string type = MessageTypes.WorldState;
+        public string sceneName;
+        public ObjectStateMsg[] objects;
     }
 
     /// The winner comes through ONE of two channels (rules.scoring, §10.5): winnerTeam in team-scored

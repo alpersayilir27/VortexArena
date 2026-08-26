@@ -693,6 +693,8 @@ namespace VortexArena.App.Admin
                        (age >= 0f ? $"{age:0.0} sn önce" : "yok") +
                        $" · bağlı admin {roster.AdminCount}");
 
+            AppendCustomerCounts(roster.ModeState);
+
             // Says out loud that the arena is stopped ON PURPOSE and names the way out: a parked round
             // has no timer, so a silent panel would read as a hang.
             if (RoundReviewWaiting())
@@ -703,6 +705,61 @@ namespace VortexArena.App.Admin
             }
 
             _matchSummary.text = _sb.ToString();
+        }
+
+        /// <summary>Co-op customer counters, when the running mode publishes them (<c>h:</c>/<c>u:</c> in
+        /// <c>modeState</c>): the operator must read the same numbers the players see on their HUD.</summary>
+        /// <remarks>⚠️ Keyed on the <c>modeState</c> TOKENS, never on <c>modeId</c> — same rule as
+        /// <see cref="RoundReviewWaiting"/>: the vocabulary belongs to the mode (§10.1), so a second
+        /// co-op mode publishing the same counters lights this line up for free.
+        /// <para>Neither key present = the line is not drawn at all; an unknown token is skipped rather
+        /// than treated as an error, so the mode can grow its state string without touching this.</para></remarks>
+        private void AppendCustomerCounts(string modeState)
+        {
+            if (string.IsNullOrEmpty(modeState))
+            {
+                return;
+            }
+
+            int happy = 0;
+            int unhappy = 0;
+            bool any = false;
+
+            string[] tokens = modeState.Split(';');
+            for (int i = 0; i < tokens.Length; i++)
+            {
+                string token = tokens[i];
+                int sep = token.IndexOf(':');
+                if (sep <= 0 || sep == token.Length - 1)
+                {
+                    continue;
+                }
+
+                string key = token.Substring(0, sep).Trim();
+                if (!int.TryParse(token.Substring(sep + 1).Trim(), out int value) || value < 0)
+                {
+                    continue;
+                }
+
+                if (string.Equals(key, "h", StringComparison.Ordinal))
+                {
+                    happy = value;
+                    any = true;
+                }
+                else if (string.Equals(key, "u", StringComparison.Ordinal))
+                {
+                    unhappy = value;
+                    any = true;
+                }
+            }
+
+            if (!any)
+            {
+                return;
+            }
+
+            _sb.AppendLine();
+            _sb.Append($"Müşteri: mutlu {happy} · mutsuz {unhappy}");
         }
 
         private static int AliveCount(IReadOnlyList<AdminPlayerView> players)

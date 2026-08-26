@@ -111,6 +111,43 @@ can görür, kimin haklı olduğunu söyleyecek bir merci kalmaz. `ReportRaycast
 "hedef ağ oyuncusu değil, hasar yok" demektir — dönüş değeri yalnız sunum kararıdır. Ağa bağlı
 olmayan geometri (duvar, dekor) hasar almaz; hasar alması gereken her şey ağsal olur (`NetIdentity`).
 
+### ⛔ Ağ nesnesinin durumunu istemcide yazma
+
+```csharp
+netObject.Flags |= NetObject.FLAG_BROKEN;                          // ❌ yalnız SENDE kırılır
+ArenaCombat.ReportObjectHit(netId, nokta, 25f, "ak47");            // ✅ sunucu karar verir
+```
+
+`NetObject`'in `Hp`/`Flags`'i **sunucudan gelen** `object_state`/`world_state` ile yazılır; senin
+işin `StateChanged`'i dinleyip sunumu (collider, materyal, ses) güncellemektir. "Ben vurdum, ben
+kırayım" kısayolu iki başlıkta farklı siper üretir ve fark tam da oyuncunun arkasına saklandığı
+şeyde ortaya çıkar. Aynı sebeple **yerel bir "kırıldı" bayrağı** da tutulmaz — ikinci doğruluk
+kaynağıdır. Kırılabilir obje için **yerel can bileşeni** (kendi `Health`/`Destructible`
+MonoBehaviour'ın) da yazılmaz: can tek defterde, sunucuda durur; sunum `BreakableObject` ya da
+kendi `StateChanged` aboneliğin üzerinden yapılır.
+
+Aynısı **sahiplik, aşama ve doğuş** için de geçerlidir: `Owner`/`Stage`'i istemci yazmaz —
+kavramanın cevabı yayınlanan `object_state.owner`'dır (istemci yalnız **iyimser** kavrar ve sahip
+başkası çıkarsa geri alır), aşamayı sunucu yazar, istemci yalnız `object_event` bildirir. ⚠️
+**İstemcinin "spawn et" mesajı YOKTUR ve eklenmez:** doğuşun iki kaynağı moddur ve türün kuralıdır;
+üçüncüsü açılırsa "sunucu icat etmez" kuralı anlamını yitirir ve bozuk bir başlık arenayı objeyle
+doldurabilir.
+
+### ⛔ Obje pozunu `0x02`/`0x04`'e taşımaya kalkma
+
+Obje pozu yalnız `0x09` (yukarı) ve `0x05`'in obje bölümünde (aşağı) taşınır. `0x02`/`0x04` **geri
+düşüş yoludur** ve düzeni sabittir; oraya bir bölüm eklemek bu sefer onları kırar. Geri düşüşte obje
+pozunun düşmesi bilinçlidir: kaybolan şey objenin son pozu değil hareketinin akıcılığıdır —
+dinlenme pozu güvenilir WS kanalından gelir.
+
+### ⛔ Sunucuda ikinci kilit açma
+
+Maç durumunun tek kilidi `MatchDirector._gate`'tir. Ona bağlı yaşayan tablolar (`WorldObjectTable`)
+**kendi kilidini açmaz**; metotları `…Locked` adlanır ve kilidi tutmak çağıranın sözleşmesidir. İki
+kilit deadlock adayıdır ve kilitlenme sahada "sunucu dondu" diye görünür — sebebi aylar sonra
+bulunur. UDP alım thread'i ise `_gate`'e **hiç girmez** (kilitsiz `volatile` okuma deseni,
+`Docs/ArenaNet-Protokol.md` §10.3).
+
 ### ⛔ `if (modeId == "ffa")` zinciri yazma
 
 Modun şekli telden gelir. `ModeRuntime`'dan oku. Zincir yazarsan her yeni mod senin kodunu
@@ -311,6 +348,28 @@ Perde kaydırması sesi "farklı silah" yapmaz, yalnız **ödünç alınmış kl
 kendi klibi bağlanmadığı sürece kulak tanıdık sesi tanımaya devam eder. Doğrusu klibi
 `WD_*.asset`'in Inspector'ına sürüklemektir — silah seslerinin tek doğruluk kaynağı orasıdır.
 
+### ⛔ Tutulabilir bir türün prefabında kavrama pozunu serbest bırakma
+
+Ağ nesnesi ele **kanonik kavrama poziyle** bağlanır ve duruş telde gitmez: iki uç aynı kaydı okur.
+Serbest kavrama (elin objeye değdiği yerden tutmak) her istemcide farklı bir ofset demektir ve obje
+uzak başlıkta elin yanında durur. Kavrama stüdyoda yazılır, çalışma anında ölçülmez.
+
+### ⛔ Mesafeli kavrama bileşenini "nasılsa filtreliyorum" diye prefabda bırakma
+
+Alma yolu `ProximitySocket` / `WristHolster` / `None` olan bir eşyanın prefabında
+`DistanceGrabInteractable` ya da `DistanceHandGrabInteractable` **bulunmaz**. Aday listesini
+kapatmak objeyi alınamaz yapmaz: boş listeyle bile interactor hover'a girer ve `Select()` kavrama
+basışını hiçbir şey seçmeden kuyruktan düşürür — basış sessizce yenir ve belirti, kavranmak istenen
+objede değil **yakınındaki başka bir objede** "kavrama tuşu bazen çalışmıyor" olur. Hazırlık
+panelindeki *Eşya alma yolu ↔ prefab* satırı bunu listeler ama **düzeltmez**.
+
+### ⛔ Tutulan ağ nesnesinde eşya baytını doldurma
+
+`WorldSingle` bir eşya elde tutulurken `itemL`/`itemR` **`0` kalır**. Baytı da yazarsan uzak elde
+**iki obje** çizilir — biri ağ nesnesinin kendi örneği, biri baytdan üretilmiş klon — ve ikisi
+gecikmede ayrışır. Bastırma kaynaktadır (`HeldItems` slotu, `ItemDefinition.IsWorldSingle`);
+tüketici tarafında ayrıca "bu objeyi çizme" dalı açılmaz, ilk unutulan yerde geri gelir.
+
 ---
 
 ## Serialize edilen veriler
@@ -323,6 +382,11 @@ Unity enum'ları **sayısal indeksle** saklar. `Team`'e başa bir değer eklemek
 
 Aynısı `HitZone` (`Body` sıfırda kalır) / `ModeTeamMode` / `ModeScoreKind` / `ModeReviveAnchor` /
 `ModeWeaponSource` / `ModeAudioEvent` için de geçerli.
+
+Eşyanın üç ekseni de aynı kuraldadır ve **0. indeksleri bugünkü davranıştır**:
+`ItemGrabPath.DistanceGrab` · `ItemInstancing.PerViewerClone` · `ItemReleaseMode.Return`. Bu alanlar
+var olmadan yazılmış her asset `0` okuyor — sıra bozulursa arsenalin tamamı hata vermeden başka bir
+şeye döner (raftaki silah yakınlık soketinden alınmaya çalışılır, tek örnek eşya kopyalanır).
 
 ### ⛔ `Server/config/maps.json`'ı elle düzenleme
 

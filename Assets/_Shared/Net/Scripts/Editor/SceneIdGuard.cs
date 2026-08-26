@@ -14,6 +14,9 @@ namespace VortexArena.Net.Editor
     /// is consistent out of the box.
     /// </para>
     /// Completely silent when the scene has no NetIdentity (most of today's scenes).
+    /// <para>Right after the repair it publishes the scene's NetObject list through
+    /// <see cref="SceneObjectExporter"/> — that is what lets the server config export stay
+    /// scene-free.</para>
     /// </summary>
     [InitializeOnLoad]
     internal static class SceneIdGuard
@@ -32,6 +35,10 @@ namespace VortexArena.Net.Editor
             {
                 Debug.Log($"[VortexArena] '{scene.name}': {fixedCount} NetIdentity sceneId onarıldı (0/çakışma).");
             }
+
+            // ⚠️ ORDER: strictly AFTER the repair — otherwise the file would carry pre-repair ids.
+            // Unconditional: a NetObject's kind may have changed without any id moving.
+            SceneObjectExporter.WriteForScene(scene, path);
         }
     }
 }
