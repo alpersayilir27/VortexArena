@@ -19,8 +19,6 @@ Reçetenin tamamı `Docs/Gelistirici/Yemek-Kitabi.md` §11.3.
 - [ ] **Kavrama kaydı:** `Tools > VortexArena > Items > Kavrama Pozu Stüdyosu` ile bombanın **ana
       kabza** kaydı (tek elli, iki kayıt — sağ/sol). Yazılmazsa el idle parmaklarla ve yanlış açıyla
       durur.
-- [ ] **`NetItemCatalog`** senkronu (`Configure All Build Elements`) — kimlik bekçisi çakışmayı
-      yakalar. Stüdyoda kavrama kaydedilince kendiliğinden de koşar.
 - [ ] **Bomba modeli:** prefabtaki `Mesh` çocuğu geçici bir küredir; gerçek model onun yerine konur.
       Collider root'tadır, modelle birlikte yarıçapı da güncellenir.
 - [ ] Patlama FX'i + sesleri: tanımdaki `explosionPrefab`/`explosionClip` ve kılıftaki `refillClip`
