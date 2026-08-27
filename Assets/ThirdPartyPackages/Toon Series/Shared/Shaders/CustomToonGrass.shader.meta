@@ -1,0 +1,16 @@
+fileFormatVersion: 2
+guid: de4fa592e6083ec4b9d20122ed0aaa7f
+ShaderImporter:
+  externalObjects: {}
+  defaultTextures: []
+  nonModifiableTextures: []
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 235041
+  packageName: Toon Farm Pack
+  packageVersion: 1.0.3
+  assetPath: Assets/Toon Series/Shared/Shaders/CustomToonGrass.shader
+  uploadId: 963428

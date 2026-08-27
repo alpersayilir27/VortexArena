@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 98aa11ce038fa244181afb1884602ba6
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 9100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 235041
+  packageName: Toon Farm Pack
+  packageVersion: 1.0.3
+  assetPath: Assets/Toon Series/Toon Farm Pack/Animations/Animal Animations/Chicken/TFP_Chicken_SitIdle_Fast.controller
+  uploadId: 963428

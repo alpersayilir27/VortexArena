@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 5f392bb16e57f334d871cc386a3969b8
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 9100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 235041
+  packageName: Toon Farm Pack
+  packageVersion: 1.0.3
+  assetPath: Assets/Toon Series/Toon Farm Pack/Animations/Animal Animations/Goose/TFP_Goose_01_Idle_01_Slow.controller
+  uploadId: 963428

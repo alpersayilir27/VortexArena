@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: a2200f68b29d61e419a2e7612d57fe26
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 9100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 235041
+  packageName: Toon Farm Pack
+  packageVersion: 1.0.3
+  assetPath: Assets/Toon Series/Toon Farm Pack/Animations/Animal Animations/Doe/TFP_Doe_01_Sleep_Regular.controller
+  uploadId: 963428

@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 8195513ed5a1a1d469133da00dc07403
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 9100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 235041
+  packageName: Toon Farm Pack
+  packageVersion: 1.0.3
+  assetPath: Assets/Toon Series/Toon Farm Pack/Animations/Animal Animations/Duckling/TFP_Duckling_01_SitIdle_Regular.controller
+  uploadId: 963428

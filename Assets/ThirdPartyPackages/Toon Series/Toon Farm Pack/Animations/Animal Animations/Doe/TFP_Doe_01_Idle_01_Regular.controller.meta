@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 290981f9b2374c34eb9c50998d691e8c
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 9100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 235041
+  packageName: Toon Farm Pack
+  packageVersion: 1.0.3
+  assetPath: Assets/Toon Series/Toon Farm Pack/Animations/Animal Animations/Doe/TFP_Doe_01_Idle_01_Regular.controller
+  uploadId: 963428

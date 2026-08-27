@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 6d539d81bf1edc64d93de59996f28be1
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 9100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 235041
+  packageName: Toon Farm Pack
+  packageVersion: 1.0.3
+  assetPath: Assets/Toon Series/Toon Farm Pack/Animations/Animal Animations/Crow/TFP_Crow_01_Idle_03_Regular.controller
+  uploadId: 963428

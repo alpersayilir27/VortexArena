@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: b9a812be0349f1c4e9f2cd9a3e5b02e1
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 9100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 235041
+  packageName: Toon Farm Pack
+  packageVersion: 1.0.3
+  assetPath: Assets/Toon Series/Toon Farm Pack/Animations/Prefab Animations/TFP_Produce_Signpost_02A.controller
+  uploadId: 963428

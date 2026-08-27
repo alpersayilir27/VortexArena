@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 1315d2aa4db4d974a8a03c5d40df7cb6
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 9100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 235041
+  packageName: Toon Farm Pack
+  packageVersion: 1.0.3
+  assetPath: Assets/Toon Series/Toon Farm Pack/Animations/Animal Animations/Crow/TFP_Crow_01_Land_Regular.controller
+  uploadId: 963428

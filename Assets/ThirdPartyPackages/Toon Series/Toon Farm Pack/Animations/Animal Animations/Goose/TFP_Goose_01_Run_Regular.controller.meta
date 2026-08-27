@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 7ff5a52745f2c0d4e9f22af3e2d4d10a
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 9100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 235041
+  packageName: Toon Farm Pack
+  packageVersion: 1.0.3
+  assetPath: Assets/Toon Series/Toon Farm Pack/Animations/Animal Animations/Goose/TFP_Goose_01_Run_Regular.controller
+  uploadId: 963428

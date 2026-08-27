@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: e623e50061bd8864a86cdb4c29e34e2f
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 9100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 235041
+  packageName: Toon Farm Pack
+  packageVersion: 1.0.3
+  assetPath: Assets/Toon Series/Toon Farm Pack/Animations/Animal Animations/Doe/TFP_Doe_01_Eating_01_Regular.controller
+  uploadId: 963428

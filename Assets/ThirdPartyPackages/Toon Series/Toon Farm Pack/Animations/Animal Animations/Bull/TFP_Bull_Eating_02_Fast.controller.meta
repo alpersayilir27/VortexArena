@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: a03327f308fab9741863f53419035d59
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 9100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 235041
+  packageName: Toon Farm Pack
+  packageVersion: 1.0.3
+  assetPath: Assets/Toon Series/Toon Farm Pack/Animations/Animal Animations/Bull/TFP_Bull_Eating_02_Fast.controller
+  uploadId: 963428

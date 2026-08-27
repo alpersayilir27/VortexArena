@@ -1,0 +1,412 @@
+fileFormatVersion: 2
+guid: 7e77514366c6a3141a1c121b7b66dcfc
+ModelImporter:
+  serializedVersion: 22200
+  internalIDToNameTable:
+  - first:
+      1: 100000
+    second: //RootNode
+  - first:
+      1: 100002
+    second: TFP_Radish_Plant_01A_LOD0
+  - first:
+      1: 100004
+    second: TFP_Radish_Plant_01A_LOD1
+  - first:
+      4: 400000
+    second: //RootNode
+  - first:
+      4: 400002
+    second: TFP_Radish_Plant_01A_LOD0
+  - first:
+      4: 400004
+    second: TFP_Radish_Plant_01A_LOD1
+  - first:
+      21: 2100000
+    second: TFP_Atlas_Vegetation_1A
+  - first:
+      23: 2300000
+    second: //RootNode
+  - first:
+      23: 2300002
+    second: TFP_Radish_Plant_01A_LOD0
+  - first:
+      23: 2300004
+    second: TFP_Radish_Plant_01A_LOD1
+  - first:
+      33: 3300000
+    second: //RootNode
+  - first:
+      33: 3300002
+    second: TFP_Radish_Plant_01A_LOD0
+  - first:
+      33: 3300004
+    second: TFP_Radish_Plant_01A_LOD1
+  - first:
+      43: 4300000
+    second: TFP_Radish_Plant_01A
+  - first:
+      43: 4300002
+    second: TFP_Radish_Plant_01A_LOD0
+  - first:
+      43: 4300004
+    second: TFP_Radish_Plant_01A_LOD1
+  - first:
+      74: 7400000
+    second: Take 001
+  - first:
+      74: 7400002
+    second: TFP_Radish_Plant_01A|Cylinder056|Take 001|BaseLayer
+  - first:
+      74: 7400004
+    second: TFP_Radish_Plant_01A|Cylinder057|Take 001|BaseLayer
+  - first:
+      74: 7400006
+    second: TFP_Radish_Plant_01A|Cylinder058|Take 001|BaseLayer
+  - first:
+      74: 7400008
+    second: TFP_Radish_Plant_01A|Cylinder059|Take 001|BaseLayer
+  - first:
+      74: 7400010
+    second: TFP_Radish_Plant_01A|Cylinder060|Take 001|BaseLayer
+  - first:
+      74: 7400012
+    second: TFP_Radish_Plant_01A|Cylinder061|Take 001|BaseLayer
+  - first:
+      74: 7400014
+    second: TFP_Radish_Plant_01A|TFP_Carrot_Plant_01A_Leaves_LOD0|Take 001|BaseLayer
+  - first:
+      74: 7400016
+    second: TFP_Radish_Plant_01A|TFP_Carrot_Plant_01A_Leaves_LOD1|Take 001|BaseLayer
+  - first:
+      74: 7400018
+    second: TFP_Radish_Plant_01A|TFP_Carrot_Plant_01A_LOD0|Take 001|BaseLayer
+  - first:
+      74: 7400020
+    second: TFP_Radish_Plant_01A|TFP_Carrot_Plant_01A_LOD1|Take 001|BaseLayer
+  - first:
+      74: 7400022
+    second: TFP_Radish_Plant_01A|TFP_Carrot_Plant_01B_LOD0|Take 001|BaseLayer
+  - first:
+      74: 7400024
+    second: TFP_Radish_Plant_01A|TFP_Carrot_Plant_01B_LOD1|Take 001|BaseLayer
+  - first:
+      74: 7400026
+    second: TFP_Radish_Plant_01A|TFP_Carrot_Plant_02A_LOD0|Take 001|BaseLayer
+  - first:
+      74: 7400028
+    second: TFP_Radish_Plant_01A|TFP_Carrot_Plant_02A_LOD1|Take 001|BaseLayer
+  - first:
+      74: 7400030
+    second: TFP_Radish_Plant_01A|TFP_Carrot_Plant_02B_LOD0|Take 001|BaseLayer
+  - first:
+      74: 7400032
+    second: TFP_Radish_Plant_01A|TFP_Carrot_Plant_02B_LOD1|Take 001|BaseLayer
+  - first:
+      74: 7400034
+    second: TFP_Radish_Plant_01A|TFP_Celery_Plant_01A_LOD0|Take 001|BaseLayer
+  - first:
+      74: 7400036
+    second: TFP_Radish_Plant_01A|TFP_Celery_Plant_01A_LOD1|Take 001|BaseLayer
+  - first:
+      74: 7400038
+    second: TFP_Radish_Plant_01A|TFP_Celery_Plant_02A_LOD0|Take 001|BaseLayer
+  - first:
+      74: 7400040
+    second: TFP_Radish_Plant_01A|TFP_Celery_Plant_02A_LOD1|Take 001|BaseLayer
+  - first:
+      74: 7400042
+    second: TFP_Radish_Plant_01A|TFP_Celery_Plant_03A_LOD0|Take 001|BaseLayer
+  - first:
+      74: 7400044
+    second: TFP_Radish_Plant_01A|TFP_Celery_Plant_03A_LOD1|Take 001|BaseLayer
+  - first:
+      74: 7400046
+    second: TFP_Radish_Plant_01A|TFP_Combine_01A|Take 001|BaseLayer
+  - first:
+      74: 7400048
+    second: TFP_Radish_Plant_01A|TFP_Fence_04A_Module_1_LOD0|Take 001|BaseLayer
+  - first:
+      74: 7400050
+    second: TFP_Radish_Plant_01A|TFP_Fence_04A_Module_1_LOD1|Take 001|BaseLayer
+  - first:
+      74: 7400052
+    second: TFP_Radish_Plant_01A|TFP_Horse_Stable_01A_Door_Down_LOD0|Take 001|BaseLayer
+  - first:
+      74: 7400054
+    second: TFP_Radish_Plant_01A|TFP_Horse_Stable_01A_Door_Down_LOD0|Take 001|BaseLayer.001
+  - first:
+      74: 7400056
+    second: TFP_Radish_Plant_01A|TFP_Horse_Stable_01A_Door_Down_LOD1|Take 001|BaseLayer
+  - first:
+      74: 7400058
+    second: TFP_Radish_Plant_01A|TFP_Horse_Stable_01A_Door_Down_LOD1|Take 001|BaseLayer.001
+  - first:
+      74: 7400060
+    second: TFP_Radish_Plant_01A|TFP_Horse_Stable_01A_Door_Down_LOD2|Take 001|BaseLayer
+  - first:
+      74: 7400062
+    second: TFP_Radish_Plant_01A|TFP_Horse_Stable_01A_Door_Down_LOD2|Take 001|BaseLayer.001
+  - first:
+      74: 7400064
+    second: TFP_Radish_Plant_01A|TFP_Horse_Stable_01A_Door_Down|Take 001|BaseLayer
+  - first:
+      74: 7400066
+    second: TFP_Radish_Plant_01A|TFP_Horse_Stable_01A_Door_Down|Take 001|BaseLayer.001
+  - first:
+      74: 7400068
+    second: TFP_Radish_Plant_01A|TFP_Horse_Stable_01A_Door_Up_LOD0|Take 001|BaseLayer
+  - first:
+      74: 7400070
+    second: TFP_Radish_Plant_01A|TFP_Horse_Stable_01A_Door_Up_LOD0|Take 001|BaseLayer.001
+  - first:
+      74: 7400072
+    second: TFP_Radish_Plant_01A|TFP_Horse_Stable_01A_Door_Up_LOD1|Take 001|BaseLayer
+  - first:
+      74: 7400074
+    second: TFP_Radish_Plant_01A|TFP_Horse_Stable_01A_Door_Up_LOD1|Take 001|BaseLayer.001
+  - first:
+      74: 7400076
+    second: TFP_Radish_Plant_01A|TFP_Horse_Stable_01A_Door_Up_LOD2|Take 001|BaseLayer
+  - first:
+      74: 7400078
+    second: TFP_Radish_Plant_01A|TFP_Horse_Stable_01A_Door_Up_LOD2|Take 001|BaseLayer.001
+  - first:
+      74: 7400080
+    second: TFP_Radish_Plant_01A|TFP_Horse_Stable_01A_Door_Up|Take 001|BaseLayer
+  - first:
+      74: 7400082
+    second: TFP_Radish_Plant_01A|TFP_Horse_Stable_01A_Door_Up|Take 001|BaseLayer.001
+  - first:
+      74: 7400084
+    second: TFP_Radish_Plant_01A|TFP_Horse_Stable_01A_LOD0|Take 001|BaseLayer
+  - first:
+      74: 7400086
+    second: TFP_Radish_Plant_01A|TFP_Horse_Stable_01A_LOD0|Take 001|BaseLayer.001
+  - first:
+      74: 7400088
+    second: TFP_Radish_Plant_01A|TFP_Horse_Stable_01A_LOD1|Take 001|BaseLayer
+  - first:
+      74: 7400090
+    second: TFP_Radish_Plant_01A|TFP_Horse_Stable_01A_LOD1|Take 001|BaseLayer.001
+  - first:
+      74: 7400092
+    second: TFP_Radish_Plant_01A|TFP_Horse_Stable_01A_LOD2|Take 001|BaseLayer
+  - first:
+      74: 7400094
+    second: TFP_Radish_Plant_01A|TFP_Horse_Stable_01A_LOD2|Take 001|BaseLayer.001
+  - first:
+      74: 7400096
+    second: TFP_Radish_Plant_01A|TFP_Horse_Stable_01B_Door_Down_LOD0|Take 001|BaseLayer
+  - first:
+      74: 7400098
+    second: TFP_Radish_Plant_01A|TFP_Horse_Stable_01B_Door_Down_LOD0|Take 001|BaseLayer.001
+  - first:
+      74: 7400100
+    second: TFP_Radish_Plant_01A|TFP_Horse_Stable_01B_Door_Down_LOD1|Take 001|BaseLayer
+  - first:
+      74: 7400102
+    second: TFP_Radish_Plant_01A|TFP_Horse_Stable_01B_Door_Down_LOD1|Take 001|BaseLayer.001
+  - first:
+      74: 7400104
+    second: TFP_Radish_Plant_01A|TFP_Horse_Stable_01B_Door_Down_LOD2|Take 001|BaseLayer
+  - first:
+      74: 7400106
+    second: TFP_Radish_Plant_01A|TFP_Horse_Stable_01B_Door_Down_LOD2|Take 001|BaseLayer.001
+  - first:
+      74: 7400108
+    second: TFP_Radish_Plant_01A|TFP_Horse_Stable_01B_Door_Down|Take 001|BaseLayer
+  - first:
+      74: 7400110
+    second: TFP_Radish_Plant_01A|TFP_Horse_Stable_01B_Door_Down|Take 001|BaseLayer.001
+  - first:
+      74: 7400112
+    second: TFP_Radish_Plant_01A|TFP_Horse_Stable_01B_Door_Up_LOD0|Take 001|BaseLayer
+  - first:
+      74: 7400114
+    second: TFP_Radish_Plant_01A|TFP_Horse_Stable_01B_Door_Up_LOD0|Take 001|BaseLayer.001
+  - first:
+      74: 7400116
+    second: TFP_Radish_Plant_01A|TFP_Horse_Stable_01B_Door_Up_LOD1|Take 001|BaseLayer
+  - first:
+      74: 7400118
+    second: TFP_Radish_Plant_01A|TFP_Horse_Stable_01B_Door_Up_LOD1|Take 001|BaseLayer.001
+  - first:
+      74: 7400120
+    second: TFP_Radish_Plant_01A|TFP_Horse_Stable_01B_Door_Up_LOD2|Take 001|BaseLayer
+  - first:
+      74: 7400122
+    second: TFP_Radish_Plant_01A|TFP_Horse_Stable_01B_Door_Up_LOD2|Take 001|BaseLayer.001
+  - first:
+      74: 7400124
+    second: TFP_Radish_Plant_01A|TFP_Horse_Stable_01B_Door_Up|Take 001|BaseLayer
+  - first:
+      74: 7400126
+    second: TFP_Radish_Plant_01A|TFP_Horse_Stable_01B_Door_Up|Take 001|BaseLayer.001
+  - first:
+      74: 7400128
+    second: TFP_Radish_Plant_01A|TFP_Horse_Stable_01B_LOD0|Take 001|BaseLayer
+  - first:
+      74: 7400130
+    second: TFP_Radish_Plant_01A|TFP_Horse_Stable_01B_LOD0|Take 001|BaseLayer.001
+  - first:
+      74: 7400132
+    second: TFP_Radish_Plant_01A|TFP_Horse_Stable_01B_LOD1|Take 001|BaseLayer
+  - first:
+      74: 7400134
+    second: TFP_Radish_Plant_01A|TFP_Horse_Stable_01B_LOD1|Take 001|BaseLayer.001
+  - first:
+      74: 7400136
+    second: TFP_Radish_Plant_01A|TFP_Horse_Stable_01B_LOD2|Take 001|BaseLayer
+  - first:
+      74: 7400138
+    second: TFP_Radish_Plant_01A|TFP_Horse_Stable_01B_LOD2|Take 001|BaseLayer.001
+  - first:
+      74: 7400140
+    second: TFP_Radish_Plant_01A|TFP_House_01A_Roof_Tall_5_LOD0|Take 001|BaseLayer
+  - first:
+      74: 7400142
+    second: TFP_Radish_Plant_01A|TFP_House_01A_Roof_Tall_5_LOD1|Take 001|BaseLayer
+  - first:
+      74: 7400144
+    second: TFP_Radish_Plant_01A|TFP_House_01B_Roof_Tall_5_LOD0|Take 001|BaseLayer
+  - first:
+      74: 7400146
+    second: TFP_Radish_Plant_01A|TFP_House_01B_Roof_Tall_5_LOD1|Take 001|BaseLayer
+  - first:
+      74: 7400148
+    second: TFP_Radish_Plant_01A|TFP_Metal_Produce_Stand_01A|Take 001|BaseLayer
+  - first:
+      74: 7400150
+    second: TFP_Radish_Plant_01A|TFP_Metal_Produce_Stand_02A|Take 001|BaseLayer
+  - first:
+      74: 7400152
+    second: TFP_Radish_Plant_01A|TFP_Radish_Plant_01A_Leaves|Take 001|BaseLayer
+  - first:
+      74: 7400154
+    second: TFP_Radish_Plant_01A|TFP_Radish_Plant_01A|Take 001|BaseLayer
+  - first:
+      74: 7400156
+    second: TFP_Radish_Plant_01A|TFP_Wooden_Table_01A|Take 001|BaseLayer
+  - first:
+      95: 9500000
+    second: //RootNode
+  - first:
+      205: 20500000
+    second: //RootNode
+  externalObjects:
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: TFP_Atlas_Vegetation_1A
+    second: {fileID: 2100000, guid: 319d953b56b81bc4a998172aa24c7aff, type: 2}
+  materials:
+    materialImportMode: 2
+    materialName: 1
+    materialSearch: 1
+    materialLocation: 1
+  animations:
+    legacyGenerateAnimations: 4
+    bakeSimulation: 0
+    resampleCurves: 1
+    optimizeGameObjects: 0
+    removeConstantScaleCurves: 0
+    motionNodeName: 
+    animationImportErrors: 
+    animationImportWarnings: 
+    animationRetargetingWarnings: 
+    animationDoRetargetingWarnings: 0
+    importAnimatedCustomProperties: 0
+    importConstraints: 0
+    animationCompression: 1
+    animationRotationError: 0.5
+    animationPositionError: 0.5
+    animationScaleError: 0.5
+    animationWrapMode: 0
+    extraExposedTransformPaths: []
+    extraUserProperties: []
+    clipAnimations: []
+    isReadable: 1
+  meshes:
+    lODScreenPercentages:
+    - 0.25
+    - 0.01
+    globalScale: 1
+    meshCompression: 0
+    addColliders: 0
+    useSRGBMaterialColor: 1
+    sortHierarchyByName: 1
+    importPhysicalCameras: 1
+    importVisibility: 1
+    importBlendShapes: 1
+    importCameras: 1
+    importLights: 1
+    nodeNameCollisionStrategy: 0
+    fileIdsGeneration: 1
+    swapUVChannels: 0
+    generateSecondaryUV: 1
+    useFileUnits: 1
+    keepQuads: 0
+    weldVertices: 1
+    bakeAxisConversion: 0
+    preserveHierarchy: 0
+    skinWeightsMode: 0
+    maxBonesPerVertex: 4
+    minBoneWeight: 0.001
+    optimizeBones: 1
+    meshOptimizationFlags: -1
+    indexFormat: 0
+    secondaryUVAngleDistortion: 8
+    secondaryUVAreaDistortion: 15.000001
+    secondaryUVHardAngle: 88
+    secondaryUVMarginMethod: 0
+    secondaryUVMinLightmapResolution: 40
+    secondaryUVMinObjectScale: 1
+    secondaryUVPackMargin: 4
+    useFileScale: 1
+    strictVertexDataChecks: 0
+  tangentSpace:
+    normalSmoothAngle: 60
+    normalImportMode: 0
+    tangentImportMode: 3
+    normalCalculationMode: 4
+    legacyComputeAllNormalsFromSmoothingGroupsWhenMeshHasBlendShapes: 0
+    blendShapeNormalImportMode: 1
+    normalSmoothingSource: 0
+  referencedClips: []
+  importAnimation: 0
+  humanDescription:
+    serializedVersion: 3
+    human: []
+    skeleton: []
+    armTwist: 0.5
+    foreArmTwist: 0.5
+    upperLegTwist: 0.5
+    legTwist: 0.5
+    armStretch: 0.05
+    legStretch: 0.05
+    feetSpacing: 0
+    globalScale: 1
+    rootMotionBoneName: 
+    hasTranslationDoF: 0
+    hasExtraRoot: 0
+    skeletonHasParents: 1
+  lastHumanDescriptionAvatarSource: {instanceID: 0}
+  autoGenerateAvatarMappingIfUnspecified: 1
+  animationType: 2
+  humanoidOversampling: 1
+  avatarSetup: 1
+  addHumanoidExtraRootOnlyWhenUsingAvatar: 0
+  importBlendShapeDeformPercent: 0
+  remapMaterialsIfMaterialImportModeIsNone: 1
+  additionalBone: 0
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 235041
+  packageName: Toon Farm Pack
+  packageVersion: 1.0.3
+  assetPath: Assets/Toon Series/Toon Farm Pack/Models/TFP_Radish_Plant_01A.fbx
+  uploadId: 963428

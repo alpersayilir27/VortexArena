@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: d71a6edce7ddd5547a6612a5100c3612
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 9100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 235041
+  packageName: Toon Farm Pack
+  packageVersion: 1.0.3
+  assetPath: Assets/Toon Series/Toon Farm Pack/Animations/Animal Animations/Goat/TFP_Goat_01_Idle_03_Slow.controller
+  uploadId: 963428

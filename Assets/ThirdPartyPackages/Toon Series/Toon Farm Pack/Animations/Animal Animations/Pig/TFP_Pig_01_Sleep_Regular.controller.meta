@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: d69d65faa487b5e4a94d5cdefe89f0e7
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 9100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 235041
+  packageName: Toon Farm Pack
+  packageVersion: 1.0.3
+  assetPath: Assets/Toon Series/Toon Farm Pack/Animations/Animal Animations/Pig/TFP_Pig_01_Sleep_Regular.controller
+  uploadId: 963428

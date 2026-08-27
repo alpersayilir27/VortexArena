@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: e34d4c08c148a3f4e8676edb22cf711d
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 9100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 235041
+  packageName: Toon Farm Pack
+  packageVersion: 1.0.3
+  assetPath: Assets/Toon Series/Toon Farm Pack/Animations/Animal Animations/Crow/TFP_Crow_01_Idle_03_Slow.controller
+  uploadId: 963428

@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: d578b8ce519c86a4f8be93beed92510c
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 9100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 235041
+  packageName: Toon Farm Pack
+  packageVersion: 1.0.3
+  assetPath: Assets/Toon Series/Toon Farm Pack/Animations/Animal Animations/Bull/TFP_Bull_Idle_02_Regular.controller
+  uploadId: 963428

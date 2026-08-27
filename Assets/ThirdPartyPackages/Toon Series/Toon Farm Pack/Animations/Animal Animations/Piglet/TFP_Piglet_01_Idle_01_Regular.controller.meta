@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 459b00cd9d1123d4b9f7e581af924d77
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 9100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 235041
+  packageName: Toon Farm Pack
+  packageVersion: 1.0.3
+  assetPath: Assets/Toon Series/Toon Farm Pack/Animations/Animal Animations/Piglet/TFP_Piglet_01_Idle_01_Regular.controller
+  uploadId: 963428

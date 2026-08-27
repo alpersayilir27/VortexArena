@@ -1,0 +1,1234 @@
+fileFormatVersion: 2
+guid: 005cb32768f30f54ab7abb9a8e2a0caf
+ModelImporter:
+  serializedVersion: 22200
+  internalIDToNameTable:
+  - first:
+      1: 100000
+    second: Arm.L
+  - first:
+      1: 100002
+    second: Arm.R
+  - first:
+      1: 100004
+    second: Clavicle.L
+  - first:
+      1: 100006
+    second: Clavicle.R
+  - first:
+      1: 100008
+    second: Fingers.L
+  - first:
+      1: 100010
+    second: Fingers.R
+  - first:
+      1: 100012
+    second: Fingertips.L
+  - first:
+      1: 100014
+    second: Fingertips.R
+  - first:
+      1: 100016
+    second: Foot.L
+  - first:
+      1: 100018
+    second: Foot.R
+  - first:
+      1: 100020
+    second: Forearm.L
+  - first:
+      1: 100022
+    second: Forearm.R
+  - first:
+      1: 100024
+    second: Hand.L
+  - first:
+      1: 100026
+    second: Hand.R
+  - first:
+      1: 100028
+    second: Head
+  - first:
+      1: 100030
+    second: Hips
+  - first:
+      1: 100032
+    second: Jaw
+  - first:
+      1: 100034
+    second: Male_Accessories
+  - first:
+      1: 100036
+    second: Male_Armature
+  - first:
+      1: 100038
+    second: Neck
+  - first:
+      1: 100040
+    second: Quad.L
+  - first:
+      1: 100042
+    second: Quad.R
+  - first:
+      1: 100044
+    second: Root
+  - first:
+      1: 100046
+    second: Shin.L
+  - first:
+      1: 100048
+    second: Shin.R
+  - first:
+      1: 100050
+    second: Spine_01
+  - first:
+      1: 100052
+    second: Spine_02
+  - first:
+      1: 100054
+    second: Spine_03
+  - first:
+      1: 100056
+    second: //RootNode
+  - first:
+      1: 100058
+    second: TFP_Male_Beekeeper_01A_Beard
+  - first:
+      1: 100060
+    second: TFP_Male_Beekeeper_01A_Body
+  - first:
+      1: 100062
+    second: TFP_Male_Beekeeper_01A_Boots
+  - first:
+      1: 100064
+    second: TFP_Male_Beekeeper_01A_Gloves
+  - first:
+      1: 100066
+    second: TFP_Male_Beekeeper_01A_Hair
+  - first:
+      1: 100068
+    second: TFP_Male_Beekeeper_01A_Helmet
+  - first:
+      1: 100070
+    second: TFP_Male_Beekeeper_01A_Jacket
+  - first:
+      1: 100072
+    second: TFP_Male_Beekeeper_01A_Pants
+  - first:
+      1: 100074
+    second: TFP_Male_Beekeeper_01B_Beard
+  - first:
+      1: 100076
+    second: TFP_Male_Beekeeper_01B_Body
+  - first:
+      1: 100078
+    second: TFP_Male_Beekeeper_01B_Boots
+  - first:
+      1: 100080
+    second: TFP_Male_Beekeeper_01B_Gloves
+  - first:
+      1: 100082
+    second: TFP_Male_Beekeeper_01B_Hair
+  - first:
+      1: 100084
+    second: TFP_Male_Beekeeper_01B_Helmet
+  - first:
+      1: 100086
+    second: TFP_Male_Beekeeper_01B_Jacket
+  - first:
+      1: 100088
+    second: TFP_Male_Beekeeper_01B_Pants
+  - first:
+      1: 100090
+    second: TFP_Male_Beekeeper_01C_Beard
+  - first:
+      1: 100092
+    second: TFP_Male_Beekeeper_01C_Body
+  - first:
+      1: 100094
+    second: TFP_Male_Beekeeper_01C_Boots
+  - first:
+      1: 100096
+    second: TFP_Male_Beekeeper_01C_Gloves
+  - first:
+      1: 100098
+    second: TFP_Male_Beekeeper_01C_Hair
+  - first:
+      1: 100100
+    second: Thumb.L
+  - first:
+      1: 100102
+    second: Thumb.R
+  - first:
+      1: 100104
+    second: Thumb_Tip.L
+  - first:
+      1: 100106
+    second: Thumb_Tip.R
+  - first:
+      1: 100108
+    second: Toes.L
+  - first:
+      1: 100110
+    second: Toes.R
+  - first:
+      4: 400000
+    second: Arm.L
+  - first:
+      4: 400002
+    second: Arm.R
+  - first:
+      4: 400004
+    second: Clavicle.L
+  - first:
+      4: 400006
+    second: Clavicle.R
+  - first:
+      4: 400008
+    second: Fingers.L
+  - first:
+      4: 400010
+    second: Fingers.R
+  - first:
+      4: 400012
+    second: Fingertips.L
+  - first:
+      4: 400014
+    second: Fingertips.R
+  - first:
+      4: 400016
+    second: Foot.L
+  - first:
+      4: 400018
+    second: Foot.R
+  - first:
+      4: 400020
+    second: Forearm.L
+  - first:
+      4: 400022
+    second: Forearm.R
+  - first:
+      4: 400024
+    second: Hand.L
+  - first:
+      4: 400026
+    second: Hand.R
+  - first:
+      4: 400028
+    second: Head
+  - first:
+      4: 400030
+    second: Hips
+  - first:
+      4: 400032
+    second: Jaw
+  - first:
+      4: 400034
+    second: Male_Accessories
+  - first:
+      4: 400036
+    second: Male_Armature
+  - first:
+      4: 400038
+    second: Neck
+  - first:
+      4: 400040
+    second: Quad.L
+  - first:
+      4: 400042
+    second: Quad.R
+  - first:
+      4: 400044
+    second: Root
+  - first:
+      4: 400046
+    second: Shin.L
+  - first:
+      4: 400048
+    second: Shin.R
+  - first:
+      4: 400050
+    second: Spine_01
+  - first:
+      4: 400052
+    second: Spine_02
+  - first:
+      4: 400054
+    second: Spine_03
+  - first:
+      4: 400056
+    second: //RootNode
+  - first:
+      4: 400058
+    second: TFP_Male_Beekeeper_01A_Beard
+  - first:
+      4: 400060
+    second: TFP_Male_Beekeeper_01A_Body
+  - first:
+      4: 400062
+    second: TFP_Male_Beekeeper_01A_Boots
+  - first:
+      4: 400064
+    second: TFP_Male_Beekeeper_01A_Gloves
+  - first:
+      4: 400066
+    second: TFP_Male_Beekeeper_01A_Hair
+  - first:
+      4: 400068
+    second: TFP_Male_Beekeeper_01A_Helmet
+  - first:
+      4: 400070
+    second: TFP_Male_Beekeeper_01A_Jacket
+  - first:
+      4: 400072
+    second: TFP_Male_Beekeeper_01A_Pants
+  - first:
+      4: 400074
+    second: TFP_Male_Beekeeper_01B_Beard
+  - first:
+      4: 400076
+    second: TFP_Male_Beekeeper_01B_Body
+  - first:
+      4: 400078
+    second: TFP_Male_Beekeeper_01B_Boots
+  - first:
+      4: 400080
+    second: TFP_Male_Beekeeper_01B_Gloves
+  - first:
+      4: 400082
+    second: TFP_Male_Beekeeper_01B_Hair
+  - first:
+      4: 400084
+    second: TFP_Male_Beekeeper_01B_Helmet
+  - first:
+      4: 400086
+    second: TFP_Male_Beekeeper_01B_Jacket
+  - first:
+      4: 400088
+    second: TFP_Male_Beekeeper_01B_Pants
+  - first:
+      4: 400090
+    second: TFP_Male_Beekeeper_01C_Beard
+  - first:
+      4: 400092
+    second: TFP_Male_Beekeeper_01C_Body
+  - first:
+      4: 400094
+    second: TFP_Male_Beekeeper_01C_Boots
+  - first:
+      4: 400096
+    second: TFP_Male_Beekeeper_01C_Gloves
+  - first:
+      4: 400098
+    second: TFP_Male_Beekeeper_01C_Hair
+  - first:
+      4: 400100
+    second: Thumb.L
+  - first:
+      4: 400102
+    second: Thumb.R
+  - first:
+      4: 400104
+    second: Thumb_Tip.L
+  - first:
+      4: 400106
+    second: Thumb_Tip.R
+  - first:
+      4: 400108
+    second: Toes.L
+  - first:
+      4: 400110
+    second: Toes.R
+  - first:
+      21: 2100000
+    second: TFP_Glass_Windows_1A
+  - first:
+      21: 2100002
+    second: TFP_Atlas_1A
+  - first:
+      43: 4300000
+    second: TFP_Male_Beekeeper_01A_Helmet
+  - first:
+      43: 4300002
+    second: TFP_Male_Beekeeper_01B_Helmet
+  - first:
+      43: 4300004
+    second: TFP_Male_Beekeeper_01A_Body
+  - first:
+      43: 4300006
+    second: TFP_Male_Beekeeper_01A_Hair
+  - first:
+      43: 4300008
+    second: TFP_Male_Beekeeper_01A_Pants
+  - first:
+      43: 4300010
+    second: TFP_Male_Beekeeper_01A_Jacket
+  - first:
+      43: 4300012
+    second: TFP_Male_Beekeeper_01A_Boots
+  - first:
+      43: 4300014
+    second: TFP_Male_Beekeeper_01A_Gloves
+  - first:
+      43: 4300016
+    second: TFP_Male_Beekeeper_01A_Beard
+  - first:
+      43: 4300018
+    second: TFP_Male_Beekeeper_01B_Body
+  - first:
+      43: 4300020
+    second: TFP_Male_Beekeeper_01B_Hair
+  - first:
+      43: 4300022
+    second: TFP_Male_Beekeeper_01B_Pants
+  - first:
+      43: 4300024
+    second: TFP_Male_Beekeeper_01B_Jacket
+  - first:
+      43: 4300026
+    second: TFP_Male_Beekeeper_01B_Boots
+  - first:
+      43: 4300028
+    second: TFP_Male_Beekeeper_01B_Gloves
+  - first:
+      43: 4300030
+    second: TFP_Male_Beekeeper_01B_Beard
+  - first:
+      43: 4300032
+    second: TFP_Male_Beekeeper_01C_Boots
+  - first:
+      43: 4300034
+    second: TFP_Male_Beekeeper_01C_Gloves
+  - first:
+      43: 4300036
+    second: TFP_Male_Beekeeper_01C_Body
+  - first:
+      43: 4300038
+    second: TFP_Male_Beekeeper_01C_Hair
+  - first:
+      43: 4300040
+    second: TFP_Male_Beekeeper_01C_Beard
+  - first:
+      74: 7400000
+    second: Male_Armature|1
+  - first:
+      74: 7400002
+    second: Male_Armature|Female_Armature.001|Female_Armature|1
+  - first:
+      74: 7400004
+    second: Male_Armature|Female_Armature.001|Female_Armature|TSP_Female_Pose_01
+  - first:
+      74: 7400006
+    second: Male_Armature|Female_Armature.001|Female_Armature|TSP_Female_Pose_02
+  - first:
+      74: 7400008
+    second: Male_Armature|Female_Armature.001|Female_Armature|TSP_Female_Pose_03
+  - first:
+      74: 7400010
+    second: Male_Armature|Female_Armature.001|Female_Armature|TSP_Female_Pose_Signal
+  - first:
+      74: 7400012
+    second: Male_Armature|Female_Armature.001|Female_Armature|TSP_Female_Pose_Sitting_01
+  - first:
+      74: 7400014
+    second: Male_Armature|Female_Armature.001|Female_Armature|TSP_Female_Pose_Sitting_02
+  - first:
+      74: 7400016
+    second: Male_Armature|Female_Armature.001|Female_Armature|TSP_Female_T_Pose
+  - first:
+      74: 7400018
+    second: Male_Armature|Female_Armature.001|Female_Armature|TSP_Male_Idle_01
+  - first:
+      74: 7400020
+    second: Male_Armature|Female_Armature.001|Female_Armature|TSP_Male_Pose_01
+  - first:
+      74: 7400022
+    second: Male_Armature|Female_Armature.001|Female_Armature|TSP_Male_Pose_02
+  - first:
+      74: 7400024
+    second: Male_Armature|Female_Armature.001|Female_Armature|TSP_Male_Pose_03
+  - first:
+      74: 7400026
+    second: Male_Armature|Female_Armature.001|Female_Armature|TSP_Male_Pose_Signal_01
+  - first:
+      74: 7400028
+    second: Male_Armature|Female_Armature.001|Female_Armature|TSP_Male_Pose_Signal_02
+  - first:
+      74: 7400030
+    second: Male_Armature|Female_Armature.001|Female_Armature|TSP_Male_Pose_Sitting_01
+  - first:
+      74: 7400032
+    second: Male_Armature|Female_Armature.001|Female_Armature|TSP_Male_Pose_Sitting_02
+  - first:
+      74: 7400034
+    second: Male_Armature|Female_Armature.001|Female_Armature|TSP_Male_T_Pose
+  - first:
+      74: 7400036
+    second: Male_Armature|TFP_Standard_Female_Head_02A|Take 001|BaseLayer
+  - first:
+      74: 7400038
+    second: Male_Armature|TFP_Standard_Female_Head_02A|Take 001|BaseLayer.001
+  - first:
+      74: 7400040
+    second: Male_Armature|TSP_Female_Pose_01
+  - first:
+      74: 7400042
+    second: Male_Armature|TSP_Female_Pose_02
+  - first:
+      74: 7400044
+    second: Male_Armature|TSP_Female_Pose_03
+  - first:
+      74: 7400046
+    second: Male_Armature|TSP_Female_Pose_Signal
+  - first:
+      74: 7400048
+    second: Male_Armature|TSP_Female_Pose_Sitting_01
+  - first:
+      74: 7400050
+    second: Male_Armature|TSP_Female_Pose_Sitting_02
+  - first:
+      74: 7400052
+    second: Male_Armature|TSP_Female_T_Pose
+  - first:
+      74: 7400054
+    second: Male_Armature|TSP_Male_Idle_01
+  - first:
+      74: 7400056
+    second: Male_Armature|TSP_Male_Pose_01
+  - first:
+      74: 7400058
+    second: Male_Armature|TSP_Male_Pose_02
+  - first:
+      74: 7400060
+    second: Male_Armature|TSP_Male_Pose_03
+  - first:
+      74: 7400062
+    second: Male_Armature|TSP_Male_Pose_Signal_01
+  - first:
+      74: 7400064
+    second: Male_Armature|TSP_Male_Pose_Signal_02
+  - first:
+      74: 7400066
+    second: Male_Armature|TSP_Male_Pose_Sitting_01
+  - first:
+      74: 7400068
+    second: Male_Armature|TSP_Male_Pose_Sitting_02
+  - first:
+      74: 7400070
+    second: Male_Armature|TSP_Male_T_Pose
+  - first:
+      95: 9500000
+    second: //RootNode
+  - first:
+      137: 13700000
+    second: TFP_Male_Beekeeper_01A_Beard
+  - first:
+      137: 13700002
+    second: TFP_Male_Beekeeper_01A_Body
+  - first:
+      137: 13700004
+    second: TFP_Male_Beekeeper_01A_Boots
+  - first:
+      137: 13700006
+    second: TFP_Male_Beekeeper_01A_Gloves
+  - first:
+      137: 13700008
+    second: TFP_Male_Beekeeper_01A_Hair
+  - first:
+      137: 13700010
+    second: TFP_Male_Beekeeper_01A_Helmet
+  - first:
+      137: 13700012
+    second: TFP_Male_Beekeeper_01A_Jacket
+  - first:
+      137: 13700014
+    second: TFP_Male_Beekeeper_01A_Pants
+  - first:
+      137: 13700016
+    second: TFP_Male_Beekeeper_01B_Beard
+  - first:
+      137: 13700018
+    second: TFP_Male_Beekeeper_01B_Body
+  - first:
+      137: 13700020
+    second: TFP_Male_Beekeeper_01B_Boots
+  - first:
+      137: 13700022
+    second: TFP_Male_Beekeeper_01B_Gloves
+  - first:
+      137: 13700024
+    second: TFP_Male_Beekeeper_01B_Hair
+  - first:
+      137: 13700026
+    second: TFP_Male_Beekeeper_01B_Helmet
+  - first:
+      137: 13700028
+    second: TFP_Male_Beekeeper_01B_Jacket
+  - first:
+      137: 13700030
+    second: TFP_Male_Beekeeper_01B_Pants
+  - first:
+      137: 13700032
+    second: TFP_Male_Beekeeper_01C_Beard
+  - first:
+      137: 13700034
+    second: TFP_Male_Beekeeper_01C_Body
+  - first:
+      137: 13700036
+    second: TFP_Male_Beekeeper_01C_Boots
+  - first:
+      137: 13700038
+    second: TFP_Male_Beekeeper_01C_Gloves
+  - first:
+      137: 13700040
+    second: TFP_Male_Beekeeper_01C_Hair
+  - first:
+      41386430: 2186277476908879412
+    second: ImportLogs
+  externalObjects:
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: TFP_Atlas_1A
+    second: {fileID: 2100000, guid: 8947ea2c73d7b334785955d3d7321641, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: TFP_Glass_Windows_1A
+    second: {fileID: 2100000, guid: 8e989af3cfc09d8468fccf0a1a5b7827, type: 2}
+  materials:
+    materialImportMode: 2
+    materialName: 0
+    materialSearch: 1
+    materialLocation: 1
+  animations:
+    legacyGenerateAnimations: 4
+    bakeSimulation: 0
+    resampleCurves: 1
+    optimizeGameObjects: 0
+    removeConstantScaleCurves: 0
+    motionNodeName: 
+    animationImportErrors: 
+    animationImportWarnings: 
+    animationRetargetingWarnings: 
+    animationDoRetargetingWarnings: 0
+    importAnimatedCustomProperties: 0
+    importConstraints: 0
+    animationCompression: 3
+    animationRotationError: 0.5
+    animationPositionError: 0.5
+    animationScaleError: 0.5
+    animationWrapMode: 0
+    extraExposedTransformPaths: []
+    extraUserProperties: []
+    clipAnimations: []
+    isReadable: 1
+  meshes:
+    lODScreenPercentages: []
+    globalScale: 1
+    meshCompression: 0
+    addColliders: 0
+    useSRGBMaterialColor: 1
+    sortHierarchyByName: 1
+    importPhysicalCameras: 1
+    importVisibility: 1
+    importBlendShapes: 1
+    importCameras: 1
+    importLights: 1
+    nodeNameCollisionStrategy: 0
+    fileIdsGeneration: 1
+    swapUVChannels: 0
+    generateSecondaryUV: 1
+    useFileUnits: 1
+    keepQuads: 0
+    weldVertices: 1
+    bakeAxisConversion: 0
+    preserveHierarchy: 0
+    skinWeightsMode: 0
+    maxBonesPerVertex: 4
+    minBoneWeight: 0.001
+    optimizeBones: 1
+    meshOptimizationFlags: -1
+    indexFormat: 0
+    secondaryUVAngleDistortion: 8
+    secondaryUVAreaDistortion: 15.000001
+    secondaryUVHardAngle: 88
+    secondaryUVMarginMethod: 0
+    secondaryUVMinLightmapResolution: 40
+    secondaryUVMinObjectScale: 1
+    secondaryUVPackMargin: 4
+    useFileScale: 1
+    strictVertexDataChecks: 0
+  tangentSpace:
+    normalSmoothAngle: 60
+    normalImportMode: 0
+    tangentImportMode: 3
+    normalCalculationMode: 4
+    legacyComputeAllNormalsFromSmoothingGroupsWhenMeshHasBlendShapes: 0
+    blendShapeNormalImportMode: 2
+    normalSmoothingSource: 0
+  referencedClips: []
+  importAnimation: 0
+  humanDescription:
+    serializedVersion: 3
+    human:
+    - boneName: Hips
+      humanName: Hips
+      limit:
+        min: {x: 0, y: 0, z: 0}
+        max: {x: 0, y: 0, z: 0}
+        value: {x: 0, y: 0, z: 0}
+        length: 0
+        modified: 0
+    - boneName: Quad.L
+      humanName: LeftUpperLeg
+      limit:
+        min: {x: 0, y: 0, z: 0}
+        max: {x: 0, y: 0, z: 0}
+        value: {x: 0, y: 0, z: 0}
+        length: 0
+        modified: 0
+    - boneName: Quad.R
+      humanName: RightUpperLeg
+      limit:
+        min: {x: 0, y: 0, z: 0}
+        max: {x: 0, y: 0, z: 0}
+        value: {x: 0, y: 0, z: 0}
+        length: 0
+        modified: 0
+    - boneName: Shin.L
+      humanName: LeftLowerLeg
+      limit:
+        min: {x: 0, y: 0, z: 0}
+        max: {x: 0, y: 0, z: 0}
+        value: {x: 0, y: 0, z: 0}
+        length: 0
+        modified: 0
+    - boneName: Shin.R
+      humanName: RightLowerLeg
+      limit:
+        min: {x: 0, y: 0, z: 0}
+        max: {x: 0, y: 0, z: 0}
+        value: {x: 0, y: 0, z: 0}
+        length: 0
+        modified: 0
+    - boneName: Foot.L
+      humanName: LeftFoot
+      limit:
+        min: {x: 0, y: 0, z: 0}
+        max: {x: 0, y: 0, z: 0}
+        value: {x: 0, y: 0, z: 0}
+        length: 0
+        modified: 0
+    - boneName: Foot.R
+      humanName: RightFoot
+      limit:
+        min: {x: 0, y: 0, z: 0}
+        max: {x: 0, y: 0, z: 0}
+        value: {x: 0, y: 0, z: 0}
+        length: 0
+        modified: 0
+    - boneName: Spine_01
+      humanName: Spine
+      limit:
+        min: {x: 0, y: 0, z: 0}
+        max: {x: 0, y: 0, z: 0}
+        value: {x: 0, y: 0, z: 0}
+        length: 0
+        modified: 0
+    - boneName: Spine_02
+      humanName: Chest
+      limit:
+        min: {x: 0, y: 0, z: 0}
+        max: {x: 0, y: 0, z: 0}
+        value: {x: 0, y: 0, z: 0}
+        length: 0
+        modified: 0
+    - boneName: Neck
+      humanName: Neck
+      limit:
+        min: {x: 0, y: 0, z: 0}
+        max: {x: 0, y: 0, z: 0}
+        value: {x: 0, y: 0, z: 0}
+        length: 0
+        modified: 0
+    - boneName: Head
+      humanName: Head
+      limit:
+        min: {x: 0, y: 0, z: 0}
+        max: {x: 0, y: 0, z: 0}
+        value: {x: 0, y: 0, z: 0}
+        length: 0
+        modified: 0
+    - boneName: Clavicle.L
+      humanName: LeftShoulder
+      limit:
+        min: {x: 0, y: 0, z: 0}
+        max: {x: 0, y: 0, z: 0}
+        value: {x: 0, y: 0, z: 0}
+        length: 0
+        modified: 0
+    - boneName: Clavicle.R
+      humanName: RightShoulder
+      limit:
+        min: {x: 0, y: 0, z: 0}
+        max: {x: 0, y: 0, z: 0}
+        value: {x: 0, y: 0, z: 0}
+        length: 0
+        modified: 0
+    - boneName: Arm.L
+      humanName: LeftUpperArm
+      limit:
+        min: {x: 0, y: 0, z: 0}
+        max: {x: 0, y: 0, z: 0}
+        value: {x: 0, y: 0, z: 0}
+        length: 0
+        modified: 0
+    - boneName: Arm.R
+      humanName: RightUpperArm
+      limit:
+        min: {x: 0, y: 0, z: 0}
+        max: {x: 0, y: 0, z: 0}
+        value: {x: 0, y: 0, z: 0}
+        length: 0
+        modified: 0
+    - boneName: Forearm.L
+      humanName: LeftLowerArm
+      limit:
+        min: {x: 0, y: 0, z: 0}
+        max: {x: 0, y: 0, z: 0}
+        value: {x: 0, y: 0, z: 0}
+        length: 0
+        modified: 0
+    - boneName: Forearm.R
+      humanName: RightLowerArm
+      limit:
+        min: {x: 0, y: 0, z: 0}
+        max: {x: 0, y: 0, z: 0}
+        value: {x: 0, y: 0, z: 0}
+        length: 0
+        modified: 0
+    - boneName: Hand.L
+      humanName: LeftHand
+      limit:
+        min: {x: 0, y: 0, z: 0}
+        max: {x: 0, y: 0, z: 0}
+        value: {x: 0, y: 0, z: 0}
+        length: 0
+        modified: 0
+    - boneName: Hand.R
+      humanName: RightHand
+      limit:
+        min: {x: 0, y: 0, z: 0}
+        max: {x: 0, y: 0, z: 0}
+        value: {x: 0, y: 0, z: 0}
+        length: 0
+        modified: 0
+    - boneName: Toes.L
+      humanName: LeftToes
+      limit:
+        min: {x: 0, y: 0, z: 0}
+        max: {x: 0, y: 0, z: 0}
+        value: {x: 0, y: 0, z: 0}
+        length: 0
+        modified: 0
+    - boneName: Toes.R
+      humanName: RightToes
+      limit:
+        min: {x: 0, y: 0, z: 0}
+        max: {x: 0, y: 0, z: 0}
+        value: {x: 0, y: 0, z: 0}
+        length: 0
+        modified: 0
+    - boneName: Jaw
+      humanName: Jaw
+      limit:
+        min: {x: 0, y: 0, z: 0}
+        max: {x: 0, y: 0, z: 0}
+        value: {x: 0, y: 0, z: 0}
+        length: 0
+        modified: 0
+    - boneName: Thumb.L
+      humanName: Left Thumb Proximal
+      limit:
+        min: {x: 0, y: 0, z: 0}
+        max: {x: 0, y: 0, z: 0}
+        value: {x: 0, y: 0, z: 0}
+        length: 0
+        modified: 0
+    - boneName: Thumb_Tip.L
+      humanName: Left Thumb Intermediate
+      limit:
+        min: {x: 0, y: 0, z: 0}
+        max: {x: 0, y: 0, z: 0}
+        value: {x: 0, y: 0, z: 0}
+        length: 0
+        modified: 0
+    - boneName: Fingers.L
+      humanName: Left Little Proximal
+      limit:
+        min: {x: 0, y: 0, z: 0}
+        max: {x: 0, y: 0, z: 0}
+        value: {x: 0, y: 0, z: 0}
+        length: 0
+        modified: 0
+    - boneName: Fingertips.L
+      humanName: Left Little Intermediate
+      limit:
+        min: {x: 0, y: 0, z: 0}
+        max: {x: 0, y: 0, z: 0}
+        value: {x: 0, y: 0, z: 0}
+        length: 0
+        modified: 0
+    - boneName: Thumb.R
+      humanName: Right Thumb Proximal
+      limit:
+        min: {x: 0, y: 0, z: 0}
+        max: {x: 0, y: 0, z: 0}
+        value: {x: 0, y: 0, z: 0}
+        length: 0
+        modified: 0
+    - boneName: Thumb_Tip.R
+      humanName: Right Thumb Intermediate
+      limit:
+        min: {x: 0, y: 0, z: 0}
+        max: {x: 0, y: 0, z: 0}
+        value: {x: 0, y: 0, z: 0}
+        length: 0
+        modified: 0
+    - boneName: Fingers.R
+      humanName: Right Little Proximal
+      limit:
+        min: {x: 0, y: 0, z: 0}
+        max: {x: 0, y: 0, z: 0}
+        value: {x: 0, y: 0, z: 0}
+        length: 0
+        modified: 0
+    - boneName: Fingertips.R
+      humanName: Right Little Intermediate
+      limit:
+        min: {x: 0, y: 0, z: 0}
+        max: {x: 0, y: 0, z: 0}
+        value: {x: 0, y: 0, z: 0}
+        length: 0
+        modified: 0
+    - boneName: Spine_03
+      humanName: UpperChest
+      limit:
+        min: {x: 0, y: 0, z: 0}
+        max: {x: 0, y: 0, z: 0}
+        value: {x: 0, y: 0, z: 0}
+        length: 0
+        modified: 0
+    skeleton:
+    - name: TFP_Male_Beekeeper_01(Clone)
+      parentName: 
+      position: {x: 0, y: 0, z: 0}
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Male_Armature
+      parentName: TFP_Male_Beekeeper_01(Clone)
+      position: {x: -0, y: 0, z: 0}
+      rotation: {x: -0.7071068, y: 0, z: -0, w: 0.7071067}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Root
+      parentName: Male_Armature
+      position: {x: -0, y: 0, z: 0}
+      rotation: {x: 0.7071068, y: 4.32978e-17, z: 0.7071067, w: -4.3297806e-17}
+      scale: {x: 1, y: 0.99999994, z: 1}
+    - name: Hips
+      parentName: Root
+      position: {x: 1.2063686, y: 0.0027477145, z: 0.000000036757086}
+      rotation: {x: 0.0000001127542, y: -0.00000009716698, z: 0.66061074, w: 0.7507286}
+      scale: {x: 1.0000001, y: 1, z: 1}
+    - name: Spine_01
+      parentName: Hips
+      position: {x: 0.0064479383, y: -0.0565597, z: -0.0000000020621447}
+      rotation: {x: 0.70567, y: 0.045059316, z: 0.70566934, w: -0.045059357}
+      scale: {x: 1.0000106, y: 1.0000001, z: 1.0000001}
+    - name: Spine_02
+      parentName: Spine_01
+      position: {x: -4.2188475e-15, y: 0.12637258, z: -5.750849e-11}
+      rotation: {x: -0.15178406, y: 0.00000030493513, z: 0.00000007802641, w: 0.9884137}
+      scale: {x: 1, y: 0.9999999, z: 1}
+    - name: Spine_03
+      parentName: Spine_02
+      position: {x: 1.2434498e-14, y: 0.16214794, z: 0.000000018626494}
+      rotation: {x: 0.11488275, y: -0.00000015217337, z: 0.000000013761554, w: 0.9933791}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Neck
+      parentName: Spine_03
+      position: {x: 0.000000025680148, y: 0.16711707, z: 0.024169575}
+      rotation: {x: -0.0013325767, y: 0.00000007544135, z: -0.00000010834504, w: 0.9999991}
+      scale: {x: 1.0000106, y: 1.0000001, z: 1.0000001}
+    - name: Head
+      parentName: Neck
+      position: {x: 9.325873e-15, y: 0.100225605, z: -0.000000011175856}
+      rotation: {x: 0.017983528, y: -0.000000020086373, z: 0.0000000060595413, w: 0.9998383}
+      scale: {x: 1.0000106, y: 0.99999994, z: 1.0000001}
+    - name: Jaw
+      parentName: Head
+      position: {x: 0.0000000026747307, y: 0.0077669993, z: 0.05870973}
+      rotation: {x: 0.88241875, y: -0.00000031374836, z: -0.0000005678242, w: 0.4704648}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Clavicle.L
+      parentName: Spine_03
+      position: {x: -2.1538327e-14, y: 0.15510657, z: -0.0000000037252879}
+      rotation: {x: 0.66883653, y: -0.50240123, z: -0.42575955, w: -0.34493405}
+      scale: {x: 1.0000002, y: 1.0000002, z: 1.0000002}
+    - name: Arm.L
+      parentName: Clavicle.L
+      position: {x: -0.00000008009374, y: 0.21323432, z: -0.000000067055225}
+      rotation: {x: 0.10439012, y: -0.06417829, z: 0.02226218, w: 0.99221385}
+      scale: {x: 1.0000027, y: 0.9999893, z: 1.0000032}
+    - name: Forearm.L
+      parentName: Arm.L
+      position: {x: -0.000000037252903, y: 0.21765852, z: 0.00000015646219}
+      rotation: {x: 0.063859284, y: -0.79430914, z: 0.030983984, w: 0.60335326}
+      scale: {x: 1.000001, y: 1.0000038, z: 0.99999607}
+    - name: Hand.L
+      parentName: Forearm.L
+      position: {x: 0.00000007357448, y: 0.29481092, z: 0.000000019790605}
+      rotation: {x: -0.05344766, y: -0.14407516, z: 0.0020289924, w: 0.98812026}
+      scale: {x: 0.99999994, y: 1, z: 1.0000001}
+    - name: Fingers.L
+      parentName: Hand.L
+      position: {x: 0.00000014761463, y: 0.119678244, z: -0.00000004656613}
+      rotation: {x: -0.0223567, y: 0.058489352, z: 0.06993474, w: 0.9955844}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Fingertips.L
+      parentName: Fingers.L
+      position: {x: 0.00000007566996, y: 0.041954838, z: -0.000000007450581}
+      rotation: {x: -0.03669017, y: -0.05611365, z: 0.18478763, w: 0.98048896}
+      scale: {x: 0.99999994, y: 0.9999999, z: 1}
+    - name: Thumb.L
+      parentName: Hand.L
+      position: {x: -0.018562455, y: 0.008450327, z: 0.027995465}
+      rotation: {x: 0.2021213, y: 0.79046386, z: 0.33514807, w: 0.4711579}
+      scale: {x: 1, y: 0.9999998, z: 0.9999998}
+    - name: Thumb_Tip.L
+      parentName: Thumb.L
+      position: {x: -0.000000033527613, y: 0.061598886, z: 0.00000004749745}
+      rotation: {x: -0.10484349, y: -0.6283412, z: -0.20932567, w: 0.7418746}
+      scale: {x: 1.0000001, y: 1, z: 1}
+    - name: Clavicle.R
+      parentName: Spine_03
+      position: {x: -2.1538327e-14, y: 0.15510657, z: -0.0000000037252879}
+      rotation: {x: 0.6688361, y: 0.5024021, z: 0.42575905, w: -0.34493414}
+      scale: {x: 1.0000002, y: 1.0000001, z: 1}
+    - name: Arm.R
+      parentName: Clavicle.R
+      position: {x: 0.00000008940697, y: 0.21323422, z: 0.00000031478703}
+      rotation: {x: 0.10439001, y: 0.06417918, z: -0.022261262, w: 0.99221385}
+      scale: {x: 1.0000032, y: 0.9999916, z: 1.000002}
+    - name: Forearm.R
+      parentName: Arm.R
+      position: {x: -0.000000007450581, y: 0.21765813, z: 0.000000052154064}
+      rotation: {x: 0.06385959, y: 0.7943075, z: -0.030984648, w: 0.60335517}
+      scale: {x: 1.0000019, y: 1.0000038, z: 0.9999955}
+    - name: Hand.R
+      parentName: Forearm.R
+      position: {x: -0.0000002013985, y: 0.29481056, z: -0.000000002561137}
+      rotation: {x: -0.053440154, y: 0.14702451, z: -0.0021875857, w: 0.9876858}
+      scale: {x: 1, y: 1, z: 0.9999999}
+    - name: Fingers.R
+      parentName: Hand.R
+      position: {x: -0.000000085216016, y: 0.11967848, z: -0.000000048428774}
+      rotation: {x: -0.022148287, y: -0.061461613, z: -0.070001975, w: 0.99540526}
+      scale: {x: 0.99999994, y: 0.99999994, z: 1}
+    - name: Fingertips.R
+      parentName: Fingers.R
+      position: {x: 0.000000092200935, y: 0.04195476, z: -0.0000000018626451}
+      rotation: {x: -0.037490442, y: 0.051863853, z: -0.18462498, w: 0.9807233}
+      scale: {x: 1, y: 0.99999994, z: 0.99999994}
+    - name: Thumb.R
+      parentName: Hand.R
+      position: {x: 0.018395131, y: 0.0084505305, z: 0.028105674}
+      rotation: {x: 0.20312017, y: -0.791864, z: -0.33454457, w: 0.46880016}
+      scale: {x: 1, y: 1.0000001, z: 1}
+    - name: Thumb_Tip.R
+      parentName: Thumb.R
+      position: {x: -0.0000000037252903, y: 0.061598778, z: 0.00000006984919}
+      rotation: {x: -0.10484689, y: 0.6283395, z: 0.20932764, w: 0.741875}
+      scale: {x: 1.0000001, y: 1.0000002, z: 1.0000001}
+    - name: Quad.L
+      parentName: Hips
+      position: {x: -0.008860375, y: 0.06925641, z: -0.092682995}
+      rotation: {x: -0.08184094, y: 0.73675436, z: 0.03619987, w: 0.6702124}
+      scale: {x: 0.9999994, y: 0.9999977, z: 0.9999995}
+    - name: Shin.L
+      parentName: Quad.L
+      position: {x: 0.000000009895302, y: 0.5134553, z: 0.00000006984919}
+      rotation: {x: -0.031857025, y: -0.044614047, z: -0.000105426705, w: 0.99849623}
+      scale: {x: 1, y: 0.9999998, z: 0.9999998}
+    - name: Foot.L
+      parentName: Shin.L
+      position: {x: 0.000000007566996, y: 0.5329104, z: -0.0000000037252903}
+      rotation: {x: 0.61022514, y: 0.042300917, z: -0.010803161, w: 0.79102415}
+      scale: {x: 0.99999976, y: 1.0000004, z: 0.9999993}
+    - name: Toes.L
+      parentName: Foot.L
+      position: {x: -0.000000007566996, y: 0.23227978, z: 0.000000013737008}
+      rotation: {x: 0.17587794, y: 0.033674665, z: -0.107459, w: 0.9779497}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Quad.R
+      parentName: Hips
+      position: {x: -0.008860272, y: 0.06925569, z: 0.09268286}
+      rotation: {x: -0.036190357, y: 0.670221, z: 0.081830844, w: 0.73674816}
+      scale: {x: 0.9999994, y: 0.99999964, z: 0.9999998}
+    - name: Shin.R
+      parentName: Quad.R
+      position: {x: 0.000000017462298, y: 0.5134557, z: -0.0000001238659}
+      rotation: {x: -0.03188568, y: 0.044605915, z: 0.00010523622, w: 0.9984957}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Foot.R
+      parentName: Shin.R
+      position: {x: 0.000000025087502, y: 0.53291047, z: 0.0000000067520887}
+      rotation: {x: 0.6102365, y: -0.042304065, z: 0.010802475, w: 0.79101527}
+      scale: {x: 0.9999998, y: 0.9999999, z: 0.99999994}
+    - name: Toes.R
+      parentName: Foot.R
+      position: {x: 0.000000005151378, y: 0.23227976, z: -3.4924597e-10}
+      rotation: {x: 0.17587832, y: -0.03367225, z: 0.10745841, w: 0.97794974}
+      scale: {x: 1, y: 0.99999994, z: 1}
+    - name: Male_Accessories
+      parentName: TFP_Male_Beekeeper_01(Clone)
+      position: {x: -0, y: 0, z: 0}
+      rotation: {x: 0, y: -0, z: -0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: TFP_Male_Beekeeper_01A_Helmet
+      parentName: Male_Accessories
+      position: {x: -0, y: 0, z: 0}
+      rotation: {x: 0, y: -0, z: -0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: TFP_Male_Beekeeper_01B_Helmet
+      parentName: Male_Accessories
+      position: {x: -0, y: 0, z: 0}
+      rotation: {x: 0, y: -0, z: -0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: TFP_Male_Beekeeper_01A_Body
+      parentName: TFP_Male_Beekeeper_01(Clone)
+      position: {x: -0, y: 0, z: 0}
+      rotation: {x: 0, y: -0, z: -0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: TFP_Male_Beekeeper_01A_Hair
+      parentName: TFP_Male_Beekeeper_01(Clone)
+      position: {x: -0, y: 0, z: 0}
+      rotation: {x: 0, y: -0, z: -0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: TFP_Male_Beekeeper_01A_Pants
+      parentName: TFP_Male_Beekeeper_01(Clone)
+      position: {x: -0, y: 0, z: 0}
+      rotation: {x: 0, y: -0, z: -0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: TFP_Male_Beekeeper_01A_Jacket
+      parentName: TFP_Male_Beekeeper_01(Clone)
+      position: {x: -0, y: 0, z: 0}
+      rotation: {x: 0, y: -0, z: -0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: TFP_Male_Beekeeper_01A_Boots
+      parentName: TFP_Male_Beekeeper_01(Clone)
+      position: {x: -0, y: 0, z: 0}
+      rotation: {x: 0, y: -0, z: -0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: TFP_Male_Beekeeper_01A_Gloves
+      parentName: TFP_Male_Beekeeper_01(Clone)
+      position: {x: -0, y: 0, z: 0}
+      rotation: {x: 0, y: -0, z: -0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: TFP_Male_Beekeeper_01A_Beard
+      parentName: TFP_Male_Beekeeper_01(Clone)
+      position: {x: -0, y: 0, z: 0}
+      rotation: {x: 0, y: -0, z: -0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: TFP_Male_Beekeeper_01B_Body
+      parentName: TFP_Male_Beekeeper_01(Clone)
+      position: {x: -0, y: 0, z: 0}
+      rotation: {x: 0, y: -0, z: -0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: TFP_Male_Beekeeper_01B_Hair
+      parentName: TFP_Male_Beekeeper_01(Clone)
+      position: {x: -0, y: 0, z: 0}
+      rotation: {x: 0, y: -0, z: -0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: TFP_Male_Beekeeper_01B_Pants
+      parentName: TFP_Male_Beekeeper_01(Clone)
+      position: {x: -0, y: 0, z: 0}
+      rotation: {x: 0, y: -0, z: -0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: TFP_Male_Beekeeper_01B_Jacket
+      parentName: TFP_Male_Beekeeper_01(Clone)
+      position: {x: -0, y: 0, z: 0}
+      rotation: {x: 0, y: -0, z: -0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: TFP_Male_Beekeeper_01B_Boots
+      parentName: TFP_Male_Beekeeper_01(Clone)
+      position: {x: -0, y: 0, z: 0}
+      rotation: {x: 0, y: -0, z: -0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: TFP_Male_Beekeeper_01B_Gloves
+      parentName: TFP_Male_Beekeeper_01(Clone)
+      position: {x: -0, y: 0, z: 0}
+      rotation: {x: 0, y: -0, z: -0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: TFP_Male_Beekeeper_01B_Beard
+      parentName: TFP_Male_Beekeeper_01(Clone)
+      position: {x: -0, y: 0, z: 0}
+      rotation: {x: 0, y: -0, z: -0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: TFP_Male_Beekeeper_01C_Boots
+      parentName: TFP_Male_Beekeeper_01(Clone)
+      position: {x: -0, y: 0, z: 0}
+      rotation: {x: 0, y: -0, z: -0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: TFP_Male_Beekeeper_01C_Gloves
+      parentName: TFP_Male_Beekeeper_01(Clone)
+      position: {x: -0, y: 0, z: 0}
+      rotation: {x: 0, y: -0, z: -0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: TFP_Male_Beekeeper_01C_Body
+      parentName: TFP_Male_Beekeeper_01(Clone)
+      position: {x: -0, y: 0, z: 0}
+      rotation: {x: 0, y: -0, z: -0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: TFP_Male_Beekeeper_01C_Hair
+      parentName: TFP_Male_Beekeeper_01(Clone)
+      position: {x: -0, y: 0, z: 0}
+      rotation: {x: 0, y: -0, z: -0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: TFP_Male_Beekeeper_01C_Beard
+      parentName: TFP_Male_Beekeeper_01(Clone)
+      position: {x: -0, y: 0, z: 0}
+      rotation: {x: 0, y: -0, z: -0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    armTwist: 0.5
+    foreArmTwist: 0.5
+    upperLegTwist: 0.5
+    legTwist: 0.5
+    armStretch: 0.05
+    legStretch: 0.05
+    feetSpacing: 0
+    globalScale: 1
+    rootMotionBoneName: 
+    hasTranslationDoF: 0
+    hasExtraRoot: 1
+    skeletonHasParents: 1
+  lastHumanDescriptionAvatarSource: {instanceID: 0}
+  autoGenerateAvatarMappingIfUnspecified: 1
+  animationType: 3
+  humanoidOversampling: 1
+  avatarSetup: 1
+  addHumanoidExtraRootOnlyWhenUsingAvatar: 0
+  importBlendShapeDeformPercent: 0
+  remapMaterialsIfMaterialImportModeIsNone: 1
+  additionalBone: 0
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 235041
+  packageName: Toon Farm Pack
+  packageVersion: 1.0.3
+  assetPath: Assets/Toon Series/Toon Farm Pack/Models/TFP_Male_Beekeeper_01.fbx
+  uploadId: 963428

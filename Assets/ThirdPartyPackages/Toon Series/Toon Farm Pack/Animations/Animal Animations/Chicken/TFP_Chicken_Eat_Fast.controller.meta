@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: d9c66edd16c359a4b932eca4e3c4271f
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 9100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 235041
+  packageName: Toon Farm Pack
+  packageVersion: 1.0.3
+  assetPath: Assets/Toon Series/Toon Farm Pack/Animations/Animal Animations/Chicken/TFP_Chicken_Eat_Fast.controller
+  uploadId: 963428

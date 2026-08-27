@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 4b5206281599cf84aa4bb7c00d2b4d1f
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 9100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 235041
+  packageName: Toon Farm Pack
+  packageVersion: 1.0.3
+  assetPath: Assets/Toon Series/Toon Farm Pack/Animations/Animal Animations/Dog/TFP_Dog_01_Idle_02_Regular.controller
+  uploadId: 963428

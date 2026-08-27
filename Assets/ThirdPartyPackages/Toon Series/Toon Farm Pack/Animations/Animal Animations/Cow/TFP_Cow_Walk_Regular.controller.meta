@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 67ea98d4a0a1f4a4eb17974420e4b3a7
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 9100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 235041
+  packageName: Toon Farm Pack
+  packageVersion: 1.0.3
+  assetPath: Assets/Toon Series/Toon Farm Pack/Animations/Animal Animations/Cow/TFP_Cow_Walk_Regular.controller
+  uploadId: 963428

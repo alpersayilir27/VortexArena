@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 5b9e7f4d6c0aec1448330709a050d3b2
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 9100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 235041
+  packageName: Toon Farm Pack
+  packageVersion: 1.0.3
+  assetPath: Assets/Toon Series/Toon Farm Pack/Animations/Animal Animations/Bull/TFP_Bull_Idle_06_Fast.controller
+  uploadId: 963428

@@ -1,0 +1,939 @@
+fileFormatVersion: 2
+guid: f5565b803d870334998a5b98c8e445a1
+ModelImporter:
+  serializedVersion: 22200
+  internalIDToNameTable:
+  - first:
+      1: 100000
+    second: Arm.L
+  - first:
+      1: 100002
+    second: Arm.R
+  - first:
+      1: 100004
+    second: Clavicle.L
+  - first:
+      1: 100006
+    second: Clavicle.R
+  - first:
+      1: 100008
+    second: Fingers.L
+  - first:
+      1: 100010
+    second: Fingers.R
+  - first:
+      1: 100012
+    second: Fingertips.L
+  - first:
+      1: 100014
+    second: Fingertips.R
+  - first:
+      1: 100016
+    second: Foot.L
+  - first:
+      1: 100018
+    second: Foot.R
+  - first:
+      1: 100020
+    second: Forearm.L
+  - first:
+      1: 100022
+    second: Forearm.R
+  - first:
+      1: 100024
+    second: Hand.L
+  - first:
+      1: 100026
+    second: Hand.R
+  - first:
+      1: 100028
+    second: Head
+  - first:
+      1: 100030
+    second: Hips
+  - first:
+      1: 100032
+    second: Jaw
+  - first:
+      1: 100034
+    second: Male_Accessories
+  - first:
+      1: 100036
+    second: Male_Armature
+  - first:
+      1: 100038
+    second: Neck
+  - first:
+      1: 100040
+    second: Quad.L
+  - first:
+      1: 100042
+    second: Quad.R
+  - first:
+      1: 100044
+    second: Root
+  - first:
+      1: 100046
+    second: Shin.L
+  - first:
+      1: 100048
+    second: Shin.R
+  - first:
+      1: 100050
+    second: Spine_01
+  - first:
+      1: 100052
+    second: Spine_02
+  - first:
+      1: 100054
+    second: Spine_03
+  - first:
+      1: 100056
+    second: //RootNode
+  - first:
+      1: 100058
+    second: TFP_Scarecrow_01A_Body
+  - first:
+      1: 100060
+    second: TFP_Scarecrow_01A_Hat
+  - first:
+      1: 100062
+    second: TFP_Scarecrow_01A_Pumpkin
+  - first:
+      1: 100064
+    second: TFP_Scarecrow_01B_Body
+  - first:
+      1: 100066
+    second: Thumb.L
+  - first:
+      1: 100068
+    second: Thumb.R
+  - first:
+      1: 100070
+    second: Thumb_Tip.L
+  - first:
+      1: 100072
+    second: Thumb_Tip.R
+  - first:
+      1: 100074
+    second: Toes.L
+  - first:
+      1: 100076
+    second: Toes.R
+  - first:
+      4: 400000
+    second: Arm.L
+  - first:
+      4: 400002
+    second: Arm.R
+  - first:
+      4: 400004
+    second: Clavicle.L
+  - first:
+      4: 400006
+    second: Clavicle.R
+  - first:
+      4: 400008
+    second: Fingers.L
+  - first:
+      4: 400010
+    second: Fingers.R
+  - first:
+      4: 400012
+    second: Fingertips.L
+  - first:
+      4: 400014
+    second: Fingertips.R
+  - first:
+      4: 400016
+    second: Foot.L
+  - first:
+      4: 400018
+    second: Foot.R
+  - first:
+      4: 400020
+    second: Forearm.L
+  - first:
+      4: 400022
+    second: Forearm.R
+  - first:
+      4: 400024
+    second: Hand.L
+  - first:
+      4: 400026
+    second: Hand.R
+  - first:
+      4: 400028
+    second: Head
+  - first:
+      4: 400030
+    second: Hips
+  - first:
+      4: 400032
+    second: Jaw
+  - first:
+      4: 400034
+    second: Male_Accessories
+  - first:
+      4: 400036
+    second: Male_Armature
+  - first:
+      4: 400038
+    second: Neck
+  - first:
+      4: 400040
+    second: Quad.L
+  - first:
+      4: 400042
+    second: Quad.R
+  - first:
+      4: 400044
+    second: Root
+  - first:
+      4: 400046
+    second: Shin.L
+  - first:
+      4: 400048
+    second: Shin.R
+  - first:
+      4: 400050
+    second: Spine_01
+  - first:
+      4: 400052
+    second: Spine_02
+  - first:
+      4: 400054
+    second: Spine_03
+  - first:
+      4: 400056
+    second: //RootNode
+  - first:
+      4: 400058
+    second: TFP_Scarecrow_01A_Body
+  - first:
+      4: 400060
+    second: TFP_Scarecrow_01A_Hat
+  - first:
+      4: 400062
+    second: TFP_Scarecrow_01A_Pumpkin
+  - first:
+      4: 400064
+    second: TFP_Scarecrow_01B_Body
+  - first:
+      4: 400066
+    second: Thumb.L
+  - first:
+      4: 400068
+    second: Thumb.R
+  - first:
+      4: 400070
+    second: Thumb_Tip.L
+  - first:
+      4: 400072
+    second: Thumb_Tip.R
+  - first:
+      4: 400074
+    second: Toes.L
+  - first:
+      4: 400076
+    second: Toes.R
+  - first:
+      21: 2100000
+    second: TFP_Atlas_1A
+  - first:
+      43: 4300000
+    second: TFP_Scarecrow_01A_Hat
+  - first:
+      43: 4300002
+    second: TFP_Scarecrow_01A_Pumpkin
+  - first:
+      43: 4300004
+    second: TFP_Scarecrow_01A_Body
+  - first:
+      43: 4300006
+    second: TFP_Scarecrow_01B_Body
+  - first:
+      74: 7400000
+    second: Male_Armature|1
+  - first:
+      74: 7400002
+    second: Male_Armature|Female_Armature.001|Female_Armature|1
+  - first:
+      74: 7400004
+    second: Male_Armature|Female_Armature.001|Female_Armature|TSP_Female_Pose_01
+  - first:
+      74: 7400006
+    second: Male_Armature|Female_Armature.001|Female_Armature|TSP_Female_Pose_02
+  - first:
+      74: 7400008
+    second: Male_Armature|Female_Armature.001|Female_Armature|TSP_Female_Pose_03
+  - first:
+      74: 7400010
+    second: Male_Armature|Female_Armature.001|Female_Armature|TSP_Female_Pose_Signal
+  - first:
+      74: 7400012
+    second: Male_Armature|Female_Armature.001|Female_Armature|TSP_Female_Pose_Sitting_01
+  - first:
+      74: 7400014
+    second: Male_Armature|Female_Armature.001|Female_Armature|TSP_Female_Pose_Sitting_02
+  - first:
+      74: 7400016
+    second: Male_Armature|Female_Armature.001|Female_Armature|TSP_Female_T_Pose
+  - first:
+      74: 7400018
+    second: Male_Armature|Female_Armature.001|Female_Armature|TSP_Male_Idle_01
+  - first:
+      74: 7400020
+    second: Male_Armature|Female_Armature.001|Female_Armature|TSP_Male_Pose_01
+  - first:
+      74: 7400022
+    second: Male_Armature|Female_Armature.001|Female_Armature|TSP_Male_Pose_02
+  - first:
+      74: 7400024
+    second: Male_Armature|Female_Armature.001|Female_Armature|TSP_Male_Pose_03
+  - first:
+      74: 7400026
+    second: Male_Armature|Female_Armature.001|Female_Armature|TSP_Male_Pose_Signal_01
+  - first:
+      74: 7400028
+    second: Male_Armature|Female_Armature.001|Female_Armature|TSP_Male_Pose_Signal_02
+  - first:
+      74: 7400030
+    second: Male_Armature|Female_Armature.001|Female_Armature|TSP_Male_Pose_Sitting_01
+  - first:
+      74: 7400032
+    second: Male_Armature|Female_Armature.001|Female_Armature|TSP_Male_Pose_Sitting_02
+  - first:
+      74: 7400034
+    second: Male_Armature|Female_Armature.001|Female_Armature|TSP_Male_T_Pose
+  - first:
+      74: 7400036
+    second: Male_Armature|TFP_Standard_Female_Head_02A|Take 001|BaseLayer
+  - first:
+      74: 7400038
+    second: Male_Armature|TFP_Standard_Female_Head_02A|Take 001|BaseLayer.001
+  - first:
+      74: 7400040
+    second: Male_Armature|TSP_Female_Pose_01
+  - first:
+      74: 7400042
+    second: Male_Armature|TSP_Female_Pose_02
+  - first:
+      74: 7400044
+    second: Male_Armature|TSP_Female_Pose_03
+  - first:
+      74: 7400046
+    second: Male_Armature|TSP_Female_Pose_Signal
+  - first:
+      74: 7400048
+    second: Male_Armature|TSP_Female_Pose_Sitting_01
+  - first:
+      74: 7400050
+    second: Male_Armature|TSP_Female_Pose_Sitting_02
+  - first:
+      74: 7400052
+    second: Male_Armature|TSP_Female_T_Pose
+  - first:
+      74: 7400054
+    second: Male_Armature|TSP_Male_Idle_01
+  - first:
+      74: 7400056
+    second: Male_Armature|TSP_Male_Pose_01
+  - first:
+      74: 7400058
+    second: Male_Armature|TSP_Male_Pose_02
+  - first:
+      74: 7400060
+    second: Male_Armature|TSP_Male_Pose_03
+  - first:
+      74: 7400062
+    second: Male_Armature|TSP_Male_Pose_Signal_01
+  - first:
+      74: 7400064
+    second: Male_Armature|TSP_Male_Pose_Signal_02
+  - first:
+      74: 7400066
+    second: Male_Armature|TSP_Male_Pose_Sitting_01
+  - first:
+      74: 7400068
+    second: Male_Armature|TSP_Male_Pose_Sitting_02
+  - first:
+      74: 7400070
+    second: Male_Armature|TSP_Male_T_Pose
+  - first:
+      95: 9500000
+    second: //RootNode
+  - first:
+      137: 13700000
+    second: TFP_Scarecrow_01A_Body
+  - first:
+      137: 13700002
+    second: TFP_Scarecrow_01A_Hat
+  - first:
+      137: 13700004
+    second: TFP_Scarecrow_01A_Pumpkin
+  - first:
+      137: 13700006
+    second: TFP_Scarecrow_01B_Body
+  - first:
+      41386430: 2186277476908879412
+    second: ImportLogs
+  externalObjects:
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: TFP_Atlas_1A
+    second: {fileID: 2100000, guid: 8947ea2c73d7b334785955d3d7321641, type: 2}
+  materials:
+    materialImportMode: 2
+    materialName: 0
+    materialSearch: 1
+    materialLocation: 1
+  animations:
+    legacyGenerateAnimations: 4
+    bakeSimulation: 0
+    resampleCurves: 1
+    optimizeGameObjects: 0
+    removeConstantScaleCurves: 0
+    motionNodeName: 
+    animationImportErrors: 
+    animationImportWarnings: 
+    animationRetargetingWarnings: 
+    animationDoRetargetingWarnings: 0
+    importAnimatedCustomProperties: 0
+    importConstraints: 0
+    animationCompression: 3
+    animationRotationError: 0.5
+    animationPositionError: 0.5
+    animationScaleError: 0.5
+    animationWrapMode: 0
+    extraExposedTransformPaths: []
+    extraUserProperties: []
+    clipAnimations: []
+    isReadable: 1
+  meshes:
+    lODScreenPercentages:
+    - 0.25
+    - 0.01
+    globalScale: 1
+    meshCompression: 0
+    addColliders: 0
+    useSRGBMaterialColor: 1
+    sortHierarchyByName: 1
+    importPhysicalCameras: 1
+    importVisibility: 1
+    importBlendShapes: 1
+    importCameras: 1
+    importLights: 1
+    nodeNameCollisionStrategy: 0
+    fileIdsGeneration: 1
+    swapUVChannels: 0
+    generateSecondaryUV: 1
+    useFileUnits: 1
+    keepQuads: 0
+    weldVertices: 1
+    bakeAxisConversion: 0
+    preserveHierarchy: 0
+    skinWeightsMode: 0
+    maxBonesPerVertex: 4
+    minBoneWeight: 0.001
+    optimizeBones: 1
+    meshOptimizationFlags: -1
+    indexFormat: 0
+    secondaryUVAngleDistortion: 8
+    secondaryUVAreaDistortion: 15.000001
+    secondaryUVHardAngle: 88
+    secondaryUVMarginMethod: 0
+    secondaryUVMinLightmapResolution: 40
+    secondaryUVMinObjectScale: 1
+    secondaryUVPackMargin: 4
+    useFileScale: 1
+    strictVertexDataChecks: 0
+  tangentSpace:
+    normalSmoothAngle: 60
+    normalImportMode: 0
+    tangentImportMode: 3
+    normalCalculationMode: 4
+    legacyComputeAllNormalsFromSmoothingGroupsWhenMeshHasBlendShapes: 0
+    blendShapeNormalImportMode: 1
+    normalSmoothingSource: 0
+  referencedClips: []
+  importAnimation: 0
+  humanDescription:
+    serializedVersion: 3
+    human:
+    - boneName: Hips
+      humanName: Hips
+      limit:
+        min: {x: 0, y: 0, z: 0}
+        max: {x: 0, y: 0, z: 0}
+        value: {x: 0, y: 0, z: 0}
+        length: 0
+        modified: 0
+    - boneName: Quad.L
+      humanName: LeftUpperLeg
+      limit:
+        min: {x: 0, y: 0, z: 0}
+        max: {x: 0, y: 0, z: 0}
+        value: {x: 0, y: 0, z: 0}
+        length: 0
+        modified: 0
+    - boneName: Quad.R
+      humanName: RightUpperLeg
+      limit:
+        min: {x: 0, y: 0, z: 0}
+        max: {x: 0, y: 0, z: 0}
+        value: {x: 0, y: 0, z: 0}
+        length: 0
+        modified: 0
+    - boneName: Shin.L
+      humanName: LeftLowerLeg
+      limit:
+        min: {x: 0, y: 0, z: 0}
+        max: {x: 0, y: 0, z: 0}
+        value: {x: 0, y: 0, z: 0}
+        length: 0
+        modified: 0
+    - boneName: Shin.R
+      humanName: RightLowerLeg
+      limit:
+        min: {x: 0, y: 0, z: 0}
+        max: {x: 0, y: 0, z: 0}
+        value: {x: 0, y: 0, z: 0}
+        length: 0
+        modified: 0
+    - boneName: Foot.L
+      humanName: LeftFoot
+      limit:
+        min: {x: 0, y: 0, z: 0}
+        max: {x: 0, y: 0, z: 0}
+        value: {x: 0, y: 0, z: 0}
+        length: 0
+        modified: 0
+    - boneName: Foot.R
+      humanName: RightFoot
+      limit:
+        min: {x: 0, y: 0, z: 0}
+        max: {x: 0, y: 0, z: 0}
+        value: {x: 0, y: 0, z: 0}
+        length: 0
+        modified: 0
+    - boneName: Spine_01
+      humanName: Spine
+      limit:
+        min: {x: 0, y: 0, z: 0}
+        max: {x: 0, y: 0, z: 0}
+        value: {x: 0, y: 0, z: 0}
+        length: 0
+        modified: 0
+    - boneName: Spine_02
+      humanName: Chest
+      limit:
+        min: {x: 0, y: 0, z: 0}
+        max: {x: 0, y: 0, z: 0}
+        value: {x: 0, y: 0, z: 0}
+        length: 0
+        modified: 0
+    - boneName: Neck
+      humanName: Neck
+      limit:
+        min: {x: 0, y: 0, z: 0}
+        max: {x: 0, y: 0, z: 0}
+        value: {x: 0, y: 0, z: 0}
+        length: 0
+        modified: 0
+    - boneName: Head
+      humanName: Head
+      limit:
+        min: {x: 0, y: 0, z: 0}
+        max: {x: 0, y: 0, z: 0}
+        value: {x: 0, y: 0, z: 0}
+        length: 0
+        modified: 0
+    - boneName: Clavicle.L
+      humanName: LeftShoulder
+      limit:
+        min: {x: 0, y: 0, z: 0}
+        max: {x: 0, y: 0, z: 0}
+        value: {x: 0, y: 0, z: 0}
+        length: 0
+        modified: 0
+    - boneName: Clavicle.R
+      humanName: RightShoulder
+      limit:
+        min: {x: 0, y: 0, z: 0}
+        max: {x: 0, y: 0, z: 0}
+        value: {x: 0, y: 0, z: 0}
+        length: 0
+        modified: 0
+    - boneName: Arm.L
+      humanName: LeftUpperArm
+      limit:
+        min: {x: 0, y: 0, z: 0}
+        max: {x: 0, y: 0, z: 0}
+        value: {x: 0, y: 0, z: 0}
+        length: 0
+        modified: 0
+    - boneName: Arm.R
+      humanName: RightUpperArm
+      limit:
+        min: {x: 0, y: 0, z: 0}
+        max: {x: 0, y: 0, z: 0}
+        value: {x: 0, y: 0, z: 0}
+        length: 0
+        modified: 0
+    - boneName: Forearm.L
+      humanName: LeftLowerArm
+      limit:
+        min: {x: 0, y: 0, z: 0}
+        max: {x: 0, y: 0, z: 0}
+        value: {x: 0, y: 0, z: 0}
+        length: 0
+        modified: 0
+    - boneName: Forearm.R
+      humanName: RightLowerArm
+      limit:
+        min: {x: 0, y: 0, z: 0}
+        max: {x: 0, y: 0, z: 0}
+        value: {x: 0, y: 0, z: 0}
+        length: 0
+        modified: 0
+    - boneName: Hand.L
+      humanName: LeftHand
+      limit:
+        min: {x: 0, y: 0, z: 0}
+        max: {x: 0, y: 0, z: 0}
+        value: {x: 0, y: 0, z: 0}
+        length: 0
+        modified: 0
+    - boneName: Hand.R
+      humanName: RightHand
+      limit:
+        min: {x: 0, y: 0, z: 0}
+        max: {x: 0, y: 0, z: 0}
+        value: {x: 0, y: 0, z: 0}
+        length: 0
+        modified: 0
+    - boneName: Toes.L
+      humanName: LeftToes
+      limit:
+        min: {x: 0, y: 0, z: 0}
+        max: {x: 0, y: 0, z: 0}
+        value: {x: 0, y: 0, z: 0}
+        length: 0
+        modified: 0
+    - boneName: Toes.R
+      humanName: RightToes
+      limit:
+        min: {x: 0, y: 0, z: 0}
+        max: {x: 0, y: 0, z: 0}
+        value: {x: 0, y: 0, z: 0}
+        length: 0
+        modified: 0
+    - boneName: Jaw
+      humanName: Jaw
+      limit:
+        min: {x: 0, y: 0, z: 0}
+        max: {x: 0, y: 0, z: 0}
+        value: {x: 0, y: 0, z: 0}
+        length: 0
+        modified: 0
+    - boneName: Thumb.L
+      humanName: Left Thumb Proximal
+      limit:
+        min: {x: 0, y: 0, z: 0}
+        max: {x: 0, y: 0, z: 0}
+        value: {x: 0, y: 0, z: 0}
+        length: 0
+        modified: 0
+    - boneName: Thumb_Tip.L
+      humanName: Left Thumb Intermediate
+      limit:
+        min: {x: 0, y: 0, z: 0}
+        max: {x: 0, y: 0, z: 0}
+        value: {x: 0, y: 0, z: 0}
+        length: 0
+        modified: 0
+    - boneName: Fingers.L
+      humanName: Left Little Proximal
+      limit:
+        min: {x: 0, y: 0, z: 0}
+        max: {x: 0, y: 0, z: 0}
+        value: {x: 0, y: 0, z: 0}
+        length: 0
+        modified: 0
+    - boneName: Fingertips.L
+      humanName: Left Little Intermediate
+      limit:
+        min: {x: 0, y: 0, z: 0}
+        max: {x: 0, y: 0, z: 0}
+        value: {x: 0, y: 0, z: 0}
+        length: 0
+        modified: 0
+    - boneName: Thumb.R
+      humanName: Right Thumb Proximal
+      limit:
+        min: {x: 0, y: 0, z: 0}
+        max: {x: 0, y: 0, z: 0}
+        value: {x: 0, y: 0, z: 0}
+        length: 0
+        modified: 0
+    - boneName: Thumb_Tip.R
+      humanName: Right Thumb Intermediate
+      limit:
+        min: {x: 0, y: 0, z: 0}
+        max: {x: 0, y: 0, z: 0}
+        value: {x: 0, y: 0, z: 0}
+        length: 0
+        modified: 0
+    - boneName: Fingers.R
+      humanName: Right Little Proximal
+      limit:
+        min: {x: 0, y: 0, z: 0}
+        max: {x: 0, y: 0, z: 0}
+        value: {x: 0, y: 0, z: 0}
+        length: 0
+        modified: 0
+    - boneName: Fingertips.R
+      humanName: Right Little Intermediate
+      limit:
+        min: {x: 0, y: 0, z: 0}
+        max: {x: 0, y: 0, z: 0}
+        value: {x: 0, y: 0, z: 0}
+        length: 0
+        modified: 0
+    - boneName: Spine_03
+      humanName: UpperChest
+      limit:
+        min: {x: 0, y: 0, z: 0}
+        max: {x: 0, y: 0, z: 0}
+        value: {x: 0, y: 0, z: 0}
+        length: 0
+        modified: 0
+    skeleton:
+    - name: TFP_Scarecrow_01(Clone)
+      parentName: 
+      position: {x: 0, y: 0, z: 0}
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Male_Armature
+      parentName: TFP_Scarecrow_01(Clone)
+      position: {x: -0, y: 0, z: 0}
+      rotation: {x: 0.000000021855694, y: -0, z: -0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Root
+      parentName: Male_Armature
+      position: {x: -0, y: 0, z: 0}
+      rotation: {x: 0.5000001, y: 0.50000006, z: 0.49999994, w: 0.4999999}
+      scale: {x: 1, y: 0.99999994, z: 1}
+    - name: Hips
+      parentName: Root
+      position: {x: 1.2063684, y: 0.0027475655, z: 0.000000051811643}
+      rotation: {x: 0.00000011463175, y: -0.000000095514835, z: 0.66061056, w: 0.7507288}
+      scale: {x: 1, y: 0.99999994, z: 1}
+    - name: Spine_01
+      parentName: Hips
+      position: {x: 0.0064479886, y: -0.056559704, z: -0.000000002634613}
+      rotation: {x: 0.7056701, y: 0.045059588, z: 0.70566916, w: -0.045059647}
+      scale: {x: 1.0000188, y: 1.0000002, z: 1.0000001}
+    - name: Spine_02
+      parentName: Spine_01
+      position: {x: 1.04360964e-14, y: 0.12637234, z: -7.18975e-11}
+      rotation: {x: -0.1517841, y: 0.0000003050596, z: 0.000000078837076, w: 0.9884137}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Spine_03
+      parentName: Spine_02
+      position: {x: 7.1054274e-15, y: 0.16214773, z: 1.0141887e-13}
+      rotation: {x: 0.11488277, y: -0.0000001525983, z: 0.000000017436165, w: 0.99337906}
+      scale: {x: 1, y: 0.9999999, z: 0.99999994}
+    - name: Neck
+      parentName: Spine_03
+      position: {x: 0.000000024917243, y: 0.16711695, z: 0.024169572}
+      rotation: {x: -0.0013325843, y: 0.00000007544127, z: -0.00000010838618, w: 0.9999991}
+      scale: {x: 1.0000188, y: 1.0000001, z: 0.9999999}
+    - name: Head
+      parentName: Neck
+      position: {x: 5.3290705e-15, y: 0.10022562, z: 0.000000007450617}
+      rotation: {x: 0.01798353, y: -0.00000002009655, z: 0.0000000066268044, w: 0.9998383}
+      scale: {x: 1.0000188, y: 1, z: 0.9999998}
+    - name: Jaw
+      parentName: Head
+      position: {x: 8.2309026e-10, y: 0.007767238, z: 0.05870973}
+      rotation: {x: 0.88241875, y: -0.00000032530164, z: -0.00000056166436, w: 0.4704648}
+      scale: {x: 1, y: 0.9999999, z: 0.9999998}
+    - name: Clavicle.L
+      parentName: Spine_03
+      position: {x: 5.3151927e-15, y: 0.15510647, z: 0.000000007450595}
+      rotation: {x: 0.66883725, y: -0.5024004, z: -0.42575988, w: -0.34493357}
+      scale: {x: 1.0000001, y: 1.0000004, z: 0.99999994}
+    - name: Arm.L
+      parentName: Clavicle.L
+      position: {x: -0.00000009313226, y: 0.21323274, z: -0.00000041164458}
+      rotation: {x: 0.10439018, y: -0.06417828, z: 0.022262268, w: 0.9922138}
+      scale: {x: 1.0000057, y: 0.9999811, z: 1.0000058}
+    - name: Forearm.L
+      parentName: Arm.L
+      position: {x: 0.00000009685755, y: 0.21765666, z: -0.000000027939677}
+      rotation: {x: 0.06386098, y: -0.7943081, z: 0.030983232, w: 0.6033543}
+      scale: {x: 1.0000007, y: 1.0000057, z: 0.9999929}
+    - name: Hand.L
+      parentName: Forearm.L
+      position: {x: -0.00000016238482, y: 0.29480878, z: -0.0000000030267984}
+      rotation: {x: -0.053448044, y: -0.14407514, z: 0.0020289747, w: 0.9881202}
+      scale: {x: 0.9999999, y: 0.9999999, z: 1}
+    - name: Fingers.L
+      parentName: Hand.L
+      position: {x: 0.00000018859282, y: 0.11967732, z: -0.0000000037252903}
+      rotation: {x: -0.022357216, y: 0.0584895, z: 0.069936246, w: 0.99558437}
+      scale: {x: 0.99999994, y: 0.9999999, z: 1}
+    - name: Fingertips.L
+      parentName: Fingers.L
+      position: {x: 0.000000044936314, y: 0.04195468, z: 0.000000013038516}
+      rotation: {x: -0.03669031, y: -0.05611361, z: 0.18478842, w: 0.98048884}
+      scale: {x: 0.9999999, y: 0.9999999, z: 1}
+    - name: Thumb.L
+      parentName: Hand.L
+      position: {x: -0.01856244, y: 0.008450331, z: 0.027995504}
+      rotation: {x: 0.20212041, y: 0.79046315, z: 0.3351501, w: 0.471158}
+      scale: {x: 0.9999999, y: 0.99999994, z: 1}
+    - name: Thumb_Tip.L
+      parentName: Thumb.L
+      position: {x: 0.000000018626451, y: 0.06159877, z: 0.00000018347055}
+      rotation: {x: -0.104844466, y: -0.62834096, z: -0.20932557, w: 0.7418747}
+      scale: {x: 1, y: 0.99999994, z: 1}
+    - name: Clavicle.R
+      parentName: Spine_03
+      position: {x: 5.3151927e-15, y: 0.15510647, z: 0.000000007450595}
+      rotation: {x: 0.6688365, y: 0.5024018, z: 0.42575908, w: -0.3449339}
+      scale: {x: 1, y: 1.0000001, z: 0.99999994}
+    - name: Arm.R
+      parentName: Clavicle.R
+      position: {x: 0.000000035390258, y: 0.21323253, z: -0.00000008568168}
+      rotation: {x: 0.10438952, y: 0.064179376, z: -0.022260219, w: 0.9922139}
+      scale: {x: 1.0000057, y: 0.99998486, z: 1.0000039}
+    - name: Forearm.R
+      parentName: Arm.R
+      position: {x: 0.000000037252903, y: 0.21765648, z: -0.000000044703484}
+      rotation: {x: 0.063861236, y: 0.79430634, z: -0.030984383, w: 0.6033566}
+      scale: {x: 1.0000031, y: 1.0000056, z: 0.99999225}
+    - name: Hand.R
+      parentName: Forearm.R
+      position: {x: -0.00000011693919, y: 0.29480836, z: -0.00000002165325}
+      rotation: {x: -0.05344058, y: 0.14702448, z: -0.0021875731, w: 0.98768574}
+      scale: {x: 1, y: 0.9999999, z: 1}
+    - name: Fingers.R
+      parentName: Hand.R
+      position: {x: 0.00000009080395, y: 0.11967765, z: -0.000000059604645}
+      rotation: {x: -0.022150336, y: -0.061461754, z: -0.070005015, w: 0.995405}
+      scale: {x: 0.99999994, y: 0.99999994, z: 1}
+    - name: Fingertips.R
+      parentName: Fingers.R
+      position: {x: -0.00000015238766, y: 0.041954473, z: -0.000000013038516}
+      rotation: {x: -0.03749069, y: 0.051863853, z: -0.1846259, w: 0.98072314}
+      scale: {x: 1.0000001, y: 0.99999994, z: 1}
+    - name: Thumb.R
+      parentName: Hand.R
+      position: {x: 0.018395327, y: 0.008450504, z: 0.028105665}
+      rotation: {x: 0.20312011, y: -0.7918646, z: -0.33454478, w: 0.46879897}
+      scale: {x: 0.99999994, y: 1.0000001, z: 1}
+    - name: Thumb_Tip.R
+      parentName: Thumb.R
+      position: {x: 0.000000014901161, y: 0.061598808, z: -0.000000015832484}
+      rotation: {x: -0.10484788, y: 0.62833935, z: 0.20932777, w: 0.741875}
+      scale: {x: 0.99999994, y: 0.99999976, z: 0.9999998}
+    - name: Quad.L
+      parentName: Hips
+      position: {x: -0.00886035, y: 0.0692564, z: -0.09268297}
+      rotation: {x: -0.08183306, y: 0.7367548, z: 0.036191624, w: 0.67021334}
+      scale: {x: 0.9999999, y: 0.9999983, z: 0.9999998}
+    - name: Shin.L
+      parentName: Quad.L
+      position: {x: 0.0000000067520887, y: 0.5134554, z: -0.000000056810677}
+      rotation: {x: -0.03187983, y: -0.044614024, z: -0.00010551168, w: 0.9984955}
+      scale: {x: 0.9999998, y: 1.0000005, z: 1.0000001}
+    - name: Foot.L
+      parentName: Shin.L
+      position: {x: 0.0000000060535967, y: 0.5329104, z: -0.0000000013969839}
+      rotation: {x: 0.6102341, y: 0.042300712, z: -0.010802992, w: 0.7910173}
+      scale: {x: 0.9999998, y: 1.0000001, z: 0.9999996}
+    - name: Toes.L
+      parentName: Foot.L
+      position: {x: 0.000000023748726, y: 0.23227979, z: -0.000000008381903}
+      rotation: {x: 0.17587788, y: 0.033674657, z: -0.10745901, w: 0.9779497}
+      scale: {x: 1, y: 0.99999994, z: 1}
+    - name: Quad.R
+      parentName: Hips
+      position: {x: -0.0088602165, y: 0.06925569, z: 0.09268288}
+      rotation: {x: -0.036190286, y: 0.6702211, z: 0.08183078, w: 0.73674804}
+      scale: {x: 0.9999999, y: 0.9999992, z: 1.0000001}
+    - name: Shin.R
+      parentName: Quad.R
+      position: {x: -0.0000000010477379, y: 0.5134555, z: -0.00000006146729}
+      rotation: {x: -0.031885967, y: 0.044605926, z: 0.000105234445, w: 0.9984957}
+      scale: {x: 1, y: 0.99999994, z: 0.9999998}
+    - name: Foot.R
+      parentName: Shin.R
+      position: {x: -9.313226e-10, y: 0.5329102, z: -0.000000007916242}
+      rotation: {x: 0.61023664, y: -0.04230412, z: 0.010802489, w: 0.79101515}
+      scale: {x: 0.99999994, y: 0.9999998, z: 0.99999994}
+    - name: Toes.R
+      parentName: Foot.R
+      position: {x: -0.000000013387762, y: 0.23227978, z: -0.0000000038417056}
+      rotation: {x: 0.17587827, y: -0.03367227, z: 0.107458435, w: 0.9779498}
+      scale: {x: 0.99999994, y: 0.99999994, z: 0.99999994}
+    - name: Male_Accessories
+      parentName: TFP_Scarecrow_01(Clone)
+      position: {x: -0, y: 0, z: 0}
+      rotation: {x: 0, y: -0, z: -0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: TFP_Scarecrow_01A_Hat
+      parentName: Male_Accessories
+      position: {x: -0, y: 0, z: 0}
+      rotation: {x: 0, y: -0, z: -0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: TFP_Scarecrow_01A_Pumpkin
+      parentName: Male_Accessories
+      position: {x: -0, y: 0, z: 0}
+      rotation: {x: 0, y: -0, z: -0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: TFP_Scarecrow_01A_Body
+      parentName: TFP_Scarecrow_01(Clone)
+      position: {x: -0, y: 0, z: 0}
+      rotation: {x: 0, y: -0, z: -0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: TFP_Scarecrow_01B_Body
+      parentName: TFP_Scarecrow_01(Clone)
+      position: {x: -0, y: 0, z: 0}
+      rotation: {x: 0, y: -0, z: -0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    armTwist: 0.5
+    foreArmTwist: 0.5
+    upperLegTwist: 0.5
+    legTwist: 0.5
+    armStretch: 0.05
+    legStretch: 0.05
+    feetSpacing: 0
+    globalScale: 1
+    rootMotionBoneName: 
+    hasTranslationDoF: 0
+    hasExtraRoot: 1
+    skeletonHasParents: 1
+  lastHumanDescriptionAvatarSource: {instanceID: 0}
+  autoGenerateAvatarMappingIfUnspecified: 1
+  animationType: 3
+  humanoidOversampling: 1
+  avatarSetup: 1
+  addHumanoidExtraRootOnlyWhenUsingAvatar: 0
+  importBlendShapeDeformPercent: 0
+  remapMaterialsIfMaterialImportModeIsNone: 1
+  additionalBone: 0
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 235041
+  packageName: Toon Farm Pack
+  packageVersion: 1.0.3
+  assetPath: Assets/Toon Series/Toon Farm Pack/Models/TFP_Scarecrow_01.fbx
+  uploadId: 963428

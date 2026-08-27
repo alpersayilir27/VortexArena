@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 44f948ff8d6acc34fba18ebe8f1ba9bc
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 9100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 235041
+  packageName: Toon Farm Pack
+  packageVersion: 1.0.3
+  assetPath: Assets/Toon Series/Toon Farm Pack/Animations/Animal Animations/Cow/TFP_Cow_Idle_01_Regular.controller
+  uploadId: 963428

@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: e728d05cfe9ccb94d8a7bd2a3813c739
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 9100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 235041
+  packageName: Toon Farm Pack
+  packageVersion: 1.0.3
+  assetPath: Assets/Toon Series/Toon Farm Pack/Animations/Animal Animations/Chick/TFP_Chick_Sleep_Fast.controller
+  uploadId: 963428
