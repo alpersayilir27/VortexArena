@@ -4,20 +4,7 @@ Kalan iş **asset tarafında** ve başlıkta doğrulamada.
 
 ---
 
-## 1. Avuç ofsetini ÖLÇ (bir kez, başlıkta)
-
-`HandGripPivot.LeftPalmOffset` / `RightPalmOffset` bugün **ergonomik tahmindir**.
-
-1. Başlıkta bir oturum aç, iki kumandayı da normal tut.
-2. `HandGripCalibrationProbe` (`VA_CameraRig` üstünde) bir kez log basıp kendini kapatır.
-3. Log'daki iki `PalmOffset` satırını `HandGripPivot`'a yapıştır.
-
-⚠️ Ön koşul `OVRManager.controllerDrivenHandPosesType ≠ None` (prefabda `Natural`) — kapalıyken prob
-**hatasız ama yanlış** bir sabit basar (bind pozu).
-
----
-
-## 1c. Silah kitini bir kez koştur (prefab temizliği + gösterge)
+## 1. Silah kitini bir kez koştur (prefab temizliği + gösterge)
 
 `Tools > VortexArena > Build > Configure All Build Elements` (**Hepsini Çalıştır** — silah kiti her
 koşuda çalışır) — 13 `WPN_*` kökündeki eksik script kaydını ve
