@@ -180,6 +180,23 @@ public sealed class WorldObjectTable
         return false;
     }
 
+    /// <summary>netIds of one kind, ASCENDING — the list a mode drives (holes, spawn points).</summary>
+    /// <remarks>Sorted on purpose: dictionary order varies between runs, and a mode picking "the first
+    /// one" would then behave differently on two servers loading the same scene.</remarks>
+    public List<int> ListByKindLocked(string kind)
+    {
+        var ids = new List<int>();
+        if (string.IsNullOrEmpty(kind)) return ids;
+
+        foreach (var entry in _byNetId.Values)
+        {
+            if (string.Equals(entry.Kind, kind, StringComparison.Ordinal)) ids.Add(entry.NetId);
+        }
+
+        ids.Sort();
+        return ids;
+    }
+
     /// <summary>Gates 3-4 of the object hit path (§10.10) plus the damage itself; false = rejected, with
     /// the reason for the console line.</summary>
     public bool ApplyDamageLocked(int netId, float damage, out NetObjectEntry entry, out string rejectReason)
