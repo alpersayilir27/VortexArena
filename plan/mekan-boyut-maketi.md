@@ -34,8 +34,3 @@ kalıcı bilgi `Docs/Sistem-Ozeti.md` (§4 bileşen sözlüğü, §7 tuzaklar) �
   uyarı.
 - Admin tercihler panelinde duvar saydamlığı satırı **olmamalı**, altındaki satırlarda boşluk
   kalmamalı; kuş bakışı kadrajı doğru kalmalı.
-
-## Elde kalan yerleştirme işi
-
-- `VA_BaseZone` şeridi 1×12 m; farklı ölçüdeki arenada `halfExtentX`/`halfExtentZ` ile birlikte
-  ölçeklenir.

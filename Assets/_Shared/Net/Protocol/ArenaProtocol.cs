@@ -6,6 +6,13 @@ namespace VortexArena.Protocol
         /// <summary>
         /// Wire version. A mismatch does NOT reject the connection (warning only), so every bump needs
         /// a full APK round on all headsets. Per-version notes: Docs/ArenaNet-Protokol.md §1.
+        /// <para>⚠️ v19 BREAKS THE WIRE LAYOUT twice over: (1) the pose block is quantized
+        /// (<see cref="PoseData"/>, 28→10 B — <c>0x01</c> 95→41 B, snapshot entry 88→34 B,
+        /// <c>0x09</c> 34→16 B, object entry 30→12 B); (2) the skeleton root became yaw + head
+        /// offset (<see cref="SkeletonRootData"/>, 28→8 B, §6.9) so the receiver rebuilds it on its
+        /// own interpolated head — a lagging skeleton channel can no longer separate the body from
+        /// the name label. Mixed versions read each other's bytes as f32 garbage: remote players
+        /// teleport to garbage poses, both directions.</para>
         /// <para>⚠️ v18 (object ownership, poses, events, dynamic spawn — §10.10) BREAKS THE WIRE
         /// LAYOUT: the <c>0x05</c> header grew from 7 B to 8 B (<c>objectCount</c>), so an old client
         /// misaligns the WHOLE datagram and loses the snapshot itself, not just objects — remote players
@@ -29,7 +36,7 @@ namespace VortexArena.Protocol
         /// <para>v5 net telemetry + packet combining (<c>0x05</c>) · v4 held item on the wire, shot
         /// events moved to UDP · v3 phase machine · v2 <c>set_identity</c>.</para>
         /// </summary>
-        public const int PROTOCOL_VERSION = 18;
+        public const int PROTOCOL_VERSION = 19;
         public const string APP_ID = "VortexArena";
 
         // ---- Calibration mode (§5.2/§10.6): how headsets align AT STARTUP. ----
@@ -153,9 +160,9 @@ namespace VortexArena.Protocol
         public const float OBJECT_REST_SECONDS = 0.3f;
 
         /// <summary>Max object entries in the object section of one <c>0x05</c> datagram (§6.8). ⚠️ The
-        /// real gate is the byte budget (<see cref="COMBINED_MAX_BYTES"/>) — 8 + 16×88 + 16×30 = 1896 B
-        /// exceeds the MTU; this number is the <c>u8</c> ceiling of <c>objectCount</c> and a safety
-        /// net.</summary>
+        /// real gate is still the byte budget (<see cref="COMBINED_MAX_BYTES"/>) — 8 + 16×34 + 16×12
+        /// = 744 B fits, but the event section shares the same budget; this number is the <c>u8</c>
+        /// ceiling of <c>objectCount</c> and a safety net.</summary>
         public const int OBJECT_MAX_ENTRIES_PER_PACKET = 16;
 
         // ---- object_state.flags core bits (§10.10). Positions are FIXED and never renumbered: a
@@ -202,7 +209,7 @@ namespace VortexArena.Protocol
         public const string KICK_CLOSE_REASON = "kicked";
 
         /// <summary>Max entries per snapshot datagram; overflow spills into extra datagrams in the same
-        /// tick (§6.3, 1414 B &lt; MTU). Each packet applies its own entries independently.</summary>
+        /// tick (§6.3, 550 B &lt; MTU). Each packet applies its own entries independently.</summary>
         public const int SNAPSHOT_MAX_ENTRIES_PER_PACKET = 16;
 
         /// <summary>Max events per <c>0x04</c> EventBatch datagram (§6.5, 1158 B &lt; MTU).
