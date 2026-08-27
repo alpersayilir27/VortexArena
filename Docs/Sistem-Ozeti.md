@@ -2234,16 +2234,22 @@ Burger kutusunun iki kuralı burada da geçerlidir (sunum sahnede kalır; olayı
 ikincisi **kendiliğinden** sağlanır: balyoz kişiseldir, yani vuruşu görebilen tek istemci onu tutandır.
 Kutunun kendine ait kuralı üçüncüdür:
 
-- ⚠️ **Vuruş FİZİKLE değil MESAFEYLE ölçülür.** Trigger, elde taşınan bir objede kinematik rigidbody
-  ister ve kareler arasında **ışınlanan** bir el ince bir trigger'ın içinden hiç değmeden geçer;
-  belirtisi "balyoz bazen işlemiyor" olur. Sunucu geometriyi zaten yargılamaz (§10.3), bu yüzden
-  ölçüm tümüyle istemcinin sorumluluğundadır.
+- **Temas iki COLLIDER'ın işidir:** balyozun ucundaki küre ile köstebeğin kendi collider'ı. Kodda
+  köstebeğin ölçüsü geçmez — yeni bir köstebek modeli yalnız kendi collider'ını getirir, sayı
+  değişmez. İkisi de **trigger**dır: elde taşınan ya da zeminden çıkan katı bir gövde, free-roam'da
+  oyuncunun gerçek bedenini iter.
+- ⚠️ **Temas anı SÜPÜRME ile bulunur, `OnTriggerEnter` ile değil.** Sallanan balyoz başı kare başına
+  metrelerce yol alır, kendisi ise santimetre boyutundadır: iki kare arasında köstebeğin **içinden
+  geçer** ve trigger hiç ateşlenmez — belirtisi "balyoz bazen işlemiyor" olur. Bu yüzden her karede
+  başın **kendi collider'ı** dünkü konumundan bugünküne süpürülür; testin şekli ve boyutu yine
+  collider'ındır, yalnız kaçan an geri kazanılır. Süpürme sorgu API'siyle yapıldığı için elde
+  taşınan objeye ayrıca kinematik `Rigidbody` takmak da gerekmez.
 
 | Sınıf | Görevi |
 |---|---|
 | `MoleKinds` | İstemcinin **tek sözlüğü**: tür adı, olay adı, `stage` sayıları, `s` anahtarları, `modeState` ön eki. ⚠️ `Docs/ArenaNet-Protokol.md` §10.5'in `mole` tablosunun birebir aynasıdır — elle yazılan literal sunucuda **sessizce** reddedilir |
-| `MoleHole` | Deliğin sunumu: `stage`/`s`'ten köstebeği yükseltir, bekletir, ezer, indirir; rengi `c:`'den alır. Sahnedeki bütün delikler **statik bir listede** toplanır — balyozun taradığı liste budur. ⚠️ Köstebek aşağıdayken **kapatılır**, yalnız indirilmez: free-roam zemini düzdür (fiziksel çukur yoktur), aşağıda bırakılan köstebek zeminin örtmediği her yerde açıkta durur. ⚠️ Anlık uygulama ile animasyon `NetStateOrigin` ile ayrılır: snapshot'ta (geç katılan) köstebek yerine **ışınlanır**, çoktan başlamış bir çıkışı baştan oynamaz |
-| `MoleHammer` | Balyoz başının bileşeni: baş hızı eşiğin üstündeyken yarıçapa giren **ayakta** köstebeğe `whack{n}` yollar. ⚠️ Rapor (delik, sayaç) çiftiyle **tekilleştirilir** — bir sallama birçok kare sürer ve her karede gönderilseydi aynı olay sunucuya beş kez giderdi. Hız eşiği "dokunarak ezmeyi" kapatır |
+| `MoleHole` | Deliğin sunumu: `stage`/`s`'ten köstebeği yükseltir, bekletir, ezer, indirir; rengi `c:`'den alır. **Prefab iki katmandır:** yükselen pivot (`Mole`) collider'ı ve zamanlamayı taşır, altındaki `Model` yalnız görüntüyü — gerçek model gelince **sadece `Model` değişir**, ayakları pivotun orijinine (yükselince zemin hizası) oturtulur ve takım rengini alacak görseller `teamRenderers`'a sürüklenir (göz/burun gibi sabit renkli parçalar dışarıda kalır; liste boş bırakılırsa hepsi boyanır). **Köstebeğin collider'ı balyozun hedefidir** ve alt ağacın herhangi bir yerinde olabilir; balyoz köke `GetComponentInParent` ile ulaşır. ⚠️ Köstebek aşağıdayken **kapatılır**, yalnız indirilmez: free-roam zemini düzdür (fiziksel çukur yoktur), aşağıda bırakılan köstebek zeminin örtmediği her yerde açıkta durur — collider'ı da onunla kapandığı için gizli köstebek zaten vurulamaz, ayrı bir kapı gerekmez. ⚠️ Anlık uygulama ile animasyon `NetStateOrigin` ile ayrılır: snapshot'ta (geç katılan) köstebek yerine **ışınlanır**, çoktan başlamış bir çıkışı baştan oynamaz |
+| `MoleHammer` | Balyozun bileşeni: baş hızı eşiğin üstündeyken **başın kendi collider'ının** dokunduğu **ayakta** köstebeğe `whack{n}` yollar (temas için önce çakışma, sonra iki kare arası süpürme). ⚠️ Rapor (delik, sayaç) çiftiyle **tekilleştirilir** — bir sallama birçok kare sürer ve her karede gönderilseydi aynı olay sunucuya beş kez giderdi. Hız eşiği "dokunarak ezmeyi" kapatır. Vuruş küresinin yarıçapı/konumu Inspector'dan görsel ayarlanır, kodda ölçü yoktur |
 | `MoleHammerGranter` | Live'da iki ele birer balyoz verir, düşerse **anında** geri verir, oyuncunun takım rengine boyar. ⚠️ Balyoz `WeaponDefinition` DEĞİLDİR: bu mod `weaponSource:"none"`dır ve silah olarak vermek ailenin baştan kapattığı hasar hattını açardı. Mod HUD prefabında yaşar — ömrü tam olarak modun maçı kadardır, her köstebek arenasında elle konulacak bir sahne objesi gerektirmez |
 | `MoleClientController` | Mole HUD'ının kökü (`ModeHudBase` alt sınıfı) — yalnız **moda özgü** olanı ekler: takım skoru satırı ve oyuncunun kendi doğru/yanlış/katkı satırı (`modeState` + `PlayerInfo.score`). Silah/can/ölüm/kill-feed alanları prefabda **bilerek boş**. ⚠️ `modeState` ayrıştırması **hoşgörülüdür**: bozuk/eksik dize sayaçları sıfırda bırakır, bilinmeyen token atlanır |
 

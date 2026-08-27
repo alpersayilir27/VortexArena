@@ -10,12 +10,17 @@ mod sözleşmesinin tamamı (tür, olay, `stage`/`s`, nonce kapısı, skor kanal
 ## Kalan içerik işi
 
 ⚠️ **Sahnedeki her şey prototiptir:** delik bir halka (yassı silindir), köstebek bir kapsül, balyoz
-silindir sap + kutu baş. Gerçek modeller gelince yerine geçecek; **yerleşim ve ölçüler korunmalı** —
-köstebeğin yükselme mesafesi, deliğin çapı ve balyoz başının konumu vuruş yarıçapına bağlıdır.
+silindir sap + kutu baş. Gerçek modeller gelince yerine geçecek; **yerleşim korunmalı** — köstebeğin
+yükselme mesafesi ve deliğin çapı ona göre ayarlı.
 
 - [ ] **Gerçek modeller + animasyonlar:** köstebek (çıkış / bekleme / ezilme / iniş), delik halkası,
       balyoz. ⚠️ Yükseliş animasyonu sunucunun havada kalma penceresinin **içinde** bitmeli — dışına
       taşarsa sunucunun indirdiği köstebek ekranda hâlâ tırmanıyor görünür.
+      ⚠️ **Köstebek modeli için tek dokunulacak yer `Mole/Model`:** prototip parçaları (gövde, kafa,
+      burun, göz, pençe) silinip gerçek model oraya konur. Ayakları pivotun orijinine oturmalı
+      (köstebek yükselince zemin hizasında durur), kafası bugünkü kafanın hizasında olmalı. Sonra
+      takım rengini alacak görseller `teamRenderers`'a sürüklenir ve köstebeğin **trigger**
+      collider'ı kontrol edilir. Kodda ölçü yoktur — vuruşun cevabı collider'lardan çıkar.
 - [ ] **Balyoz kavrama pozu** (`Kavrama Pozu Stüdyosu`, sağ + sol ana kabza) — yazılmadan balyoz ele
       gelir ama kumanda anchor'ında, yanlış açıyla durur.
 - [ ] **Sesler:** köstebek çıkışı, doğru vuruş (neşeli), yanlış vuruş (uyarı), ezilme, iniş.
@@ -24,7 +29,8 @@ köstebeğin yükselme mesafesi, deliğin çapı ve balyoz başının konumu vur
 
 ## Playtest ayarları
 
-- [ ] `MinSwingSpeed` (dokunarak ezmeyi kapatan eşik) ve balyozun vuruş yarıçapı.
+- [ ] `MinSwingSpeed` (dokunarak ezmeyi kapatan eşik) ve balyoz ucundaki vuruş küresinin yarıçapı —
+      küçük küre "ıskaladım" hissi, büyük küre "değmeden ezdim" hissi verir.
 - [ ] Çıkış aralığı / aynı anda ayakta köstebek tavanı — kalabalıkta yoğunluk hissi.
 - [ ] Puan ve ceza oranı; ceza caydırmıyorsa artırılır.
 - [ ] Köstebeğin yükseklik ayarı: eğilme derinliği çocuk için konforlu mu.
@@ -42,6 +48,8 @@ köstebeğin yükselme mesafesi, deliğin çapı ve balyoz başının konumu vur
       düşer (**0 altına inmez**), oyuncu katkısı eksilir, yanlış sayacı artar.
 - [ ] Köstebek indikten sonra ulaşan sallama hiçbir şey yapmaz (nonce) ve **ceza yazmaz**; eşik altı
       yavaş temas vuruş sayılmaz.
+- [ ] Köstebeğin **herhangi bir yerine** (tepesi, yanı) hızlı vuruş sayılır; **çok hızlı** sallamada
+      da kaçmaz (süpürme). Balyozla havayı sallamak ya da zemine vurmak hiçbir şey yapmaz.
 - [ ] Balyozlar iki elde belirir, bırakılamaz; uzak avatarın iki elinde doğru ve **takım renginde**
       çizilir.
 - [ ] Geç katılan başlık: ayaktaki köstebekleri doğru renkte görür (çıkışı baştan oynamaz),
