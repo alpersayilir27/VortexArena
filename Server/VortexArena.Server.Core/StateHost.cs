@@ -344,7 +344,7 @@ public sealed class StateHost
 
             // §10.9: the obstacle-violation flag is mirrored into a SEPARATE field (it also lives in
             // LastPose) because its reader is MatchDirector, which does NOT take PoseGate — reading
-            // an 88 B struct lock-free means tearing, reading a single bool does not.
+            // a multi-field struct lock-free means tearing, reading a single bool does not.
             state.InObstacle = (pose.gripFlags & SnapshotEntry.FLAG_IN_OBSTACLE) != 0;
             // Out-of-bounds mirrored for the same reason. ⚠️ This bit PRODUCES NO PENALTY (§10.9);
             // it only feeds admin visibility and the violation log.
@@ -487,7 +487,9 @@ public sealed class StateHost
         }
 
         // Duplicate suppression (§6.4): UDP CAN duplicate a packet and an exact repeat shows up as a
-        // double tracer + double sound. Only this thread touches these fields, so no lock.
+        // double tracer + double sound. Only this thread touches these fields, so no lock — the one
+        // exception is the hello reset (PlayerRegistry), which runs while UdpEndpoint is null, so no
+        // event can race it past the endpoint gate above.
         // ⚠️ NO ORDERING ENFORCEMENT: do NOT copy the pose filter — (short)(seq - LastSeq) <= 0 —
         // here. A pose is a STATE (latest wins, older is worthless), an event is a FACT: an
         // out-of-order shot really happened, and dropping it silently erases a tracer and a sound.
