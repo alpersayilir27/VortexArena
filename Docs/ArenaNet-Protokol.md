@@ -8,7 +8,7 @@ Tümü paylaşılan `ArenaProtocol` statik sınıfında tanımlanır (`Assets/_S
 
 | Sabit | Değer | Açıklama |
 |---|---|---|
-| `PROTOCOL_VERSION` | `18` | hello/welcome'da taşınır; uyumsuzlukta log uyarısı (bağlantı **kesilmez** — `Server/VortexArena.Server.Core/LobbyService.cs` uyarıyı basıp devam eder). ⚠️ **Karışık sürüm desteklenmez** — sürüm artınca tüm başlıklara yeni APK kurulur; bağlantı reddedilmediği için bunu zorlayan tek şey APK turunun tamamlanmasıdır. v18 **ağ nesnesi modelinin ikinci fazını** getirir: sahiplik ve obje pozu (`object_grab`/`object_release`/`object_rest` §5.1, `object_state`'in `owner`/`pos`/`rot`/`stage` alanları §5.3, UDP `0x09 ObjectPose` §6.12 ve `0x05`'in **obje bölümü** §6.8), obje olayları (`object_event`, **iki yönlü**) ve dinamik doğuş/ölüm (`object_spawn`/`object_despawn`) — kural §10.10, `kinds[]` girdisi `grab` + `events[]` kazanır (§11). ⚠️ **Bu artış tel DÜZENİNİ bozar:** `0x05`'in başlığı 7 B'den 8 B'ye çıkar (`objectCount`), yani eski istemci o paketin **tamamını** yanlış hizalar — karışık sürümde kaybolan şey kozmetik bir obje değil **snapshot'ın kendisidir**: uzak oyuncular çöp pozlara ışınlanır. Bozulma iki yönlüdür — eski APK `object_grab` göndermediği için hiçbir tutulabilir objeyi alamaz, yenilerin taşıdığı objeyi de sahnedeki yerinde donmuş görür. v17 **ağ nesnesi modelinin ilk fazını** getirir: sunucu artık oyuncu olmayan varlıkların (kırılabilir örtü, hedef tahtası) canını da tutar — `object_state` + `world_state` (§5.3), `hit_report.targetNetId` (§5.1), kural §10.10, `maps.json`'da `objects[]` + `kinds[]` (§11). Tel formatı **eklemelidir** ama karışık sürümde kaybolan şey kozmetik DEĞİLDİR: eski APK `targetNetId` göndermediği için hiçbir objeyi kıramaz, gelen `object_state`'i de yok saydığı için başkalarının kırdığı örtüyü **sağlam görmeye devam eder** — iki oyuncu aynı duvarın iki yanında farklı şey görür, biri kendini siperde sanırken diğeri onu açıkta vurur. v16 `identify` mesajını **her iki yönden de KALDIRIR**: admin→sunucu komutu da, sunucu→istemci bildirimi de yoktur. Kırıcı değildir ama sessizdir — eski bir admin komutu yollarsa yeni sunucu tipi `default` dalında yok sayar, düğme basılır ve hiçbir şey olmaz; eski bir başlığa da artık hiç bildirim gitmez. v15 `clear_calibration`'a **`keepSaved` (bool)** ekler (§5.2/§5.3, davranış §10.6): sıfırlama iki eyleme ayrılır — *hizalamayı geçersiz kıl* (gözlükteki kayıtlı çapa ve UUID korunur, `reload_calibration` çalışmaya devam eder) ve *cihaz kaydını da sil*. ⚠️ **Alanın YOKLUĞU `keepSaved:false` demektir** (sert kip): alanı tanımayan bir uç bugünkü davranışı sürdürür, sürpriz yapmaz. Karışık sürümde kaybolan şey bozuk çizim değil, operatörün *yumuşak* seçiminin sert uygulanmasıdır — kayıtlı çapa silinir ve o oyuncuda `reload_calibration` bir daha iş görmez. v14 **alan-dışını tele taşır**: `flags` bit7 = `FLAG_OUT_OF_BOUNDS` (§6.3) + yalnız adminlere giden `violation` akışı (§5.3, §10.9). Tel formatı **değişmez** (95 B / 88 B aynı, bit rezervden alındı, bant artışı sıfır) ama sürüm yine de artar: biti yazan **istemcidir**, yani eski APK'lı oyuncu onu hiç göndermez ve adminde alan dışına çıktığı **hiç görünmez** — kaybolan şey bozuk çizim değil, operatörün göremediği bir ihlaldir. ⚠️ **Bu bit CAN ERİTMEZ** (§10.9): ceza modeli yalnız `FLAG_IN_OBSTACLE`'a bağlıdır. v13 **kalibre modunu** (`set_calibration_mode` §5.2, `admin_state.calibrationMode` + `welcome.calibrationMode` §5.3, davranış §10.6), **zemin sapması bildirimini** (`set_calibration.floorOffset` §5.1 → `PlayerInfo.floorOffset` §5.3) ve **ölçüm başarısızlığı geri bildirimini** (`set_body_scale.error` §5.1 → `PlayerInfo.scaleError` §5.3, §10.8) getirir; tümüyle **eklemelidir**. Karışık sürümde: alanları göndermeyen eski istemcinin zemin sapması ve ölçüm gerekçesi operatöre hiç görünmez, `welcome.calibrationMode`'u okumayan başlık ise modu yok sayıp bugünkü davranışta (diskten çapa geri yükleme) kalır — kaybolan kural, bozuk çizim değil. v12 iskelet blob'undan **parmak eklemlerini çıkarır** (§6.9): hedef iskeletin 40 parmak eklemi tele hiç girmez, parmakları alıcı kendi sentezler. ⚠️ **Bu değişiklik KIRICIDIR ve sessizdir** — blob opak olduğu için eklem listesi uyuşmayan iki uç hata vermez, yalnız gövdeyi bozuk çizer; karışık sürümde belirti "uzak oyuncular garip duruyor"dur. v11 **engel ihlalini** taşır: `flags` bit5 = `FLAG_IN_OBSTACLE` (§6.3) + sunucu tarafında saniyelik can eritme (§10.9) — tümüyle **eklemelidir** (bayt düzeni değişmedi, bit rezervden alındı). Karışık sürümde: eski istemci biti hiç göndermez (o oyuncu duvarda ceza almaz) ve gelen biti yok sayar (admin halkası yanıp sönmez). v10 kumanda durumunu taşır: `flags` bit3/bit4 = **bayat el** (§6.3) + `status`/`PlayerInfo` üzerinde `ctrlL`/`ctrlR` (§5.1/§5.3) — tümüyle **eklemelidir** (bayt düzeni değişmedi, bitler rezervden alındı), bilmeyen uç bitleri yok sayar ve alanları `0` = "bildirilmedi" okur. v10 ayrıca `clear_calibration`'a **sunucu → istemci yönü** ekler (§5.2/§5.3): sıfırlama artık roster'a yazılan bir boole değil hedef başlığa iletilen bir komuttur. Bu yön de eklemelidir — tanımayan eski istemci mesajı yok sayar ve **yarım kalmış elle kalibrasyonu** (A alındı, B alınmadı) başlığında tutmaya devam eder, yani karışık sürümde bozulan tek şey operatörün o oyuncuyu sıfırlayamamasıdır. v9 gövde ölçeğini getirdi (`measure_body_scale` · `set_body_scale` · `PlayerInfo.bodyScale`, §10.8): tümüyle **eklemelidir**, eski istemci alanı bulamayınca `0` okur ve herkesi ölçeksiz çizer — yani karışık sürümde bozulan tek şey avatar boylarıdır. v8'de `lobby_state`'in `online` (bool) alanı yerini üç değerli `connection` + `reconnectSeconds`'a bıraktı (§5.3): alanı tanımayan eski admin her satırı "bağlı" çizer, yani kopan oyuncular hiç fark edilmez. v7'yi kırıcı yapan tel DÜZENİ değil **ANLAMIDIR**: baytlar v6 ile birebir aynı, ama `0x01`/`0x02`/`0x05` pozları, `0x03` atış yönleri ve `0x07`/`0x08` iskelet kökleri artık arena uzayı = dünya uzayı çerçevesinde okunur (§3). Eski istemci aynı baytları kendi sahne marker'ına göre çözer → iki taraf birbirini metrelerce kaymış, zeminin altında veya havada görür; belirti **"uzak oyuncular rastgele yerlere ışınlanıyor"**. v6'da bozulma iki yönlüydü: `0x07`/`0x08`'i tanımayan istemci uzak gövdeleri hiç çizemez, iskelet göndermeyen istemci de gövdesiz görünür (§6.9). v5'te bozulan tek yer `0x05` birleştirmesiydi (§6.8) |
+| `PROTOCOL_VERSION` | `19` | hello/welcome'da taşınır; uyumsuzlukta log uyarısı (bağlantı **kesilmez** — `Server/VortexArena.Server.Core/LobbyService.cs` uyarıyı basıp devam eder). ⚠️ **Karışık sürüm desteklenmez** — sürüm artınca tüm başlıklara yeni APK kurulur; bağlantı reddedilmediği için bunu zorlayan tek şey APK turunun tamamlanmasıdır. v19 iki değişikliği birden taşır ve tel DÜZENİNİ kırar. (1) **Poz bloğu quantize edildi** (§6.2): f32 yedi alan (28 B) yerine `[u32 rot][i16 x,y,z]` (10 B) — `0x01` 95→41 B, snapshot girdisi 88→34 B, `0x09` 34→16 B, `0x05` obje girdisi 30→12 B. (2) **İskelet kökü mutlak poz olmaktan çıktı** (§6.9): `0x07`/`0x08` kökü artık `[u16 yaw][i16 dx,dy,dz]` = 8 B'dir ve poz kanalındaki kafanın zemin izdüşümüne göre OFSET taşır — alıcı kökü kendi interpolasyonlu kafasının üstüne kurar, yani iskelet kanalı geciktiğinde/koptuğunda gövde isim etiketiyle AYNI noktada kalır ("gövde başka yerde" ayrışması yapısal olarak kapanır). Karışık sürümde belirti v7'dekiyle aynıdır: eski uç yeni baytları f32 diye okur ve uzak oyuncular çöp pozlara ışınlanır; bozulma iki yönlüdür. v18 **ağ nesnesi modelinin ikinci fazını** getirir: sahiplik ve obje pozu (`object_grab`/`object_release`/`object_rest` §5.1, `object_state`'in `owner`/`pos`/`rot`/`stage` alanları §5.3, UDP `0x09 ObjectPose` §6.12 ve `0x05`'in **obje bölümü** §6.8), obje olayları (`object_event`, **iki yönlü**) ve dinamik doğuş/ölüm (`object_spawn`/`object_despawn`) — kural §10.10, `kinds[]` girdisi `grab` + `events[]` kazanır (§11). ⚠️ **Bu artış tel DÜZENİNİ bozar:** `0x05`'in başlığı 7 B'den 8 B'ye çıkar (`objectCount`), yani eski istemci o paketin **tamamını** yanlış hizalar — karışık sürümde kaybolan şey kozmetik bir obje değil **snapshot'ın kendisidir**: uzak oyuncular çöp pozlara ışınlanır. Bozulma iki yönlüdür — eski APK `object_grab` göndermediği için hiçbir tutulabilir objeyi alamaz, yenilerin taşıdığı objeyi de sahnedeki yerinde donmuş görür. v17 **ağ nesnesi modelinin ilk fazını** getirir: sunucu artık oyuncu olmayan varlıkların (kırılabilir örtü, hedef tahtası) canını da tutar — `object_state` + `world_state` (§5.3), `hit_report.targetNetId` (§5.1), kural §10.10, `maps.json`'da `objects[]` + `kinds[]` (§11). Tel formatı **eklemelidir** ama karışık sürümde kaybolan şey kozmetik DEĞİLDİR: eski APK `targetNetId` göndermediği için hiçbir objeyi kıramaz, gelen `object_state`'i de yok saydığı için başkalarının kırdığı örtüyü **sağlam görmeye devam eder** — iki oyuncu aynı duvarın iki yanında farklı şey görür, biri kendini siperde sanırken diğeri onu açıkta vurur. v16 `identify` mesajını **her iki yönden de KALDIRIR**: admin→sunucu komutu da, sunucu→istemci bildirimi de yoktur. Kırıcı değildir ama sessizdir — eski bir admin komutu yollarsa yeni sunucu tipi `default` dalında yok sayar, düğme basılır ve hiçbir şey olmaz; eski bir başlığa da artık hiç bildirim gitmez. v15 `clear_calibration`'a **`keepSaved` (bool)** ekler (§5.2/§5.3, davranış §10.6): sıfırlama iki eyleme ayrılır — *hizalamayı geçersiz kıl* (gözlükteki kayıtlı çapa ve UUID korunur, `reload_calibration` çalışmaya devam eder) ve *cihaz kaydını da sil*. ⚠️ **Alanın YOKLUĞU `keepSaved:false` demektir** (sert kip): alanı tanımayan bir uç bugünkü davranışı sürdürür, sürpriz yapmaz. Karışık sürümde kaybolan şey bozuk çizim değil, operatörün *yumuşak* seçiminin sert uygulanmasıdır — kayıtlı çapa silinir ve o oyuncuda `reload_calibration` bir daha iş görmez. v14 **alan-dışını tele taşır**: `flags` bit7 = `FLAG_OUT_OF_BOUNDS` (§6.3) + yalnız adminlere giden `violation` akışı (§5.3, §10.9). Tel formatı **değişmez** (95 B / 88 B aynı, bit rezervden alındı, bant artışı sıfır) ama sürüm yine de artar: biti yazan **istemcidir**, yani eski APK'lı oyuncu onu hiç göndermez ve adminde alan dışına çıktığı **hiç görünmez** — kaybolan şey bozuk çizim değil, operatörün göremediği bir ihlaldir. ⚠️ **Bu bit CAN ERİTMEZ** (§10.9): ceza modeli yalnız `FLAG_IN_OBSTACLE`'a bağlıdır. v13 **kalibre modunu** (`set_calibration_mode` §5.2, `admin_state.calibrationMode` + `welcome.calibrationMode` §5.3, davranış §10.6), **zemin sapması bildirimini** (`set_calibration.floorOffset` §5.1 → `PlayerInfo.floorOffset` §5.3) ve **ölçüm başarısızlığı geri bildirimini** (`set_body_scale.error` §5.1 → `PlayerInfo.scaleError` §5.3, §10.8) getirir; tümüyle **eklemelidir**. Karışık sürümde: alanları göndermeyen eski istemcinin zemin sapması ve ölçüm gerekçesi operatöre hiç görünmez, `welcome.calibrationMode`'u okumayan başlık ise modu yok sayıp bugünkü davranışta (diskten çapa geri yükleme) kalır — kaybolan kural, bozuk çizim değil. v12 iskelet blob'undan **parmak eklemlerini çıkarır** (§6.9): hedef iskeletin 40 parmak eklemi tele hiç girmez, parmakları alıcı kendi sentezler. ⚠️ **Bu değişiklik KIRICIDIR ve sessizdir** — blob opak olduğu için eklem listesi uyuşmayan iki uç hata vermez, yalnız gövdeyi bozuk çizer; karışık sürümde belirti "uzak oyuncular garip duruyor"dur. v11 **engel ihlalini** taşır: `flags` bit5 = `FLAG_IN_OBSTACLE` (§6.3) + sunucu tarafında saniyelik can eritme (§10.9) — tümüyle **eklemelidir** (bayt düzeni değişmedi, bit rezervden alındı). Karışık sürümde: eski istemci biti hiç göndermez (o oyuncu duvarda ceza almaz) ve gelen biti yok sayar (admin halkası yanıp sönmez). v10 kumanda durumunu taşır: `flags` bit3/bit4 = **bayat el** (§6.3) + `status`/`PlayerInfo` üzerinde `ctrlL`/`ctrlR` (§5.1/§5.3) — tümüyle **eklemelidir** (bayt düzeni değişmedi, bitler rezervden alındı), bilmeyen uç bitleri yok sayar ve alanları `0` = "bildirilmedi" okur. v10 ayrıca `clear_calibration`'a **sunucu → istemci yönü** ekler (§5.2/§5.3): sıfırlama artık roster'a yazılan bir boole değil hedef başlığa iletilen bir komuttur. Bu yön de eklemelidir — tanımayan eski istemci mesajı yok sayar ve **yarım kalmış elle kalibrasyonu** (A alındı, B alınmadı) başlığında tutmaya devam eder, yani karışık sürümde bozulan tek şey operatörün o oyuncuyu sıfırlayamamasıdır. v9 gövde ölçeğini getirdi (`measure_body_scale` · `set_body_scale` · `PlayerInfo.bodyScale`, §10.8): tümüyle **eklemelidir**, eski istemci alanı bulamayınca `0` okur ve herkesi ölçeksiz çizer — yani karışık sürümde bozulan tek şey avatar boylarıdır. v8'de `lobby_state`'in `online` (bool) alanı yerini üç değerli `connection` + `reconnectSeconds`'a bıraktı (§5.3): alanı tanımayan eski admin her satırı "bağlı" çizer, yani kopan oyuncular hiç fark edilmez. v7'yi kırıcı yapan tel DÜZENİ değil **ANLAMIDIR**: baytlar v6 ile birebir aynı, ama `0x01`/`0x02`/`0x05` pozları, `0x03` atış yönleri ve `0x07`/`0x08` iskelet kökleri artık arena uzayı = dünya uzayı çerçevesinde okunur (§3). Eski istemci aynı baytları kendi sahne marker'ına göre çözer → iki taraf birbirini metrelerce kaymış, zeminin altında veya havada görür; belirti **"uzak oyuncular rastgele yerlere ışınlanıyor"**. v6'da bozulma iki yönlüydü: `0x07`/`0x08`'i tanımayan istemci uzak gövdeleri hiç çizemez, iskelet göndermeyen istemci de gövdesiz görünür (§6.9). v5'te bozulan tek yer `0x05` birleştirmesiydi (§6.8) |
 | `UDP_BEACON_PORT` | `47820` | Sunucu → broadcast (cosmos 47800/47801 ile bilerek çakışmaz) |
 | `CONTROL_PORT` | `47821` | WS TCP, endpoint `/ws` |
 | `STATE_PORT` | `47822` | UDP poz kanalı |
@@ -22,7 +22,7 @@ Tümü paylaşılan `ArenaProtocol` statik sınıfında tanımlanır (`Assets/_S
 | `SNAPSHOT_RATE_HZ` | `20` | Sunucu snapshot yayın frekansı |
 | `INTERP_DELAY_MS` | `100` | Uzak avatar interpolasyon tamponu |
 | `SKELETON_RATE_HZ` | `12` | İskelet blob'u gönderim frekansı (§6.9). Poz kanalından **ayrı ve daha düşük** — blob poz paketinin birkaç katı ve darboğaz paket sayısı. Alıcıda SDK'nın kendi interpolasyonu koştuğu için 12 Hz akış 72 Hz çizime yumuşak yayılır; yükseltmek akıcılık değil yalnız paket satın alır |
-| `SKELETON_MAX_BLOB_BYTES` | `1024` | Tek oyuncunun blob tavanı (§6.9). Bütçe değil **emniyet**: 34 + 1024 = 1058 B < `COMBINED_MAX_BYTES`, çünkü bu kanalda **parçalama yoktur**. Aşan blob hiç gönderilmez |
+| `SKELETON_MAX_BLOB_BYTES` | `1024` | Tek oyuncunun blob tavanı (§6.9). Bütçe değil **emniyet**: 14 + 1024 = 1038 B < `COMBINED_MAX_BYTES`, çünkü bu kanalda **parçalama yoktur**. Aşan blob hiç gönderilmez |
 | `SKELETON_MAX_ENTRIES_PER_PACKET` | `16` | Tek `0x08` datagramına yazılan en fazla girdi (§6.10). Asıl kısıt **bayt bütçesidir** (`COMBINED_MAX_BYTES`) — girdiler değişken uzunluklu; bu sayı `count`'un `u8` olmasının tavanıdır |
 | `PLAYER_ID_MAX` | `255` | `playerId` tahsis tavanı. **Ürün kotası değil, tel formatı tavanıdır** — `playerId` UDP paketlerinde `u8`. Eşzamanlı oyuncu/admin sayısına başka sınır YOKTUR (kota ileride lisanslamayla gelecek) |
 | `NET_ID_SCENE_MIN` / `NET_ID_SCENE_MAX` | `1` / `32767` | Sahne objesinin ağ kimliği aralığı (`NetIdentity.sceneId`, §10.10); sahne kaydında `SceneIdGuard` zorlar. `0` = atanmamış ve **hiçbir zaman adreslenmez**. ⚠️ Üst yarı (`32768..65535`) **rezervdir** — sunucunun çalışma zamanında dağıtacağı dinamik obje kimlikleri oraya düşecek; sahne bake'i o aralığa taşarsa bir sahne objesiyle bir dinamik obje aynı kimliği alır ve sunucu hasarı hangisine yazdığını bilemez |
@@ -30,12 +30,12 @@ Tümü paylaşılan `ArenaProtocol` statik sınıfında tanımlanır (`Assets/_S
 | `OBJECT_POSE_RATE_HZ` | `10` | Sahibin obje pozu gönderim frekansı (§6.12) — oyuncu pozunun (`POSE_RATE_HZ`) **yarısı**. Yarısı olmasının sebebi bant değil paket sayısıdır (`Docs/Sistem-Ozeti.md` §3.12); obje pozu ayrıca yalnız **uyanık ve tutulmayan** objede akar, yani tipik tikte hiç yoktur |
 | `OBJECT_REST_SPEED` | `0.05` m/s | Bırakılan objenin **durdu** sayılma hız eşiği (§10.10). Altına inip `OBJECT_REST_SECONDS` boyunca kalırsa sahip `object_rest{pos,rot}` yollar ve sahiplik biter |
 | `OBJECT_REST_SECONDS` | `0.3` | Durma eşiğinin altında kesintisiz geçirilmesi gereken süre. ⚠️ Tek karelik bir "durdum" yeterli değildir: sekmenin tepe noktasında hız anlık sıfırlanır, orada bırakılan obje havada donardı |
-| `OBJECT_MAX_ENTRIES_PER_PACKET` | `16` | Tek `0x05` datagramının obje bölümüne yazılan en fazla girdi (§6.8). 8 + 16×88 + 16×30 = 1896 B > MTU olduğu için gerçek kapı boyut kapısıdır (`COMBINED_MAX_BYTES`); bu sayı `objectCount`'un `u8` olmasının tavanı ve bir emniyettir |
+| `OBJECT_MAX_ENTRIES_PER_PACKET` | `16` | Tek `0x05` datagramının obje bölümüne yazılan en fazla girdi (§6.8). 8 + 16×34 + 16×12 = 744 B bütçeye sığar ama olay bölümü aynı bütçeyi paylaşır — gerçek kapı yine boyut kapısıdır (`COMBINED_MAX_BYTES`); bu sayı `objectCount`'un `u8` olmasının tavanı ve bir emniyettir |
 | `PLAYER_NUMBER_MIN` / `PLAYER_NUMBER_MAX` | `1` / `99` | Forma numarası aralığı (§2). `0` = atanmamış ve aralığın dışındadır. Numara **tüm kayıtlı cihazlar** arasında benzersizdir |
 | `CALIB_MODE_TWO_ANCHOR` / `CALIB_MODE_SAVED_ANCHOR` / `CALIB_MODE_ANCHOR_CLOUD` | `"two_anchor"` / `"saved_anchor"` / `"anchor_cloud"` | Kalibre modunun geçerli değerleri (§5.2/§10.6). Sunucu açılış varsayılanı `two_anchor`. ⚠️ `anchor_cloud` **rezervdir** — sunucu kabul etmez, loglayıp durumu değiştirmez; bilinmeyen/boş değer de aynı şekilde reddedilir (sessizce varsayılana düşmez: mod bir operatör kararıdır, tahmin edilmez) |
 | `CALIB_FLOOR_WARN_METERS` | `0.5` | Elle kalibrasyonda bildirilen zemin sapmasının (`set_calibration.floorOffset`) mutlak değeri bunu aşarsa sunucu adminlere duyuru basar (§10.6). Bir kapı değil **teşhis eşiğidir**: kalibrasyon yine kabul edilir, operatör gözlükte alan verisi temizliğine yönlendirilir |
 | `BODY_SCALE_MIN` / `BODY_SCALE_MAX` | `0.5` / `1.6` | `set_body_scale` kırpma aralığı (§10.8). Ölçüm istemcide yapılır ama sonuç **herkesin ekranına** gider; sunucu bu yüzden kırpar — bozuk bir istemci arenaya 4 metrelik bir avatar koyamasın. `0` bu aralığın dışındadır ve "ölçülmemiş" demektir |
-| `SNAPSHOT_MAX_ENTRIES_PER_PACKET` | `16` | Tek snapshot datagramına yazılan en fazla oyuncu; fazlası ek pakete taşar (§6.3). 6 + 16×88 = 1414 B < MTU |
+| `SNAPSHOT_MAX_ENTRIES_PER_PACKET` | `16` | Tek snapshot datagramına yazılan en fazla oyuncu; fazlası ek pakete taşar (§6.3). 6 + 16×34 = 550 B < MTU |
 | `EVENT_MAX_ENTRIES_PER_PACKET` | `128` | Tek `0x04` datagramına yazılan en fazla olay (§6.5). 6 + 128×9 = 1158 B < MTU. Taşan olay **atılmaz, sonraki tik'e kayar** — "tik başına en fazla bir batch" değişmezi kopya korumasının dayanağıdır |
 | `EVENT_TICK_HISTORY` | `64` | İstemcinin kopya ayıklama için hatırladığı `0x04` tik sayısı (§6.5) |
 | `PLAYER_MAX_HP` | `100` | Oyuncu tam canı (sunucu-otoriter; §10) |
@@ -685,12 +685,31 @@ Sunucu `playerId↔udpToken` eşleşirse istemcinin UDP endpoint'ini kaydeder ve
 ```
 [u8 0x01][u8 playerId][u16 seq][u32 clientTimeMs]
 [u8 itemL][u8 itemR][u8 gripFlags]    (3 B — v4)
-[head : f32 px,py,pz, qx,qy,qz,qw]   (28 B)
-[handL: aynı düzen]                   (28 B)
-[handR: aynı düzen]                   (28 B)
-Toplam: 11 + 84 = 95 B  → 20 Hz'de ~15.2 kbps/oyuncu
+[head : poz bloğu]                    (10 B)
+[handL: aynı düzen]                   (10 B)
+[handR: aynı düzen]                   (10 B)
+Toplam: 11 + 30 = 41 B  → 20 Hz'de ~6.6 kbps/oyuncu
 ```
-Pozlar **arena uzayında**. `seq` sarmalanır (u16); eski `seq` gelirse paket atılır (son gelen kazanır). Quaternion sıkıştırma **YOKTUR ve planlanmıyor**: bant hiçbir zaman darboğaz değil, bağlayıcı kısıt paket sayısıdır (`Docs/Sistem-Ozeti.md` §8).
+
+**Poz bloğu (10 B, v19) — tüm UDP pozların ortak birimi** (`PoseData`; §6.3, §6.8 ve §6.12 de aynı
+bloğu kullanır):
+
+```
+[u32 rot][i16 x][i16 y][i16 z]
+rot  : "smallest-three" — bit31-30 en büyük |bileşen|in indeksi (0=x, 1=y, 2=z, 3=w);
+       bit29-20 / 19-10 / 9-0 kalan üç bileşen SIRAYLA (büyük olan atlanır), 10-bit işaretli,
+       ölçek 511/√½ ≈ 722,66. En büyük bileşen negatifse q yerine −q kodlanır (q ≡ −q).
+       Çözümde atlanan bileşen √(1−a²−b²−c²) ile geri kurulur.
+x,y,z: arena uzayında metre × 500 (2 mm adım; i16 → ±65,5 m, taşan değer uca kırpılır).
+```
+
+Hassasiyet payı bilinçlidir: 2 mm ve ~0,1° izleme gürültüsünün altındadır, hasar da zaten istemcide
+çizilen gövdeden hesaplanır (§10.3) — tel hassasiyeti hiçbir otorite kararına girmez. f32'ye dönüş
+yoktur: kazanç bant değil **datagram boyudur** — küçük datagram Wi-Fi'da az airtime demektir
+(`Docs/Sistem-Ozeti.md` §3.12) ve `COMBINED_MAX_BYTES` bütçesinde snapshot + olay + objeyi tek
+datagramda tutar (§6.8).
+
+Pozlar **arena uzayında**. `seq` sarmalanır (u16); eski `seq` gelirse paket atılır (son gelen kazanır).
 
 **`itemL`/`itemR`/`gripFlags` (v4)** — elde tutulan eşya (§6.6). Pozla aynı pakette gider çünkü aynı otoriteye aittir: "elimde ne var" da "elim nerede" gibi **istemci-otoriter bir sunum bilgisidir**. Sunucu bu üç baytı **doğrulamaz**, snapshot'a kopyalar (§6.3) — sunucuda eşya tablosu YOKTUR ve eklenmez (§10.3 felsefesi). `gripFlags`'te bit0 ya da bit6 gelirse **yok sayılır**: onlar snapshot'ta `FLAG_ALIVE` ve `FLAG_SPAWN_PROTECTED`'dır, yazarı yalnız sunucudur (istemci ne kendini canlı ne dokunulmaz ilan edebilir).
 
@@ -720,7 +739,8 @@ kendi hesaplaması ise "alan dışı"nın biri istemcide biri adminde iki kez ya
 
 ```
 [u8 0x02][u8 playerCount][u32 serverTick]
-oyuncu başına: [u8 playerId][u8 flags][u8 itemL][u8 itemR][head 28][handL 28][handR 28] = 88 B
+oyuncu başına: [u8 playerId][u8 flags][u8 itemL][u8 itemR][head 10][handL 10][handR 10] = 34 B
+              (pozlar §6.2'deki poz bloğudur)
 ```
 
 `flags` bitleri — **tek bayt, iki yazar** (otorite bölünmesi §10.1'in tel karşılığı):
@@ -749,7 +769,7 @@ davranır. `FLAG_OUT_OF_BOUNDS` tam olarak bu ikinci sınıftadır ve sürümü 
 **Bayat el bitleri (`3`/`4`) neden var:** kumandanın pili biterse rig el anchor'ını **koşulsuz** yazar
 ve okuma `(0,0,0)` döner — yani sıfır poz eli oyuncunun ayağının dibine koyar, üstelik gövde çözümünü
 de (dolayısıyla `0x07`'nin kökünü) zehirler. Gönderen bunu tel dışında çözemez: paket **sabit
-uzunlukludur** (95 B / 88 B), "eli olmayan oyuncu" diye bir tel durumu YOKTUR ve eklenmez — akışı
+uzunlukludur** (41 B / 34 B), "eli olmayan oyuncu" diye bir tel durumu YOKTUR ve eklenmez — akışı
 kesmek ya da eli sıfırlamak seçenek değildir. Bunun yerine gönderen **son geçerli eli kafaya göreli**
 tutmaya devam eder (el arena uzayında donmaz, oyuncunun gövdesiyle taşınır; donsaydı oyuncu yürüdükçe
 eli geride kalırdı) ve durumu bu bitle bildirir.
@@ -760,9 +780,9 @@ admin bunu operatöre gösterir (kumandası düşen oyuncu sahada fark edilsin d
 
 İstemci kendi pozunu snapshot'tan ÇİZMEZ (yerelden çizer); uzak oyuncuları `INTERP_DELAY_MS` tamponuyla interpole eder. Admin'e de aynı snapshot gider (gözlemci avatarları/işaretçileri bundan beslenir).
 
-**Parçalama (MTU):** pozlu oyuncu sayısı `SNAPSHOT_MAX_ENTRIES_PER_PACKET`'i aşarsa sunucu aynı tik'i **birden çok datagrama böler**; her datagram kendi `playerCount`'unu taşır, hepsi aynı `serverTick`'i taşır ve aynı hedeflere yollanır. 16 girdi = 6 + 16×88 = **1414 B** (MTU 1500 altı). **İstemcide birleştirme mantığı YOKTUR ve gerekmez:** her paket taşıdığı girdileri bağımsız olarak uygular, oyuncu düşürme kararı "bu pakette yok" değil ~1.5 sn'lik zaman aşımıdır. Bu yüzden parçalama tel formatını değiştirmez — ek başlık alanı yoktur, eski okuyucu da doğru çalışır.
+**Parçalama (MTU):** pozlu oyuncu sayısı `SNAPSHOT_MAX_ENTRIES_PER_PACKET`'i aşarsa sunucu aynı tik'i **birden çok datagrama böler**; her datagram kendi `playerCount`'unu taşır, hepsi aynı `serverTick`'i taşır ve aynı hedeflere yollanır. 16 girdi = 6 + 16×34 = **550 B** (MTU 1500 altı). **İstemcide birleştirme mantığı YOKTUR ve gerekmez:** her paket taşıdığı girdileri bağımsız olarak uygular, oyuncu düşürme kararı "bu pakette yok" değil ~1.5 sn'lik zaman aşımıdır. Bu yüzden parçalama tel formatını değiştirmez — ek başlık alanı yoktur, eski okuyucu da doğru çalışır.
 
-⚠️ **Olay batch'i (`0x04`) snapshot'a EKLENMEZ, ayrı datagramdır.** 1414 B + tek olay MTU'yu aşar ve snapshot'ın boyut garantisi çöker.
+⚠️ **Olay batch'i (`0x04`) snapshot'a (`0x02`) EKLENMEZ, ayrı datagramdır.** Birleşik taşıma `0x05`'in işidir; `0x02`+`0x04` tam da `0x05`'in bütçesi aşıldığında düşülen yoldur ve değişken uzunluklu bir bölüm `0x02`'nin sabit-girdi parçalama hesabını (boyut garantisini) çökertir.
 
 **İçerik kuralı:** snapshot'a yalnız *online* olup en az bir `PoseUpdate`'i alınmış `role=player` girişleri konur (admin hiç girmez — poz göndermez; ama UDP kaydı yaptığı için snapshot ALIR, ve birden çok admin varsa her biri ayrı hedeftir). Kopan oyuncu (WS kapanışı/OFFLINE_TIMEOUT) bir sonraki tikten itibaren düşer; `playerCount=0` snapshot yine yayınlanır (istemciler bayat avatarı böyle temizler). **Yayın hedefi:** UDP kaydı yapılmış tüm online endpoint'ler (admin dahil). **İstemci düşürme kuralı:** bir `playerId` snapshot'larda ~1.5 sn görünmezse uzak avatarı kaldırılır (paket kaybı toleransı; sunucunun 15 sn'lik OFFLINE_TIMEOUT'unu beklemez).
 
@@ -788,6 +808,7 @@ Toplam: 12 B
 - ✅ **Kopya bastırma:** sunucu oyuncu başına son `seq`'i tutar; aynısı ikinci kez gelirse relay etmez (UDP paket çoğaltabilir → çift tracer + çift ses).
 - ✅ **Kayıp ölçümü:** `seq` boşluğu = kaybolan olay sayısı (başlık başına Wi-Fi teşhisi).
 - ❌ **SIRA ZORLAMASI YOK.** "Eski `seq`'i at" kuralı **POZ** kuralıdır (durum: son gelen kazanır) ve olaylara **UYGULANMAZ**: sırası bozuk gelen atış gerçekten olmuş bir atıştır; atmak sessizce bir tracer ve bir ses silmektir.
+- ⚠️ **Sunucu yeni bir `hello`'da bu defteri de sıfırlar** (poz ve iskelet defterleriyle aynı kural, §6.9): yeniden başlayan istemci 0'dan sayar ve bayat defter, eski son `seq`'e denk gelen ilk atışı "kopya" diye yutar, kayıp sayacına da bir kez bozuk boşluk yazardı.
 
 **Yön neden gönderiliyor** (el pozundan türetilebilir gibi duruyor): 20 Hz interpole el pozundan türetilirse aynı tik'e düşen iki atış aynı yöne gider ve geri tepme kaybolur. Nişan, oyun açısından anlamlı bilgidir; 4 B'ye değer.
 
@@ -906,15 +927,15 @@ Sunucu tarafı ölçüm (**uplink**: poz varış aralığı + `seq` boşluğu) v
 
 ```
 [u8 0x05][u8 playerCount][u8 eventCount][u8 objectCount][u32 serverTick]
-oyuncu başına: SnapshotEntry (88 B, §6.3 ile birebir aynı)
+oyuncu başına: SnapshotEntry (34 B, §6.3 ile birebir aynı)
 olay başına:   FireEventEntry (9 B, §6.5 ile birebir aynı)
-obje başına:   ObjectPoseEntry (30 B, §6.12)
+obje başına:   ObjectPoseEntry (12 B, §6.12)
 Başlık: 8 B
 ```
 
 ⚠️ **`objectCount` başlığı 7 B'den 8 B'ye çıkardı (v18) ve bu KIRICIDIR:** alanı bilmeyen okuyucu tüm gövdeyi bir bayt kaymış çözer, yani yalnız objeleri değil **snapshot'ın tamamını** kaybeder. Rezerv bitten bayrak almanın serbestliği (§6.3) burada geçmez — orada düzen sabit kalıyordu, burada değişiyor.
 
-**Varlık sebebi paket sayısıdır, bant değil.** Tipik bir maçta (10 oyuncu, 5 olay/tik) snapshot 886 B ve olay bloğu 45 B — ikisi tek datagrama rahat sığıyor, oysa ayrı gönderildiklerinde **tik başına hedef başına iki** datagram üretiliyordu. 10 oyuncu + 1 admin'de bu ~220 paket/sn'dir; bant kazancı ihmal edilebilir, kazanç **airtime**'dadır (`Docs/Sistem-Ozeti.md` §3.12).
+**Varlık sebebi paket sayısıdır, bant değil.** Tipik bir maçta (10 oyuncu, 5 olay/tik) snapshot bölümü 340 B ve olay bloğu 45 B — ikisi tek datagrama rahat sığıyor, oysa ayrı gönderildiklerinde **tik başına hedef başına iki** datagram üretiliyordu. 10 oyuncu + 1 admin'de bu ~220 paket/sn'dir; bant kazancı ihmal edilebilir, kazanç **airtime**'dadır (`Docs/Sistem-Ozeti.md` §3.12).
 
 **Sunucunun birleştirme kapısı — üç koşulun HEPSİ gerekli:**
 
@@ -935,9 +956,15 @@ Snapshot bloğu `0x02` ile birebir aynı işlenir; tik tekrarında durumu yenide
 ### 6.9 `0x07 SkeletonUpdate` (istemci → sunucu, `SKELETON_RATE_HZ`; yalnız player)
 
 ```
-[u8 0x07][u8 playerId][u16 seq][root : f32 px,py,pz, qx,qy,qz,qw] (28 B)
+[u8 0x07][u8 playerId][u16 seq]
+[kök : u16 yaw][i16 dx][i16 dy][i16 dz]   (8 B)
 [u16 len][blob len B]
-Başlık: 34 B  →  len=200'de 234 B
+Başlık: 14 B  →  len=200'de 214 B
+
+yaw     : gövdenin arena yaw'ı, 360°/65536 adım.
+dx,dy,dz: kökün, poz kanalındaki (§6.2) KAFANIN ZEMİN İZDÜŞÜMÜNE göre ofseti, milimetre
+          (i16 → ±32,7 m, taşan değer uca kırpılır). İzdüşümün y'si 0'dır, yani dy kökün
+          arena yüksekliğidir.
 ```
 
 Gövde artık üç noktadan **türetilmiyor**: sahibinin cihazında Meta Movement SDK'nın body tracking'i
@@ -972,12 +999,29 @@ yanlış çözülür ve gövde tümden bozulur — bu, sürüm uyumsuzluğunun s
 ayrışma orada ✗ olarak görünür ve **insan adımıdır** — liste iki prefabın Inspector'ında düzeltilir,
 çalışma anında hesaplanmaz (hesaplayan bir yol, listeyi yazan ikinci bir taraf açar).
 
-⚠️ **`root` neden ayrı bir alan** (blob'un kendi kökü varken): SDK kök eklemi
+⚠️ **`kök` neden ayrı bir alan** (blob'un kendi kökü varken): SDK kök eklemi
 `JointType.NoWorldSpace` ile yazıyor, yani **gönderenin dünya pozu** — alıcının arenasıyla ilgisi
-yok. Blob opak olduğu için içindeki kökü çeviremeyiz; kök bu yüzden **arena uzayında ayrıca**
-taşınır ve alıcı `ApplyBodyPose`'dan sonra karakterin kökünü bununla yazar. Blob'un kendi kökü
-kullanılmaz. Aynı madde `Docs/Sistem-Ozeti.md` §7'deki "retarget avatarı hareket eden kökün altına
-konmaz" tuzağının da çözümüdür: karakter hiçbir şeyin altına parent'lanmaz.
+yok ve blob opak olduğu için içindeki kök çevrilemez. Kök bu yüzden ayrıca taşınır ve alıcı
+`ApplyBodyPose`'dan sonra karakterin kökünü bununla yazar; blob'un kendi kökü kullanılmaz. Aynı
+madde `Docs/Sistem-Ozeti.md` §7'deki "retarget avatarı hareket eden kökün altına konmaz" tuzağının
+da çözümüdür: karakter hiçbir şeyin altına parent'lanmaz.
+
+⚠️ **Kök MUTLAK POZ DEĞİLDİR (v19): yaw + kafaya göre ofsettir.** Alıcı kökü **kendi
+interpolasyonlu kafasının** üstüne kurar: `kök = kafanın zemin izdüşümü + ofset`,
+dönüş yalnız yaw. **Neden:** iki kanal ayrı kadansta akar (20 Hz ↔ `SKELETON_RATE_HZ`) ve mutlak
+kök, iskelet paketi kaybolduğunda son örneğinde donarken isim etiketini çizen kafa akmaya devam
+ederdi — gövde "başka yerde" kalırdı. Kök kafaya bağlanınca bu ayrışma **tanım gereği** imkânsızdır:
+iskelet kanalı ne kadar gecikirse geciksin gövde isim etiketiyle aynı noktaya çizilir; bayatlayan
+yalnız eğilme/çömelme ofseti ile gövde yaw'ıdır. **Ofsetin taşınma sebebi:** kök kalçanın altındadır,
+kafanın değil — eğilen/çömelen oyuncuda ikisi yatayda yarım metreyi aşkın ayrılır; ofset atılsaydı
+gövde kafanın izdüşümüne kayar, ayaklar oyuncuyla birlikte sürüklenirdi. **Yaw'ın kafadan
+taşınmama sebebi:** omuz üstünden bakan oyuncuda gövde ile kafa yaw'ı 90°'ye dek ayrışır; kafadan
+türetmek yan/geri bakışı yok ederdi. Gönderen ofseti kendi poz kanalına verdiği kafaya göre ölçer
+(iki uç aynı referansı kullanır); poz kaynağı hazır değilse kare gönderilmez — o durumda poz kanalı
+da susuyordur ve alıcının kökü kuracak kafası zaten yoktur. Kök dönüşünün yaw dışı bileşeni tele
+girmez: SDK'nın kök eklemi zemine izdüşürülmüş dik bir çerçevedir, eğilme kökün değil blob'daki
+omurga eklemlerinin işidir — T-poz yedeği ve kumanda-kaybı tutması da (§6.9 altı, `GuardRootJump`)
+zaten yalnız yaw üretir.
 
 ⚠️ **Bu kanalda PARÇALAMA YOKTUR.** Blob `SKELETON_MAX_BLOB_BYTES`'ı aşarsa paket **hiç
 gönderilmez** (bir kez uyarı basılır). Yarım bir kareyi deserialize etmek bozuk iskelet demektir ve
@@ -1013,11 +1057,18 @@ göndermez.
 `seq` sarmalanır (u16); eski `seq` gelirse paket atılır. `0x01` ile aynı "son gelen kazanır"
 kuralıdır — bu bir **durum** kanalıdır, olay değil (karşılaştır §6.4: olayda sıra zorlaması yoktur).
 
+⚠️ **Sunucu yeni bir `hello`'da iskelet seq defterini de poz defteri gibi SIFIRLAR**
+(`HasSkeleton`/`LastSkeletonSeq`/`LastSkeleton`). Sıfırlanmazsa yeniden başlayan istemcinin 0'dan
+başlayan sayacı, sunucudaki eski değer u16 sarma penceresine girene kadar her kareyi sessizce
+reddettirir — 12 Hz'de bu **dakikalarca** sürer ve belirti "isim etiketi doğru, gövde donuk"tur
+(iskelet susunca alıcı §6.11 yedeğine düşer: kollar oynar, bacaklar kalır). Gözlüğü yeniden
+başlatmak sayacı yine 0'a çektiği için arızayı çözmez, pekiştirir.
+
 ### 6.10 `0x08 SkeletonBatch` (sunucu → tüm istemciler, `SKELETON_RATE_HZ`)
 
 ```
 [u8 0x08][u8 count][u32 serverTick]
-oyuncu başına: [u8 playerId][root 28][u16 len][blob] = 31 + len B
+oyuncu başına: [u8 playerId][kök 8, §6.9 düzeni][u16 len][blob] = 11 + len B
 Başlık: 6 B
 ```
 
@@ -1037,7 +1088,8 @@ snapshot parçalamasında olduğu gibi (§6.3).
 Hedefe özel batch üretmek tik başına N serileştirme demek olurdu; §6.5 olay batch'i de aynı
 gerekçeyle atanı süzmüyor.
 
-⚠️ **Snapshot'a (`0x05`) birleştirilmez.** Snapshot 16 girdide zaten 1414 B; değişken uzunluklu bir
+⚠️ **Snapshot'a (`0x05`) birleştirilmez.** Snapshot'ın boyut garantisi sabit girdi boyuna dayanır
+(16 girdide 550 B, §6.3'ün parçalama hesabı); değişken uzunluklu bir
 blok eklemek `0x05`'in boyut garantisini çökertir.
 
 ⚠️ **Kırpılmış girdiden sonra okuma DURUR.** Girdiler değişken uzunluklu olduğu için kırpılmış bir
@@ -1057,8 +1109,10 @@ devredilir.
 Gövdenin çizilmesi altı halkaya bağlıdır: gözlüğün body tracking servisi → Movement SDK retargeter →
 `0x07` blob (tek datagram, parçalanma yok) → sunucu → `0x08` → alıcının kayıt defteri. Herhangi biri
 koparsa iskelet akışı susar. **Oyuncu bu yüzden görünmez kalmaz:** alıcı, iskelet kökü tazeliğini
-yitirdiğinde gövdeyi **poz kanalından** çizer — kök kafanın zemin izdüşümü (yalnız yaw), kafa kemiği
-kafa pozundan, kollar el pozlarına iki kemikli IK ile; gerisi olduğu yerde kalır.
+yitirdiğinde gövdeyi **poz kanalından** çizer. Kökün KONUMU v19'dan beri her iki durumda da poz
+kanalının kafasına bağlıdır (§6.9) — iskelet ölünce düşen yalnız yaw + ofsettir: kök kafanın zemin
+izdüşümüne, gövde yaw'ı kafa yaw'ına iner; kafa kemiği kafa pozundan, kollar el pozlarına iki
+kemikli IK ile çizilir, gerisi olduğu yerde kalır.
 
 **Neden alıcı tarafında:** poz kanalı bu arızada da akmaya devam eder — aynı veri oyuncunun isim
 etiketini ve silahını doğru yerde çizmeye devam eder, kanıtı budur. Gönderendeki T-poz yedeği ise
@@ -1095,15 +1149,15 @@ olarak verir; denemeler artan aralıklarla yinelenir ve gövde dönünce sayaçl
 
 ```
 [u8 0x09][u8 playerId][u16 netId][u16 seq]
-[pose : f32 px,py,pz, qx,qy,qz,qw]   (28 B)
-Toplam: 6 + 28 = 34 B
+[pose : poz bloğu, §6.2]   (10 B)
+Toplam: 6 + 10 = 16 B
 ```
 
 Aşağı yönü ayrı bir paket değildir: aynı poz `0x05`'in **obje bölümünde** taşınır (§6.8), girdi
 düzeni `ObjectPoseEntry`'dir:
 
 ```
-[u16 netId][pose : f32 px,py,pz, qx,qy,qz,qw]   = 30 B
+[u16 netId][pose : poz bloğu, §6.2 (10 B)]   = 12 B
 ```
 
 Pozlar **arena uzayında** (§3), `seq` obje başına sarmalanır — eski `seq` gelirse paket atılır

@@ -25,7 +25,7 @@ namespace VortexArena.Protocol
         /// Latency is measured here, on the channel the game flows through.</para></summary>
         public const byte RttProbe = 0x06;
 
-        /// <summary>0x07 — retargeted skeleton blob + arena-space root
+        /// <summary>0x07 — retargeted skeleton blob + head-anchored root (yaw + offset, v19)
         /// (<see cref="SkeletonUpdate"/>, §6.9). Client → server,
         /// <see cref="ArenaProtocol.SKELETON_RATE_HZ"/>; players only.</summary>
         public const byte SkeletonUpdate = 0x07;
@@ -44,25 +44,186 @@ namespace VortexArena.Protocol
         public const byte ObjectPose = 0x09;
     }
 
-    /// Pose block: f32 px,py,pz,qx,qy,qz,qw — 28 B, in arena space.
+    /// <summary>
+    /// Pose block — <b>10 B</b> quantized (§6.2, v19): [u32 rot][i16 x][i16 y][i16 z], arena space.
+    /// <para>Position: metres × <see cref="POS_UNITS_PER_METER"/> (2 mm steps, i16 → ±65.5 m,
+    /// clamped at the ends). Rotation: "smallest three" — bits 31-30 index the largest |component|
+    /// (0=x, 1=y, 2=z, 3=w); bits 29-20 / 19-10 / 9-0 hold the remaining three components in order,
+    /// 10-bit signed, scaled by <see cref="ROT_COMPONENT_SCALE"/>; if the largest component is
+    /// negative, −q is encoded instead (q ≡ −q). The skipped component is rebuilt as
+    /// √(1−a²−b²−c²).</para>
+    /// <para>⚠️ The fields stay <c>float</c> ON PURPOSE: quantization lives only in Write/Read, so
+    /// no consumer changes. Precision (2 mm / ~0.1°) sits below tracking noise, and damage is
+    /// computed client-side from the drawn body anyway (§10.3) — wire precision enters no authority
+    /// decision. The win is DATAGRAM SIZE (airtime + the §6.8 combine budget), not bandwidth.</para>
+    /// </summary>
     public struct PoseData
     {
-        public const int SIZE = 28;
+        public const int SIZE = 10;
+
+        /// <summary>Position quantization scale: 500 units per metre = 2 mm steps.</summary>
+        public const float POS_UNITS_PER_METER = 500f;
+
+        /// <summary>Smallest-three component scale: 511 / √½ — a unit quaternion's non-largest
+        /// components stay within ±√½.</summary>
+        public const float ROT_COMPONENT_SCALE = 511f / 0.70710678f;
 
         public float px, py, pz, qx, qy, qz, qw;
 
         public void Write(BinaryWriter w)
         {
-            w.Write(px); w.Write(py); w.Write(pz);
-            w.Write(qx); w.Write(qy); w.Write(qz); w.Write(qw);
+            w.Write(PackRotation(qx, qy, qz, qw));
+            w.Write(QuantizePosition(px));
+            w.Write(QuantizePosition(py));
+            w.Write(QuantizePosition(pz));
         }
 
         public static PoseData Read(BinaryReader r)
         {
             PoseData p;
-            p.px = r.ReadSingle(); p.py = r.ReadSingle(); p.pz = r.ReadSingle();
-            p.qx = r.ReadSingle(); p.qy = r.ReadSingle(); p.qz = r.ReadSingle(); p.qw = r.ReadSingle();
+            uint rot = r.ReadUInt32();
+            p.px = r.ReadInt16() / POS_UNITS_PER_METER;
+            p.py = r.ReadInt16() / POS_UNITS_PER_METER;
+            p.pz = r.ReadInt16() / POS_UNITS_PER_METER;
+            UnpackRotation(rot, out p.qx, out p.qy, out p.qz, out p.qw);
             return p;
+        }
+
+        internal static short QuantizePosition(float meters)
+        {
+            float scaled = meters * POS_UNITS_PER_METER;
+            if (scaled >= short.MaxValue) return short.MaxValue;
+            if (scaled <= short.MinValue) return short.MinValue;
+            return (short)System.Math.Round(scaled);
+        }
+
+        private static uint PackRotation(float x, float y, float z, float w)
+        {
+            // Largest |component| is dropped and rebuilt on read.
+            int largest = 0;
+            float la = System.Math.Abs(x);
+            float a = System.Math.Abs(y);
+            if (a > la) { la = a; largest = 1; }
+            a = System.Math.Abs(z);
+            if (a > la) { la = a; largest = 2; }
+            a = System.Math.Abs(w);
+            if (a > la) { largest = 3; }
+
+            // q ≡ −q: keep the dropped component non-negative so √ rebuilds it exactly.
+            float largestValue = largest switch { 0 => x, 1 => y, 2 => z, _ => w };
+            float sign = largestValue < 0f ? -1f : 1f;
+
+            uint packed = (uint)largest << 30;
+            int shift = 20;
+            for (int i = 0; i < 4; i++)
+            {
+                if (i == largest) continue;
+                float c = (i switch { 0 => x, 1 => y, 2 => z, _ => w }) * sign;
+                int q = (int)System.Math.Round(c * ROT_COMPONENT_SCALE);
+                if (q > 511) q = 511;
+                if (q < -511) q = -511;
+                packed |= (uint)(q & 0x3FF) << shift;
+                shift -= 10;
+            }
+
+            return packed;
+        }
+
+        private static void UnpackRotation(uint packed, out float x, out float y, out float z, out float w)
+        {
+            int largest = (int)(packed >> 30);
+            float sumSq = 0f;
+            float c0 = 0f, c1 = 0f, c2 = 0f;
+            int shift = 20;
+            for (int i = 0; i < 3; i++)
+            {
+                // 10-bit two's complement sign extension.
+                int q = (int)((packed >> shift) & 0x3FF);
+                if (q >= 512) q -= 1024;
+                float c = q / ROT_COMPONENT_SCALE;
+                if (i == 0) c0 = c; else if (i == 1) c1 = c; else c2 = c;
+                sumSq += c * c;
+                shift -= 10;
+            }
+
+            float rebuilt = sumSq < 1f ? (float)System.Math.Sqrt(1f - sumSq) : 0f;
+
+            // The three stored components fill the non-largest slots in index order.
+            x = y = z = w = 0f;
+            int taken = 0;
+            for (int i = 0; i < 4; i++)
+            {
+                float value;
+                if (i == largest)
+                {
+                    value = rebuilt;
+                }
+                else
+                {
+                    value = taken switch { 0 => c0, 1 => c1, _ => c2 };
+                    taken++;
+                }
+
+                if (i == 0) x = value; else if (i == 1) y = value; else if (i == 2) z = value; else w = value;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Skeleton root — <b>8 B</b> (§6.9, v19): [u16 yaw][i16 dx][i16 dy][i16 dz]. NOT an absolute
+    /// pose: <c>yawDeg</c> is the body's arena yaw (360°/65536 steps) and the offset is the root's
+    /// position relative to the POSE CHANNEL head's floor projection, in mm (i16 → ±32.7 m,
+    /// clamped). The projection's y is 0, so <c>oy</c> is the root's arena height.
+    /// <para><b>Why head-anchored:</b> the receiver rebuilds the root on its OWN interpolated head,
+    /// so a lagging/dead skeleton channel can no longer separate the body from the name label —
+    /// only the lean/crouch offset and the body yaw go stale (§6.9).</para>
+    /// <para>Fields stay <c>float</c> (metres/degrees); quantization lives in Write/Read, like
+    /// <see cref="PoseData"/>.</para>
+    /// </summary>
+    public struct SkeletonRootData
+    {
+        public const int SIZE = 8;
+
+        /// <summary>Millimetre offset scale.</summary>
+        public const float OFFSET_UNITS_PER_METER = 1000f;
+
+        /// <summary>Body yaw in degrees (arena space).</summary>
+        public float yawDeg;
+
+        /// <summary>Root offset from the head's floor projection, metres (arena axes).</summary>
+        public float ox, oy, oz;
+
+        public void Write(BinaryWriter w)
+        {
+            w.Write(QuantizeYaw(yawDeg));
+            w.Write(QuantizeOffset(ox));
+            w.Write(QuantizeOffset(oy));
+            w.Write(QuantizeOffset(oz));
+        }
+
+        public static SkeletonRootData Read(BinaryReader r)
+        {
+            SkeletonRootData d;
+            d.yawDeg = r.ReadUInt16() * (360f / 65536f);
+            d.ox = r.ReadInt16() / OFFSET_UNITS_PER_METER;
+            d.oy = r.ReadInt16() / OFFSET_UNITS_PER_METER;
+            d.oz = r.ReadInt16() / OFFSET_UNITS_PER_METER;
+            return d;
+        }
+
+        private static ushort QuantizeYaw(float degrees)
+        {
+            float wrapped = degrees % 360f;
+            if (wrapped < 0f) wrapped += 360f;
+            return (ushort)((uint)System.Math.Round(wrapped * (65536f / 360f)) & 0xFFFF);
+        }
+
+        private static short QuantizeOffset(float meters)
+        {
+            float scaled = meters * OFFSET_UNITS_PER_METER;
+            if (scaled >= short.MaxValue) return short.MaxValue;
+            if (scaled <= short.MinValue) return short.MinValue;
+            return (short)System.Math.Round(scaled);
         }
     }
 
@@ -104,7 +265,7 @@ namespace VortexArena.Protocol
     /// </summary>
     public struct ObjectPose
     {
-        public const int SIZE = 34;
+        public const int SIZE = 16;
 
         public byte playerId;
 
@@ -136,11 +297,11 @@ namespace VortexArena.Protocol
         }
     }
 
-    /// <summary>The object entry of the <c>0x05</c> object section: [u16 netId][pose 28] = <b>30 B</b>
+    /// <summary>The object entry of the <c>0x05</c> object section: [u16 netId][pose 10] = <b>12 B</b>
     /// (§6.12). <c>seq</c> is not carried — the server already dropped the old ones.</summary>
     public struct ObjectPoseEntry
     {
-        public const int SIZE = 30;
+        public const int SIZE = 12;
 
         public ushort netId;
         public PoseData pose;
@@ -171,7 +332,7 @@ namespace VortexArena.Protocol
     /// objects. On the fallback path (<c>0x02</c>+<c>0x04</c>) the object section is DROPPED and no
     /// section is added there; what is lost is the smoothness of the motion, not the final pose (that
     /// comes over WS via <c>object_rest</c> → <c>object_state</c>).</para>
-    /// <para><b>Exists for packet count:</b> a typical match (10 players) is 886 B of snapshot + 45 B
+    /// <para><b>Exists for packet count:</b> a typical match (10 players) is 340 B of snapshot + 45 B
     /// of events — one datagram instead of <b>two</b> per target per tick. The win is <b>airtime</b>,
     /// not bandwidth (Docs/Sistem-Ozeti.md §3.12).</para>
     /// <para>⚠️ <c>0x02</c>/<c>0x04</c> were <b>not removed and will not be</b>: the server falls back
@@ -265,7 +426,7 @@ namespace VortexArena.Protocol
 
     /// <summary>
     /// 0x01 — [u8 type][u8 playerId][u16 seq][u32 clientTimeMs][u8 itemL][u8 itemR][u8 gripFlags]
-    /// [head][handL][handR] = <b>95 B</b> (§6.2).
+    /// [head][handL][handR] = <b>41 B</b> (§6.2).
     /// <para><b>Why the item bytes ride the pose packet:</b> same authority — "what is in my hand" is,
     /// like "where my hand is", <b>client-authoritative presentation info</b>. The server copies them
     /// into the snapshot unvalidated (§6.3); there is NO item table on the server.</para>
@@ -275,7 +436,7 @@ namespace VortexArena.Protocol
     /// </summary>
     public struct PoseUpdate
     {
-        public const int SIZE = 95;
+        public const int SIZE = 41;
 
         public byte playerId;
         public ushort seq;
@@ -328,7 +489,7 @@ namespace VortexArena.Protocol
 
     /// <summary>
     /// Snapshot player entry: [u8 playerId][u8 flags][u8 itemL][u8 itemR][head][handL][handR]
-    /// = <b>88 B</b> (§6.3).
+    /// = <b>34 B</b> (§6.3).
     /// <para><b>flags: one byte, two writers</b> (the wire form of the authority split) — bit0
     /// <b>server</b> (authoritative <c>alive</c>), bits 1-5 copied from the client's <c>gripFlags</c>,
     /// bit6 <b>server</b> (spawn protection), bit7 copied from the client (out of bounds).
@@ -336,7 +497,7 @@ namespace VortexArena.Protocol
     /// </summary>
     public struct SnapshotEntry
     {
-        public const int SIZE = 88;
+        public const int SIZE = 34;
 
         /// <summary>Written by the server: the player is alive (authoritative state).</summary>
         public const byte FLAG_ALIVE = 1 << 0;
@@ -452,7 +613,7 @@ namespace VortexArena.Protocol
     }
 
     /// 0x02 — [u8 type][u8 playerCount][u32 serverTick] + playerCount × SnapshotEntry.
-    /// 16 players: 6 + 16×88 = 1414 B (a single UDP packet).
+    /// 16 players: 6 + 16×34 = 550 B (a single UDP packet).
     public struct Snapshot
     {
         public uint serverTick;
@@ -611,8 +772,9 @@ namespace VortexArena.Protocol
     /// <see cref="ArenaProtocol.EVENT_TICK_HISTORY"/> ticks and drops only an <b>exact repeat</b>.</para>
     /// <para>⚠️ An old but unseen tick IS PLAYED (immediately if the interp clock passed it): a tracer
     /// ~50 ms late beats a lost one.</para>
-    /// <para>⚠️ NOT added to the snapshot, a separate datagram — 1414 B + one event exceeds the
-    /// MTU.</para>
+    /// <para>⚠️ NOT added to the snapshot (<c>0x02</c>), a separate datagram — combined carriage is
+    /// <c>0x05</c>'s job, and a variable-length section would break <c>0x02</c>'s fixed-entry
+    /// fragmentation math.</para>
     /// </summary>
     public struct EventBatch
     {
@@ -641,7 +803,7 @@ namespace VortexArena.Protocol
     }
 
     /// <summary>
-    /// 0x07 — [u8 type][u8 playerId][u16 seq][root: <see cref="PoseData"/> 28][u16 len][blob]
+    /// 0x07 — [u8 type][u8 playerId][u16 seq][root: <see cref="SkeletonRootData"/> 8][u16 len][blob]
     /// (client → server, <see cref="ArenaProtocol.SKELETON_RATE_HZ"/>; players only, §6.9).
     /// <para><b>The blob is OPAQUE:</b> the Meta Movement SDK's native serialisation
     /// (<c>SerializeSkeletonAndFace</c>). The server neither unpacks nor validates it, it only copies —
@@ -650,24 +812,28 @@ namespace VortexArena.Protocol
     /// <para>⚠️ <b>Why <c>root</c> is separate:</b> the blob's joint 0 is written with
     /// <c>JointType.NoWorldSpace</c>, i.e. <b>the sender's world pose</b>, unrelated to the receiver's
     /// arena. The blob being opaque, we cannot transform the root inside it — so the root rides
-    /// separately in arena space and the receiver writes it after <c>ApplyBodyPose</c>.</para>
+    /// separately (as yaw + head offset since v19, see <see cref="SkeletonRootData"/>) and the
+    /// receiver writes it after <c>ApplyBodyPose</c>.</para>
     /// <para>⚠️ <b>NO fragmentation</b> here: a blob over
     /// <see cref="ArenaProtocol.SKELETON_MAX_BLOB_BYTES"/> is not sent at all — deserialising half a
     /// frame means a broken skeleton.</para>
     /// </summary>
     public struct SkeletonUpdate
     {
-        /// <summary>[type][playerId][seq][root 28][len] — the fixed part before the blob.</summary>
-        public const int HEADER_SIZE = 34;
+        /// <summary>[type][playerId][seq][root 8][len] — the fixed part before the blob.</summary>
+        public const int HEADER_SIZE = 14;
 
         public byte playerId;
 
         /// <summary>Wraps (u16); an old <c>seq</c> drops the packet — the "last one wins" rule of
-        /// <c>0x01</c> (§6.2). A state channel, not an event one.</summary>
+        /// <c>0x01</c> (§6.2). A state channel, not an event one.
+        /// <para>⚠️ The server RESETS its skeleton ledger on a new hello, like the pose ledger
+        /// (§6.9): a restarted client counts from 0 again, and a stale high value would silently
+        /// reject every frame for minutes.</para></summary>
         public ushort seq;
 
-        /// <summary>The character root's pose in <b>arena space</b> (§3).</summary>
-        public PoseData root;
+        /// <summary>Body yaw + root offset from the pose-channel head (§6.9, v19).</summary>
+        public SkeletonRootData root;
 
         /// <summary>The serialised skeleton. ⚠️ Only the first <see cref="blobLength"/> bytes are valid;
         /// the array length is not binding, so the sender may pass a pooled buffer.</summary>
@@ -690,7 +856,7 @@ namespace VortexArena.Protocol
             SkeletonUpdate m;
             m.playerId = r.ReadByte();
             m.seq = r.ReadUInt16();
-            m.root = PoseData.Read(r);
+            m.root = SkeletonRootData.Read(r);
             int len = r.ReadUInt16();
 
             // A legitimate sender cannot exceed this limit, so a larger value means a corrupt/truncated
@@ -721,17 +887,17 @@ namespace VortexArena.Protocol
     }
 
     /// <summary>
-    /// The player entry of the <c>0x08</c> batch: [u8 playerId][root 28][u16 len][blob]
-    /// = <b>31 + len</b> B (§6.10). Fields mean the same as in <see cref="SkeletonUpdate"/>;
+    /// The player entry of the <c>0x08</c> batch: [u8 playerId][root 8][u16 len][blob]
+    /// = <b>11 + len</b> B (§6.10). Fields mean the same as in <see cref="SkeletonUpdate"/>;
     /// <c>seq</c> is not carried (the server already filtered out old ones).
     /// </summary>
     public struct SkeletonEntry
     {
-        /// <summary>[playerId][root 28][len] — the fixed part before the blob.</summary>
-        public const int HEADER_SIZE = 31;
+        /// <summary>[playerId][root 8][len] — the fixed part before the blob.</summary>
+        public const int HEADER_SIZE = 11;
 
         public byte playerId;
-        public PoseData root;
+        public SkeletonRootData root;
         public byte[] blob;
         public int blobLength;
 
@@ -750,7 +916,7 @@ namespace VortexArena.Protocol
         {
             SkeletonEntry e;
             e.playerId = r.ReadByte();
-            e.root = PoseData.Read(r);
+            e.root = SkeletonRootData.Read(r);
             int len = r.ReadUInt16();
 
             if (len > ArenaProtocol.SKELETON_MAX_BLOB_BYTES)
@@ -790,8 +956,8 @@ namespace VortexArena.Protocol
     /// <para>⚠️ <b>The sender gets its own entry back and IGNORES it</b> — it draws its own body from
     /// the sensors. A per-target batch would mean N serialisations per tick; §6.5's event batch skips
     /// filtering for the same reason.</para>
-    /// <para>⚠️ <b>Not combined</b> into the snapshot (<c>0x05</c>): the snapshot is already 1414 B at
-    /// 16 entries and a variable-length block would collapse its size guarantee.</para>
+    /// <para>⚠️ <b>Not combined</b> into the snapshot (<c>0x05</c>): the snapshot's size guarantee
+    /// rests on fixed-size entries (550 B at 16), and a variable-length block would collapse it.</para>
     /// </summary>
     public struct SkeletonBatch
     {

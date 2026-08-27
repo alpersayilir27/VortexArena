@@ -19,8 +19,9 @@ namespace VortexArena.Core.Player
     /// are applied. Hence one prefab and one retarget config — the difference is the source, not the
     /// code.</para>
     /// <para>⚠️ <b>THIS class writes the root, not the SDK.</b> Joint 0 is in the sender's world space
-    /// (§6.9) and the blob is opaque, so the root travels separately in arena space and is written in
-    /// <see cref="LateUpdate"/>, AFTER the SDK's <c>ApplyBodyPose</c>.</para>
+    /// (§6.9) and the blob is opaque, so the root travels separately — as body yaw + an offset from
+    /// the pose-channel head since v19 (§6.9), rebuilt on the receiver's own interpolated head — and
+    /// is written in <see cref="LateUpdate"/>, AFTER the SDK's <c>ApplyBodyPose</c>.</para>
     /// <para>⚠️ <b>Never parent the character to anything</b> (especially the rig) — see
     /// Docs/Sistem-Ozeti.md §7 "retarget avatarı hareket eden kökün altına konmaz": the SDK writes the
     /// root joint locally, so a non-identity parent is applied twice.</para>
@@ -610,35 +611,20 @@ namespace VortexArena.Core.Player
         /// from the source, not read from the transform: the writer runs in this class's
         /// <c>LateUpdate</c>, so an earlier reader would get a one-frame stale value; the same
         /// <c>RenderTime</c> yields an identical result.
-        /// <para>⚠️ <b>The skeleton root counts only while the stream is LIVE.</b> Registry samples never
-        /// expire, so without the age test a stream that died minutes ago would keep the body frozen at
-        /// its last root — and a stream that never started at all would leave the player INVISIBLE while
-        /// their name label and weapon kept drawing correctly.</para></summary>
+        /// <para>⚠️ <b>The root's POSITION is ALWAYS anchored to the pose channel</b> (§6.9, v19): the
+        /// wire carries yaw + an offset from the head's floor projection, and the root is rebuilt here
+        /// on the receiver's OWN interpolated head — the same data that draws the name label, so a
+        /// lagging skeleton channel cannot separate the body from it. With no head sample at all
+        /// there is nothing to anchor to and the body hides (zero scale in the caller).</para>
+        /// <para>⚠️ <b>The skeleton contribution counts only while the stream is LIVE.</b> Registry
+        /// samples never expire, so without the age test a stream that died minutes ago would keep the
+        /// stale lean offset and body yaw forever; a dead stream drops to the head-derived root — same
+        /// formula as the sender's T-pose path (floor projection, YAW only), or the body would jump
+        /// the moment a real stream returns.</para></summary>
         private bool TryGetEffectiveRoot(out Pose world, out bool fromSkeleton)
         {
-            RemoteSkeletonRegistry skeletons = RemoteSkeletonRegistry.Instance;
-            int ageMs = skeletons != null ? skeletons.GetRootAgeMs(PlayerId) : -1;
-
-            if (ageMs >= 0 && ageMs <= SkeletonDeadAfterMs &&
-                skeletons.TryGetInterpolatedRoot(PlayerId, out Pose arenaRoot))
-            {
-                world = ArenaSpace.ArenaToWorld(arenaRoot);
-                fromSkeleton = true;
-                return true;
-            }
-
-            fromSkeleton = false;
-            return TryGetPoseDrivenRoot(out world);
-        }
-
-        /// <summary>Root derived from the remote player's HEAD — the channel that keeps flowing when the
-        /// skeleton one does not (it is already what draws their name label and weapon in the right
-        /// place, which is the proof that it survives this fault).
-        /// <para>⚠️ Same formula as the sender's T-pose path (floor projection, YAW only). The two must
-        /// agree, or the body would jump the moment a real stream returns.</para></summary>
-        private bool TryGetPoseDrivenRoot(out Pose world)
-        {
             world = default;
+            fromSkeleton = false;
 
             RemotePlayerRegistry poses = RemotePlayerRegistry.Instance;
             if (poses == null || !poses.GetInterpolatedPose(PlayerId, out Pose head, out _, out _))
@@ -646,16 +632,30 @@ namespace VortexArena.Core.Player
                 return false;
             }
 
+            var headFloor = new Vector3(head.position.x, 0f, head.position.z);
+
+            RemoteSkeletonRegistry skeletons = RemoteSkeletonRegistry.Instance;
+            int ageMs = skeletons != null ? skeletons.GetRootAgeMs(PlayerId) : -1;
+
+            if (ageMs >= 0 && ageMs <= SkeletonDeadAfterMs &&
+                skeletons.TryGetInterpolatedRoot(PlayerId, out float yawDeg, out Vector3 offset))
+            {
+                var arenaRoot = new Pose(headFloor + offset, Quaternion.Euler(0f, yawDeg, 0f));
+                world = ArenaSpace.ArenaToWorld(arenaRoot);
+                fromSkeleton = true;
+                return true;
+            }
+
             Vector3 forward = head.rotation * Vector3.forward;
             forward.y = 0f;
 
-            var arenaRoot = new Pose(
-                new Vector3(head.position.x, 0f, head.position.z),
+            var fallback = new Pose(
+                headFloor,
                 forward.sqrMagnitude > 1e-6f
                     ? Quaternion.LookRotation(forward, Vector3.up)
                     : Quaternion.identity);
 
-            world = ArenaSpace.ArenaToWorld(arenaRoot);
+            world = ArenaSpace.ArenaToWorld(fallback);
             return true;
         }
 

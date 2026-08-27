@@ -190,6 +190,18 @@ public sealed class PlayerRegistry : IDisposable
             {
                 state.HasPose = false;
                 state.LastSeq = 0;
+                // §6.9: the skeleton ledger resets WITH the pose ledger. A restarted client counts
+                // from 0 again; against a stale high LastSkeletonSeq the u16 wrap check would
+                // silently reject every frame for minutes — "name label fine, body frozen".
+                state.HasSkeleton = false;
+                state.LastSkeletonSeq = 0;
+                state.LastSkeleton = null;
+                // §6.4: the event dedup ledger too — a stale LastEventSeq matching the restarted
+                // client's first seq would swallow that shot as a "duplicate" and log one bogus
+                // loss gap. Normally recv-thread-only fields; safe here because UdpEndpoint is
+                // null until the client re-registers, so no event can race this write.
+                state.HasEventSeq = false;
+                state.LastEventSeq = 0;
                 // §10.9: stale violation flags are not carried over either. The freshness gate
                 // (LastPoseAt) already covers this; the fields are cleared anyway so a "reconnected
                 // but still shown inside the wall" intermediate state can never appear.
