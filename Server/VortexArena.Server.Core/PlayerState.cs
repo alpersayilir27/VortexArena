@@ -153,7 +153,7 @@ public sealed class PlayerState
     public IPEndPoint? UdpEndpoint { get; set; }
 
     /// <summary>Pose read/write lock — the UDP recv thread and the snapshot timer are different
-    /// threads, and the ~90 B PoseUpdate struct must not tear.</summary>
+    /// threads, and the multi-field PoseUpdate struct must not tear.</summary>
     public object PoseGate { get; } = new();
 
     /// <summary>Has at least one valid PoseUpdate arrived (only then is LastPose read).</summary>
@@ -226,8 +226,9 @@ public sealed class PlayerState
     /// half-updated blob.</remarks>
     public byte[]? LastSkeleton { get; set; }
 
-    /// <summary>Arena-space pose of the character root (§6.9) — the blob's own root is unused.</summary>
-    public PoseData LastSkeletonRoot { get; set; }
+    /// <summary>Body yaw + head-anchored root offset (§6.9, v19) — the blob's own root is unused.
+    /// Copied into the batch as-is; the server never interprets it.</summary>
+    public SkeletonRootData LastSkeletonRoot { get; set; }
 
     /// <summary>Sequence number of the skeleton channel. ⚠️ SEPARATE from <see cref="LastSeq"/>: the two
     /// channels flow at different cadences, and a shared counter would age one's packet in the other's

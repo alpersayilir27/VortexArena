@@ -45,11 +45,14 @@ namespace VortexArena.Net
 
         public static RemoteSkeletonRegistry Instance { get; private set; }
 
-        /// <summary>A single root sample (recvMs = <c>Environment.TickCount</c>).</summary>
+        /// <summary>A single root sample (recvMs = <c>Environment.TickCount</c>): body yaw + the
+        /// root's offset from the pose-channel head's floor projection (§6.9, v19) — decoded to
+        /// floats at ingest so interpolation needs no unpacking.</summary>
         private struct RootSample
         {
             public int recvMs;
-            public PoseData root;
+            public float yawDeg;
+            public Vector3 offset;
         }
 
         private class SkeletonEntryState
@@ -129,7 +132,12 @@ namespace VortexArena.Net
                 state.pendingBlob = entry.blob;
                 state.pendingLength = entry.blobLength;
 
-                state.ring[state.nextIndex] = new RootSample { recvMs = recvTickMs, root = entry.root };
+                state.ring[state.nextIndex] = new RootSample
+                {
+                    recvMs = recvTickMs,
+                    yawDeg = entry.root.yawDeg,
+                    offset = new Vector3(entry.root.ox, entry.root.oy, entry.root.oz)
+                };
                 state.nextIndex = (state.nextIndex + 1) % RING_SIZE;
                 if (state.count < RING_SIZE)
                 {
@@ -162,15 +170,20 @@ namespace VortexArena.Net
         }
 
         /// <summary>
-        /// MAIN THREAD: the character root's interpolated <b>arena space</b> pose, delayed by
-        /// <see cref="ArenaProtocol.INTERP_DELAY_MS"/>; clamps to the nearest end with no bracketing
-        /// pair, false with no sample at all.
+        /// MAIN THREAD: the character root's interpolated body yaw + head offset (§6.9, v19),
+        /// delayed by <see cref="ArenaProtocol.INTERP_DELAY_MS"/>; clamps to the nearest end with no
+        /// bracketing pair, false with no sample at all.
+        /// <para>⚠️ NOT a pose: the caller rebuilds the arena root on its OWN interpolated
+        /// pose-channel head (<c>root = headFloor + offset</c>, rotation from yaw) — that anchoring
+        /// is the whole point of the v19 wire form, so this class must not try to produce an
+        /// absolute pose.</para>
         /// <para>Uses the same sampling time as the pose channel's <c>GetInterpolatedPose</c>, so no
         /// body-vs-hands time shift is left.</para>
         /// </summary>
-        public bool TryGetInterpolatedRoot(int playerId, out Pose root)
+        public bool TryGetInterpolatedRoot(int playerId, out float yawDeg, out Vector3 offset)
         {
-            root = Pose.identity;
+            yawDeg = 0f;
+            offset = Vector3.zero;
 
             int renderMs = Environment.TickCount - ArenaProtocol.INTERP_DELAY_MS;
 
@@ -217,24 +230,24 @@ namespace VortexArena.Net
 
             if (!hasBefore)
             {
-                root = ToPose(after.root);
+                yawDeg = after.yawDeg;
+                offset = after.offset;
                 return true;
             }
 
             if (!hasAfter)
             {
-                root = ToPose(before.root);
+                yawDeg = before.yawDeg;
+                offset = before.offset;
                 return true;
             }
 
             int span = after.recvMs - before.recvMs;
             float t = span > 0 ? Mathf.Clamp01((renderMs - before.recvMs) / (float)span) : 0f;
 
-            Pose a = ToPose(before.root);
-            Pose b = ToPose(after.root);
-            root = new Pose(
-                Vector3.Lerp(a.position, b.position, t),
-                Quaternion.Slerp(a.rotation, b.rotation, t));
+            // LerpAngle: yaw wraps at 360° and a plain lerp would spin the body the long way round.
+            yawDeg = Mathf.LerpAngle(before.yawDeg, after.yawDeg, t);
+            offset = Vector3.Lerp(before.offset, after.offset, t);
             return true;
         }
 
@@ -270,11 +283,5 @@ namespace VortexArena.Net
             }
         }
 
-        private static Pose ToPose(in PoseData d)
-        {
-            return new Pose(
-                new Vector3(d.px, d.py, d.pz),
-                new Quaternion(d.qx, d.qy, d.qz, d.qw));
-        }
     }
 }

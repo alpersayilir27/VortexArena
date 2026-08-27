@@ -1,49 +1,8 @@
-# Kavrama: kalan iş (kayıtları yazmak + doğrulama)
+# Kavrama: kalan iş (doğrulama)
 
-Kalan iş **asset tarafında** ve başlıkta doğrulamada.
+Kod, stüdyo ve 13 silahın kavrama kayıtları yerinde. Kalan iş **başlıkta doğrulamadır**.
 
----
-
-## 1. Silah kitini bir kez koştur (prefab temizliği + gösterge)
-
-`Tools > VortexArena > Build > Configure All Build Elements` (**Hepsini Çalıştır** — silah kiti her
-koşuda çalışır) — 13 `WPN_*` kökündeki eksik script kaydını ve
-`_interactorFilters` girişlerini temizler (kalırsa ISDK `Start`'ta assert atar, silah kavranamaz),
-`VA_GripSocket.prefab` + `M_GripSocket.mat`'ı üretir ve kataloğa bağlar. Sonuçta değişen
-prefab/asset'ler commit'e girer.
-
----
-
-## 2. 13 silahın kavramasını YAZ
-
-⚠️ Kavraması yazılmamış silahta el `Idle`'da kalır; ön kabza kaydı yoksa soket hiç çizilmez ve
-ikinci el bağlanmaz (`ItemDefinition.HasSecondaryGrip`).
-
-`Tools > VortexArena > Items > Kavrama Pozu Stüdyosu`, prefab kipinde
-(tam reçete: `Docs/Gelistirici/Yemek-Kitabi.md` §11.0):
-
-1. `WPN_*`'ı prefab kipinde aç → **Ana Kabza Ellerini Oluştur** (+ **Ön Kabza Ellerini Oluştur**);
-   taşınan kök kumanda (anchor) çerçevesidir (yalnız taşınır, dönüşü kaydedilmez), kumanda modeli
-   ile hayalet el onun çocuğudur.
-2. Dört el de yazılmalı: ana kabza sağ/sol, ön kabza sağ/sol. Eksik el öteki elin kaydına düşer ve
-   o el silahı yanlış tutar; **Karşı Ele Aynala** yalnız başlangıçtır.
-3. Her elin **modelini** o kumandanın üstüne oturt (*El Modeli* düğmesi → taşı ve **çevir**): kimi
-   kabza yandan, kimi alttan tutuluyor. Silahın duruşu bundan etkilenmez.
-4. Her elin parmaklarını o silaha göre rigle: penceredeki parmak listesinden eklemi seç, Scene
-   View'da çevir (metakarpallar listede yoktur ve riglenmez).
-5. **Kaydet** → dördü `WD_*.asset`'e iner; silah kiti kendiliğinden eşitlenir (eller tezgâhtan
-   kalkarsa *Elleri Oluştur* kayıttan aynı yere getirir).
-
-Aynı el başka bir silahta yazılıysa **Kopya Al** 3. ve 4. adımı devralır (el satırındaki üçüncü
-düğme: yerleşim + parmak rigi aynen gelir). ⚠️ Silahın kumandaya göre yeri kopyalanmaz — o her
-silahta elle konur.
-
-Kapsam: `WeaponKitBuilder` tablosundaki **tüm** `WPN_*`'lar; hangilerinin eksik olduğunu
-silah kiti koşusunun sonundaki uyarı listeler.
-
----
-
-## 3. Doğrulama (başlıkta + iki uçta)
+## Doğrulama (başlıkta + iki uçta)
 
 - [ ] Silah ele geldiğinde ana kavrama noktası avucun ortasında; el döndükçe kaymıyor.
 - [ ] Stüdyoda kumanda kökü çevrilmiş olsa bile silah tek elde kumandayla hizalı geliyor (anchor

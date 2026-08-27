@@ -386,8 +386,8 @@ namespace VortexArena.Net
         }
 
         /// <summary>
-        /// MAIN THREAD: sends the retargeted skeleton blob + the character root's <b>arena space</b>
-        /// pose as <c>0x07</c> (§6.9); a silent no-op before registration.
+        /// MAIN THREAD: sends the retargeted skeleton blob + the character root as <c>0x07</c>
+        /// (§6.9); a silent no-op before registration.
         /// <para><b>PUSH gate:</b> the cadence comes from the Movement SDK, not this class — the caller
         /// hands over a frame when the SDK produces one. <see cref="SkeletonMinSendInterval"/> is only a
         /// safety net against a runaway cadence.</para>
@@ -395,6 +395,11 @@ namespace VortexArena.Net
         /// blob</b>: the SDK writes the root joint in the sender's world space, unrelated to the
         /// receiver's arena (§6.9). The caller does the transform — the Net layer does not see
         /// <c>ArenaSpace</c>, same as on the pose channel (see <see cref="IPoseSource"/>).</para>
+        /// <para>⚠️ The wire form is NOT the absolute pose (v19): the root travels as yaw + offset
+        /// from the pose-channel head's floor projection (§6.9), measured here against the SAME
+        /// <see cref="IPoseSource"/> head the pose channel sends — both ends use one reference. With
+        /// no head available the frame is dropped: the pose channel is silent too, so the receiver
+        /// could not rebuild the root anyway.</para>
         /// <para>⚠️ A blob over <see cref="ArenaProtocol.SKELETON_MAX_BLOB_BYTES"/> is <b>NOT SENT</b>:
         /// there is no fragmentation on this channel, and sending it would mean trusting IP
         /// fragmentation (losing one fragment throws away the whole frame).</para>
@@ -402,6 +407,11 @@ namespace VortexArena.Net
         public void SendSkeleton(byte[] blob, int length, Pose arenaRoot)
         {
             if (!Registered || _udp == null || blob == null || length <= 0)
+            {
+                return;
+            }
+
+            if (_poseSource == null || !_poseSource.TryGetArenaPoses(out Pose head, out _, out _))
             {
                 return;
             }
@@ -433,7 +443,14 @@ namespace VortexArena.Net
             {
                 playerId = _playerId,
                 seq = _skeletonSeq++,
-                root = ToPoseData(arenaRoot),
+                root = new SkeletonRootData
+                {
+                    yawDeg = YawDegrees(arenaRoot.rotation),
+                    // Offset from the head's floor projection (its y is 0, so oy = the root's height).
+                    ox = arenaRoot.position.x - head.position.x,
+                    oy = arenaRoot.position.y,
+                    oz = arenaRoot.position.z - head.position.z
+                },
                 blob = blob,
                 blobLength = length
             };
@@ -643,6 +660,18 @@ namespace VortexArena.Net
             data.qz = pose.rotation.z;
             data.qw = pose.rotation.w;
             return data;
+        }
+
+        /// <summary>Arena yaw of a rotation (forward projected to XZ) — the only rotation component
+        /// the skeleton root carries (§6.9). Degenerate forward (looking straight up/down) yields 0;
+        /// the SDK root is an upright frame, so this never fires on real data.</summary>
+        private static float YawDegrees(in Quaternion rotation)
+        {
+            Vector3 forward = rotation * Vector3.forward;
+            forward.y = 0f;
+            return forward.sqrMagnitude > 1e-6f
+                ? Mathf.Atan2(forward.x, forward.z) * Mathf.Rad2Deg
+                : 0f;
         }
 
         private void OnDestroy()
