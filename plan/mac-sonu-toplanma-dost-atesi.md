@@ -15,7 +15,6 @@ Bu dosya yalnız **elde kalan doğrulamayı** tutuyor; hepsi geçince silinir.
 - [ ] Unity konsolu temiz — dokunulan istemci dosyaları: `ControlMessages` · `MessageTypes` ·
       `NetEvents` · `ArenaClient` · `ModeRuntimePump` · `AdminSelection` · `AdminCommands` ·
       `AdminPreferencesPanel`
-- [x] `dotnet build Server/` temiz (0 uyarı, 0 hata)
 
 ## 2. Tercihler paneli (`AdminHud.prefab`)
 
