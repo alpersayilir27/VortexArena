@@ -514,14 +514,16 @@ namespace VortexArena.Core.Combat
         /// <para>
         /// <c>false</c> means the target is not a network PLAYER — it does NOT mean no damage: a network
         /// object (§10.10) is reported from here too and still returns <c>false</c>. The return value is
-        /// only a PRESENTATION decision — body FX or wall FX:
+        /// only a PRESENTATION decision:
         /// <code>
         /// if (Physics.Raycast(muzzle.position, dir, out var hit, range))
         /// {
-        ///     bool isPlayer = ArenaCombat.ReportRaycastHit(hit, damage, "ok");
-        ///     Instantiate(isPlayer ? bloodFx : sparkFx, hit.point, Quaternion.LookRotation(hit.normal));
+        ///     ArenaCombat.ReportImpact(hit);   // what the surface leaves behind
+        ///     ArenaCombat.ReportRaycastHit(hit, damage, "ok");
         /// }
         /// </code>
+        /// ⚠️ Choosing blood vs sparks is NOT the caller's job any more — that is what
+        /// <see cref="ReportImpact"/> resolves from the surface.
         /// </para>
         /// </summary>
         public static bool ReportRaycastHit(in RaycastHit hit, float damage, string weaponId)
@@ -540,6 +542,19 @@ namespace VortexArena.Core.Combat
             }
 
             return false;
+        }
+
+        /// <summary>What the round LEAVES on what it hit: the surface's particles and sound
+        /// (<see cref="SurfaceImpactFx"/>).
+        /// <para>Sits next to <see cref="ReportHit"/> for the same reason: a new damage source (bow,
+        /// axe, blast) gets impacts by calling one method, instead of each one growing its own
+        /// prefab field and its own <c>Instantiate</c>. Purely local decoration — nothing here
+        /// touches the wire.</para>
+        /// <para>Independent of damage on purpose: it fires for scenery too, and a shot that hits a
+        /// wall must look the same whether or not anything took damage.</para></summary>
+        public static void ReportImpact(in RaycastHit hit)
+        {
+            SurfaceImpactFx.Shared.Play(hit);
         }
 
         /// <summary>

@@ -1036,6 +1036,17 @@ bireysel katkı ve ortak toplam **tek çağrıdan** gider, `scoreBlue` `0` kalı
 (`IsMatchOver` her zaman `MatchOutcome.Draw` döndürür). Sonuç tablosu grubun birlikte okuduğu şey
 olduğu için `HoldsResultForOperator => true`.
 
+> **Yarışmalı varyant.** Ailenin değişmezi yalnız ilk üçüdür — `Weapons = None` (hasarı kapatan
+> şey), `Revive = None`, `HoldsResultForOperator => true`. **Skor kanalı ve takım kipi serbesttir:**
+> kırmızı–mavi yarışan bir çocuk oyunu `Teams = TwoTeams` + `Scoring = Team` alır, kazananı olur ve
+> `IsMatchOver` süre dolunca önde olan takımı döndürür (örnek: `mole`). ⚠️ **Takımlı olmak taban
+> gerektirmez:** taban `Revive = OwnBase`'in aracıydı ve burada canlanma yoktur — haritaya BaseZone
+> koymak, oyuncuya oyunun parçası olmayan bir hedef gösterir. ⚠️ Yarışmalı bir çocuk oyununda
+> **ceza kanalını da seç:** takım skorunu eksiye açmak mı, `0`'da kısmak mı? Küçük yaş grubunda eksi
+> skor anlatılamaz, ama ceza hiç görünmezse yanlış vuruşun karşılığı da kalmaz — ikisini ayırmanın
+> yolu takım skorunu kısıp bireysel katkıyı eksiye bırakmaktır (o zaman iki kanal birbirinin toplamı
+> **değildir** ve HUD bunu böyle sunmalıdır).
+
 **3. HUD.** `ModeHudBase`'den türet ama silah/can/ölüm/kill-feed alanlarını prefabda **boş bırak** —
 taban atanmamış alan için hiçbir şey çizmez, bu modda karşılıkları yoktur. Kendi sayaçlarını
 `modeState`'ten oku (biçimi mod tanımlar, çekirdek yorumlamaz) ve **bilinmeyen anahtarı atla**:

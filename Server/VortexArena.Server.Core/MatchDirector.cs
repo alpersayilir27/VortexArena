@@ -323,6 +323,7 @@ public sealed class MatchDirector
         Register(new FfaMode());
         Register(new TournamentMode());
         Register(new BurgerMode());
+        Register(new MoleMode());
     }
 
     private void Register(IGameMode mode) => _modes[mode.ModeId] = mode;
@@ -2199,6 +2200,18 @@ public sealed class MatchDirector
             hasPose = entry.HasPose;
             return true;
         }
+    }
+
+    /// <summary>netIds of the loaded scene's objects of one kind, in ascending order; empty when the
+    /// scene has none. The way a mode learns which objects it may drive.</summary>
+    /// <remarks>⚠️ Returns a COPY for the same reason as <see cref="TryReadObject"/>: mode hooks run
+    /// outside the lock.
+    /// <para>Meant for the SETUP path (<c>OnMatchStart</c>) — it walks the whole table, so calling it
+    /// from the 10 Hz tick would rescan every object ten times a second for a list that only changes
+    /// when the scene does.</para></remarks>
+    public IReadOnlyList<int> ObjectIdsOfKind(string kind)
+    {
+        lock (_gate) return _objects.ListByKindLocked(kind);
     }
 
     /// <summary>Rejected object message: one console line, nothing sent back (§10.10).</summary>

@@ -95,6 +95,32 @@
       "gameType": "quickbattle",
       "modes": ["ffa", "tdm", "tournament"],
       "objects": []
+    },
+    {
+      "sceneName": "Mole_VortexAntep",
+      "venue": "VortexAntep",
+      "gameType": "kids",
+      "modes": ["mole"],
+      "objects": [
+        { "sceneId": 1, "kind": "mole_hole" },
+        { "sceneId": 2, "kind": "mole_hole" },
+        { "sceneId": 3, "kind": "mole_hole" },
+        { "sceneId": 4, "kind": "mole_hole" },
+        { "sceneId": 5, "kind": "mole_hole" },
+        { "sceneId": 6, "kind": "mole_hole" },
+        { "sceneId": 7, "kind": "mole_hole" },
+        { "sceneId": 8, "kind": "mole_hole" },
+        { "sceneId": 9, "kind": "mole_hole" },
+        { "sceneId": 10, "kind": "mole_hole" },
+        { "sceneId": 11, "kind": "mole_hole" },
+        { "sceneId": 12, "kind": "mole_hole" },
+        { "sceneId": 13, "kind": "mole_hole" },
+        { "sceneId": 14, "kind": "mole_hole" },
+        { "sceneId": 15, "kind": "mole_hole" },
+        { "sceneId": 16, "kind": "mole_hole" },
+        { "sceneId": 17, "kind": "mole_hole" },
+        { "sceneId": 18, "kind": "mole_hole" }
+      ]
     }
   ],
   "kinds": [
@@ -139,6 +165,9 @@
       ] },
     { "kind": "knife", "maxHp": 0, "grab": "anyone", "events": [] },
     { "kind": "lettuce", "maxHp": 0, "grab": "anyone", "events": [] },
+    { "kind": "mole_hole", "maxHp": 0, "grab": "none", "events": [
+        { "name": "whack", "policy": "anyone", "phaseGate": "playing" }
+      ] },
     { "kind": "onion", "maxHp": 0, "grab": "anyone", "events": [] },
     { "kind": "patty", "maxHp": 0, "grab": "anyone", "events": [
         { "name": "grill", "policy": "anyone", "phaseGate": "playing" }

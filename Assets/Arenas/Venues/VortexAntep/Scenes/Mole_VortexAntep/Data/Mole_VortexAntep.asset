@@ -12,8 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1426f3e989e9dc8438a88550f4934cea, type: 3}
   m_Name: Mole_VortexAntep
   m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Arena.MapDefinition
-  sceneName: Military_VortexAntep
-  displayName: Military
+  sceneName: Mole_VortexAntep
+  displayName: "K\xF6stebek"
   gameType: 1
   supportedModeIds:
   - mole

@@ -25,6 +25,10 @@
         "blender-mcp"
       ],
       "env": {}
+    },
+    "notion": {
+      "type": "http",
+      "url": "https://mcp.notion.com/mcp"
     }
   }
 }
