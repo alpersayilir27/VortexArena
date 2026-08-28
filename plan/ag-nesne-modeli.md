@@ -14,7 +14,6 @@ dinamik ve sahne prefabları, sahne yerleşimi ve export **kuruldu**
 
 **B1 (hâlâ koşulmadı):**
 
-- [ ] Sunucu derlemesi temiz (`dotnet build`), Unity derlemesi temiz.
 - [ ] Sahneye `NetObject` + `NetObjectKind` konup sahne kaydedilince
       `Data/<SahneAdı>_objects.json` yazılıyor; obje silinince dosya siliniyor.
 - [ ] `Export Server Config` → `maps.json`'da `objects[]` ve `kinds[]` görünüyor; ikinci export

@@ -21,6 +21,9 @@ namespace VortexArena.Modes.Mole
     /// stands at ground level when raised) and its head with the old head's height, then drag the
     /// renderers that should take the team colour into <see cref="teamRenderers"/>. Nothing else moves
     /// — the pivot is what rises, not the model.</para>
+    /// <para>Sound lives on THIS object, not on the model: an <c>AudioSource</c> on the hole root is
+    /// found automatically, so swapping the model keeps the sounds. The hole is also the right place
+    /// for them — it never moves, while the mole travels through the floor.</para>
     /// <para>⚠️ <b><c>Model</c>'s own transform must stay at zero</b> (position, rotation, scale 1): it is
     /// the swap point, not a placement. An offset there moves the mole away from its hole in EVERY
     /// arena at once, and the mole is below the floor while hidden — so the mistake shows up as holes
@@ -50,6 +53,27 @@ namespace VortexArena.Modes.Mole
         [SerializeField] private Color redColor = new Color(0.86f, 0.22f, 0.20f);
         [SerializeField] private Color blueColor = new Color(0.20f, 0.42f, 0.90f);
 
+        [Tooltip("YANLIŞ rengi ezince köstebeğin aldığı renk. Çocuk 'yanlışa vurdum'u puandan " +
+                 "değil buradan anlar — takım renklerinden ikisine de benzemeyen bir ton seç.")]
+        [SerializeField] private Color wrongColor = new Color(0.22f, 0.20f, 0.18f);
+
+        [Header("Ses")]
+        [Tooltip("Köstebeğin sesleri buradan çalar. Boşsa bu objedeki AudioSource aranır; o da " +
+                 "yoksa ses çıkmaz (efektin geri kalanı çalışır).")]
+        [SerializeField] private AudioSource audioSource;
+
+        [Tooltip("Köstebek delikten çıkarken.")]
+        [SerializeField] private AudioClip riseClip;
+
+        [Tooltip("DOĞRU rengi ezince — neşeli.")]
+        [SerializeField] private AudioClip correctClip;
+
+        [Tooltip("YANLIŞ rengi ezince — uyarı. ⚠️ Ceza sesi çocuğu korkutmasın diye kısa tut.")]
+        [SerializeField] private AudioClip wrongClip;
+
+        [Tooltip("Köstebek deliğe inerken (ezilmeden de iner: süresi dolarsa).")]
+        [SerializeField] private AudioClip descendClip;
+
         private NetObject _net;
 
         /// <summary>Material INSTANCES of the team-coloured renderers. Instances on purpose: writing the
@@ -68,6 +92,15 @@ namespace VortexArena.Modes.Mole
         /// <summary>Mole colour from the payload (<c>red</c>/<c>blue</c>); empty while the hole is idle.
         /// Only the tint reads it — the hitter's own team is compared on the SERVER.</summary>
         private string _color = "";
+
+        /// <summary>Was the LAST squash on this hole the right colour (payload <c>ok</c>)? Only the
+        /// tint and the sound read it — the server already scored it.</summary>
+        private bool _wasCorrect = true;
+
+        /// <summary>Stage of the previous state, so a CHANGE can be told from a repeat. ⚠️ Sounds hang
+        /// off transitions, not off the current stage: the same stage arrives again on every payload
+        /// write, and playing on arrival would stutter the clip.</summary>
+        private int _lastStage = -1;
 
         public int NetId => _net != null ? _net.NetId : 0;
 
@@ -90,6 +123,11 @@ namespace VortexArena.Modes.Mole
                 teamRenderers = mole.GetComponentsInChildren<Renderer>(true);
             }
 
+            if (audioSource == null)
+            {
+                audioSource = GetComponent<AudioSource>();
+            }
+
             _restLocalPosition = mole.localPosition;
             _restLocalScale = mole.localScale;
 
@@ -108,6 +146,9 @@ namespace VortexArena.Modes.Mole
             _net.StateChanged += HandleStateChanged;
             ReadPayload();
             ApplyImmediate();
+
+            // Seeded WITHOUT playing: enabling the hole is not a pop.
+            _lastStage = _net.Stage;
         }
 
         private void OnDisable()
@@ -126,6 +167,36 @@ namespace VortexArena.Modes.Mole
             if (origin == NetStateOrigin.Snapshot)
             {
                 ApplyImmediate();
+                _lastStage = _net.Stage;
+                return;
+            }
+
+            PlayStageSound(_lastStage, _net.Stage);
+            _lastStage = _net.Stage;
+        }
+
+        /// <summary>Sound of a stage CHANGE. ⚠️ Never runs for a snapshot: a late joiner would hear
+        /// every standing mole pop at once, as if the whole board had just come up.</summary>
+        private void PlayStageSound(int from, int to)
+        {
+            if (audioSource == null || from == to)
+            {
+                return;
+            }
+
+            AudioClip clip = to switch
+            {
+                MoleKinds.StageUp => riseClip,
+                MoleKinds.StageSquashed => _wasCorrect ? correctClip : wrongClip,
+                MoleKinds.StageHidden => descendClip,
+                _ => null,
+            };
+
+            if (clip != null)
+            {
+                // PlayOneShot: the squash lands while the rise may still be sounding, and cutting the
+                // rise off would swallow the hit's own feedback.
+                audioSource.PlayOneShot(clip);
             }
         }
 
@@ -138,12 +209,23 @@ namespace VortexArena.Modes.Mole
 
             _color = _net.TryGetPayloadValue(MoleKinds.PayloadColor, out string color) ? color : "";
 
+            // Absent (any stage but squashed) counts as correct: the flag only qualifies a squash, and
+            // treating "no flag" as wrong would paint every rising mole with the warning colour.
+            _wasCorrect = !_net.TryGetPayloadValue(MoleKinds.PayloadOk, out string ok) || ok != "0";
+
             if (_teamMaterials == null)
             {
                 return;
             }
 
             Color tint = _color == MoleKinds.ColorBlue ? blueColor : redColor;
+
+            // The wrong colour is worn only WHILE squashed: it is feedback for the hit, not a third
+            // team. The next pop repaints from the payload anyway.
+            if (_net.Stage == MoleKinds.StageSquashed && !_wasCorrect)
+            {
+                tint = wrongColor;
+            }
             for (int i = 0; i < _teamMaterials.Length; i++)
             {
                 if (_teamMaterials[i] != null)

@@ -19,7 +19,7 @@ alanın dışına çıkıp içeri ateş etmek artık mümkün değil.
 
 ## 2. Doğrulama (kullanıcı koşar)
 
-- [ ] `dotnet build` (Server) + Unity derlemesi + yeni APK
+- [ ] Yeni APK (tüm başlıklara)
 - [ ] Alanın dışına çık → halka **turuncu 1.5 Hz**, etiket `ALAN DIŞI`, feed'de başlangıç satırı;
       içeri gir → söner + bitiş satırı ve süre
 - [ ] Kafayı engele sok → halka **kırmızı 3 Hz** (mevcut davranış bozulmamış), etiket `DUVAR`

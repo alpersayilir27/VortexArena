@@ -23,7 +23,10 @@ yükselme mesafesi ve deliğin çapı ona göre ayarlı.
       collider'ı kontrol edilir. Kodda ölçü yoktur — vuruşun cevabı collider'lardan çıkar.
 - [ ] **Balyoz kavrama pozu** (`Kavrama Pozu Stüdyosu`, sağ + sol ana kabza) — yazılmadan balyoz ele
       gelir ama kumanda anchor'ında, yanlış açıyla durur.
-- [ ] **Sesler:** köstebek çıkışı, doğru vuruş (neşeli), yanlış vuruş (uyarı), ezilme, iniş.
+- [ ] **Ses klipleri:** çıkış, doğru vuruş (neşeli), yanlış vuruş (uyarı), iniş. Kancalar
+      `MoleHole`'da hazır ve aşama DEĞİŞİMİNE bağlı; klipler alanlara sürüklenir, delik kökündeki
+      `AudioSource` çalar. ⚠️ Ayrı bir "ezilme" sesi yoktur: doğru/yanlış vuruş sesi onun yerine
+      geçer.
 - [ ] **HUD sanatı** (bugün Hamburgerci HUD'ının kopyası).
 - [ ] Sahnenin ortam sesi boş; köstebek arenasına uygun bir `ambienceClip` seçilecek.
 
@@ -33,6 +36,8 @@ yükselme mesafesi ve deliğin çapı ona göre ayarlı.
       küçük küre "ıskaladım" hissi, büyük küre "değmeden ezdim" hissi verir.
 - [ ] Çıkış aralığı / aynı anda ayakta köstebek tavanı — kalabalıkta yoğunluk hissi.
 - [ ] Puan ve ceza oranı; ceza caydırmıyorsa artırılır.
+- [ ] Yanlış vuruş rengi (`wrongColor`): iki takım renginden de yeterince ayrılıyor mu — çocuk
+      "yanlışa vurdum"u puandan değil oradan anlıyor.
 - [ ] Köstebeğin yükseklik ayarı: eğilme derinliği çocuk için konforlu mu.
 - [ ] Takım skorunun `0` tabanı: sahada bilinçli yanlış vurma görülürse eksiye açmak caydırıcılığı
       artırır (karar gerekçesi `Server/README.md` mod bloğunda).
@@ -40,12 +45,14 @@ yükselme mesafesi ve deliğin çapı ona göre ayarlı.
 
 ## Doğrulama (kullanıcı koşar)
 
-- [ ] Sunucu derlemesi temiz (`dotnet build`; Unity tarafı derleniyor).
 - [ ] İki başlıkta aynı delikten aynı anda aynı renk köstebek çıkar; süre dolunca ikisinde de iner.
 - [ ] İki oyuncu aynı köstebeğe sallar: **tek** vuruş işlenir, skor bir kez yazılır, ezilme iki
       başlıkta da oynar.
 - [ ] Doğru vuruş: takım skoru + oyuncu katkısı + doğru sayacı artar. Yanlış vuruş: takım skoru
       düşer (**0 altına inmez**), oyuncu katkısı eksilir, yanlış sayacı artar.
+- [ ] Yanlış rengi ezince köstebek uyarı rengine döner ve uyarı sesi çalar; **sonraki çıkışta**
+      yine takım renginde gelir. Doğru vuruşta renk değişmez.
+- [ ] Geç katılan başlıkta ayaktaki köstebeklerin sesi **toplu çalmıyor** (anlık görüntü sessizdir).
 - [ ] Köstebek indikten sonra ulaşan sallama hiçbir şey yapmaz (nonce) ve **ceza yazmaz**; eşik altı
       yavaş temas vuruş sayılmaz.
 - [ ] Köstebeğin **herhangi bir yerine** (tepesi, yanı) hızlı vuruş sayılır; **çok hızlı** sallamada

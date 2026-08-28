@@ -2,11 +2,10 @@
 
 Kod ve doküman yazıldı (`ServiceShutdown` + dört serviste `StopAsync` + `Program.ShutdownAsync` üç
 tetikleyiciyle; `Server/README.md` "Kapanış", `Sistem-Ozeti` §4 sözleşmesi ve §7 tuzağı).
-**Sunucu derlemesi yapılmadı.** Bu dosya doğrulama bitince silinir.
+Bu dosya doğrulama bitince silinir.
 
 ## Doğrulama (kullanıcı koşar)
 
-- [ ] `dotnet build` temiz.
 - [ ] Ctrl+C: konsolda son satır "Kapandı.", sonrasında log yok; süreç 3 sn içinde çıkar.
 - [ ] **Konsol penceresini çarpıyla kapatma** aynı sırayı koşturur (pencere kapanmadan önce
       "Kapatılıyor…" → "Kapandı." görünür).

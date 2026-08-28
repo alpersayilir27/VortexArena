@@ -9,7 +9,6 @@ dokümanların tamamı yazıldı. Kalıcı bilgi `Docs/ArenaNet-Protokol.md` (§
 
 ## Doğrulama (kullanıcı koşar)
 
-- [ ] `dotnet build` (Server) + Unity derlemesi temiz
 - [ ] Kumanda **eğik** tutulup kalibre edilince zemin, dik tutuşla aynı çıkıyor (log satırındaki
       `floor` değeri)
 - [ ] `VA_CalibrationManager.floorProbeDropMeters` (0.08) sahada doğru: ilk kalibrasyondan sonra

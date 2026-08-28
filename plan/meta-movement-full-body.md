@@ -35,7 +35,7 @@ Eklem sayısı 66 ve sıkıştırma `High`; kaba hesapla blob ~300-400 B, yani
 - İzinler hazır: manifest'te `BODY_TRACKING`/`USE_ANCHOR_API`/`USE_SCENE`, `OVRManager`'da
   `requestBodyTrackingPermissionOnStartup` ve `requestScenePermissionOnStartup` açık.
 
-## Doğrulanacaklar (derlemeyi kullanıcı koşar)
+## Doğrulanacaklar (kullanıcı koşar)
 
 - Yerel oyuncu kendi gövdesinden hiçbir şey görmüyor; gördüğü eller rig'in sentetik elleri.
 - Uzak avatar full body, doğru boyda, arena zemininde; kalibrasyondan sonra kaymıyor.
