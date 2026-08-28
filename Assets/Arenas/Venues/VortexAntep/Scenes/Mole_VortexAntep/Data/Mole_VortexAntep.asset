@@ -14,9 +14,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Arena.MapDefinition
   sceneName: Military_VortexAntep
   displayName: Military
+  gameType: 1
   supportedModeIds:
-  - tdm
-  - ffa
-  - tournament
-  ambienceClip: {fileID: 8300000, guid: ce0957423e989d3409b4c4680b9079ad, type: 3}
+  - mole
+  ambienceClip: {fileID: 0}
   ambienceVolume: 0.175
+  musicClip: {fileID: 8300000, guid: 35b2007bc1e731848a65d0e57541bde0, type: 3}
+  musicVolume: 0.5
