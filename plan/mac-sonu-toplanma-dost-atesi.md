@@ -1,6 +1,6 @@
 # Maç sonu bekleme · Toplanma · Dost ateşi — kalan doğrulama
 
-**Kod, prefab ve dokümanların tamamı yazıldı**; sunucu derlemesi temiz. Kalıcı bilgi dokümanlara
+**Kod, prefab ve dokümanların tamamı yazıldı.** Kalıcı bilgi dokümanlara
 işlendi: `Docs/ArenaNet-Protokol.md` (§1 sabit, §5.2 `set_friendly_fire`, §5.3 `rules_update` +
 `admin_state.friendlyFire`, §10.1 `finished` + tur tabanlı modlar, §10.2 takımdaş öldürme,
 §10.5 `friendlyFire`) · `Docs/Sistem-Ozeti.md` (§3.6, §3.8.2, §3.9, §4, §7) ·
@@ -10,13 +10,7 @@ Bu dosya yalnız **elde kalan doğrulamayı** tutuyor; hepsi geçince silinir.
 
 ---
 
-## 1. Derleme (kullanıcı koşar)
-
-- [ ] Unity konsolu temiz — dokunulan istemci dosyaları: `ControlMessages` · `MessageTypes` ·
-      `NetEvents` · `ArenaClient` · `ModeRuntimePump` · `AdminSelection` · `AdminCommands` ·
-      `AdminPreferencesPanel`
-
-## 2. Tercihler paneli (`AdminHud.prefab`)
+## 1. Tercihler paneli (`AdminHud.prefab`)
 
 - [ ] MAÇ bölümünde satırlar üst üste binmiyor: Mod · Harita · Süre · Skor limiti · Geri sayim ·
       **Dost atesi**
@@ -24,7 +18,7 @@ Bu dosya yalnız **elde kalan doğrulamayı** tutuyor; hepsi geçince silinir.
 - [ ] "Dost atesi" satırındaki iki düğme de aç/kapa yapıyor; değer AÇIK iken kırmızı
 - [ ] Satır **maç koşarken de basılabiliyor** (mod/harita kilitliyken bile)
 
-## 3. Davranış
+## 2. Davranış
 
 **Maç sonu**
 - [ ] Maç bitti → kazanan ekranı duruyor, 10 sn'de lobiye dönmüyor

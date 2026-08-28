@@ -86,7 +86,6 @@ namespace VortexArena.Core.Combat
         [SerializeField] private Transform modelPivot;
         [SerializeField] private Grabbable grabbable;
         [SerializeField] private WeaponAudio weaponAudio;
-        [SerializeField] private GameObject hitEffectPrefab;
         [Tooltip("YALNIZ editör fallback'i (kontrolcü çözülemezse 'Player/Attack'). Boşsa proje geneli aksiyonlar.")]
         [SerializeField] private InputActionAsset inputActions;
 
@@ -815,12 +814,10 @@ namespace VortexArena.Core.Combat
                 }
 
                 RaycastHit hit = trace.Hit;
-                if (hitEffectPrefab != null)
-                {
-                    GameObject fx = Instantiate(hitEffectPrefab, hit.point + hit.normal * 0.01f,
-                        Quaternion.LookRotation(hit.normal));
-                    Destroy(fx, 2f);
-                }
+
+                // ⚠️ The weapon does NOT own the impact look: what a round leaves behind belongs to
+                // the SURFACE (snow, wood, metal), not to the gun. One gate, pooled instances.
+                ArenaCombat.ReportImpact(hit);
 
                 // The zone multiplier is applied HERE: damage is client-authoritative and the
                 // server applies hit_report.damage verbatim (§10.3).

@@ -12,9 +12,20 @@ APK engelin içinden ateş edebilir ve kafası içerideyken görmeye devam eder.
 ## 1. Sahne işi (elle) — her arena kutusunda tek tek
 
 - [ ] **İç engellerin** (sütun, kasa, sandık, blok) collider'ını `Obstacle` layer'ına al.
-      ⚠️ Dış duvar, zemin ve tavan **girmez** — kalibrasyonu kaymış oyuncu durduk yere ölmesin.
+      ⚠️ Dış duvar, zemin, tavan ve köşe dolgusu **girmez** — kalibrasyonu kaymış oyuncu durduk
+      yere ölmesin.
+- [ ] Yalnız **oyun kutusunun içindeki** geometri sayılır. Hazır environment paketleri kutunun
+      çok dışına taşar (çit dizileri, terrain, hangar); oyuncunun ulaşamadığı hiçbir şey layer'a
+      girmez — girerse yalnız `ObstacleVolumes`'un aday sınırını boşa doldurur.
+- [ ] Sınır kabuğu olarak konmuş bloklar obje obje ayrılır: oyuncuyu dışarı çıkmaktan alıkoyan
+      kabuk layer'a **girmez**, kutunun içinde duran blok girer. Aynı ad ailesi ikisini de
+      kapsayabildiği için ada bakarak karar verilmez.
 - [ ] Aynı objelerin collider'ı **konveks** olmalı (`MeshCollider` + `Convex`, ya da
       Box/Sphere/Capsule). ProBuilder objelerinde bu kutu varsayılan olarak KAPALI gelir.
+      ⚠️ Environment paketleri konkav `MeshCollider` ile gelir: böylesine layer vermek hiçbir şey
+      yapmaz (çalışma anında elenir + hata basar), mesh'i convex işaretlemek ise hull'ü şişirip
+      oyuncuyu boşlukta cezalandırır. Doğru hamle kaba bir **Box/Capsule eklemektir** — yani bu
+      iş çoğu arenada "layer değiştir" değil, "collider koy".
 - [ ] `Tools > VortexArena > Arena > Engel Hacimlerini Denetle` koştur; rapordaki konveks olmayan
       **ve şişkin** collider'lar düzeltilene kadar o objeler yanlış ceza üretir.
 
@@ -31,7 +42,7 @@ her `Venues/<İşletme>/Scenes/<Arena>/` kutusunu açıp denetimi koştur.
 
 ## 3. Doğrulama (kullanıcı koşar)
 
-- [ ] `dotnet build` (Server) + Unity derlemesi + yeni APK
+- [ ] Yeni APK (tüm başlıklara)
 - [ ] Kafayı engele sok → ekran **0.2 sn'de tam siyah**, uyarı yazısı nabızla görünür
 - [ ] Bloğa **yavaşça** yaklaş → ekran, bloğun yüzeyi kırpılmaya başlamadan ÖNCE siyah;
       duvarın içi/arkası hiçbir anda görünmüyor. **Dört ana yönde ve köşegende ayrı ayrı dene**

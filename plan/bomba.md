@@ -42,7 +42,6 @@ Reçetenin tamamı `Docs/Gelistirici/Yemek-Kitabi.md` §11.3.
 
 ## 4. Doğrulama (kullanıcı koşar)
 
-- [ ] Sunucu derlemesi temiz (`dotnet build`; Unity tarafı derleniyor).
 - [ ] Sağ elde silah varken sol bileğe uzanıp kavramaya basınca: silah kaybolur, elde bomba belirir,
       **parmaklar bombanın kavrama duruşunu alır**; atış sonrası **aynı silah** aynı ele geri gelir
       (yere silah düşmez, rastgele başka silah gelmez).

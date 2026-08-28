@@ -46,6 +46,13 @@ namespace VortexArena.Core.Combat
 
         private const int ParticlesPerShot = 14;
 
+        /// <summary>Below this the round never left the barrel (obstacle gate) — nothing was hit.</summary>
+        private const float MinImpactDistanceMeters = 0.05f;
+
+        /// <summary>The impact ray is cast this much LONGER than the reported distance: the shooter's
+        /// distance is quantised on the wire, and a ray stopping exactly at the surface can miss it.</summary>
+        private const float ImpactRayMarginMeters = 0.15f;
+
         /// <summary>Name of the muzzle child in the item prefab (WeaponKitBuilder creates it).</summary>
         private const string MuzzleChildName = "Muzzle";
 
@@ -353,7 +360,36 @@ namespace VortexArena.Core.Combat
             }
 
             DrawTracer(fx, item, origin, worldDir, evt.magnitude);
+            PlayRemoteImpact(origin, worldDir, evt.magnitude);
             PrunePlayers(now);
+        }
+
+        /// <summary>Impact of a REMOTE player's round on the surface it hit, recovered locally.
+        /// <para>Nothing about the impact travels on the wire and nothing is added: the shot event
+        /// already carries direction and distance (§6.4), so every receiver can cast the same ray and
+        /// resolve the same surface for itself. An "impact" message would be a second source of truth
+        /// for something already derivable — the same reasoning as simulating a thrown bomb's
+        /// ballistics locally.</para>
+        /// <para>⚠️ Deliberately NOT inside <see cref="DrawTracer"/>: tracers are drawn every Nth
+        /// round, impacts belong on EVERY round — a wall that only sparks on every third hit reads as
+        /// a broken gun.</para>
+        /// <para>The ray is cast slightly LONG so it lands on the same collider the shooter's ray
+        /// stopped at; a miss (round flew to max range) simply hits nothing.</para></summary>
+        private static void PlayRemoteImpact(Vector3 origin, Vector3 worldDir, float distanceMeters)
+        {
+            // An obstacle swallowed the round at the muzzle (§10.9): there is no surface to mark.
+            // Written as a negated comparison so a NaN distance falls out here instead of reaching
+            // Physics.Raycast, which throws on a non-finite length.
+            if (!(distanceMeters > MinImpactDistanceMeters))
+            {
+                return;
+            }
+
+            if (Physics.Raycast(origin, worldDir, out RaycastHit hit,
+                    distanceMeters + ImpactRayMarginMeters, ~0, QueryTriggerInteraction.Ignore))
+            {
+                ArenaCombat.ReportImpact(hit);
+            }
         }
 
         // ---------------------------------------------------------------------- throw

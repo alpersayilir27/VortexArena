@@ -375,7 +375,6 @@ MonoBehaviour:
   muzzle: {fileID: 3408458733611401524}
   modelPivot: {fileID: 5569931341934039454}
   grabbable: {fileID: 7586782109471931299}
-  muzzleFlash: {fileID: 0}
   weaponAudio: {fileID: 5319405770410506279}
   hitEffectPrefab: {fileID: 7889201435730507071, guid: 192901f7cf7b43246bbe48fd22c3ccbe, type: 3}
   inputActions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}

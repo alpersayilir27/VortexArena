@@ -10,7 +10,6 @@ dokümanlar yazıldı. Kalıcı bilgi: `Docs/ArenaNet-Protokol.md` (§1 sabitler
 
 ## 1. Doğrulama (kullanıcı koşar)
 
-- [ ] Unity derlemesi + `dotnet build` (Server) temiz
 - [ ] Panelde üç düğme hizalı; ÇAPA BULUTU pasif/soluk ve tıklanamıyor; panel 1080p'de taşmıyor
       (alt kenar: BAĞLANTI bölümü ekranda)
 - [ ] Sunucu açılışında mod `two_anchor`; panelde 2 ÇAPA vurgulu; ESKİ KALİBRE'ye basınca duyuru

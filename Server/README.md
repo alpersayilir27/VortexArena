@@ -344,6 +344,7 @@ aynı ortak kanaldan (`set_selection` → `admin_state`) gider, böylece iki ope
 | `ffa` | `Modes/FfaMode.cs` | Takımsız · bireysel skor · sabit durarak canlanma · silahı mod dağıtır · gecikme 0 | 300 sn / 20 |
 | `tournament` | `Modes/TournamentMode.cs` | TDM varsayılanından tek farkı: **canlanma yok** (`Revive = None`, gecikme 0). Tur tabanlı takım elemesi | 120 sn (**turun** süresi) / 4 tur (operatör **sınırsız** da seçebilir) |
 | `burger` | `Modes/BurgerMode.cs` | **Oyun tipi `kids`** · silah yok (`Weapons = None`, dolayısıyla hasar yok) · takımsız · canlanma yok (gecikme 0) · ortak skor (`PlayerAndShared`) | 600 sn / **sınırsız** (limit yok) |
+| `mole` | `Modes/MoleMode.cs` | **Oyun tipi `kids`** · silah yok (`Weapons = None`, dolayısıyla hasar yok) · **iki takım + takım skoru** · canlanma yok (gecikme 0) | 300 sn / **sınırsız** (limit yok) |
 
 > `ffa` skoru `AddPlayerScore(killerId, 1)` ile yazar ve kazananı `TryGetLeader` ile bulur;
 > eşitlikte `TryGetLeader` false döndüğü için maç berabere biter. Oyuncusuz başlatılan maçta
@@ -359,9 +360,17 @@ aynı ortak kanaldan (`set_selection` → `admin_state`) gider, böylece iki ope
 > **`burger` Çocuk Oyunları ailesindendir** (`GameType = "kids"`): `start_match` yalnız `gameType`
 > `kids` olan haritayı kabul eder, `quickbattle` haritası reddedilir. Maçı bitiren tek koşul
 > **süredir**; `match_end`'de kazanan alanlarının **ikisi de boş** kalır (§10.5 ortak skor kuralı) ve
-> sonuç ekranı `HoldsResultForOperator` ile operatör kapatana kadar durur. Bugün sunucuda yalnız
-> modun şekli ve yaşam döngüsü vardır — müşteri/tarif/pişirme mantığı ve ortak skorun yazan yolu
-> yoktur, yani mod puan üretmez.
+> sonuç ekranı `HoldsResultForOperator` ile operatör kapatana kadar durur. Vardiyanın tamamı
+> (müşteri, tarif, pişirme, servis doğrulaması, ortak skor) sunucudadır; istemci yalnız sunumdur.
+
+> **`mole` de Çocuk Oyunları ailesindendir** ama **yarışmalıdır**: iki takım + takım skoru, yani
+> ailenin kazananı olan ilk oyunu. Ailenin değişmezleri durur (silah yok → hasar yok, canlanma yok,
+> sonuç ekranı operatörü bekler). ⚠️ **Takımlı olması taban gerektirmez** — taban `base`
+> canlanmasının aracıydı, burada canlanma yok. Maçı bitiren tek koşul **süredir**: skoru yüksek
+> takım kazanır, eşitlik berabere. Delikler haritanın ağ nesneleridir (`mole_hole`) ve mod onları
+> maç başında `ObjectIdsOfKind` ile öğrenir — **haritada delik yoksa konsola uyarı düşer ve köstebek
+> çıkmaz**. Konsolda `[mole]` satırı delik sayısını yazar.
+
 > Turlar arasında faz `paused`/`mode` olur (`modeState:"regroup:2/6"`), oyuncular fiziksel olarak
 > kendi taban bölgelerine yürüyüp `set_ready{true}` yollar ve herkes toplanınca geri sayım başlar
 > — **toplanmanın zaman aşımı YOKTUR**, çıkışı operatörün `kick`/`abort_match`'idir. **Geri sayım

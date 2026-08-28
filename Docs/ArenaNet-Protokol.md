@@ -1580,6 +1580,7 @@ olmalı, tanınmayan `modeId` reddedilir):
 | `ffa` | Herkes Tek | `none` | `player` | `standstill` | `random` | `0` | `false` | 300 sn / 20 |
 | `tournament` | Turnuva | `two` | `team` | **`none`** | `weaponcanvas` | `0` | `false` | 120 sn / 4 tur |
 | `burger` | Hamburgerci | `none` | `shared` | `none` | **`none`** | `0` | `false` | 600 sn / limitsiz |
+| `mole` | Köstebek Ezme | `two` | `team` | **`none`** | **`none`** | `0` | `false` | 300 sn / limitsiz |
 
 > **`burger` — Çocuk Oyunları ailesinin ilk turu.** Tablodaki tek **`gameType:"kids"`** modudur, yani
 > yalnız `gameType` alanı `kids` olan haritalarda başlatılabilir (§10.1 üçüncü kapı, §11). Silah yok
@@ -1643,6 +1644,67 @@ olmalı, tanınmayan `modeId` reddedilir):
 > bake'lidir (`CustomerPath` + banko slotları); istemci `stage` + `s`'teki slot numarasından
 > deterministik olarak yürütür. Sunucu metre bilmez (§10.10), müşterinin nerede olduğunu da bilmez —
 > yalnız **hangi aşamada** olduğunu bilir.
+
+> **`mole` — Çocuk Oyunları ailesinin ilk YARIŞMALI turu.** `gameType:"kids"`, yani yalnız `gameType`
+> alanı `kids` olan haritalarda başlatılır (§10.1 üçüncü kapı, §11). Ailenin değişmezleri durur: silah
+> yok — dolayısıyla **hasar da yok** (`weaponSource:"none"`), canlanma yok çünkü ölüm yok, sonuç ekranı
+> operatör kapatana kadar durur. Ayrıldığı tek yer **skor kanalıdır**: kırmızı ile mavi yarışır
+> (`teamMode:"two"` + `scoring:"team"`), yani ailenin **kazananı olan** ilk oyunudur.
+>
+> ⚠️ **Takımlı olması TABAN gerektirmez:** taban `reviveAnchor:"base"`in aracıydı ve burada canlanma
+> yoktur. Takım bu modda yalnız **hangi köstebeğin kimin hedefi olduğunu** söyler; haritada taban
+> bölgesi aranmaz.
+>
+> **Bitişi yalnız süredir** (`scoreLimit` limitsiz, §5.2): süre dolunca skoru yüksek takım kazanır,
+> eşitlik **berabere** biter.
+>
+> **Skor iki kanala birden yazılır:** takım puanı `match_state.scoreRed`/`scoreBlue`'ya, aynı miktar
+> vuran oyuncunun katkısı olarak `PlayerInfo.score`'a (§10.2). ⚠️ **Takım skoru `0`'ın altına inmez,
+> oyuncu skoru iner** — eksi takım skoru çocuk kitlesine anlatılamaz, ama yanlış vuranın katkısı eksiye
+> düşemezse hiç görünmezdi. Bu yüzden iki kanal birbirinin toplamı **DEĞİLDİR** ve öyle okunmamalıdır.
+>
+> **`modeState` biçimi:** `;` ile ayrılmış `p<playerId>:<doğru>/<yanlış>` token'ları
+> (`"p12:7/1;p13:5/0"`). Çekirdek yorumlamaz (§10.1); ⚠️ bilinmeyen token **atlanır**, hata değildir.
+>
+> **Tür ve olay tablosu** (`kinds[]`, §11):
+>
+> | `kind` | `grab` | olay (`policy`) | `stage` | `s` |
+> |---|---|---|---|---|
+> | `mole_hole` | `none` | `whack` (`anyone`) | `0` boş · `1` köstebek ayakta · `2` ezik | `n:<sayaç>;c:red\|blue` — `2`'de ek `by:<playerId>;ok:1\|0` |
+>
+> **Köstebek AYRI BİR TÜR DEĞİLDİR:** delik objesinin sunum çocuğudur. Sunucu deliği bilir, köstebeği
+> değil — telde yalnız "bu delikte şu renkte köstebek var mı" taşınır. Delik başına tek `netId` olması,
+> aynı deliğin iki köstebekle dolmasını sözleşme düzeyinde imkânsız kılar.
+>
+> **`whack` yükü `i:[n]`dir ve `n` bir NONCE'tur:** her çıkışta o deliğin sayacı artar. Köstebek
+> inmişken ya da yeni bir çıkış başlamışken ulaşan sallama sayaç tutmadığı için **sessizce** düşer —
+> ceza yazılmaz, istemciye red gönderilmez. ⚠️ "Geç kaldım mı" sorusunu **sunucu** cevaplar: istemcinin
+> kendi saatiyle ölçtüğü bir pencere iki başlıkta iki farklı cevap verirdi.
+>
+> **Aynı köstebeğe iki kişi vurursa ilk ulaşan kazanır;** ikincisi aynı nonce kapısına takılır, yani
+> tek çıkış tek kez puanlanır.
+>
+> **Mod olayı işler ve relay ETMEZ:** vuruşun sonucu `object_state`'tir (aşama `2` + `by`/`ok` yükü).
+> Relay aynı gerçeği ikinci kez duyurup ezilmeyi iki kez oynatırdı (§10.10, dönüş değeri).
+>
+> **`policy` `anyone`, çünkü gönderen deliğin sahibi DEĞİLDİR:** delik `grab:"none"`dur, kimsenin
+> elinde olamaz. Sunucu yalnız **durum** kapılarını doğrular (köstebek ayakta mı, sayaç tutuyor mu);
+> mesafe/fizik yargılamaz, metre bilmez (§10.3 felsefesi). Vuruşun geometrisi istemcinin sorumluluğudur
+> — atış hattındaki güven modelinin aynısı.
+>
+> ⚠️ **Balyoz bir ağ nesnesi DEĞİLDİR:** kişiseldir, dünyaya hiç bırakılmaz ve obje poz kanalına
+> girmez. Uzak elde `itemR`/`itemL` baytıyla çizilir (§6.6) — yani `netItemId` taşıyan sıradan bir
+> eşyadır ve `kinds[]`'e girmez.
+>
+> ⚠️ **Köstebeğin yükseliş/iniş hareketi telde YOKTUR:** `mole_hole` poz paketi göndermez/almaz,
+> `stage` dışında bir şey taşımaz. Yükseliş istemcide, ayakta kalma penceresinin **içinde** oynar ve
+> köstebek `1` boyunca vurulabilir — pencerenin dışına taşan bir animasyon, sunucunun indirdiği
+> köstebeğe hâlâ vurulabiliyormuş gibi gösterirdi. Sunucu köstebeğin nerede olduğunu bilmez, yalnız
+> **hangi aşamada** olduğunu bilir (müşterinin yürüyüşüyle aynı kural).
+>
+> ⚠️ **"Yan yana iki delikten aynı anda çıkarma" sunucudan YAPILAMAZ** — sunucu delik konumlarını
+> bilmez. Delikler arası aralık bir **yerleşim** kararıdır; sunucunun elindeki tek kaldıraç aynı anda
+> ayakta duran köstebek sayısının tavanıdır.
 
 > ⚠️ **`friendlyFire` bu tabloda YOKTUR:** artık bir mod kuralı değil **operatör anahtarıdır**
 > (§5.2) ve üç modda da aynı kaynaktan gelir. Modlar onu bildirmez.

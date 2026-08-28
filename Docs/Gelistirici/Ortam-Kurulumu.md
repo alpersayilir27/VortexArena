@@ -80,6 +80,17 @@ zorundadır** — eklenti eskiyse çağrılar el sıkışmada düşer.
 - Konsolda `UnicodeEncodeError`/`charmap` görürsen sebep Windows kod sayfasıdır (çıktıdaki `→`);
   `$env:PYTHONIOENCODING='utf-8'` ile koş, kurulumun kendisi etkilenmez.
 
+### `notion` kaydı — yetki OAuth'la, makine başına
+
+Kayıt HTTP'dir (`https://mcp.notion.com/mcp`); kurulum gerektirmez, ilk çağrıda tarayıcıda Notion
+oturumu açılır ve hangi sayfa/veritabanlarının görüneceği **orada** seçilir. Durum `/mcp` ile
+görülür, yetki `/mcp` üzerinden geri alınır.
+
+- ⚠️ **`.mcp.json`'a token yazılmaz** — o dosya git'e giriyor; yetki her geliştiricinin kendi
+  makinesinde OAuth'la durur, yani yeni klonda kayıt hazır gelir ama **oturum açılması gerekir**.
+- ⚠️ Notion **repo dışıdır**: takımın hatırlaması gereken şey oraya yazılmakla kalıcı olmaz, yeri
+  yine `Docs/` ya da `plan/`'dır (`.claude/rules/docs-sync.md` tablosu).
+
 ### `unity-mcp` (AI Assistant relay) kaydı neden yok
 
 `com.unity.ai.assistant` içindeki bridge onayı **canlı bağlantı başına** tutuyor

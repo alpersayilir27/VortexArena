@@ -12,11 +12,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1426f3e989e9dc8438a88550f4934cea, type: 3}
   m_Name: Mole_VortexAntep
   m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Arena.MapDefinition
-  sceneName: Military_VortexAntep
-  displayName: Military
+  sceneName: Mole_VortexAntep
+  displayName: "K\xF6stebek"
+  gameType: 1
   supportedModeIds:
-  - tdm
-  - ffa
-  - tournament
-  ambienceClip: {fileID: 8300000, guid: ce0957423e989d3409b4c4680b9079ad, type: 3}
+  - mole
+  ambienceClip: {fileID: 0}
   ambienceVolume: 0.175
+  musicClip: {fileID: 0}
+  musicVolume: 0.5
