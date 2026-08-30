@@ -4703,6 +4703,19 @@ konsoluna tek satır sebep yazar.
     uyarısı verir; bu uyarı **beklenen** durumdur, susturmak için araca dokunulmaz. Genel kural:
     bir aracın girdisi kod değil **sahne/prefab objesiyse**, o objeyi kaldıran değişiklik aracın
     o adımını da birlikte ele almalıdır.
+190. **`.gitattributes`'ta `*.unity` LFS'e ALINMAZ** (`filter=lfs`) — iki ayrı zararı var ve ikisi
+    de sessizdir. (1) LFS smudge filtresinin koşmadığı her checkout'ta sahneler diskte ~130
+    baytlık bir pointer metnine döner; Unity onu YAML sanar, ayrıştıramaz ve **"File may be
+    corrupted or was serialized with a newer version of Unity"** der — hata sürümü işaret eder,
+    oysa dosyanın içinde sahne yoktur ve sahne bomboş açılır. Belirtiyi asıl saklayan şey
+    `git status`'ün **temiz** demesidir: git, çalışma alanındaki pointer'ı HEAD'deki pointer
+    blob'uyla karşılaştırır, ikisi aynıdır. Teşhis dosyanın ilk satırıdır —
+    `version https://git-lfs.github.com/spec/v1` ise pointer, `%YAML 1.1` ise sağlam. (2)
+    `merge=lfs`, sahne çakışmasında `unityyamlmerge`'ü devre dışı bırakır; birleştirme "iki
+    sürümden birini seç"e iner. Karşılığında kazanç yoktur, sahneler birkaç MB'ı geçmez.
+    **Kurtarma sırası şaşmaz:** önce `git lfs checkout` (nesneler `.git/lfs/objects`'te
+    duruyorsa çevrimdışı çalışır), *sonra* `.gitattributes`. Ters çevirirsen `.unity` artık LFS
+    izlenmez, pointer'lar kurtarılamaz ve o baytlar gerçek sahne içeriği sanılıp commit'lenir.
 
 ---
 
