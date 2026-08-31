@@ -24,6 +24,7 @@
 | **Mekan boyut maketi**: kod, boyut dosyaları, prefablar, sahneler ve doküman **bitti**. Kalan: doğrulama (maket gidiş-dönüşü · loader'ın ikinci çalıştırması · Play'de karartma rampası · admin paneli) | `mekan-boyut-maketi.md` |
 | **Kalibre modu + T-poz sağlamlaştırma + ölçek geri bildirimi**: kod (protokol **v13**, sunucu, istemci, admin paneli üç mod düğmesi) ve doküman **bitti**. Kalan: doğrulama listesi + adb alan-verisi temizliği denemesi. ⚠️ v13 tüm başlıklara yeni APK ister | `kalibre-modu-ve-olcek.md` |
 | **Admin ihlal görünürlüğü** (engel + alan dışı halkada renk/frekans, sunucu-kaynaklı ihlal akışı ve defteri, alan dışında ateş kapısı): kod, protokol (**v14** — rezervdeki bit7 `FLAG_OUT_OF_BOUNDS`, tel formatı ve paket boyu DEĞİŞMEDİ) ve doküman **bitti**. Kalan: `GameSoundBank.adminViolation` uyarı ses klibi + doğrulama listesi. ⚠️ Silah/namlu engel durumu tele girmez — kaynağında zaten engelleniyor. ⚠️ v14 tüm başlıklara yeni APK ister | `admin-ihlal-gorunurlugu.md` |
+| **Zombi modu** (`zombie`, kooperatif dalga savunması): zombi bir **ağ nesnesidir** — sunucu doğurur/öldürür/skorlar, **beyni (NavMesh + saldırı kararı) en eski bağlı Windows admin'de** koşar ve pozu `0x09` ile akar; admin düşünce/susunca sıradaki admin devralır, admin yoksa maç duraklar. Sunucu geometri almaz. Henüz **hiçbir şey yazılmadı**: protokol maddeleri (kinds, `attack` olayı, obje poz tavanı 16→48, `admin_state.objectHostId`), sunucu (`ZombieMode`, iki `IGameMode` kancası, `DamagePlayerFromObject`, sahip seçimi + susma bekçisi), istemci (`VortexArena.Modes.Zombie`: beyin, görünüm, HUD, doğum noktası), NavMesh bake, denge tablosu | `zombi-modu.md` |
 
 > Sıradaki büyük iş **bulut kalibrasyonu** (Meta grup / paylaşılan uzamsal anchor ile toplu
 > hizalama). Henüz planlanmadı; altyapısı hazır: `set_calibration.source` `"cloud"` değerini
@@ -48,6 +49,8 @@ işler değildir.
   gönderim kuyruğu, konsol QuickEdit. (Ölüm sonrası hasar penceresi bu listede DEĞİL: bomba
   kararıyla `bomba.md`'ye girdi.)
 - Lag compensation / rewind, interest management: oyun hiç online olmayacak, gerekmez.
+- Uzak avatarın bileğinde bombanın görünmesi: böyle bir özellik **olmayacak** — kılıf yalnız
+  sahibinin ekranındadır.
 - Sunucu test projesi: ileride.
 
 ## Nereye bakmalı

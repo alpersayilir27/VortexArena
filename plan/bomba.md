@@ -33,9 +33,6 @@ Reçetenin tamamı `Docs/Gelistirici/Yemek-Kitabi.md` §11.3.
 
 ## 3. Kod tarafında bilinçli olarak YAPILMAYANLAR
 
-- **Uzak avatarın bileğinde bomba görünmüyor.** Tele hiçbir şey eklemeden yapılabilir (uzak istemci
-  atma olayını görüyor, kendi kopyasının patlamasını ve dolum süresini biliyor); geç katılan **dolu**
-  varsayar. İstenirse ayrı küçük iş.
 - **Askıdan dönen tek kullanımlık silah dolu şarjörle gelir** — bugünkü "grip bırak-bas" davranışı da
   dolu silah veriyor, fark yalnız rastgeleliğin atlanması.
 - Kılıf boşken **gizli**; "sönük siluet" sanat gerektiriyor.
