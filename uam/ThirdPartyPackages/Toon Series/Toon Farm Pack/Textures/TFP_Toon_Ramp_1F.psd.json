@@ -1,0 +1,20 @@
+{
+    "serializationVersion": [
+        4,
+        0
+    ],
+    "path": "ThirdPartyPackages\\Toon Series\\Toon Farm Pack\\Textures\\TFP_Toon_Ramp_1F.psd",
+    "assetName": "TFP_Toon_Ramp_1F",
+    "assetId": "6a957005823b3a25b4b285d7",
+    "datasetId": "",
+    "projectId": "4b47cd69-48c1-4875-b3fb-ed20c2040de2",
+    "organizationId": "18968457974296",
+    "versionId": "c00ab80e-7bd6-482b-8946-8a4561440e67",
+    "sequenceNumber": 1,
+    "updated": "2026-08-31T12:14:29.1660000Z",
+    "timestamp": 1787944631,
+    "checksum": "a4a2569b0cea560d285c2bac809162ab",
+    "metaFileChecksum": "d66469c5f5f59afa7985fc37944889a4",
+    "metaFileTimestamp": 1787944631,
+    "unityGUID": "4ad8c21978cf8a842bba8230cf956f9a"
+}

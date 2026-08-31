@@ -80,20 +80,37 @@
       "venue": "VortexAntep",
       "gameType": "quickbattle",
       "modes": ["lobby"],
-      "objects": []
+      "objects": [
+        { "sceneId": 1, "kind": "target_board" },
+        { "sceneId": 2, "kind": "breakable_cover" }
+      ]
     },
     {
       "sceneName": "Military_VortexAntep",
       "venue": "VortexAntep",
       "gameType": "quickbattle",
       "modes": ["ffa", "tdm", "tournament"],
-      "objects": []
+      "objects": [
+        { "sceneId": 1, "kind": "breakable_cover" },
+        { "sceneId": 2, "kind": "breakable_cover" },
+        { "sceneId": 3, "kind": "breakable_cover" },
+        { "sceneId": 4, "kind": "breakable_cover" },
+        { "sceneId": 5, "kind": "target_board" },
+        { "sceneId": 6, "kind": "target_board" }
+      ]
     },
     {
       "sceneName": "Mirage_A_Outdoor14x16",
       "venue": "Outdoor14x16",
       "gameType": "quickbattle",
       "modes": ["ffa", "tdm", "tournament"],
+      "objects": []
+    },
+    {
+      "sceneName": "Mole_Outdoor14x16",
+      "venue": "Outdoor14x16",
+      "gameType": "kids",
+      "modes": ["burger"],
       "objects": []
     },
     {

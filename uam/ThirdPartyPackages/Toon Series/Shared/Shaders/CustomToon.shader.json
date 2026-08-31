@@ -1,0 +1,20 @@
+{
+    "serializationVersion": [
+        4,
+        0
+    ],
+    "path": "ThirdPartyPackages\\Toon Series\\Shared\\Shaders\\CustomToon.shader",
+    "assetName": "CustomToon",
+    "assetId": "6a957004df1415d96ebfb726",
+    "datasetId": "",
+    "projectId": "4b47cd69-48c1-4875-b3fb-ed20c2040de2",
+    "organizationId": "18968457974296",
+    "versionId": "0c95fdd9-9dd9-4765-8896-9d74fc51ba38",
+    "sequenceNumber": 1,
+    "updated": "2026-08-31T12:14:16.9510000Z",
+    "timestamp": 1787944625,
+    "checksum": "2364fe06d98cb42e7de67f72d070e627",
+    "metaFileChecksum": "4d18fe0c63203b542fda7ada010ed905",
+    "metaFileTimestamp": 1787944625,
+    "unityGUID": "25e085ecbe5fe224db065ec60b95b24b"
+}

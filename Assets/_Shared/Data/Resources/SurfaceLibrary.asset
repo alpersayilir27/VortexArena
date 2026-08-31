@@ -14,4 +14,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.SurfaceLibrary
   definitions:
   - {fileID: 11400000, guid: 8cdabe955df12464caaf3e0b5821ab93, type: 2}
+  - {fileID: 11400000, guid: e5d4819236169294fa96d7a421e11a5b, type: 2}
+  - {fileID: 11400000, guid: 09b81fdba3fa51446bf28c61591c6c4b, type: 2}
   defaultSurface: {fileID: 11400000, guid: 8cdabe955df12464caaf3e0b5821ab93, type: 2}

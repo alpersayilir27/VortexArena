@@ -1,0 +1,20 @@
+{
+    "serializationVersion": [
+        4,
+        0
+    ],
+    "path": "ThirdPartyPackages\\Toon Series\\Toon Farm Pack\\Models\\Materials\\TFP_Atlas_Lights_1A.mat",
+    "assetName": "TFP_Atlas_Lights_1A",
+    "assetId": "6a9570032c337df9a4e9c759",
+    "datasetId": "",
+    "projectId": "4b47cd69-48c1-4875-b3fb-ed20c2040de2",
+    "organizationId": "18968457974296",
+    "versionId": "036cda26-e09d-4023-bd48-8cb1959da72f",
+    "sequenceNumber": 1,
+    "updated": "2026-08-31T12:14:29.7360000Z",
+    "timestamp": 1787944625,
+    "checksum": "f8643d60d012010997105cac5c72a13f",
+    "metaFileChecksum": "e3e5e3f990c51961ea7cc0973618ab9f",
+    "metaFileTimestamp": 1787944625,
+    "unityGUID": "9b4eccbd628daee47b36c4e09ef0d1f9"
+}

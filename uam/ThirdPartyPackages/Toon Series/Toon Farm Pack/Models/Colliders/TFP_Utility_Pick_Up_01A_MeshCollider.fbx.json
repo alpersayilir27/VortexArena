@@ -1,0 +1,20 @@
+{
+    "serializationVersion": [
+        4,
+        0
+    ],
+    "path": "ThirdPartyPackages\\Toon Series\\Toon Farm Pack\\Models\\Colliders\\TFP_Utility_Pick_Up_01A_MeshCollider.fbx",
+    "assetName": "TFP_Utility_Pick_Up_01A_MeshCollider",
+    "assetId": "6a957005823b3a25b4b285df",
+    "datasetId": "",
+    "projectId": "4b47cd69-48c1-4875-b3fb-ed20c2040de2",
+    "organizationId": "18968457974296",
+    "versionId": "88352d68-2792-4b00-a49d-cf6a8ff3d1ac",
+    "sequenceNumber": 1,
+    "updated": "2026-08-31T12:14:29.6690000Z",
+    "timestamp": 1787944625,
+    "checksum": "f3b0790585eb8a3a6e81eeee8da20432",
+    "metaFileChecksum": "5f4e44a9c5353ef5883eb5c10b8f8e73",
+    "metaFileTimestamp": 1787944625,
+    "unityGUID": "592908cfd24fe684d812adc85bb3c520"
+}

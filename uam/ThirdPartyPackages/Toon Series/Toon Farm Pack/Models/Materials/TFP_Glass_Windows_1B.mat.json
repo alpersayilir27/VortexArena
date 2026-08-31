@@ -1,0 +1,20 @@
+{
+    "serializationVersion": [
+        4,
+        0
+    ],
+    "path": "ThirdPartyPackages\\Toon Series\\Toon Farm Pack\\Models\\Materials\\TFP_Glass_Windows_1B.mat",
+    "assetName": "TFP_Glass_Windows_1B",
+    "assetId": "6a957002df1415d96ebfb716",
+    "datasetId": "",
+    "projectId": "4b47cd69-48c1-4875-b3fb-ed20c2040de2",
+    "organizationId": "18968457974296",
+    "versionId": "02584ca1-97eb-4072-9302-08123969ae97",
+    "sequenceNumber": 1,
+    "updated": "2026-08-31T12:14:27.6670000Z",
+    "timestamp": 1787944625,
+    "checksum": "37961a848463e2658162ac6a68f66a89",
+    "metaFileChecksum": "ad3e065287ded3dfd8f3d6ea950c3a74",
+    "metaFileTimestamp": 1787944625,
+    "unityGUID": "a03dab9186bc7084fb126987b2783344"
+}

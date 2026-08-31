@@ -1,0 +1,20 @@
+{
+    "serializationVersion": [
+        4,
+        0
+    ],
+    "path": "ThirdPartyPackages\\Toon Series\\Toon Farm Pack\\Prefabs\\Vehicles\\Regular\\TFP_Utility_Pick_Up_01A.prefab",
+    "assetName": "TFP_Utility_Pick_Up_01A",
+    "assetId": "6a957002823b3a25b4b285cf",
+    "datasetId": "",
+    "projectId": "4b47cd69-48c1-4875-b3fb-ed20c2040de2",
+    "organizationId": "18968457974296",
+    "versionId": "6fbd0558-daeb-4d3b-b948-4428f4a8db00",
+    "sequenceNumber": 1,
+    "updated": "2026-08-31T12:14:28.4960000Z",
+    "timestamp": 1787944629,
+    "checksum": "531664853c711aaaaf001782d7b18308",
+    "metaFileChecksum": "d4888d8db2a0536f324d94f76467fabe",
+    "metaFileTimestamp": 1787944629,
+    "unityGUID": "0165b5a39b42cc74f9a8a40db6d05d73"
+}

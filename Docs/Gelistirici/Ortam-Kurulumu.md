@@ -52,6 +52,22 @@ konumundan türetir — elle yol ekleme, gerekiyorsa `-ExtraPath` geç. Geri alm
 Kayıtların hepsi **proje scope'undadır**: tek kaynak repo kökündeki `.mcp.json`. User scope'a ya da
 `~/.claude.json` içindeki `projects[...].mcpServers` altına kayıt açılmaz.
 
+### `auggie` kurulumu iki parçadır: CLI + oturum
+
+Kayıt `.mcp.json`'da hazır gelir ama CLI makinede yoksa sunucu `CONNECTION_CLOSED` ile düşer.
+
+| # | Ne | Nasıl |
+|---|---|---|
+| 1 | CLI | `npm i -g --allow-scripts=node-pty @augmentcode/auggie` — `--allow-scripts` olmadan bağımlılık `node-pty`'nin prebuild adımı atlanır |
+| 2 | Oturum | `auggie login` (tarayıcı açar, Augment hesabı ister) — CI/headless için `AUGMENT_SESSION_AUTH` |
+
+Oturum açılmadan `auggie --mcp` „No auth provided” yazıp çıkar; Claude Code bunu bağlantı hatası
+olarak görür, eksik kurulum olarak değil.
+
+⚠️ **PowerShell'de `auggie login` „running scripts is disabled” verirse** npm'in `.ps1` shim'i
+execution policy'e takılmıştır; çözümü `auggie.cmd login` çağırmaktır (policy değiştirmeye gerek yok).
+MCP kaydı `cmd /c` ile `.cmd` shim'ini çağırdığı için bağlantının kendisi bu policy'den etkilenmez.
+
 ### `auggie` Windows'ta neden `cmd /c` ile çağrılır
 
 `.mcp.json`'daki satır `cmd /c auggie --mcp` biçimindedir. Sebebi npm shim'inin `.cmd` olmasıdır:
