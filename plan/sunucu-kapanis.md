@@ -10,5 +10,6 @@ Bu dosya doğrulama bitince silinir.
 - [ ] **Konsol penceresini çarpıyla kapatma** aynı sırayı koşturur (pencere kapanmadan önce
       "Kapatılıyor…" → "Kapandı." görünür).
 - [ ] Bağlı başlıklar `close` alır → yeniden bağlanma ekranı (`ConnectionOverlay`).
-- [ ] Launcher'dan durdurma aynı sonucu verir.
+- [ ] Launcher sunucuyu **kapatmaz**: açıkken tekrar *Sunucuyu Başlat* → "zaten çalışıyor … Ctrl+C"
+      uyarısı; kapatma yalnız sunucunun kendi konsolundan.
 - [ ] Maç KOŞARKEN kapatma: tik durduktan sonra hiçbir yayın çıkmaz, zaman aşımı satırı basılmaz.
