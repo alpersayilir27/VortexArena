@@ -28,8 +28,17 @@ namespace VortexArena.Modes.Burger
         [Tooltip("Yanlış servis sesi. Atanmazsa yalnız log yazılır.")]
         [SerializeField] private AudioSource rejectSound;
 
+        [Tooltip("İki servis denemesi arasındaki en kısa süre (saniye).")]
+        [SerializeField] private float serveCooldownSeconds = 1f;
+
         private NetObject _net;
         private NetObjectPoseSender _sender;
+
+        /// <summary>⚠️ Both triggers can fire for ONE burger: a loaded board carried into a slot rests,
+        /// and the top bun riding it rests right after. The second <c>serve</c> names ingredients the
+        /// server has already despawned, and a rejection is relayed as the event itself (§10.5) — the
+        /// player would hear the reject sound on a burger that was accepted.</summary>
+        private float _serveCooldown;
 
         private readonly List<NetObject> _stack = new List<NetObject>();
         private readonly List<int> _payload = new List<int>();
@@ -152,9 +161,17 @@ namespace VortexArena.Modes.Burger
         /// <summary>The board itself came to rest — the "assemble elsewhere, carry it over" flow.</summary>
         private void HandleRestSent(NetObject net) => TryServe();
 
+        private void Update()
+        {
+            if (_serveCooldown > 0f)
+            {
+                _serveCooldown -= Time.deltaTime;
+            }
+        }
+
         private void TryServe()
         {
-            if (stackTrigger == null || _net == null || _net.NetId <= 0)
+            if (stackTrigger == null || _net == null || _net.NetId <= 0 || _serveCooldown > 0f)
             {
                 return;
             }
@@ -189,6 +206,7 @@ namespace VortexArena.Modes.Burger
             }
 
             NetObjectSync.SendEvent(_net.NetId, BurgerKinds.EventServe, _payload.ToArray());
+            _serveCooldown = serveCooldownSeconds;
         }
 
         /// <summary>Which slot the board was put down in. Searched by VOLUME rather than by number: the

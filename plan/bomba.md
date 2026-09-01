@@ -16,9 +16,6 @@ kill feed "kendini havaya uçurdu" satırı.
 
 Reçetenin tamamı `Docs/Gelistirici/Yemek-Kitabi.md` §11.3.
 
-- [ ] **Kavrama kaydı:** `Tools > VortexArena > Items > Kavrama Pozu Stüdyosu` ile bombanın **ana
-      kabza** kaydı (tek elli, iki kayıt — sağ/sol). Yazılmazsa el idle parmaklarla ve yanlış açıyla
-      durur.
 - [ ] **Bomba modeli:** prefabtaki `Mesh` çocuğu geçici bir küredir; gerçek model onun yerine konur.
       Collider root'tadır, modelle birlikte yarıçapı da güncellenir.
 - [ ] Patlama FX'i + sesleri: tanımdaki `explosionPrefab`/`explosionClip` ve kılıftaki `refillClip`
@@ -39,19 +36,12 @@ Reçetenin tamamı `Docs/Gelistirici/Yemek-Kitabi.md` §11.3.
 
 ## 4. Doğrulama (kullanıcı koşar)
 
-- [ ] Sağ elde silah varken sol bileğe uzanıp kavramaya basınca: silah kaybolur, elde bomba belirir,
-      **parmaklar bombanın kavrama duruşunu alır**; atış sonrası **aynı silah** aynı ele geri gelir
-      (yere silah düşmez, rastgele başka silah gelmez).
-- [ ] Silah sol eldeyken: sağ el bombayı alır, sol el ateş etmeye devam eder.
-- [ ] Elde bombayla silah rafından silah alınamaz.
 - [ ] Bomba bırakıldıktan 5 sn sonra patlar; elde bekletmek fitili başlatmaz.
-- [ ] Patlamadan 3 sn sonra kılıf dolar; arka arkaya sınırsız bomba atılır.
 - [ ] Elde bombayla ölünce patlama olmaz; doğuşta kılıf dolu.
 - [ ] Dost ateşi **kapalı**: kendi bombası hasar vermez, takımdaş hasar almaz, rakip alır.
 - [ ] Dost ateşi **açık**: kendi bombası hasar verir; ölünce kill feed'de "kendini havaya uçurdu",
       skor değişmez, `kills` artmaz, `deaths` artar.
 - [ ] İki başlıkta patlama yeri ve zamanı aynı (statik geometriye sekme dahil); avatar üzerinden geçer.
-- [ ] Uzak başlıkta bombanın **eldeki görüntüsü** doğru (`itemR` bombayı taşıyor).
 - [ ] Bomba havadayken ölen oyuncu: patlama **hasar verir**, kill feed'de ölü atıcının adı; öldükten
       pencere süresi sonra gelen rapor reddedilir (sunucu konsolunda "atıcı ölü").
 - [ ] `ffa`'da anahtar açıkken kendi bombası hasar verir, kapalıyken vermez.

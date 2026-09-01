@@ -49,6 +49,13 @@ namespace VortexArena.Core.Combat
         private NetObject _net;
         private Rigidbody _body;
 
+        /// <summary>The object rides a CARRIER (a spatula blade, a serving board) instead of a palm: the
+        /// same hand, a different anchor. Set on EVERY client by the carrier, which derives the relation
+        /// from <c>owner</c>+<c>held</c> — it is never on the wire.
+        /// <para>⚠️ While it is set this bridge writes NOTHING: the carrier owns the transform, and two
+        /// writers on one transform is a visible jitter, not a compile error.</para></summary>
+        public Transform CarryAnchor { get; set; }
+
         /// <summary>The controller holding it LOCALLY; <c>None</c> = we are not holding it (someone else
         /// may be).</summary>
         private OVRInput.Controller _localHand = OVRInput.Controller.None;
@@ -339,7 +346,9 @@ namespace VortexArena.Core.Combat
             // The server can put an object straight into a hand: a dispenser's `take` spawns it already
             // owned and held (§10.10). Nobody pressed anything locally, so the hand is adopted HERE —
             // otherwise the object hangs in the air with `owner` pointing at us and no hand driving it.
-            if (net.IsMine && _localHand == OVRInput.Controller.None)
+            // ⚠️ A carried object is the exception: the hand is already full of the CARRIER, so claiming
+            // the slot would be refused and the spatula would lose its finger pose.
+            if (net.IsMine && _localHand == OVRInput.Controller.None && CarryAnchor == null)
             {
                 AdoptServerGrab();
             }
@@ -398,7 +407,9 @@ namespace VortexArena.Core.Combat
         /// the hand at two different times.</para></summary>
         private void TickHeldPose()
         {
-            if (!_net.IsHeld || item == null)
+            // CarryAnchor: the object sits on a carrier, not in the palm — that placement is the
+            // carrier's and this bridge must not fight it.
+            if (!_net.IsHeld || item == null || CarryAnchor != null)
             {
                 return;
             }

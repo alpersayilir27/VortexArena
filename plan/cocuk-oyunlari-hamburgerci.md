@@ -22,6 +22,10 @@ slotlarının hacimleri ve müşteri yolu ona bağlı. Her banko slotunda bir se
       ⚠️ Yerleşim korunmalı: bileşenler ona bağlı.
 - [ ] **Dört prop tanımının kavrama pozu** (`Kavrama Pozu Stüdyosu`) — yazılmadan obje ele gelir ama
       kumanda anchor'ında durur.
+- [ ] **Taşıma ankorlarının gerçek modele göre ayarı** (`BurgerCarrier`): spatulanın `Cargo` hacmi +
+      `CargoAnchor`'ı bıçağın, servis tahtasınınki yüzeyin ölçüsüne göre yazıldı; model değişince
+      ikisi de yeniden konumlanır. `slotHeight` katman kalınlığına, `spillAngle` istenen dökülme
+      hissine göre ayarlanır. ⚠️ Ankor yanlış yerdeyse yük görsel olarak modele gömülür — hata vermez.
 - [ ] **Sesler:** servis tahtasının red sesi (`BurgerServingBoard.rejectSound`) ve müşteri
       gelme/gitme sesleri.
 
@@ -39,3 +43,13 @@ slotlarının hacimleri ve müşteri yolu ona bağlı. Her banko slotunda bir se
 - Admin HUD'ında mutlu/mutsuz sayaçları oyuncu HUD'ıyla aynı.
 - Geç katılan başlık: bekleyen müşterileri (siparişleriyle) ve masadaki malzemeleri doğru yerde görür.
 - Sahip koparsa elindeki malzeme yere düşer (serbest kalır), oyun sürer.
+- **Spatula:** ızgaradaki köfte bıçağa alınır, ikinci başlıkta da bıçağın üstünde görünür (avuçta
+  değil) ve spatulanın parmak kavraması bozulmaz. Spatula yatırılınca köfte düşer; düşerken düz
+  tutulunca hemen geri alınmaz. Bıçak doluyken ikinci malzeme binmez.
+- **Servis tahtası:** kurulmuş hamburger tahtayla birlikte taşınır, katman sırası korunur ve slota
+  konunca servis olur — servis kabul edildiğinde **red sesi duyulmaz** (tahta ve üst ekmek peş peşe
+  dinlendiği için iki servis denemesi olur, ikincisi yutulmalı).
+- **Taşıma sırasında bağlanan başlık:** yüklü tahtayı/spatulayı taşıyan oyuncuyu görür ve yığını
+  aynı sırayla çizer (sıra dinlenme pozundan türetiliyor).
+- Aynı malzemeyi bir el kaparken spatula da almaya çalışır: biri alır, spatula boş kalır ve malzeme
+  avuca sıçramaz.

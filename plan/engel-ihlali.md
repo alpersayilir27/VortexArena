@@ -65,7 +65,6 @@ her `Venues/<İşletme>/Scenes/<Arena>/` kutusunu açıp denetimi koştur.
 - [ ] Siperin üstünden/yanından meşru atış → engellenmiyor (yalancı pozitif kontrolü — silah kutusu
       siperin birkaç cm yanındayken tetik ölmemeli)
 - [ ] Bir kumandayı kapat, engelin yanında ateş et → **engellenmiyor** (izlenmeyen el sorulmaz)
-- [ ] Silah tezgâhının önünden ateş et → mermi kavrama hacimlerine takılmaz (trigger elemesi)
 - [ ] Mermiyle hasar al (engel dışında) → kırmızı vinyet aynı şekilde görünüyor
 - [ ] Engelde ölünce: kill feed "… engelde kaldı", skor **değişmez**, `deaths` artar
 - [ ] Engelin **içinde** kalarak bekle → canlanma **olmaz** ("Engelden çık ve canlan"); çık →

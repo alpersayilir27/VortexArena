@@ -10,10 +10,6 @@ Kalan iş **ölçüm ve ayar**dır.
 Eklem sayısı 66 ve sıkıştırma `High`; kaba hesapla blob ~300-400 B, yani
 `SKELETON_MAX_BLOB_BYTES` (1024 B) rahat altında görünüyor. **Doğrulanmadı.**
 
-- [ ] Oyunu koştur ve konsolda `[UdpStateChannel] İskelet blob'u … B — tavan …` uyarısının
-      çıkmadığını gör (çıkarsa blob sınırı aşıyor demektir).
-- [ ] Sunucu konsolundaki `[state]` satırında `iskelet … p/s` değerini oku, `Docs/Sistem-Ozeti.md`
-      §3.12 paket bütçesiyle karşılaştır.
 - [ ] Aşım varsa: `BodyIndicesToSend`/`BodyIndicesToSync`'ten **parmak eklemlerini çıkar**
       (kumandayla oynanıyor, parmak pozu gerçek veri taşımaz). Hâlâ aşıyorsa sınır büyütülemez —
       `0x07`/`0x08`'e parçalama eklemek gerekir (bugün yok, bilerek).
@@ -37,14 +33,7 @@ Eklem sayısı 66 ve sıkıştırma `High`; kaba hesapla blob ~300-400 B, yani
 
 ## Doğrulanacaklar (kullanıcı koşar)
 
-- Yerel oyuncu kendi gövdesinden hiçbir şey görmüyor; gördüğü eller rig'in sentetik elleri.
 - Uzak avatar full body, doğru boyda, arena zemininde; kalibrasyondan sonra kaymıyor.
-- Gövde ile eller arasında zaman kayması yok (ikisi de `INTERP_DELAY_MS` tamponunda).
-- Harita değişiminde ve avatar başka oyuncuya devredilince gövde bozulmuyor.
-- Silah iki tarafta da elde doğru duruyor; çift ellide boş el kabzada.
-- Vuruş kutuları gövdeyle örtüşüyor (kafa vuruşu çarpanı doğru) — kutular
-  `mixamorig:Head`/`mixamorig:Spine1` kemiklerinde asılı, retargeter onları sürüyor.
-- Admin (Windows) gözlemcide gövdeler çiziliyor.
 - Editörde başlıksız Play'de karakter T-pozunda kalıyor ve konsolu boğmuyor.
 
 ## Açık riskler

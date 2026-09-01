@@ -12,10 +12,6 @@ Bu dosya yalnız **elde kalan doğrulamayı** tutuyor; hepsi geçince silinir.
 
 ## 1. Tercihler paneli (`AdminHud.prefab`)
 
-- [ ] MAÇ bölümünde satırlar üst üste binmiyor: Mod · Harita · Süre · Skor limiti · Geri sayim ·
-      **Dost atesi**
-- [ ] Kart ekrana sığıyor (alt kenarda BAĞLANTI bölümü kesilmiyor)
-- [ ] "Dost atesi" satırındaki iki düğme de aç/kapa yapıyor; değer AÇIK iken kırmızı
 - [ ] Satır **maç koşarken de basılabiliyor** (mod/harita kilitliyken bile)
 
 ## 2. Davranış

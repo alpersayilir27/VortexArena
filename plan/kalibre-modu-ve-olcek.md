@@ -10,19 +10,10 @@ dokümanlar yazıldı. Kalıcı bilgi: `Docs/ArenaNet-Protokol.md` (§1 sabitler
 
 ## 1. Doğrulama (kullanıcı koşar)
 
-- [ ] Panelde üç düğme hizalı; ÇAPA BULUTU pasif/soluk ve tıklanamıyor; panel 1080p'de taşmıyor
-      (alt kenar: BAĞLANTI bölümü ekranda)
-- [ ] Sunucu açılışında mod `two_anchor`; panelde 2 ÇAPA vurgulu; ESKİ KALİBRE'ye basınca duyuru
-      düşüyor ve ikinci admin ekranında da vurgu değişiyor
-- [ ] `two_anchor`: başlık uygulamayı kapatıp açınca eski kalibreyi YÜKLEMİYOR (elle kalibre
-      istiyor); oturum içinde harita değişince kalibre korunuyor
-- [ ] `saved_anchor`: uygulama yeniden açılınca kalibre kayıttan geri geliyor
 - [ ] Mod değişimi o an bağlı başlığa işlemiyor (yeniden bağlanınca işliyor) — panel bunu yazıyor
 - [ ] Admin `KAL` sıfırlaması sonrası ne disk ne bellek yolundan geri yükleme oluyor
 - [ ] Zemin sapması: kalibre kasıtlı yükseltide alınınca (uç masada) duyuru + satırda turuncu
       `KAL ?`; doğru zeminde alınca temizleniyor
-- [ ] Gövde takibi kapalıyken ÖLÇ → satırda `ÖLÇÜLEMEDİ`, duyuruda "gövde pozu yok"; eğilerek
-      ölçümde "oyuncu hareketli/eğilmiş"; dik tekrar ölçümde çarpan dönüyor ve hata siliniyor
 - [ ] T-poz (ilk açılış): body tracking izinsizken oyuncu diğer ekranlarda konumunu izleyen
       T-pozda (görünmez değil)
 - [ ] T-poz (oyun içi): kök saçmalayınca (çok katlı senaryo) uzak taraf ışınlanma yerine T-poz

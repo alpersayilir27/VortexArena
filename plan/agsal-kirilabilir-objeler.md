@@ -11,22 +11,13 @@ Shader, iki tür asset'i (`breakable_cover` · `target_board`), iki prefab
 (`_Shared/FX/FX_BreakDebris`) kuruldu; bir lobide bir hedef tahtası + iki siper duruyor ve export
 koşuldu.
 
-- [ ] **Arena yerleşimi:** siperler oyun arenalarına konmalı — seviye tasarımı kararıdır, boş
-      alanı olan arena yok denecek kadar az. Sahneyi kaydet → `Export Server Config`.
-      ⚠️ Export koşulmazsa sunucu objeyi tanımaz, vuruş sessizce reddedilir.
-- [ ] **`maxHp` denemeyle oturur** (bugün siper `200`, tahta `60`).
 - [ ] **Kırılma sesi geçicidir** — bugün ISDK örnek paketinden 0,19 sn'lik bir darbe sesi bağlı
       (`breakClip`). Gerçek bir kırılma/parçalanma klibi `Assets/Audio/` altına girmeli;
       ⚠️ paket örneği bir gün yerinden kalkarsa ses sessizce yok olur, hata vermez.
 
 ## Doğrulama (kullanıcı koşar)
 
-- İki başlık aynı objeyi vurur: can tek defterde düşer, hasar görünümü ikisinde aynı, aynı anda
-  kırılır.
-- Lobide hedef tahtası: can düşer ve kırılır (`fireWhilePaused`); oyuncuya hasar yine yok.
 - Turnuvada tur başı: kırık objeler tam cana ve sağlam görünüme döner, efekt oynamaz.
-- Geç katılan (maç ortası `hello`) kırık objeyi kırık görür, kırılma efekti oynamaz.
-- Lobiye dönüp yeni maç: obje tam canla geri gelir.
 - Bomba: patlama yarıçapındaki objeler hasar alır; siperin arkasındaki oyuncu korunurken siperin
   kendisi hasar alır (obje kendi collider'ında gölgelenmez).
 - `maxHp > 0` olup collider'ı olmayan obje: sahne kaydında konsola uyarı düşer.
