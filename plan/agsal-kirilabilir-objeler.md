@@ -8,8 +8,8 @@
 
 Shader, iki tür asset'i (`breakable_cover` · `target_board`), iki prefab
 (`_Shared/World/Prefabs/NO_BreakableCover` · `NO_TargetBoard`), materyaller ve kırılma efekti
-(`_Shared/FX/FX_BreakDebris`) kuruldu; bir lobide bir hedef tahtası + iki siper duruyor ve export
-koşuldu.
+(`_Shared/FX/FX_BreakDebris`) kuruldu; lobilerde ve bir oyun arenasında hedef tahtası + siperler
+duruyor ve export koşuldu.
 
 - [ ] **Kırılma sesi geçicidir** — bugün ISDK örnek paketinden 0,19 sn'lik bir darbe sesi bağlı
       (`breakClip`). Gerçek bir kırılma/parçalanma klibi `Assets/Audio/` altına girmeli;
