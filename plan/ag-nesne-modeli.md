@@ -19,27 +19,11 @@ dinamik ve sahne prefabları, sahne yerleşimi ve export **kuruldu**
 - [ ] `Export Server Config` → `maps.json`'da `objects[]` ve `kinds[]` görünüyor; ikinci export
       **aynı baytları** üretiyor (git diff boş).
 - [ ] `SceneIdGuard` aralık dışı/çakışan kimliği onarıyor; kimlik `NET_ID_SCENE_MAX`'ı aşmıyor.
-- [ ] Maç başlayınca herkese `world_state` gidiyor; objeler tam canla başlıyor.
-- [ ] Objeye ateş → `object_state` **herkeste** aynı anda; `hp` sıfırlanınca `Broken` biti geliyor.
-- [ ] Kırılmış objeye ikinci vuruş sessizce reddediliyor (konsolda tek satır, çift yayın yok).
-- [ ] Lobide (`fireWhilePaused`) hedef tahtası vurulabiliyor ama **oyuncu** vurulamıyor.
-- [ ] Maç ortasında bağlanan oyuncu kırık objeleri **kırık** görüyor.
-- [ ] Aynı haritada ikinci maç: objeler sağlam başlıyor (sunucu tablosu da sıfırlanmış).
 - [ ] Turnuvada tur başı sıfırlama çalışıyor.
 - [ ] Hazırlık panelindeki "Ağ nesneleri" satırı eksik/yinelenen `kind`'ı yakalıyor.
 
 **B2 — sahiplik ve poz:**
 
-- [ ] Objeyi alan oyuncunun elinde duruyor; **ikinci oyuncu alamıyor**, sahibi bırakınca alabiliyor.
-- [ ] İki oyuncu aynı anda uzanırsa biri alır, diğerinin eli boş kalır (yerel kavrama geri alınır) —
-      obje iki elde birden **görünmüyor**.
-- [ ] Fırlatılan obje **iki başlıkta da aynı yere** düşüyor; karşı taraf simüle etmiyor.
-- [ ] Uçuş bitince obje duruyor ve **orada kalıyor** (dinlenme pozu sunucuya yazıldı): yeni bağlanan
-      oyuncu onu düştüğü yerde görüyor, alındığı yerde değil.
-- [ ] Sahip **kopunca/ölünce** obje son bilinen yerinde serbest kalıyor — kimse alamaz hâlde
-      kilitlenmiyor.
-- [ ] Tutulan objede uzak elin parmakları doğru kavramayı alıyor ve elde **tek** obje görünüyor
-      (katalogdan ikinci kopya üretilmiyor).
 - [ ] 17+ oyuncuda fırlatılan obje uzak başlıkta zıplayarak da olsa **doğru yerde duruyor** (snapshot
       parçalanınca obje bölümü düşer, dinlenme pozu WS'ten gelir).
 

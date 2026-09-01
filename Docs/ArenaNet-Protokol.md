@@ -1618,9 +1618,26 @@ olmalı, tanınmayan `modeId` reddedilir):
 > konduğunda, ya da bitmiş bir tahta slota bırakıldığında — ve ikisinde de yığının **en üstü**
 > `bun_top` olmak zorundadır. ⚠️ Birinci an olmadan döngü kapanmaz: slotta duran bir tahta bir daha
 > "dinlenmeye" geçmez, yani müşterinin önünde kurulan bir hamburger asla teslim edilemezdi. Kapalılık
-> şartı da her malzemede yeniden reddedilmeyi önler. ⚠️ Malzeme yığını tahtaya **bağlanmaz**: dolu bir
-> tahtayı taşımak malzemeleri yerinde bırakır — bu yüzden tahta müşterinin önünde durur, hamburger
-> orada kurulur.
+> şartı da her malzemede yeniden reddedilmeyi önler. ⚠️ **İki an aynı hamburger için arka arkaya
+> tetiklenebilir** — yüklü tahta slota konar, üstündeki ekmek hemen ardından dinlenir. İstemci ikinci
+> denemeyi kısa bir beklemeyle yutar; yoksa sunucunun çoktan sildiği `netId`'lerle ikinci bir `serve`
+> gider ve **kabul edilmiş** bir hamburgerde red duyulur.
+>
+> **Taşıyıcılar telde YOKTUR — türetilir.** Spatulanın bıçağına ya da servis tahtasının üstüne binen
+> malzeme sıradan bir `object_grab` ile **taşıyıcıyı tutan elin** malı olur; telde yalnız "şu malzeme şu
+> oyuncunun şu elinde" yazar. "Taşıyıcının üstünde" bilgisini her istemci aynı durumdan çıkarır:
+> *taşıyıcıyla aynı elde tutulan malzeme, o taşıyıcının ankorunda durur.* ⚠️ Bunun için ayrı bir
+> alan/mesaj **eklenmez**: ilişki zaten `owner` + `held` + `heldRight` üçlüsünde duruyor, ikinci bir
+> kayıt yalnız senkron tutulacak ikinci bir sözleşme olurdu.
+>
+> **Yığın sırası DİNLENME pozunun yüksekliğinden okunur, geliş sırasından değil.** ⚠️ Geliş sırası
+> maçın ortasında bağlanan başlıkta yoktur (`world_state` sırasızdır) — o başlıkta yığın karışır, ve
+> tarif alttan üste okunduğu için karışıklık doğrudan **yanlış servise** dönüşür.
+>
+> ⚠️ **Taşınan malzeme poz paketi göndermez:** `held` olduğu için `0x09` kapısı zaten kapalıdır (§6.12)
+> ve gerekmez de — malzemenin pozu taşıyıcıdan, taşıyıcınınki elden gelir. Yük taşıyıcıdan ayrılınca
+> (yatırma jesti ya da taşıyıcının elden bırakılması) sıradan `object_release` gider ve uçuş penceresi
+> açılır; ızgara ile servis tahtası bu yüzden mevcut kancalarıyla, değişmeden çalışır.
 >
 > **Yanlış servisin cevabı, olayın kendisidir:** tarif tutmazsa mod hiçbir şey yazmaz ve `serve`
 > herkese relay edilir (kozmetik dal) — istemci bunu red sesi/HUD uyarısı olarak oynar. Doğru servis

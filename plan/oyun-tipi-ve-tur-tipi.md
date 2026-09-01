@@ -12,8 +12,6 @@ silahsız modda hiç koşmuyor.
 
 ## Doğrulama (kullanıcı koşar)
 
-- Admin panelinin Maç sekmesinde **"Oyun tipi"** satırı mod satırının üstünde çiziliyor; iki tip
-  arasında geçiş yapınca harita ve mod listeleri o aileye göre daralıyor.
 - Satırın altındaki bütün satırlar (mod, harita, süre, skor limiti, geri sayım, dost ateşi,
   kalibrasyon kipi) bir sıra aşağı kaydı ve **taşmadı** — kalibrasyon düğmeleri panelin içinde.
 - Mevcut arenalar hiç dokunulmadan Hızlı Savaş: `Export Server Config` sonrası `maps.json`'da

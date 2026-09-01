@@ -9,8 +9,6 @@ dokümanların tamamı yazıldı. Kalıcı bilgi `Docs/ArenaNet-Protokol.md` (§
 
 ## Doğrulama (kullanıcı koşar)
 
-- [ ] Kumanda **eğik** tutulup kalibre edilince zemin, dik tutuşla aynı çıkıyor (log satırındaki
-      `floor` değeri)
 - [ ] `VA_CalibrationManager.floorProbeDropMeters` (0.08) sahada doğru: ilk kalibrasyondan sonra
       `floor R m` log satırına bak, gerekirse `y_yeni = y_eski − R` ile ayarla
       (`Docs/Isletme-Kurulum.md` §3)

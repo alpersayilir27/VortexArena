@@ -14,8 +14,6 @@ kopan oyuncular hiç fark edilmez.
 ## Doğrulama listesi
 
 **Kopma → geri dönüş**
-- [ ] Maç sırasında bir gözlüğün Wi-Fi'ı kesilir → admin satırı `yeniden bağlanıyor · N sn` der ve
-      sayaç **kendiliğinden ilerler** (başka bir roster değişikliği beklemeden).
 - [ ] Aynı gözlükte ekran: "BAĞLANTI KOPTU · çıkarılmana N sn / maç istatistiklerin korunuyor".
 - [ ] Wi-Fi geri gelir → aynı ad, aynı forma numarası, aynı takım, aynı `kills/deaths/score`;
       roster'da **ikinci bir satır açılmaz**.
@@ -36,9 +34,6 @@ kopan oyuncular hiç fark edilmez.
 
 **Admin ve atma**
 - [ ] Admin penceresi kapatılır → satır **hemen** kaybolur ("yeniden bağlanıyor" yazmaz).
-- [ ] Admin bağlantısı koparsa admin ekranı bugünkü "SUNUCUYA BAĞLANILAMIYOR" metnini korur
-      (geri sayım gösterilmez).
-- [ ] `AT` ile atılan oyuncu: satır anında kalkar ve **maç sonu tablosunda da yer almaz**.
 
 **Genel**
 - [ ] Hiçbir ekranda "çevrimdışı" yazmıyor.

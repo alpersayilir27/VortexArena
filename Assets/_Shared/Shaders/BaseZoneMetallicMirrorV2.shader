@@ -1,5 +1,4 @@
-// V1'in (BaseZoneMetallicMirror) ayna bloğu aynen, deseni değişti: kayan BANT yerine akan bir
-// SIVI yüzey. Denemelik — V1 yerinde duruyor, ikisi birbirinden bağımsızdır.
+// Taban bölgesi şeridi: koyu, ayna gibi yansıtan yüzey + takım rengiyle akan SIVI desen.
 //
 // Sıvı hissini üreten üç şey:
 //  1. Yükseklik alanı üç FARKLI yöne giden dalganın toplamıdır. Tek yönlü dalga "kayan çizgi"
@@ -12,7 +11,7 @@
 // Desen koordinatı dünya XZ'si DEĞİL, yüzeyin kendi teğet düzlemidir: materyal düz zemine de,
 // dik bir duvara da, küreye de sürülebilsin diye. Düz zeminde ikisi zaten aynı şeye iner.
 //
-// ⚠️ _BaseColor = TAKIM RENGİ (V1 ile aynı sözleşme): BaseZoneVisibility, ölen oyuncunun
+// ⚠️ _BaseColor = TAKIM RENGİ: BaseZoneVisibility, ölen oyuncunun
 // duvar-arkası şeridinin rengini şeridin materyalinden bu alanı okuyarak kopyalıyor. Yüzeyin
 // koyu rengi ayrı alanda (_MirrorColor).
 Shader "VortexArena/BaseZoneMetallicMirrorV2"
@@ -224,7 +223,7 @@ Shader "VortexArena/BaseZoneMetallicMirrorV2"
                 half glowMask = saturate(vein + trough * _DepthGlow);
                 half3 glow = _BaseColor.rgb * (glowMask * _GlowIntensity + edge * _EdgeGlow);
 
-                // --- ayna yansıması (V1 ile aynı blok) -------------------------------------
+                // --- ayna yansıması --------------------------------------------------------
                 half perceptualRoughness = 1.0h - _Smoothness;
                 float3 reflectVector = reflect(-viewDir, normalWS);
                 half3 environment = GlossyEnvironmentReflection(reflectVector,
