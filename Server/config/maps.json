@@ -165,7 +165,10 @@
       "venue": "VortexAntep",
       "gameType": "quickbattle",
       "modes": ["ffa", "tdm", "tournament"],
-      "objects": []
+      "objects": [
+        { "sceneId": 1, "kind": "breakable_cover" },
+        { "sceneId": 2, "kind": "target_board" }
+      ]
     }
   ],
   "kinds": [

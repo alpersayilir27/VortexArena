@@ -375,7 +375,7 @@ MonoBehaviour:
   brokenRoot: {fileID: 5634729328830901170}
   breakFxPrefab: {fileID: 8785692645442384701, guid: 9bb4a2119a7b23048a11cb6aa11fd240, type: 3}
   breakFxLifetime: 3
-  breakClip: {fileID: 8300000, guid: 7f1459cc291cebf46b6a654b2530e93f, type: 3}
+  breakClip: {fileID: 0}
   breakVolume: 0.8
 --- !u!1 &5542383349054582880
 GameObject:

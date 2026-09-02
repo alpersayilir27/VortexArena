@@ -170,6 +170,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: VortexArena.Modes.Burger::VortexArena.Modes.Burger.BurgerKnife
   bladeTrigger: {fileID: 2982153395569384258}
   cooldownSeconds: 1
+  cutSound: {fileID: 0}
 --- !u!1 &487068514469062603
 GameObject:
   m_ObjectHideFlags: 0
