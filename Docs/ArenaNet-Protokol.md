@@ -1570,7 +1570,12 @@ yollar. Amaç tek: **istemci modun ne olduğunu TAHMİN ETMESİN.** Kural telden
   sonuç ortak toplam + sıralamadır).
 - ⚠️ **"Hasar kapalı" diye bir alan YOKTUR ve eklenmez:** silahsız oyunda (`weaponSource:"none"`)
   hiç `hit_report` gönderilmez, yani hasarı kapatan şey silahın yokluğudur. Ayrı bir anahtar,
-  yalnız ikisinin çelişebileceği bir durum üretirdi.
+  yalnız ikisinin çelişebileceği bir durum üretirdi. `none` **can eriten her yolu** kapatır: iç
+  engel cezası da (§10.9) bu kuralda koşmaz.
+- **Lobi profili tek değildir; seçimi AÇIK SAHNENİN oyun ailesi yapar** (§10.7): `quickbattle`
+  haritasında `weaponSource:"random"` + `fireWhilePaused:true`, `kids` haritasında
+  `weaponSource:"none"` + `fireWhilePaused:false`. İstemci için ek kural yoktur — ikisi de aynı
+  `rules` alanlarıyla taşınır.
 **Kayıtlı modlar** (sunucuda `MatchDirector.RegisterModes()`; `start_match.modeId` bunlardan biri
 olmalı, tanınmayan `modeId` reddedilir):
 
@@ -1628,7 +1633,10 @@ olmalı, tanınmayan `modeId` reddedilir):
 > oyuncunun şu elinde" yazar. "Taşıyıcının üstünde" bilgisini her istemci aynı durumdan çıkarır:
 > *taşıyıcıyla aynı elde tutulan malzeme, o taşıyıcının ankorunda durur.* ⚠️ Bunun için ayrı bir
 > alan/mesaj **eklenmez**: ilişki zaten `owner` + `held` + `heldRight` üçlüsünde duruyor, ikinci bir
-> kayıt yalnız senkron tutulacak ikinci bir sözleşme olurdu.
+> kayıt yalnız senkron tutulacak ikinci bir sözleşme olurdu. Taşıyıcı hacmine giren her serbest
+> malzemeyi **almaz**: aday **dinlenmiş** olmalı (`awake` değil) ve merkezi yığının tepesinden prefabda
+> yazılı bir temas bandı içinde durmalı — yoksa boş tahtayla ızgaranın üstünden geçmek köfteleri
+> süpürürdü. Bant sahne/prefab verisidir, telde yoktur.
 >
 > **Yığın sırası DİNLENME pozunun yüksekliğinden okunur, geliş sırasından değil.** ⚠️ Geliş sırası
 > maçın ortasında bağlanan başlıkta yoktur (`world_state` sırasızdır) — o başlıkta yığın karışır, ve
@@ -1643,6 +1651,10 @@ olmalı, tanınmayan `modeId` reddedilir):
 > herkese relay edilir (kozmetik dal) — istemci bunu red sesi/HUD uyarısı olarak oynar. Doğru servis
 > ise `object_state` üretir. ⚠️ Ayrı bir `rejected` olayı **yoktur**: iki sonuç zaten iki ayrı mesaj
 > tipiyle ayrılıyor, üçüncü bir ad yalnız senkron tutulacak ikinci bir sözleşme olurdu.
+> **Reddin SEBEBİ de telde yoktur:** istemci relay edilen `serve`'deki yığını müşterinin tarifiyle
+> sunucunun kuralının **aynasıyla** (alt/üst ekmek yeri, köfte aşaması, eksik/fazla tür) yerelde
+> karşılaştırıp balonda yazar. ⚠️ İki kural ayrışırsa balon yalan söyler — servis kuralı değişince
+> istemcideki teşhis de aynı değişiklikte güncellenir.
 >
 > ⚠️ **Üçünün de `policy`'si `anyone`, çünkü olayı gönderen objenin sahibi DEĞİLDİR:** ekmek tahtada,
 > köfte ızgarada, tahta bankoda **serbest** durur (`owner == 0`) — bıçağı/spatulayı tutan başka bir
@@ -1661,6 +1673,12 @@ olmalı, tanınmayan `modeId` reddedilir):
 > bake'lidir (`CustomerPath` + banko slotları); istemci `stage` + `s`'teki slot numarasından
 > deterministik olarak yürütür. Sunucu metre bilmez (§10.10), müşterinin nerede olduğunu da bilmez —
 > yalnız **hangi aşamada** olduğunu bilir.
+>
+> ⚠️ **Müşterinin sabrı da telde YOKTUR:** süreyi sunucu tutar (`server.json → burger`, vardiya
+> boyunca iner) ve dolunca yalnız `stage` `3`'e geçer. İstemcinin balonda çizdiği sabır rengi
+> **yaklaşık bir göstergedir** — `1`'e geçiş anından kendi sabitine göre sayar; maçın ortasında
+> bağlanan başlık geçen süreyi bilmediği için tam sabırdan başlar. Kabul edilen sapmadır; kalan süreyi
+> tele koymak saniyede bir `object_state` demek olurdu.
 
 > **`mole` — Çocuk Oyunları ailesinin ilk YARIŞMALI turu.** `gameType:"kids"`, yani yalnız `gameType`
 > alanı `kids` olan haritalarda başlatılır (§10.1 üçüncü kapı, §11). Ailenin değişmezleri durur: silah
@@ -1968,7 +1986,7 @@ hasar veremeden.
 | Faz ne olur? | `paused` + `phaseReason:"lobby"` (§10.1). Lobi diye bir faz YOKTUR |
 | Oyuncuya hasar? | **İmkânsız** — `hit_report` yalnız `playing` fazında işlenir (§10.3) |
 | Atış görünür mü? | Evet — `rules.fireWhilePaused:true` olduğu için atış olayı relay edilir (§6.5/§10.3) |
-| Silah nereden gelir? | **Mod dağıtır** (`weaponSource:"random"`): grip'e basılı tutulan elde loadout'tan rastgele bir silah durur, bırakınca yok olur. Loadout'u istemci `modeId:"lobby"` ile kendi katalogundan çözer. Lobi bilinçli olarak `"weaponcanvas"` değil `"random"` taşır: iki lobi sahnesine elle silah yerleştirme işi doğmasın diye |
+| Silah nereden gelir? | **Mod dağıtır** (`weaponSource:"random"`): grip'e basılı tutulan elde loadout'tan rastgele bir silah durur, bırakınca yok olur. Loadout'u istemci `modeId:"lobby"` ile kendi katalogundan çözer. Lobi bilinçli olarak `"weaponcanvas"` değil `"random"` taşır: iki lobi sahnesine elle silah yerleştirme işi doğmasın diye. ⚠️ **Açık sahne `gameType:"kids"` ise silah hiç gelmez** — sahneleme bölümüne bak |
 | Taban şeritleri görünür mü? | **Seçili mod belirler** (`selection_state.teamMode`, §5.3): takımlı mod seçiliyken (`tdm`/`tournament`) kırmızı/mavi şeritler durur, takımsız mod seçiliyken (`ffa`) gizlenir. Kapı **silah kaynağı DEĞİLDİR** — aktif kural hâlâ lobi profilidir, değişen yalnız sunumdur. Sunucu bu mesajı hiç yollamamışsa istemci aktif kuralın `teamMode`'una düşer |
 | Canlanma / skor / süre? | Yok. Herkes canlı (`hp=PLAYER_MAX_HP`), sayaçlar 0 (§5.3) |
 | Takım? | Vardır ve **yalnız admin atar** (`set_team`, §5.2) — her fazda, sunucuya bağlı herkes için. Oyuncu kendi takımını seçemez; bunun için protokol mesajı YOKTUR ve eklenmeyecektir |
@@ -2023,6 +2041,13 @@ yapar, yerini alır; operatör bunu tek tek anlatmak zorunda kalmaz.
 > süresince silah alır ve serbest atış yapar. ⚠️ İstemci "mod silah dağıtıyor" durumunu `modeId`'den
 > değil bu **bileşimden** ayırır (§10.5): yalnız `random` = mod dağıtıyor (FFA, tezgâhlar gizlenir),
 > `random` + `fireWhilePaused` = serbest alan.
+>
+> ⚠️ **Çocuk Oyunları istisnası:** sahnelenen haritanın `gameType`'ı `kids` ise lobi profili
+> `weaponSource:"none"` + `fireWhilePaused:false` taşır (çocuk lobi profili). Tezgâh gizlenir,
+> grip silah vermez, atış relay edilmez. Gerekçe: çocuk oyununda **bekleme süresinde de** silah
+> olmamalıdır — normal lobi profili rastgele silah dağıtır, yani maç başlamadan çocuğun eline
+> silah verirdi. İstemci için ek kural yoktur: `none` zaten hem çerçeveyi hem grant yolunu
+> kapatıyor (§10.5). Lobi haritasına dönüşte normal profil geri gelir.
 
 ### 10.8 Gövde ölçeği (`bodyScale`)
 
@@ -2086,7 +2111,7 @@ Oyuncunun **fiziksel kural ihlali** iki türdür ve ikisi de tele girer, ama **s
 
 | Tür | Bit | Ne olur | Adminde |
 |---|---|---|---|
-| **Kafa iç engelin içinde** | `FLAG_IN_OBSTACLE` | Karartma + uyarı + titreşim, tolerans sonrası **can erimesi** | Kırmızı **3 Hz** halka |
+| **Kafa iç engelin içinde** | `FLAG_IN_OBSTACLE` | Karartma + uyarı + titreşim, tolerans sonrası **can erimesi** (yalnız silahlı modlarda) | Kırmızı **3 Hz** halka |
 | **Kafa alanın dışında** | `FLAG_OUT_OF_BOUNDS` | Karartma + uyarı (muhafaza), **ateş kapanır**, **can gitmez** | Turuncu **1.5 Hz** halka |
 
 ⚠️ **Alan-dışı bayrağı CEZA ÜRETMEZ ve üretmeyecek.** Gerekçesi dış duvarın `Obstacle` layer'ına
@@ -2113,9 +2138,13 @@ halkasını kırmızı yakıp söndürür.
 | **Kafa** alanın dışında | ✅ uyarı yazısı + `FLAG_OUT_OF_BOUNDS`; **can gitmez** | ✅ tam siyah + nabız (muhafazanın kendi karartması) | ✅ tetik ölür |
 | Kol / gövde / bacak | — | — | — |
 
-⚠️ **Tablonun üç sütunu üç ayrı kapıdan geçer.** "Ceza" sütunu faz `playing` + canlı + kalibre
-ister (sunucuda); "Karartma + titreşim" ve ateş kapısı **hiçbirini istemez** — her harita, her mod,
-her faz ve ölü/diri fark etmeksizin çalışırlar.
+⚠️ **Tablonun üç sütunu üç ayrı kapıdan geçer.** "Ceza" sütunu faz `playing` + canlı + kalibre +
+`weaponSource ≠ "none"` ister (sunucuda); "Karartma + titreşim" ve ateş kapısı **hiçbirini
+istemez** — her harita, her mod, her faz ve ölü/diri fark etmeksizin çalışırlar.
+
+⚠️ **Silahsız modda (`weaponSource:"none"`) engel cezası KOŞMAZ.** O modlarda canlanma da yoktur
+(`reviveAnchor:"none"`), yani engel ölümü vardiyanın sonuna kadar kalıcı olurdu. Karartma, uyarı ve
+admin halkası **aynen çalışır** — operatör kuralı çiğneyeni görmeye devam eder, yalnız can gitmez.
 
 ⚠️ **Ceza yalnız kafayı yargılar, ateş kapısı kafa + eli.** Sebep iki sorunun farklı olmasıdır:
 ceza *"görüşüm geometrinin içinde mi"* diye sorar, ateş kapısı *"gövdemi göstermeden mi ateş

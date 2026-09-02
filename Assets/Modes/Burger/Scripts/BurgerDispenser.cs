@@ -21,6 +21,9 @@ namespace VortexArena.Modes.Burger
         [Tooltip("İki alma arasındaki en kısa süre — tek basışın iki malzeme doğurmasını engeller.")]
         [SerializeField] private float cooldownSeconds = 0.4f;
 
+        [Tooltip("Malzeme alınırken çalan ses. Atanmazsa sessizdir.")]
+        [SerializeField] private AudioSource takeSound;
+
         private NetObject _net;
 
         private bool _gripWasLeft;
@@ -108,6 +111,13 @@ namespace VortexArena.Modes.Burger
 
             NetObjectSync.SendEvent(_net.NetId, BurgerKinds.EventTake, new[] { rightHand ? 1 : 0 });
             _cooldown = cooldownSeconds;
+
+            // Played on the ASK, not on the spawn: the ingredient is born on the server and arrives as a
+            // spawn with no link back to this dispenser.
+            if (takeSound != null)
+            {
+                takeSound.Play();
+            }
         }
     }
 }

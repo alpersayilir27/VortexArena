@@ -67,6 +67,10 @@ public sealed class MapTable
     /// <summary>The game family an empty <c>gameType</c> (an old export) is assigned to.</summary>
     public const string DefaultGameType = "quickbattle";
 
+    /// <summary>The Kids family (§11) — the value the kids modes and the weaponless lobby profile
+    /// (§10.7) key off.</summary>
+    public const string KidsGameType = "kids";
+
     private readonly Dictionary<string, MapEntry> _byScene = new(StringComparer.Ordinal);
 
     /// <summary>Scene names taken into the table (for the startup summary / rejection messages).</summary>
@@ -213,6 +217,11 @@ public sealed class MapTable
         }
         return false;
     }
+
+    /// <summary>Is the map in the Kids family? An empty <c>gameType</c> (an old export) is quick
+    /// battle, so it is never kids.</summary>
+    public static bool IsKids(MapEntry entry) =>
+        StringComparer.OrdinalIgnoreCase.Equals(entry.gameType, KidsGameType);
 
     /// <summary>Do the map and the mode belong to the same game family? An empty value on either side
     /// means quick battle, so an old export never hides a map.</summary>

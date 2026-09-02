@@ -15,22 +15,20 @@ namespace VortexArena.Server.Core.Modes;
 public sealed class BurgerMode : IGameMode
 {
     // ---- Tuning (mode-internal; nothing outside reads these) ----
-
-    private const float CustomerSpawnIntervalSeconds = 20f;
+    // The balance numbers (arrival, patience, grill, points) live in _settings — server.json → burger.
 
     /// <summary>Spawn → arrival at the counter; the same budget as the client's deterministic walk, so
     /// the customer reaches Waiting exactly where the client draws them standing.</summary>
     private const float CustomerWalkSeconds = 6f;
 
-    private const float CustomerPatienceSeconds = 120f;
-
     /// <summary>Happy/unhappy → despawn.</summary>
     private const float CustomerLeaveSeconds = 4f;
 
     private const int CounterSlotCount = 3;
-    private const float PattyCookSeconds = 20f;
-    private const float PattyBurnSeconds = 40f;
-    private const int ServePoints = 10;
+
+    /// <summary>Retry interval while every counter slot is taken — a whole arrival interval would be
+    /// burnt on a busy shift.</summary>
+    private const float CounterFullRetrySeconds = 1f;
 
     /// <summary>Vertical gap between the halves of a cut bun (m). Born at the SAME point they overlap and
     /// physics flings one of them off the board.</summary>
@@ -73,6 +71,8 @@ public sealed class BurgerMode : IGameMode
     // ⚠️ One IGameMode instance is created once at RegisterModes() and reused by every match, so all of
     // this is reset in OnMatchStart — never in a field initializer.
 
+    private readonly BurgerSettings _settings;
+
     private int _happy;
     private int _unhappy;
     private float _spawnTimer;
@@ -87,10 +87,17 @@ public sealed class BurgerMode : IGameMode
     /// <summary>Spawned ingredient netIds, OLDEST FIRST — the cleanup order.</summary>
     private readonly List<int> _ingredients = new();
 
+    public BurgerMode() : this(new BurgerSettings())
+    {
+    }
+
+    /// <summary>Balance from <c>server.json → burger</c>; expected ALREADY sanitized.</summary>
+    public BurgerMode(BurgerSettings settings) => _settings = settings;
+
     public string ModeId => "burger";
 
     /// <summary>Kids family (§11): the <c>start_match</c> gate rejects a map from any other family.</summary>
-    public string GameType => "kids";
+    public string GameType => MapTable.KidsGameType;
 
     /// <summary>The result screen waits for the operator (§10.1): the shift's table is what the group
     /// reads together at the end, and the core's <c>MATCH_END_SECONDS</c> valve would wipe it mid-read.</summary>
@@ -125,7 +132,7 @@ public sealed class BurgerMode : IGameMode
         _cooking.Clear();
         _ingredients.Clear();
         Array.Clear(_slotTaken, 0, _slotTaken.Length);
-        _spawnTimer = CustomerSpawnIntervalSeconds;
+        _spawnTimer = _settings.customerIntervalStart;
         PushModeState(director);
 
         Console.WriteLine($"[burger] vardiya başladı — {director.RoundSeconds} sn; skor limiti yok, " +
@@ -146,6 +153,19 @@ public sealed class BurgerMode : IGameMode
         TickGrill(director, deltaSeconds);
     }
 
+    /// <summary>Shift progress 0→1; the source of both ramps.</summary>
+    /// <remarks>A shift with no length (<c>roundSeconds &lt;= 0</c>) stays at 0 — the ramp then plays the
+    /// start values instead of dividing by zero.</remarks>
+    private static float Progress(MatchDirector director)
+    {
+        var round = director.RoundSeconds;
+        if (round <= 0) return 0f;
+        var elapsed = round - director.TimeRemaining;
+        return Math.Clamp(elapsed / round, 0f, 1f);
+    }
+
+    private static float Lerp(float from, float to, float t) => from + (to - from) * t;
+
     private void TickSpawn(MatchDirector director, float deltaSeconds)
     {
         _spawnTimer -= deltaSeconds;
@@ -154,11 +174,11 @@ public sealed class BurgerMode : IGameMode
         var slot = FreeSlot();
         if (slot < 0)
         {
-            // Counter full: retry soon instead of burning a whole interval on a busy shift.
-            _spawnTimer = 1f;
+            _spawnTimer = CounterFullRetrySeconds;
             return;
         }
 
+        var progress = Progress(director);
         _slotTaken[slot] = true;
         var recipe = BuildRecipe();
         var netId = director.SpawnObject("customer", default, payload: $"slot:{slot};r:{recipe}");
@@ -168,10 +188,13 @@ public sealed class BurgerMode : IGameMode
             Slot = slot,
             Recipe = recipe,
             Stage = CustomerWalking,
-            Timer = CustomerWalkSeconds
+            Timer = CustomerWalkSeconds,
+            // Frozen at BIRTH: a patience read later would keep shrinking under a customer who is
+            // already waiting.
+            Patience = Lerp(_settings.patienceStart, _settings.patienceEnd, progress)
         };
 
-        _spawnTimer = CustomerSpawnIntervalSeconds;
+        _spawnTimer = Lerp(_settings.customerIntervalStart, _settings.customerIntervalEnd, progress);
     }
 
     private void TickCustomers(MatchDirector director, float deltaSeconds)
@@ -189,7 +212,7 @@ public sealed class BurgerMode : IGameMode
             {
                 case CustomerWalking:
                     customer.Stage = CustomerWaiting;
-                    customer.Timer = CustomerPatienceSeconds;
+                    customer.Timer = customer.Patience;
                     director.SetObjectStage(netId, CustomerWaiting);
                     break;
 
@@ -224,8 +247,8 @@ public sealed class BurgerMode : IGameMode
 
             var cooked = _cooking[netId] + deltaSeconds;
             _cooking[netId] = cooked;
-            if (cooked >= PattyBurnSeconds) director.SetObjectStage(netId, PattyBurnt);
-            else if (cooked >= PattyCookSeconds) director.SetObjectStage(netId, PattyCooked);
+            if (cooked >= _settings.burnSeconds) director.SetObjectStage(netId, PattyBurnt);
+            else if (cooked >= _settings.cookSeconds) director.SetObjectStage(netId, PattyCooked);
         }
     }
 
@@ -357,7 +380,7 @@ public sealed class BurgerMode : IGameMode
         if (served[0] != BunBottom || served[served.Count - 1] != BunTop) return false;
         if (!MiddleMatches(customer.Recipe, served)) return false;
 
-        director.AddSharedScore(playerId, ServePoints);
+        director.AddSharedScore(playerId, _settings.servePoints);
         customer.Stage = CustomerHappy;
         customer.Timer = CustomerLeaveSeconds;
         _happy++;
@@ -455,6 +478,9 @@ public sealed class BurgerMode : IGameMode
         public string Recipe = "";
 
         public int Stage;
+
+        /// <summary>Patience granted at birth (seconds), from the ramp.</summary>
+        public float Patience;
 
         /// <summary>Counts the walk, then the patience, then the leaving — one field, because a customer
         /// is only ever in one of the three.</summary>

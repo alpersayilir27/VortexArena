@@ -19,6 +19,9 @@ namespace VortexArena.Modes.Burger
         [Tooltip("İki kesme arasındaki en kısa süre — tek hamlenin birden çok kesme yollamasını engeller.")]
         [SerializeField] private float cooldownSeconds = 1f;
 
+        [Tooltip("Kesme sesi. Atanmazsa sessizdir.")]
+        [SerializeField] private AudioSource cutSound;
+
         private NetObject _net;
         private float _cooldown;
 
@@ -82,6 +85,12 @@ namespace VortexArena.Modes.Burger
 
             NetObjectSync.SendEvent(bun.NetId, BurgerKinds.EventCut);
             _cooldown = cooldownSeconds;
+
+            // Local only, like the cut itself — a remote knife is driven by its own client.
+            if (cutSound != null)
+            {
+                cutSound.Play();
+            }
         }
     }
 }

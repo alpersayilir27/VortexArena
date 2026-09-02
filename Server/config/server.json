@@ -5,5 +5,14 @@
   "venueName": "Dev",
   "tickHz": 20,
   "venue": "",
-  "lobbyScene": ""
+  "lobbyScene": "",
+  "burger": {
+    "customerIntervalStart": 25,
+    "customerIntervalEnd": 12,
+    "patienceStart": 150,
+    "patienceEnd": 90,
+    "cookSeconds": 20,
+    "burnSeconds": 40,
+    "servePoints": 10
+  }
 }

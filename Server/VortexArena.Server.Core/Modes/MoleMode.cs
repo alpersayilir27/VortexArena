@@ -76,7 +76,7 @@ public sealed class MoleMode : IGameMode
     public string ModeId => "mole";
 
     /// <summary>Kids family — startable ONLY on a <c>gameType:"kids"</c> map (§11).</summary>
-    public string GameType => "kids";
+    public string GameType => MapTable.KidsGameType;
 
     /// <summary>Two teams and a team score, but NO base and NO revive: nothing dies here, and the base
     /// was the vehicle of <c>reviveAnchor:"base"</c>. <c>Weapons = None</c> is what switches damage off

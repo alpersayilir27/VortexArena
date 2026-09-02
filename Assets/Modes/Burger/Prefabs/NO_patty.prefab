@@ -154,6 +154,7 @@ GameObject:
   - component: {fileID: 6691034808782164719}
   - component: {fileID: 5670646959780918427}
   - component: {fileID: 1340775672451016584}
+  - component: {fileID: 3899033161197586663}
   m_Layer: 0
   m_Name: NO_patty
   m_TagString: Untagged
@@ -291,3 +292,21 @@ MonoBehaviour:
   m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.NetObjectGrabBridge
   item: {fileID: 11400000, guid: 1a422b76e00dc5849b5649f531374416, type: 2}
   socket: {fileID: 200634926920353090}
+--- !u!114 &3899033161197586663
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7856095617283306508}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 021d3fa6187ccd24099601152cd837b2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.Modes.Burger::VortexArena.Modes.Burger.BurgerPatty
+  renderers: []
+  rawColor: {r: 0.78, g: 0.32, b: 0.33, a: 1}
+  cookedColor: {r: 0.42, g: 0.24, b: 0.12, a: 1}
+  burntColor: {r: 0.1, g: 0.08, b: 0.07, a: 1}
+  sizzleSource: {fileID: 0}
+  cookedClip: {fileID: 0}

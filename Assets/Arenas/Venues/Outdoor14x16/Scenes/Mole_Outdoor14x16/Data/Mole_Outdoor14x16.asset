@@ -16,7 +16,7 @@ MonoBehaviour:
   displayName: "K\xF6stebek"
   gameType: 1
   supportedModeIds:
-  - burger
+  - mole
   ambienceClip: {fileID: 0}
   ambienceVolume: 0.2
   musicClip: {fileID: 8300000, guid: 35b2007bc1e731848a65d0e57541bde0, type: 3}

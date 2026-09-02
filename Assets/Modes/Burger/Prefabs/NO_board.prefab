@@ -341,6 +341,7 @@ MonoBehaviour:
   stackTrigger: {fileID: 9160765601308308341}
   rejectSound: {fileID: 0}
   serveCooldownSeconds: 1
+  noticeSeconds: 2.5
 --- !u!114 &1660131241805459449
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -357,6 +358,7 @@ MonoBehaviour:
   anchor: {fileID: 5338013819401894637}
   capacity: 8
   slotHeight: 0.03
+  claimBand: 0.04
   spillAngle: 55
   reclaimDelaySeconds: 0.6
 --- !u!1 &8946993903199983806

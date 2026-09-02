@@ -59,6 +59,11 @@ namespace VortexArena.Modes.Burger
         /// <inheritdoc cref="CustomerWalkSeconds"/>
         public const float CustomerLeaveSeconds = 4f;
 
+        /// <summary>Patience gauge budget (s). ⚠️ Approximate: the server ramps patience per shift
+        /// (<c>server.json</c> <c>burger.patienceStart/End</c>) and the value is not on the wire, so the
+        /// client only draws a rough gauge — never a countdown to trust.</summary>
+        public const float CustomerPatienceSeconds = 120f;
+
         // ------------------------------------------------------------------- payload keys (§10.10 `s`)
 
         public const string PayloadSlot = "slot";
@@ -83,6 +88,28 @@ namespace VortexArena.Modes.Burger
                    string.Equals(kind, Pickle, StringComparison.Ordinal) ||
                    string.Equals(kind, Tomato, StringComparison.Ordinal) ||
                    string.Equals(kind, Sauce, StringComparison.Ordinal);
+        }
+
+        /// <summary>Turkish name of a kind for the order bubble. ⚠️ An unknown key is returned AS IS
+        /// rather than dropped: the vocabulary can gain ingredients server-side, and an empty line would
+        /// read as a wrong order.</summary>
+        public static string DisplayName(string kind)
+        {
+            switch (kind)
+            {
+                case BunWhole: return "Ekmek";
+                case BunBottom: return "Alt ekmek";
+                case Patty: return "Köfte";
+                case Cheese: return "Peynir";
+                case Bacon: return "Pastırma";
+                case Lettuce: return "Marul";
+                case Onion: return "Soğan";
+                case Pickle: return "Turşu";
+                case Tomato: return "Domates";
+                case Sauce: return "Sos";
+                case BunTop: return "Üst ekmek";
+                default: return kind;
+            }
         }
     }
 }

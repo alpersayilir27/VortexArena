@@ -7,6 +7,8 @@ Kod, protokol ve doküman yerinde. Sistemin anlatımı dokümanlarda: mod sözle
 `Server/README.md` mod tablosu · yeni bir çocuk oyununun reçetesi
 `Docs/Gelistirici/Yemek-Kitabi.md` "Çocuk oyunu eklemek".
 
+Bu dosya yalnız **içerik** işini tutar; kod, protokol ve prefab alanları yerindedir.
+
 ## Kalan içerik işi
 
 ⚠️ **Sahnedeki dükkân ve bütün eşyalar prototiptir:** kutu/silindir primitifleriyle kurulmuş banko,
@@ -26,30 +28,13 @@ slotlarının hacimleri ve müşteri yolu ona bağlı. Her banko slotunda bir se
       `CargoAnchor`'ı bıçağın, servis tahtasınınki yüzeyin ölçüsüne göre yazıldı; model değişince
       ikisi de yeniden konumlanır. `slotHeight` katman kalınlığına, `spillAngle` istenen dökülme
       hissine göre ayarlanır. ⚠️ Ankor yanlış yerdeyse yük görsel olarak modele gömülür — hata vermez.
-- [ ] **Sesler:** servis tahtasının red sesi (`BurgerServingBoard.rejectSound`) ve müşteri
-      gelme/gitme sesleri.
+- [ ] **Sesler** — alanlar prefabda hazır, klip bekliyor (boş alan sessizdir): servis tahtasının red
+      sesi (`BurgerServingBoard.rejectSound`) · müşteri geldi/mutlu/mutsuz (`BurgerCustomer`
+      `arriveSound`/`happySound`/`unhappySound`) · köfte cızırtısı ve pişti vuruşu (`BurgerPatty`
+      `sizzleSource` loop'lu `AudioSource` + `cookedClip`) · dağıtıcı `takeSound` · bıçak `cutSound`.
+- [ ] **Balon ölçüsü gerçek modele göre:** `NO_customer/Bubble/Panel/Dilimler` dilim kökü ve
+      `BurgerOrderBubble.sliceSize` (canvas birimi, 0.001 ölçek) metin alanıyla birlikte modelin
+      başına göre yeniden konumlanır; dilim renkleri (`sliceColors`) malzeme modellerinin renkleriyle
+      eşitlenir.
 
-## Doğrulama (kullanıcı koşar)
-
-- İki başlık: biri ekmeği keser, diğeri iki yarımı aynı anda görür; köfte iki başlıkta aynı anda
-  pişmiş olur, renk tonu aynı.
-- Aynı bıçağı iki kişi aynı anda tutmaya çalışır: biri alır, diğerinin eli boş kalır, çalamaz.
-- Bankodaki tahtaya doğru sırayla dizip **üst ekmeği koyunca** servis olur: servis edenin puanı +
-  toplam artar, müşteri mutlu gider, `h` artar. Yarım yığın (üstte ekmek yokken) hiç rapor edilmez.
-  Yanlış tarifte üst ekmek konunca red gelir, müşteri bekler; sabrı dolunca mutsuz gider, `u` artar,
-  puan düşmez.
-- Dolu elle dağıtıcıyı sıkmak yeni malzeme doğurmaz; malzeme doğar doğmaz ele yapışır (havada
-  asılı kalmaz). Kesilen ekmeğin iki yarısı iç içe geçmez.
-- Admin HUD'ında mutlu/mutsuz sayaçları oyuncu HUD'ıyla aynı.
-- Geç katılan başlık: bekleyen müşterileri (siparişleriyle) ve masadaki malzemeleri doğru yerde görür.
-- Sahip koparsa elindeki malzeme yere düşer (serbest kalır), oyun sürer.
-- **Spatula:** ızgaradaki köfte bıçağa alınır, ikinci başlıkta da bıçağın üstünde görünür (avuçta
-  değil) ve spatulanın parmak kavraması bozulmaz. Spatula yatırılınca köfte düşer; düşerken düz
-  tutulunca hemen geri alınmaz. Bıçak doluyken ikinci malzeme binmez.
-- **Servis tahtası:** kurulmuş hamburger tahtayla birlikte taşınır, katman sırası korunur ve slota
-  konunca servis olur — servis kabul edildiğinde **red sesi duyulmaz** (tahta ve üst ekmek peş peşe
-  dinlendiği için iki servis denemesi olur, ikincisi yutulmalı).
-- **Taşıma sırasında bağlanan başlık:** yüklü tahtayı/spatulayı taşıyan oyuncuyu görür ve yığını
-  aynı sırayla çizer (sıra dinlenme pozundan türetiliyor).
-- Aynı malzemeyi bir el kaparken spatula da almaya çalışır: biri alır, spatula boş kalır ve malzeme
-  avuca sıçramaz.
+Doğrulama listesi Notion'da: Todo → "Doğrulama 18 — Çocuk Oyunları: Hamburgerci".

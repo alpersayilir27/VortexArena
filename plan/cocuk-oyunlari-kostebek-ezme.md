@@ -29,6 +29,9 @@ yükselme mesafesi ve deliğin çapı ona göre ayarlı.
       geçer.
 - [ ] **HUD sanatı** (bugün Hamburgerci HUD'ının kopyası).
 - [ ] Sahnenin ortam sesi boş; köstebek arenasına uygun bir `ambienceClip` seçilecek.
+- [ ] Açık hava köstebek sahnesinde çit hattı arena düzlemiyle hizalı değil (batı ve kuzey çitleri
+      oyun alanının içinde kalıyor); çitler `VA_ArenaBoundary` düzlemine oturtulacak. Delikler
+      düzlem **ve** çit kesişiminin içinde dizildi, çit taşınınca yerinde kalır.
 
 ## Playtest ayarları
 
@@ -43,28 +46,4 @@ yükselme mesafesi ve deliğin çapı ona göre ayarlı.
       artırır (karar gerekçesi `Server/README.md` mod bloğunda).
 - [ ] Oyuncu çarpışması görülürse tavan düşürülür — sunucudan mesafe çözümü yoktur.
 
-## Doğrulama (kullanıcı koşar)
-
-- [ ] İki başlıkta aynı delikten aynı anda aynı renk köstebek çıkar; süre dolunca ikisinde de iner.
-- [ ] İki oyuncu aynı köstebeğe sallar: **tek** vuruş işlenir, skor bir kez yazılır, ezilme iki
-      başlıkta da oynar.
-- [ ] Doğru vuruş: takım skoru + oyuncu katkısı + doğru sayacı artar. Yanlış vuruş: takım skoru
-      düşer (**0 altına inmez**), oyuncu katkısı eksilir, yanlış sayacı artar.
-- [ ] Yanlış rengi ezince köstebek uyarı rengine döner ve uyarı sesi çalar; **sonraki çıkışta**
-      yine takım renginde gelir. Doğru vuruşta renk değişmez.
-- [ ] Geç katılan başlıkta ayaktaki köstebeklerin sesi **toplu çalmıyor** (anlık görüntü sessizdir).
-- [ ] Köstebek indikten sonra ulaşan sallama hiçbir şey yapmaz (nonce) ve **ceza yazmaz**; eşik altı
-      yavaş temas vuruş sayılmaz.
-- [ ] Köstebeğin **herhangi bir yerine** (tepesi, yanı) hızlı vuruş sayılır; **çok hızlı** sallamada
-      da kaçmaz (süpürme). Balyozla havayı sallamak ya da zemine vurmak hiçbir şey yapmaz.
-- [ ] Balyozlar iki elde belirir, bırakılamaz; uzak avatarın iki elinde doğru ve **takım renginde**
-      çizilir.
-- [ ] Geç katılan başlık: ayaktaki köstebekleri doğru renkte görür (çıkışı baştan oynamaz),
-      skor/sayaçlar doğru gelir.
-- [ ] Lobide takım dengesi otomatik; admin `set_team` ile değiştirince balyoz rengi yeni takımı
-      izler.
-- [ ] Süre bitince önde olan takım ilan edilir, eşitlikte berabere; sonuç ekranı operatör kapatana
-      kadar durur.
-- [ ] Hasar tümüyle kapalı: balyozla oyuncuya vurmak hiçbir şey yapmaz, can HUD'ı yok.
-- [ ] Delik yerleşimi sahada: duvar hattından en az 1 m içeride, delikler arası en az 2 m, kolonların
-      dibinde delik yok.
+Doğrulama listesi Notion'da: Todo → "Doğrulama 19 — Çocuk Oyunları: Köstebek Ezme".

@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using VortexArena.Core.Arena;
 using VortexArena.Core.Combat;
+using VortexArena.Core.Player;
 using VortexArena.Net;
 
 namespace VortexArena.Modes.Burger
@@ -36,6 +37,10 @@ namespace VortexArena.Modes.Burger
         [Tooltip("Katmanlar arası yükseklik (metre): yük ankorun yukarısına bu aralıkla dizilir.")]
         [SerializeField] private float slotHeight = 0.03f;
 
+        [Tooltip("Aday malzemenin merkezi yığının tepesinden en fazla bu kadar (m) uzakta olmalı; " +
+                 "0 = hacmin tamamı.")]
+        [SerializeField] private float claimBand;
+
         [Tooltip("Taşıyıcı bu açıdan (derece) fazla yatınca yük dökülür. 0 = hiç dökülmez.")]
         [SerializeField] private float spillAngle = 55f;
 
@@ -45,6 +50,10 @@ namespace VortexArena.Modes.Burger
         /// <summary>How long an unanswered <c>object_grab</c> is waited for. A refusal has no message of
         /// its own (§10.10) — the only sign is that the owner never becomes us.</summary>
         private const float AskSeconds = 0.5f;
+
+        private const string HapticSource = "carry";
+        private const float HapticSeconds = 0.1f;
+        private const float HapticAmplitude = 0.5f;
 
         private NetObject _net;
 
@@ -72,6 +81,12 @@ namespace VortexArena.Modes.Burger
         private Vector3 _lastAnchorPosition;
         private Vector3 _velocity;
         private float _reclaimAt;
+
+        /// <summary>End of the pickup buzz; the arbiter wants a report every frame (heartbeat), so the
+        /// clock lives here rather than in a coroutine.</summary>
+        private float _hapticUntil;
+
+        private bool _hapticRight;
 
         private void Awake()
         {
@@ -107,10 +122,19 @@ namespace VortexArena.Modes.Burger
             _cargo.Clear();
             _asked.Clear();
             _dropped.Clear();
+
+            if (_hapticUntil > 0f)
+            {
+                _hapticUntil = 0f;
+                ControllerHaptics.ReportHand(HapticSource, _hapticRight, 0f);
+            }
         }
 
         private void LateUpdate()
         {
+            // Before the guards: a buzz that started must still be able to switch itself off.
+            TickHaptics();
+
             if (_net == null || _net.NetId <= 0 || cargoVolume == null)
             {
                 return;
@@ -230,6 +254,7 @@ namespace VortexArena.Modes.Burger
                 Anchor(ingredient);
                 _asked[ingredient.NetId] = Time.time + AskSeconds;
                 NetObjectSync.SendGrab(ingredient.NetId, _net.HeldByRightHand);
+                Buzz();
 
                 if (_cargo.Count + _asked.Count >= capacity)
                 {
@@ -240,10 +265,27 @@ namespace VortexArena.Modes.Burger
 
         private bool IsClaimable(NetObject ingredient)
         {
+            // ⚠️ An AWAKE ingredient is mid-flight: scooping one out of the air is not a gesture the
+            // player made, it is the carrier happening to be under it.
             return ingredient != null && ingredient != _net && ingredient.NetId > 0 &&
                    ingredient.Kind != null && BurgerKinds.IsIngredient(ingredient.Kind.Kind) &&
-                   ingredient.Owner == 0 && !ingredient.IsHeld &&
-                   !_asked.ContainsKey(ingredient.NetId) && !_dropped.Contains(ingredient.NetId);
+                   ingredient.Owner == 0 && !ingredient.IsHeld && !ingredient.IsAwake &&
+                   !_asked.ContainsKey(ingredient.NetId) && !_dropped.Contains(ingredient.NetId) &&
+                   InClaimBand(ingredient);
+        }
+
+        /// <summary>Contact band around the TOP of the stack. ⚠️ Without it the whole volume claims: the
+        /// serving board is 32 cm tall, so passing an empty board over the grill sweeps up every patty
+        /// under it.</summary>
+        private bool InClaimBand(NetObject ingredient)
+        {
+            if (claimBand <= 0f)
+            {
+                return true;
+            }
+
+            float top = anchor.position.y + _cargo.Count * slotHeight;
+            return Mathf.Abs(ingredient.transform.position.y - top) <= claimBand;
         }
 
         private void PruneAsked()
@@ -327,6 +369,41 @@ namespace VortexArena.Modes.Burger
         }
 
         private bool Tipped => spillAngle > 0f && Vector3.Angle(anchor.up, Vector3.up) > spillAngle;
+
+        // ------------------------------------------------------------------- feel
+
+        /// <summary>Short buzz in the hand that scooped: cargo rides the carrier silently and without
+        /// this the pickup has no feedback at all.</summary>
+        private void Buzz()
+        {
+            bool right = _net.HeldByRightHand;
+
+            // A hand switch would leave the old side buzzing until the arbiter's timeout.
+            if (_hapticUntil > 0f && right != _hapticRight)
+            {
+                ControllerHaptics.ReportHand(HapticSource, _hapticRight, 0f);
+            }
+
+            _hapticRight = right;
+            _hapticUntil = Time.unscaledTime + HapticSeconds;
+        }
+
+        private void TickHaptics()
+        {
+            if (_hapticUntil <= 0f)
+            {
+                return;
+            }
+
+            if (Time.unscaledTime >= _hapticUntil)
+            {
+                _hapticUntil = 0f;
+                ControllerHaptics.ReportHand(HapticSource, _hapticRight, 0f);
+                return;
+            }
+
+            ControllerHaptics.ReportHand(HapticSource, _hapticRight, HapticAmplitude);
+        }
 
         /// <summary>Carrier speed, so spilled cargo keeps the motion of the gesture that tipped it
         /// (a flick off the blade throws, a slow tilt lets go).</summary>

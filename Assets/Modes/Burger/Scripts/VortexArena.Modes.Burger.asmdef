@@ -6,7 +6,8 @@
         "VortexArena.Net",
         "VortexArena.Protocol",
         "Oculus.VR",
-        "Unity.TextMeshPro"
+        "Unity.TextMeshPro",
+        "UnityEngine.UI"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

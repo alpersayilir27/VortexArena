@@ -86,6 +86,10 @@ namespace VortexArena.Modes.Mole
         /// <summary>How far out the mole is, 0..1.</summary>
         private float _height;
 
+        /// <summary>Squashed look persists through the descent: the hidden stage arrives while the mole
+        /// is still sinking, and un-squashing on that stage change would pop it back to full size.</summary>
+        private bool _squashed;
+
         /// <summary>Pop counter from the payload; the value a <c>whack</c> must carry back.</summary>
         public int Nonce { get; private set; } = -1;
 
@@ -269,7 +273,16 @@ namespace VortexArena.Modes.Mole
 
             mole.localPosition = _restLocalPosition + Vector3.up * (riseHeight * _height);
 
-            float squash = _net.Stage == MoleKinds.StageSquashed ? Mathf.Max(0.05f, squashScale) : 1f;
+            if (_net.Stage == MoleKinds.StageSquashed)
+            {
+                _squashed = true;
+            }
+            else if (_net.Stage == MoleKinds.StageUp)
+            {
+                _squashed = false;
+            }
+
+            float squash = _squashed ? Mathf.Max(0.05f, squashScale) : 1f;
             mole.localScale = new Vector3(
                 _restLocalScale.x,
                 _restLocalScale.y * squash,

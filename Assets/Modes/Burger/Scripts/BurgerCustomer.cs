@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using VortexArena.Net;
 
@@ -20,13 +21,31 @@ namespace VortexArena.Modes.Burger
         [Tooltip("Mutlu/mutsuz renginin uygulanacağı görsel. Atanmazsa renk değiştirilmez.")]
         [SerializeField] private Renderer moodRenderer;
 
+        [Tooltip("Müşteri bankoya varınca çalan ses. Atanmazsa sessizdir.")]
+        [SerializeField] private AudioSource arriveSound;
+
+        [Tooltip("Sipariş kabul edilince çalan ses. Atanmazsa sessizdir.")]
+        [SerializeField] private AudioSource happySound;
+
+        [Tooltip("Sabrı bitip giderken çalan ses. Atanmazsa sessizdir.")]
+        [SerializeField] private AudioSource unhappySound;
+
         /// <summary>Path fraction at which the customer starts peeling off toward its own slot.</summary>
         private const float SlotBlendStart = 0.75f;
+
+        private static readonly List<BurgerCustomer> Customers = new List<BurgerCustomer>();
+
+        /// <summary>All enabled customers in the scene.</summary>
+        public static IReadOnlyList<BurgerCustomer> All => Customers;
 
         private NetObject _net;
 
         private float _walkTimer;
         private float _leaveTimer;
+
+        /// <summary>Local clock of the wait. ⚠️ A late joiner starts from FULL patience — the remaining
+        /// time is not on the wire (§10.5), so the gauge is an estimate, never a promise.</summary>
+        private float _waitStart;
 
         private int _lastStage = -1;
 
@@ -52,6 +71,11 @@ namespace VortexArena.Modes.Burger
 
         private void OnEnable()
         {
+            if (!Customers.Contains(this))
+            {
+                Customers.Add(this);
+            }
+
             _net.StateChanged += HandleStateChanged;
             ReadPayload();
             ApplyStage(_net.Stage);
@@ -59,7 +83,31 @@ namespace VortexArena.Modes.Burger
 
         private void OnDisable()
         {
+            Customers.Remove(this);
             _net.StateChanged -= HandleStateChanged;
+        }
+
+        public static BurgerCustomer Find(int netId)
+        {
+            for (int i = 0; i < Customers.Count; i++)
+            {
+                BurgerCustomer customer = Customers[i];
+                if (customer != null && customer.NetId == netId)
+                {
+                    return customer;
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>Temporary line in this customer's bubble (why the serve was refused).</summary>
+        public void ShowNotice(string notice, float seconds)
+        {
+            if (bubble != null)
+            {
+                bubble.ShowNotice(notice, seconds);
+            }
         }
 
         /// <summary>Payload is re-read on EVERY state, including the one that arrives with the spawn —
@@ -82,6 +130,9 @@ namespace VortexArena.Modes.Burger
 
         private void ApplyStage(int stage)
         {
+            // A late joiner's FIRST apply is a snapshot, not a transition: the sounds stay silent for it,
+            // or every joiner would hear the whole counter arrive at once.
+            bool known = _lastStage >= 0;
             bool stageChanged = stage != _lastStage;
             _lastStage = stage;
 
@@ -90,9 +141,19 @@ namespace VortexArena.Modes.Burger
                 _walkTimer = 0f;
             }
 
+            if (stageChanged && stage == BurgerKinds.CustomerWaiting)
+            {
+                _waitStart = Time.time;
+            }
+
             if (stageChanged && (stage == BurgerKinds.CustomerHappy || stage == BurgerKinds.CustomerUnhappy))
             {
                 _leaveTimer = 0f;
+            }
+
+            if (stageChanged && known)
+            {
+                PlayStageSound(stage);
             }
 
             if (bubble != null)
@@ -119,6 +180,32 @@ namespace VortexArena.Modes.Burger
             else if (stage == BurgerKinds.CustomerUnhappy)
             {
                 moodRenderer.material.color = Color.red;
+            }
+        }
+
+        private static void Play(AudioSource source)
+        {
+            if (source != null)
+            {
+                source.Play();
+            }
+        }
+
+        private void PlayStageSound(int stage)
+        {
+            switch (stage)
+            {
+                case BurgerKinds.CustomerWaiting:
+                    Play(arriveSound);
+                    break;
+
+                case BurgerKinds.CustomerHappy:
+                    Play(happySound);
+                    break;
+
+                case BurgerKinds.CustomerUnhappy:
+                    Play(unhappySound);
+                    break;
             }
         }
 
@@ -152,6 +239,12 @@ namespace VortexArena.Modes.Burger
         {
             _walkTimer = 0f;
             _leaveTimer = 0f;
+
+            if (bubble != null)
+            {
+                float spent = (Time.time - _waitStart) / BurgerKinds.CustomerPatienceSeconds;
+                bubble.SetPatience(1f - Mathf.Clamp01(spent));
+            }
 
             BurgerCounterSlot slot = BurgerCounterSlot.Find(Slot);
             if (slot == null)

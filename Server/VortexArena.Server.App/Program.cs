@@ -51,7 +51,7 @@ internal static class Program
         var maps = SelectVenue(allMaps, ArgValue(args, "--venue") ?? config.venue);
 
         using var registry = new PlayerRegistry(Path.Combine(configDir, "devices.json"));
-        var director = new MatchDirector(registry, maps, config.lobbyScene);
+        var director = new MatchDirector(registry, maps, config.lobbyScene, config.burger);
 
         // ⚠️ Fail-fast (§11): the server's open scene is the client's only routing source
         // (welcome.match.sceneName). If it cannot be resolved the configuration is already broken, and

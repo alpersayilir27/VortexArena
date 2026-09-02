@@ -680,6 +680,51 @@ maçı bitirmenin yolu **İPTAL**'dir (ikisi de aynı işi yapar).
 farklı/eski sürüm var. Sunucu penceresinde sebep tek satır olarak yazar; teknik ekibe o satırı
 ilet.
 
+### Çocuk Oyunları — Hamburgerci
+
+Çocuk Oyunları ayrı bir ailedir: **silah yok, vurulma yok, ölüm yok.** Bu modlar yalnız kendi
+haritalarında açılır: Tercihler'in **MAÇ** sekmesinde **Oyun tipi** satırından **Çocuk Oyunları**'nı
+seçince harita ve mod listeleri yalnız o aileyi gösterir (mekânda tek aile varsa bu satır hiç
+görünmez). Savaş modu çocuk haritasında başlamaz, tersi de doğru. Çocuk haritası açıkken, maç
+başlamadan önce de **kimsenin eline silah gelmez**; yan tuş (grip) yalnız eşyaları tutar.
+
+**Hamburgerci** bir işbirliği vardiyasıdır: takım yok, kazanan yok, süre dolunca biter ve **sonuç
+ekranı sen kapatana kadar durur** (çocuklar ortak puanı ve sıralamayı birlikte okusun diye; alt
+ortadaki **BİTİR** ya da lobiye alma kapatır). Puan limiti yoktur; süre Tercihler'den ayarlanır.
+
+Akış: kapıdan **müşteri** gelir, bankonun önünde durur, başının üstündeki balonda sipariş yazar
+ve **resimli** görünür (alttan üste dilimler, okuma bilmeyen çocuk için). Çocuklar dağıtıcılardan
+malzeme alır (yan tuş), bütün ekmeği tahtada bıçakla keser, köfteyi ızgarada pişirir (**renk
+değişince pişmiştir; kararırsa yanmıştır, yanmış köfte kabul edilmez**), hamburgeri banko
+tahtasına **alttan üste** dizer: en alta alt ekmek, en üste üst ekmek. Üst ekmek konunca servis
+kendiliğinden olur: sipariş tutuyorsa müşteri mutlu gider, servis eden çocuğun puanı ve ortak
+toplam artar. Tutmuyorsa kısa bir red sesi çalar ve müşterinin balonunda **sebep** yazar
+("Köfte pişmemiş", "Peynir eksik", "En üste üst ekmek"…); yığın bozulmaz, düzeltip yeniden
+denenir. Müşterinin sabrı balonun renginden okunur (yeşilden kırmızıya); sabrı dolan müşteri
+mutsuz gider, **puan düşmez**. Vardiya ilerledikçe müşteriler daha sık gelir ve daha az bekler.
+
+**Çocuklara söylenecekler:**
+1. *"Yan tuşla eşyayı tut, bırakınca eşya bırakılır. Bir şeyi kapmak için ona doğru uzan."*
+2. *"Önce alt ekmek, en son üst ekmek. Üst ekmeği koyunca hamburger gider."*
+3. *"Köfte renk değiştirince ızgaradan al; kararmasını bekleme."*
+4. *"Ekranın kararırsa bankonun ya da ızgaranın içine girmişsin — bir adım geri çekil."*
+
+**Sık durumlar:**
+- **Ekran karardı:** çocuk kafasını bankonun/ızgaranın içine sokmuştur. Karartma ve halka aynı
+  şekilde çalışır ama **bu modda can gitmez, kimse ölmez** — sesle "geri çekil" demek yeter.
+- **Tahta ya da spatula yere düştü:** çocuk eğilip yan tuşla geri alır. Yerde biriken malzemeler
+  çoğalınca **en eskileri kendiliğinden silinir**; elde tutulan eşyaya dokunulmaz, tahta ve spatula
+  silinmez.
+- **Ekmek kesilmiyor:** bütün ekmek kesme tahtasında dururken bıçağın ağzı ona değmeli; elde
+  tutulan ekmek kesilmez.
+- **Köfte tahtaya konmuyor / uçuyor:** malzeme henüz havada (düşüyor) ise tahta almaz; durmasını
+  bekle.
+- **Hiç müşteri gelmiyor:** maç başlamamıştır (BAŞLAT'a bas) ya da harita çocuk haritası değildir.
+
+> Aynı ailenin diğer oyunu **Köstebek Ezme** de silahsız ve ölümsüzdür; farkı iki takım ve takım
+> puanı olmasıdır (kazanan vardır). Çocuk haritalarında ayrıca kalibrasyon ve alan kuralları
+> savaş modlarıyla aynıdır (Bölüm 4).
+
 ### Ölü kalan oyuncu
 
 Oyuncu kendi başına canlanır: modun kuralına göre ya kendi renkli tabanına yürür ya olduğu yerde
@@ -703,7 +748,7 @@ ve **arenanın dışı**. İkisini de sen görürsün, oyuncu da kendi ekranınd
 
 | Ne görüyorsun | Ne demek | Ne yapman gerekiyor |
 |---|---|---|
-| Halkası **kırmızı**, hızlı yanıp sönüyor, adının yanında **DUVAR** | Kafası bir engelin **içinde**. Ekranı kapkaranlık; 3 saniye sonra canı erimeye başlar ve 8. saniyede ölür | Hemen sesle uyar: **"Duvardan çık."** Ölmesi normaldir, sistem bunun için var |
+| Halkası **kırmızı**, hızlı yanıp sönüyor, adının yanında **DUVAR** | Kafası bir engelin **içinde**. Ekranı kapkaranlık; 3 saniye sonra canı erimeye başlar ve 8. saniyede ölür. **Çocuk Oyunları'nda can gitmez** — karartma ve halka aynı, ölüm yok | Hemen sesle uyar: **"Duvardan çık."** Ölmesi normaldir, sistem bunun için var |
 | Halkası **turuncu**, daha yavaş yanıp sönüyor, adının yanında **ALAN DIŞI** | Oyun alanının **dışına** çıkmış. Ekranı kararır ve **ateş edemez**; canı gitmez | Sesle içeri çağır. Tekrar tekrar oluyorsa kalibrasyonu kaymış olabilir (Bölüm 4.1) |
 | Halkası normal renkte | Kural dışı bir durum yok | — |
 

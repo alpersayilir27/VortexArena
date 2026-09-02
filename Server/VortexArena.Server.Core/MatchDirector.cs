@@ -250,10 +250,17 @@ public sealed class MatchDirector
     /// outside a match. The damage gate (§10.3) still reads the phase.</para></remarks>
     private readonly string _lobbyScene;
 
-    public MatchDirector(PlayerRegistry registry, MapTable maps, string lobbyScene = "")
+    /// <summary>Hamburgerci balance (<c>server.json → burger</c>), already sanitized.</summary>
+    private readonly BurgerSettings _burger;
+
+    public MatchDirector(PlayerRegistry registry, MapTable maps, string lobbyScene = "",
+        BurgerSettings? burger = null)
     {
         _registry = registry;
         _maps = maps;
+        // Sanitized once here, not per match: a bad file must be reported at startup, not on the
+        // operator's first shift.
+        _burger = (burger ?? new BurgerSettings()).Sanitized();
         // Left empty, the venue's own lobby map takes over (§11) — so this is not a field every install
         // must fill in by hand; config only covers the exception.
         _lobbyScene = string.IsNullOrWhiteSpace(lobbyScene) ? maps.ResolveLobbyScene() : lobbyScene.Trim();
@@ -265,7 +272,7 @@ public sealed class MatchDirector
         // The startup lobby is a staging too (§10.10): without it the first welcome would carry no
         // world_state and the lobby's objects would stay unknown until the first map change.
         RebuildObjectsLocked(_lobbyScene);
-        ApplyRulesLocked(ModeRules.LobbyProfile);
+        ApplyRulesLocked(LobbyProfileForSceneLocked(_lobbyScene));
         RefreshShotRelayLocked();
     }
 
@@ -295,6 +302,16 @@ public sealed class MatchDirector
     private void ApplyRulesLocked(ModeRules baseRules) =>
         _rules = baseRules with { FriendlyFire = _friendlyFire };
 
+    /// <summary>Which lobby profile a scene runs with (§10.7): the OPEN SCENE's game family decides,
+    /// not the selected mode.</summary>
+    /// <remarks>⚠️ The single decision point — the normal profile grants a random weapon on grip, which
+    /// on a kids map would arm a child while the match is still being set up. Any new path that writes
+    /// scene + rules must come through here.</remarks>
+    private ModeRules LobbyProfileForSceneLocked(string sceneName) =>
+        _maps.TryGet(sceneName, out var entry) && MapTable.IsKids(entry)
+            ? ModeRules.KidsLobbyProfile
+            : ModeRules.LobbyProfile;
+
     /// <summary>Whether shot events (<c>0x03</c>/<c>0x04</c>, §6.4/6.5) are relayed: phase
     /// <c>playing</c> OR <c>rules.fireWhilePaused</c>. The shooter's own conditions (online + player +
     /// alive + calibrated) are not part of it; <see cref="StateHost"/> reads those per player.</summary>
@@ -322,7 +339,7 @@ public sealed class MatchDirector
         Register(new TdmMode());
         Register(new FfaMode());
         Register(new TournamentMode());
-        Register(new BurgerMode());
+        Register(new BurgerMode(_burger));
         Register(new MoleMode());
     }
 
@@ -342,6 +359,7 @@ public sealed class MatchDirector
         if (!string.IsNullOrEmpty(modeId) && _modes.TryGetValue(modeId, out var mode))
             return mode.Rules.Teams;
 
+        // Both lobby profiles carry the same Teams, so the scene family is irrelevant here.
         return ModeRules.LobbyProfile.Teams;
     }
 
@@ -760,7 +778,10 @@ public sealed class MatchDirector
     /// <see cref="ArenaProtocol.OBSTACLE_GRACE_SECONDS"/> of grace (no health loss at all), then a drain
     /// from full health to death within <see cref="ArenaProtocol.OBSTACLE_DRAIN_SECONDS"/>. The grace
     /// clock is the SERVER's (<see cref="PlayerState.ObstacleSince"/>) — a duration from the client would
-    /// hand it the penalty.</para></remarks>
+    /// hand it the penalty.</para>
+    /// <para>⚠️ NO penalty in a weaponless mode (<see cref="WeaponSource.None"/>): those modes have no
+    /// revive either, so an obstacle death would last the whole shift. The darkening, the warning and the
+    /// admin ring stay — only the health loss is off.</para></remarks>
     private void TickObstacleLocked(List<Outgoing> outbox, DateTime now, float deltaSeconds)
     {
         var damage = ArenaProtocol.OBSTACLE_DAMAGE_PER_SECOND * deltaSeconds;
@@ -775,7 +796,8 @@ public sealed class MatchDirector
             // ⚠️ ONE gate: the grace clock resets the moment any penalty condition drops. With separate
             // `continue`s, a player who died and revived would find the grace already spent and start
             // draining the instant they respawn.
-            if (!IsObstacleFlagLiveLocked(player, now) || !player.Alive || !player.Calibrated)
+            if (!IsObstacleFlagLiveLocked(player, now) || !player.Alive || !player.Calibrated ||
+                _rules.Weapons == WeaponSource.None)
             {
                 player.ObstacleSince = null;
                 continue;
@@ -1643,10 +1665,10 @@ public sealed class MatchDirector
             SetSceneLocked(target);
             // The KIND stays lobby: even if the scene is an arena there is no match yet (§10.7). Writing
             // the selected match mode here would open the match HUD and match loadout before the match
-            // starts. The kind changes only via start_match. Rules also stay on the lobby profile (free
-            // fire); damage is closed by the phase anyway.
+            // starts. The kind changes only via start_match. Rules stay on a LOBBY profile, but WHICH one
+            // follows the staged scene's family (§10.7); damage is closed by the phase anyway.
             _modeId = ArenaProtocol.LOBBY_MODE_ID;
-            ApplyRulesLocked(ModeRules.LobbyProfile);
+            ApplyRulesLocked(LobbyProfileForSceneLocked(_sceneName));
             RefreshShotRelayLocked();
 
             // Staging changes the wait, not a running match: if it happened from `finished`, we are now
@@ -2378,7 +2400,8 @@ public sealed class MatchDirector
         // The lobby KIND (§10.7): its rule shape differs from the default only by free fire. Damage is
         // still closed by the phase (hit_report only in playing) — this flag merely makes the muzzle flash
         // visible. modId is filled too, since the client resolves weapon loadout/HUD by that key.
-        ApplyRulesLocked(ModeRules.LobbyProfile);
+        // The profile follows the scene we are RETURNING to, which is set a few lines below.
+        ApplyRulesLocked(LobbyProfileForSceneLocked(_lobbyScene));
         // ⚠️ SetPhaseLocked ran above, so the gate was computed with the OLD _rules — which is exactly why
         // every place that changes the rules must refresh it itself.
         RefreshShotRelayLocked();

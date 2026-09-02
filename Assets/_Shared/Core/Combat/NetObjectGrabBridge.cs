@@ -1,5 +1,6 @@
 using UnityEngine;
 using VortexArena.Core.Arena;
+using VortexArena.Core.Player;
 using VortexArena.Net;
 
 namespace VortexArena.Core.Combat
@@ -46,6 +47,12 @@ namespace VortexArena.Core.Combat
         [Tooltip("Objenin alındığı yakınlık soketi. Boşsa çocuklarda aranır.")]
         [SerializeField] private GripSocket socket;
 
+        private const string HapticSource = "grab";
+        private const float GrabHapticSeconds = 0.12f;
+        private const float GrabHapticAmplitude = 0.6f;
+        private const float ReleaseHapticSeconds = 0.08f;
+        private const float ReleaseHapticAmplitude = 0.35f;
+
         private NetObject _net;
         private Rigidbody _body;
 
@@ -66,6 +73,13 @@ namespace VortexArena.Core.Combat
 
         /// <summary>Last seen <see cref="NetObject.IsHeld"/> — only its EDGE is acted on.</summary>
         private bool _wasHeld;
+
+        /// <summary>End of the take/let-go buzz. The arbiter wants a report every frame (heartbeat), so
+        /// the clock runs in <see cref="LateUpdate"/> rather than in a coroutine.</summary>
+        private float _hapticUntil;
+
+        private float _hapticAmplitude;
+        private bool _hapticRight;
 
         // ⚠️ The home pose is kept in ARENA space (§3): calibration can move the arena root under the
         // scene, and a world-space copy would send a Return prop back to a place that no longer exists.
@@ -121,10 +135,19 @@ namespace VortexArena.Core.Combat
             // ⚠️ The hand gate must not outlive the bridge: a leftover flag would keep that hand closed
             // to weapons for the rest of the session, with nothing left to explain why.
             ReleaseLocal(false);
+
+            if (_hapticUntil > 0f)
+            {
+                _hapticUntil = 0f;
+                ControllerHaptics.ReportHand(HapticSource, _hapticRight, 0f);
+            }
         }
 
         private void LateUpdate()
         {
+            // Before the guards: a buzz that started must still be able to switch itself off.
+            TickHaptics();
+
             if (_net.NetId <= 0 || _net.Kind == null || !_net.Kind.IsGrabbable)
             {
                 return;
@@ -212,8 +235,41 @@ namespace VortexArena.Core.Combat
             }
 
             socket.Hide();
+            Buzz(rightHand, GrabHapticAmplitude, GrabHapticSeconds);
 
             NetObjectSync.SendGrab(_net.NetId, rightHand);
+        }
+
+        /// <summary>Short buzz in the hand that took or let go — the grab is optimistic and has no other
+        /// confirmation until the state comes back.</summary>
+        private void Buzz(bool right, float amplitude, float seconds)
+        {
+            // A hand switch would leave the old side buzzing until the arbiter's timeout.
+            if (_hapticUntil > 0f && right != _hapticRight)
+            {
+                ControllerHaptics.ReportHand(HapticSource, _hapticRight, 0f);
+            }
+
+            _hapticRight = right;
+            _hapticAmplitude = amplitude;
+            _hapticUntil = Time.unscaledTime + seconds;
+        }
+
+        private void TickHaptics()
+        {
+            if (_hapticUntil <= 0f)
+            {
+                return;
+            }
+
+            if (Time.unscaledTime >= _hapticUntil)
+            {
+                _hapticUntil = 0f;
+                ControllerHaptics.ReportHand(HapticSource, _hapticRight, 0f);
+                return;
+            }
+
+            ControllerHaptics.ReportHand(HapticSource, _hapticRight, _hapticAmplitude);
         }
 
         /// <summary>Lets the object go locally.</summary>
@@ -240,6 +296,8 @@ namespace VortexArena.Core.Combat
             {
                 return;
             }
+
+            Buzz(_localRight, ReleaseHapticAmplitude, ReleaseHapticSeconds);
 
             if (item != null && item.ReleaseMode == ItemReleaseMode.Return)
             {

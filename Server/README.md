@@ -14,7 +14,7 @@ Server/
                               # MapTable, KindTable, World/ (WorldObjectTable),
                               # Modes/ (IGameMode, TdmMode, FfaMode)
   VortexArena.Server.App/     # konsol exe (UI YOK — yönetim UI'ı Unity admin build'i)
-  config/server.json          # portlar + mekan adı + tickHz + venue + lobbyScene (ELLE)
+  config/server.json          # portlar + mekan adı + tickHz + venue + lobbyScene + burger (ELLE)
   config/maps.json            # harita tablosu (sceneName + venue + gameType + modes + objects) + kinds[] — Unity export
   config/devices.json         # deviceId -> { ad, forma numarası }; otomatik doldurulur
   firewall-kur.cmd            # Windows Firewall kuralları (yönetici olarak çalıştırın)
@@ -167,6 +167,19 @@ değilse (servis/betik) sunucu **bloklanmaz**, ilk mekanla açılır ve bunu log
 admin lobide durur: birbirlerini görürler, kalibrasyonlarını orada yaparlar, silah alıp
 hedeflere ateş edebilirler — birbirlerine hasar veremeden (`hit_report` yalnız `playing` fazında
 işlenir; ateş serbestliği lobi türünün kuralıdır, `rules.fireWhilePaused`).
+
+`burger` = **Hamburgerci denge bloğu** (isteğe bağlı; blok yoksa aşağıdaki varsayılanlar geçerli):
+```json
+{ "burger": { "customerIntervalStart": 25, "customerIntervalEnd": 12,
+              "patienceStart": 150, "patienceEnd": 90,
+              "cookSeconds": 20, "burnSeconds": 40, "servePoints": 10 } }
+```
+Süreler **saniye**, `servePoints` doğru servisin puanıdır. **Rampa:** müşteri geliş aralığı ve
+sabır süresi vardiya boyunca `Start` değerinden `End` değerine **doğrusal** iner — ilerleme
+vardiyanın geçen süresi / toplam süresidir, yani vardiya kısaltılınca rampa da kısalır. Sabır
+müşteri **doğduğu anda** dondurulur: bekleyen müşterinin sabrı sonradan kısalmaz. Bozuk değer
+(≤ 0 süre, `burnSeconds ≤ cookSeconds`, negatif puan) **varsayılana çekilir** ve sebebi açılışta
+konsola yazılır. Bu kuralların hiçbiri telde yoktur — protokol değişmez.
 
 > ⚠️ **Açık sahne çözülemezse sunucu AÇILMAZ.** `lobbyScene` boş ve mekanda lobi haritası yoksa,
 > ya da yazılan sahne `maps.json`'da bulunmuyorsa sunucu sebebi + çözümü yazıp **çıkış kodu 2** ile
@@ -343,7 +356,7 @@ aynı ortak kanaldan (`set_selection` → `admin_state`) gider, böylece iki ope
 | `tdm` | `Modes/TdmMode.cs` | Tümüyle varsayılan (`ModeRules.TeamDefault`): iki takım, takım skoru, kendi tabanında canlanma, sahnede duran silah, 5 sn gecikme | 300 sn / 30 |
 | `ffa` | `Modes/FfaMode.cs` | Takımsız · bireysel skor · sabit durarak canlanma · silahı mod dağıtır · gecikme 0 | 300 sn / 20 |
 | `tournament` | `Modes/TournamentMode.cs` | TDM varsayılanından tek farkı: **canlanma yok** (`Revive = None`, gecikme 0). Tur tabanlı takım elemesi | 120 sn (**turun** süresi) / 4 tur (operatör **sınırsız** da seçebilir) |
-| `burger` | `Modes/BurgerMode.cs` | **Oyun tipi `kids`** · silah yok (`Weapons = None`, dolayısıyla hasar yok) · takımsız · canlanma yok (gecikme 0) · ortak skor (`PlayerAndShared`) | 600 sn / **sınırsız** (limit yok) |
+| `burger` | `Modes/BurgerMode.cs` | **Oyun tipi `kids`** · silah yok (`Weapons = None`, dolayısıyla hasar yok) · takımsız · canlanma yok (gecikme 0) · ortak skor (`PlayerAndShared`) · denge `server.json → burger` | 600 sn / **sınırsız** (limit yok) |
 | `mole` | `Modes/MoleMode.cs` | **Oyun tipi `kids`** · silah yok (`Weapons = None`, dolayısıyla hasar yok) · **iki takım + takım skoru** · canlanma yok (gecikme 0) | 300 sn / **sınırsız** (limit yok) |
 
 > `ffa` skoru `AddPlayerScore(killerId, 1)` ile yazar ve kazananı `TryGetLeader` ile bulur;
@@ -362,6 +375,13 @@ aynı ortak kanaldan (`set_selection` → `admin_state`) gider, böylece iki ope
 > **süredir**; `match_end`'de kazanan alanlarının **ikisi de boş** kalır (§10.5 ortak skor kuralı) ve
 > sonuç ekranı `HoldsResultForOperator` ile operatör kapatana kadar durur. Vardiyanın tamamı
 > (müşteri, tarif, pişirme, servis doğrulaması, ortak skor) sunucudadır; istemci yalnız sunumdur.
+> Denge sayıları `server.json → burger` bloğundan gelir (yukarı bak).
+
+> **`kids` haritası sahnelenince lobi profili de SİLAHSIZDIR** (§10.7): operatör admin panelinden
+> çocuk haritasını seçtiğinde açık sahnenin kuralı `Weapons = None` olur — maç başlamadan grip'e
+> basan çocuğun eline silah gelmez, atış relay edilmez. Lobi haritasına dönüşte normal lobi profili
+> (rastgele silah + serbest atış) geri gelir. Kural açık sahnenin `gameType`'ına bakar, seçili moda
+> değil.
 
 > **`mole` de Çocuk Oyunları ailesindendir** ama **yarışmalıdır**: iki takım + takım skoru, yani
 > ailenin kazananı olan ilk oyunu. Ailenin değişmezleri durur (silah yok → hasar yok, canlanma yok,

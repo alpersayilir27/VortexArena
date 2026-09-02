@@ -113,6 +113,17 @@ public sealed record ModeRules
         Weapons = WeaponSource.RandomGrant
     };
 
+    /// <summary>The lobby profile of a KIDS family map (§10.7): no weapon at all.</summary>
+    /// <remarks>The normal lobby profile hands out a random weapon on grip — in a children's game there
+    /// must be no weapon during the WAIT either, not just during the match.
+    /// <para><c>FireWhilePaused</c> stays false: with no weapon there is nothing to fire.
+    /// <c>weaponSource:"none"</c> alone closes both grant paths on the client, so no extra client
+    /// rule is needed.</para></remarks>
+    public static readonly ModeRules KidsLobbyProfile = new()
+    {
+        Weapons = WeaponSource.None
+    };
+
     /// <summary>Converts to the wire format (§10.5); enum → string, because an unknown value falls
     /// back to the default on the reading side — safer across versions than a numeric enum.</summary>
     public ModeRulesInfo ToInfo() => new()

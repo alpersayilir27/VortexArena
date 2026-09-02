@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using VortexArena.Core.Player;
 using VortexArena.Core.World;
 using VortexArena.Net;
 using VortexArena.Protocol;
@@ -31,8 +32,21 @@ namespace VortexArena.Modes.Burger
         [Tooltip("İki servis denemesi arasındaki en kısa süre (saniye).")]
         [SerializeField] private float serveCooldownSeconds = 1f;
 
+        [Tooltip("Red sebebinin müşteri balonunda kalma süresi (saniye).")]
+        [SerializeField] private float noticeSeconds = 2.5f;
+
+        /// <summary>How long a serve WE sent is watched for an acceptance. Acceptance has no message of
+        /// its own — the only sign is the customer turning happy (§10.5).</summary>
+        private const float AcceptWindowSeconds = 2f;
+
         private NetObject _net;
         private NetObjectPoseSender _sender;
+
+        /// <summary>Customer of the serve this headset sent, so only the player who handed the burger
+        /// over feels the confirmation.</summary>
+        private int _servedCustomer;
+
+        private float _servedUntil;
 
         /// <summary>⚠️ Both triggers can fire for ONE burger: a loaded board carried into a slot rests,
         /// and the top bun riding it rests right after. The second <c>serve</c> names ingredients the
@@ -42,6 +56,11 @@ namespace VortexArena.Modes.Burger
 
         private readonly List<NetObject> _stack = new List<NetObject>();
         private readonly List<int> _payload = new List<int>();
+
+        /// <summary>Scratch for the rejection diagnosis — reused so a refused serve allocates nothing.</summary>
+        private readonly List<NetObject> _served = new List<NetObject>();
+
+        private readonly Dictionary<string, int> _wanted = new Dictionary<string, int>();
 
         /// <summary>Ingredients currently over the board, with the sender we subscribed to.</summary>
         private readonly Dictionary<NetObject, NetObjectPoseSender> _watched =
@@ -167,6 +186,33 @@ namespace VortexArena.Modes.Burger
             {
                 _serveCooldown -= Time.deltaTime;
             }
+
+            TickAccepted();
+        }
+
+        /// <summary>The confirmation buzz for OUR serve. Watched instead of listened for: acceptance
+        /// produces <c>object_state</c> on the customer, not an event on this board.</summary>
+        private void TickAccepted()
+        {
+            if (_servedCustomer == 0)
+            {
+                return;
+            }
+
+            if (Time.time >= _servedUntil)
+            {
+                _servedCustomer = 0;
+                return;
+            }
+
+            BurgerCustomer customer = BurgerCustomer.Find(_servedCustomer);
+            if (customer == null || customer.Stage != BurgerKinds.CustomerHappy)
+            {
+                return;
+            }
+
+            _servedCustomer = 0;
+            ControllerHaptics.PulseBoth(this, 2);
         }
 
         private void TryServe()
@@ -207,6 +253,9 @@ namespace VortexArena.Modes.Burger
 
             NetObjectSync.SendEvent(_net.NetId, BurgerKinds.EventServe, _payload.ToArray());
             _serveCooldown = serveCooldownSeconds;
+
+            _servedCustomer = customer.NetId;
+            _servedUntil = Time.time + AcceptWindowSeconds;
         }
 
         /// <summary>Which slot the board was put down in. Searched by VOLUME rather than by number: the
@@ -285,12 +334,142 @@ namespace VortexArena.Modes.Burger
                 return;
             }
 
-            Debug.Log("[Hamburgerci] Sipariş tutmadı — servis reddedildi.", this);
+            string reason = Diagnose(msg);
+            Debug.Log($"[Hamburgerci] Sipariş tutmadı — {reason}", this);
 
             if (rejectSound != null)
             {
                 rejectSound.Play();
             }
+
+            // Shown to EVERYONE: the event is relayed to the whole room and the bubble belongs to the
+            // customer, not to the player who served.
+            BurgerCustomer customer = msg.i != null && msg.i.Length > 0
+                ? BurgerCustomer.Find(msg.i[0])
+                : null;
+
+            if (customer != null)
+            {
+                customer.ShowNotice(reason, noticeSeconds);
+            }
+        }
+
+        /// <summary>Why the serve was refused, derived locally.
+        /// <para>⚠️ MIRROR of the server's <c>MiddleMatches</c> + patty gate (§10.5): the reason is not on
+        /// the wire, so the two rules must say the same thing — drift makes the bubble lie.</para></summary>
+        private string Diagnose(ObjectEventMsg msg)
+        {
+            const string generic = "Sipariş tutmadı";
+
+            if (msg.i == null || msg.i.Length < 3)
+            {
+                return generic;
+            }
+
+            BurgerCustomer customer = BurgerCustomer.Find(msg.i[0]);
+            if (customer == null)
+            {
+                return generic;
+            }
+
+            _served.Clear();
+            for (int i = 1; i < msg.i.Length; i++)
+            {
+                if (!NetObjectRegistry.TryGet(msg.i[i], out NetObject ingredient) ||
+                    ingredient.Kind == null)
+                {
+                    return generic;
+                }
+
+                _served.Add(ingredient);
+            }
+
+            if (_served[0].Kind.Kind != BurgerKinds.BunBottom)
+            {
+                return "Önce alt ekmek";
+            }
+
+            if (_served[_served.Count - 1].Kind.Kind != BurgerKinds.BunTop)
+            {
+                return "En üste üst ekmek";
+            }
+
+            string pattyReason = DiagnosePatties();
+            if (pattyReason != null)
+            {
+                return pattyReason;
+            }
+
+            return DiagnoseMiddle(customer.Recipe) ?? generic;
+        }
+
+        private string DiagnosePatties()
+        {
+            bool burnt = false;
+
+            for (int i = 0; i < _served.Count; i++)
+            {
+                if (_served[i].Kind.Kind != BurgerKinds.Patty)
+                {
+                    continue;
+                }
+
+                if (_served[i].Stage == BurgerKinds.PattyRaw)
+                {
+                    return "Köfte pişmemiş";
+                }
+
+                burnt |= _served[i].Stage == BurgerKinds.PattyBurnt;
+            }
+
+            return burnt ? "Köfte yanmış" : null;
+        }
+
+        /// <summary>Filling COUNTS, ends excluded — the stacking order is free on the server too.</summary>
+        private string DiagnoseMiddle(string recipe)
+        {
+            _wanted.Clear();
+
+            if (!string.IsNullOrEmpty(recipe))
+            {
+                string[] parts = recipe.Split(',');
+                for (int i = 1; i < parts.Length - 1; i++)
+                {
+                    string kind = parts[i].Trim();
+                    if (kind.Length == 0)
+                    {
+                        continue;
+                    }
+
+                    _wanted.TryGetValue(kind, out int count);
+                    _wanted[kind] = count + 1;
+                }
+            }
+
+            for (int i = 1; i < _served.Count - 1; i++)
+            {
+                string kind = _served[i].Kind.Kind;
+                _wanted.TryGetValue(kind, out int count);
+
+                // Below zero on purpose: the leftover negative IS the extra ingredient.
+                _wanted[kind] = count - 1;
+            }
+
+            string extra = null;
+            foreach (KeyValuePair<string, int> entry in _wanted)
+            {
+                if (entry.Value > 0)
+                {
+                    return $"{BurgerKinds.DisplayName(entry.Key)} eksik";
+                }
+
+                if (entry.Value < 0 && extra == null)
+                {
+                    extra = $"{BurgerKinds.DisplayName(entry.Key)} fazla";
+                }
+            }
+
+            return extra;
         }
     }
 }

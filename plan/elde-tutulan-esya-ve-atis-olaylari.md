@@ -8,9 +8,8 @@ bir his kararı. Kalıcı bilgi dokümanda: tel formatı + kurallar `Docs/ArenaN
 ## 1. Tracer + ön kabza göstergesi görünüm değerleri — playtest ayarı
 
 `ItemDefinition`'daki `tracerColor` / `tracerWidth` / `tracerLifetime` / `tracerEveryNthRound`
-(varsayılan 3) sahada gözle ayarlanır. Dokümana sayı yazılmaz.
-Karar verilecek: her silahın tracer'ı farklı mı görünecek, yoksa hepsi aynı mı kalacak (altyapı
-ikisini de destekliyor — alanlar silah başına, değerler şu an aynı).
+(varsayılan 3) sahada gözle ayarlanır. Dokümana sayı yazılmaz. Renk silah başına
+farklılaşmaz (`README.md` "Değişmeyecekler").
 
 Ön kabza tarafında ayarlanacaklar: **soket yarıçapı silah başınadır** (`secondaryGripRadius`,
 varsayılan 0.10 = 20 cm çap — Inspector'dan girilir; görülen küre = kabul hacmi). `Weapon`
@@ -20,9 +19,10 @@ Kürenin sanatı (`VA_GripSocket.prefab` + `M_GripSocket.mat`: renk/materyal) pr
 düzenlenir; **1 m çap sözleşmesi** korunur (ölçeği `Weapon` verir).
 ⚠️ Ön kabza silah ana elde SALLANIRKEN tutuluyor: hareketli bir hedefe 10 cm dar geliyorsa önce
 `secondaryGripRadius`'u büyüt — kod değişikliği değil, silah başına bir ayar (küre de büyür).
-İsteğe bağlı: `WeaponCatalog.secondaryGripIndicatorPrefab`'a tasarlanmış bir soket sanatı bağlamak —
-varsayılan küre silah kiti koşusuyla üretilip bağlanıyor, yani **iş yapılmadan da çalışıyor**.
-Soket silahın dönüşünü alır (küre için önemsiz).
+Küre kalıcı değil: yerine tasarlanmış görsel gelecek — hedef Meta el modelinin kendisi.
+Bağlama noktası `WeaponCatalog.secondaryGripIndicatorPrefab`; varsayılan küre silah kiti koşusuyla
+üretilip bağlandığı için o iş gelene kadar sistem çalışmaya devam eder. Soket silahın dönüşünü alır
+(küre için önemsiz, el modeli için önemli).
 
 ## 2. İki elli yerel nişan kuralı — his kararı
 

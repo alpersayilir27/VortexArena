@@ -1,6 +1,7 @@
 #nullable enable
 using System.Text.Json;
 using VortexArena.Protocol;
+using VortexArena.Server.Core.Modes;
 
 namespace VortexArena.Server.Core;
 
@@ -23,6 +24,10 @@ public sealed class ServerConfig
     /// <remarks>Fill in only for a venue with several lobbies or to play another one deliberately;
     /// the name must match a <c>sceneName</c> in <c>maps.json</c>.</remarks>
     public string lobbyScene = "";
+
+    /// <summary>Hamburgerci balance (<c>burger</c> block); absent = the defaults in
+    /// <see cref="BurgerSettings"/>.</summary>
+    public BurgerSettings burger = new();
 
     private static readonly JsonSerializerOptions WriteOptions = new()
     {
