@@ -50,6 +50,9 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Arenas/Venues/Outdoor14x16/Scenes/Mole_Outdoor14x16/Mole_Outdoor14x16.unity
     guid: 3af1ddc35c948cb41821f263d9dd743a
+  - enabled: 1
+    path: Assets/Arenas/Venues/VortexAntep/Scenes/Test_VortexAntep/Test_VortexAntep.unity
+    guid: 26add10ea05d89f46a035925e76f2a9c
   m_configObjects:
     com.unity.dt.app-ui: {fileID: 11400000, guid: 1b1c20d82303e4b5781c3ef50ac1449f, type: 2}
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}

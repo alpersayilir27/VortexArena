@@ -110,8 +110,29 @@
       "sceneName": "Mole_Outdoor14x16",
       "venue": "Outdoor14x16",
       "gameType": "kids",
-      "modes": ["burger"],
-      "objects": []
+      "modes": ["mole"],
+      "objects": [
+        { "sceneId": 1, "kind": "mole_hole" },
+        { "sceneId": 2, "kind": "mole_hole" },
+        { "sceneId": 3, "kind": "mole_hole" },
+        { "sceneId": 4, "kind": "mole_hole" },
+        { "sceneId": 5, "kind": "mole_hole" },
+        { "sceneId": 6, "kind": "mole_hole" },
+        { "sceneId": 7, "kind": "mole_hole" },
+        { "sceneId": 8, "kind": "mole_hole" },
+        { "sceneId": 9, "kind": "mole_hole" },
+        { "sceneId": 10, "kind": "mole_hole" },
+        { "sceneId": 11, "kind": "mole_hole" },
+        { "sceneId": 12, "kind": "mole_hole" },
+        { "sceneId": 13, "kind": "mole_hole" },
+        { "sceneId": 14, "kind": "mole_hole" },
+        { "sceneId": 15, "kind": "mole_hole" },
+        { "sceneId": 16, "kind": "mole_hole" },
+        { "sceneId": 17, "kind": "mole_hole" },
+        { "sceneId": 18, "kind": "mole_hole" },
+        { "sceneId": 19, "kind": "mole_hole" },
+        { "sceneId": 20, "kind": "mole_hole" }
+      ]
     },
     {
       "sceneName": "Mole_VortexAntep",
@@ -138,6 +159,13 @@
         { "sceneId": 17, "kind": "mole_hole" },
         { "sceneId": 18, "kind": "mole_hole" }
       ]
+    },
+    {
+      "sceneName": "Test_VortexAntep",
+      "venue": "VortexAntep",
+      "gameType": "quickbattle",
+      "modes": ["ffa", "tdm", "tournament"],
+      "objects": []
     }
   ],
   "kinds": [
