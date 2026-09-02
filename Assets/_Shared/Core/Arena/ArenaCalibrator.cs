@@ -479,7 +479,8 @@ namespace VortexArena.Core.Arena
                 capturedCount = 1;
                 if (anchorA != null) anchorA.SetActive(true);
                 StartCoroutine(Pulse(1, PointAPulseSeconds));
-                Debug.Log($"ArenaCalibrator: 1/2 — A yakalandı, fiziksel {point} → sanal " +
+                Debug.Log($"ArenaCalibrator: 1/2 — A yakalandı, fiziksel {point} " +
+                          $"(zemin sapması {TrackingFloorOffset(point):F2} m) → sanal " +
                           $"'{AnchorAName}' {(anchorA != null ? anchorA.transform.position.ToString() : "(yok)")}. " +
                           "Sıradaki nokta B.");
                 return;
@@ -514,7 +515,8 @@ namespace VortexArena.Core.Arena
             MeasureFloorOffset(point);
             if (anchorB != null) anchorB.SetActive(true);
             StartCoroutine(Pulse(1, PointBPulseSeconds));
-            Debug.Log($"ArenaCalibrator: 2/2 — B yakalandı, fiziksel {point} → sanal " +
+            Debug.Log($"ArenaCalibrator: 2/2 — B yakalandı, fiziksel {point} " +
+                      $"(zemin sapması {LastFloorOffsetMeters:F2} m) → sanal " +
                       $"'{AnchorBName}' {(anchorB != null ? anchorB.transform.position.ToString() : "(yok)")}.");
             AlignRig(capturedA, point);
             HideMarkersAfterConfirmation();
@@ -522,15 +524,22 @@ namespace VortexArena.Core.Arena
             _ = CreateAndSaveAnchorAsync();
         }
 
-        /// <summary>Measures the floor offset (§10.6). Under <c>Stage</c> origin the floor guess is
-        /// tracking-local y=0, so the tracking-local Y of a tip on the real floor IS the offset.
+        /// <summary>Tracking-local Y of a world point (§10.6). Under <c>Stage</c> origin the floor
+        /// guess is tracking-local y=0, so for a tip on the real floor this IS the floor offset.
         /// ⚠️ Read via <see cref="Transform.InverseTransformPoint"/> and BEFORE alignment — the rig
-        /// may already carry a pre-align shift that world Y would include. The threshold is a
-        /// diagnostic, not a gate.</summary>
-        private void MeasureFloorOffset(Vector3 floorPoint)
+        /// may already carry a pre-align shift that world Y would include (the capture log prints
+        /// both for that reason).</summary>
+        private float TrackingFloorOffset(Vector3 worldPoint)
         {
             Transform rig = RigRoot;
-            LastFloorOffsetMeters = rig != null ? rig.InverseTransformPoint(floorPoint).y : 0f;
+            return rig != null ? rig.InverseTransformPoint(worldPoint).y : 0f;
+        }
+
+        /// <summary>Measures and stores the floor offset. The threshold is a diagnostic, not a
+        /// gate.</summary>
+        private void MeasureFloorOffset(Vector3 floorPoint)
+        {
+            LastFloorOffsetMeters = TrackingFloorOffset(floorPoint);
 
             if (Mathf.Abs(LastFloorOffsetMeters) > ArenaProtocol.CALIB_FLOOR_WARN_METERS)
             {

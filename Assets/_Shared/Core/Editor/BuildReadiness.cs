@@ -7,9 +7,10 @@ namespace VortexArena.Core.Editor
     /// list (the "Hazırlık" section of the <see cref="BuildElementsConfigurator"/> window).</summary>
     /// <remarks>
     /// ⚠️ <b>The checks WRITE NOTHING.</b> Only the window's "Hepsini Çalıştır" button writes, and it
-    /// runs all rows; HMD overlays are the one exception, installed only when stale because
-    /// reserializing the shared rig prefab every run would be merge noise. Buttonless rows only
-    /// report: a ✗ left there is a human step the tool cannot fix (grip, fire audio, netItemId).
+    /// runs all rows, with two exceptions: HMD overlays are installed only when stale (reserializing
+    /// the shared rig prefab every run would be merge noise) and the sceneId pass ("Onar") is
+    /// button-only (it opens every arena scene). Buttonless rows only report: a ✗ left there is a
+    /// human step the tool cannot fix (grip, fire audio, netItemId).
     /// <para>⚠️ Check logic lives in each tool's own file, not here — whoever defines the constants
     /// also answers "is it up to date". A threshold moved here would drift from the tool.</para>
     /// </remarks>
@@ -134,13 +135,17 @@ namespace VortexArena.Core.Editor
                 Check(
                     "Ağ nesneleri",
                     BuildElementsConfigurator.AreNetObjectsReady,
-                    null,
-                    null,
+                    "Onar",
+                    BuildElementsConfigurator.RepairSceneIds,
                     "Kırılabilir/ağ objelerinin tür tablosu (NetObjectKind) ve sahnelerin export edilmiş " +
-                    "obje listeleri. NE ZAMAN: yeni tür ekleyince ya da bir sahneye NetObject koyup " +
-                    "sahneyi kaydedince. Sahne listesi sahne KAYDINDA yazılır; ✗ ise insan adımıdır: " +
-                    "boş/yinelenen 'kind' ya da sahnede olup türü olmayan bir obje var — sunucu o objeyi " +
-                    "tabloya almaz ve sahada 'obje kırılmıyor' diye görünür. Tür yoksa satır temizdir."),
+                    "obje listeleri. NE ZAMAN: yeni tür ekleyince, bir sahneye NetObject koyup sahneyi " +
+                    "kaydedince ya da bir sahne dosyası merge/kopya ile değişince. Sahne listesi sahne " +
+                    "KAYDINDA yazılır. ✗ iki türlüdür: boş/yinelenen 'kind' ya da türü olmayan obje İNSAN " +
+                    "adımıdır (sunucu o objeyi tabloya almaz, sahada 'obje kırılmıyor' diye görünür); " +
+                    "listede yinelenen sceneId ise 'Onar' ile düzelir — her arena sahnesini açıp " +
+                    "0/çakışan kimlikleri onarır, değişeni kaydeder, obje listelerini tazeler, açık " +
+                    "sahneleri geri getirir (açık sahne kirliyse çalışmaz). ⚠️ Hepsini Çalıştır bunu " +
+                    "KOŞMAZ; merge sonrası elle bas. Tür yoksa satır temizdir."),
 
                 Check(
                     "Sunucu harita tablosu (maps.json)",

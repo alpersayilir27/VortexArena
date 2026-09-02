@@ -319,6 +319,15 @@ Transform kafa = rig != null ? rig.centerEyeAnchor : null;
 iş geldiğinde sahnelerdeki katman numaraları sessizce yanlış şeyi işaretler — katman numarası
 sahnelerde sayı olarak saklanır, yeniden adlandırmak eski sahneleri düzeltmez.
 
+### ⛔ `NetIdentity.sceneId` override'ını prefaba Apply etme
+
+`sceneId` **sahneye** aittir: prefabdan gelen objede prefab asset'i 0 taşır, sahnedeki her kopya kendi
+kimliğini prefab override olarak alır. `Overrides > Apply` ile o sayı prefaba yazılırsa o prefabın her
+kopyası aynı kimlikle doğar; `NetObjectRegistry` ikinciyi kaydetmez ve belirtisi sahada "obje
+kırılmıyor"dur. `SceneIdGuard` sahne kaydında çakışmayı ayırır ama prefab asset'i kirli kalır, her yeni
+sahnede yeniden çakışır. Normal prefabda Apply penceresinde `NetIdentity` satırının işaretini kaldır;
+model prefab (FBX) örneğine Apply zaten yapılamaz, oraya eklemek güvenlidir.
+
 ### ⛔ `.meta` dosyası kopyalayarak asmdef/asset üretme
 
 GUID çakışır ve Unity referansları rastgele koparır. JSON'u kopyala, `.meta`'yı Unity üretsin.

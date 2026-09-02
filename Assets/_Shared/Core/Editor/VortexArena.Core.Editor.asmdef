@@ -4,6 +4,7 @@
     "references": [
         "VortexArena.Core",
         "VortexArena.Net",
+        "VortexArena.Net.Editor",
         "Unity.ProBuilder",
         "Oculus.Interaction"
     ],

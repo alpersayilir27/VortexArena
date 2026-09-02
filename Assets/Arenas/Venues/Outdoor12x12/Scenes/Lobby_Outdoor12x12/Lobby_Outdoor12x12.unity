@@ -51051,13 +51051,34 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 1818654949734145167, guid: 7ba29393563b9ab4bacbec0b467a5c39, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1328903073}
   m_SourcePrefab: {fileID: 100100000, guid: 7ba29393563b9ab4bacbec0b467a5c39, type: 3}
 --- !u!4 &1328903071 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 1330525231786788405, guid: 7ba29393563b9ab4bacbec0b467a5c39, type: 3}
   m_PrefabInstance: {fileID: 1328903070}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &1328903072 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 1818654949734145167, guid: 7ba29393563b9ab4bacbec0b467a5c39, type: 3}
+  m_PrefabInstance: {fileID: 1328903070}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &1328903073
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1328903072}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 132450df7fcabb5439b6f9b9b089e475, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.Net::VortexArena.Net.NetIdentity
+  sceneId: 2
 --- !u!1001 &1331405423
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -69061,13 +69082,76 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 1818654949734145167, guid: 7ba29393563b9ab4bacbec0b467a5c39, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1872067121}
+    - targetCorrespondingSourceObject: {fileID: 1818654949734145167, guid: 7ba29393563b9ab4bacbec0b467a5c39, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1872067120}
+    - targetCorrespondingSourceObject: {fileID: 1818654949734145167, guid: 7ba29393563b9ab4bacbec0b467a5c39, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1872067119}
   m_SourcePrefab: {fileID: 100100000, guid: 7ba29393563b9ab4bacbec0b467a5c39, type: 3}
 --- !u!4 &1872067117 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 1330525231786788405, guid: 7ba29393563b9ab4bacbec0b467a5c39, type: 3}
   m_PrefabInstance: {fileID: 1872067116}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &1872067118 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 1818654949734145167, guid: 7ba29393563b9ab4bacbec0b467a5c39, type: 3}
+  m_PrefabInstance: {fileID: 1872067116}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &1872067119
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1872067118}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fede702e44b182745acb4900632050a3, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.Net::VortexArena.Net.NetObject
+  kind: {fileID: 11400000, guid: e4beae2be305815459aada1105ea57b4, type: 2}
+  dynamicId: 1
+--- !u!64 &1872067120
+MeshCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1872067118}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 5
+  m_Convex: 1
+  m_CookingOptions: 30
+  m_Mesh: {fileID: 7264771760769376751, guid: dc669adc09acc4a49a22bbf6f4829601, type: 3}
+--- !u!114 &1872067121
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1872067118}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 132450df7fcabb5439b6f9b9b089e475, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.Net::VortexArena.Net.NetIdentity
+  sceneId: 1
 --- !u!1001 &1880045340
 PrefabInstance:
   m_ObjectHideFlags: 0

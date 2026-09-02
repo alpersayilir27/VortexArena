@@ -7,6 +7,7 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using VortexArena.Core.Arena;
 using VortexArena.Core.Combat;
+using VortexArena.Net.Editor;
 
 namespace VortexArena.Core.Editor
 {
@@ -1400,6 +1401,9 @@ namespace VortexArena.Core.Editor
                     continue;
                 }
 
+                // A duplicated sceneId in one list = a collision in the scene FILE (typically a git
+                // merge); the guard only sees it on the next open+save — that is what "Onar" does.
+                var seenIds = new HashSet<int>();
                 for (int r = 0; r < rows.Length; r++)
                 {
                     objectCount++;
@@ -1411,6 +1415,11 @@ namespace VortexArena.Core.Editor
                     else if (!known.Contains(kind))
                     {
                         problems.Add($"'{sceneName}' → '{kind}' türü NetObjectKind olarak yok");
+                    }
+
+                    if (rows[r] != null && !seenIds.Add(rows[r].sceneId))
+                    {
+                        problems.Add($"'{sceneName}' içinde sceneId {rows[r].sceneId} iki kez — 'Onar' ile düzelt");
                     }
                 }
             }
@@ -1435,6 +1444,27 @@ namespace VortexArena.Core.Editor
 
             detail = $"{kinds.Count} tür, {files.Length} sahnede {objectCount} obje tanımlı.";
             return true;
+        }
+
+        /// <summary>Button of the "Ağ nesneleri" row: runs <see cref="SceneIdBatchRepair"/> over every
+        /// valid box scene of the venue tree.</summary>
+        /// <remarks>⚠️ Deliberately NOT part of "Hepsini Çalıştır": the pass opens every arena scene,
+        /// and the sync also runs from <see cref="ConfigureActiveScene"/> — pulling the user's working
+        /// scene away on each sync is not acceptable. Template scenes are skipped like everywhere
+        /// else (they never ship).</remarks>
+        internal static void RepairSceneIds()
+        {
+            ScanResult current = Scan();
+            var paths = new List<string>(current.ValidBoxes.Count);
+            for (int i = 0; i < current.ValidBoxes.Count; i++)
+            {
+                if (!string.IsNullOrEmpty(current.ValidBoxes[i].ScenePath))
+                {
+                    paths.Add(current.ValidBoxes[i].ScenePath);
+                }
+            }
+
+            Debug.Log("[BuildElements] " + SceneIdBatchRepair.Run(paths));
         }
 
         /// <summary>Picks the first two CHANGE lines from the dry-run report.</summary>

@@ -75,7 +75,7 @@ veri üretir, ama duvarlar çizilmeye devam etmeli.
 | **`ArenaRoof`** | Arenanın çatısı varsa | Çatı hiyerarşisinin köküne: `GameObject > VortexArena > Arena Roof`. Admin kuş bakışına geçince çatı çizilmez (gölgesi kalır). Açık tavanlı arenada hiç yapılmaz |
 | **`FX_SnowStorm`** | Kar/hava efekti isteniyorsa | Karlı bir arena kutusunun `Prefabs/` klasöründeki prefabı arena orijinine (0,0,0) bırak. 12×12 değilse `Snow_A/B/E` shape scale'lerini arena boyutu + ~3 m payla ölçekle |
 | **`ProximityWarning`** | Çarpışma önleme isteniyorsa | Elle eklenir; `head` ve `haloMaterial` (`_Shared/FX/M_ProximityHalo`) Inspector'dan verilir |
-| **`NetIdentity`** | Dinamik obje senkronu gerekiyorsa | `GameObject > VortexArena > Network Parent` — benzersiz `sceneId` damgalar |
+| **`NetIdentity`** | Dinamik obje senkronu gerekiyorsa | `GameObject > VortexArena > Network Parent` — benzersiz `sceneId` damgalar. Prefabdan gelen objede bileşen prefabda durur (`sceneId` 0), sahnedeki her kopya kimliğini **kayıtta** override olarak alır — `Ctrl+S` yeter, override prefaba Apply edilmez |
 
 ---
 
