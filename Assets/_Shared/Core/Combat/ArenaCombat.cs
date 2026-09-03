@@ -46,8 +46,21 @@ namespace VortexArena.Core.Combat
         private static readonly HitReportMsg Hit = new HitReportMsg { hitPos = new float[3] };
         private static int _seq;
 
-        /// <summary>Overlap buffer for <see cref="ReportAreaHit"/> — avoids a new array per blast.</summary>
-        private static readonly Collider[] OverlapBuffer = new Collider[64];
+        /// <summary>Overlap buffer for <see cref="ReportAreaHit"/> — avoids a new array per blast.
+        /// <para>⚠️ Sized well above the expected target count anyway: the query is narrowed to
+        /// <see cref="ArenaLayers.AreaTargetMask"/> and skips triggers, but scenery still shares
+        /// those layers with the hit boxes. A full buffer drops real targets, and the blast damages
+        /// fewer players than it should.</para></summary>
+        private static readonly Collider[] OverlapBuffer = new Collider[128];
+
+        /// <summary>Blockers on ONE line from the blast centre to ONE target
+        /// (<see cref="TryPenetrateArea"/>) — a separate buffer, since it is filled while
+        /// <see cref="OverlapBuffer"/> is still being walked.</summary>
+        private static readonly RaycastHit[] BlockerBuffer = new RaycastHit[32];
+
+        /// <summary>One cover counts once even with several colliders on the line.</summary>
+        private static readonly HashSet<int> AreaBlockersOnce = new HashSet<int>();
+
         private static readonly HashSet<int> AreaHitOnce = new HashSet<int>();
 
         /// <summary>⚠️ Separate set on purpose: a <c>netId</c> and a <c>playerId</c> collide numerically.</summary>
@@ -566,17 +579,26 @@ namespace VortexArena.Core.Combat
         /// <paramref name="damage"/> × <paramref name="edgeScale"/> at the edge. At most ONE hit per
         /// player (a body has several hit boxes) and one per object.
         /// </para>
+        /// <para>⚠️ <b>Order with cover: absorb first, fall off second.</b> Breakable cover is
+        /// subtracted from the CENTRE damage and the falloff then runs on the remainder — the blast
+        /// spends its energy on the cover, and what survives travels the same curve it always would.
+        /// Falling off first and subtracting after charges the cover against an already-reduced
+        /// number, and a bomb that provably breaks a cover reaches nobody behind it
+        /// (Docs/Gelistirici/Yapma-Listesi.md, "Alan hasarı ve siper").</para>
         /// <para>⚠️ <b>The local player is NOT in this list and cannot be</b>: player targets are found
         /// from <see cref="RemoteHitBox"/> colliders and the local rig carries none. Self damage goes
         /// through <see cref="ReportAreaSelfHit"/>.</para>
         /// </summary>
-        /// <param name="requireLineOfSight">Skip targets with an obstacle between them and the centre
-        /// (<c>Physics.Linecast</c>). Off by default — a blast wrapping a corner is the old behaviour
-        /// and callers that never asked must not change.</param>
+        /// <param name="layerMask">Layers to look for targets on; <c>0</c> means
+        /// <see cref="ArenaLayers.AreaTargetMask"/>. Triggers never match.</param>
+        /// <param name="requireLineOfSight">Make cover count: solid cover between the target and the
+        /// centre blocks the blast, breakable cover only ABSORBS its remaining health
+        /// (<see cref="TryPenetrateArea"/>). Off by default — a blast wrapping a corner is the old
+        /// behaviour and callers that never asked must not change.</param>
         /// <returns>Number of PLAYERS a hit was reported for — network objects are reported but not
         /// counted, since callers read this value for player-facing feedback.</returns>
         public static int ReportAreaHit(Vector3 worldCenter, float radius, float damage, string weaponId,
-            float edgeScale = 0.25f, int layerMask = ~0, bool requireLineOfSight = false)
+            float edgeScale = 0.25f, int layerMask = 0, bool requireLineOfSight = false)
         {
             if (radius <= 0f || !float.IsFinite(damage) || damage <= 0f)
             {
@@ -585,13 +607,23 @@ namespace VortexArena.Core.Combat
 
             AreaHitOnce.Clear();
             AreaHitObjectsOnce.Clear();
-            int count = Physics.OverlapSphereNonAlloc(worldCenter, radius, OverlapBuffer, layerMask,
-                QueryTriggerInteraction.Collide);
+
+            // 0 = "the damageable layers", not "nothing": no caller ever wants a query that can match
+            // no target at all, so the useless value is spent on the useful default.
+            int mask = layerMask != 0 ? layerMask : ArenaLayers.AreaTargetMask;
+
+            // ⚠️ Triggers are IGNORED: every damageable collider is solid (ArenaLayers.AreaTargetMask
+            // states that invariant), while grab volumes, interaction and boundary volumes are not —
+            // and those are what used to fill the buffer.
+            int count = Physics.OverlapSphereNonAlloc(worldCenter, radius, OverlapBuffer, mask,
+                QueryTriggerInteraction.Ignore);
 
             if (count >= OverlapBuffer.Length)
             {
-                Debug.LogWarning($"[ArenaCombat] Alan etkisi tamponu doldu ({OverlapBuffer.Length}); " +
-                                 "yarıçapı küçült ya da layerMask ver — bazı hedefler atlanmış olabilir.");
+                // An ERROR, not a warning: the buffer filling up means damage was NOT reported for
+                // some targets — the blast silently did less than it should have.
+                Debug.LogError($"[ArenaCombat] Alan etkisi tamponu doldu ({OverlapBuffer.Length}); " +
+                               "yarıçapı küçült ya da layerMask ver — HEDEF ATLANMIŞ OLABİLİR.");
             }
 
             int reported = 0;
@@ -607,15 +639,28 @@ namespace VortexArena.Core.Combat
                     }
 
                     Vector3 playerPoint = collider.ClosestPoint(worldCenter);
+                    float through = damage;
 
                     // ⚠️ The LOS ray goes to the collider's CENTRE, not to the closest point: the closest
                     // point sits ON the surface, and a wall touching the target would read as clear.
-                    if (requireLineOfSight && IsAreaBlocked(worldCenter, collider.bounds.center))
+                    if (requireLineOfSight)
                     {
-                        continue;
+                        if (!TryPenetrateArea(worldCenter, collider.bounds.center, 0, out float absorbed))
+                        {
+                            continue;
+                        }
+
+                        through = damage - absorbed;
                     }
 
-                    float applied = AreaFalloff(worldCenter, playerPoint, radius, damage, edgeScale);
+                    // ⚠️ Cover is subtracted from the CENTRE damage and falloff runs on what is left —
+                    // never the other way round. Falloff first would charge the cover against an
+                    // already-reduced number, so a 250 bomb would fail to reach past a 200 cover it
+                    // demonstrably breaks (Yapma-Listesi, "Alan hasarı ve siper").
+                    float applied = through > 0f
+                        ? AreaFalloff(worldCenter, playerPoint, radius, through, edgeScale)
+                        : 0f;
+
                     if (applied <= 0f)
                     {
                         continue;
@@ -632,13 +677,25 @@ namespace VortexArena.Core.Combat
                 }
 
                 Vector3 point = collider.ClosestPoint(worldCenter);
+                float throughToObject = damage;
 
-                if (requireLineOfSight && IsAreaBlockedForObject(worldCenter, collider.bounds.center, netId))
+                // ⚠️ The target's own netId is passed in: a breakable cover sits on the Obstacle layer
+                // itself and would otherwise shadow itself into never taking damage.
+                if (requireLineOfSight)
                 {
-                    continue;
+                    if (!TryPenetrateArea(worldCenter, collider.bounds.center, netId, out float absorbed))
+                    {
+                        continue;
+                    }
+
+                    throughToObject = damage - absorbed;
                 }
 
-                float appliedToObject = AreaFalloff(worldCenter, point, radius, damage, edgeScale);
+                // Same order as the player branch: subtract cover from the centre damage, then fall off.
+                float appliedToObject = throughToObject > 0f
+                    ? AreaFalloff(worldCenter, point, radius, throughToObject, edgeScale)
+                    : 0f;
+
                 if (appliedToObject <= 0f)
                 {
                     continue;
@@ -662,6 +719,9 @@ namespace VortexArena.Core.Combat
         /// blast. The decision stays the server's — this is a noise gate, not a rule.</para>
         /// <para>Silent no-op with no connection, no rig or no player id (the class contract).</para>
         /// </summary>
+        /// <param name="requireLineOfSight">Same cover rule as <see cref="ReportAreaHit"/>: solid cover
+        /// blocks, breakable cover absorbs its remaining health — ducking behind your own crate saves
+        /// you by exactly what the crate can still take.</param>
         /// <returns><c>true</c> if a hit was reported for the local player.</returns>
         public static bool ReportAreaSelfHit(Vector3 worldCenter, float radius, float damage,
             string weaponId, float edgeScale = 0.25f, bool requireLineOfSight = false)
@@ -682,12 +742,23 @@ namespace VortexArena.Core.Combat
                 return false;
             }
 
-            if (requireLineOfSight && IsAreaBlocked(worldCenter, head))
+            float through = damage;
+
+            if (requireLineOfSight)
             {
-                return false;
+                if (!TryPenetrateArea(worldCenter, head, 0, out float absorbed))
+                {
+                    return false;
+                }
+
+                through = damage - absorbed;
             }
 
-            float applied = AreaFalloff(worldCenter, head, radius, damage, edgeScale);
+            // Same order as ReportAreaHit: cover comes off the centre damage, falloff runs on the rest.
+            float applied = through > 0f
+                ? AreaFalloff(worldCenter, head, radius, through, edgeScale)
+                : 0f;
+
             if (applied <= 0f)
             {
                 return false;
@@ -709,36 +780,96 @@ namespace VortexArena.Core.Combat
             return damage * Mathf.Lerp(1f, Mathf.Clamp01(edgeScale), t);
         }
 
-        /// <summary>Is an obstacle between the blast centre and the target (Yemek-Kitabi §3 pattern).
-        /// <para>⚠️ <c>Obstacle</c> mask ONLY: a maskless linecast would stop on the target's own hit
-        /// box, on the thrower's hands, on grab volumes — and swallow every hit. With no obstacle layer
-        /// configured the gate stays OPEN (fail-open), like the other obstacle rules.</para></summary>
-        private static bool IsAreaBlocked(Vector3 worldCenter, Vector3 targetPoint)
+        /// <summary>
+        /// How much of an area effect reaches a target through the cover in front of it — the
+        /// blast's answer to "is there something in the way" (Yemek-Kitabi §3 pattern).
+        /// <para><b>Solid cover blocks completely; BREAKABLE cover only ABSORBS.</b> A breakable
+        /// network object swallows its own remaining health and lets the rest through, so a bomb that
+        /// beats a weakened cover still reaches the player behind it, and a broken one (rubble)
+        /// swallows nothing at all. Anything that is not a breakable network object — arena geometry,
+        /// a <c>maxHp 0</c> object — blocks the whole blast.</para>
+        /// <para>⚠️ <c>Obstacle</c> mask ONLY: a maskless ray would stop on the target's own hit box,
+        /// on the thrower's hands, on grab volumes — and swallow every hit. With no obstacle layer
+        /// configured the gate stays OPEN (fail-open), like the other obstacle rules. The arena's
+        /// OUTER walls/floor/ceiling are deliberately not on that layer
+        /// (<see cref="ArenaLayers"/>), so they do not stop a blast.</para>
+        /// <para>⚠️ A blast going off INSIDE a cover's collider does not see that cover (a ray never
+        /// hits the collider it starts in) — it is then cover for nobody, which is the same answer
+        /// the old line-of-sight gate gave.</para>
+        /// <para>⚠️ The absorbed amount is the client's MIRROR of the cover's health
+        /// (<c>NetObject.Hp</c>, last <c>object_state</c>). Damage is client-computed and applied by
+        /// the server verbatim (§10.3), so two blasts inside one round trip both read the same
+        /// health — the second over-penetrates by design rather than waiting for a reply.</para>
+        /// </summary>
+        /// <param name="ignoreNetId">The target's own <c>netId</c> — an object never shadows itself;
+        /// <c>0</c> for a player target.</param>
+        /// <param name="absorbed">Damage swallowed by breakable cover on the way; only meaningful
+        /// when this returns <c>true</c>. ⚠️ Subtract it from the <b>centre</b> damage, then apply
+        /// falloff to what is left — see the order note on <see cref="ReportAreaHit"/>.</param>
+        /// <returns><c>false</c> = nothing gets through.</returns>
+        private static bool TryPenetrateArea(Vector3 worldCenter, Vector3 targetPoint, int ignoreNetId,
+            out float absorbed)
         {
-            int obstacleMask = ArenaLayers.ObstacleMask;
-            return obstacleMask != 0 &&
-                   Physics.Linecast(worldCenter, targetPoint, obstacleMask, QueryTriggerInteraction.Ignore);
-        }
+            absorbed = 0f;
 
-        /// <summary>LOS gate for a network object target.
-        /// <para>⚠️ A breakable cover usually sits on the <c>Obstacle</c> layer itself: the masked
-        /// linecast stops on its OWN collider and the object would shadow itself into never taking
-        /// damage — if the first hit IS the target, there is no obstacle.</para></summary>
-        private static bool IsAreaBlockedForObject(Vector3 worldCenter, Vector3 targetPoint, int netId)
-        {
             int obstacleMask = ArenaLayers.ObstacleMask;
             if (obstacleMask == 0)
             {
-                return false;
+                return true;
             }
 
-            if (!Physics.Linecast(worldCenter, targetPoint, out RaycastHit hit, obstacleMask,
-                    QueryTriggerInteraction.Ignore))
+            Vector3 delta = targetPoint - worldCenter;
+            float distance = delta.magnitude;
+            if (distance < 1e-4f)
             {
+                return true;
+            }
+
+            int count = Physics.RaycastNonAlloc(new Ray(worldCenter, delta / distance), BlockerBuffer,
+                distance, obstacleMask, QueryTriggerInteraction.Ignore);
+
+            if (count >= BlockerBuffer.Length)
+            {
+                // Blocked, not let through: an unread blocker may be the solid one, and inventing
+                // damage through a wall is worse than losing a blast.
+                Debug.LogError($"[ArenaCombat] Görüş hattı tamponu doldu ({BlockerBuffer.Length}); " +
+                               "patlama engellenmiş sayıldı — hedefe hasar GİTMEDİ.");
                 return false;
             }
 
-            return !(TryGetTargetNetId(hit.collider, out int hitNetId) && hitNetId == netId);
+            AreaBlockersOnce.Clear();
+            for (int i = 0; i < count; i++)
+            {
+                // The collider may sit on any child of the object — search upward, like the target
+                // resolvers do.
+                NetObject cover = BlockerBuffer[i].collider.GetComponentInParent<NetObject>();
+                if (cover == null || cover.NetId <= 0)
+                {
+                    // Plain geometry: a wall is a wall.
+                    return false;
+                }
+
+                if (cover.NetId == ignoreNetId || !AreaBlockersOnce.Add(cover.NetId))
+                {
+                    // The target itself, or a second collider of a cover already counted.
+                    continue;
+                }
+
+                // A network object that cannot be broken is as solid as the wall next to it.
+                if (cover.MaxHp <= 0f || cover.GetComponent<BreakableObject>() == null)
+                {
+                    return false;
+                }
+
+                if (cover.IsBroken)
+                {
+                    continue;
+                }
+
+                absorbed += Mathf.Max(0f, cover.Hp);
+            }
+
+            return true;
         }
 
         private static void Write(float[] target, in Vector3 value)

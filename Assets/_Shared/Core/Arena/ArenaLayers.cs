@@ -68,5 +68,29 @@ namespace VortexArena.Core.Arena
                 return obstacleMask;
             }
         }
+
+        /// <summary>
+        /// The layers an <b>area effect</b> looks for its targets on: <c>Default</c> (player hit
+        /// boxes and free-standing network objects) + <see cref="ObstacleName"/> (breakable cover,
+        /// which sits on the obstacle layer to be a violation volume too).
+        /// <para>
+        /// ⚠️ <b>Why not <c>~0</c>:</b> a maskless overlap pulls every grab volume, interaction
+        /// trigger, boundary volume and piece of scenery into the query's buffer. A FULL buffer
+        /// silently drops real targets — the blast then damages fewer players than it should — so
+        /// narrowing the query is a correctness rule, not only a cost one.
+        /// </para>
+        /// <para>
+        /// ⚠️ <b>The invariant this depends on:</b> anything that can take damage carries a
+        /// NON-TRIGGER collider on <c>Default</c> or <see cref="ObstacleName"/>. A hit box moved to
+        /// another layer, or turned into a trigger, stops taking blast damage <b>without any
+        /// error</b>. Add the layer here when that changes.
+        /// </para>
+        /// <para>Falls back to <c>Default</c> alone when the obstacle layer is undefined — the same
+        /// fail-open shape <see cref="ObstacleMask"/> uses.</para>
+        /// </summary>
+        public static int AreaTargetMask => DefaultMask | ObstacleMask;
+
+        /// <summary>Unity's built-in <c>Default</c> layer (index 0) — always defined.</summary>
+        private const int DefaultMask = 1;
     }
 }

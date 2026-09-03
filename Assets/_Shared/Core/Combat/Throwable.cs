@@ -102,6 +102,13 @@ namespace VortexArena.Core.Combat
             _ownColliders = GetComponentsInChildren<Collider>(true);
             _probeRadius = ResolveProbeRadius();
 
+            // Build the effect's presentation while the fuse burns, not at the explosion.
+            ThrowableEffect armedEffect = GetComponentInChildren<ThrowableEffect>();
+            if (armedEffect != null)
+            {
+                armedEffect.Prewarm(definition);
+            }
+
             // 1) QUANTIZE FIRST. The thrower runs the very same octahedral round-trip and cm/s
             // rounding the wire would have applied — otherwise the odd copy out is the thrower's own
             // (§6.4).
@@ -113,6 +120,10 @@ namespace VortexArena.Core.Combat
 
             _body.isKinematic = false;
             _body.useGravity = true;
+            // ⚠️ detectCollisions is INDEPENDENT of isKinematic and the carrier parks it off while the
+            // item is held (WristHolster.Deactivate). Left off, the item reports no contact at all —
+            // enabled colliders change nothing — and falls straight through the world without an error.
+            _body.detectCollisions = true;
             _body.linearVelocity = dir * speed;
 
             // 3) ⚠️ Spin is derived too: hand rotation is not on the wire, so a random tumble would

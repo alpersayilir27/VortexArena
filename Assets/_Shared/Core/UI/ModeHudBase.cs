@@ -270,36 +270,11 @@ namespace VortexArena.Core.UI
                 return;
             }
 
-            string victim = NameOf(msg.victimId);
-            // The kill feed text only uses characters that EXIST in the TMP font: LiberationSans SDF
-            // (+ fallback) does not contain symbols like arrows or skulls, and a missing glyph is
-            // drawn on screen as □.
-            string line;
-            if (msg.killerId > 0 && msg.killerId != msg.victimId)
-            {
-                line = $"{NameOf(msg.killerId)} -> {victim}";
-            }
-            else if (msg.killerId > 0 && msg.killerId == msg.victimId)
-            {
-                // Own blast (§10.3 gate 5, friendly fire on): killerId == victimId. Its own line —
-                // "öldü" would read as an environmental death and hide who did it.
-                line = $"{victim} kendini havaya uçurdu";
-            }
-            else if (string.Equals(msg.weaponId, ArenaProtocol.WEAPON_ID_OBSTACLE))
-            {
-                // §10.9 environmental death: since killerId is 0 the branch above does not match.
-                // It is a separate line for the sake of the operator/player distinction — "öldü" did
-                // not tell a player melting inside a wall apart from a server error.
-                line = $"{victim} engelde kaldı";
-            }
-            else
-            {
-                line = $"{victim} öldü";
-            }
-
+            // ⚠️ The wording rule lives in KillFeedText, not here: the admin roster shows the same
+            // events and a second copy drifts into a different answer for the same death.
             _killFeed.Add(new KillFeedLine
             {
-                text = line,
+                text = KillFeedText.Line(msg, NameOf),
                 expireTime = Time.unscaledTime + Mathf.Max(0.5f, killFeedSeconds)
             });
 
@@ -529,8 +504,11 @@ namespace VortexArena.Core.UI
             }
         }
 
-        /// <summary>The death screen's killer line. No killer (environmental death, self-kill, or a
-        /// kill_event that has not arrived yet) is not an error — it has its own text.</summary>
+        /// <summary>The death screen's killer line. A missing killer (environmental death, or a
+        /// kill_event that has not arrived yet) is not an error — it has its own text.
+        /// <para>⚠️ Same CLASSIFICATION as <see cref="KillFeedText"/> but not the same wording: the
+        /// feed talks about a player in the third person, this talks TO them. Adding a cause on one
+        /// side means adding it on the other.</para></summary>
         private void RefreshDeathLine()
         {
             if (deathKillerNameText == null)
@@ -542,6 +520,11 @@ namespace VortexArena.Core.UI
             if (_deathKillerId > 0 && _deathKillerId != LocalPlayerId)
             {
                 line = $"{NameOf(_deathKillerId)} tarafından öldürüldün!";
+            }
+            else if (_deathKillerId > 0 && _deathKillerId == LocalPlayerId)
+            {
+                // Own blast: the server sends killerId == victimId (§10.3 gate 5, friendly fire on).
+                line = "Kendini havaya uçurdun";
             }
             else if (string.Equals(_deathWeaponId, ArenaProtocol.WEAPON_ID_OBSTACLE))
             {

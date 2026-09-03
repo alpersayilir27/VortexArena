@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using VortexArena.Core;
 using VortexArena.Core.Audio;
+using VortexArena.Core.UI;
 using VortexArena.Net;
 using VortexArena.Protocol;
 
@@ -764,13 +765,10 @@ namespace VortexArena.App.Admin
                 }
             }
 
-            // ⚠️ No glyph that the default TMP font may lack; use "->".
-            string weapon = string.IsNullOrEmpty(msg.weaponId) ? "" : $" [{msg.weaponId}]";
-            string line = msg.killerId > 0 && msg.killerId != msg.victimId
-                ? $"{NameOf(msg.killerId)} -> {NameOf(msg.victimId)}{weapon}"
-                : $"{NameOf(msg.victimId)} öldü{weapon}";
-
-            _killFeed.Add(line);
+            // ⚠️ Same wording rule as the player HUD (KillFeedText) — written here once too, an
+            // operator reading "öldü" for a suicide chases a server bug that never happened. The
+            // weapon label is the operator's only extra.
+            _killFeed.Add(KillFeedText.Line(msg, NameOf, withWeaponLabel: true));
             while (_killFeed.Count > KillFeedMaxLines)
             {
                 _killFeed.RemoveAt(0);

@@ -18,6 +18,7 @@ duruyor ve export koşuldu.
 ## Doğrulama (kullanıcı koşar)
 
 - Turnuvada tur başı: kırık objeler tam cana ve sağlam görünüme döner, efekt oynamaz.
-- Bomba: patlama yarıçapındaki objeler hasar alır; siperin arkasındaki oyuncu korunurken siperin
-  kendisi hasar alır (obje kendi collider'ında gölgelenmez).
+- Bomba: patlama yarıçapındaki objeler hasar alır; siperin arkasındaki oyuncu **siperin kalan canı
+  kadar** korunur, fazlası ona geçer (obje kendi collider'ında gölgelenmez). Merkez hasarı siperin
+  canından küçükse arkadaki hiç hasar almaz.
 - `maxHp > 0` olup collider'ı olmayan obje: sahne kaydında konsola uyarı düşer.

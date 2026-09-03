@@ -685,6 +685,13 @@ tek satır iş çıkarmaz (denge sayıları istemcide yaşar — `Protokol` §10
 **Impact** = ilk temas, molotof), fitil/dolum süreleri, atış hızı ölçeği + tavanı, patlama
 yarıçapı/hasarı/`edgeScale`, `requireLineOfSight`, patlama prefabı + ses klibi.
 
+⚠️ **Patlama prefabının materyalleri Unlit, soft particle'sız, distortion'suz ve LDR olmalıdır** —
+başlık ile admin farklı boru hattı ayarlarıyla koşar, üçünden biri kaçarsa efekt VR'da *hata
+vermeden* başka bir şey çizer; kural ve gerekçe `Yapma-Listesi.md` "Parçacık materyalinde soft
+particle, distortion ya da 1'i aşan renk kullanma", kurulu takım `_Shared/FX/Materials/M_Blast*`.
+Sunum havuzludur (`BlastFxPool`): efekt prefabı sahnede kendi ömrünü yönetmez, `Instantiate`/
+`Destroy` yazma.
+
 **2. Prefab.** Root'ta `Rigidbody` + collider + **fizik materyali**, `Throwable` bileşeni ve bir
 `ThrowableEffect` (bomba için `BlastEffect`).
 ⚠️ **Sekme katsayısını düşük tut** — kopyaların ayrışması sekme sayısıyla büyür (`Sistem-Ozeti` §7
@@ -705,7 +712,8 @@ sağ el alır; alırken sağ eldeki silah **askıya alınır** (yere düşmez, y
 sonra aynı silah geri gelir.
 
 **Yeni bir ETKİ yazmak** (ateş havuzu, flashbang, sis): `ThrowableEffect`'ten türet, `Trigger`'ı
-yaz, prefaba ekle. İki kural:
+yaz, prefaba ekle. Sunumu pahalı olan bir etki `Prewarm`'ı da ezer — havuz/ısınma bedeli orada, fitil
+boyunca ödenir; tetik anı stall'a en kapalı andır. Kurallar:
 - **Hasarı yalnız atanın kopyası raporlar** (`source.LocalOwner`) — uzak kopyalar sadece FX oynatır.
 - **Hasarsız etkiler hiç `hit_report` üretmez:** flashbang/sis'te her istemci **yalnız kendi
   oyuncusunu** değerlendirir (mesafe + bakış + görüş hattı), sunucu onları hiç görmez.
@@ -745,6 +753,15 @@ ağ nesnesini **kendiliğinden** raporlar — silah kodunda yapılacak bir iş y
 ⚠️ **Alan hasarı (bomba) da ağ nesnesine geçer:** `ReportAreaHit` yarıçaptaki ağ nesnelerini de
 tarar ve her biri için ayrı `hit_report{targetNetId}` yollar; görüş hattı isteyen etkilerde objenin
 **kendi collider'ı kendini gölgelemez** (kırılabilir siper çoğu zaman `Obstacle` layer'ındadır).
+⚠️ **Siper `Obstacle` layer'ında DEĞİLSE hiç siper değildir:** görüş hattı sorgusu yalnız o
+maskeyi okur — başka bir layer'daki kırılabilir obje ne engeller ne soğurur, patlama içinden
+geçer.
+⚠️ **Kırılabilir siper hasarı KESMEZ, SOĞURUR** (`requireLineOfSight` açık etkilerde): arada duran
+kırılabilir obje **kalan canı kadarını** yutar, artan hasar arkasındaki oyuncuya/objeye geçer;
+kırık olan (enkaz) hiçbir şey soğurmaz. Kırılamayan her şey — arena geometrisi, `maxHp 0` ağ
+nesnesi — hasarı **tümden** keser. Pratik sonuç: **`maxHp`, sipere "kaç patlama dayanır" değil
+"tek patlamanın ne kadarını yutar" anlamı da yükler**; patlama hasarından büyük bir `maxHp`
+o siperi tek patlamaya karşı geçilmez yapar.
 ⚠️ `maxHp > 0` olup raycast'e takılan collider'ı olmayan obje **hiç vurulamaz**: sahne kaydı bunu
 konsola uyarı olarak düşürür (obje yine listeye girer).
 
