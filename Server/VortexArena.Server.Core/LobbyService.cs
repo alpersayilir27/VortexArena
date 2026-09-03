@@ -142,6 +142,14 @@ public sealed class LobbyService
         _director.MarkParticipantIfMatchRunning(state);
 
         _registry.Announce(state, kind); // console line + lobby_state broadcast
+
+        // Violations already open replay to a late admin (§5.3) — AFTER Announce, so the feed can
+        // name the player from the roster it just received.
+        if (state.Role == "admin")
+        {
+            foreach (var json in _director.BuildOpenViolationJsons())
+                await SendSafeAsync(connection, json, state.Name);
+        }
     }
 
     /// <summary>status heartbeat (§5.1): updates device state and performs <b>roster

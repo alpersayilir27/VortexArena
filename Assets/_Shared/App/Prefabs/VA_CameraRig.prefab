@@ -1809,7 +1809,7 @@ MonoBehaviour:
   effectEnabled: 1
   vignetteRenderer: {fileID: 4900955760334278813}
   vignetteColor: {r: 0.5569, g: 0.1216, b: 0.1216, a: 1}
-  maxAlpha: 0.4
+  maxAlpha: 0.55
   attackSeconds: 0.06
   decaySeconds: 0.4
   fullIntensityDamage: 25
@@ -8060,7 +8060,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Meta.XR.BuildingBlocks::Meta.XR.BuildingBlocks.BuildingBlock
   blockId: 5817f7c0-f2a5-45f9-a5ca-64264e0166e8
-  instanceId: 92aa6acb-6cab-4b69-a1bf-7ae084e720c6
+  instanceId: 80d11bef-ea26-47e1-bcf0-c555b426d090
   version: 1
   installationRoutineCheckpoint:
     _installationRoutineId: 
@@ -8808,7 +8808,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Meta.XR.BuildingBlocks::Meta.XR.BuildingBlocks.BuildingBlock
   blockId: e47682b9-c270-40b1-b16d-90b627a5ce1b
-  instanceId: b3bb3f6b-52c6-4906-a2bb-80f5d402372b
+  instanceId: b0397fab-9c5d-4011-88b8-df477054d270
   version: 1
   installationRoutineCheckpoint:
     _installationRoutineId: 
@@ -10780,7 +10780,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Meta.XR.BuildingBlocks::Meta.XR.BuildingBlocks.BuildingBlock
   blockId: 5817f7c0-f2a5-45f9-a5ca-64264e0166e8
-  instanceId: b16e7075-d873-4b38-95a2-12fd93dcd32d
+  instanceId: 9db0eb1f-8faa-4438-982c-e9bc14281028
   version: 1
   installationRoutineCheckpoint:
     _installationRoutineId: 
@@ -11744,7 +11744,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Meta.XR.BuildingBlocks::Meta.XR.BuildingBlocks.BuildingBlock
   blockId: 81f55626-5fad-45e9-a1df-184f330da7ba
-  instanceId: 2981f71e-3c8e-4e39-ab74-5f8dc3e744f4
+  instanceId: 36172b88-5b04-40f6-b896-183323382f12
   version: 1
   installationRoutineCheckpoint:
     _installationRoutineId: 2063f481-1b63-4eda-9ee8-a00df98536bc

@@ -310,7 +310,7 @@ namespace VortexArena.Protocol
         /// <summary>Grace inside an obstacle before health drains (s, §10.9). The screen is already
         /// black during it, so what is free is health, not vision — hence it can be generous.
         /// <para>⚠️ Fully resets on leaving (no partial decay): re-entering blinds the player again.</para></summary>
-        public const float OBSTACLE_GRACE_SECONDS = 1f;
+        public const float OBSTACLE_GRACE_SECONDS = 3f;
 
         /// <summary>Time from FULL health to death after the grace (s, §10.9). ⚠️ A wounded player dies
         /// sooner: the drain is a RATE, not a fixed countdown.</summary>
@@ -319,7 +319,7 @@ namespace VortexArena.Protocol
         /// <summary>Health lost per second on obstacle violation (§10.9), applied on the server's own
         /// tick. ⚠️ Derived from the two durations above, not hand-tuned. ⚠️ All three are consumed
         /// ONLY by the server: changing them needs a server build, not a new APK.</summary>
-        public const float OBSTACLE_DAMAGE_PER_SECOND = 13f;
+        public const float OBSTACLE_DAMAGE_PER_SECOND = PLAYER_MAX_HP / OBSTACLE_DRAIN_SECONDS;
 
         /// <summary>Max time revival stays blocked inside an obstacle (s, §10.9/§10.4). The ceiling
         /// exists because the gate trusts a client flag: a client that keeps claiming "I'm in an

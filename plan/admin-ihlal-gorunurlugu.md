@@ -12,10 +12,10 @@ Yeni APK gerekir.
 ⚠️ **Alan dışında ateş kapısı açıldı** (`ArenaCombat.CanFire` → `IsOutsideArena`, fail-open):
 alanın dışına çıkıp içeri ateş etmek artık mümkün değil.
 
-## 1. Prefab bağları (Unity, elle)
+## 1. Ses — karar verildi, yapılmaz
 
-- [ ] **`_Shared/Data/Resources/GameSoundBank.asset`** → `adminViolation` klibi
-      (`Assets/Audio/Announce/` altına kısa bir uyarı sesi). ⚠️ Atanmazsa uyarı sessizdir.
+`GameSoundBank.adminViolation` **bilinçli olarak boş**: admin PC'si seyirci hoparlörüne bağlı,
+her ihlalde bip istenmiyor. Kanca ve tercih satırı duruyor; klip atanırsa çalışır.
 
 ## 2. Doğrulama (kullanıcı koşar)
 
@@ -29,18 +29,17 @@ alanın dışına çıkıp içeri ateş etmek artık mümkün değil.
       (plansız muhafaza: açık başarısızlık, herkesi alan-dışı saymıyor)
 - [ ] Sınır çizgisinde salın (0.3 sn'lik çıkışlar) → feed **kirlenmiyor**, halka yine de yanıp
       sönüyor, istatistikteki sayaç **artmıyor**
-- [ ] Oyuncu öldür → ihlal halkası çizilmiyor, feed'e bitiş satırı düşüyor
+- [ ] İhlaldeki oyuncuyu öldür → halka **ve satır kenarlığı** o anda sönüyor, feed'e bitiş satırı
+      **ölüm anında** düşüyor (engelden çıkışı beklemiyor)
 - [ ] Poz akışını kes (oyuncu APK'sını dondur) → bayrak `OBSTACLE_FLAG_STALE_MS` içinde düşüyor,
-      halka sonsuza kadar turuncu kalmıyor
+      halka sonsuza kadar turuncu kalmıyor; satır "bekliyor"a düşüyor, akış dönünce toparlanıyor
 - [ ] İki admin bağlı → **ikisi de aynı feed satırlarını** görüyor
-- [ ] Hiç admin bağlı değilken ihlal başlat, sonra admin bağla → yarım kalmış ihlal **açık
-      kalmıyor**, süre şişmiyor
+- [ ] Hiç admin bağlı değilken ihlal başlat, sonra admin bağla → süren ihlal feed'e **başlangıç
+      satırıyla hemen düşüyor**; bitince süre gerçek süre (şişmiyor)
 - [ ] Kuş bakışından POV'a geç → halkalar kayboluyor ama **satır kenarlığı** ihlali göstermeye
       devam ediyor; ihlal bitince kenarlık eski rengine **geri dönüyor**
 - [ ] Kalibresiz oyuncu alan dışına çıksın → halka yanıyor ve feed'e giriyor, **can gitmiyor**
 - [ ] Lobide/geri sayımda alan dışına çık → feed **yine yazıyor** (defter fazdan bağımsız)
-- [ ] Maç sonu istatistik panelinde ihlal sayacı doğru; lobiye dönüşte sıfırlanıyor
-- [ ] Ses: beş oyuncu aynı anda ihlalde → uyarı sesi **3 sn'de bir**, üst üste binmiyor
 
 ## 3. Yapılmayanlar — ayrı karar bekliyor
 

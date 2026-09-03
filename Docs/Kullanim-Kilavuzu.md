@@ -508,7 +508,7 @@ yok. Panel her açıldığında klasör yeniden okunur, yani maç sürerken yeni
   müzik çalıyorsa kesilmez, arkada devam eder.
 - Müzik **anonsların altında** çalar: "maç başladı", "rakip elendi" ya da kazanan takım anonsu
   gelince müzik kendiliğinden bir tık alçalır, anons bitince geri yükselir. Ambiyansı, silah
-  seslerini ve ihlal uyarısını da bastırmaz — hepsi birlikte duyulur.
+  seslerini de bastırmaz — hepsi birlikte duyulur.
 - ⚠️ Müzik **yalnız bu bilgisayardan** çalar; oyuncuların kulaklığına gitmez. Salon hoparlörlerinin
   bu bilgisayara bağlı olması gerekir (bir alttaki başlık).
 
@@ -759,18 +759,14 @@ ve **arenanın dışı**. İkisini de sen görürsün, oyuncu da kendi ekranınd
   (ölüm listesinden ayrıdır — o maçın hikâyesi, bu senin iş listen). **Yarım saniyeden kısa
   temaslar yazılmaz**: sınır çizgisinde gidip gelen bir oyuncu listeyi doldurup okunmaz hâle
   getirirdi. Halka yine de yanar.
-- **İhlal başlayınca kısa bir uyarı sesi çalar** — ekrana bakmıyorken de haberin olsun diye.
-  Sesi kapatmak istersen **Tercihler** (`P`) → **GÖRÜNÜM** sekmesinde **İhlal sesi** satırı vardır.
-  Bu satır **yalnız senin ekranına aittir**: sen kapatınca diğer operatörün sesi susmaz, o da
-  kendi ekranından kapatır. ⚠️ **SES sekmesindeki "Seslendirme" bu uyarıyı susturmaz** — anonsları
-  tamamen kıssan bile ihlal sesi çalar; onun tek anahtarı GÖRÜNÜM sekmesindeki bu satırdır.
-- **Ses kalabalıkta sirene dönmez:** aynı anda kaç kişi kural dışına çıkarsa çıksın en fazla
-  birkaç saniyede bir çalar. Yani duyduğun her ses "en az bir kişi" demektir, "tam bir kişi"
-  demek değildir — kimin olduğunu ihlal listesinden ve halkalardan görürsün. Sesin bitişi ayrıca
-  duyurulmaz; ihlalin bittiğini listeden okursun.
-- Maç sonunda istatistik panelinin **İHLAL** kolonunda oyuncu başına **kaç kez ve toplam kaç saniye**
-  kural dışı kaldığı durur (hiç ihlal etmemiş oyuncuda `-`). Oyuncuyla konuşurken elindeki somut
-  veri budur; lobiye dönünce skorla birlikte sıfırlanır.
+- **İhlalin sesi yoktur.** Admin PC'si çoğu kurulumda seyircinin de duyduğu hoparlöre bağlıdır;
+  her ihlalde bip sesi gitmesin diye uyarı **yalnız ekrandadır** — halka, satır kenarlığı ve ihlal
+  listesi. (Tercihler → GÖRÜNÜM sekmesindeki **İhlal sesi** satırı, ileride bir ses klibi
+  atanırsa onu yönetir; bugün bir şey değiştirmez.)
+- **Oyuncu ölünce ihlal biter:** halkası söner, listeye "bitti" satırı düşer. Engelin içinde ölen
+  oyuncu dışarı çıkmadan canlanamaz (aşağıda, Bölüm 6).
+- **Admin ekranını sonradan açtıysan** o sırada süren ihlaller listeye hemen düşer; hiçbir şey
+  kaçırmazsın.
 - ⚠️ **Ceza vermek senin kararın.** Sistem alan dışına çıkanı öldürmez — kalibrasyonu birkaç santim
   kaymış bir gözlük yüzünden oyuncu durduk yere ölmesin diye böyle. Israrla tekrarlayan oyuncuyu
   uyarırsın, gerekirse **AT**'arsın.

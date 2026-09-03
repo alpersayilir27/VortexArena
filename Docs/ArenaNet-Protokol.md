@@ -43,7 +43,7 @@ Tümü paylaşılan `ArenaProtocol` statik sınıfında tanımlanır (`Assets/_S
 | `OBSTACLE_GRACE_SECONDS` | `3` | Engelin içinde **can erimeye başlamadan önceki** tolerans (§10.9). Bu sürede oyuncunun ekranı zaten kapkaranlıktır: bedava olan görüş değil **yalnız candır**. ⚠️ Engelden çıkınca **tümden sıfırlanır** (kısmi sönüm yok) — girip çıkan oyuncu her girişinde yeniden kör kalıyor, yani kazandığı bir şey yok |
 | `OBSTACLE_DRAIN_SECONDS` | `5` | Tolerans dolduktan sonra **tam candan** ölüme geçen süre (§10.9). Engelde geçirilebilen toplam süre `OBSTACLE_GRACE_SECONDS` + bu değerdir (**8 sn**). ⚠️ Yaralı oyuncu daha çabuk ölür: erime bir HIZ'dır, geri sayım değil |
 | `OBSTACLE_DAMAGE_PER_SECOND` | `20` | Engel ihlalinde saniyelik can kaybı (§10.9). ⚠️ **Elle yazılmaz, türetilir:** `PLAYER_MAX_HP / OBSTACLE_DRAIN_SECONDS`. Tasarım parametresi süredir, hız onun sonucudur — ikisini ayrı ayrı yazmak aynı sayının iki kaynağı olurdu. ⚠️ **Üçünün de tek tüketicisi sunucudur** — değerleri değiştirmek yeni APK gerektirmez, sunucu derlemesi yeter |
-| `OBSTACLE_REVIVE_BLOCK_SECONDS` | `40` | Engelin içindeyken canlanmanın en fazla bu kadar ertelenmesi (§10.9/§10.4). Kapı istemcinin bildirdiği bayrağa baktığı için tavansız bırakılamaz: yanlış konuşan bir istemci oyuncuyu kalıcı ölü bırakırdı (`OBSTACLE_FLAG_STALE_MS` yalnız **susmuş** istemciyi çözer). Tavan dolunca oyuncu engelde de olsa canlandırılır — çıkmadıysa ceza anında yeniden başlar, yani kural işlevsizleşmez |
+| `OBSTACLE_REVIVE_BLOCK_SECONDS` | `40` | Engelin içindeyken canlanmanın en fazla bu kadar ertelenmesi (§10.9/§10.4). Kapı istemcinin bildirdiği bayrağa baktığı için tavansız bırakılamaz: yanlış konuşan bir istemci oyuncuyu kalıcı ölü bırakırdı (`OBSTACLE_FLAG_STALE_MS` yalnız **susmuş** istemciyi çözer). Tavan dolunca oyuncu engelde de olsa canlandırılır — çıkmadıysa ceza anında yeniden başlar, yani kural işlevsizleşmez. ⚠️ **Oyuncunun göreceği bir "zorla canlanma" DEĞİLDİR:** dürüst istemci engeldeyken `revive_request`'i hiç göndermez, yani sahada engelde bekleyen oyuncu tavan dolsa da canlanmaz — tavan yalnız yalan söyleyen istemciye karşı sunucu güvencesidir |
 | `OBSTACLE_FLAG_STALE_MS` | `300` | `FLAG_IN_OBSTACLE` bu süredir tazelenmemişse bayrak **düşürülür** (§10.9). Poz kanalı 20 Hz (50 ms) olduğu için 6 paketlik kayba dayanır; susmuş bir istemci sonsuza kadar ceza almaz |
 | `VIOLATION_KIND_OBSTACLE` / `VIOLATION_KIND_OUT_OF_BOUNDS` | `"obstacle"` / `"out_of_bounds"` | `violation` mesajının `kind` alanının geçerli değerleri (§5.3/§10.9). ⚠️ İkisi **ayrı türdür ve birleştirilmez**: biri ceza üretir, diğeri yalnız görünürlüktür — tek bir "ihlal" türü operatöre hangisine müdahale edeceğini söylemezdi |
 | `VIOLATION_MIN_SECONDS` | `0.5` sn | Bir ihlalin admin akışına **yazılmaya değer** sayılması için gereken en kısa süre (§10.9). Altındaki temaslar için `violation` mesajı **hiç** gönderilmez — başlangıç kenarı bu süre dolana kadar bekletilir. ⚠️ **Yalnız akış içindir:** halka ve ceza ilk kareden itibaren çalışır; sınır çizgisinde salınan oyuncu aksi hâlde saniyede birkaç satır üretip akışı okunamaz hâle getirirdi |
@@ -626,6 +626,14 @@ yeniden yüklemeyi dener** ve sonucu bildirir (§10.6): başarıda normal bir
 - ⚠️ `VIOLATION_MIN_SECONDS`'tan kısa temaslar için **hiç gönderilmez** (§1) — ne başlangıç ne
   bitiş satırı. Sayaçlara da girmez: akışta görünmeyen bir ihlalin istatistikte belirmesi
   operatöre iki farklı gerçek anlatırdı.
+- **Ölüm ihlali kapatır:** ihlaldeki oyuncu ölünce `active:false` satırı o anda gider (süre ölüme
+  kadardır) ve halka söner; ölü bir bedenin bloğun içinde durması operatörün müdahale edeceği bir
+  şey değildir. Kalibrasyon ise sorulmaz — kalibresiz oyuncunun alan dışına çıkması tam da
+  görülmesi gereken şeydir.
+- **Geç bağlanan admin açık ihlalleri alır:** `hello` sırasında sürmekte olan (eşiği geçmiş) her
+  ihlal için `active:true` satırı yalnız o admine, `lobby_state`'ten **sonra** tekrar gönderilir
+  (ad çözülebilsin diye). Kenar hiç admin yokken de ilerler (defter admin'e bağlı değildir), yani
+  yeni admin ne "sonsuza kadar açık" bir ihlal görür ne de yalnız bitiş satırını.
 
 **`calibration_result`** — yalnız adminlere; operatörün `reload_calibration` düğmesinin **cevabı**:
 
@@ -2231,7 +2239,7 @@ candaki süredir, bir garanti değil.
 |---|---|
 | İstemci | Kafasını ölçer, `0x01`'in `gripFlags` bit5'ini (engel) ve bit7'sini (alan dışı) set eder (20 Hz); ekranı karartır, tetiği kapatır |
 | Sunucu | Bitleri `PlayerState`'e alır, **kendi saatiyle** toleransı ve erimeyi işletir (yalnız bit5), `health_update` yayar, ölümü işler; **her iki bit için** ihlal defterini tutar ve adminlere `violation` yayar |
-| Admin | Snapshot bitlerini okur, halkayı yakıp söndürür — engel **kırmızı 3 Hz**, alan dışı **turuncu 1.5 Hz**, ikisi birdense kırmızı (yerel çizim); `violation` satırlarını ihlal akışına yazar |
+| Admin | Snapshot bitlerini okur, halkayı yakıp söndürür — engel **kırmızı 3 Hz**, alan dışı **turuncu 1.5 Hz**, ikisi birdense kırmızı (yerel çizim); **ölü oyuncuda halka da satır kenarlığı da yanmaz** (`AdminViolations.Of` canlılığı tek yerde sorar); `violation` satırlarını ihlal akışına yazar |
 
 ⚠️ **Toleransın saati sunucunundur** (`PlayerState.ObstacleSince`). İstemci "ne zamandır
 içerideyim" diye bir süre gönderseydi cezanın başlama anını o belirlerdi; bit yalnız "şu an
@@ -2312,7 +2320,14 @@ tarafında ölçülür ve sunucuya bildirilmez:
   Karartmanın açıklaması olduğu için **onunla aynı kapıdadır**: faz ve canlılık sorulmaz.
 - **Can kaybının kırmızısı:** karartmanın **üstünde** ayrı bir katmandır. ⚠️ Karartma hakemine
   (`ScreenFade`) kaynak olarak eklenemez: "en yüksek alfa kazanır" kuralı siyah 1.0'dayken kırmızıyı
-  tümden yutar ve oyuncu canının gittiğini hiç görmez.
+  tümden yutar ve oyuncu canının gittiğini hiç görmez. ⚠️ Erime sırasında vuruş zarfı
+  **kullanılmaz**: ~4 Hz gelen 3-5 HP'lik damlalar zarfı küçücük bir alfada seğirtir — siyahın
+  üstünde görünmez, görünse de titreme gibi okunur. Bunun yerine erime boyunca (engel bayrağı açık +
+  son can düşüşü taze) kırmızı **1 Hz'lik düz bir nabızla** yüksek opaklıkta çizilir; toleransta
+  hiç görünmez (düşüş yok), erime durunca söner.
+- **Yalnız bir uyarı yazısı:** kafa engelde ve alan dışındayken engel yazısı kazanır, muhafazanın
+  "alan dışı" yazısı gizlenir (adminde halkanın önceliğiyle aynı sıra). İki yazının üst üste nabız
+  atması titreme gibi okunur; ceza taşıyan yazı kalır.
 - **Atış kapısı** dört testten geçer, **herhangi biri** tetiği öldürür (cephane gitmez, namlu
   alevi/sesi oynamaz, ağa `shot_event` gitmez, atış gecikmesi bile ilerlemez):
   1. **Oyuncunun kendisi:** kafası ya da izlenen bir eli engelin içinde (`CanFire`).

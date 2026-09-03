@@ -52,9 +52,10 @@ her `Venues/<İşletme>/Scenes/<Arena>/` kutusunu açıp denetimi koştur.
       (yalancı pozitif kontrolü; açıklık tavanı kafa yarıçapıdır)
 - [ ] Elde silah tutarken silahın gövdesi kırpılmıyor (near-clip 0.10 → 0.05 düştü) ve uzak
       geometride z-fighting yok
-- [ ] Yarım sok (kabuk değiyor, merkez dışarıda) → hafif kızarma, yazı YOK, ceza YOK
-- [ ] İçeride kal → **3 sn hiç can gitmez**, sonra kırmızı vinyet siyahın üstünde nabız atar ve
-      5 sn'de ölüm (toplam ~8 sn)
+- [ ] Yarım sok (kabuk değiyor, merkez dışarıda) → ekran **kararır** (kabuk değer değmez tam
+      siyah; yarı saydam perde duvarın arkasını okutur), uyarı yazısı YOK, ceza YOK
+- [ ] İçeride kal → **3 sn hiç can gitmez**, sonra kırmızı çerçeve siyahın üstünde **1 Hz düz
+      nabızla, belirgin** yanar ve 5 sn'de ölüm (toplam ~8 sn); nabız seğirmiyor, titreme yok
 - [ ] 3 sn dolmadan çık → can hiç azalmamış; tekrar gir → tolerans baştan
 - [ ] Yaralıyken (ör. 40 HP) gir → 3 sn sonra ~2 sn'de ölüm (beklenen davranış)
 - [ ] Elini engele sok, kafanı dışarıda tut → **ceza yok, karartma yok** ama **tetik ölü**
@@ -67,12 +68,13 @@ her `Venues/<İşletme>/Scenes/<Arena>/` kutusunu açıp denetimi koştur.
 - [ ] Bir kumandayı kapat, engelin yanında ateş et → **engellenmiyor** (izlenmeyen el sorulmaz)
 - [ ] Mermiyle hasar al (engel dışında) → kırmızı vinyet aynı şekilde görünüyor
 - [ ] Engelde ölünce: kill feed "… engelde kaldı", skor **değişmez**, `deaths` artar
-- [ ] Engelin **içinde** kalarak bekle → canlanma **olmaz** ("Engelden çık ve canlan"); çık →
-      canlanır. Bayrak takılı kalırsa 40 sn'de yine canlanır (tavan)
+- [ ] Engelin **içinde** kalarak bekle → canlanma **olmaz** ("Engelden çık ve canlan"), ne kadar
+      beklersen bekle; çık → canlanır (40 sn tavanı sunucu içidir, oyuncuya görünmez)
 - [ ] Ölüp canlan (engelden çıkıp) → tolerans sıfırdan başlıyor, canlanır canlanmaz can gitmiyor
 - [ ] Ölü oyuncunun soketini kopar/geri getir → istemci **canlı görünmez**, ölüm ekranı kapanmaz
 - [ ] Kalibresiz oyuncu ihlalde **ceza almaz**
-- [ ] Sınır karartması ile ihlal karartması aynı anda → titreme YOK (en yüksek alfa çizilir)
+- [ ] Sınır karartması ile ihlal karartması aynı anda (vücut alan dışı, kafa engelde) → titreme
+      YOK, tek uyarı yazısı ("duvar" kazanır, "alan dışı" gizli), can gidiyor (engel kuralı)
 - [ ] Admin: ihlal eden oyuncunun halkası kırmızı yanıp söner; admin gözlemcide hiçbir ekran
       katmanı çizilmez (rig kökü kapalı)
 - [ ] Karartma alfa 1'de gerçekten opak ve FOV'un tamamını kapatıyor mu (çevresel görüşte kalan bir

@@ -56,11 +56,13 @@ namespace VortexArena.App.Admin
         /// </para>
         /// <para>Without a registry, <see cref="AdminViolationKind.None"/> — an unknown state must
         /// not be shown as an event that never happened.</para>
+        /// <para>⚠️ <b>A dead player has no violation:</b> the penalty stopped and the server closed the
+        /// ledger on death (§10.9). Gated HERE so the ring and the row cannot disagree.</para>
         /// </summary>
         public static AdminViolationKind Of(int playerId)
         {
             RemotePlayerRegistry registry = RemotePlayerRegistry.Instance;
-            if (registry == null)
+            if (registry == null || !registry.IsAlive(playerId))
             {
                 return AdminViolationKind.None;
             }

@@ -561,6 +561,41 @@ public sealed class MatchDirector
         lock (_gate) return BuildMatchInfoLocked();
     }
 
+    /// <summary>Open (announced) violations as <c>violation active:true</c> messages, for an admin that
+    /// connects mid-violation (§5.3): the start edge went out before this admin existed, and without a
+    /// replay its feed would show only the end line.</summary>
+    public List<string> BuildOpenViolationJsons()
+    {
+        var result = new List<string>();
+        lock (_gate)
+        {
+            foreach (var player in _registry.Snapshot())
+            {
+                if (player.Role != "player" || !player.IsConnected) continue;
+                AppendOpenViolationLocked(result, player, player.ObstacleTally,
+                    ArenaProtocol.VIOLATION_KIND_OBSTACLE);
+                AppendOpenViolationLocked(result, player, player.OutOfBoundsTally,
+                    ArenaProtocol.VIOLATION_KIND_OUT_OF_BOUNDS);
+            }
+        }
+        return result;
+    }
+
+    private static void AppendOpenViolationLocked(List<string> sink, PlayerState player,
+        ViolationTally tally, string kind)
+    {
+        if (!tally.Announced) return;
+        sink.Add(JsonUtil.Serialize(new ViolationMsg
+        {
+            playerId = player.PlayerId,
+            kind = kind,
+            active = true,
+            seconds = 0f,
+            count = tally.Count,
+            totalSeconds = tally.TotalSeconds
+        }));
+    }
+
     // ---- Tick loop ----
 
     public void Start()
@@ -868,9 +903,10 @@ public sealed class MatchDirector
     /// phase-independent part of the tick loop: the operator must also see a player leaving the arena in
     /// the lobby and during the countdown. The penalty (<see cref="TickObstacleLocked"/>) runs only in
     /// <c>playing</c> — the ledger is not a penalty.
-    /// <para>⚠️ It is not tied to the penalty gates either: <c>Alive</c>/<c>Calibrated</c> are not asked
-    /// here. The penalty has those conditions because it drains health; the ledger only records, and an
-    /// uncalibrated player going out of bounds is exactly what the operator needs to see.</para></remarks>
+    /// <para>⚠️ <c>Calibrated</c> is NOT asked here: the penalty has it because it drains health; the ledger
+    /// only records, and an uncalibrated player going out of bounds is exactly what the operator needs to
+    /// see. <c>Alive</c> IS asked: death ends the violation for the operator (the ring goes dark, the end
+    /// line drops) — a dead body inside a block is nothing to act on.</para></remarks>
     private void TickViolationFeedLocked(List<Outgoing> outbox, DateTime now)
     {
         // ⚠️ The early exit is PARTIAL: with no admin connected no message is serialised (no packets for
@@ -894,9 +930,9 @@ public sealed class MatchDirector
 
             // Freshness is the same question for both kinds; asked once (see IsPoseFreshLocked).
             var fresh = IsPoseFreshLocked(player, now);
-            TickViolationKindLocked(outbox, player, player.ObstacleTally, player.InObstacle && fresh,
+            TickViolationKindLocked(outbox, player, player.ObstacleTally, player.Alive && player.InObstacle && fresh,
                 ArenaProtocol.VIOLATION_KIND_OBSTACLE, now, anyAdmin);
-            TickViolationKindLocked(outbox, player, player.OutOfBoundsTally, player.OutOfBounds && fresh,
+            TickViolationKindLocked(outbox, player, player.OutOfBoundsTally, player.Alive && player.OutOfBounds && fresh,
                 ArenaProtocol.VIOLATION_KIND_OUT_OF_BOUNDS, now, anyAdmin);
         }
     }
