@@ -120,6 +120,14 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
+            // A weaponless mode carries no bomb at all: the trigger gate alone only refuses the take
+            // and would leave the wrist item visible on a family that has nothing to throw.
+            if (ModeRuntime.IsWeaponless)
+            {
+                ClearForWeaponless();
+                return;
+            }
+
             // PlayerCombatState bootstraps after scene load, so it may not exist in OnEnable (the
             // same lazy subscription as WeaponGranter/Weapon).
             if (!_aliveSubscribed)
@@ -218,7 +226,9 @@ namespace VortexArena.Core.Combat
             var bodies = instance.GetComponentsInChildren<Rigidbody>(true);
             for (int i = 0; i < bodies.Length; i++)
             {
-                bodies[i].isKinematic = true;
+                // Transform-driven from here: interpolation goes off with the kinematic flag, or the
+                // body keeps rewriting the transform from stale physics poses (RigidbodyDrive).
+                RigidbodyDrive.SetKinematic(bodies[i], true);
                 bodies[i].useGravity = false;
                 bodies[i].detectCollisions = false;
             }
@@ -238,9 +248,9 @@ namespace VortexArena.Core.Combat
 
         /// <summary>Hands the item over to flight: colliders and the throwable behaviour come back.
         /// <para>⚠️ The <see cref="Rigidbody"/> is deliberately NOT touched here — from
-        /// <c>Throwable.Arm</c> on, the body belongs to the flight code (mass, gravity, velocity,
-        /// bounce, <c>detectCollisions</c>). Two writers on one body would produce a different
-        /// trajectory per client.</para></summary>
+        /// <c>Throwable.Arm</c> on, the body belongs to the flight code, which REBUILDS everything
+        /// <see cref="Deactivate"/> switched off (kinematic flag, collisions, interpolation, gravity).
+        /// Two writers on one body would produce a different trajectory per client.</para></summary>
         private static void Reactivate(GameObject instance)
         {
             var colliders = instance.GetComponentsInChildren<Collider>(true);
@@ -422,6 +432,30 @@ namespace VortexArena.Core.Combat
                     out Vector3 position, out Quaternion rotation);
                 _heldItem.transform.SetPositionAndRotation(position, rotation);
             }
+        }
+
+        /// <summary>Weaponless mode: both instances go, the hand comes back. <c>_ready</c> and a running
+        /// refill are kept — the next weapon mode finds the wrist exactly as it would have been.</summary>
+        private void ClearForWeaponless()
+        {
+            HideIndicator();
+
+            if (_wristItem != null)
+            {
+                Destroy(_wristItem);
+                _wristItem = null;
+            }
+
+            if (_heldItem == null)
+            {
+                return;
+            }
+
+            // Same exit as dying with the bomb in hand: gone without an event.
+            Destroy(_heldItem);
+            _heldItem = null;
+            ClearHeldReport();
+            ReleaseHandGate();
         }
 
         /// <summary>Frees the hand this holster claimed. ⚠️ Runs BEFORE the weapon is restored: the

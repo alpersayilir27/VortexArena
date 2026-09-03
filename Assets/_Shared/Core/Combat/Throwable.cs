@@ -118,12 +118,12 @@ namespace VortexArena.Core.Combat
             // 2) Rotation is DERIVED from the direction. No randomness anywhere in this method.
             transform.SetPositionAndRotation(worldOrigin, Quaternion.LookRotation(dir));
 
-            _body.isKinematic = false;
-            _body.useGravity = true;
-            // ⚠️ detectCollisions is INDEPENDENT of isKinematic and the carrier parks it off while the
-            // item is held (WristHolster.Deactivate). Left off, the item reports no contact at all —
-            // enabled colliders change nothing — and falls straight through the world without an error.
+            // The body is REBUILT, not trusted: a carried copy arrives kinematic, collision-less and
+            // uninterpolated (WristHolster.Deactivate). ⚠️ detectCollisions is INDEPENDENT of
+            // isKinematic — left off, contact is never generated and enabled colliders change nothing.
+            RigidbodyDrive.SetKinematic(_body, false);
             _body.detectCollisions = true;
+            _body.useGravity = true;
             _body.linearVelocity = dir * speed;
 
             // 3) ⚠️ Spin is derived too: hand rotation is not on the wire, so a random tumble would

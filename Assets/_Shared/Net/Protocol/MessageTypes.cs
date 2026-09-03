@@ -74,6 +74,9 @@ namespace VortexArena.Protocol
         // late joiner right after welcome.
         public const string WorldState = "world_state";
         public const string Ping = "ping"; // "send me a status" trigger — MEASURES NO LATENCY (UDP 0x06 does)
+        // Reply to every status (§8): payload-less, exists only so the client's link watchdog has a
+        // guaranteed periodic frame — a silently dead Wi-Fi link never errors on its own.
+        public const string Heartbeat = "heartbeat";
         public const string Kicked = "kicked";
         public const string AdminState = "admin_state"; // admins only: shared selection + announcement
         public const string SelectionState = "selection_state"; // TO EVERYONE: team mode of the selected mode (§5.3)

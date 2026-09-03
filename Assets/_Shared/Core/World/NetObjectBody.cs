@@ -34,7 +34,7 @@ namespace VortexArena.Core.World
             {
                 // Kinematic until ownership says otherwise: an object simulated on two headsets is the
                 // same knife in two places.
-                _body.isKinematic = true;
+                RigidbodyDrive.SetKinematic(_body, true);
             }
         }
 
@@ -79,7 +79,9 @@ namespace VortexArena.Core.World
                 return;
             }
 
-            _body.isKinematic = kinematic;
+            // Interpolation follows the flag: a streamed pose is written to the transform and must not
+            // be rewritten from physics (RigidbodyDrive).
+            RigidbodyDrive.SetKinematic(_body, kinematic);
         }
 
         /// <summary>The owner's live pose (§6.12), arena → world. False when no stream is running.</summary>

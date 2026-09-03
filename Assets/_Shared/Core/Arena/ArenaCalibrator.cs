@@ -100,11 +100,12 @@ namespace VortexArena.Core.Arena
         private const float PointBPulseSeconds = 1f;
 
         /// <summary>Retry count for restoring the saved anchor; the anchor service is not always
-        /// ready at scene load. ⚠️ With <see cref="RestoreRetryDelayMs"/> this is a ~10 s window and
-        /// is NOT shortened: localization waits for the room to be recognized, so a short window
-        /// turns a transient failure permanent. Polling faster does not help — the wait is tracking,
-        /// so the INTERVAL is long, not the count.</summary>
-        private const int RestoreAttempts = 6;
+        /// ready at scene load. ⚠️ With <see cref="RestoreRetryDelayMs"/> this is a ~30 s window and
+        /// is NOT shortened: localization waits for the room to be recognized, which after an app
+        /// launch can take well over ten seconds, so a short window turns a transient failure
+        /// permanent. Polling faster does not help — the wait is tracking, so the INTERVAL is long,
+        /// not the count.</summary>
+        private const int RestoreAttempts = 15;
 
         /// <summary>Retry interval (ms).</summary>
         private const int RestoreRetryDelayMs = 2000;
@@ -227,8 +228,16 @@ namespace VortexArena.Core.Arena
             SetMarkersVisible(false);
             TryHookTrackingEvents();
 
+            string saved = ResolveSavedUuid();
+
+            // One line per scene start: "stayed uncalibrated" has three look-alike causes (no record,
+            // mode gate, restore failed) and only this line separates the first two.
+            Debug.Log($"ArenaCalibrator: sahne açılışı — kayıtlı kalibrasyon " +
+                      $"{(string.IsNullOrEmpty(saved) ? "YOK" : saved)}, mod '{CalibrationState.Mode}', " +
+                      $"otomatik geri yükleme {(autoRestoreBlocked ? "KAPALI" : "açık")}.");
+
             // No saved alignment → no restore will run, so queue the pre-align immediately.
-            if (string.IsNullOrEmpty(ResolveSavedUuid()))
+            if (string.IsNullOrEmpty(saved))
                 StartPreAlign();
 
             _ = RestoreSavedCalibrationAsync();

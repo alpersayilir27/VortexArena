@@ -309,8 +309,12 @@ namespace VortexArena.Core.Arena
 
             DrawFade(FadeAlphaFor(edgeDistance));
             ReportHaptics(IsOutOfBounds);
-            if (warningText != null && warningText.gameObject.activeSelf != IsOutOfBounds)
-                warningText.gameObject.SetActive(IsOutOfBounds);
+
+            // One warning at a time: the obstacle text wins (same priority as the admin ring) —
+            // two stacked pulsing texts read as flicker, and the obstacle carries the penalty.
+            bool showWarning = IsOutOfBounds && !ObstacleViolationProbe.IsViolating;
+            if (warningText != null && warningText.gameObject.activeSelf != showWarning)
+                warningText.gameObject.SetActive(showWarning);
         }
 
         /// <summary>

@@ -223,7 +223,7 @@ namespace VortexArena.Core.Combat
             {
                 // Physics must not fight the hand during the optimistic window (NetObjectBody leaves a
                 // held object alone, but the state saying "held" has not arrived yet).
-                _body.isKinematic = true;
+                RigidbodyDrive.SetKinematic(_body, true);
             }
 
             // Claims the hand in the slot registry: this is what feeds the FINGER pose. The wire byte
@@ -340,7 +340,7 @@ namespace VortexArena.Core.Combat
             {
                 // Set here rather than left to NetObjectBody: the "held" flag has not fallen yet, so
                 // NetObjectBody still skips this object and the throw would start a frame late.
-                _body.isKinematic = false;
+                RigidbodyDrive.SetKinematic(_body, false);
                 _body.linearVelocity = ResolveReleaseVelocity(hand);
             }
 
@@ -398,7 +398,7 @@ namespace VortexArena.Core.Combat
 
             if (_body != null)
             {
-                _body.isKinematic = true;
+                RigidbodyDrive.SetKinematic(_body, true);
             }
 
             // The server can put an object straight into a hand: a dispenser's `take` spawns it already

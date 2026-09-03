@@ -693,7 +693,9 @@ Sunum havuzludur (`BlastFxPool`): efekt prefabı sahnede kendi ömrünü yönetm
 `Destroy` yazma.
 
 **2. Prefab.** Root'ta `Rigidbody` + collider + **fizik materyali**, `Throwable` bileşeni ve bir
-`ThrowableEffect` (bomba için `BlastEffect`).
+`ThrowableEffect` (bomba için `BlastEffect`). Rigidbody'nin interpolasyon/kinematik/çarpışma
+alanlarını prefabda ayarlamaya çalışma: taşınırken kılıf kapatır, uçuşta `Arm` açar
+(`Yapma-Listesi` "taşınan Rigidbody").
 ⚠️ **Sekme katsayısını düşük tut** — kopyaların ayrışması sekme sayısıyla büyür (`Sistem-Ozeti` §7
 "atılabilir avatarla çarpışmaz").
 

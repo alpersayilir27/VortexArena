@@ -1,5 +1,6 @@
 using Meta.XR.Movement.Networking;
 using UnityEngine;
+using VortexArena.Core.Arena;
 using VortexArena.Net;
 
 namespace VortexArena.Core.Player
@@ -65,8 +66,9 @@ namespace VortexArena.Core.Player
         [SerializeField] private GameObject visualRoot;
 
         [Tooltip("Karakterin GÖZ hizası — kafa kemiğinin altında, iki gözün arasında duran boş " +
-                 "işaretçi. Gövde ölçümünün referansıdır (§10.8): oyuncunun gözü ile buranın " +
-                 "yüksekliği oranlanır. Boşsa ölçüm hiç yapılmaz.")]
+                 "işaretçi. Gövde ölçümünün referansıdır (§10.8): prefabın DİNLENME pozundaki " +
+                 "yüksekliği bir kez okunur, oyuncunun ayakta göz yüksekliği ona oranlanır. " +
+                 "Boşsa ölçüm hiç yapılmaz.")]
         [SerializeField] private Transform eyeAnchor;
 
         private OVRCameraRig _rig;
@@ -98,13 +100,41 @@ namespace VortexArena.Core.Player
 
         private float _nextRepairTime = float.NegativeInfinity;
 
-        /// <summary>The character's eye level (a marker under the head bone in the prefab) — the
-        /// reference of the body measurement (§10.8). <c>null</c> if unbound; the measuring side then
-        /// refuses to measure and complains.</summary>
-        /// <remarks>⚠️ The measurement reads its WORLD position, and that position being a scale-1
-        /// reference depends on <see cref="ArenaNetCharacterBehaviour"/> never scaling the local
-        /// character — otherwise a second measurement would drag the factor toward 1.</remarks>
+        /// <summary>Plausible range of the model's rest-pose eye height (m). Outside it the marker is
+        /// misplaced or the prefab was saved mid-pose; a wrong denominator would put a wrong height on
+        /// every other screen, so the measurement refuses instead.</summary>
+        private const float MinRestEyeHeightMeters = 1.2f;
+
+        /// <inheritdoc cref="MinRestEyeHeightMeters"/>
+        private const float MaxRestEyeHeightMeters = 2.0f;
+
+        /// <summary>The standing height must hold within this band for <see cref="HintSettleSeconds"/>
+        /// before it reaches the runtime: the learned ceiling climbs in steps during the first seconds,
+        /// and every hint re-runs the runtime's body calibration.</summary>
+        private const float HintSettleMeters = 0.01f;
+
+        /// <inheritdoc cref="HintSettleMeters"/>
+        private const float HintSettleSeconds = 2f;
+
+        /// <summary>A settled height this far from the last hint means another player (or a new
+        /// alignment floor) and is sent again.</summary>
+        private const float HintRefreshMeters = 0.03f;
+
+        private float _hintCandidate;
+        private float _hintCandidateSince = -1f;
+        private float _hintedHeight;
+        private int _hintedGeneration = -1;
+
+        /// <summary>The character's eye level (a marker under the head bone in the prefab).
+        /// <c>null</c> if unbound; the measuring side then refuses to measure and complains.</summary>
         public Transform EyeAnchor => eyeAnchor;
+
+        /// <summary>The model's eye height in its authored rest pose, root-relative at scale 1 (m) —
+        /// the denominator of the body measurement (§10.8). <c>0</c> = unreadable, no measurement.
+        /// <para>⚠️ Read ONCE in <c>Awake</c>, before the SDK ever poses the character: once posed the
+        /// head sits wherever the PLAYER's head is, and a reference that follows the player measures
+        /// nothing — the ratio is 1 whoever wears the headset.</para></summary>
+        public float RestEyeHeightMeters { get; private set; }
 
         /// <summary>Is the body actually being solved (initialised + retargeter valid)? Precondition of
         /// the measurement: the eye level of a skeleton with no pose is meaningless.</summary>
@@ -170,6 +200,8 @@ namespace VortexArena.Core.Player
                 return;
             }
 
+            CaptureRestEyeHeight();
+
             // Subscribed only past the component checks: with nothing to repair the command is a no-op
             // anyway, and an unreachable listener is one more thing to reason about.
             NetEvents.OnRestartBodyTracking += RepairBodyTrackingNow;
@@ -203,6 +235,87 @@ namespace VortexArena.Core.Player
             }
 
             TickBodyTrackingWatchdog();
+            TickHeightHint();
+        }
+
+        /// <summary>Reads the model's rest-pose eye height (<see cref="RestEyeHeightMeters"/>).
+        /// Root-relative so the prefab's placement does not enter; refused outside the plausible
+        /// range, with the reason in the console.</summary>
+        private void CaptureRestEyeHeight()
+        {
+            RestEyeHeightMeters = 0f;
+
+            if (eyeAnchor == null)
+            {
+                Debug.LogError("[LocalBodyAvatar] 'Eye Anchor' boş — gövde ölçümü (ÖLÇ) yapılamayacak. " +
+                               "Resources/LocalBodyAvatar.prefab içinde kafa kemiğinin altındaki göz " +
+                               "işaretçisi bu alana bağlanmalı.", this);
+                return;
+            }
+
+            Transform root = character.transform;
+            if (root.lossyScale.y < 1e-3f)
+            {
+                Debug.LogError("[LocalBodyAvatar] Karakter kökünün ölçeği sıfır — göz referansı " +
+                               "okunamadı, gövde ölçümü yapılamayacak.", this);
+                return;
+            }
+
+            float height = root.InverseTransformPoint(eyeAnchor.position).y;
+            if (height < MinRestEyeHeightMeters || height > MaxRestEyeHeightMeters)
+            {
+                Debug.LogError($"[LocalBodyAvatar] Modelin dinlenme pozundaki göz hizası {height:F2} m, " +
+                               $"makul aralığın ({MinRestEyeHeightMeters:F1}–{MaxRestEyeHeightMeters:F1} m) " +
+                               "dışında — işaretçi yanlış yerde ya da prefab poz ortasında kaydedilmiş. " +
+                               "Gövde ölçümü yapılamayacak.", this);
+                return;
+            }
+
+            RestEyeHeightMeters = height;
+            Debug.Log($"[LocalBodyAvatar] Model göz hizası (dinlenme pozu) {height:F2} m — gövde " +
+                      "ölçümünün referansı.", this);
+        }
+
+        /// <summary>Hands the runtime the player's stature once it is known and stable, and again when
+        /// the arena is re-aligned or the stature moves (another player in the headset).
+        /// <para>⚠️ Only while calibrated: before alignment the arena floor IS the runtime's own floor
+        /// guess, so the hint would just echo the number it exists to correct.</para></summary>
+        private void TickHeightHint()
+        {
+            if (!CalibrationState.IsCalibrated || !StandingHeightState.TryGet(out float eye))
+            {
+                _hintCandidateSince = -1f;
+                return;
+            }
+
+            if (_hintCandidateSince < 0f || Mathf.Abs(eye - _hintCandidate) > HintSettleMeters)
+            {
+                _hintCandidate = eye;
+                _hintCandidateSince = Time.unscaledTime;
+                return;
+            }
+
+            if (Time.unscaledTime - _hintCandidateSince < HintSettleSeconds)
+            {
+                return;
+            }
+
+            int generation = ArenaCalibrator.CalibrationGeneration;
+            if (generation == _hintedGeneration && Mathf.Abs(eye - _hintedHeight) < HintRefreshMeters)
+            {
+                return;
+            }
+
+            // Recorded even when the runtime refuses: retrying every frame would not change its answer.
+            _hintedGeneration = generation;
+            _hintedHeight = eye;
+
+            float sent = character.SeedBodyHeightHint();
+            if (sent > 0f)
+            {
+                Debug.Log($"[LocalBodyAvatar] Gövde takibine boy önerildi: {sent:F2} m (arena " +
+                          "zeminine göre; gözlüğün kendi zemin tahmini devre dışı).", this);
+            }
         }
 
         /// <summary>Sets the body up only when <b>both</b> conditions hold: an active rig (i.e. the role

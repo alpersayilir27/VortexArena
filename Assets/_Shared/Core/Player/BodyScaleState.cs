@@ -10,23 +10,22 @@ namespace VortexArena.Core.Player
     /// <summary>
     /// Takes the local player's <b>body measurement</b> and reports it to the server (§10.8).
     /// <para>
-    /// The scale is the ratio of the player's eye height to the character's <b>current</b> eye height;
-    /// both are read in arena space, in the <b>same frame</b>. Since the character is already driven
-    /// from body tracking it is in the same pose as the player — so the posture difference cancels out
-    /// of the ratio by itself and there is no need to keep a fixed "model eye height" number (that
-    /// number would go silently stale whenever the model changed).
+    /// The scale is the player's eye height above the <b>arena</b> floor over the character model's
+    /// eye height in its <b>rest pose</b> (<see cref="LocalBodyAvatar.RestEyeHeightMeters"/>, read
+    /// once from the prefab at scale 1). Body tracking is not consulted, so the measurement works
+    /// while tracking is broken and does not depend on the headset's own floor guess.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Never the character's LIVE eye height.</b> The retargeter drives the character's head to
+    /// the tracked head, so player-eye over character-eye is <c>1</c> by construction — every player,
+    /// whatever their height, measures <c>0.99…1.01</c>.
     /// </para>
     /// <para>
     /// ⚠️ <b>The measurement is not triggered by TIME but by the operator</b>
     /// (<c>measure_body_scale</c>). A machine cannot know the right moment to measure — the moment the
     /// player stands upright; a measurement triggered automatically from calibration would measure
-    /// while the player is <b>bent over</b> to touch the controller to the floor.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>The scale is not applied to the LOCAL character</b> (only to remote avatars, §10.8). The
-    /// repeatability of the measurement depends on this: if the local character were scaled too, a
-    /// second measurement would read an already-scaled reference and drag the multiplier toward
-    /// <c>1</c>.
+    /// while the player is <b>bent over</b> to touch the controller to the floor. A steady stoop
+    /// passes the spread check, so the learned standing height gates it as well.
     /// </para>
     /// <para>
     /// It does NOT live in the scene: it bootstraps itself as a persistent singleton (the
@@ -52,9 +51,14 @@ namespace VortexArena.Core.Player
         /// </summary>
         private const float MaxSpreadRatio = 0.05f;
 
-        /// <summary>The eye height (m) below which the measurement is considered meaningless — it means
-        /// the player or the character is on the floor/crouching.</summary>
+        /// <summary>The eye height (m) below which the measurement is considered meaningless — the
+        /// player is on the floor/crouching.</summary>
         private const float MinEyeHeightMeters = 0.8f;
+
+        /// <summary>The largest dip below the learned standing eye height still accepted (ratio). The
+        /// operator presses while the player stands, but a player holding a stoop steadily passes the
+        /// spread check — this catches them.</summary>
+        private const float MaxStoopRatio = 0.06f;
 
         /// <summary>The smallest difference required to count a scale change as "a new value".</summary>
         private const float ScaleEpsilon = 0.0005f;
@@ -148,9 +152,9 @@ namespace VortexArena.Core.Player
                 return;
             }
 
-            if (TrySampleRatio(out float ratio) && _sampleCount < _samples.Length)
+            if (TrySampleEyeHeight(out float eyeHeight) && _sampleCount < _samples.Length)
             {
-                _samples[_sampleCount++] = ratio;
+                _samples[_sampleCount++] = eyeHeight;
             }
 
             if (Time.unscaledTime < _sampleDeadline)
@@ -163,40 +167,53 @@ namespace VortexArena.Core.Player
         }
 
         /// <summary>
-        /// This frame's ratio: the player's eye / the character's eye, both in arena space (floor
-        /// y=0). <c>false</c> if it cannot be measured — that frame is silently skipped and the total
-        /// sample count is checked at the end of the window.
+        /// This frame's player eye height above the arena floor (m). <c>false</c> if it cannot be
+        /// measured — that frame is silently skipped and the total sample count is checked at the end
+        /// of the window.
+        /// <para>⚠️ Arena space needs a calibration: without one "floor" is the headset's own guess,
+        /// which is exactly the number the stale-space-data fault corrupts.</para>
         /// </summary>
-        private bool TrySampleRatio(out float ratio)
+        private bool TrySampleEyeHeight(out float eyeHeight)
         {
-            ratio = 0f;
+            eyeHeight = 0f;
 
             OVRCameraRig rig = ResolveRig();
-            LocalBodyAvatar body = LocalBodyAvatar.Instance;
-            if (rig == null || rig.centerEyeAnchor == null || body == null)
-            {
-                return false;
-            }
-
-            Transform avatarEye = body.EyeAnchor;
-            if (avatarEye == null || !body.IsBodyPoseValid)
+            if (rig == null || rig.centerEyeAnchor == null || !CalibrationState.IsCalibrated)
             {
                 return false;
             }
 
             float playerEyeY = ArenaSpace.WorldToArena(rig.centerEyeAnchor.position).y;
-            float avatarEyeY = ArenaSpace.WorldToArena(avatarEye.position).y;
-            if (playerEyeY < MinEyeHeightMeters || avatarEyeY < MinEyeHeightMeters)
+            if (playerEyeY < MinEyeHeightMeters)
             {
                 return false;
             }
 
-            ratio = playerEyeY / avatarEyeY;
+            eyeHeight = playerEyeY;
             return true;
         }
 
+        /// <summary>Why no sample could be taken — the reason the operator sees. Only meaningful right
+        /// after an empty window.</summary>
+        private string DescribeSampleFailure()
+        {
+            LocalBodyAvatar body = LocalBodyAvatar.Instance;
+            if (body == null || body.RestEyeHeightMeters <= 0f)
+            {
+                return "model göz referansı yok";
+            }
+
+            if (!CalibrationState.IsCalibrated)
+            {
+                return "kalibre yok";
+            }
+
+            return "göz hizası okunamadı";
+        }
+
         /// <summary>
-        /// The window is full: take the median, check the spread, clamp and report.
+        /// The window is full: take the median, check spread and posture, divide by the model's rest
+        /// eye height, clamp and report.
         /// <para>⚠️ On a failed measurement <b>no scale is sent but the REASON is</b> (§10.8): the old
         /// scale stays, and the cause is both written to the console and delivered to the operator via
         /// <c>set_body_scale.error</c>. Writing a wrong height is worse than writing none — only other
@@ -205,43 +222,61 @@ namespace VortexArena.Core.Player
         /// </summary>
         private void FinishMeasurement()
         {
-            if (_sampleCount == 0)
+            LocalBodyAvatar body = LocalBodyAvatar.Instance;
+            float restEye = body != null ? body.RestEyeHeightMeters : 0f;
+
+            if (_sampleCount == 0 || restEye <= 0f)
             {
+                string reason = DescribeSampleFailure();
                 Debug.LogWarning(
-                    "[BodyScaleState] Gövde ölçülemedi: gövde pozu yok ya da göz işaretçisi bağlı " +
-                    "değil. Resources/LocalBodyAvatar.prefab içindeki 'Eye Anchor' alanı kafa " +
-                    "kemiğinin altındaki işaretçiyi göstermeli.", this);
-                ReportError("gövde pozu yok");
+                    $"[BodyScaleState] Gövde ölçülemedi: {reason}. Model referansı için " +
+                    "Resources/LocalBodyAvatar.prefab içindeki 'Eye Anchor' alanı kafa kemiğinin " +
+                    "altındaki işaretçiyi göstermeli; kalibre için oyuncu önce hizalanmalı.", this);
+                ReportError(reason);
                 return;
             }
 
             Array.Sort(_samples, 0, _sampleCount);
-            float median = _samples[_sampleCount / 2];
+            float medianEye = _samples[_sampleCount / 2];
             float spread = _samples[_sampleCount - 1] - _samples[0];
 
-            if (median <= 0f || spread / median > MaxSpreadRatio)
+            if (medianEye <= 0f || spread / medianEye > MaxSpreadRatio)
             {
                 Debug.LogWarning(
                     $"[BodyScaleState] Ölçüm reddedildi: {_sampleCount} örnekte yayılım " +
-                    $"%{spread / Mathf.Max(median, 0.0001f) * 100f:F1} (tavan " +
+                    $"%{spread / Mathf.Max(medianEye, 0.0001f) * 100f:F1} (tavan " +
                     $"%{MaxSpreadRatio * 100f:F0}). Oyuncu ölçüm anında hareketli ya da eğilmiş — " +
                     "dik dururken tekrar ölçün.", this);
                 ReportError("oyuncu hareketli/eğilmiş");
                 return;
             }
 
-            float scale = Mathf.Clamp(median, ArenaProtocol.BODY_SCALE_MIN, ArenaProtocol.BODY_SCALE_MAX);
-            if (!Mathf.Approximately(scale, median))
+            // A held stoop is steady enough to pass the spread check; the learned standing height is
+            // the only reference that knows how tall this player stands.
+            if (StandingHeightState.TryGet(out float standingEye) &&
+                medianEye < standingEye * (1f - MaxStoopRatio))
             {
                 Debug.LogWarning(
-                    $"[BodyScaleState] Ölçülen {median:F3} protokol aralığının " +
+                    $"[BodyScaleState] Ölçüm reddedildi: göz {medianEye:F2} m, oyuncunun ayakta göz " +
+                    $"hizası {standingEye:F2} m — oyuncu eğilmiş. Dik dururken tekrar ölçün.", this);
+                ReportError("oyuncu eğilmiş");
+                return;
+            }
+
+            float ratio = medianEye / restEye;
+            float scale = Mathf.Clamp(ratio, ArenaProtocol.BODY_SCALE_MIN, ArenaProtocol.BODY_SCALE_MAX);
+            if (!Mathf.Approximately(scale, ratio))
+            {
+                Debug.LogWarning(
+                    $"[BodyScaleState] Ölçülen {ratio:F3} protokol aralığının " +
                     $"({ArenaProtocol.BODY_SCALE_MIN:F2}–{ArenaProtocol.BODY_SCALE_MAX:F2}) dışında, " +
                     $"{scale:F3} olarak kırpıldı — avatar oyuncunun boyuna tam yetişmeyecek.", this);
             }
 
             SetLocalScale(scale);
             Report(scale);
-            Debug.Log($"[BodyScaleState] Gövde ölçeği {scale:F3} ({_sampleCount} örnek).", this);
+            Debug.Log($"[BodyScaleState] Gövde ölçeği {scale:F3} (göz {medianEye:F2} m / model " +
+                      $"{restEye:F2} m, {_sampleCount} örnek).", this);
         }
 
         // ------------------------------------------------------------- headset → server

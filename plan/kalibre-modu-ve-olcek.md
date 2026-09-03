@@ -22,11 +22,5 @@ dokümanlar yazıldı. Kalıcı bilgi: `Docs/ArenaNet-Protokol.md` (§1 sabitler
 
 ⚠️ **Protokol v13** — tüm başlıklara yeni APK + admin build + sunucu dağıtımı gerekir.
 
-## 2. adb alan-verisi temizliği denemesi (saha)
-
-- [ ] Tek başlıkta dene: `adb shell pm clear com.oculus.vrguardianservice` — Ayarlar'daki
-      "fiziksel alan verilerini temizle" ile aynı etkiyi veriyor mu (temiz açılış + sıfırdan
-      sorunsuz kalibre)?
-- [ ] Veriyorsa: `scripts/` altına bağlı tüm başlıklarda temizliği koşan bakım betiği (adb Wi-Fi
-      dahil) + `Docs/Kullanim-Kilavuzu.md` §4.4'e betik yolu. Vermiyorsa bu bölüm silinir,
-      prosedür yalnız Ayarlar menüsünden kalır.
+Alan verisi temizliği yalnız gözlüğün Ayarlar menüsünden yapılır (`Docs/Kullanim-Kilavuzu.md`
+§4.4); `vrguardianservice` paketi bu sistem sürümünde yok, adb ile temizlik yolu kapalı.

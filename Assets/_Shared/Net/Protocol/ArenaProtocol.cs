@@ -36,7 +36,7 @@ namespace VortexArena.Protocol
         /// <para>v5 net telemetry + packet combining (<c>0x05</c>) · v4 held item on the wire, shot
         /// events moved to UDP · v3 phase machine · v2 <c>set_identity</c>.</para>
         /// </summary>
-        public const int PROTOCOL_VERSION = 19;
+        public const int PROTOCOL_VERSION = 20;
         public const string APP_ID = "VortexArena";
 
         // ---- Calibration mode (§5.2/§10.6): how headsets align AT STARTUP. ----
@@ -97,6 +97,11 @@ namespace VortexArena.Protocol
         public const float RECONNECT_GRACE = 45f;
 
         public const float HELLO_TIMEOUT = 10f; // §8: a connection without hello is closed after this
+
+        /// <summary>Upper bound of one WS connect attempt (§8). <c>ConnectAsync</c> has no timeout of
+        /// its own: against an unreachable address a SYN sits in TCP retransmit for minutes and the
+        /// backoff never gets its turn.</summary>
+        public const float CONNECT_TIMEOUT = 10f;
 
         // Reconnect backoff sequence; last element is the ceiling.
         public static readonly float[] RECONNECT_BACKOFF = { 1f, 2f, 5f };
@@ -305,7 +310,7 @@ namespace VortexArena.Protocol
         /// <summary>Grace inside an obstacle before health drains (s, §10.9). The screen is already
         /// black during it, so what is free is health, not vision — hence it can be generous.
         /// <para>⚠️ Fully resets on leaving (no partial decay): re-entering blinds the player again.</para></summary>
-        public const float OBSTACLE_GRACE_SECONDS = 1f;
+        public const float OBSTACLE_GRACE_SECONDS = 3f;
 
         /// <summary>Time from FULL health to death after the grace (s, §10.9). ⚠️ A wounded player dies
         /// sooner: the drain is a RATE, not a fixed countdown.</summary>
@@ -314,7 +319,7 @@ namespace VortexArena.Protocol
         /// <summary>Health lost per second on obstacle violation (§10.9), applied on the server's own
         /// tick. ⚠️ Derived from the two durations above, not hand-tuned. ⚠️ All three are consumed
         /// ONLY by the server: changing them needs a server build, not a new APK.</summary>
-        public const float OBSTACLE_DAMAGE_PER_SECOND = 13f;
+        public const float OBSTACLE_DAMAGE_PER_SECOND = PLAYER_MAX_HP / OBSTACLE_DRAIN_SECONDS;
 
         /// <summary>Max time revival stays blocked inside an obstacle (s, §10.9/§10.4). The ceiling
         /// exists because the gate trusts a client flag: a client that keeps claiming "I'm in an

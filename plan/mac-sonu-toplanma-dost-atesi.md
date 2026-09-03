@@ -31,7 +31,8 @@ Bu dosya yalnız **elde kalan doğrulamayı** tutuyor; hepsi geçince silinir.
 - [ ] Sunucu yeni açıldı → anahtar kapalı (mod ne olursa olsun)
 - [ ] Maç **koşarken** açıldı → bir sonraki mermi takım arkadaşına hasar veriyor (yeniden başlatma yok)
 - [ ] İki admin panelinde aynı anda değişiyor + duyuru satırı düşüyor
-- [ ] Açıkken TDM'de takım arkadaşı öldürüldü → **takım skoru değişmiyor**, öldürende +1 kill,
-      ölende +1 death, kill feed'de satır var, sunucu konsolunda "(TAKIMDAŞ — skor yazılmadı)"
+- [ ] Açıkken TDM'de takım arkadaşı öldürüldü → **takım skoru değişmiyor**, öldürende −1 kill ve
+      −1 puan (eksiye düşebilir), ölende +1 death, kill feed'de satır var, sunucu konsolunda
+      "(TAKIMDAŞ — öldürene −1, takım skoru yazılmadı)"
 - [ ] Anahtar açıkken harita seç / lobiye dön / yeni maç başlat → ayar korunuyor
 - [ ] Yeni bağlanan oyuncu doğru değeri alıyor (`welcome.match.rules`)

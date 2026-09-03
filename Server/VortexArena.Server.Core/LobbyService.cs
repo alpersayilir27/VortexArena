@@ -142,6 +142,14 @@ public sealed class LobbyService
         _director.MarkParticipantIfMatchRunning(state);
 
         _registry.Announce(state, kind); // console line + lobby_state broadcast
+
+        // Violations already open replay to a late admin (§5.3) — AFTER Announce, so the feed can
+        // name the player from the roster it just received.
+        if (state.Role == "admin")
+        {
+            foreach (var json in _director.BuildOpenViolationJsons())
+                await SendSafeAsync(connection, json, state.Name);
+        }
     }
 
     /// <summary>status heartbeat (§5.1): updates device state and performs <b>roster
@@ -149,12 +157,20 @@ public sealed class LobbyService
     /// THAT client only. A safety net, not the primary path: the control channel is TCP so
     /// broadcasts do not "get lost"; this closes the windows where a client could not apply one
     /// (scene transition, moment of disconnect).</summary>
+    /// <summary>Serialised once: the reply never changes.</summary>
+    private static readonly string HeartbeatJson = JsonUtil.Serialize(new HeartbeatMsg());
+
     public async Task HandleStatusAsync(ClientConnection connection, StatusMsg msg)
     {
         var state = connection.State;
         if (state == null) return;
 
         _registry.UpdateStatus(state.DeviceId, msg);
+
+        // §8: the client's link watchdog needs a guaranteed periodic frame — every status is answered,
+        // whether or not the roster below has anything to say.
+        await SendSafeAsync(connection, HeartbeatJson, state.Name);
+
         if (msg.rosterVersion >= Volatile.Read(ref _rosterVersion)) return;
 
         await SendSafeAsync(connection, BuildLobbyStateJson(), state.Name);

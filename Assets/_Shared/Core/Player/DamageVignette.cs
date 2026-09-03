@@ -37,7 +37,7 @@ namespace VortexArena.Core.Player
 
         [Tooltip("Kenardaki en yüksek opaklık. Merkezin temiz kalmasını shader'ın yarıçapları sağlar.")]
         [Range(0f, 1f)]
-        [SerializeField] private float maxAlpha = 0.40f;
+        [SerializeField] private float maxAlpha = 0.55f;
 
         [Header("Zamanlama")]
         [Tooltip("Vuruştan sonra tepe opaklığa çıkma süresi (sn).")]
@@ -50,6 +50,19 @@ namespace VortexArena.Core.Player
 
         [Tooltip("Tek pakette tam yoğunluk sayılan hasar (HP).")]
         [SerializeField] private float fullIntensityDamage = 25f;
+
+        [Tooltip("Tek vuruşun en düşük yoğunluğu (0..1): küçük hasar da görünür kalsın.")]
+        [Range(0f, 1f)]
+        [SerializeField] private float minHitIntensity = 0.35f;
+
+        [Header("Engel erimesi")]
+        [Tooltip("Engelde can erirken karartmanın üstündeki kırmızının tepe opaklığı.")]
+        [Range(0f, 1f)]
+        [SerializeField] private float drainAlpha = 0.8f;
+
+        [Tooltip("Erime nabzının hızı (Hz).")]
+        [Range(0.05f, 3f)]
+        [SerializeField] private float drainPulseHz = 1f;
 
         [Header("Düşük can")]
         [Tooltip("Bu can oranının ALTINDA vinyet tamamen sönmez, yavaşça nabız atar (0..1).")]
@@ -75,8 +88,15 @@ namespace VortexArena.Core.Player
 
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
 
+        /// <summary>Obstacle health arrives at ~4 Hz; a drop younger than this means "draining".</summary>
+        private const float DrainHoldSeconds = 0.75f;
+
+        /// <summary>Lower end of the drain pulse (ratio of <see cref="drainAlpha"/>) — never off.</summary>
+        private const float DrainPulseFloor = 0.45f;
+
         private MaterialPropertyBlock _propertyBlock;
         private float _lastHp = ArenaProtocol.PLAYER_MAX_HP;
+        private float _lastDropTime = float.NegativeInfinity;
 
         // Hit envelope. A new hit REFRESHES these instead of adding a second envelope: stacked
         // envelopes would push the screen past maxAlpha exactly when the player can least afford it.
@@ -99,6 +119,7 @@ namespace VortexArena.Core.Player
         private void OnDisable()
         {
             _hitPeak = 0f;
+            _lastDropTime = float.NegativeInfinity;
             Draw(0f);
         }
 
@@ -118,6 +139,7 @@ namespace VortexArena.Core.Player
             if (drop > 0f)
             {
                 RegisterHit(drop);
+                _lastDropTime = Time.unscaledTime;
             }
 
             if (!ArenaCombat.IsAlive)
@@ -128,7 +150,22 @@ namespace VortexArena.Core.Player
                 return;
             }
 
-            Draw(Mathf.Max(HitEnvelope() * maxAlpha, LowHpAlpha(hp)));
+            Draw(Mathf.Max(HitEnvelope() * maxAlpha, Mathf.Max(LowHpAlpha(hp), DrainAlpha())));
+        }
+
+        /// <summary>Steady pulse while obstacle health is draining: the ~4 Hz trickle would otherwise
+        /// throb the hit envelope at a tiny alpha, invisible over the blackout (and read as flicker).
+        /// Silent during the grace (no drops yet) and off the moment the drain stops.</summary>
+        private float DrainAlpha()
+        {
+            if (!ObstacleViolationProbe.IsViolating ||
+                Time.unscaledTime - _lastDropTime > DrainHoldSeconds)
+            {
+                return 0f;
+            }
+
+            float breath = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * drainPulseHz * 2f * Mathf.PI);
+            return drainAlpha * Mathf.Lerp(DrainPulseFloor, 1f, breath);
         }
 
         /// <summary>Refreshes the envelope: the intensity takes the HIGHER of the running level and this
@@ -140,6 +177,9 @@ namespace VortexArena.Core.Player
             float intensity = fullIntensityDamage > 0f
                 ? Mathf.Clamp01(damage / fullIntensityDamage)
                 : 1f;
+            // Floor: a light hit must still register, the frame is the only "you were hit" channel
+            // besides the direction indicator.
+            intensity = Mathf.Max(intensity, minHitIntensity);
 
             _hitFrom = current;
             _hitPeak = Mathf.Max(current, intensity);

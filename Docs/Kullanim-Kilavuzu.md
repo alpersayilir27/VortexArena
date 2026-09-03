@@ -447,7 +447,7 @@ Yönetim ekranındaki dashboard'da elindeki kontroller:
 | **Maçı Başlat** (ekranın **alt ortasındaki yeşil ▶**) | Herkesi arenaya alır, geri sayımı başlatır | Herkes bağlı ve hazır olduğunda. Düğme yalnız bir arena açıkken ve maç kurulmamışken yanar; lobideyken sönüktür |
 | **Maçı İptal** (alt ortadaki **kırmızı ■**) | Maçı erken bitirir, herkesi lobiye döndürür | Acil durum, oyuncu değişimi, yanlış harita. Lobide sönüktür (iptal edilecek maç yok) |
 | **Duraklat / Devam et** (alt ortadaki **⏸** — duraklattığında **▶** olur) | Koşan maçı dondurur, aynı düğme kaldığı yerden sürdürür | Aşağıdaki "Maçı geçici olarak durdurmak" bölümü |
-| **Dost ateşi** | Takım arkadaşının da vurulup vurulamayacağını belirler (Tercihler → **MAÇ** sekmesi). **Kapalı** (varsayılan): takım arkadaşına ateş etsen de canı azalmaz. **Açık**: azalır. Satırdaki iki düğmeden hangisine bassan aç/kapa yapar; açıkken değer kırmızı yanar | Diğer satırların aksine **maç sırasında da değiştirilebilir** — maçı iptal etmen gerekmez, etkisi anında geçer. Takım arkadaşını öldürmek **puan kazandırmaz** (ceza da yoktur, öldürme listesinde yine görünür). Ayar sunucu kapanana kadar kalır: maç bitince, harita değişince kendiliğinden kapanmaz |
+| **Dost ateşi** | Takım arkadaşının da vurulup vurulamayacağını belirler (Tercihler → **MAÇ** sekmesi). **Kapalı** (varsayılan): takım arkadaşına ateş etsen de canı azalmaz. **Açık**: azalır. Satırdaki iki düğmeden hangisine bassan aç/kapa yapar; açıkken değer kırmızı yanar | Diğer satırların aksine **maç sırasında da değiştirilebilir** — maçı iptal etmen gerekmez, etkisi anında geçer. Takım arkadaşını öldürmek **puan kazandırmaz, tersine öldürenden 1 öldürme ve 1 puan siler** (Counter-Strike kuralı; sayı eksiye düşebilir, takım skoru değişmez, öldürme listesinde yine görünür). Ayar sunucu kapanana kadar kalır: maç bitince, harita değişince kendiliğinden kapanmaz |
 | **Skor ve öldürme akışı** | Ortada canlı skor + faz/süre, sağ altta "kim kimi vurdu" listesi | Maç sırasında takip |
 | **Kamera: Kuş bakışı** (sağ üstteki **KUŞ BAKIŞI** düğmesi ya da `3`) | Arenayı yukarıdan görürsün; her oyuncunun **etrafında renkli halka, altında adı** yazar | Kimin nerede olduğunu görmek, güvenlik takibi — **varsayılan görünüm** |
 | **Kamera: POV** (oyuncu kartındaki **POV** düğmesi; seçili oyuncu için `1` ya da `F`) | O oyuncunun **kendi gözünden** izlersin — karttaki POV'a basmak hem oyuncuyu seçer hem gözünden bakmaya geçer. Sağ üstte ayrı bir POV düğmesi yoktur; hangi oyuncuya baktığını listede **turuncu çerçeveli** satırdan görürsün | "Bu oyuncu ne görüyor / neden takıldı?" |
@@ -508,7 +508,7 @@ yok. Panel her açıldığında klasör yeniden okunur, yani maç sürerken yeni
   müzik çalıyorsa kesilmez, arkada devam eder.
 - Müzik **anonsların altında** çalar: "maç başladı", "rakip elendi" ya da kazanan takım anonsu
   gelince müzik kendiliğinden bir tık alçalır, anons bitince geri yükselir. Ambiyansı, silah
-  seslerini ve ihlal uyarısını da bastırmaz — hepsi birlikte duyulur.
+  seslerini de bastırmaz — hepsi birlikte duyulur.
 - ⚠️ Müzik **yalnız bu bilgisayardan** çalar; oyuncuların kulaklığına gitmez. Salon hoparlörlerinin
   bu bilgisayara bağlı olması gerekir (bir alttaki başlık).
 
@@ -555,7 +555,7 @@ Sorun yaşandığında ilk bakılacak yer burasıdır ve sana üç şeyi ayırt 
 | | **Takım Ölüm Maçı** | **Herkes Tek** | **Turnuva** |
 |---|---|---|---|
 | Takım | Kırmızı ve mavi (sistem otomatik dengeler) | **Yok** — herkes herkesi vurabilir | Kırmızı ve mavi |
-| Skor | Takım puanı | **Kişi başına puan**; her öldürme öldürene +1 | **Kazanılan tur sayısı** — öldürme puan yazmaz |
+| Skor | Takım puanı (dost ateşi açıkken takım arkadaşını öldürmek takım puanı yazmaz, öldürene −1) | **Kişi başına puan**; her öldürme öldürene +1 | **Kazanılan tur sayısı** — öldürme puan yazmaz |
 | Kazanan | Puan limitine ilk ulaşan takım; süre biterse önde olan | Puan limitine ilk ulaşan **oyuncu**; süre biterse en yüksek puanlı. Tepede eşitlik varsa berabere | **4 tur** kazanan takım (en fazla 7 tur oynanır) |
 | Silah | Arenaya yerleştirilmiş silahlardan seçilir: oyuncu silaha ~2 metreye kadar yaklaşıp nişan alır, yan tuşa (grip) basınca silahın bir kopyası eline gelir. Silah yerinden kaybolmaz, sınırsız kez alınabilir. ⚠️ Silahların arenaya konması **haritayı yapan kişinin işidir** — konmamış bir arenada oyuncunun eline silah gelmez | Oyuncu kumandanın **yan tuşunu (grip) basılı tutunca** eline rastgele bir silah gelir; bıraktığında silah kaybolur, tekrar bastığında **başka** bir silah gelir | Takım Ölüm Maçı ile aynı (arenadaki silahlardan seçilir) |
 | Şarjör | Boşalınca kendiliğinden dolar | **Dolmaz** — oyuncu silahı bırakıp yenisini çeker | Her **tur başında** herkes tam dolu başlar |
@@ -759,18 +759,14 @@ ve **arenanın dışı**. İkisini de sen görürsün, oyuncu da kendi ekranınd
   (ölüm listesinden ayrıdır — o maçın hikâyesi, bu senin iş listen). **Yarım saniyeden kısa
   temaslar yazılmaz**: sınır çizgisinde gidip gelen bir oyuncu listeyi doldurup okunmaz hâle
   getirirdi. Halka yine de yanar.
-- **İhlal başlayınca kısa bir uyarı sesi çalar** — ekrana bakmıyorken de haberin olsun diye.
-  Sesi kapatmak istersen **Tercihler** (`P`) → **GÖRÜNÜM** sekmesinde **İhlal sesi** satırı vardır.
-  Bu satır **yalnız senin ekranına aittir**: sen kapatınca diğer operatörün sesi susmaz, o da
-  kendi ekranından kapatır. ⚠️ **SES sekmesindeki "Seslendirme" bu uyarıyı susturmaz** — anonsları
-  tamamen kıssan bile ihlal sesi çalar; onun tek anahtarı GÖRÜNÜM sekmesindeki bu satırdır.
-- **Ses kalabalıkta sirene dönmez:** aynı anda kaç kişi kural dışına çıkarsa çıksın en fazla
-  birkaç saniyede bir çalar. Yani duyduğun her ses "en az bir kişi" demektir, "tam bir kişi"
-  demek değildir — kimin olduğunu ihlal listesinden ve halkalardan görürsün. Sesin bitişi ayrıca
-  duyurulmaz; ihlalin bittiğini listeden okursun.
-- Maç sonunda istatistik panelinin **İHLAL** kolonunda oyuncu başına **kaç kez ve toplam kaç saniye**
-  kural dışı kaldığı durur (hiç ihlal etmemiş oyuncuda `-`). Oyuncuyla konuşurken elindeki somut
-  veri budur; lobiye dönünce skorla birlikte sıfırlanır.
+- **İhlalin sesi yoktur.** Admin PC'si çoğu kurulumda seyircinin de duyduğu hoparlöre bağlıdır;
+  her ihlalde bip sesi gitmesin diye uyarı **yalnız ekrandadır** — halka, satır kenarlığı ve ihlal
+  listesi. (Tercihler → GÖRÜNÜM sekmesindeki **İhlal sesi** satırı, ileride bir ses klibi
+  atanırsa onu yönetir; bugün bir şey değiştirmez.)
+- **Oyuncu ölünce ihlal biter:** halkası söner, listeye "bitti" satırı düşer. Engelin içinde ölen
+  oyuncu dışarı çıkmadan canlanamaz (aşağıda, Bölüm 6).
+- **Admin ekranını sonradan açtıysan** o sırada süren ihlaller listeye hemen düşer; hiçbir şey
+  kaçırmazsın.
 - ⚠️ **Ceza vermek senin kararın.** Sistem alan dışına çıkanı öldürmez — kalibrasyonu birkaç santim
   kaymış bir gözlük yüzünden oyuncu durduk yere ölmesin diye böyle. Israrla tekrarlayan oyuncuyu
   uyarırsın, gerekirse **AT**'arsın.
