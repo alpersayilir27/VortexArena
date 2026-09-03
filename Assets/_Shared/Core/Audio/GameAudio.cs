@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using VortexArena.Core.Arena;
 using VortexArena.Core.Combat;
 using VortexArena.Net;
 using VortexArena.Protocol;
@@ -50,6 +51,9 @@ namespace VortexArena.Core.Audio
         /// one.</summary>
         private const float AnnouncementGapSeconds = 0.1f;
 
+        /// <summary>Catalog asset name under Resources — same path as <see cref="ModeRuntime"/>.</summary>
+        private const string CatalogResourceName = "GameCatalog";
+
         /// <summary>A single queued announcement: clip, volume and expiry.
         /// <para>The volume is computed on enqueue (with the <see cref="AudioMix.Voiceover"/> of that
         /// moment): the announcement belongs to the event's moment, not to a knob the operator turns
@@ -69,6 +73,11 @@ namespace VortexArena.Core.Audio
         }
 
         public static GameAudio Instance { get; private set; }
+
+        /// <summary>Catalog cache; the flag is separate so a missing asset is not looked up on every
+        /// sound.</summary>
+        private static GameCatalog _catalog;
+        private static bool _catalogLoaded;
 
         private AudioSource _source;
 
@@ -214,11 +223,21 @@ namespace VortexArena.Core.Audio
 
             if (IsInstant(id))
             {
-                _source.PlayOneShot(clip, volume);
+                PlayInstant(clip, volume);
                 return;
             }
 
             Announce(clip, volume);
+        }
+
+        /// <summary>Plays a cue OUTSIDE the announcement channel: no queue, no wait, and it does not
+        /// push back a waiting line (<see cref="_channelFreeAt"/> is left alone).</summary>
+        private void PlayInstant(AudioClip clip, float volume)
+        {
+            if (clip != null && _source != null)
+            {
+                _source.PlayOneShot(clip, volume);
+            }
         }
 
         /// <summary>Local mix level for the sound.</summary>
@@ -572,7 +591,7 @@ namespace VortexArena.Core.Audio
                    TryResolve(ModeAudioEvent.MatchEndWarning, out rule);
         }
 
-        /// <summary>Resolves the rule for the active mode + active scene.</summary>
+        /// <summary>Resolves the rule for the active mode + scene + game type.</summary>
         private static bool TryResolve(ModeAudioEvent trigger, out ModeAudioRegistry.Rule rule)
         {
             ModeAudioRegistry registry = ModeAudioRegistry.Load();
@@ -582,8 +601,38 @@ namespace VortexArena.Core.Audio
                 return false;
             }
 
-            return registry.TryResolve(trigger, ModeRuntime.ModeId,
-                SceneManager.GetActiveScene().name, out rule);
+            string sceneName = SceneManager.GetActiveScene().name;
+            return registry.TryResolve(trigger, ModeRuntime.ModeId, sceneName,
+                ActiveGameType(sceneName), out rule);
+        }
+
+        /// <summary>Game type (family) of the moment, read from the catalog.</summary>
+        /// <remarks>The scene decides first: a lobby standing in a children's venue is part of that
+        /// family too. Only without a map does the mode answer, and without either the default is
+        /// competitive play.
+        /// <para>⚠️ The family comes from the CATALOG, not from the wire — this is presentation
+        /// only, no server authority is involved.</para></remarks>
+        private static GameType ActiveGameType(string sceneName)
+        {
+            if (!_catalogLoaded)
+            {
+                _catalogLoaded = true;
+                _catalog = Resources.Load<GameCatalog>(CatalogResourceName);
+            }
+
+            if (_catalog == null)
+            {
+                return GameType.QuickBattle;
+            }
+
+            MapDefinition map = _catalog.FindMap(sceneName);
+            if (map != null)
+            {
+                return map.GameType;
+            }
+
+            ModeDefinition mode = _catalog.FindMode(ModeRuntime.ModeId);
+            return mode != null ? mode.GameType : GameType.QuickBattle;
         }
 
         /// <summary>Hands one of the rule's clips to the announcement channel; <c>false</c> when
@@ -637,10 +686,40 @@ namespace VortexArena.Core.Audio
 
         private void HandleCountdown(CountdownMsg msg)
         {
-            if (msg != null && msg.seconds > 0)
+            if (msg == null || msg.seconds <= 0)
+            {
+                return;
+            }
+
+            // The registry owns the countdown when a rule matches; the shared tick is the fallback
+            // for everyone else.
+            if (!PlayCountdownRule(msg.seconds))
             {
                 Play(GameSoundId.CountdownTick);
             }
+        }
+
+        /// <summary>Plays the countdown clip of that second; <c>false</c> = no rule, so the shared
+        /// bank tick takes over.</summary>
+        /// <remarks>⚠️ A matching rule WITHOUT a clip for that second returns <c>true</c>: the row
+        /// owns the countdown and chose silence there. Falling back to the tick would mix two
+        /// countdowns into one.
+        /// <para>The clip plays instantly, off the announcement queue: like the tick, it IS the
+        /// second and would mark the wrong one if it waited for a line to finish.</para></remarks>
+        private bool PlayCountdownRule(int seconds)
+        {
+            if (!TryResolve(ModeAudioEvent.Countdown, out ModeAudioRegistry.Rule rule))
+            {
+                return false;
+            }
+
+            AudioClip clip = rule.ClipForSecond(seconds);
+            if (clip != null)
+            {
+                PlayInstant(clip, Mathf.Clamp01(rule.Volume * AudioMix.Voiceover));
+            }
+
+            return true;
         }
     }
 }

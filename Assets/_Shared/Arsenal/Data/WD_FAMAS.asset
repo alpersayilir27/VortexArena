@@ -16,6 +16,9 @@ MonoBehaviour:
   netItemId: 5
   prefab: {fileID: 6511540988315402901, guid: 135285a2988f2dd459c81b87ac254f34, type: 3}
   holdMode: 1
+  grabPath: 0
+  instancing: 0
+  releaseMode: 0
   primaryGripRight:
     authored: 1
     position: {x: 0, y: -0.019, z: 0}
@@ -173,7 +176,7 @@ MonoBehaviour:
     wristPosition: {x: -0.0901, y: -0.0374, z: -0.0633}
     wristRotation: {x: 0.6087621, y: 0.0000005239854, z: 0.7933529, w: 0.00000085320727}
   secondaryGripRadius: 0.1
-  tracerColor: {r: 1, g: 0.85, b: 0.4, a: 0.8039216}
+  tracerColor: {r: 1, g: 0.92, b: 0.72, a: 0.55}
   tracerWidth: 0.005
   tracerLifetime: 0.1
   tracerEveryNthRound: 1
@@ -197,6 +200,8 @@ MonoBehaviour:
   oneHandRecoveryPenalty: 0.75
   hapticAmplitude: 0.8
   hapticDuration: 0.05
+  dryFireHapticAmplitude: 0.45
+  dryFireHapticDuration: 0.06
   magazineSize: 25
   spareMagazines: 2
   reserveMode: 0

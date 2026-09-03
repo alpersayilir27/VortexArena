@@ -602,7 +602,7 @@ tabanda **değildir** (aşağıdaki nota bak).
 | `INTERP_DELAY_MS` | `100` | Uzak poz interpolasyon gecikmesi |
 | `PLAYER_ID_MAX` | `255` | `playerId` UDP'de `u8` |
 | `LOADING_TIMEOUT` | `20` | Sahne yükleme kapısı |
-| `OBJECT_POSE_RATE_HZ` | `10` | Sahibin obje pozu gönderim hızı (oyuncu pozunun yarısı) |
+| `OBJECT_POSE_RATE_HZ` | `20` | Sahibin obje pozu gönderim hızı (oyuncu pozuyla aynı; interpolasyon gecikmesine iki örnek payı) |
 | `OBJECT_REST_SPEED` / `OBJECT_REST_SECONDS` | `0.05` m/s / `0.3` | Objenin "durdu" eşiği ve altında kesintisiz kalması gereken süre — ⚠️ tek karelik durma yeterli değildir (sekmenin tepesinde hız sıfırlanır) |
 | `NET_ID_SCENE_MIN`/`_MAX` · `NET_ID_DYNAMIC_MIN`/`_MAX` | `1`/`32767` · `32768`/`65535` | Sahne kimlikleri ve sunucunun çalışma zamanında dağıttıkları; ikisi asla çakışmaz |
 

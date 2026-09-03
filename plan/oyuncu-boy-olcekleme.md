@@ -14,7 +14,7 @@ dokümanların tamamı yazıldı. Kalıcı bilgi `Docs/ArenaNet-Protokol.md` (§
       (`Docs/Isletme-Kurulum.md` §3)
 - [ ] Admin satırındaki **ÖLÇ**: hedef oyuncunun avatarı diğer başlıklarda ve admin ekranında
       anında yeniden ölçekleniyor; etikette çarpan görünüyor
-- [ ] **TÜM OYUNCULARI ÖLÇEKLE**: kalibre olmayan atlanıyor ve sayısı admin duyurusunda
+- [ ] **TÜM OYUNCULARI ÖLÇEKLE**: kalibre olmayan atlanıyor, admin duyurusunda **adları** yazıyor
 - [ ] Ölçüm anında oyuncu eğilirse ölçüm reddediliyor (konsolda tek satır sebep), eski değer duruyor
 - [ ] Kısa ve uzun iki oyuncu yan yana: avatarlar gözle doğru boyda, **duruşlar bozulmuyor**
       (blob tutarlılığı korunmuş demektir)

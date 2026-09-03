@@ -356,7 +356,9 @@ en uygunu.
 
 **Bilmen gerekenler**
 
-- Düğme **pasifse** oyuncu kalibresizdir: önce kalibrasyon, sonra ölçüm.
+- Düğme **pasifse** oyuncu kalibresizdir: önce kalibrasyon, sonra ölçüm. **TÜMÜNÜ ÖLÇEKLENDİR**
+  kalibresizleri atlar ve duyuru satırında **adlarını** yazar — o gözlükleri kalibre edip ÖLÇ'e
+  tek tek bas.
 - **Kalibrasyonu sıfırlarsan ölçü de sıfırlanır** (zemin geçersizleştiği için). Oyuncu yeniden
   kalibre olunca ÖLÇ'e tekrar basman gerekir.
 - Ölçü gözlükte saklanır: aynı oyuncu ertesi gün bağlandığında boyu kendiliğinden geri gelir.

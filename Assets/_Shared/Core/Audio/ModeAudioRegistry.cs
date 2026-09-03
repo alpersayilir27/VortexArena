@@ -8,11 +8,13 @@ namespace VortexArena.Core.Audio
     /// <para>⚠️ The asset lives at <c>Assets/_Shared/Data/Resources/ModeAudioRegistry.asset</c> — no
     /// scene references it, <see cref="Load"/> takes it via <c>Resources.Load</c> (same rationale as
     /// <c>GameCatalog</c>). Moving or renaming it silences every mode-specific sound.</para>
-    /// <para>Rule matching: empty <c>modeId</c> = any mode, empty <c>sceneName</c> = any map. The
-    /// most specific match wins (mode outweighs map); on a tie the FIRST rule in the list is used. So
-    /// a general row stands as a fallback and a map-specific row overrides it on that map only.</para>
+    /// <para>Rule matching: empty <c>modeId</c> = any mode, empty <c>sceneName</c> = any map,
+    /// <see cref="ModeAudioGameType.Any"/> = any game type. The most specific match wins (mode
+    /// outweighs map, map outweighs game type); on a tie the FIRST rule in the list is used. So a
+    /// general row stands as a fallback and a map-specific row overrides it on that map only.</para>
     /// <para>Clip lists are picked at random: several clips per trigger is how variation is
-    /// authored, one clip is equally valid.</para></summary>
+    /// authored, one clip is equally valid. The exception is <see cref="ModeAudioEvent.Countdown"/>,
+    /// whose list is indexed by second (<see cref="Rule.ClipForSecond"/>).</para></summary>
     [CreateAssetMenu(fileName = "ModeAudioRegistry", menuName = "VortexArena/Mode Audio Registry")]
     public class ModeAudioRegistry : ScriptableObject
     {
@@ -28,6 +30,9 @@ namespace VortexArena.Core.Audio
 
             [Tooltip("Hangi harita — sahne adıyla BİREBİR aynı. BOŞ = her harita.")]
             [SerializeField] private string sceneName = "";
+
+            [Tooltip("Hangi oyun tipi (Hızlı Savaş / Çocuk Oyunları). Her tip = kısıt yok.")]
+            [SerializeField] private ModeAudioGameType gameType = ModeAudioGameType.Any;
 
             [Tooltip("Sesin çalacağı an.")]
             [SerializeField] private ModeAudioEvent trigger = ModeAudioEvent.RoundStart;
@@ -48,6 +53,10 @@ namespace VortexArena.Core.Audio
 
             /// <summary>Scene name the rule is bound to; empty = any map.</summary>
             public string SceneName => sceneName;
+
+            /// <summary>Game type the rule is bound to; <see cref="ModeAudioGameType.Any"/> = any
+            /// type.</summary>
+            public ModeAudioGameType GameTypeFilter => gameType;
 
             /// <summary>When the sound plays.</summary>
             public ModeAudioEvent Trigger => trigger;
@@ -93,6 +102,19 @@ namespace VortexArena.Core.Audio
                 return _lastPicked;
             }
 
+            /// <summary>Clip for a given countdown second; null when the list has no entry for it.
+            /// <para>Indexed by second, never random: index 0 = 1 second left, index 1 = 2 seconds
+            /// left. A shorter list simply leaves the earlier seconds silent.</para></summary>
+            public AudioClip ClipForSecond(int seconds)
+            {
+                if (clips == null || seconds < 1 || seconds > clips.Length)
+                {
+                    return null;
+                }
+
+                return clips[seconds - 1];
+            }
+
             /// <summary>Collects the filled clips, skipping <paramref name="exclude"/> if given.</summary>
             private AudioClip[] Collect(AudioClip exclude)
             {
@@ -120,29 +142,50 @@ namespace VortexArena.Core.Audio
 
             /// <summary>Does the rule fit the given context. An empty field means "no
             /// restriction".</summary>
-            public bool Matches(ModeAudioEvent wanted, string activeModeId, string activeSceneName)
+            public bool Matches(ModeAudioEvent wanted, string activeModeId, string activeSceneName,
+                GameType activeGameType)
             {
                 return trigger == wanted &&
                        Fits(modeId, activeModeId) &&
-                       Fits(sceneName, activeSceneName);
+                       Fits(sceneName, activeSceneName) &&
+                       FitsGameType(activeGameType);
             }
 
-            /// <summary>Narrowness of the match: mode scores 2, map 1; the higher score wins. Mode
-            /// deliberately outweighs map — the same arena is played in several modes.</summary>
+            /// <summary>Narrowness of the match: mode scores 4, map 2, game type 1; the higher score
+            /// wins. Mode deliberately outweighs map — the same arena is played in several modes —
+            /// and the game type comes last, since a map already belongs to exactly one type.</summary>
             public int Specificity()
             {
                 int score = 0;
                 if (!string.IsNullOrEmpty(modeId))
                 {
-                    score += 2;
+                    score += 4;
                 }
 
                 if (!string.IsNullOrEmpty(sceneName))
+                {
+                    score += 2;
+                }
+
+                if (gameType != ModeAudioGameType.Any)
                 {
                     score += 1;
                 }
 
                 return score;
+            }
+
+            private bool FitsGameType(GameType active)
+            {
+                switch (gameType)
+                {
+                    case ModeAudioGameType.QuickBattle:
+                        return active == GameType.QuickBattle;
+                    case ModeAudioGameType.Kids:
+                        return active == GameType.Kids;
+                    default:
+                        return true;
+                }
             }
 
             private static bool Fits(string filter, string active)
@@ -174,7 +217,8 @@ namespace VortexArena.Core.Audio
 
         /// <summary>Finds the most specific rule fitting the given context. Returns <c>false</c> when
         /// nothing matches — the caller needs no extra check, it simply means no sound.</summary>
-        public bool TryResolve(ModeAudioEvent trigger, string modeId, string sceneName, out Rule rule)
+        public bool TryResolve(ModeAudioEvent trigger, string modeId, string sceneName,
+            GameType gameType, out Rule rule)
         {
             rule = null;
             if (rules == null)
@@ -186,7 +230,7 @@ namespace VortexArena.Core.Audio
             for (int i = 0; i < rules.Length; i++)
             {
                 Rule candidate = rules[i];
-                if (candidate == null || !candidate.Matches(trigger, modeId, sceneName))
+                if (candidate == null || !candidate.Matches(trigger, modeId, sceneName, gameType))
                 {
                     continue;
                 }

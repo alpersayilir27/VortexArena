@@ -25,6 +25,16 @@ namespace VortexArena.Core.Audio
         /// <para>⚠️ The round that ENDS THE MATCH does not fire this trigger: there the phase goes
         /// straight to <c>finished</c> and the match result (<see cref="GameSoundId"/>) takes over
         /// the announcement — there is no next round to return to positions for.</para></summary>
-        RoundEnd = 3
+        RoundEnd = 3,
+
+        /// <summary>Every <c>countdown{seconds}</c> message with <c>seconds &gt; 0</c>.
+        /// <para>⚠️ The clip is NOT random, it is picked BY SECOND
+        /// (<see cref="ModeAudioRegistry.Rule.ClipForSecond"/>): list index 0 = 1 second left,
+        /// index 1 = 2 seconds left, and so on. A second with no entry stays SILENT — the rule
+        /// matched, so the shared bank tick is NOT used as a fallback; the row owns the
+        /// countdown.</para>
+        /// <para>Clips must be shorter than a second: this is a cue whose meaning is its timing, it
+        /// plays instantly and never queues.</para></summary>
+        Countdown = 4
     }
 }

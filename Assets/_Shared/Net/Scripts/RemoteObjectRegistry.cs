@@ -21,11 +21,11 @@ namespace VortexArena.Net
     /// </summary>
     public class RemoteObjectRegistry : MonoBehaviour
     {
-        /// <summary>Samples kept per object (~1.6 s of history at OBJECT_POSE_RATE_HZ).</summary>
+        /// <summary>Samples kept per object (~0.8 s of history at OBJECT_POSE_RATE_HZ).</summary>
         private const int RING_SIZE = 16;
 
         /// <summary>An object not seen in the object section for this long is dropped (ms). Wide enough
-        /// for a few lost packets at 10 Hz, short enough that a resting object stops being interpolated
+        /// for a few lost packets at OBJECT_POSE_RATE_HZ, short enough that a resting object stops being interpolated
         /// soon after it stopped.</summary>
         private const int STALE_TIMEOUT_MS = 1000;
 

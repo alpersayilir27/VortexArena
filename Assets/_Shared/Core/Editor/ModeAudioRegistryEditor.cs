@@ -26,6 +26,12 @@ namespace VortexArena.Core.Editor
         private const string ANY_MODE_LABEL = "(her mod)";
         private const string ANY_MAP_LABEL = "(her harita)";
 
+        /// <summary>Popup labels of <see cref="ModeAudioGameType"/>, in enum value order.</summary>
+        private static readonly string[] GAME_TYPE_LABELS =
+        {
+            "(her tip)", "Hızlı Savaş", "Çocuk Oyunları"
+        };
+
         private GameCatalog _catalog;
 
         // Values (element 0 always the empty string) and their popup labels.
@@ -48,8 +54,9 @@ namespace VortexArena.Core.Editor
             serializedObject.Update();
 
             EditorGUILayout.HelpBox(
-                "Eşleşen kurallar arasından en spesifik olan kazanır (mod 2 puan, harita 1); " +
-                "eşitlikte listedeki İLK kural çalar. Boş mod = her mod, boş harita = her harita.",
+                "Eşleşen kurallar arasından en spesifik olan kazanır (mod 4 puan, harita 2, " +
+                "oyun tipi 1); eşitlikte listedeki İLK kural çalar. Boş mod = her mod, boş harita = " +
+                "her harita, her tip = kısıt yok.",
                 MessageType.None);
 
             if (_catalog == null)
@@ -98,6 +105,7 @@ namespace VortexArena.Core.Editor
             SerializedProperty rule = _rules.GetArrayElementAtIndex(index);
             SerializedProperty modeId = rule.FindPropertyRelative("modeId");
             SerializedProperty sceneName = rule.FindPropertyRelative("sceneName");
+            SerializedProperty gameType = rule.FindPropertyRelative("gameType");
             SerializedProperty trigger = rule.FindPropertyRelative("trigger");
             SerializedProperty clips = rule.FindPropertyRelative("clips");
             SerializedProperty volume = rule.FindPropertyRelative("volume");
@@ -121,25 +129,59 @@ namespace VortexArena.Core.Editor
                 "Katalogda bu modId yok — kural hiç eşleşmez.");
             DrawIdField("Harita", sceneName, _mapIds, _mapLabels,
                 "Katalogda bu sahne adı yok — kural hiç eşleşmez.");
+            DrawGameTypeField(gameType);
 
             EditorGUILayout.PropertyField(trigger, new GUIContent("Tetikleyici"));
 
-            // The threshold is read only by warning triggers; drawing it on RoundStart would
+            // The threshold is read only by the two warning triggers; drawing it elsewhere would
             // suggest a setting that does nothing.
-            if (trigger.enumValueIndex != (int)ModeAudioEvent.RoundStart)
+            if (IsWarningTrigger(trigger.enumValueIndex))
             {
                 EditorGUILayout.PropertyField(warningSeconds, new GUIContent("Eşik (sn)"));
             }
 
             volume.floatValue = EditorGUILayout.Slider("Seviye", volume.floatValue, 0f, 1f);
-            EditorGUILayout.PropertyField(clips, new GUIContent("Klipler (rastgele biri)"), true);
+            EditorGUILayout.PropertyField(clips, new GUIContent(ClipsLabel(trigger)), true);
 
-            DrawRuleDiagnostics(index, modeId, sceneName, trigger, clips);
+            DrawRuleDiagnostics(index, modeId, sceneName, gameType, trigger, clips);
 
             EditorGUILayout.EndVertical();
             EditorGUILayout.Space(2f);
 
             return remove;
+        }
+
+        /// <summary>Game type popup with Turkish labels.</summary>
+        /// <remarks>A plain enum field would show the C# names; the label order follows
+        /// <see cref="ModeAudioGameType"/> value by value.</remarks>
+        private static void DrawGameTypeField(SerializedProperty gameType)
+        {
+            if (gameType == null)
+            {
+                return;
+            }
+
+            int index = Mathf.Clamp(gameType.enumValueIndex, 0, GAME_TYPE_LABELS.Length - 1);
+            int picked = EditorGUILayout.Popup("Oyun tipi", index, GAME_TYPE_LABELS);
+            if (picked != gameType.enumValueIndex)
+            {
+                gameType.enumValueIndex = picked;
+            }
+        }
+
+        /// <summary>Only the two warning triggers read <c>warningSeconds</c>.</summary>
+        private static bool IsWarningTrigger(int trigger)
+        {
+            return trigger == (int)ModeAudioEvent.RoundEndWarning ||
+                   trigger == (int)ModeAudioEvent.MatchEndWarning;
+        }
+
+        /// <summary>Clip list label — the countdown list is indexed by second, not random.</summary>
+        private static string ClipsLabel(SerializedProperty trigger)
+        {
+            return trigger.enumValueIndex == (int)ModeAudioEvent.Countdown
+                ? "Klipler (saniyeye göre: [0]=1 sn, [1]=2 sn …)"
+                : "Klipler (rastgele biri)";
         }
 
         /// <summary>Catalog popup, or a plain text field without a catalog.</summary>
@@ -183,7 +225,8 @@ namespace VortexArena.Core.Editor
 
         /// <summary>Inline checks: silent rule, unplayable mode/map pair, dead duplicate.</summary>
         private void DrawRuleDiagnostics(int index, SerializedProperty modeId,
-            SerializedProperty sceneName, SerializedProperty trigger, SerializedProperty clips)
+            SerializedProperty sceneName, SerializedProperty gameType, SerializedProperty trigger,
+            SerializedProperty clips)
         {
             if (!HasClip(clips))
             {
@@ -206,12 +249,52 @@ namespace VortexArena.Core.Editor
                 }
             }
 
-            if (HasEarlierTwin(index, modeId.stringValue, sceneName.stringValue, trigger.enumValueIndex))
+            DrawGameTypeConflicts(modeId, sceneName, gameType);
+
+            if (HasEarlierTwin(index, modeId.stringValue, sceneName.stringValue,
+                    gameType.enumValueIndex, trigger.enumValueIndex))
             {
                 EditorGUILayout.HelpBox(
-                    "Aynı mod/harita/tetikleyici üçlüsü yukarıda da var: eşit spesiflikte listedeki " +
-                    "İLK kural kazanır, bu satır ölüdür.",
+                    "Aynı mod/harita/oyun tipi/tetikleyici dörtlüsü yukarıda da var: eşit " +
+                    "spesiflikte listedeki İLK kural kazanır, bu satır ölüdür.",
                     MessageType.Warning);
+            }
+        }
+
+        /// <summary>Warns when the selected mode/map belongs to a different game type than the
+        /// filter — the two narrowings cancel out and the rule can never match.</summary>
+        private void DrawGameTypeConflicts(SerializedProperty modeId, SerializedProperty sceneName,
+            SerializedProperty gameType)
+        {
+            if (_catalog == null || gameType.enumValueIndex == (int)ModeAudioGameType.Any)
+            {
+                return;
+            }
+
+            GameType filter = gameType.enumValueIndex == (int)ModeAudioGameType.Kids
+                ? GameType.Kids
+                : GameType.QuickBattle;
+
+            if (!string.IsNullOrEmpty(modeId.stringValue))
+            {
+                ModeDefinition mode = _catalog.FindMode(modeId.stringValue);
+                if (mode != null && mode.GameType != filter)
+                {
+                    EditorGUILayout.HelpBox(
+                        "Bu mod o oyun tipinde değil, kural hiç tetiklenmez.",
+                        MessageType.Info);
+                }
+            }
+
+            if (!string.IsNullOrEmpty(sceneName.stringValue))
+            {
+                MapDefinition map = _catalog.FindMap(sceneName.stringValue);
+                if (map != null && map.GameType != filter)
+                {
+                    EditorGUILayout.HelpBox(
+                        "Bu harita o oyun tipinde değil, kural hiç tetiklenmez.",
+                        MessageType.Info);
+                }
             }
         }
 
@@ -226,18 +309,21 @@ namespace VortexArena.Core.Editor
             SerializedProperty rule = _rules.GetArrayElementAtIndex(index);
             rule.FindPropertyRelative("modeId").stringValue = "";
             rule.FindPropertyRelative("sceneName").stringValue = "";
+            rule.FindPropertyRelative("gameType").enumValueIndex = (int)ModeAudioGameType.Any;
             rule.FindPropertyRelative("trigger").enumValueIndex = (int)ModeAudioEvent.RoundStart;
             rule.FindPropertyRelative("clips").arraySize = 0;
             rule.FindPropertyRelative("volume").floatValue = 1f;
             rule.FindPropertyRelative("warningSeconds").floatValue = 5f;
         }
 
-        private bool HasEarlierTwin(int index, string modeId, string sceneName, int trigger)
+        private bool HasEarlierTwin(int index, string modeId, string sceneName, int gameType,
+            int trigger)
         {
             for (int i = 0; i < index; i++)
             {
                 SerializedProperty other = _rules.GetArrayElementAtIndex(i);
                 if (other.FindPropertyRelative("trigger").enumValueIndex == trigger &&
+                    other.FindPropertyRelative("gameType").enumValueIndex == gameType &&
                     Same(other.FindPropertyRelative("modeId").stringValue, modeId) &&
                     Same(other.FindPropertyRelative("sceneName").stringValue, sceneName))
                 {

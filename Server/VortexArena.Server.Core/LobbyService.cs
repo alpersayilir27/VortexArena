@@ -503,18 +503,19 @@ public sealed class LobbyService
         if (msg.playerId == 0)
         {
             var sent = 0;
-            var skipped = 0;
+            // Skipped headsets are NAMED: a bare count leaves the operator guessing which one to calibrate.
+            var skipped = new List<string>();
             foreach (var state in _registry.Snapshot())
             {
                 if (state.Role != "player" || state.Socket == null) continue;
-                if (!state.Calibrated) { skipped++; continue; }
+                if (!state.Calibrated) { skipped.Add(state.Name); continue; }
                 await SendSafeAsync(state.Socket, payload, state.Name);
                 sent++;
             }
 
-            Console.WriteLine($"[Lobby] measure_body_scale: {sent} oyuncu, {skipped} kalibresiz atlandı — {connection.State?.Name}.");
-            var note = skipped > 0
-                ? $"{sent} oyuncu ölçülüyor ({skipped} kalibresiz atlandı)"
+            Console.WriteLine($"[Lobby] measure_body_scale: {sent} oyuncu, {skipped.Count} kalibresiz atlandı — {connection.State?.Name}.");
+            var note = skipped.Count > 0
+                ? $"{sent} oyuncu ölçülüyor (kalibresiz atlandı: {string.Join(", ", skipped)})"
                 : $"{sent} oyuncu ölçülüyor";
             await BroadcastAdminStateAsync(Notice(connection, note));
             return;

@@ -123,15 +123,17 @@ namespace VortexArena.Core.Combat
         [Tooltip("Mermi izinin rengi (alfa dahil).")]
         [SerializeField] private Color tracerColor = new Color(1f, 0.85f, 0.4f, 0.9f);
 
-        [Tooltip("Mermi izinin kalınlığı (metre).")]
+        [Tooltip("Mermi izinin baş kalınlığı (metre); kuyruk bunun küçük bir oranıdır.")]
         [SerializeField] private float tracerWidth = 0.02f;
 
-        // ⚠️ This duration is not "how long the trail stays FULLY bright" but "from birth to complete
-        // disappearance": the line fades over its lifetime (ShotTracer.FadeAlphaAt). A separate "fade
+        // ⚠️ This duration starts at ARRIVAL, not at the shot: the streak flies muzzle → impact at a
+        // fixed speed (ShotTracer), so flight time comes from distance and is NOT part of this field;
+        // what it covers is arrival → completely gone (ShotTracer.FadeAlphaAt). A separate "fade
         // duration" field is deliberately absent — with two numbers, which one cuts the other (a fade
         // longer than the lifetime truncates the trail) would be a silent trap.
-        [Tooltip("Mermi izinin doğuşundan tümden sönmesine kadar geçen süre (saniye). " +
-                 "İz bu süre boyunca sönerek kaybolur, sonunda pat diye kapanmaz.")]
+        [Tooltip("İz parçasının hedefe VARIŞINDAN tümden sönmesine kadar geçen süre (saniye). " +
+                 "Namludan hedefe uçuş süresi mesafeden gelir, bu süreye dahil değildir; " +
+                 "iz bu süre boyunca sönerek kaybolur, sonunda pat diye kapanmaz.")]
         [SerializeField] private float tracerLifetime = 0.1f;
 
         // ⚠️ NOT every round gets a tracer. Two reasons:

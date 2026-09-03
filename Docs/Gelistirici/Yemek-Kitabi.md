@@ -1025,7 +1025,7 @@ Ayrıntı: `ModeRules` alanlarının tamamı → [Sistem Özeti §3.9](../Sistem
 
 ## 13.1 Çocuk oyunu eklemek (silahsız, kooperatif)
 
-Reçete 13'ün üstüne binen **beş fark** vardır; gerisi aynıdır.
+Reçete 13'ün üstüne binen **altı fark** vardır; gerisi aynıdır.
 
 **1. Aile.** Sunucuda `public string GameType => "kids";`, `ModeDefinition`'da `gameType = Kids`,
 haritanın `MapDefinition`'ında da `gameType = Kids`. ⚠️ Üçü tutmazsa `start_match` **sessizce**
@@ -1066,6 +1066,11 @@ taşınmaz: sunucu **metre bilmez**. Taşınan tek şey `stage` (aşama) ve `s` 
 durduğunu sahnedeki yol/slot bileşenleri söyler. ⚠️ Böyle bir objeye `NetObjectBody`/
 `NetObjectPoseSender` **eklenmez** — objeyi hem yoldan hem ağdan süren iki yazar, iki başlıkta iki
 yer demektir.
+
+**6. Ses.** `ModeAudioRegistry`'de ailenin duyuruları (maç başı, geri sayım) oyun tipi filtresi
+`Çocuk Oyunları` olan satırlarla verilir — mod başına satır yazılmaz, aileye eklenen yeni çocuk
+oyunu sesleri kendiliğinden alır. Tek bir moda ayrı klip istiyorsan (ör. daha yumuşak bir maç başı)
+satırı moda daralt. ⚠️ Ortak "hadi hadi" duyuru kliplerini çocuk ailesine bağlama.
 
 ⚠️ **Bir olayı KİM bildirir?** `policy:"anyone"` olan bir olayı herkes gönderebilir, ama aynı
 gerçeği N istemcinin bildirmesi sunucuda aynı sayacı N kez başlatır. Seçici sahnede aranır ve tek

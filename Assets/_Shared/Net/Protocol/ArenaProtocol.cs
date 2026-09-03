@@ -148,11 +148,12 @@ namespace VortexArena.Protocol
         /// <inheritdoc cref="NET_ID_DYNAMIC_MIN"/>
         public const int NET_ID_DYNAMIC_MAX = 65535;
 
-        /// <summary>How often the OWNER streams an object pose (<c>0x09</c>, §6.12) — half of
-        /// <see cref="POSE_RATE_HZ"/>. The reason is packet count, not bandwidth
-        /// (<c>Docs/Sistem-Ozeti.md</c> §3.12); object poses also flow only for an AWAKE and UNHELD
-        /// object, so a typical tick carries none.</summary>
-        public const int OBJECT_POSE_RATE_HZ = 10;
+        /// <summary>How often the OWNER streams an object pose (<c>0x09</c>, §6.12) — same as
+        /// <see cref="POSE_RATE_HZ"/>. ⚠️ Not lower: the receiver interpolates
+        /// <see cref="INTERP_DELAY_MS"/> behind, and at 10 Hz that delay equals ONE sample interval,
+        /// leaving no jitter slack — a thrown object visibly stutters. Packet count stays negligible:
+        /// poses flow only for an AWAKE and UNHELD object, so a typical tick carries none.</summary>
+        public const int OBJECT_POSE_RATE_HZ = 20;
 
         /// <summary>Speed threshold (m/s) under which a released object counts as stopped (§10.10);
         /// staying under it for <see cref="OBJECT_REST_SECONDS"/> makes the owner send

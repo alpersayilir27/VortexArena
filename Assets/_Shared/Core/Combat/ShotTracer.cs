@@ -2,7 +2,8 @@ using UnityEngine;
 
 namespace VortexArena.Core.Combat
 {
-    /// <summary>Shot tracer: a fading line from muzzle to impact plus smoke along it. Draw-only,
+    /// <summary>Shot tracer: a short streak that flies from muzzle to impact, gathers there and
+    /// fades out, plus smoke along the path. Draw-only,
     /// never placed in a scene; <see cref="Weapon"/> drives the local shooter,
     /// <see cref="RemoteShotFx"/> remote players (§6.4/6.5) — two callers are mandatory, the server
     /// never echoes a shot back.
@@ -24,6 +25,18 @@ namespace VortexArena.Core.Combat
         private const int PoolSize = 48;
 
         private const float MinTracerMeters = 0.5f;
+
+        /// <summary>Streak flight speed. NOT a bullet speed: in a ≤20 m arena 20 m ≈ 0.17 s, fast
+        /// but still trackable by the eye.</summary>
+        private const float TracerSpeedMetersPerSecond = 120f;
+
+        /// <summary>Streak length (head to tail). A full-length static line reads as a laser
+        /// beam.</summary>
+        private const float StreakMeters = 1.5f;
+
+        /// <summary>Tail width = width × this; the head keeps the full width, so the streak points
+        /// where it flies (LineRenderer position 0 = tail, 1 = head).</summary>
+        private const float TailWidthScale = 0.15f;
 
         /// <summary>Max lines (pellets) per volley; BOTH callers clamp to this. Lives here because
         /// it shares the <see cref="PoolSize"/> budget — caller-owned caps would outgrow the
@@ -98,13 +111,14 @@ namespace VortexArena.Core.Combat
 
         // ------------------------------------------------------------------ line fade
 
-        /// <summary>Fraction of the lifetime held at FULL brightness before the fade starts.
-        /// ⚠️ Never zero: at 0.1 s (≈7 frames) a tracer fading from frame one reads as a pale
-        /// ghost, not a line.</summary>
+        /// <summary>Fraction of the fade (post-arrival) held at FULL brightness before it starts.
+        /// ⚠️ Never zero: at 0.1 s (≈7 frames) a streak fading from frame one reads as a pale
+        /// ghost, not a tracer.</summary>
         private const float FadeHoldFraction = 0.25f;
 
-        /// <summary>Width left at the end of the fade (1f disables thinning). Alpha alone leaves
-        /// the trail equally thick; thinning reads as dispersing.</summary>
+        /// <summary>Width left at the end of the fade (1f disables thinning), applied to head and
+        /// tail alike so their ratio holds. Alpha alone leaves the streak equally thick; thinning
+        /// reads as dispersing.</summary>
         private const float FadeEndWidthScale = 0.55f;
 
         private sealed class TracerNode
@@ -112,8 +126,18 @@ namespace VortexArena.Core.Combat
             public LineRenderer Line;
             public bool Active;
 
-            /// <summary>Fade axis: birth time + lifetime (<c>Time.unscaledTime</c>). ⚠️ No ExpireAt
-            /// field — a second copy of the same info would drift.</summary>
+            /// <summary>Flight path (world) and its length; the streak slides along it.</summary>
+            public Vector3 From;
+            public Vector3 To;
+            public float Length;
+
+            /// <summary>Length / speed: when the head reaches the impact point.</summary>
+            public float TravelSeconds;
+
+            /// <summary>Time axis: birth (<c>Time.unscaledTime</c>) and travel + lifetime.
+            /// ⚠️ The fade starts at ARRIVAL, so <c>tracerLifetime</c> means "arrival → gone" and
+            /// flight time is not taken out of it. No ExpireAt field — a second copy of the same
+            /// info would drift.</summary>
             public float StartAt;
             public float Duration;
 
@@ -215,19 +239,29 @@ namespace VortexArena.Core.Combat
                     continue;
                 }
 
-                node.Line.startWidth = w;
+                // Tail thin, head full width: the streak reads as pointing where it flies.
+                node.Line.startWidth = w * TailWidthScale;
                 node.Line.endWidth = w;
                 node.Line.startColor = color;
                 node.Line.endColor = color;
+                // Born collapsed at the muzzle; Update grows and slides it (a first frame drawn
+                // full length would flash the very beam this avoids).
                 node.Line.SetPosition(0, from);
-                node.Line.SetPosition(1, to);
+                node.Line.SetPosition(1, from);
                 node.Line.enabled = true;
+
+                float length = Mathf.Sqrt(sqrDistance);
+                float travel = length / TracerSpeedMetersPerSecond;
 
                 // Time.unscaledTime so a paused match (timeScale 0) does not freeze tracers.
                 // ⚠️ The whole volley shares ONE stamp (not re-read inside the loop): trails of a
                 // single trigger pull must be born and fade together.
                 node.StartAt = now;
-                node.Duration = life;
+                node.Duration = travel + life;
+                node.From = from;
+                node.To = to;
+                node.Length = length;
+                node.TravelSeconds = travel;
                 node.BaseColor = color;
                 node.BaseWidth = w;
                 node.Active = true;
@@ -244,11 +278,12 @@ namespace VortexArena.Core.Combat
             return drawn;
         }
 
-        /// <summary>Fades live lines (alpha down, width thinner) and hides expired ones; pool nodes
-        /// are disabled, never destroyed. The fade spans the lifetime ITSELF — no separate
-        /// fade-duration field, or <c>tracerLifetime</c> would stop meaning "how long the trail
-        /// lasts". Only live nodes are touched, and only vertex color/width (no material instance,
-        /// no SRP break).</summary>
+        /// <summary>Flies live streaks along their path, then fades them (alpha down, width
+        /// thinner) once the head has arrived; hides finished ones. Pool nodes are disabled, never
+        /// destroyed. The fade spans <c>tracerLifetime</c> ITSELF — no separate fade-duration
+        /// field, or the lifetime would stop meaning "how long the trail lasts". Only live nodes
+        /// are touched, and only positions/vertex color/width (no material instance, no SRP
+        /// break).</summary>
         private void Update()
         {
             float now = Time.unscaledTime;
@@ -266,26 +301,52 @@ namespace VortexArena.Core.Combat
                     continue;
                 }
 
-                float t = (now - node.StartAt) / node.Duration;
-                if (t >= 1f)
+                float age = now - node.StartAt;
+                if (age >= node.Duration)
                 {
                     node.Active = false;
                     node.Line.enabled = false;
                     continue;
                 }
 
+                float travelled = age * TracerSpeedMetersPerSecond;
+
+                float headDist = Mathf.Min(travelled, node.Length);
+                float tailDist = Mathf.Clamp(travelled - StreakMeters, 0f, node.Length);
+
+                // In flight the streak stays at full brightness; fading starts at arrival.
+                float fadeAlpha = 1f;
+                float widthScale = 1f;
+                if (age > node.TravelSeconds)
+                {
+                    // Lifetime is derived, not stored: a second copy of Duration − TravelSeconds
+                    // would drift.
+                    float t = Mathf.Clamp01((age - node.TravelSeconds) / (node.Duration - node.TravelSeconds));
+
+                    // Collapse spans the lifetime so the fade is visible: at flight speed the tail
+                    // would catch the impact point long before the streak had faded.
+                    headDist = node.Length;
+                    tailDist = Mathf.Lerp(Mathf.Max(0f, node.Length - StreakMeters), node.Length, t);
+
+                    fadeAlpha = FadeAlphaAt(t);
+                    widthScale = Mathf.Lerp(1f, FadeEndWidthScale, t);
+                }
+
+                Vector3 dir = (node.To - node.From) / node.Length;
+                node.Line.SetPosition(0, node.From + dir * tailDist);
+                node.Line.SetPosition(1, node.From + dir * headDist);
+
                 Color color = node.BaseColor;
-                color.a = node.BaseColor.a * FadeAlphaAt(t);
+                color.a = node.BaseColor.a * fadeAlpha;
                 node.Line.startColor = color;
                 node.Line.endColor = color;
 
-                float width = node.BaseWidth * Mathf.Lerp(1f, FadeEndWidthScale, t);
-                node.Line.startWidth = width;
-                node.Line.endWidth = width;
+                node.Line.startWidth = node.BaseWidth * TailWidthScale * widthScale;
+                node.Line.endWidth = node.BaseWidth * widthScale;
             }
         }
 
-        /// <summary>Fade curve: 1 → 0 for <paramref name="t"/> 0 (birth) → 1 (end of life). Not
+        /// <summary>Fade curve: 1 → 0 for <paramref name="t"/> 0 (arrival) → 1 (end of life). Not
         /// linear — after a short hold it accelerates with <c>1 − u²</c>, which reads as a tracer
         /// burning out rather than a dimming lamp.</summary>
         private static float FadeAlphaAt(float t)

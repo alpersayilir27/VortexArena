@@ -28,7 +28,7 @@ Tümü paylaşılan `ArenaProtocol` statik sınıfında tanımlanır (`Assets/_S
 | `PLAYER_ID_MAX` | `255` | `playerId` tahsis tavanı. **Ürün kotası değil, tel formatı tavanıdır** — `playerId` UDP paketlerinde `u8`. Eşzamanlı oyuncu/admin sayısına başka sınır YOKTUR (kota ileride lisanslamayla gelecek) |
 | `NET_ID_SCENE_MIN` / `NET_ID_SCENE_MAX` | `1` / `32767` | Sahne objesinin ağ kimliği aralığı (`NetIdentity.sceneId`, §10.10); sahne kaydında `SceneIdGuard` zorlar. `0` = atanmamış ve **hiçbir zaman adreslenmez**. ⚠️ Üst yarı (`32768..65535`) **rezervdir** — sunucunun çalışma zamanında dağıtacağı dinamik obje kimlikleri oraya düşecek; sahne bake'i o aralığa taşarsa bir sahne objesiyle bir dinamik obje aynı kimliği alır ve sunucu hasarı hangisine yazdığını bilemez |
 | `NET_ID_DYNAMIC_MIN` / `NET_ID_DYNAMIC_MAX` | `32768` / `65535` | Sunucunun **çalışma zamanında** dağıttığı obje kimliklerinin aralığı (§10.10) — sahne aralığının üstündeki yarı, ikisi asla çakışmaz. Kimlikler döner (havuz), ama despawn edilen bir kimlik **tur bitmeden yeniden verilmez**: verilirse yolda olan bir `object_event` ya da poz paketi kimliği devralan yeni objeye yazar ve kimse hata görmez |
-| `OBJECT_POSE_RATE_HZ` | `10` | Sahibin obje pozu gönderim frekansı (§6.12) — oyuncu pozunun (`POSE_RATE_HZ`) **yarısı**. Yarısı olmasının sebebi bant değil paket sayısıdır (`Docs/Sistem-Ozeti.md` §3.12); obje pozu ayrıca yalnız **uyanık ve tutulmayan** objede akar, yani tipik tikte hiç yoktur |
+| `OBJECT_POSE_RATE_HZ` | `20` | Sahibin obje pozu gönderim frekansı (§6.12) — oyuncu pozuyla (`POSE_RATE_HZ`) **aynı**. ⚠️ Daha düşük tutulmaz: alıcı `INTERP_DELAY_MS` geriden interpolasyon yapar; 10 Hz'de o gecikme TEK örnek aralığına eşittir ve jitter payı kalmaz — fırlatılan eşya gözle görülür takılır. Paket sayısı yine önemsizdir: obje pozu yalnız **uyanık ve tutulmayan** objede akar, yani tipik tikte hiç yoktur (`Docs/Sistem-Ozeti.md` §3.12) |
 | `OBJECT_REST_SPEED` | `0.05` m/s | Bırakılan objenin **durdu** sayılma hız eşiği (§10.10). Altına inip `OBJECT_REST_SECONDS` boyunca kalırsa sahip `object_rest{pos,rot}` yollar ve sahiplik biter |
 | `OBJECT_REST_SECONDS` | `0.3` | Durma eşiğinin altında kesintisiz geçirilmesi gereken süre. ⚠️ Tek karelik bir "durdum" yeterli değildir: sekmenin tepe noktasında hız anlık sıfırlanır, orada bırakılan obje havada donardı |
 | `OBJECT_MAX_ENTRIES_PER_PACKET` | `16` | Tek `0x05` datagramının obje bölümüne yazılan en fazla girdi (§6.8). 8 + 16×34 + 16×12 = 744 B bütçeye sığar ama olay bölümü aynı bütçeyi paylaşır — gerçek kapı yine boyut kapısıdır (`COMBINED_MAX_BYTES`); bu sayı `objectCount`'un `u8` olmasının tavanı ve bir emniyettir |
@@ -313,7 +313,8 @@ durumunda bırakır; başarısız ölçümü ölçek olarak yazmak ise sessizce 
   ölçüsünü **şimdi aldırır** (§10.8). **`playerId:0` = TÜM oyuncular.** Sunucu bir şey hesaplamaz;
   hedefe alansız bir `measure_body_scale` iletir (`reload_calibration` ile aynı çift yönlü desen) ve ölçümü
   başlık yapıp `set_body_scale` ile döner. ⚠️ **Kalibresiz oyuncuya iletilmez:** ölçü arena zeminine
-  göredir, kalibresiz başlıkta zemin bilinmiyor — atlanan hedefler `admin_state.notice` ile bildirilir.
+  göredir, kalibresiz başlıkta zemin bilinmiyor — atlanan hedefler `admin_state.notice` ile **adlarıyla**
+  bildirilir (sayı tek başına operatöre hangi başlığı kalibre edeceğini söylemez).
 - **`restart_body_tracking`** `{ "type":"restart_body_tracking", "playerId":5 }` — o oyuncunun
   başlığında **gövde izlemesini yeniden başlattırır** (§6.11). **`playerId:0` = TÜM oyuncular.**
   Sunucu bir şey hesaplamaz; hedefe alansız bir `restart_body_tracking` iletir

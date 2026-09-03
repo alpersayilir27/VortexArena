@@ -5,11 +5,7 @@ bir his kararı. Kalıcı bilgi dokümanda: tel formatı + kurallar `Docs/ArenaN
 §6.2–§6.6 · akış/bileşenler ve editör aracı `Docs/Sistem-Ozeti.md` · stüdyo reçetesi
 `Docs/Gelistirici/Yemek-Kitabi.md`.
 
-## 1. Tracer + ön kabza göstergesi görünüm değerleri — playtest ayarı
-
-`ItemDefinition`'daki `tracerColor` / `tracerWidth` / `tracerLifetime` / `tracerEveryNthRound`
-(varsayılan 3) sahada gözle ayarlanır. Dokümana sayı yazılmaz. Renk silah başına
-farklılaşmaz (`README.md` "Değişmeyecekler").
+## 1. Ön kabza göstergesi görünüm değerleri — playtest ayarı
 
 Ön kabza tarafında ayarlanacaklar: **soket yarıçapı silah başınadır** (`secondaryGripRadius`,
 varsayılan 0.10 = 20 cm çap — Inspector'dan girilir; görülen küre = kabul hacmi). `Weapon`
