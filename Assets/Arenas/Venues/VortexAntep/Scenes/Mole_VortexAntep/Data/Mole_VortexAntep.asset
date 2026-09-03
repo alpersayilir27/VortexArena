@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Mole_VortexAntep
   m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Arena.MapDefinition
   sceneName: Mole_VortexAntep
-  displayName: "K\xF6stebek"
+  displayName: "K\xF6stebek Tarlas\u0131"
   gameType: 1
   supportedModeIds:
   - mole

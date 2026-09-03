@@ -190,6 +190,29 @@ Puan, galibiyet limiti, tur tavanı ve maç saati kararları turu **kapatan** ye
 (`TournamentMode.EndRound`), bekleme basamağında değil. İncelemeye taşınan bir karar, maçın sonucunu
 bir düğmeye ne zaman basıldığına bağlar.
 
+### ⛔ Kill feed / ölüm ekranı metnini ikinci bir yerde kurma
+
+Bir `kill_event`in metne dönüşmesi **`UI/KillFeedText`**'te olur; oyuncu HUD'ı da admin listesi de
+onu çağırır. Metin dallara ayrılıyor çünkü **"bu oyuncuyu ne öldürdü"** sorusunu cevaplıyor: rakip
+(`A -> B`) · kendi bombası (`killerId == victimId`) · engel (`weaponId == "obstacle"`) · bilinmeyen.
+
+Kendi kopyasını kuran yüzey, eksik bıraktığı dalda **cevapsız kalmaz — YANLIŞ cevap verir**: intihar
+"öldü" diye okunur ve operatör olmayan bir sunucu hatasını kovalar. Belirti hiçbir yerde hata
+üretmez, yalnız yanlış bir cümledir.
+
+⚠️ **Ölüm ekranı bu kuralın kopyası değil, ikinci kişisidir** (`ModeHudBase.RefreshDeathLine`):
+sınıflandırma aynı, sözcükler farklı — feed "kendini havaya uçurdu", ekran "Kendini havaya
+uçurdun" der. Yeni bir ölüm sebebi ikisine birden eklenir.
+
+### ⛔ Alan hasarında mesafe düşümünü siper soğurmasından ÖNCE uygulama
+
+Sıra: siper soğurmasını **merkez hasarından** düş, mesafe düşümünü **kalana** uygula. Ters sıra
+sipere düşümle küçülmüş bir sayı üzerinden bedel ödetir. Belirti: bomba sipere yeterli hasarı
+verip onu kırar, ama arkasındaki oyuncuya sıfır hasar gider; siper zaten kırıkken (soğurma sıfır)
+aynı bomba aynı yerden öldürür — bu yüzden "menzil sorunu" gibi okunur ve teşhisi pahalıdır.
+Kural üç yolda da aynıdır (uzak oyuncu · ağ nesnesi · kendine hasar); biri sapınca atan
+başkasından farklı bir eğriye tabi olur.
+
 ---
 
 ## Koordinat
@@ -357,6 +380,27 @@ ilk dosya girdiğinde açılır.
 
 `Assembly-CSharp`'a düşer, hiçbir asmdef göremez.
 
+### ⛔ Parçacık materyalinde soft particle, distortion ya da 1'i aşan renk kullanma
+
+VR (Android) **Mobile** kalite seviyesiyle, admin (Standalone) **PC** seviyesiyle koşar; Mobile
+tarafında **Depth Texture · Opaque Texture · HDR üçü de kapalıdır**. `_SOFTPARTICLES_ON` derinlik
+dokusuna, `_DISTORTION_ON` opaque dokusuna, 1'i aşan renk/emisyon ise HDR'a bağlıdır: üçü de VR'da
+**sessizce başka bir şey çizer** — yumuşak kenar sertleşir, distortion kartı boş/koyu kalır, 1'i
+aşan ateş rengi beyaz lekeye kırpılır. Editörde ve admin build'inde doğru görünür, yalnız başlıkta
+yanlıştır: **hata satırı yoktur.**
+
+Kural: patlama/çarpma parçacıkları **Unlit**, soft particle'sız, distortion'suz ve **LDR**
+renklerle yazılır — renk 1'i aşacaksa yerine tonu koyulaştır, parlaklığı değil. Yumuşak kenar
+gerçekten gerekiyorsa derinlik dokusu istemeyen iki araç var: materyalde **Camera Fading** ve
+Collision modülünde tek düzlem + `lifetimeLoss = 1`.
+
+⚠️ Bu, RP asset'lerini Mobile'da açarak da "çözülür" ama çözülmez: derinlik ön-geçişi + tam
+çözünürlüklü renk kopyası per-eye maliyeti başlıkta tüm kareyi yavaşlatır. Düzeltme **efektte**
+yapılır, boru hattında değil. ⚠️ `Particles/Lit` de kaçınılır: saydam parçacık başına aydınlatma
+Quest'te pahalıdır ve iki platformun ek-ışık bütçesi farklı olduğu için görünüm ayrışır.
+
+Kurulu örnek: `_Shared/FX/Materials/M_Blast*` (patlama efektinin platform-bağımsız materyal takımı).
+
 ---
 
 ## Kod ve assembly düzeni
@@ -502,12 +546,6 @@ sabitidir (tek satır) — o güncellenmezse silah kiti kaynaklarını bulamaz a
 
 Hiçbir materyalin referanslamadığı shader strip edilir. Runtime'da üretilen görseller bu yüzden
 UI/TMP shader'ları üzerinden çizilir.
-
-### ⚠️ Quest'te "Soft Particles" yok
-
-`supportsCameraDepthTexture = false` (PC asset'te açık — editörde çalışır, cihazda çalışmaz).
-Derinlik dokusu gerektirmeyen iki araç var: materyalde **Camera Fading** ve Collision modülünde
-tek düzlem + `lifetimeLoss = 1`.
 
 ### ⚠️ Silah dengesi değişikliği APK build'i ister
 

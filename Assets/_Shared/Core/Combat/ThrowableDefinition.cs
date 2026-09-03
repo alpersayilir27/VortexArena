@@ -68,7 +68,8 @@ namespace VortexArena.Core.Combat
         [Tooltip("Yarıçapın kenarındaki hasar çarpanı (0.25 = merkezin dörtte biri).")]
         [SerializeField] private float edgeScale = 0.25f;
 
-        [Tooltip("Açıkken duvar arkasındaki hedefe hasar geçmez (Physics.Linecast). Saha ayarı.")]
+        [Tooltip("Açıkken siper sayılır: sağlam engel hasarı tümden keser, KIRILABİLIR siper yalnız " +
+                 "kalan canı kadarını soğurur, gerisi arkasındakine geçer. Saha ayarı.")]
         [SerializeField] private bool requireLineOfSight;
 
         [Header("Sunum")]
@@ -114,7 +115,7 @@ namespace VortexArena.Core.Combat
         /// <summary>Damage multiplier at the edge of the radius.</summary>
         public float EdgeScale => Mathf.Clamp01(edgeScale);
 
-        /// <summary>Should a wall block the blast.</summary>
+        /// <summary>Should cover count — solid blocks, breakable absorbs its remaining health.</summary>
         public bool RequireLineOfSight => requireLineOfSight;
 
         /// <summary>Explosion effect prefab (may be unassigned).</summary>

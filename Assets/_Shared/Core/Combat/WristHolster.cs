@@ -218,7 +218,9 @@ namespace VortexArena.Core.Combat
         /// off, colliders off, throwable behaviour off.
         /// <para>⚠️ Colliders are DISABLED, not destroyed: the thrown bomb needs them back to bounce
         /// off geometry. A live collider in the hand would catch the player's own shot ray and the
-        /// grab system.</para></summary>
+        /// grab system.</para>
+        /// <para>⚠️ <c>detectCollisions</c> is turned back on by <c>Throwable.Arm</c>, not by
+        /// <see cref="Reactivate"/> — it belongs to the body, and the body is the flight code's.</para></summary>
         private static void Deactivate(GameObject instance)
         {
             var bodies = instance.GetComponentsInChildren<Rigidbody>(true);

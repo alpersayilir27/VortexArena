@@ -1012,6 +1012,7 @@ GameObject:
   - component: {fileID: 1783042273888686560}
   - component: {fileID: 6969846491714801987}
   - component: {fileID: 5116134805446922281}
+  - component: {fileID: 3014048501021847139}
   m_Layer: 0
   m_Name: RemoteAvatar
   m_TagString: Untagged
@@ -1061,7 +1062,6 @@ MonoBehaviour:
   shieldMaterial: {fileID: 2100000, guid: c8a4f019d6b2470e91d3c5ea7f28b641, type: 2}
   redBodyRoot: {fileID: 1351621414267931348}
   character: {fileID: 8595517995428222429}
-  friendMarker: {fileID: 0}
   visualRoot: {fileID: 3915598790773187048}
   idleHandPose:
     thumb: 0
@@ -1096,6 +1096,19 @@ Rigidbody:
   m_Interpolate: 0
   m_Constraints: 0
   m_CollisionDetection: 0
+--- !u!114 &3014048501021847139
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3639760030289724950}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b96ece079555195488efdbac65179f44, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.SurfaceTag
+  surface: {fileID: 11400000, guid: 1f281ab1a91457c4ab64c42aedafb8a3, type: 2}
 --- !u!1 &3942498296143755658
 GameObject:
   m_ObjectHideFlags: 0

@@ -1,0 +1,26 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ac8ede43930e76d41b5403a01c8a80f8, type: 3}
+  m_Name: SUR_Metal
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.SurfaceDefinition
+  surfaceId: metal
+  impactPrefab: {fileID: 371613135301754936, guid: a85b785059162f247a31d154e8f64f0b, type: 3}
+  impactClips: []
+  volume: 0.8
+  pitchRange: {x: 0.9, y: 1.14}
+  lifetimeSeconds: 1.5
+  materials:
+  - {fileID: 7640750391190514593, guid: 8997ac074c93cce46aa05afbe0d7254b, type: 3}
+  - {fileID: 2100000, guid: ab98e3b3fc3532746a7f4b79054543a0, type: 2}
+  - {fileID: -977237120110461261, guid: d84c88d6c4dc27a4086004e67109e7a1, type: 3}
+  - {fileID: -4078237145039042201, guid: 46db3a7dd4740a1428394710c39c4a6a, type: 3}
+  - {fileID: 2100000, guid: f4d818922caea8b46b04ac27d02ab8a8, type: 2}

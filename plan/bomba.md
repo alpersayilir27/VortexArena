@@ -12,21 +12,26 @@ kendini öldürmede skor/kill yazılmaması · `ThrowableDefinition`/`ThrowableT
 `requireLineOfSight` · `HeldItems` atılabilir slotu · `RemoteShotFx` `KIND_THROW` tüketicisi ·
 kill feed "kendini havaya uçurdu" satırı.
 
-## 1. Unity içeriği — ⚠️ SIRADAKİ İŞ (kod olmadan çalışmaz)
+## 1. Unity içeriği
 
 Reçetenin tamamı `Docs/Gelistirici/Yemek-Kitabi.md` §11.3.
 
-- [ ] **Bomba modeli:** prefabtaki `Mesh` çocuğu geçici bir küredir; gerçek model onun yerine konur.
-      Collider root'tadır, modelle birlikte yarıçapı da güncellenir.
-- [ ] Patlama FX'i + sesleri: tanımdaki `explosionPrefab`/`explosionClip` ve kılıftaki `refillClip`
-      boş (kod boş referansa dayanıklı).
+- [ ] Kılıftaki `refillClip` boş (kod boş referansa dayanıklı).
 
 ## 2. Playtest ayarı
 
-- [ ] `requireLineOfSight` açık mı kapalı mı (duvar arkası hasar).
+- [ ] Siper dengesi: merkez hasarından siperin kalan canı düşülür, mesafe düşümü kalana uygulanır.
+      `TD_Bomba.blastDamage` (250) ile `KIND_breakable_cover.maxHp` (200) çiftinde sağlam siperin
+      arkasına yakın mesafede ~50 civarı geçer; `edgeScale` (0.25) kenardaki açık oyuncuya gideni
+      belirler. İkisi tek sayıya bağlı, birlikte denenir.
 - [ ] Sekme katsayısı: kopyaların ayrışması sekme sayısıyla büyür, "gerçekçi" ile "tutarlı" arasında
       seçim burada yapılır.
 - [ ] Atış hızı ölçeği/tavanı, kabul yarıçapı (`acceptRadius`).
+- [ ] **Görsel yarıçap ile `blastRadius` (4 m) okunabilir mi:** oyuncu tehlikeli alanı efekte bakarak
+      tahmin ediyor. Efekt hasar alanından belirgin büyükse "vurulmayacağım yerde öldüm", belirgin
+      küçükse "dumanın içindeydim, hasar almadım" olarak okunur — ikisi de balans değil **okunurluk**
+      şikâyeti olarak gelir. Şok dalgası halkası (`Shockwave.startSize`) bu eşleşmenin en görünür
+      ögesidir.
 
 ## 3. Kod tarafında bilinçli olarak YAPILMAYANLAR
 
@@ -46,3 +51,11 @@ Reçetenin tamamı `Docs/Gelistirici/Yemek-Kitabi.md` §11.3.
       pencere süresi sonra gelen rapor reddedilir (sunucu konsolunda "atıcı ölü").
 - [ ] `ffa`'da anahtar açıkken kendi bombası hasar verir, kapalıyken vermez.
 - [ ] Lobide (`fireWhilePaused`) atma olayı relay edilir, patlama görünür, hasar yok.
+- [ ] Sağlam siperin (200 HP) arkasındaki oyuncu: bomba siperi kırar **ve** oyuncuya kalan hasar
+      gider (sıfır değil).
+- [ ] Aynı yerde ikinci bomba: siper artık kırık, soğurma yok, hasarın tamamı mesafe düşümüyle gider.
+- [ ] Kırılamayan geometrinin (arena iç duvarı/sütunu) arkasındaki oyuncu hiç hasar almaz.
+- [ ] Başlıkta ve admin'de patlama **aynı** görünür: duman yoğunluğu, ateş rengi ve şok dalgası
+      halkası eşleşir.
+- [ ] Arka arkaya birkaç patlamada kare düşüşü/takılma yok; ilk patlama da takılmıyor (havuz fitil
+      başında kuruluyor).

@@ -1,4 +1,5 @@
 using UnityEngine;
+using VortexArena.Core.Arena;
 
 namespace VortexArena.Core.Combat
 {
@@ -9,8 +10,24 @@ namespace VortexArena.Core.Combat
     /// </summary>
     public sealed class BlastEffect : ThrowableEffect
     {
-        [Tooltip("Patlama efekti prefabının kaç saniye sonra silineceği.")]
+        /// <summary>Pool nodes built at arm time — one is the blast itself, the second covers a
+        /// second bomb landing before the first has faded.</summary>
+        private const int PrewarmNodes = 2;
+
+        [Tooltip("Patlama efektinin kaç saniye sonra havuza döneceği.")]
         [SerializeField] private float effectLifetime = 3f;
+
+        /// <summary>Builds the FX pool while the fuse burns, so the explosion itself pays no
+        /// <c>Instantiate</c> or shader warm-up.</summary>
+        public override void Prewarm(ThrowableDefinition definition)
+        {
+            if (definition == null)
+            {
+                return;
+            }
+
+            BlastFxPool.Shared.Prewarm(definition.ExplosionPrefab, PrewarmNodes);
+        }
 
         public override void Trigger(Throwable source)
         {
@@ -31,7 +48,8 @@ namespace VortexArena.Core.Combat
             }
 
             ArenaCombat.ReportAreaHit(position, definition.BlastRadius, definition.BlastDamage,
-                definition.ThrowableId, definition.EdgeScale, ~0, definition.RequireLineOfSight);
+                definition.ThrowableId, definition.EdgeScale, ArenaLayers.AreaTargetMask,
+                definition.RequireLineOfSight);
 
             // The local rig carries no hittable collider, so self damage is a separate pass; the
             // friendly-fire gate is read there, not here.
@@ -39,19 +57,14 @@ namespace VortexArena.Core.Combat
                 definition.ThrowableId, definition.EdgeScale, definition.RequireLineOfSight);
         }
 
+        /// <summary>⚠️ Pooled, not instantiated: this object is destroyed the moment the effect fires,
+        /// so the presentation cannot live under it — and a per-blast
+        /// <c>Instantiate</c>/<c>Destroy</c> pair is a visible hitch on Quest
+        /// (<see cref="BlastFxPool"/>).</summary>
         private void PlayPresentation(ThrowableDefinition definition, Vector3 position)
         {
-            if (definition.ExplosionPrefab != null)
-            {
-                // Detached from the throwable: this object is destroyed the moment the effect fires.
-                GameObject fx = Instantiate(definition.ExplosionPrefab, position, Quaternion.identity);
-                Destroy(fx, Mathf.Max(0.1f, effectLifetime));
-            }
-
-            if (definition.ExplosionClip != null)
-            {
-                AudioSource.PlayClipAtPoint(definition.ExplosionClip, position, definition.ExplosionVolume);
-            }
+            BlastFxPool.Shared.Play(definition.ExplosionPrefab, position, definition.ExplosionClip,
+                definition.ExplosionVolume, effectLifetime);
         }
     }
 }

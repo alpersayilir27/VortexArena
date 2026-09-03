@@ -17,5 +17,14 @@ namespace VortexArena.Core.Combat
     {
         /// <summary>Fires the effect. Called once, right before the throwable is destroyed.</summary>
         public abstract void Trigger(Throwable source);
+
+        /// <summary>Pay the presentation's one-off cost NOW, at <see cref="Throwable.Arm"/>, instead of
+        /// at the trigger. No-op by default.
+        /// <para>⚠️ The trigger is the one moment that must not stall: a pool built there hitches
+        /// exactly when the player is watching the explosion. The fuse is dead time and pays for
+        /// it.</para></summary>
+        public virtual void Prewarm(ThrowableDefinition definition)
+        {
+        }
     }
 }

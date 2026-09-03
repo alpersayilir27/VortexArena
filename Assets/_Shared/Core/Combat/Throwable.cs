@@ -102,6 +102,13 @@ namespace VortexArena.Core.Combat
             _ownColliders = GetComponentsInChildren<Collider>(true);
             _probeRadius = ResolveProbeRadius();
 
+            // Build the effect's presentation while the fuse burns, not at the explosion.
+            ThrowableEffect armedEffect = GetComponentInChildren<ThrowableEffect>();
+            if (armedEffect != null)
+            {
+                armedEffect.Prewarm(definition);
+            }
+
             // 1) QUANTIZE FIRST. The thrower runs the very same octahedral round-trip and cm/s
             // rounding the wire would have applied — otherwise the odd copy out is the thrower's own
             // (§6.4).
@@ -112,7 +119,8 @@ namespace VortexArena.Core.Combat
             transform.SetPositionAndRotation(worldOrigin, Quaternion.LookRotation(dir));
 
             // The body is REBUILT, not trusted: a carried copy arrives kinematic, collision-less and
-            // uninterpolated (WristHolster.Deactivate) and would otherwise fall through the floor.
+            // uninterpolated (WristHolster.Deactivate). ⚠️ detectCollisions is INDEPENDENT of
+            // isKinematic — left off, contact is never generated and enabled colliders change nothing.
             RigidbodyDrive.SetKinematic(_body, false);
             _body.detectCollisions = true;
             _body.useGravity = true;

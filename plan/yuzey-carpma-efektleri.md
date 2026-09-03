@@ -2,7 +2,7 @@
 title: Yüzey çarpma efektleri
 ---
 
-# Yüzey çarpma efektleri — kalan iş: içerik
+# Yüzey çarpma efektleri — kalan iş: ses
 
 Mermi neye çarptıysa **o yüzeyin** parçacığı ve sesi çıkar. Kod yerinde: yüzey kimliği
 `SurfaceDefinition` + `SurfaceLibrary` + `SurfaceTag`'te, oynatma havuzlu `SurfaceImpactFx`'te, tek
@@ -12,25 +12,29 @@ Sözleşmenin anlatımı `Docs/Sistem-Ozeti.md` §4.
 
 ## Kalan içerik işi
 
-- [ ] `SurfaceLibrary.asset` (`_Shared/Data/Resources/`) + yüzey tanımları: kar, tahta, metal,
-      beton, toprak ve `default`. ⚠️ `default` **boş bırakılmaz** — eşleşmeyen yüzeyde hiçbir şey
-      çıkmaması "efekt bozuk" diye okunur, jenerik bir toz okunmaz. `FX_HitSpark.prefab`
-      `default`'un prefabı olur.
-- [ ] Her tanıma parçacık prefabı + çarpma sesleri (ses seviyesi ve perde bandı tanımın içinde).
-      ⚠️ Tanımın ömrü parçacığın kendi ömründen kısa olursa efekt yarıda kesilir.
-- [ ] Oynanan arenaların environment materyalleri tanımların materyal listesine eşlenir.
-      ⚠️ Işın maskesizdir: eşlenmemiş her şey `default`'a düşer ve belirti "her yerde toz çıkıyor"
-      olur — eşleme listesi arena bittiğinde gözden geçirilir.
-- [ ] Oyuncuya isabet: kütüphaneye bir `body` tanımı, `RemoteHitBox` taşıyan collider'ların
-      materyali ona eşlenir — kan/darbe efekti ayrı bir kod yolu açmadan gelir.
+- [ ] Çarpma sesleri: `default` dışındaki altı tanımın `impactClips` listesi boş. Yüzey başına
+      2-3 kısa klip (~0.3 sn) → `Assets/Audio/World/Impacts/`. Seviye ve perde bandı tanımın
+      içinde ayarlı, klip bağlamak yeter.
+- [ ] `toprak` tanımının materyal listesi boş — bugünkü arenalarda toprak materyali yok. Toprak
+      yüzeyli arena gelince listeye eklenir.
+- [ ] `tahta`ya bağlı `M_BreakableCover` ve `M_TargetBoard` göz kararı eşlendi (ikisi de aynı
+      `Textures1` atlasını kullanıyor) — oyunda bakılıp doğrulanır.
 
 ## Tuzaklar
 
 - ⚠️ **Materyal örneği ≠ materyal asset'i.** Sözlük `sharedMaterial` okur; çalışma anında
   `renderer.material` bir KOPYA üretir ve hiçbir zaman eşleşmez.
+- ⚠️ **Deri giydirilmiş avatarın hitbox'ları materyale ÇÖZÜLMEZ.** `RemoteAvatar` prefabındaki 32
+  `RemoteHitBox` collider'ı kemik transformlarında oturur; ne üstlerinde ne altlarında ne de
+  üstlerinde `Renderer` vardır, dolayısıyla `Ch18_Body` materyalini listeye yazmak hiçbir şey
+  yapmaz. Oyuncu yüzeyi prefab kökündeki `SurfaceTag` ile gelir. Aynısı ileride eklenecek her
+  skinned mesh için geçerlidir.
 - ⚠️ **Çok materyalli mesh DESTEKLENMEZ** (yalnız ilk materyal çözülür): hangi submesh'e vurulduğunu
   bilmek `hit.triangleIndex` ister, o da mesh'te Read/Write (bellek iki katı) + `MeshCollider` şartı
   koyar. O objeyi ikiye bölmek ya da `SurfaceTag` koymak yeterlidir.
+- ⚠️ **Aynı adlı materyal her sahnede AYRI asset'tir.** `M_Snow`/`M_Brick`/`M_Marble` her arena
+  sahnesinin kendi `Art/Materials` klasöründe kopyalanmış durumda; eşleme listesine hepsi tek tek
+  girer, biri unutulursa o arena sessizce `default`'a düşer.
 - ⚠️ **Mermi deliği (decal) bu işin parçası değil, ayrı bir adım.** URP Decal Renderer Feature
   Quest'te tam ekran bir geçiş ekler; yapılacaksa havuzlu quad + sert bir tavan (en eski delik geri
   alınır) ile yapılır.

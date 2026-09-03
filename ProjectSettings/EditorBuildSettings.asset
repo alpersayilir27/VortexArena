@@ -46,13 +46,16 @@ EditorBuildSettings:
     guid: 13f05aab672c14a4dae1de58e64f6197
   - enabled: 1
     path: Assets/Arenas/Venues/VortexAntep/Scenes/Mole_VortexAntep/Mole_VortexAntep.unity
-    guid: f888e8ae4fedf9043bdd1c5cd1f8394c
+    guid: ccc008a5d18e4e04fbe4b6da60a03984
   - enabled: 1
     path: Assets/Arenas/Venues/Outdoor14x16/Scenes/Mole_Outdoor14x16/Mole_Outdoor14x16.unity
     guid: 3af1ddc35c948cb41821f263d9dd743a
   - enabled: 1
     path: Assets/Arenas/Venues/VortexAntep/Scenes/Test_VortexAntep/Test_VortexAntep.unity
     guid: 26add10ea05d89f46a035925e76f2a9c
+  - enabled: 1
+    path: Assets/Arenas/Venues/VortexAntep/Scenes/Burger_VortexAntep/Burger_VortexAntep.unity
+    guid: d19bbd9c0d1441e48b15d6bee8385971
   m_configObjects:
     com.unity.dt.app-ui: {fileID: 11400000, guid: 1b1c20d82303e4b5781c3ef50ac1449f, type: 2}
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}
