@@ -140,6 +140,21 @@ düşüş yoludur** ve düzeni sabittir; oraya bir bölüm eklemek bu sefer onla
 pozunun düşmesi bilinçlidir: kaybolan şey objenin son pozu değil hareketinin akıcılığıdır —
 dinlenme pozu güvenilir WS kanalından gelir.
 
+### ⛔ Sunucuya kenar tetikli bildirdiğin durumu yeniden bağlanmada tekrar bildirmeden bırakma
+
+Sunucu `hello`'da ve kopuşta oturum durumunu sıfırlar (`ready`, `calibrated`, …). "Değişince
+yolla" diye yazılmış bir bildirim bunu bilemez: oyuncu tabanında dururken Wi-Fi kopup gelirse
+istemci "zaten bildirdim" der, sunucu "hiç gelmedi" der ve toplanma süresiz bekler. Kenar tetikli
+her bildirim `NetEvents.OnConnected`'da son kenarı unutur ve mevcut durumu tekrar yollar
+(`TournamentRegroupReporter`, `CalibrationState`, `SceneRouter` aynı kalıptır).
+
+### ⛔ Bağlantı kopmasını "soket hata verir" diye TCP'ye bırakma
+
+Sessizce ölen Wi-Fi'da sokete hata gelmez: gönderimler TCP kuyruğunda bekler, `ReceiveAsync`
+sonsuza dek bekler, yeniden bağlanma döngüsü hiç başlamaz. Ölü bağlantıyı düşüren istemcinin kendi
+bekçisidir (`ArenaClient.LinkWatchdogAsync`, girdisi sunucunun `heartbeat`'i); WebSocket
+ping/pong bu iş için kullanılmaz. Gerekçe: `ArenaNet-Protokol` §8.
+
 ### ⛔ Sunucuda ikinci kilit açma
 
 Maç durumunun tek kilidi `MatchDirector._gate`'tir. Ona bağlı yaşayan tablolar (`WorldObjectTable`)
@@ -393,6 +408,16 @@ kapatmak objeyi alınamaz yapmaz: boş listeyle bile interactor hover'a girer ve
 basışını hiçbir şey seçmeden kuyruktan düşürür — basış sessizce yenir ve belirti, kavranmak istenen
 objede değil **yakınındaki başka bir objede** "kavrama tuşu bazen çalışmıyor" olur. Hazırlık
 panelindeki *Eşya alma yolu ↔ prefab* satırı bunu listeler ama **düzeltmez**.
+
+### ⛔ Elde/bilekte taşınan Rigidbody'de `isKinematic`'i elle yazma, interpolasyonu açık bırakma
+
+Transform'la sürülen kinematik gövdede `Interpolate` açık kalırsa fizik transform'u her karede
+geri yazar: eşya elin çevresinde kayar, yalnız yerel oyuncu görür (uzak taraf Rigidbody'yi siler).
+Kinematik bayrağı **`RigidbodyDrive.SetKinematic`** ile çevrilir — interpolasyon onunla birlikte
+gider. Taşırken kapattığın (`detectCollisions`, yerçekimi) neyse fırlatma yolu (`Throwable.Arm`)
+kendisi geri açar; "taşıyan geri açar" diye güvenme, uzak kopya taze prefabdan doğduğu için
+eksiği yalnız atanın kendi kopyası gösterir. Gerekçe: `Sistem-Ozeti` §7 "Transform'la sürülen
+Rigidbody".
 
 ### ⛔ Tutulan ağ nesnesinde eşya baytını doldurma
 

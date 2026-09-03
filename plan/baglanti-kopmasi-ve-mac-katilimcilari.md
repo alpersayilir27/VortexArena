@@ -27,10 +27,11 @@ kopan oyuncular hiç fark edilmez.
 - [ ] Maç yokken kopan oyuncu: süre dolunca roster'dan **tümden düşer** (playerId serbest kalır).
 
 **Maç sonu**
-- [ ] Maç biter (`finished`) → ayrılmış oyuncu **maç sonu tablosunda görünür**.
+- [ ] Maç biter (`finished`) → takımlı modda ayrılmış oyuncu oyuncu tablosunda **soluk ve
+      `ayrıldı` işaretiyle** görünür; FFA'da oyuncu tablosuna **girmez**; admin tablosunda her iki
+      modda da görünür.
 - [ ] Lobiye dönülür → `ayrıldı` satırları kaybolur, kalanların `inMatch`'i temizlenir.
-- [ ] Kazanan **bağlı** oyunculardan seçilir (ayrılmış oyuncunun skoru tabloda durur ama kupayı
-      almaz).
+- [ ] Kazanan **bağlı** oyunculardan seçilir; FFA'da "LİDER" satırı da ayrılanı saymaz.
 
 **Admin ve atma**
 - [ ] Admin penceresi kapatılır → satır **hemen** kaybolur ("yeniden bağlanıyor" yazmaz).

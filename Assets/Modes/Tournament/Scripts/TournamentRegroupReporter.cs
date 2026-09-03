@@ -79,11 +79,13 @@ namespace VortexArena.Modes.Tournament
         private void OnEnable()
         {
             NetEvents.OnLobbyState += HandleLobbyState;
+            NetEvents.OnConnected += HandleConnected;
         }
 
         private void OnDisable()
         {
             NetEvents.OnLobbyState -= HandleLobbyState;
+            NetEvents.OnConnected -= HandleConnected;
 
             // Scene/HUD going away: drop the prompt, else it stays stuck on the persistent singleton.
             Leave();
@@ -218,6 +220,21 @@ namespace VortexArena.Modes.Tournament
             }
 
             return _opponentsMissing > 0 ? "RAKİP BASE'DE BEKLENİYOR" : "";
+        }
+
+        /// <summary>Reconnect: the server zeroes every <c>ready</c> flag on hello (and on the drop
+        /// before it), and an edge-only report cannot know that. Forgetting the last edge makes the
+        /// next frame resend the current state — a player standing in the base through a Wi-Fi drop
+        /// would otherwise hold the regroup open forever.</summary>
+        private void HandleConnected(WelcomeMsg msg)
+        {
+            if (!_active || !_reported)
+            {
+                return;
+            }
+
+            _reported = false;
+            Debug.Log("[Regroup] yeniden bağlanıldı — taban durumu sunucuya tekrar bildirilecek.");
         }
 
         /// <summary>Roster refresh: how many are still out of their base, split by side. Fed by the SAME

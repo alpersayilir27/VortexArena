@@ -973,11 +973,12 @@ public sealed class MatchDirector
     /// <c>respawn</c> themselves, every new step added to one (clearing a flag, calling a hook, sending a
     /// message) would go SILENTLY MISSING in the other. "Dying" is one sentence, written in one place.
     /// <para>With <paramref name="killer"/> <c>null</c> the death is environmental: <c>killerId</c> 0 and
-    /// nobody's <c>kills</c> increases. ⚠️ This method does NOT write score — <c>IGameMode.OnKill</c> is
-    /// raised at the CALL SITE, outside the lock (§10.2: teamkills and environmental deaths score nothing
-    /// for the same reason).</para></remarks>
+    /// nobody's <c>kills</c> increases. ⚠️ This method does NOT write REWARD score — <c>IGameMode.OnKill</c>
+    /// is raised at the CALL SITE, outside the lock (§10.2: teamkills and environmental deaths reward
+    /// nothing for the same reason). The teamkill PENALTY is written here: it is a counter correction,
+    /// not a reward, so it belongs with the counters.</para></remarks>
     private void KillPlayerLocked(List<Outgoing> outbox, PlayerState victim, PlayerState? killer,
-        string weaponId, DateTime now)
+        string weaponId, DateTime now, bool teamKill = false)
     {
         victim.Alive = false;
         victim.DiedAt = now;
@@ -990,7 +991,22 @@ public sealed class MatchDirector
         ReleaseObjectsOfLocked(outbox, victim.PlayerId);
         // A suicide adds a death but NO kill (§10.2): killer and victim are the same record, and
         // crediting it would inflate K/D. The kill_event still goes out with killerId == victimId.
-        if (killer != null && !ReferenceEquals(killer, victim)) killer.Kills++;
+        if (killer != null && !ReferenceEquals(killer, victim))
+        {
+            if (teamKill)
+            {
+                // Counter-Strike rule (§10.2): a teamkill is a kill taken AWAY — kills −1 and score −1 on
+                // the killer, both may go negative. Team score is untouched: its only writer is OnKill,
+                // which the call site does not raise for a teamkill.
+                killer.Kills--;
+                killer.Score--;
+            }
+            else
+            {
+                killer.Kills++;
+            }
+        }
+
         _rosterRefreshFor = victim; // deaths + alive changed → refresh lobby_state (§5.3)
 
         QueueBroadcastLocked(outbox, JsonUtil.Serialize(new KillEventMsg
@@ -1800,7 +1816,7 @@ public sealed class MatchDirector
             {
                 killed = true;
                 // ⚠️ The ONLY writer of death (§10.2): counters, kill_event and respawn live there.
-                KillPlayerLocked(outbox, target, shooter, weaponId, now);
+                KillPlayerLocked(outbox, target, shooter, weaponId, now, teamKill);
             }
 
             mode = _mode;
@@ -1813,16 +1829,16 @@ public sealed class MatchDirector
         mode?.OnHitApplied(this, shooter.PlayerId, target.PlayerId, appliedDamage, killed);
         if (!killed) return;
 
-        // ⚠️ A TEAMKILL SCORES NOTHING (§10.2): with friendly fire on, a hit that thins your own team must
+        // ⚠️ A TEAMKILL REWARDS NOTHING (§10.2): with friendly fire on, a hit that thins your own team must
         // not award that team points. The gate sits at the CALL SITE, not inside the mode — IGameMode is
-        // the only score writer, so the rule stays in one place and every new mode obeys it for free.
-        // `kills`/`deaths` counters and the kill feed line still run: the event happened, only the reward
-        // is gone. A penalty (−1) is deliberately absent.
+        // the only reward writer, so the rule stays in one place and every new mode obeys it for free.
+        // The kill feed line still runs; the Counter-Strike penalty (kills −1, score −1) is already
+        // written by KillPlayerLocked as a counter correction.
         // Blowing yourself up scores nothing either, and for the same reason — plus it is a SEPARATE
         // test: with no teams, `teamKill` is false for a suicide (§10.2).
         if (!teamKill && !selfHit) mode?.OnKill(this, shooter.PlayerId, target.PlayerId, weaponId);
         var scorelessNote = selfHit ? " (KENDİNİ — skor yazılmadı)"
-            : teamKill ? " (TAKIMDAŞ — skor yazılmadı)" : "";
+            : teamKill ? " (TAKIMDAŞ — öldürene −1, takım skoru yazılmadı)" : "";
         Console.WriteLine($"[match] öldürme{scorelessNote}: " +
                           $"{shooter.Name} → {target.Name} ({weaponId}) — skor kırmızı {ScoreRed} : mavi {ScoreBlue}");
         // The match-end check runs in the tick loop (≤100 ms); no phase change here.

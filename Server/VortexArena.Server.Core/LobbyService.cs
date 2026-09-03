@@ -149,12 +149,20 @@ public sealed class LobbyService
     /// THAT client only. A safety net, not the primary path: the control channel is TCP so
     /// broadcasts do not "get lost"; this closes the windows where a client could not apply one
     /// (scene transition, moment of disconnect).</summary>
+    /// <summary>Serialised once: the reply never changes.</summary>
+    private static readonly string HeartbeatJson = JsonUtil.Serialize(new HeartbeatMsg());
+
     public async Task HandleStatusAsync(ClientConnection connection, StatusMsg msg)
     {
         var state = connection.State;
         if (state == null) return;
 
         _registry.UpdateStatus(state.DeviceId, msg);
+
+        // §8: the client's link watchdog needs a guaranteed periodic frame — every status is answered,
+        // whether or not the roster below has anything to say.
+        await SendSafeAsync(connection, HeartbeatJson, state.Name);
+
         if (msg.rosterVersion >= Volatile.Read(ref _rosterVersion)) return;
 
         await SendSafeAsync(connection, BuildLobbyStateJson(), state.Name);

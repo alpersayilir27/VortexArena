@@ -36,7 +36,7 @@ namespace VortexArena.Protocol
         /// <para>v5 net telemetry + packet combining (<c>0x05</c>) · v4 held item on the wire, shot
         /// events moved to UDP · v3 phase machine · v2 <c>set_identity</c>.</para>
         /// </summary>
-        public const int PROTOCOL_VERSION = 19;
+        public const int PROTOCOL_VERSION = 20;
         public const string APP_ID = "VortexArena";
 
         // ---- Calibration mode (§5.2/§10.6): how headsets align AT STARTUP. ----
@@ -97,6 +97,11 @@ namespace VortexArena.Protocol
         public const float RECONNECT_GRACE = 45f;
 
         public const float HELLO_TIMEOUT = 10f; // §8: a connection without hello is closed after this
+
+        /// <summary>Upper bound of one WS connect attempt (§8). <c>ConnectAsync</c> has no timeout of
+        /// its own: against an unreachable address a SYN sits in TCP retransmit for minutes and the
+        /// backoff never gets its turn.</summary>
+        public const float CONNECT_TIMEOUT = 10f;
 
         // Reconnect backoff sequence; last element is the ceiling.
         public static readonly float[] RECONNECT_BACKOFF = { 1f, 2f, 5f };

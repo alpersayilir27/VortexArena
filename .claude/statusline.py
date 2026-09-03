@@ -63,7 +63,7 @@ def _sum_usage(usage):
     return total
 
 
-def tail_lines(path, max_bytes=262144, max_lines=400):
+def tail_lines(path, max_bytes=1048576, max_lines=2000):
     """Last chunk of a file as lines. Never reads the whole transcript."""
     try:
         with open(path, "rb") as f:
@@ -132,23 +132,42 @@ def resolve_limit(data, display_name):
     return DEFAULT_LIMIT
 
 
+def _transcript_used(transcript_path):
+    """(tokens, from_compact). Newest record wins: a compact boundary that comes
+    AFTER the last assistant usage means the window was just rebuilt and every
+    older usage record (and the harness value derived from it) is stale."""
+    for obj in iter_tail_records(transcript_path):
+        if obj.get("type") == "system" and obj.get("subtype") == "compact_boundary":
+            meta = obj.get("compactMetadata")
+            post = meta.get("postTokens") if isinstance(meta, dict) else None
+            if isinstance(post, (int, float)) and post >= 0:
+                return int(post), True
+            return None, True
+        message = obj.get("message")
+        if isinstance(message, dict):
+            total = _sum_usage(message.get("usage"))
+            if total > 0:
+                return total, False
+    return None, False
+
+
 def resolve_used(data, transcript_path):
     """Occupied context. Returns None when it cannot be determined."""
-    # Preferred: the harness already computed it for us — no disk I/O.
+    from_transcript, after_compact = _transcript_used(transcript_path)
+
+    # Right after /compact no API call has happened yet, so whatever the harness
+    # reports still describes the pre-compact window. Trust the boundary.
+    if after_compact and from_transcript is not None:
+        return from_transcript
+
+    # Preferred: the harness already computed it for us.
     cw = data.get("context_window")
     if isinstance(cw, dict):
         total = _sum_usage(cw.get("current_usage"))
         if total > 0:
             return total
 
-    # Fallback: last assistant usage in the transcript tail.
-    for obj in iter_tail_records(transcript_path):
-        message = obj.get("message")
-        if isinstance(message, dict):
-            total = _sum_usage(message.get("usage"))
-            if total > 0:
-                return total
-    return None
+    return from_transcript
 
 
 # ----------------------------------------------------------------- effort ---
@@ -251,8 +270,10 @@ def build_line(data):
 
 
 def main():
+    # Bytes, not text: the console code page would mangle a UTF-8 payload
+    # (and a BOM), and any decode error would blank the whole line.
     try:
-        raw = sys.stdin.read()
+        raw = sys.stdin.buffer.read().decode("utf-8-sig", errors="replace")
     except Exception:
         raw = ""
     try:
@@ -265,7 +286,10 @@ def main():
         line = build_line(data)
     except Exception:
         line = ""
-    sys.stdout.write(line)
+    try:
+        sys.stdout.buffer.write(line.encode("utf-8", errors="replace"))
+    except Exception:
+        sys.stdout.write(line)
 
 
 if __name__ == "__main__":

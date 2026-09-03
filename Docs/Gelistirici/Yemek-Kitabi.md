@@ -686,7 +686,9 @@ tek satır iş çıkarmaz (denge sayıları istemcide yaşar — `Protokol` §10
 yarıçapı/hasarı/`edgeScale`, `requireLineOfSight`, patlama prefabı + ses klibi.
 
 **2. Prefab.** Root'ta `Rigidbody` + collider + **fizik materyali**, `Throwable` bileşeni ve bir
-`ThrowableEffect` (bomba için `BlastEffect`).
+`ThrowableEffect` (bomba için `BlastEffect`). Rigidbody'nin interpolasyon/kinematik/çarpışma
+alanlarını prefabda ayarlamaya çalışma: taşınırken kılıf kapatır, uçuşta `Arm` açar
+(`Yapma-Listesi` "taşınan Rigidbody").
 ⚠️ **Sekme katsayısını düşük tut** — kopyaların ayrışması sekme sayısıyla büyür (`Sistem-Ozeti` §7
 "atılabilir avatarla çarpışmaz").
 

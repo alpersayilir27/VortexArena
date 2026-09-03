@@ -305,6 +305,9 @@ namespace VortexArena.App
         /// Ordering matches <c>AdminStatsPanel</c>: in team modes roster order (<c>playerId</c>) is
         /// kept so a player always finds themselves in the same row; in FFA score is the only
         /// criterion, sorted DESCENDING (stable via <c>playerId</c> on ties).
+        /// <para>Departed (<c>left</c>) rows follow the Counter-Strike rule (§10.2): in a
+        /// player-scored mode they leave the table (deathmatch), in a team mode they stay, dimmed
+        /// (competitive). The admin table is not filtered — the operator must see everyone.</para>
         /// </summary>
         private void RankPlayers()
         {
@@ -313,10 +316,17 @@ namespace VortexArena.App
             for (int i = 0; i < _roster.Length; i++)
             {
                 PlayerInfo info = _roster[i];
-                if (info != null && info.role != "admin")
+                if (info == null || info.role == "admin")
                 {
-                    _ranked.Add(info);
+                    continue;
                 }
+
+                if (ModeRuntime.IsTeamless && info.connection == ArenaProtocol.CONNECTION_LEFT)
+                {
+                    continue;
+                }
+
+                _ranked.Add(info);
             }
 
             if (!ModeRuntime.IsTeamless)
@@ -369,6 +379,21 @@ namespace VortexArena.App
         /// <c>AdminPlayerView</c> (client mirror); a shared signature would cut one of them off from
         /// its natural source.</summary>
         private static string CellText(PlayerInfo info, int column)
+        {
+            string text = RawCellText(info, column);
+            if (info.connection != ArenaProtocol.CONNECTION_LEFT)
+            {
+                return text;
+            }
+
+            // Departed row (only team modes get here, see RankPlayers): dimmed, and the name carries
+            // the marker — the text stand-in for Counter-Strike's disconnected icon.
+            return column == 0
+                ? $"<alpha=#66>{text} · ayrıldı<alpha=#FF>"
+                : $"<alpha=#66>{text}<alpha=#FF>";
+        }
+
+        private static string RawCellText(PlayerInfo info, int column)
         {
             switch (column)
             {

@@ -751,6 +751,14 @@ namespace VortexArena.Protocol
         public string type = MessageTypes.Ping;
     }
 
+    /// <summary>Server → client answer to every <c>status</c> (§8). No fields: the frame's ARRIVAL is
+    /// the information — the client's link watchdog counts it.</summary>
+    [Serializable]
+    public class HeartbeatMsg
+    {
+        public string type = MessageTypes.Heartbeat;
+    }
+
     [Serializable]
     public class KickedMsg
     {

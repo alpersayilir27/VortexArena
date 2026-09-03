@@ -8,14 +8,15 @@ Tümü paylaşılan `ArenaProtocol` statik sınıfında tanımlanır (`Assets/_S
 
 | Sabit | Değer | Açıklama |
 |---|---|---|
-| `PROTOCOL_VERSION` | `19` | hello/welcome'da taşınır; uyumsuzlukta log uyarısı (bağlantı **kesilmez** — `Server/VortexArena.Server.Core/LobbyService.cs` uyarıyı basıp devam eder). ⚠️ **Karışık sürüm desteklenmez** — sürüm artınca tüm başlıklara yeni APK kurulur; bağlantı reddedilmediği için bunu zorlayan tek şey APK turunun tamamlanmasıdır. v19 iki değişikliği birden taşır ve tel DÜZENİNİ kırar. (1) **Poz bloğu quantize edildi** (§6.2): f32 yedi alan (28 B) yerine `[u32 rot][i16 x,y,z]` (10 B) — `0x01` 95→41 B, snapshot girdisi 88→34 B, `0x09` 34→16 B, `0x05` obje girdisi 30→12 B. (2) **İskelet kökü mutlak poz olmaktan çıktı** (§6.9): `0x07`/`0x08` kökü artık `[u16 yaw][i16 dx,dy,dz]` = 8 B'dir ve poz kanalındaki kafanın zemin izdüşümüne göre OFSET taşır — alıcı kökü kendi interpolasyonlu kafasının üstüne kurar, yani iskelet kanalı geciktiğinde/koptuğunda gövde isim etiketiyle AYNI noktada kalır ("gövde başka yerde" ayrışması yapısal olarak kapanır). Karışık sürümde belirti v7'dekiyle aynıdır: eski uç yeni baytları f32 diye okur ve uzak oyuncular çöp pozlara ışınlanır; bozulma iki yönlüdür. v18 **ağ nesnesi modelinin ikinci fazını** getirir: sahiplik ve obje pozu (`object_grab`/`object_release`/`object_rest` §5.1, `object_state`'in `owner`/`pos`/`rot`/`stage` alanları §5.3, UDP `0x09 ObjectPose` §6.12 ve `0x05`'in **obje bölümü** §6.8), obje olayları (`object_event`, **iki yönlü**) ve dinamik doğuş/ölüm (`object_spawn`/`object_despawn`) — kural §10.10, `kinds[]` girdisi `grab` + `events[]` kazanır (§11). ⚠️ **Bu artış tel DÜZENİNİ bozar:** `0x05`'in başlığı 7 B'den 8 B'ye çıkar (`objectCount`), yani eski istemci o paketin **tamamını** yanlış hizalar — karışık sürümde kaybolan şey kozmetik bir obje değil **snapshot'ın kendisidir**: uzak oyuncular çöp pozlara ışınlanır. Bozulma iki yönlüdür — eski APK `object_grab` göndermediği için hiçbir tutulabilir objeyi alamaz, yenilerin taşıdığı objeyi de sahnedeki yerinde donmuş görür. v17 **ağ nesnesi modelinin ilk fazını** getirir: sunucu artık oyuncu olmayan varlıkların (kırılabilir örtü, hedef tahtası) canını da tutar — `object_state` + `world_state` (§5.3), `hit_report.targetNetId` (§5.1), kural §10.10, `maps.json`'da `objects[]` + `kinds[]` (§11). Tel formatı **eklemelidir** ama karışık sürümde kaybolan şey kozmetik DEĞİLDİR: eski APK `targetNetId` göndermediği için hiçbir objeyi kıramaz, gelen `object_state`'i de yok saydığı için başkalarının kırdığı örtüyü **sağlam görmeye devam eder** — iki oyuncu aynı duvarın iki yanında farklı şey görür, biri kendini siperde sanırken diğeri onu açıkta vurur. v16 `identify` mesajını **her iki yönden de KALDIRIR**: admin→sunucu komutu da, sunucu→istemci bildirimi de yoktur. Kırıcı değildir ama sessizdir — eski bir admin komutu yollarsa yeni sunucu tipi `default` dalında yok sayar, düğme basılır ve hiçbir şey olmaz; eski bir başlığa da artık hiç bildirim gitmez. v15 `clear_calibration`'a **`keepSaved` (bool)** ekler (§5.2/§5.3, davranış §10.6): sıfırlama iki eyleme ayrılır — *hizalamayı geçersiz kıl* (gözlükteki kayıtlı çapa ve UUID korunur, `reload_calibration` çalışmaya devam eder) ve *cihaz kaydını da sil*. ⚠️ **Alanın YOKLUĞU `keepSaved:false` demektir** (sert kip): alanı tanımayan bir uç bugünkü davranışı sürdürür, sürpriz yapmaz. Karışık sürümde kaybolan şey bozuk çizim değil, operatörün *yumuşak* seçiminin sert uygulanmasıdır — kayıtlı çapa silinir ve o oyuncuda `reload_calibration` bir daha iş görmez. v14 **alan-dışını tele taşır**: `flags` bit7 = `FLAG_OUT_OF_BOUNDS` (§6.3) + yalnız adminlere giden `violation` akışı (§5.3, §10.9). Tel formatı **değişmez** (95 B / 88 B aynı, bit rezervden alındı, bant artışı sıfır) ama sürüm yine de artar: biti yazan **istemcidir**, yani eski APK'lı oyuncu onu hiç göndermez ve adminde alan dışına çıktığı **hiç görünmez** — kaybolan şey bozuk çizim değil, operatörün göremediği bir ihlaldir. ⚠️ **Bu bit CAN ERİTMEZ** (§10.9): ceza modeli yalnız `FLAG_IN_OBSTACLE`'a bağlıdır. v13 **kalibre modunu** (`set_calibration_mode` §5.2, `admin_state.calibrationMode` + `welcome.calibrationMode` §5.3, davranış §10.6), **zemin sapması bildirimini** (`set_calibration.floorOffset` §5.1 → `PlayerInfo.floorOffset` §5.3) ve **ölçüm başarısızlığı geri bildirimini** (`set_body_scale.error` §5.1 → `PlayerInfo.scaleError` §5.3, §10.8) getirir; tümüyle **eklemelidir**. Karışık sürümde: alanları göndermeyen eski istemcinin zemin sapması ve ölçüm gerekçesi operatöre hiç görünmez, `welcome.calibrationMode`'u okumayan başlık ise modu yok sayıp bugünkü davranışta (diskten çapa geri yükleme) kalır — kaybolan kural, bozuk çizim değil. v12 iskelet blob'undan **parmak eklemlerini çıkarır** (§6.9): hedef iskeletin 40 parmak eklemi tele hiç girmez, parmakları alıcı kendi sentezler. ⚠️ **Bu değişiklik KIRICIDIR ve sessizdir** — blob opak olduğu için eklem listesi uyuşmayan iki uç hata vermez, yalnız gövdeyi bozuk çizer; karışık sürümde belirti "uzak oyuncular garip duruyor"dur. v11 **engel ihlalini** taşır: `flags` bit5 = `FLAG_IN_OBSTACLE` (§6.3) + sunucu tarafında saniyelik can eritme (§10.9) — tümüyle **eklemelidir** (bayt düzeni değişmedi, bit rezervden alındı). Karışık sürümde: eski istemci biti hiç göndermez (o oyuncu duvarda ceza almaz) ve gelen biti yok sayar (admin halkası yanıp sönmez). v10 kumanda durumunu taşır: `flags` bit3/bit4 = **bayat el** (§6.3) + `status`/`PlayerInfo` üzerinde `ctrlL`/`ctrlR` (§5.1/§5.3) — tümüyle **eklemelidir** (bayt düzeni değişmedi, bitler rezervden alındı), bilmeyen uç bitleri yok sayar ve alanları `0` = "bildirilmedi" okur. v10 ayrıca `clear_calibration`'a **sunucu → istemci yönü** ekler (§5.2/§5.3): sıfırlama artık roster'a yazılan bir boole değil hedef başlığa iletilen bir komuttur. Bu yön de eklemelidir — tanımayan eski istemci mesajı yok sayar ve **yarım kalmış elle kalibrasyonu** (A alındı, B alınmadı) başlığında tutmaya devam eder, yani karışık sürümde bozulan tek şey operatörün o oyuncuyu sıfırlayamamasıdır. v9 gövde ölçeğini getirdi (`measure_body_scale` · `set_body_scale` · `PlayerInfo.bodyScale`, §10.8): tümüyle **eklemelidir**, eski istemci alanı bulamayınca `0` okur ve herkesi ölçeksiz çizer — yani karışık sürümde bozulan tek şey avatar boylarıdır. v8'de `lobby_state`'in `online` (bool) alanı yerini üç değerli `connection` + `reconnectSeconds`'a bıraktı (§5.3): alanı tanımayan eski admin her satırı "bağlı" çizer, yani kopan oyuncular hiç fark edilmez. v7'yi kırıcı yapan tel DÜZENİ değil **ANLAMIDIR**: baytlar v6 ile birebir aynı, ama `0x01`/`0x02`/`0x05` pozları, `0x03` atış yönleri ve `0x07`/`0x08` iskelet kökleri artık arena uzayı = dünya uzayı çerçevesinde okunur (§3). Eski istemci aynı baytları kendi sahne marker'ına göre çözer → iki taraf birbirini metrelerce kaymış, zeminin altında veya havada görür; belirti **"uzak oyuncular rastgele yerlere ışınlanıyor"**. v6'da bozulma iki yönlüydü: `0x07`/`0x08`'i tanımayan istemci uzak gövdeleri hiç çizemez, iskelet göndermeyen istemci de gövdesiz görünür (§6.9). v5'te bozulan tek yer `0x05` birleştirmesiydi (§6.8) |
+| `PROTOCOL_VERSION` | `20` | hello/welcome'da taşınır; uyumsuzlukta log uyarısı (bağlantı **kesilmez** — `Server/VortexArena.Server.Core/LobbyService.cs` uyarıyı basıp devam eder). ⚠️ **Karışık sürüm desteklenmez** — sürüm artınca tüm başlıklara yeni APK kurulur; bağlantı reddedilmediği için bunu zorlayan tek şey APK turunun tamamlanmasıdır. v20 **istemci tarafı ölü-bağlantı bekçisini** getirir (§8): sunucu her `status`'a `heartbeat` ile cevap verir (§5.3), istemci `HEARTBEAT_TIMEOUT` boyunca hiçbir WS çerçevesi almazsa soketi **kendisi** düşürüp yeniden bağlanır; bağlanma denemesi de `CONNECT_TIMEOUT` ile sınırlıdır. Tel formatı eklemelidir ama karışık sürümde kaybolan şey kozmetik DEĞİLDİR: `heartbeat` yollamayan ESKİ sunucuya karşı YENİ istemci her 15 sn'de soketi düşürür ve bağlantı hiç oturmaz — sürüm bu yüzden artar. v19 iki değişikliği birden taşır ve tel DÜZENİNİ kırar. (1) **Poz bloğu quantize edildi** (§6.2): f32 yedi alan (28 B) yerine `[u32 rot][i16 x,y,z]` (10 B) — `0x01` 95→41 B, snapshot girdisi 88→34 B, `0x09` 34→16 B, `0x05` obje girdisi 30→12 B. (2) **İskelet kökü mutlak poz olmaktan çıktı** (§6.9): `0x07`/`0x08` kökü artık `[u16 yaw][i16 dx,dy,dz]` = 8 B'dir ve poz kanalındaki kafanın zemin izdüşümüne göre OFSET taşır — alıcı kökü kendi interpolasyonlu kafasının üstüne kurar, yani iskelet kanalı geciktiğinde/koptuğunda gövde isim etiketiyle AYNI noktada kalır ("gövde başka yerde" ayrışması yapısal olarak kapanır). Karışık sürümde belirti v7'dekiyle aynıdır: eski uç yeni baytları f32 diye okur ve uzak oyuncular çöp pozlara ışınlanır; bozulma iki yönlüdür. v18 **ağ nesnesi modelinin ikinci fazını** getirir: sahiplik ve obje pozu (`object_grab`/`object_release`/`object_rest` §5.1, `object_state`'in `owner`/`pos`/`rot`/`stage` alanları §5.3, UDP `0x09 ObjectPose` §6.12 ve `0x05`'in **obje bölümü** §6.8), obje olayları (`object_event`, **iki yönlü**) ve dinamik doğuş/ölüm (`object_spawn`/`object_despawn`) — kural §10.10, `kinds[]` girdisi `grab` + `events[]` kazanır (§11). ⚠️ **Bu artış tel DÜZENİNİ bozar:** `0x05`'in başlığı 7 B'den 8 B'ye çıkar (`objectCount`), yani eski istemci o paketin **tamamını** yanlış hizalar — karışık sürümde kaybolan şey kozmetik bir obje değil **snapshot'ın kendisidir**: uzak oyuncular çöp pozlara ışınlanır. Bozulma iki yönlüdür — eski APK `object_grab` göndermediği için hiçbir tutulabilir objeyi alamaz, yenilerin taşıdığı objeyi de sahnedeki yerinde donmuş görür. v17 **ağ nesnesi modelinin ilk fazını** getirir: sunucu artık oyuncu olmayan varlıkların (kırılabilir örtü, hedef tahtası) canını da tutar — `object_state` + `world_state` (§5.3), `hit_report.targetNetId` (§5.1), kural §10.10, `maps.json`'da `objects[]` + `kinds[]` (§11). Tel formatı **eklemelidir** ama karışık sürümde kaybolan şey kozmetik DEĞİLDİR: eski APK `targetNetId` göndermediği için hiçbir objeyi kıramaz, gelen `object_state`'i de yok saydığı için başkalarının kırdığı örtüyü **sağlam görmeye devam eder** — iki oyuncu aynı duvarın iki yanında farklı şey görür, biri kendini siperde sanırken diğeri onu açıkta vurur. v16 `identify` mesajını **her iki yönden de KALDIRIR**: admin→sunucu komutu da, sunucu→istemci bildirimi de yoktur. Kırıcı değildir ama sessizdir — eski bir admin komutu yollarsa yeni sunucu tipi `default` dalında yok sayar, düğme basılır ve hiçbir şey olmaz; eski bir başlığa da artık hiç bildirim gitmez. v15 `clear_calibration`'a **`keepSaved` (bool)** ekler (§5.2/§5.3, davranış §10.6): sıfırlama iki eyleme ayrılır — *hizalamayı geçersiz kıl* (gözlükteki kayıtlı çapa ve UUID korunur, `reload_calibration` çalışmaya devam eder) ve *cihaz kaydını da sil*. ⚠️ **Alanın YOKLUĞU `keepSaved:false` demektir** (sert kip): alanı tanımayan bir uç bugünkü davranışı sürdürür, sürpriz yapmaz. Karışık sürümde kaybolan şey bozuk çizim değil, operatörün *yumuşak* seçiminin sert uygulanmasıdır — kayıtlı çapa silinir ve o oyuncuda `reload_calibration` bir daha iş görmez. v14 **alan-dışını tele taşır**: `flags` bit7 = `FLAG_OUT_OF_BOUNDS` (§6.3) + yalnız adminlere giden `violation` akışı (§5.3, §10.9). Tel formatı **değişmez** (95 B / 88 B aynı, bit rezervden alındı, bant artışı sıfır) ama sürüm yine de artar: biti yazan **istemcidir**, yani eski APK'lı oyuncu onu hiç göndermez ve adminde alan dışına çıktığı **hiç görünmez** — kaybolan şey bozuk çizim değil, operatörün göremediği bir ihlaldir. ⚠️ **Bu bit CAN ERİTMEZ** (§10.9): ceza modeli yalnız `FLAG_IN_OBSTACLE`'a bağlıdır. v13 **kalibre modunu** (`set_calibration_mode` §5.2, `admin_state.calibrationMode` + `welcome.calibrationMode` §5.3, davranış §10.6), **zemin sapması bildirimini** (`set_calibration.floorOffset` §5.1 → `PlayerInfo.floorOffset` §5.3) ve **ölçüm başarısızlığı geri bildirimini** (`set_body_scale.error` §5.1 → `PlayerInfo.scaleError` §5.3, §10.8) getirir; tümüyle **eklemelidir**. Karışık sürümde: alanları göndermeyen eski istemcinin zemin sapması ve ölçüm gerekçesi operatöre hiç görünmez, `welcome.calibrationMode`'u okumayan başlık ise modu yok sayıp bugünkü davranışta (diskten çapa geri yükleme) kalır — kaybolan kural, bozuk çizim değil. v12 iskelet blob'undan **parmak eklemlerini çıkarır** (§6.9): hedef iskeletin 40 parmak eklemi tele hiç girmez, parmakları alıcı kendi sentezler. ⚠️ **Bu değişiklik KIRICIDIR ve sessizdir** — blob opak olduğu için eklem listesi uyuşmayan iki uç hata vermez, yalnız gövdeyi bozuk çizer; karışık sürümde belirti "uzak oyuncular garip duruyor"dur. v11 **engel ihlalini** taşır: `flags` bit5 = `FLAG_IN_OBSTACLE` (§6.3) + sunucu tarafında saniyelik can eritme (§10.9) — tümüyle **eklemelidir** (bayt düzeni değişmedi, bit rezervden alındı). Karışık sürümde: eski istemci biti hiç göndermez (o oyuncu duvarda ceza almaz) ve gelen biti yok sayar (admin halkası yanıp sönmez). v10 kumanda durumunu taşır: `flags` bit3/bit4 = **bayat el** (§6.3) + `status`/`PlayerInfo` üzerinde `ctrlL`/`ctrlR` (§5.1/§5.3) — tümüyle **eklemelidir** (bayt düzeni değişmedi, bitler rezervden alındı), bilmeyen uç bitleri yok sayar ve alanları `0` = "bildirilmedi" okur. v10 ayrıca `clear_calibration`'a **sunucu → istemci yönü** ekler (§5.2/§5.3): sıfırlama artık roster'a yazılan bir boole değil hedef başlığa iletilen bir komuttur. Bu yön de eklemelidir — tanımayan eski istemci mesajı yok sayar ve **yarım kalmış elle kalibrasyonu** (A alındı, B alınmadı) başlığında tutmaya devam eder, yani karışık sürümde bozulan tek şey operatörün o oyuncuyu sıfırlayamamasıdır. v9 gövde ölçeğini getirdi (`measure_body_scale` · `set_body_scale` · `PlayerInfo.bodyScale`, §10.8): tümüyle **eklemelidir**, eski istemci alanı bulamayınca `0` okur ve herkesi ölçeksiz çizer — yani karışık sürümde bozulan tek şey avatar boylarıdır. v8'de `lobby_state`'in `online` (bool) alanı yerini üç değerli `connection` + `reconnectSeconds`'a bıraktı (§5.3): alanı tanımayan eski admin her satırı "bağlı" çizer, yani kopan oyuncular hiç fark edilmez. v7'yi kırıcı yapan tel DÜZENİ değil **ANLAMIDIR**: baytlar v6 ile birebir aynı, ama `0x01`/`0x02`/`0x05` pozları, `0x03` atış yönleri ve `0x07`/`0x08` iskelet kökleri artık arena uzayı = dünya uzayı çerçevesinde okunur (§3). Eski istemci aynı baytları kendi sahne marker'ına göre çözer → iki taraf birbirini metrelerce kaymış, zeminin altında veya havada görür; belirti **"uzak oyuncular rastgele yerlere ışınlanıyor"**. v6'da bozulma iki yönlüydü: `0x07`/`0x08`'i tanımayan istemci uzak gövdeleri hiç çizemez, iskelet göndermeyen istemci de gövdesiz görünür (§6.9). v5'te bozulan tek yer `0x05` birleştirmesiydi (§6.8) |
 | `UDP_BEACON_PORT` | `47820` | Sunucu → broadcast (cosmos 47800/47801 ile bilerek çakışmaz) |
 | `CONTROL_PORT` | `47821` | WS TCP, endpoint `/ws` |
 | `STATE_PORT` | `47822` | UDP poz kanalı |
 | `BEACON_INTERVAL` | 2 sn | Beacon yayın aralığı |
 | `DISCOVERY_TIMEOUT` | 5 sn | Beacon gelmezse statik IP fallback (`StreamingAssets/arena.json`); komut satırı adresi ve elle girilen IP beacon'ın **üstündedir** (zincirin tamamı §4) |
-| `STATUS_INTERVAL` | 5 sn | İstemci status kalp atışı |
-| `HEARTBEAT_TIMEOUT` | 15 sn | Status gelmezse soket ölü sayılır, kapatılır ve cihaz `reconnecting`'e düşer (§2). ⚠️ Tek başına "oyuncu gitti" DEMEZ — asıl karar `RECONNECT_GRACE`'indir |
+| `STATUS_INTERVAL` | 5 sn | İstemci status kalp atışı; sunucu her birine `heartbeat` ile cevap verir (§5.3, §8) |
+| `CONNECT_TIMEOUT` | 10 sn | Tek bir WS bağlanma denemesinin tavanı (§8). `ConnectAsync`'in kendi zaman aşımı yoktur: ulaşılamayan adrese SYN dakikalarca yeniden denenir ve backoff sırası hiç gelmez |
+| `HEARTBEAT_TIMEOUT` | 15 sn | **İki yönlü:** sunucuda status gelmezse soket ölü sayılır, kapatılır ve cihaz `reconnecting`'e düşer (§2); istemcide bu kadar süre **hiçbir WS çerçevesi** gelmezse istemci soketi kendisi düşürür ve yeniden bağlanır (§8, sessiz Wi-Fi ölümü). ⚠️ Tek başına "oyuncu gitti" DEMEZ — asıl karar `RECONNECT_GRACE`'indir |
 | `RECONNECT_GRACE` | 45 sn | `reconnecting` cihazın geri beklendiği süre. Dolunca oyuncu oyundan **çıkarılır**: koşan maçın katılımcısıysa kaydı `left` olarak maç sonuna kadar durur, değilse tümden silinir ve `playerId`'si havuza döner (§2, §10.2). Kopuştan çıkarılmaya toplam süre `HEARTBEAT_TIMEOUT + RECONNECT_GRACE` |
 | `RECONNECT_BACKOFF` | 1 → 2 → 5 sn (tavan 5) | Kopunca sonsuz yeniden deneme; her denemede discovery baştan. ⚠️ İstemci `RECONNECT_GRACE` dolsa da denemeyi BIRAKMAZ (§8) |
 | `POSE_RATE_HZ` | `20` | İstemci poz gönderim frekansı |
@@ -499,6 +500,10 @@ Kazanan **iki kanaldan biriyle** ifade edilir (`rules.scoring`, §10.5): takım 
 **`return_to_lobby`** `{ "type":"return_to_lobby", "modeId":"lobby", "sceneName":"<Lobi>", "sceneElapsed":0, "rules":{ … } }` — herkesi sunucunun **açık sahnesine** taşır. Şekli `load_match` ile aynıdır (§10.7): `sceneName` o an açık olan sahne, `modeId`/`rules` o sahnenin profili. Adı tarihseldir — yalnız "lobiye dön" değil, operatörün seçtiği arenayı sahnelemek için de kullanılır (§10.7 Sahneleme).
 Aynı mesaj **lobi sahnelemesini** de taşır (§10.7): operatör lobideyken harita seçtiğinde `sceneName` o arenadır. İstemci için ikisi de aynı şeydir — *"lobideyiz, şu sahneyi yükle"* — bu yüzden ayrı bir mesaj tipi YOKTUR. `modeId` her iki durumda da `"lobby"` kalır: sahnenin arena olması fazı değiştirmez.
 **`ping`** `{ "type":"ping" }` — istemci `status` ile yanıtlar (ayrı pong yok).
+**`heartbeat`** `{ "type":"heartbeat" }` — sunucunun **her `status`'a** verdiği alansız cevap (§8). Bilgi
+çerçevenin kendisidir: istemcinin ölü-bağlantı bekçisi yalnız "sunucudan en son ne zaman bir şey
+geldi"ye bakar ve bu mesaj o soruya garantili periyodik bir cevap sağlar; roster değişmezken başka
+hiçbir mesaj periyodik değildir. İstemci içeriğini işlemez.
 **`measure_body_scale`** `{ "type":"measure_body_scale" }` — istemci gövde ölçüsünü alır ve sonucu
 `set_body_scale` ile döner (§10.8). Yalnız player'a gider; ölçüm başarısız olursa istemci yine
 `set_body_scale` yollar ama `error` alanı **dolu** olur — eski ölçek durur, gerekçe operatöre
@@ -1203,9 +1208,12 @@ serbest bırakır (§10.10); tutmasaydı obje alındığı yere ışınlanırdı
          (PlayerPrefs); yoksa beacon dinle 5 sn; yoksa StreamingAssets/arena.json statik IP)
        → ws://ip:47821/ws bağlan → hello → welcome (playerId + udpToken + match durumu)
        → UDP kayıt (0x00, ack'e dek tekrar) → geç katılımsa sahne senkronu
-       → StatusLoop (5 sn; status.rosterVersion ile roster uzlaştırması) + (player ise,
-         Live/Lobby fark etmez) PoseLoop (20 Hz)
-Kopma  → 1→2→5 sn backoff ile discovery'den itibaren baştan (SONSUZ — aşağıdaki nota bak)
+       → StatusLoop (5 sn; status.rosterVersion ile roster uzlaştırması; her status'a sunucudan
+         heartbeat) + (player ise, Live/Lobby fark etmez) PoseLoop (20 Hz)
+       → HEARTBEAT_TIMEOUT (15 sn) boyunca sunucudan HİÇBİR WS çerçevesi gelmezse istemci soketi
+         KENDİSİ düşürür (sessiz Wi-Fi ölümü — aşağıdaki nota bak) → Kopma
+Kopma  → 1→2→5 sn backoff ile discovery'den itibaren baştan (SONSUZ — aşağıdaki nota bak); her
+         bağlanma denemesi CONNECT_TIMEOUT (10 sn) ile sınırlı
        → bağlantısızlık ~3 sn sürerse istemci hata ekranı gösterir (sunum; §4 notu)
 Sunucu : hello'suz bağlantıyı 10 sn içinde kapat; deviceId çakışmasında eskisini kapat
        → roster değişince TEK yayıncı üzerinden lobby_state (version artar); status.rosterVersion
@@ -1224,6 +1232,17 @@ düşüreceğini söyler, başlığın ne zaman pes edeceğini değil: sahada bi
 beklemesi, operatörün her kopan başlığa elle gitmesi demektir. Süre dolduğunda değişen tek şey
 sunumdur (§5.3 `reconnectSeconds` biter, ekran "oyundan çıkarıldınız — yeniden bağlanılıyor" der);
 ağ geri gelince başlık normal `hello` ile katılır ve maç sürüyorsa **eski satırına oturur** (§2).
+
+⚠️ **Sessiz Wi-Fi ölümünü TCP fark etmez; bağlantıyı düşüren istemcinin kendisi olmak zorundadır.**
+Gözlüğün Wi-Fi'ı kesildiğinde sokete RST gelmez: istemcinin gönderdiği `status`'lar TCP'nin yeniden
+gönderim kuyruğunda "başarıyla" beklerken `ReceiveAsync` sonsuza dek bekler, yani hiçbir hata
+oluşmaz ve yeniden bağlanma döngüsü hiç başlamaz — Wi-Fi geri gelse bile eski soket ölüdür ve başlık
+uygulama yeniden başlatılana kadar "bağlı" sanır. Bu yüzden istemci kendi bekçisini tutar: sunucudan
+son çerçevenin üstünden `HEARTBEAT_TIMEOUT` geçince soketi düşürür. Bekçinin garantili girdisi
+`heartbeat`'tir (§5.3); WebSocket ping/pong bu iş için KULLANILMAZ — Unity'nin `ClientWebSocket`'i
+cevapsız kalan pong'u süreye bağlamaz ve sunucu ping'i istemcinin okuma döngüsüne hiç düşmez.
+Süre bilerek sunucunun süresiyle aynıdır: iki taraf da bağlantıyı yaklaşık aynı anda ölü sayar,
+istemci geri geldiğinde sunucu kaydı zaten `reconnecting`'dedir ve eski satırına oturur.
 
 ⚠️ **İstemcinin geri sayımı sunucununkiyle her zaman aynı anda başlamaz.** Bağlantısız istemci
 sunucudan sayı alamadığı için süreyi kendi kopuş anından sayar: soket düzgün kapanırsa iki saat
@@ -1365,6 +1384,10 @@ paused/loading → paused/countdown → playing                     ◄── TU
 - Toplanma kapısı **`set_ready` bayrağını yeniden kullanır** (yükleme kapısının aynısı, §5.1):
   oyuncu kendi taban bölgesine girince `set_ready{true}`, çıkınca `set_ready{false}` yollar. Yeni
   bir mesaj tipi YOKTUR ve eklenmez — "hazırım" zaten bu bayrağın anlamıdır.
+  ⚠️ **Bildirim kenar tetiklidir ve sunucu bayrağı kopuşta + `hello`'da sıfırlar (§2):** bu yüzden
+  istemci yeniden bağlanınca (`welcome`) son kenarı unutup mevcut durumu **tekrar yollar**. Yoksa
+  tabanında dururken Wi-Fi'ı kopup gelen oyuncu sunucuda süresiz "tabanına dönmedi" görünür ve
+  geri sayım hiç başlamaz.
 - **Modun açtığı geri sayım GERİ ALINABİLİR.** Şart yalnız girişte değil geri sayım **boyunca** da
   ölçülür: bayrağı düşen tek oyuncu turu erteler, mod geri sayımı iptal eder ve faz `paused`/`mode`'a
   döner (`modeState` yine `regroup:<h>/<t>`). İstemci için ek bir mesaj yoktur — geri sayımı
@@ -1381,7 +1404,7 @@ paused/loading → paused/countdown → playing                     ◄── TU
 
 Oyuncu başına: `hp` (0..`PLAYER_MAX_HP`), `alive`, `team`, `kills`, `deaths`, `score`, ölüm zamanı. `playing`'e girerken herkes `hp=PLAYER_MAX_HP`, `alive=1`. Snapshot'taki `SnapshotEntry.flags` bit0 (`FLAG_ALIVE`) bu `alive` alanından beslenir — maç dışında (`paused`/`lobby`) herkes canlı sayılır.
 
-⚠️ **Takımdaş öldürme ve KENDİNİ öldürme skor YAZMAZ.** Dost ateşi açıkken (§5.2) takım arkadaşını ya da kendini öldüren vuruşta `IGameMode.OnKill` **hiç çağrılmaz** — skorun tek yazarı orası olduğu için ne takım skoru ne bireysel skor işler. `kills`/`deaths` sayaçları ve `kill_event` (kill feed) normal işlemeye devam eder: olay gerçekleşti, yalnız ödülü yok. Kendine vuruşun tek farkı: `deaths` artar ama **`kills` ARTMAZ** (öldüren ile ölen aynı kayıt — kendini öldürene öldürme yazmak K/D'yi şişirir); `kill_event.killerId == victimId` gider ve kill feed "kendini öldürdü" satırını ondan çizer. **Ceza (−1) YOKTUR.** Kapı modun içinde değil çağrı yerindedir, böylece her yeni mod ona kendiliğinden uyar. ⚠️ İki durum **ayrı** kontrol edilir: boş takım takımdaş sayılmadığı için takımsız modda (`teamMode:"none"`) kendini öldürme "takımdaş" testinden geçemez — geçseydi FFA'da kendini havaya uçuran oyuncu kendine puan yazardı.
+⚠️ **Takımdaş öldürme Counter-Strike kuralıyla işler; KENDİNİ öldürme skor YAZMAZ.** Dost ateşi açıkken (§5.2) takım arkadaşını ya da kendini öldüren vuruşta `IGameMode.OnKill` **hiç çağrılmaz** — ödül skorunun tek yazarı orası olduğu için ne takım skoru ne bireysel ödül işler. **Takımdaş öldürmede öldürene `kills` −1 ve `score` −1 yazılır** (ikisi de eksiye düşebilir — CS'te K sütununun düşmesi), ölene `deaths` +1; takım skoru değişmez. Ceza `KillPlayerLocked`'ta, sayaçların yanında yazılır: bir sayaç düzeltmesidir, ödül değil, o yüzden `OnKill`'in dışındadır. `kill_event` (kill feed) normal gider. Kendine vuruşun farkı: `deaths` artar ama **`kills` ARTMAZ ve ceza da YOKTUR** (öldüren ile ölen aynı kayıt — kendini öldürene öldürme yazmak K/D'yi şişirir); `kill_event.killerId == victimId` gider ve kill feed "kendini öldürdü" satırını ondan çizer. Kapı modun içinde değil çağrı yerindedir, böylece her yeni mod ona kendiliğinden uyar. ⚠️ İki durum **ayrı** kontrol edilir: boş takım takımdaş sayılmadığı için takımsız modda (`teamMode:"none"`) kendini öldürme "takımdaş" testinden geçemez — geçseydi FFA'da kendini havaya uçuran oyuncu kendine puan yazardı.
 
 `score` = **bireysel maç skoru**. Yazarı yalnız `IGameMode`'dur (`MatchDirector`'ın skor defteri üzerinden); `kills` ile aynı şey DEĞİLDİR — bir mod öldürme başına 1, bir başkası objektif başına 5 yazabilir, Silah Yarışı'nda aynı alan "seviye" anlamına gelir. Maç kurulurken ve açık sahneye dönerken 0'lanır.
 
@@ -1401,7 +1424,14 @@ okunduğu anda boşaltırdı, oysa ayrılmış oyuncuların orada görünmesi bu
 roster satır eksik gider.
 
 ⚠️ **Ayrılmış oyuncu maçı KAZANAMAZ.** Kazanan hesabı (§10.1) **bağlı** oyuncular arasından yürür:
-skoru tabloda durur ama kupayı almaz. Aksi hâlde kimsenin göremediği bir kazanan ilan edilirdi.
+skoru defterde durur ama kupayı almaz. Aksi hâlde kimsenin göremediği bir kazanan ilan edilirdi.
+
+⚠️ **Ayrılmış oyuncunun OYUNCU ekranındaki gösterimi Counter-Strike kuralıdır** (`MatchResultOverlay`):
+takım skorlu modda satır durur, soluk çizilir ve adında `ayrıldı` işareti taşır (CS rekabetçi:
+bağlantısı kopan oyuncu bağlantı ikonuyla listede kalır); bireysel skorlu modda (`teamMode:"none"`)
+satır **tabloya hiç girmez** (CS deathmatch: ayrılan listeden düşer — yoksa 7 öldürmeyle giden
+oyuncu, kupayı 3 öldürmeyle alanın üstünde "lider" görünürdü). Sunucu defteri iki modda da aynıdır,
+fark yalnız sunumdadır; **admin tablosu süzülmez** — operatör ayrılanı da görmek zorundadır.
 
 ⚠️ **Atma (§5.4) katılımcılıktan da düşürür:** operatör bilinçli attıysa kayıt tümüyle silinir ve
 maç sonu tablosunda da yer almaz — kopmadan farkı budur.
@@ -2063,8 +2093,8 @@ karakter kökünün ölçeğine yazar. `0` = ölçülmemiş → `1` uygulanır.
 | Başlık | Ölçer ve `set_body_scale` ile **bildirir** (§5.1) — başarısızlığı da (`error`) |
 | Sunucu | Aralığa kırpar, saklar, yayar. **Hesaplamaz** |
 
-**Ölçüm başarısızlığı geri bildirilir.** Başlık ölçemediğinde (kalibrasyon düşmüş, karakter henüz
-sürülmemiş, göz hizası okunamadı…) sessiz kalmaz: `set_body_scale`'i `error` dolu, `scale`
+**Ölçüm başarısızlığı geri bildirilir.** Başlık ölçemediğinde (kalibre yok, model göz referansı
+okunamadı, oyuncu hareketli ya da eğilmiş…) sessiz kalmaz: `set_body_scale`'i `error` dolu, `scale`
 önemsiz olarak yollar. Sunucu ölçeği **yazmaz** (kayıtlı değer aynen durur), gerekçeyi roster'a
 (`PlayerInfo.scaleError`) yazar ve adminlere duyurur.
 ⚠️ **Gerekçe doğrulanmayan serbest bir metindir** (`weaponId`/`calibrationSource` ile aynı
@@ -2077,11 +2107,15 @@ sonsuza kadar kalırdı ve operatör sorunun sürdüğünü sanardı.
 operatör bilir. Kalibrasyondan otomatik tetiklenen bir ölçüm, oyuncu kumandayı zemine değdirmek
 için **eğilmişken** ölçmek demektir.
 
-**Ölçüm iki göz hizasının oranıdır:** oyuncunun gözü (HMD) ile karakterin **o anki** göz hizası aynı
-karede okunur, ikisi de arena uzayında. Karakter zaten body tracking'den sürüldüğü için oyuncuyla
-aynı pozdadır — yani duruş farkı orandan düşer ve "göz + şu kadar cm = boy" gibi bir tahmine hiç
-girilmez. ⚠️ **Kafa tepesi hiçbir yerde kullanılmaz:** modelin kafası oyuncunun gözüne göre
-hizalansaydı uzun bir kafa, kısa bir gövde satın alınırdı.
+**Ölçüm iki göz hizasının oranıdır:** oyuncunun gözü (HMD, **arena** zeminine göre — kalibre şart)
+bölü karakter modelinin **dinlenme pozundaki** göz hizası (prefabtan, ölçek 1'de, süreç başında bir
+kez okunur). Gövde takibi ölçüme hiç girmez: takip bozukken de ölçülür ve gözlüğün kendi zemin
+tahmininden etkilenmez. ⚠️ **Karakterin CANLI göz hizası referans olamaz:** retargeter karakterin
+kafasını oyuncunun kafasına sürer, yani "oyuncu gözü / karakter gözü" gözlüğü kim takarsa taksın
+`1` çıkar. ⚠️ **Duruş kapısı:** ~0,5 sn'lik pencerede yayılım %5'i aşarsa (hareket) ya da medyan
+öğrenilmiş ayakta göz hizasının (`StandingHeightState`) %6'dan fazla altındaysa (sabit eğilme)
+ölçüm reddedilir. ⚠️ **Kafa tepesi hiçbir yerde kullanılmaz:** modelin kafası oyuncunun gözüne
+göre hizalansaydı uzun bir kafa, kısa bir gövde satın alınırdı.
 
 ⚠️ **Ölçek iskelet blob'una GİRMEZ.** Meta Movement SDK'nın `Calibrate()`'i gönderenin gövde
 ORANLARINI değiştirir; blob `SerializationCompressionType.High` ile eklem uzunlukları üzerinden
@@ -2089,9 +2123,17 @@ sıkıştığı için alıcının hedef iskeleti artık gönderenin kodladığı
 avatar **bozuk duruşlara** girer. Bu yüzden gönderenin iskeleti prefab oranlarında bırakılır
 (`Calibrate()` hiç çağrılmaz) ve boy ayrı bir alanda, **bir kez** taşınır.
 
-⚠️ **Yerel karakter ölçeklenmez.** Ölçek yalnız uzak avatarlara uygulanır. Gönderen kendi
-karakterini de ölçekleseydi bir sonraki ölçüm zaten ölçeklenmiş bir referansı okur ve çarpanı
-`1`'e yaklaştırırdı — düğme ikinci basışta sessizce bozulurdu.
+⚠️ **Yerel karakter ölçeklenmez.** Ölçek yalnız uzak avatarlara uygulanır. Gönderenin iskeleti
+tele canlı kemik transformlarından, ölçek dahil okunur; kök yerelde ölçeklenseydi ölçek blob'a
+girer ve alıcıda ikinci kez uygulanırdı.
+
+**Boy önerisi gövde takibine arena zemininden verilir.** Kalibre olmuş başlık, öğrenilmiş ayakta
+göz hizası 2 sn sabit kalınca `OVRBody.SuggestBodyTrackingCalibrationOverride(göz + 0,11 m)` çağırır;
+yeniden hizalamada ve boy 3 cm'den fazla değişince (yeni oyuncu) yeniler. Sebep: çalışma zamanı
+boyu **kendi zemin tahmininin** üstündeki kafa yüksekliğinden çıkarır; alan verisi bayatsa o zemin
+gerçeğin altındadır, iskelet fazla uzun çözülür ve bacaklar gerçek zeminin altına iner (uzak avatar
+yere gömülü durur). Arena zemini kendi hizalamamızla `y=0`'a sabit olduğu için ona göre verilen
+boy bu hatadan bağımsızdır. Protokole girmez, yalnız başlığın kendi çalışma zamanına söylenir.
 
 ⚠️ **Kalibrasyon sıfırlanınca `bodyScale` de sıfırlanır.** Ölçü arena zeminine göredir; zemin
 geçersizse ölçü de geçersizdir. Kapı `clear_calibration` değil **kalibrasyonun `false` olması**dır:

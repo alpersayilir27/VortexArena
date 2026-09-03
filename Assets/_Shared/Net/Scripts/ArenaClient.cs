@@ -23,7 +23,8 @@ namespace VortexArena.Net
     /// <summary>
     /// Persistent WS control client singleton: Connect(ip, port, role) connects, sends hello, awaits
     /// welcome and heartbeats a status every 5 s; on a drop it retries the same address forever with a
-    /// 1→2→5 s backoff (unless Disconnect was called).
+    /// 1→2→5 s backoff (unless Disconnect was called). A link silent for HEARTBEAT_TIMEOUT is dropped
+    /// by the client itself (<see cref="LinkWatchdogAsync"/>, §8) — TCP alone never notices a dead Wi-Fi.
     ///
     /// Network work runs on background Tasks; anything needing the Unity API is moved to the main
     /// thread (Update) through a ConcurrentQueue. Server messages are published through NetEvents —
@@ -82,6 +83,10 @@ namespace VortexArena.Net
         // Written only by the connection loop thread, read by the main thread (atomic int/string assign).
         private volatile int _connectAttempts;
         private volatile string _lastError = "";
+
+        /// <summary>UTC ticks of the last frame received on the socket — the link watchdog's only
+        /// input. Written by the receive loop, read by the watchdog (Interlocked).</summary>
+        private long _lastReceivedTicks;
 
         // Device info cached on the main thread for hello (the net thread cannot touch the Unity API).
         private string _hardwareId;
@@ -322,9 +327,16 @@ namespace VortexArena.Net
 
                     using (var socket = new ClientWebSocket())
                     {
-                        await socket.ConnectAsync(uri, ct);
+                        // Bounded attempt (CONNECT_TIMEOUT): a cancelled connect lands in the generic
+                        // catch below (the loop's own token is not the one that fired) → backoff.
+                        using (var connectCts = CancellationTokenSource.CreateLinkedTokenSource(ct))
+                        {
+                            connectCts.CancelAfter(TimeSpan.FromSeconds(ArenaProtocol.CONNECT_TIMEOUT));
+                            await socket.ConnectAsync(uri, connectCts.Token);
+                        }
 
                         _socket = socket;
+                        Interlocked.Exchange(ref _lastReceivedTicks, DateTime.UtcNow.Ticks);
                         backoffIndex = 0;
                         _connectAttempts = 0;
                         _lastError = "";
@@ -332,7 +344,12 @@ namespace VortexArena.Net
                         Debug.Log("[ArenaClient] Bağlandı; hello gönderiliyor.");
 
                         await SendTextAsync(BuildHelloJson(), ct);
-                        await ReceiveLoopAsync(socket, ct);
+
+                        // The watchdog ends the receive loop by aborting the socket; the loop's
+                        // exception is what lands in the catch below and starts the reconnect.
+                        Task receive = ReceiveLoopAsync(socket, ct);
+                        _ = LinkWatchdogAsync(socket, receive, ct);
+                        await receive;
                     }
                 }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -385,6 +402,7 @@ namespace VortexArena.Net
                 while (!ct.IsCancellationRequested && socket.State == WebSocketState.Open)
                 {
                     WebSocketReceiveResult result = await socket.ReceiveAsync(new ArraySegment<byte>(buffer), ct);
+                    Interlocked.Exchange(ref _lastReceivedTicks, DateTime.UtcNow.Ticks);
 
                     if (result.MessageType == WebSocketMessageType.Close)
                     {
@@ -428,6 +446,38 @@ namespace VortexArena.Net
 
                     message.SetLength(0);
                 }
+            }
+        }
+
+        /// <summary>Client-side dead-link detection (§8). A silently dead Wi-Fi link never errors on
+        /// its own: sends sit in TCP retransmit and <c>ReceiveAsync</c> waits forever, so the headset
+        /// would stay "connected" until the app is restarted. The server answers every status with
+        /// <c>heartbeat</c>; HEARTBEAT_TIMEOUT without ANY frame = dead → abort → reconnect loop.</summary>
+        private async Task LinkWatchdogAsync(ClientWebSocket socket, Task receive, CancellationToken ct)
+        {
+            long timeoutTicks = TimeSpan.FromSeconds(ArenaProtocol.HEARTBEAT_TIMEOUT).Ticks;
+
+            try
+            {
+                while (!receive.IsCompleted && !ct.IsCancellationRequested)
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(1), ct);
+
+                    long silence = DateTime.UtcNow.Ticks - Interlocked.Read(ref _lastReceivedTicks);
+                    if (receive.IsCompleted || silence < timeoutTicks)
+                    {
+                        continue;
+                    }
+
+                    Debug.LogWarning($"[ArenaClient] Sunucudan {ArenaProtocol.HEARTBEAT_TIMEOUT:0} sn'dir " +
+                                     "mesaj yok — bağlantı ölü sayıldı, yeniden bağlanılacak.");
+                    socket.Abort();
+                    return;
+                }
+            }
+            catch (Exception)
+            {
+                // Cancelled, or the socket is already gone: the receive loop reports that itself.
             }
         }
 
@@ -646,6 +696,10 @@ namespace VortexArena.Net
                         _mainThreadActions.Enqueue(() => NetEvents.RaiseSelectionState(msg));
                         break;
                     }
+
+                    case MessageTypes.Heartbeat:
+                        // Payload-less by design: its arrival already refreshed the link watchdog.
+                        break;
 
                     case MessageTypes.Ping:
                         // ⚠️ NOT a latency measurement: it is the server's "send me a status" trigger.

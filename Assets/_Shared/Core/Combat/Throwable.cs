@@ -111,7 +111,10 @@ namespace VortexArena.Core.Combat
             // 2) Rotation is DERIVED from the direction. No randomness anywhere in this method.
             transform.SetPositionAndRotation(worldOrigin, Quaternion.LookRotation(dir));
 
-            _body.isKinematic = false;
+            // The body is REBUILT, not trusted: a carried copy arrives kinematic, collision-less and
+            // uninterpolated (WristHolster.Deactivate) and would otherwise fall through the floor.
+            RigidbodyDrive.SetKinematic(_body, false);
+            _body.detectCollisions = true;
             _body.useGravity = true;
             _body.linearVelocity = dir * speed;
 

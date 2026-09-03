@@ -93,9 +93,9 @@ namespace VortexArena.Core.Player
 
         /// <summary>Uniform body scale (§10.8) — <c>1</c> = unmeasured. Written by
         /// <see cref="RemoteAvatar"/> from the roster.
-        /// <para>⚠️ <b>Applied only on the REMOTE body</b> (<see cref="ApplyArenaRoot"/>). Writing it
-        /// locally would move the sender's own measurement reference: the next measurement would read an
-        /// already-scaled eye height and drift toward <c>1</c>.</para></summary>
+        /// <para>⚠️ <b>Applied only on the REMOTE body</b> (<see cref="ApplyArenaRoot"/>). The sender's
+        /// skeleton goes on the wire at prefab proportions, read from the live bone transforms scale
+        /// included — a locally scaled root would be streamed and applied a second time.</para></summary>
         public float BodyScale { get; set; } = 1f;
 
         /// <summary>Is the sensor source actually running?
@@ -363,30 +363,47 @@ namespace VortexArena.Core.Player
             }
 
             OVRBody.ResetBodyTrackingCalibration();
-
-            if (TryGetHintHeightMeters(out float meters))
-            {
-                OVRBody.SuggestBodyTrackingCalibrationOverride(meters);
-            }
-
+            SeedBodyHeightHint();
             return true;
         }
 
+        /// <summary>Hands the runtime the player's stature measured against the ARENA floor (local body
+        /// only). Returns the metres sent, <c>0</c> when nothing plausible was available.
+        /// <para>⚠️ Left alone, the runtime infers stature from head height above ITS OWN floor. With
+        /// stale space data that floor sits well below the real one: the inferred body is too tall and
+        /// its legs reach the bogus floor, so the remote avatar stands sunk into the ground.</para></summary>
+        public float SeedBodyHeightHint()
+        {
+            if (!HasInputAuthority || !TryGetHintHeightMeters(out float meters))
+            {
+                return 0f;
+            }
+
+            return OVRBody.SuggestBodyTrackingCalibrationOverride(meters) ? meters : 0f;
+        }
+
         /// <summary>Player stature for the calibration hint, measured against the ARENA floor.
-        /// <para>⚠️ <b>Deliberately not <see cref="BodyScale"/>:</b> that is a RATIO of two eye heights
-        /// (§10.8) and carries no metres at all.</para>
+        /// <para>Standing eye height first (<see cref="StandingHeightState"/>, posture-independent); the
+        /// live HMD only before one is learned — a hint taken mid-stoop would become the stature.</para>
+        /// <para>⚠️ <b>Deliberately not <see cref="BodyScale"/>:</b> that is a RATIO (§10.8) and carries
+        /// no metres at all.</para>
         /// <para>⚠️ Read in ARENA space on purpose. The headset's own floor is exactly what is
-        /// untrustworthy when this repair runs; the arena floor is pinned at y=0 by our own alignment,
-        /// which survives stale headset space data.</para></summary>
+        /// untrustworthy here; the arena floor is pinned at y=0 by our own alignment, which survives
+        /// stale headset space data.</para></summary>
         private bool TryGetHintHeightMeters(out float meters)
         {
             meters = 0f;
-            if (!TryGetHeadYawPose(out Pose head))
+            if (!StandingHeightState.TryGet(out float eye))
             {
-                return false;
+                if (!TryGetHeadYawPose(out Pose head))
+                {
+                    return false;
+                }
+
+                eye = ArenaSpace.WorldToArena(head.position).y;
             }
 
-            meters = ArenaSpace.WorldToArena(head.position).y + HeadTopAboveEyeMeters;
+            meters = eye + HeadTopAboveEyeMeters;
             return meters >= MinHintHeightMeters && meters <= MaxHintHeightMeters;
         }
 

@@ -137,7 +137,10 @@ namespace VortexArena.App.Admin
         {
             if (Send(new SetCalibrationModeMsg { mode = mode ?? "" }))
             {
-                SetStatus($"Kalibre modu gönderildi: {CalibrationModeLabel(mode)}");
+                // §10.6: the mode reaches a headset only with its next welcome — said here, since
+                // the operator otherwise expects the connected headsets to change on the spot.
+                SetStatus($"Kalibre modu gönderildi: {CalibrationModeLabel(mode)} — bağlı gözlüklere " +
+                          "yeniden bağlanınca (uygulama açılışında) işler.");
             }
         }
 
