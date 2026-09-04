@@ -8,16 +8,6 @@
       ],
       "env": {}
     },
-    "auggie": {
-      "type": "stdio",
-      "command": "cmd",
-      "args": [
-        "/c",
-        "auggie",
-        "--mcp"
-      ],
-      "env": {}
-    },
     "notion": {
       "type": "http",
       "url": "https://mcp.notion.com/mcp"
