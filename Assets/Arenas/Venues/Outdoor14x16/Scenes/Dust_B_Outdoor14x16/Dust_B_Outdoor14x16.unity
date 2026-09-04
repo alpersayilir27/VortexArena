@@ -4829,8 +4829,8 @@ GameObject:
   m_CorrespondingSourceObject: {fileID: -3236535019480376054, guid: 15062f10d1f82c14eb245af24bd5262e, type: 3}
   m_PrefabInstance: {fileID: 530216414}
   m_PrefabAsset: {fileID: 0}
---- !u!64 &530216417
-MeshCollider:
+--- !u!65 &530216417
+BoxCollider:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
@@ -4847,10 +4847,9 @@ MeshCollider:
   m_IsTrigger: 0
   m_ProvidesContacts: 0
   m_Enabled: 1
-  serializedVersion: 5
-  m_Convex: 1
-  m_CookingOptions: 30
-  m_Mesh: {fileID: 2286958818987054602, guid: 15062f10d1f82c14eb245af24bd5262e, type: 3}
+  serializedVersion: 3
+  m_Size: {x: 2.3082352, y: 1.4481761, z: 2.2951202}
+  m_Center: {x: 0.011398315, y: -0.06316227, z: 0.0052871704}
 --- !u!1001 &598504040
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -7205,8 +7204,8 @@ GameObject:
   m_CorrespondingSourceObject: {fileID: -3236535019480376054, guid: 15062f10d1f82c14eb245af24bd5262e, type: 3}
   m_PrefabInstance: {fileID: 931348583}
   m_PrefabAsset: {fileID: 0}
---- !u!64 &931348586
-MeshCollider:
+--- !u!65 &931348586
+BoxCollider:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
@@ -7223,10 +7222,9 @@ MeshCollider:
   m_IsTrigger: 0
   m_ProvidesContacts: 0
   m_Enabled: 1
-  serializedVersion: 5
-  m_Convex: 1
-  m_CookingOptions: 30
-  m_Mesh: {fileID: 2286958818987054602, guid: 15062f10d1f82c14eb245af24bd5262e, type: 3}
+  serializedVersion: 3
+  m_Size: {x: 2.3082352, y: 1.4481761, z: 2.2951202}
+  m_Center: {x: 0.011398315, y: -0.06316227, z: 0.0052871704}
 --- !u!1001 &953850115
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -8117,15 +8115,20 @@ PrefabInstance:
     m_AddedComponents:
     - targetCorrespondingSourceObject: {fileID: -3236535019480376054, guid: 15062f10d1f82c14eb245af24bd5262e, type: 3}
       insertIndex: -1
-      addedObject: {fileID: 1015253535}
+      addedObject: {fileID: 1015253537}
   m_SourcePrefab: {fileID: -4161369568681901532, guid: 15062f10d1f82c14eb245af24bd5262e, type: 3}
 --- !u!1 &1015253534 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: -3236535019480376054, guid: 15062f10d1f82c14eb245af24bd5262e, type: 3}
   m_PrefabInstance: {fileID: 1015253533}
   m_PrefabAsset: {fileID: 0}
---- !u!64 &1015253535
-MeshCollider:
+--- !u!4 &1015253536 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: -2174502893762351388, guid: 15062f10d1f82c14eb245af24bd5262e, type: 3}
+  m_PrefabInstance: {fileID: 1015253533}
+  m_PrefabAsset: {fileID: 0}
+--- !u!65 &1015253537
+BoxCollider:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
@@ -8142,15 +8145,9 @@ MeshCollider:
   m_IsTrigger: 0
   m_ProvidesContacts: 0
   m_Enabled: 1
-  serializedVersion: 5
-  m_Convex: 1
-  m_CookingOptions: 30
-  m_Mesh: {fileID: 2286958818987054602, guid: 15062f10d1f82c14eb245af24bd5262e, type: 3}
---- !u!4 &1015253536 stripped
-Transform:
-  m_CorrespondingSourceObject: {fileID: -2174502893762351388, guid: 15062f10d1f82c14eb245af24bd5262e, type: 3}
-  m_PrefabInstance: {fileID: 1015253533}
-  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 3
+  m_Size: {x: 2.3082352, y: 1.4481761, z: 2.2951202}
+  m_Center: {x: 0.011398315, y: -0.06316227, z: 0.0052871704}
 --- !u!1001 &1066283874
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -12604,6 +12601,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1510895938}
   - component: {fileID: 1510895937}
+  - component: {fileID: 1510895939}
   m_Layer: 10
   m_Name: ArenaBoundry2
   m_TagString: Untagged
@@ -12647,6 +12645,19 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1510895939
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1510895936}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b96ece079555195488efdbac65179f44, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.SurfaceTag
+  surface: {fileID: 11400000, guid: 5fcb4a446ce5e1843a30c3f59c8a2109, type: 2}
 --- !u!1001 &1645244611
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -14676,6 +14687,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1790100742}
   - component: {fileID: 1790100741}
+  - component: {fileID: 1790100743}
   m_Layer: 10
   m_Name: ArenaBoundry3
   m_TagString: Untagged
@@ -14719,6 +14731,19 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1790100743
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1790100740}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b96ece079555195488efdbac65179f44, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.SurfaceTag
+  surface: {fileID: 11400000, guid: 5fcb4a446ce5e1843a30c3f59c8a2109, type: 2}
 --- !u!1001 &1796757116
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -15481,7 +15506,8 @@ GameObject:
   m_Component:
   - component: {fileID: 1918864191}
   - component: {fileID: 1918864190}
-  m_Layer: 10
+  - component: {fileID: 1918864192}
+  m_Layer: 0
   m_Name: ArenaBoundry1
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -15524,6 +15550,19 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1918864192
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1918864189}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b96ece079555195488efdbac65179f44, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.SurfaceTag
+  surface: {fileID: 11400000, guid: 5fcb4a446ce5e1843a30c3f59c8a2109, type: 2}
 --- !u!1001 &1937616129
 PrefabInstance:
   m_ObjectHideFlags: 0

@@ -696,8 +696,11 @@ Sunum havuzludur (`BlastFxPool`): efekt prefabı sahnede kendi ömrünü yönetm
 `ThrowableEffect` (bomba için `BlastEffect`). Rigidbody'nin interpolasyon/kinematik/çarpışma
 alanlarını prefabda ayarlamaya çalışma: taşınırken kılıf kapatır, uçuşta `Arm` açar
 (`Yapma-Listesi` "taşınan Rigidbody").
-⚠️ **Sekme katsayısını düşük tut** — kopyaların ayrışması sekme sayısıyla büyür (`Sistem-Ozeti` §7
-"atılabilir avatarla çarpışmaz").
+⚠️ **Sekme katsayısını düşük ama sıfır olmayan tut** (`PM_Bomba`: düşük sekme, `bounceCombine`
+**Maximum** — zemin materyalinden bağımsız bir kez seker) — kopyaların ayrışması sekme sayısıyla
+büyür (`Sistem-Ozeti` §7 "atılabilir avatarla çarpışmaz"); sıfır sekme ise yere yapışıp yuvarlanan
+top verir. Yuvarlanmayı durduran şey materyal değil `Throwable`'ın ilk temasta yükselttiği sönümdür
+— prefabda yüksek `angularDamping` YAZMA, uçuştaki fırılı da söndürür.
 
 **3. Kavrama.** `Tools > VortexArena > Items > Kavrama Pozu Stüdyosu` ile **ana kabza** kaydını yaz
 (tek elli — ön kabza yok). Yazılmazsa eşya elde idle parmaklarla ve yanlış açıyla durur; uzak
@@ -1137,6 +1140,29 @@ yani oyuncu maketten yalnız işaretçileri, onları da yalnız kalibrasyon sür
 ([17.4](#174-maket-build-ayrımı)). Arena sanatı hazır environment'ların içine
 kurulur; maket yalnız o sanatın oturacağı fiziksel alanı gösterir
 ([Reçete 17](#17-arena-ölçüsü-boyut-dosyası)).
+
+**5. adımın engel kuralı — `Obstacle` layer'ı.** Engel ihlali (kafa → karartma + ceza, namlu → atış
+yok; `Docs/ArenaNet-Protokol.md` engel ihlali bölümü) yalnız bu layer'daki collider'ları görür; layer
+değeri sahne objesinde durduğu için arena başına elle yapılır ve **atlanırsa o arenada ihlal hiç
+çalışmaz**, hata da vermez.
+
+- **Giren:** oyuncunun ulaşabildiği, kutunun **içindeki** katı geometri — sütun, kasa, sandık, blok,
+  mobilya, kutuya 1 m'den fazla giren duvar çıkıntısı, kırılır siper.
+- **Girmeyen:** dış duvar, zemin, tavan, kutu kenarına oturan **kabuk** (görünmez sınır kutuları,
+  çit, cam kenar), köşe dolgusu ve kutunun dışında kalan her şey — kalibrasyonu kaymış oyuncu
+  kenarda durduk yere ölmesin, `ObstacleVolumes` aday sınırı boşa dolmasın. Aynı ad ailesi
+  (`ArenaBoundry*` gibi) iki türü de kapsayabilir: **ada değil konuma** bakılır. Küçük prop
+  (mikrodalga, el aleti) da girmez — kafa sığmaz, aday sınırını yer.
+- **Collider konveks olmalı:** Box/Sphere/Capsule ya da `MeshCollider` + Convex. Environment
+  paketleri **konkav** `MeshCollider` ile gelir: layer vermek işe yaramaz (çalışma anında elenir +
+  hata), convex işaretlemek ise içbükey mesh'te hull'ü çukura doldurur ve oyuncu **boşlukta** ceza
+  alır. Doğru hamle mesh'in yerel sınırlarına oturan kaba bir **Box/Capsule** koymaktır.
+- **Dekor haritalı arenada** (collider'sız tek mesh harita) görünmez sınır kutuları hem yüzey
+  etiketi hem layer taşır — yenisini eklerken ikisi de kopyalanır
+  ([Sistem Özeti, `SurfaceTag`](../Sistem-Ozeti.md)).
+- Sonunda `Tools > VortexArena > Arena > Engel Hacimlerini Denetle` koşulur: konveks olmayan,
+  şişkin ve trigger collider'lar düzeltilene kadar o objeler yanlış ceza üretir. Rapor tüm açık
+  sahneleri kapsar, hiçbir şeyi düzeltmez.
 
 ⚠️ **Ölçekleme yoktur ve eklenmez.** Her işletmenin alanı farklı ölçüde ve çoğu kare/dikdörtgen
 bile değil — orantılı ölçekleme elle düzeltilecek bir yalancı-doğru üretir.

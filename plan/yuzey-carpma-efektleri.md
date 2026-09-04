@@ -12,13 +12,16 @@ Sözleşmenin anlatımı `Docs/Sistem-Ozeti.md` §4.
 
 ## Kalan içerik işi
 
-- [ ] Çarpma sesleri: `default` dışındaki altı tanımın `impactClips` listesi boş. Yüzey başına
-      2-3 kısa klip (~0.3 sn) → `Assets/Audio/World/Impacts/`. Seviye ve perde bandı tanımın
-      içinde ayarlı, klip bağlamak yeter.
+- [ ] Çarpma sesleri: `default` dahil hiçbir tanımın `impactClips` listesi dolu değil ve repoda
+      çarpma klibi yok. Yüzey başına 2-3 kısa klip (~0.3 sn) → `Assets/Audio/World/Impacts/`.
+      Seviye ve perde bandı tanımın içinde ayarlı, klip bağlamak yeter.
 - [ ] `toprak` tanımının materyal listesi boş — bugünkü arenalarda toprak materyali yok. Toprak
       yüzeyli arena gelince listeye eklenir.
-- [ ] `tahta`ya bağlı `M_BreakableCover` ve `M_TargetBoard` göz kararı eşlendi (ikisi de aynı
-      `Textures1` atlasını kullanıyor) — oyunda bakılıp doğrulanır.
+- [ ] Göz kararı eşlemeler, oyunda bakılıp doğrulanır: `M_BreakableCover` + `M_TargetBoard` →
+      `tahta` (ikisi de aynı `Textures1` atlasını kullanıyor); üs kulübesi prefabı
+      (`Base_Hut_Roof`, dokusuz düz materyaller) kökündeki `SurfaceTag` → `tahta`.
+- [ ] Arena kenar camı (`M_VortexGlassWall_*`) `default`a düşüyor. Cam efekti/sesi istenirse yeni
+      bir tanım + prefab gerekir; materyalleri listeye bağlamak yeter.
 
 ## Tuzaklar
 
@@ -29,6 +32,11 @@ Sözleşmenin anlatımı `Docs/Sistem-Ozeti.md` §4.
   üstlerinde `Renderer` vardır, dolayısıyla `Ch18_Body` materyalini listeye yazmak hiçbir şey
   yapmaz. Oyuncu yüzeyi prefab kökündeki `SurfaceTag` ile gelir. Aynısı ileride eklenecek her
   skinned mesh için geçerlidir.
+- ⚠️ **Dekor haritalı arenada materyal eşlemesi işe yaramaz — `SurfaceTag` şart.** Görsel harita
+  tek renderer'lı, çok materyalli ve collider'sız; mermi görünmez sınır kutularına
+  (`ArenaBoundry*`), kulübe duvar collider'larına ve prop'lara çarpar. Renderer'sız collider
+  materyale hiç çözülmez ve `default`a düşer → sınır kutularının köküne `beton`, kulübe prefabına
+  `tahta` etiketi konur; **yeni sınır kutusu eklerken etiket de kopyalanır.**
 - ⚠️ **Çok materyalli mesh DESTEKLENMEZ** (yalnız ilk materyal çözülür): hangi submesh'e vurulduğunu
   bilmek `hit.triangleIndex` ister, o da mesh'te Read/Write (bellek iki katı) + `MeshCollider` şartı
   koyar. O objeyi ikiye bölmek ya da `SurfaceTag` koymak yeterlidir.
@@ -45,6 +53,8 @@ Sözleşmenin anlatımı `Docs/Sistem-Ozeti.md` §4.
 - [ ] Materyali eşlenmemiş bir yüzey `default` efekti veriyor (hiçbir şey çıkmaması DEĞİL).
 - [ ] `SurfaceTag` konmuş bir obje, materyali başka bir yüzeye eşli olsa da tag'i kazanıyor.
 - [ ] Aynı materyal iki tanıma bağlanınca konsolda **tek** uyarı düşüyor ve ilk bağ geçerli oluyor.
+- [ ] Dekor haritalı arenada görünmez sınır kutusuna sıkılınca `beton`, üs kulübesi duvarına
+      sıkılınca `tahta` efekti çıkıyor (`default` değil).
 - [ ] İki oyuncu: A'nın duvara sıktığı efekti B de görüyor ve aynı yüzeyden çıkıyor; tracer
       seyreltmesi (her N'inci mermi) efekti **seyreltmiyor**.
 - [ ] Namlusu engelin içindeyken ateş → hiçbir çarpma efekti çıkmıyor.

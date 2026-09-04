@@ -7,10 +7,10 @@
 
 Yazılanların özeti (referans için): sunucuda ölüm sonrası penceresi + kendine vuruş kapısı,
 kendini öldürmede skor/kill yazılmaması · `ThrowableDefinition`/`ThrowableTrigger` ·
-`Throwable` (nicelikleme, avatar muafiyeti, yetişme, fitil) · `ThrowableEffect`/`BlastEffect` ·
-`WristHolster` · `WeaponGranter.StowHeld/RestoreStowed` · `ArenaCombat.ReportAreaSelfHit` +
-`requireLineOfSight` · `HeldItems` atılabilir slotu · `RemoteShotFx` `KIND_THROW` tüketicisi ·
-kill feed "kendini havaya uçurdu" satırı.
+`Throwable` (nicelikleme, avatar muafiyeti, yetişme, fitil, temasta sönüm) · `ThrowableEffect`/
+`BlastEffect` · `WristHolster` · `WeaponGranter.StowHeld/RestoreStowed` ·
+`ArenaCombat.ReportAreaSelfHit` + `requireLineOfSight` · `HeldItems` atılabilir slotu ·
+`RemoteShotFx` `KIND_THROW` tüketicisi · kill feed "kendini havaya uçurdu" satırı.
 
 ## 1. Unity içeriği
 
@@ -20,18 +20,15 @@ Reçetenin tamamı `Docs/Gelistirici/Yemek-Kitabi.md` §11.3.
 
 ## 2. Playtest ayarı
 
-- [ ] Siper dengesi: merkez hasarından siperin kalan canı düşülür, mesafe düşümü kalana uygulanır.
-      `TD_Bomba.blastDamage` (250) ile `KIND_breakable_cover.maxHp` (200) çiftinde sağlam siperin
-      arkasına yakın mesafede ~50 civarı geçer; `edgeScale` (0.25) kenardaki açık oyuncuya gideni
-      belirler. İkisi tek sayıya bağlı, birlikte denenir.
-- [ ] Sekme katsayısı: kopyaların ayrışması sekme sayısıyla büyür, "gerçekçi" ile "tutarlı" arasında
-      seçim burada yapılır.
-- [ ] Atış hızı ölçeği/tavanı, kabul yarıçapı (`acceptRadius`).
 - [ ] **Görsel yarıçap ile `blastRadius` (4 m) okunabilir mi:** oyuncu tehlikeli alanı efekte bakarak
       tahmin ediyor. Efekt hasar alanından belirgin büyükse "vurulmayacağım yerde öldüm", belirgin
       küçükse "dumanın içindeydim, hasar almadım" olarak okunur — ikisi de balans değil **okunurluk**
       şikâyeti olarak gelir. Şok dalgası halkası (`Shockwave.startSize`) bu eşleşmenin en görünür
       ögesidir.
+- [ ] **Sekme/duruş:** `PM_Bomba` sekme 0.3 (`Maximum` birleşim) + `Throwable`'ın ilk temasta
+      yükselttiği sönüm. Sahada bakılacak: yere atılan bomba bir kez sekip kısa sürede duruyor mu
+      (yuvarlanıp gitmiyor), sekme iki başlıkta aynı yerde mi. Fazla seker/ayrışırsa sekme düşürülür,
+      hâlâ yuvarlanırsa `LandedAngularDamping` yükseltilir — ikisi ayrı düğmedir.
 
 ## 3. Kod tarafında bilinçli olarak YAPILMAYANLAR
 
@@ -41,18 +38,8 @@ Reçetenin tamamı `Docs/Gelistirici/Yemek-Kitabi.md` §11.3.
 
 ## 4. Doğrulama (kullanıcı koşar)
 
-- [ ] Bomba bırakıldıktan 5 sn sonra patlar; elde bekletmek fitili başlatmaz.
-- [ ] Elde bombayla ölünce patlama olmaz; doğuşta kılıf dolu.
-- [ ] Dost ateşi **kapalı**: kendi bombası hasar vermez, takımdaş hasar almaz, rakip alır.
-- [ ] Dost ateşi **açık**: kendi bombası hasar verir; ölünce kill feed'de "kendini havaya uçurdu",
-      skor değişmez, `kills` artmaz, `deaths` artar.
-- [ ] İki başlıkta patlama yeri ve zamanı aynı (statik geometriye sekme dahil); avatar üzerinden geçer.
-- [ ] Bomba havadayken ölen oyuncu: patlama **hasar verir**, kill feed'de ölü atıcının adı; öldükten
-      pencere süresi sonra gelen rapor reddedilir (sunucu konsolunda "atıcı ölü").
-- [ ] `ffa`'da anahtar açıkken kendi bombası hasar verir, kapalıyken vermez.
-- [ ] Lobide (`fireWhilePaused`) atma olayı relay edilir, patlama görünür, hasar yok.
-- [ ] Sağlam siperin (200 HP) arkasındaki oyuncu: bomba siperi kırar **ve** oyuncuya kalan hasar
-      gider (sıfır değil).
+- [ ] Yere atılan bomba zemine çarpıp **sekiyor**, zeminin üstünde kalıyor ve kısa sürede duruyor;
+      duvara atılan duvardan sekiyor, içinden geçmiyor.
 - [ ] Aynı yerde ikinci bomba: siper artık kırık, soğurma yok, hasarın tamamı mesafe düşümüyle gider.
 - [ ] Kırılamayan geometrinin (arena iç duvarı/sütunu) arkasındaki oyuncu hiç hasar almaz.
 - [ ] Başlıkta ve admin'de patlama **aynı** görünür: duman yoğunluğu, ateş rengi ve şok dalgası

@@ -71,10 +71,23 @@ namespace VortexArena.Net
         public string LastError => _lastError;
 
         private readonly ConcurrentQueue<Action> _mainThreadActions = new ConcurrentQueue<Action>();
-        private readonly SemaphoreSlim _sendLock = new SemaphoreSlim(1, 1);
+
+        /// <summary>One socket + its own send gate. ⚠️ Paired on purpose: a send stuck on a dead
+        /// socket must not hold the gate the NEXT connection's hello waits on — a new link gets a
+        /// new gate, the stale send keeps the old one.</summary>
+        private sealed class Link
+        {
+            public readonly ClientWebSocket Socket;
+            public readonly SemaphoreSlim SendGate = new SemaphoreSlim(1, 1);
+
+            public Link(ClientWebSocket socket)
+            {
+                Socket = socket;
+            }
+        }
 
         private CancellationTokenSource _cts;
-        private volatile ClientWebSocket _socket;
+        private volatile Link _link;
         private volatile string _role = "player";
         private volatile string _currentSceneName = "";
         private volatile bool _userDisconnect = true; // no reconnect until Connect is called
@@ -273,8 +286,7 @@ namespace VortexArena.Net
                 return;
             }
 
-            ClientWebSocket socket = _socket;
-            if (socket == null || socket.State != WebSocketState.Open)
+            if (!IsSocketOpen)
             {
                 return;
             }
@@ -297,13 +309,13 @@ namespace VortexArena.Net
 
             _cts = null;
 
-            ClientWebSocket socket = _socket;
-            _socket = null;
-            if (socket != null)
+            Link link = _link;
+            _link = null;
+            if (link != null)
             {
                 try
                 {
-                    socket.Abort();
+                    link.Socket.Abort();
                 }
                 catch (Exception)
                 {
@@ -318,24 +330,31 @@ namespace VortexArena.Net
 
             while (!ct.IsCancellationRequested)
             {
+                DateTime attemptStarted = DateTime.UtcNow;
+                bool established = false;
+
                 try
                 {
                     SetState(ArenaConnectionState.Connecting);
                     _connectAttempts++;
                     var uri = new Uri($"ws://{ip}:{port}{ArenaProtocol.WS_PATH}");
-                    Debug.Log($"[ArenaClient] Bağlanılıyor: {uri}");
+                    Debug.Log($"[ArenaClient] Bağlanılıyor ({_connectAttempts}. deneme): {uri}");
 
                     using (var socket = new ClientWebSocket())
                     {
                         // Bounded attempt (CONNECT_TIMEOUT): a cancelled connect lands in the generic
                         // catch below (the loop's own token is not the one that fired) → backoff.
+                        // ⚠️ The token alone is not trusted: an implementation that ignores it during
+                        // the TCP connect would park the attempt for minutes → Abort on expiry too.
                         using (var connectCts = CancellationTokenSource.CreateLinkedTokenSource(ct))
+                        using (connectCts.Token.Register(socket.Abort))
                         {
                             connectCts.CancelAfter(TimeSpan.FromSeconds(ArenaProtocol.CONNECT_TIMEOUT));
                             await socket.ConnectAsync(uri, connectCts.Token);
                         }
 
-                        _socket = socket;
+                        established = true;
+                        _link = new Link(socket);
                         Interlocked.Exchange(ref _lastReceivedTicks, DateTime.UtcNow.Ticks);
                         backoffIndex = 0;
                         _connectAttempts = 0;
@@ -359,11 +378,14 @@ namespace VortexArena.Net
                 catch (Exception e)
                 {
                     _lastError = e.Message;
-                    Debug.LogWarning($"[ArenaClient] Bağlantı koptu/başarısız: {e.Message}");
+                    double seconds = (DateTime.UtcNow - attemptStarted).TotalSeconds;
+                    Debug.LogWarning(established
+                        ? $"[ArenaClient] Bağlantı koptu ({seconds:0} sn sonra): {e.Message}"
+                        : $"[ArenaClient] Bağlanma başarısız ({_connectAttempts}. deneme, {seconds:0.0} sn): {e.Message}");
                 }
                 finally
                 {
-                    _socket = null;
+                    _link = null;
                 }
 
                 if (ct.IsCancellationRequested || _userDisconnect)
@@ -895,8 +917,8 @@ namespace VortexArena.Net
         {
             get
             {
-                ClientWebSocket socket = _socket;
-                return socket != null && socket.State == WebSocketState.Open;
+                Link link = _link;
+                return link != null && link.Socket.State == WebSocketState.Open;
             }
         }
 
@@ -946,24 +968,43 @@ namespace VortexArena.Net
             }
         }
 
-        /// <summary>Every send goes through one SemaphoreSlim (concurrent Send is forbidden on a WebSocket).</summary>
+        /// <summary>Every send on a link goes through that link's gate (concurrent Send is forbidden
+        /// on a WebSocket). Bounded by SEND_TIMEOUT: a send that does not finish means a dead link
+        /// → the socket is aborted and the reconnect loop takes over.</summary>
         private async Task SendTextAsync(string json, CancellationToken ct)
         {
+            Link link = _link;
+            if (link == null || link.Socket.State != WebSocketState.Open)
+            {
+                return;
+            }
+
             byte[] payload = Encoding.UTF8.GetBytes(json);
-            await _sendLock.WaitAsync(ct);
+            await link.SendGate.WaitAsync(ct);
             try
             {
-                ClientWebSocket socket = _socket;
-                if (socket == null || socket.State != WebSocketState.Open)
+                ClientWebSocket socket = link.Socket;
+                if (socket.State != WebSocketState.Open)
                 {
                     return;
                 }
 
-                await socket.SendAsync(new ArraySegment<byte>(payload), WebSocketMessageType.Text, true, ct);
+                using (var sendCts = CancellationTokenSource.CreateLinkedTokenSource(ct))
+                using (sendCts.Token.Register(socket.Abort))
+                {
+                    sendCts.CancelAfter(TimeSpan.FromSeconds(ArenaProtocol.SEND_TIMEOUT));
+                    await socket.SendAsync(new ArraySegment<byte>(payload), WebSocketMessageType.Text, true, sendCts.Token);
+                }
+            }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            {
+                Debug.LogWarning($"[ArenaClient] Gönderim {ArenaProtocol.SEND_TIMEOUT:0} sn'de bitmedi — " +
+                                 "bağlantı ölü sayıldı, soket düşürüldü.");
+                throw;
             }
             finally
             {
-                _sendLock.Release();
+                link.SendGate.Release();
             }
         }
 

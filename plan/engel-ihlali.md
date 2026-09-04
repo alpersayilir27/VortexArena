@@ -4,43 +4,20 @@ Kod, protokol ve doküman **yazıldı**. Sistemin anlatımı dokümanlarda:
 `Docs/ArenaNet-Protokol.md` §10.9 (kural + otorite + iki aşamalı ceza) · `Docs/Sistem-Ozeti.md` §4
 (`ObstacleViolationProbe` · `ObstacleWarningOverlay` · `DamageVignette` · `ObstacleVolumes` ·
 `ScreenFade` · `HmdOverlayBuilder`) ve §7 tuzaklar · `Docs/Gelistirici/Yapma-Listesi.md`
-(layer sözleşmesi + `IsMuzzleBlocked` kapısı).
+(layer sözleşmesi + `IsMuzzleBlocked` kapısı). Arena başına sahne kuralı (hangi collider
+`Obstacle`'a girer, konvekslik, denetim aracı) `Docs/Gelistirici/Yemek-Kitabi.md` yeni arena
+reçetesindedir — yeni arena o adımı atlarsa ihlal orada hiç çalışmaz.
 
 ⚠️ **Protokol v11** — tel formatı **değişmedi**, ama istemci davranışı değişti: karışık sürümde eski
 APK engelin içinden ateş edebilir ve kafası içerideyken görmeye devam eder. Yeni APK gerekir.
 
-## 1. Sahne işi (elle) — her arena kutusunda tek tek
-
-- [ ] **İç engellerin** (sütun, kasa, sandık, blok) collider'ını `Obstacle` layer'ına al.
-      ⚠️ Dış duvar, zemin, tavan ve köşe dolgusu **girmez** — kalibrasyonu kaymış oyuncu durduk
-      yere ölmesin.
-- [ ] Yalnız **oyun kutusunun içindeki** geometri sayılır. Hazır environment paketleri kutunun
-      çok dışına taşar (çit dizileri, terrain, hangar); oyuncunun ulaşamadığı hiçbir şey layer'a
-      girmez — girerse yalnız `ObstacleVolumes`'un aday sınırını boşa doldurur.
-- [ ] Sınır kabuğu olarak konmuş bloklar obje obje ayrılır: oyuncuyu dışarı çıkmaktan alıkoyan
-      kabuk layer'a **girmez**, kutunun içinde duran blok girer. Aynı ad ailesi ikisini de
-      kapsayabildiği için ada bakarak karar verilmez.
-- [ ] Aynı objelerin collider'ı **konveks** olmalı (`MeshCollider` + `Convex`, ya da
-      Box/Sphere/Capsule). ProBuilder objelerinde bu kutu varsayılan olarak KAPALI gelir.
-      ⚠️ Environment paketleri konkav `MeshCollider` ile gelir: böylesine layer vermek hiçbir şey
-      yapmaz (çalışma anında elenir + hata basar), mesh'i convex işaretlemek ise hull'ü şişirip
-      oyuncuyu boşlukta cezalandırır. Doğru hamle kaba bir **Box/Capsule eklemektir** — yani bu
-      iş çoğu arenada "layer değiştir" değil, "collider koy".
-- [ ] `Tools > VortexArena > Arena > Engel Hacimlerini Denetle` koştur; rapordaki konveks olmayan
-      **ve şişkin** collider'lar düzeltilene kadar o objeler yanlış ceza üretir.
-
-Lobi sahnelerinde bu iş gerekmez: hasar kapısı fazdır (`playing`), lobide maç yoktur.
-
-⚠️ Hangi arenada yapıldığı sahne açılmadan görülemez (layer değeri yalnız sahne objesinde durur):
-her `Venues/<İşletme>/Scenes/<Arena>/` kutusunu açıp denetimi koştur.
-
-## 2. VFX (asset yok)
+## 1. VFX (asset yok)
 
 - [ ] Engel yüzeyindeki kesişim efekti — **havuzlanmış tek** partikül sistemi, ihlal başına
       `Instantiate` YOK. Karartma, uyarı yazısı, vinyet ve titreşim koddan geliyor; eksik olan
       yalnız partikül.
 
-## 3. Doğrulama (kullanıcı koşar)
+## 2. Doğrulama (kullanıcı koşar)
 
 - [ ] Yeni APK (tüm başlıklara)
 - [ ] Kafayı engele sok → ekran **0.2 sn'de tam siyah**, uyarı yazısı nabızla görünür
@@ -79,3 +56,5 @@ her `Venues/<İşletme>/Scenes/<Arena>/` kutusunu açıp denetimi koştur.
       katmanı çizilmez (rig kökü kapalı)
 - [ ] Karartma alfa 1'de gerçekten opak ve FOV'un tamamını kapatıyor mu (çevresel görüşte kalan bir
       şerit hilenin tamamını geri verir); uyarı yazısı ve vinyet siyahın **üstünde** okunuyor mu
+- [ ] Engel yüzeyinde bir dekor-harita arenasında (görünmez duvar bloğu) ve bir mobilya arenasında
+      (masa/dolap) aynı davranış: kafa → karartma, namlu → atış yok
