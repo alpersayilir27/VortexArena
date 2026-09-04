@@ -183,6 +183,33 @@ namespace VortexArena.App
             LoadChecked(sceneName);
         }
 
+        /// <summary>
+        /// Loads a player-LOCAL utility scene (the venue survey). Nothing is sent and
+        /// <see cref="LastMatchScene"/>/<see cref="LastModeId"/> stay untouched — a later
+        /// <c>load_match</c> takes its normal path.
+        /// </summary>
+        public void LoadLocalScene(string sceneName)
+        {
+            if (!string.IsNullOrEmpty(sceneName))
+            {
+                LoadChecked(sceneName);
+            }
+        }
+
+        /// <summary>Returns to the server's OPEN scene: the running match's arena if any, else the
+        /// lobby (with the shell fallback).</summary>
+        public void ReturnToOpenScene()
+        {
+            if (LastMatchScene.Length > 0)
+            {
+                LoadChecked(LastMatchScene);
+            }
+            else
+            {
+                LoadLobbyChecked();
+            }
+        }
+
         /// <summary>Stores the server's match target (read by ModeHudSpawner + the ready report).</summary>
         private void RememberMatch(string modeId, string sceneName)
         {

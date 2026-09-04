@@ -183,6 +183,18 @@ public sealed class ClientConnection
                 if (msg != null) _lobby.HandleSetBodyScale(this, msg);
                 return;
             }
+            case MessageTypes.VenueSurvey:
+            {
+                if (State == null) return;
+                if (State.Role != "player")
+                {
+                    Console.WriteLine($"[ClientConnection] venue_survey yalnız player içindir ({State.Name}) — yok sayıldı.");
+                    return;
+                }
+                var msg = JsonUtil.Deserialize<VenueSurveyMsg>(json);
+                if (msg != null) await _lobby.HandleVenueSurveyAsync(this, msg);
+                return;
+            }
             case MessageTypes.Kick:
             {
                 if (!RequireAdmin(type)) return;

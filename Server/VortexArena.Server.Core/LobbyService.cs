@@ -1115,6 +1115,44 @@ public sealed class LobbyService
         players = _registry.Snapshot().OrderBy(p => p.PlayerId).Select(p => p.ToPlayerInfo()).ToArray()
     });
 
+    // ---- Venue survey (§10.11) ----
+
+    /// <summary>venue_survey: a player uploads a survey taken with the controllers; it is written next
+    /// to the server exe and the result goes back to the SENDER only (it is an event, not state —
+    /// nothing enters the roster).
+    /// <para>
+    /// ⚠️ <b>The file is named from the SERVER's venue</b>, not from the message: the venue belongs to
+    /// the server, and a headset carrying a stale venue name would otherwise write a second file that
+    /// nobody reads. The message's <c>name</c> is informational and is only used as a fallback when
+    /// the server has no venue configured.
+    /// </para></summary>
+    public async Task HandleVenueSurveyAsync(ClientConnection connection, VenueSurveyMsg msg)
+    {
+        var who = connection.State?.Name ?? "?";
+
+        var venue = _director.VenueId?.Trim() ?? "";
+        if (venue.Length == 0) venue = msg.dimensions?.name?.Trim() ?? "";
+        if (venue.Length == 0) venue = "Venue";
+
+        var dims = msg.dimensions;
+        // The file's own `name` field must not stay empty: the generated geometry is labelled from it.
+        if (dims != null && string.IsNullOrWhiteSpace(dims.name)) dims.name = venue;
+
+        var path = VenueSurveyStore.Save(venue, dims, out var error);
+        if (path == null)
+        {
+            Console.WriteLine($"[Lobby] venue_survey: {who} ölçümü kaydedilemedi — {error}");
+        }
+
+        var reply = new VenueSurveyResultMsg
+        {
+            ok = path != null,
+            file = path ?? "",
+            error = error
+        };
+        await SendSafeAsync(connection, JsonUtil.Serialize(reply), who);
+    }
+
     private static async Task SendSafeAsync(ClientConnection connection, string json, string who)
     {
         try

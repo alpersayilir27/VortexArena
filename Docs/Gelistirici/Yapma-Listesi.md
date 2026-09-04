@@ -231,6 +231,15 @@ ArenaSpace.WorldToArena(dir);                                  // ❌ orijin kad
 `RemotePlayerRegistry.GetInterpolatedPose` ve `ShotFiredMsg.muzzlePos` dünya koordinatı **değildir**.
 `ArenaSpace.ArenaToWorld` ile çevir.
 
+### ⚠️ Kumandayla alınan ölçüm ESKİ dosyanın A/B çerçevesinde yazılır
+
+Mekan ölçümü (`Docs/ArenaNet-Protokol.md` §10.11) yeni bir çerçeve kurmaz: ölçüme girilen sahnenin
+planında kalibrasyon noktaları varsa çıktı **onların** çerçevesine döndürülür. Zemindeki bant sahada
+fizikseldir ve mevcut sahne sanatı ona göre kuruludur — düzeltilen şey duvarların banda göre
+konumudur. Sonuç: dosyadaki `calibration` noktaları yanlışsa **önce onlar düzeltilir**; yanlış bir
+çerçevenin üstüne alınan ölçüm de aynı yanlış yere oturur ve ölçünün "düzeldiğini" sanırsınız. Bant
+gerçekten yer değiştirdiyse dosyadaki A/B elle güncellenir, sonra ölçüm alınır.
+
 ---
 
 ## Sahne ve prefab
@@ -401,6 +410,21 @@ Quest'te pahalıdır ve iki platformun ek-ışık bütçesi farklı olduğu içi
 
 Kurulu örnek: `_Shared/FX/Materials/M_Blast*` (patlama efektinin platform-bağımsız materyal takımı).
 
+### ⛔ `VenueSurvey` sahnesine elle bileşen koyma
+
+Ölçüm sahnesinde yalnız rig, ışık ve zemin durur; denetleyiciyi, rehber geometriyi ve etiketi
+`VenueSurveyGesture` sahne yüklendiğinde **kodla** kurar. Sahneye konan bir bileşen seri alan ister,
+seri alan da elle bağlanan bir referans demektir — bu sahne hiçbir arena reçetesine girmez ve
+hiçbir kurulum aracının denetlemediği tek sahnedir, yani boşalan bir referans kimsenin bakmayı
+düşünmediği yerde sessizce çizmemeye başlar. Ölçüme yeni bir görsel gerekiyorsa yeri
+`_Shared/App/Scripts/Survey/` içindeki rehber sınıfıdır, sahne değil.
+
+### ⚠️ `VenueSurvey` mekana ait değildir — Build Settings'te elle durur
+
+Sahne `_Shared/Scenes/` altındadır, bir mekan kutusunda değil: `Configure All Build Elements` yalnız
+mekan kutularını tarar ve bu sahneye **dokunmaz**. Build listesinden düşerse jest hatasız çalışır,
+sahne yüklenmez ve oyuncu bir şey olmadığını görür. Listeye elle konur ve orada kalır.
+
 ---
 
 ## Kod ve assembly düzeni
@@ -419,8 +443,18 @@ adlandırmalarda referansı sessizce koparır.
 `Unity.RenderPipelines.Universal.Runtime` `VortexArena.Core`'un bağımlılık listesinde YOKTUR ve
 geri eklenmez: oyun kodunun render pipeline'ına bağlanması Core'u pipeline değişimine ve
 platform-özel derlemeye bağlar. Editor asmdef'leri `includePlatforms:["Editor"]` ile sınırlıdır
-ve yalnız kendi runtime'ını referanslar — `Core.Editor`'ün ProBuilder bağımlılığı bu yüzden
-runtime'a **bulaşmaz**.
+ve yalnız kendi runtime'ını referanslar.
+
+### ⛔ Core'a ProBuilder referansı ekleme
+
+ProBuilder runtime'ı build'e **yalnız `VortexArena.App`** üzerinden girer: mekan ölçüm rehberi
+(`_Shared/App/Scripts/Survey/`) rehber geometriyi sahada çalışma anında üretir, o yüzden App
+asmdef'i `Unity.ProBuilder`'ı referanslar. **Bu, Core için bir izin değildir.** Core her sahnede,
+her modda ve admin build'inde derlenir; arena sahnelerindeki ölçü maketi ise sanat değil **ölçü
+referansıdır** ve `DimensionMeshBuildStripper` onun görsel dalını build'e giden sahne kopyasından
+ayıklamaya devam eder — referansı Core'a taşımak sahada hiç çizilmeyen bir mesh ailesini kalıcı
+kılar. `Core.Editor`'ün ProBuilder bağımlılığı `includePlatforms:["Editor"]` sayesinde runtime'a
+**bulaşmaz**.
 
 ### ⚠️ "`_Shared` mi, kutu mu" sorusunun tek testi
 

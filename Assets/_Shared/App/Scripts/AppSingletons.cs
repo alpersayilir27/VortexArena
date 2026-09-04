@@ -46,7 +46,7 @@ namespace VortexArena.App
 
         /// <summary>
         /// Singletons of a server-connected session: connection/loading/match-result cards,
-        /// kick shutdown, scene routing, admin spectator.
+        /// kick shutdown, scene routing, admin spectator, venue survey gesture (player only).
         /// </summary>
         private static void InstallNetworkSingletons()
         {
@@ -56,6 +56,11 @@ namespace VortexArena.App
             KickedShutdown.Install();
             SceneRouter.Install();
             Admin.AdminSpectator.Install();
+
+            if (AppSession.Role == AppSession.RolePlayer)
+            {
+                Survey.VenueSurveyGesture.Install();
+            }
         }
     }
 }

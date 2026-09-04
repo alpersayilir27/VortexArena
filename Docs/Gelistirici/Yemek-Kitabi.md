@@ -1109,6 +1109,10 @@ Tek düğmeli bir sihirbaz **yoktur** (kaldırıldı). Akış altı adımdır ve
 | 5 | Environment sanatı (**dünya orijinine**, zemin y=0), bake | elle |
 | 6 | Tüm kayıtları yap | `… > Build > Configure All Build Elements` |
 
+**3. adımın boyut dosyası hazır olmalıdır.** Dosya elle yazılabilir (§17.2) ya da sahada kumandayla
+ölçülüp sunucudan alınabilir (§17.5) — sonuç aynı dosyadır, mekan başına tektir ve o mekanın bütün
+sahneleri onu gösterir.
+
 **2. adım** altyapıyı prefab **ÖRNEĞİ** olarak koyar (`VA_ArenaBoundary` = `ArenaBoundary`,
 `VA_CameraRig`, `VA_PoseSync`, `VA_CalibrationManager`, seçime bağlı
 `VA_ModeHud` · taban bölgeleri), sahneye bakan referansları bağlar
@@ -1317,6 +1321,9 @@ anında** okunur.
 **Aynı dosya ölçü maketini üretir, muhafazayı besler, admin kuş bakışı kadrajını verir ve
 kalibrasyon işaretçilerini yerleştirir** — ölçüyü ikinci bir yere yazma.
 
+Dosyayı üretmenin iki yolu var ve **ikisi de aynı dosyayı** yazar: metreyle ölçüp elle yazmak
+(§17.1–17.2) ya da sahada kumandayla ölçmek (§17.5).
+
 ⚠️ **Taban da kolon da TEK sıralı köşe halkasıdır; parçalardan birleştirme (union) YOKTUR.**
 İçbükeylik için ek bir şey gerekmez — L şekli, yamuk, girintili duvar tek halkayla ifade edilir ve
 ProBuilder içbükey çokgeni sorunsuz üçgenler. Aynı sebeple "dikdörtgense şu hızlı yol" ayrımı ve
@@ -1502,10 +1509,36 @@ Maketin iki dalı iki ayrı muameleye tabidir ve bunlar **birbirinin yedeği de�
 | Gerçek build | **Girer** — kalibrasyon onlara bağlı | **Hiç girmez**: `DimensionMeshBuildStripper` (`IProcessSceneWithReport`) build'e giden **geçici sahne kopyasından** siler; sahne dosyan değişmez |
 | Editör Play kipi | Sahnede | Sahnede, ama `ArenaDimensionMesh.Awake` `Renderer.enabled`'ı false yapar |
 
-⚠️ **Ayıklamanın gerekçesi boyut değil bağımlılıktır:** taban ve kolonlar `ProBuilderMesh` taşır,
-o da `Unity.ProBuilder` runtime derlemesini build'e sokardı — bu projede ProBuilder yalnız editör
-tarafıdır. Aynı sebeple maket **`EditorOnly` etiketlenmez**: etiket kalibrasyon işaretçilerini de
-silerdi.
+⚠️ **Ayıklamanın gerekçesi boyut değil sahipliktir:** ProBuilder runtime'ı build'e zaten giriyor, ama
+yalnız `VortexArena.App`'in mekan ölçüm rehberi üzerinden (`_Shared/App/Scripts/Survey/`, §17.5) —
+`VortexArena.Core`'un ProBuilder'a referansı **yoktur ve eklenmez**. Maketteki `ProBuilderMesh` sanat
+değil **ölçü referansıdır**: sahada çizilmesi gereken bir şey değildir, bu yüzden ayıklanır. Aynı
+sebeple maket **`EditorOnly` etiketlenmez**: etiket kalibrasyon işaretçilerini de silerdi.
+
+### 17.5 Alternatif: dosyayı sahada kumandayla üretmek
+
+Ölçüyü metreyle alıp JSON'u elle yazmak (§17.1–17.2) tek yol değildir: aynı dosya sahada, gözlüğü
+takan kişi tarafından da çıkarılabilir. Jest akışı ve doğrulama kuralları
+`Docs/ArenaNet-Protokol.md` §10.11'de; operatör dili anlatımı `Docs/Kullanim-Kilavuzu.md`'dedir.
+
+| # | Yaptığın | Nerede |
+|---|---|---|
+| 1 | Sahada ölçümü al (kalibrasyon noktaları → duvar köşeleri → kolonlar), bitir | gözlük, sağ kumanda |
+| 2 | Sunucu exe'sinin yanına düşen `<İşletme>_dimensions.json`'ı al | sunucu makinesi |
+| 3 | Dosyayı mekanın `Venues/<İşletme>/Data/` klasörüne kopyala (var olanı ezer) | Unity projesi |
+| 4 | Maketi yeniden üret ve sanatla karşılaştır | `… > Arena > JSON'dan DimensionMesh Üret` |
+
+⚠️ **3. adım bir EZME işlemidir ve geri alınamaz** — kopyalamadan önce mekanın mevcut dosyasının
+sürüm kontrolünde temiz olduğundan emin ol. Sunucudaki `<İşletme>_dimensions.prev.json` yalnız **tek
+kuşak** yedektir ve bir sonraki ölçüm onu da ezer.
+
+⚠️ **Çıktı yeni bir çerçeve kurmaz:** ölçüm, dosyadaki mevcut `calibration` A/B noktalarının
+çerçevesine döndürülerek yazılır — bant sahada sabittir ve sahne sanatı ona kuruludur. Bu yüzden
+4. adımda bakılacak şey "maket sanatla örtüşüyor mu"dur; örtüşmüyorsa şüphelenilecek ilk yer duvar
+köşeleri değil **A/B noktalarıdır** (`Docs/Gelistirici/Yapma-Listesi.md`, Koordinat).
+
+⚠️ Sunucu bağlı değilken de ölçüm tamamlanır; o durumda dosyanın tek nüshası gözlüğün kendi
+depolamasındadır (`Application.persistentDataPath/VenueSurvey/`) ve kabloyla çekilir.
 
 ---
 

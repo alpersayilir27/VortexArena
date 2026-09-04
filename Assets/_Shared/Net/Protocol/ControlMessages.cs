@@ -912,6 +912,75 @@ namespace VortexArena.Protocol
         public string error = "";
     }
 
+    // ---- Venue survey (§10.11): the ArenaDimensions file schema on the wire ----
+    // ⚠️ Field names mirror the dimensions FILE, not a message shape: the server writes this object
+    // to disk as-is and the result must stay readable by ArenaDimensions.Parse. Renaming a field
+    // here silently produces a file whose plan reads back empty.
+
+    [Serializable]
+    public class VenueSurveyPoint
+    {
+        public float x;
+        public float y;
+    }
+
+    [Serializable]
+    public class VenueSurveyColumn
+    {
+        public string name = "";
+
+        /// <summary>Height (m); <c>0</c> = use <see cref="VenueSurveyDimensions.defaultColumnHeight"/>.</summary>
+        public float height;
+
+        public VenueSurveyPoint[] points = Array.Empty<VenueSurveyPoint>();
+    }
+
+    [Serializable]
+    public class VenueSurveyCalibration
+    {
+        public VenueSurveyPoint a = new VenueSurveyPoint();
+        public VenueSurveyPoint b = new VenueSurveyPoint();
+    }
+
+    [Serializable]
+    public class VenueSurveyDimensions
+    {
+        /// <summary>Informational; the server names the FILE from its own venue.</summary>
+        public string name = "";
+
+        public VenueSurveyPoint[] plane = Array.Empty<VenueSurveyPoint>();
+        public VenueSurveyColumn[] columns = Array.Empty<VenueSurveyColumn>();
+        public VenueSurveyCalibration calibration = new VenueSurveyCalibration();
+        public float defaultColumnHeight = 3f;
+
+        /// <summary><c>0</c> = not written to the file.</summary>
+        public float topViewHeight;
+    }
+
+    /// <summary>A player uploads a survey taken on site with the controller (§10.11).</summary>
+    [Serializable]
+    public class VenueSurveyMsg
+    {
+        public string type = MessageTypes.VenueSurvey;
+        public VenueSurveyDimensions dimensions = new VenueSurveyDimensions();
+    }
+
+    /// <summary>The answer to <see cref="VenueSurveyMsg"/>, to the sending player only (§10.11).
+    /// <para>⚠️ An EVENT, not state — nothing in the roster changes, this only says whether the file
+    /// was written.</para></summary>
+    [Serializable]
+    public class VenueSurveyResultMsg
+    {
+        public string type = MessageTypes.VenueSurveyResult;
+        public bool ok;
+
+        /// <summary>Full path written; empty on failure.</summary>
+        public string file = "";
+
+        /// <summary>Free text; empty on success.</summary>
+        public string error = "";
+    }
+
     // ---- UDP beacon (§4; not a WS message, the receiver validates the app field) ----
 
     [Serializable]

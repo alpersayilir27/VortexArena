@@ -17,6 +17,10 @@ namespace VortexArena.App
         public const string SceneBoot = "Boot";
         public const string SceneLobby = "Lobby";
 
+        /// <summary>Player-LOCAL utility scene (on-site venue survey): the headset loads it itself,
+        /// it is never server-routed and never a match scene.</summary>
+        public const string SceneVenueSurvey = "VenueSurvey";
+
         public static string Role = RolePlayer;
         public static bool RoleResolved;
 

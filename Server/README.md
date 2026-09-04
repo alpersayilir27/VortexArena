@@ -242,6 +242,14 @@ bağlantısında numara alır; dosya ilk yazımda yeni biçime yükseltilir.
 ⚠️ **Admin adları buraya YAZILMAZ** — admin `deviceId`'si oturumlukttur (aşağı), her açılış
 dosyaya çöp bir satır eklerdi. Admin'e numara da atanmaz (`number: 0`).
 
+**`<Mekan>_dimensions.json` — config değil, ÇIKTI.** Sahada kumandayla alınan mekan ölçümü
+(`venue_survey`, §10.11) `config/` altına değil **exe'nin yanına** yazılır; yanında tek kuşaklık
+`<Mekan>_dimensions.prev.json` yedeği durur. Dosya adının mekanı sunucunun **seçili mekanıdır**.
+⚠️ **Sunucu bu dosyayı hiç okumaz** — ölçünün tüketicisi Unity'dir (`maps.json`'da da arena ölçüsü
+yoktur, sunucu metre kullanmaz). Dosya doğrulandıktan sonra elle Unity projesine
+`Assets/Arenas/Venues/<İşletme>/Data/` altına taşınır; sunucu klasöründe bırakılan kopya kalıcı
+sayılmaz ve bir sonraki ölçüm onu ezer.
+
 ## Çoklu admin
 
 Eşzamanlı admin sayısında **sınır yoktur** ve hepsi eş yetkilidir (birincil/ikincil admin
@@ -431,3 +439,7 @@ olmayan kancayı hiç ekleme**.
   free-roam canlanma.
 - **Hasar modeli:** sunucuda silah tablosu YOKTUR; hasarı istemci hesaplar, sunucu aynen uygular
   (`weaponId` yalnız etiket) — `../Docs/ArenaNet-Protokol.md` §10.3.
+- **Mekan ölçümü:** oyuncunun sahada kumandayla aldığı ölçüyü (`venue_survey`) doğrulayıp
+  **exe'nin yanına** `<Mekan>_dimensions.json` olarak yazar ve sonucu yalnız gönderene döner
+  (`venue_survey_result`) — `../Docs/ArenaNet-Protokol.md` §10.11. Dosya adının mekanı sunucunun
+  **seçili mekanıdır**, mesajdaki ad değil. Sunucu bu dosyayı bir daha okumaz: tüketicisi Unity'dir.

@@ -433,6 +433,90 @@ o "kalibresiz" demektir ve oyuncu oynayamaz).
 > T-poz **yalnız başkalarının ekranında** görünür; oyuncunun kendi ekranında hiçbir belirti
 > olmaz, yani "bende bir şey yok" demesi normaldir.
 
+### 4.5 Mekanı kumandayla ölçmek
+
+Oyunun, salonun duvarlarının ve kolonlarının **nerede** olduğunu bilmesi gerekir: sınıra yaklaşan
+oyuncunun ekranını kararttıran bilgi budur. Bu ölçü bir dosyada durur ve normalde teknik ekip
+hazırlar. Salonda bir şey değiştiyse (duvar örüldü, bölme kaldırıldı, alan büyüdü) ölçüyü **gözlük
+ve kumandayla sen de alabilirsin**.
+
+**Ne zaman yapılır**
+
+- Salonun şekli fiziksel olarak değişti.
+- Oyuncular duvara daha varmadan ekranları kararıyor ya da tam tersi, duvara değecekken hiçbir uyarı
+  gelmiyor.
+- Teknik ekip senden ölçü istedi.
+
+⚠️ **Maç sürerken yapılmaz** — koşan bir maç varsa kumanda hiçbir şey yapmaz ve üç kısa titreşimle
+"olmaz" der. Önce maçı bitir.
+
+⚠️ **Zemindeki A ve B bantlarına dokunma.** Ölçüm onları başlangıç noktası olarak kullanır; bantlar
+kaymışsa önce teknik ekiple konuş, sonra ölç.
+
+**Bütün jestler SAĞ kumandadadır.** Kumandayı ölçtüğün noktaya götürüp tuşu basılı tutarsın; nasıl
+tuttuğun önemli değildir, önemli olan **kumandanın ucunun** doğru yerde olmasıdır.
+
+| Ne yapıyorsun | Tuş |
+|---|---|
+| Ölçüme gir / ölçümü bitir ve gönder | **A ve B'ye birlikte bas, 3 saniye tut** |
+| Bulunduğun noktayı al | **B'ye bas, 3 saniye tut** |
+| Sıradaki adıma geç | **A basılı tut, B'ye 3 kez tıkla** |
+| Son aldığın noktayı sil | **A'ya bas, 3 saniye tut** |
+
+**Adım adım**
+
+- [ ] **1.** Maç yokken sağ kumandada **A + B'ye birlikte bas ve 3 saniye tut.** Uzun bir titreşim
+      gelir, etraf boşalır: gözlükte sade bir zemin ve önünde bir yazı görürsün. Yazı hangi adımda
+      olduğunu ve kaç nokta aldığını söyler.
+- [ ] **2. Adım 1 — Zemindeki A ve B işaretleri.** Önce **A** bandının üstüne git, kumandanın ucunu
+      işaretin ortasına koy, **B'yi 3 saniye tut**. Kısa bir titreşim gelir ve orada mavi bir kutu
+      belirir. Sonra **B** bandına git, aynısını yap (turuncu kutu). **Tam iki nokta alınır.**
+- [ ] **3.** **A basılı tutarken B'ye 3 kez tıkla.** İki kısa titreşim = sıradaki adıma geçtin.
+- [ ] **4. Adım 2 — Duvar köşeleri.** Salonun duvarını takip ederek dolaş; **her köşede** kumandanın
+      ucunu köşeye götürüp **B'yi 3 saniye tut**. Her noktada küçük bir kutu belirir. Girinti,
+      çıkıntı ve nişler de birer köşedir — duvar nerede yön değiştiriyorsa oraya nokta koy. Köşe
+      sayısında sınır yoktur, en az üç köşe gerekir. Turu tamamladığında ilk noktaya geri dön ama
+      **orayı tekrar işaretleme**.
+- [ ] **5.** Yine **A basılı + B'ye 3 tık.** Gözlükte az önce ölçtüğün **zemin ve duvarlar** belirir;
+      içeride durup şekle bak: salona benziyor mu? Benzemiyorsa 7. maddeye bak.
+- [ ] **6. Adım 3 — Kolonlar.** Salonun ortasında duran her kolon/direk için **dört köşesini**
+      sırayla işaretle (her köşede B'yi 3 saniye). Dördüncü noktadan sonra kolon tamamlanır ve yerine
+      turuncu bir sütun çizilir; bir sonraki nokta **yeni** kolonu başlatır. Kolon yoksa bu adımı boş
+      geç.
+- [ ] **7. Yanlış nokta aldıysan:** **A'ya bas ve 3 saniye tut** — bulunduğun adımdaki **son** nokta
+      silinir (orta uzunlukta bir titreşim gelir). Peş peşe basarak birkaç noktayı geri alabilirsin.
+- [ ] **8. Bitir:** **A + B'ye birlikte bas, 3 saniye tut.** Uzun bir titreşim gelir, yazıda
+      "gönderildi" görürsün ve birkaç saniye sonra oyun kendiliğinden lobiye döner.
+
+**Titreşimin anlamı**
+
+| Titreşim | Anlamı |
+|---|---|
+| 1 kısa | Nokta alındı |
+| 2 kısa | Sıradaki adıma geçtin |
+| 3 kısa | **Olmadı** — noktan kabul edilmedi ya da bu jest şu an geçerli değil |
+| 1 orta | Son nokta silindi |
+| 1 uzun | Ölçüme girdin / ölçüm gönderildi |
+
+> **3 kısa titreşim aldıysan** gözlükteki yazının son satırını oku: sebebini orada yazar. En sık iki
+> sebep: A ve B noktalarını birbirine **çok yakın** almışsındır (aralarında en az yarım metre olmalı),
+> ya da adım 2'de üç köşeden az nokta almışsındır.
+
+**Ölçüm bitince ne olur**
+
+Ölçü dosyası **sunucu bilgisayarına**, sunucu programının bulunduğu klasöre düşer; adı mekanın adıyla
+başlar ve `_dimensions.json` ile biter. Senin yapman gereken tek şey **o dosyayı teknik ekibe
+iletmektir** — dosya kendi başına oyuna geçmez, teknik ekip onu projeye alıp arenaları günceller.
+
+- Dosyayı kendin **açma, düzenleme, adını değiştirme**.
+- Aynı gün ikinci kez ölçüm alırsan öncekinin üstüne yazılır; bu yüzden **her ölçümden sonra dosyayı
+  ilet**, biriktirme.
+- Ölçüm sırasında sunucu kapalıysa iş yine tamamlanır ama dosya **sunucuya düşmez**, gözlüğün
+  içinde kalır. Bu durumda teknik ekibe "sunucu kapalıyken ölçtüm" diye haber ver.
+
+⚠️ **Ölçüm oyunun sınır uyarısını kendiliğinden değiştirmez.** Sen ölçtün diye salondaki karartma
+sınırı yeni ölçüye geçmez — o, dosya teknik ekip tarafından projeye alındıktan sonra olur.
+
 ---
 
 ## 5. Maçı başlatmak ve yönetmek (Yönetim ekranı)
@@ -926,6 +1010,18 @@ Kurulumda bırakılan **bilgi kartında** şunlar yazmalı; yoksa teknik ekipten
 │                                           B'yi tekrar al │
 │                              1 titreşim = uç yere        │
 │                                değmemiş, B'yi tekrar al  │
+├──────────────────────────────────────────────────────────┤
+│  MEKANI ÖLÇMEK (maç yokken — bkz. §4.5)                  │
+│                                                          │
+│  A + B birlikte, 3 sn     →  Ölçüme gir / bitir-gönder   │
+│  B'ye bas, 3 sn           →  Bulunduğun noktayı al       │
+│  A basılı + B'ye 3 tık    →  Sıradaki adım               │
+│  A'ya bas, 3 sn           →  Son noktayı sil             │
+│                                                          │
+│  Sıra: A-B bantları (2 nokta) → duvar köşeleri →         │
+│        kolonlar (her kolon 4 köşe)                       │
+│  1 kısa=alındı · 2 kısa=adım · 3 kısa=OLMADI             │
+│  1 orta=silindi · 1 uzun=girdin/gönderildi               │
 ├──────────────────────────────────────────────────────────┤
 │  OYUNCUYA — "HERKES TEK" MODUNDA                         │
 │                                                          │

@@ -135,8 +135,14 @@ namespace VortexArena.Core.Arena
         /// this does not define a direction: since the yaw error grows inversely with distance, a
         /// 20 cm span would turn a few millimeters of measurement error into meters at the other
         /// end of the arena.
+        /// <para>
+        /// ⚠️ Aliased to <see cref="VortexArena.Protocol.ArenaProtocol.SURVEY_MIN_CALIBRATION_SPAN"/>
+        /// so the on-site survey and this reader cannot disagree: a second literal would let the
+        /// client upload a span the file reader then calls uncalibrated.
+        /// </para>
         /// </summary>
-        public const float MinCalibrationSpan = 0.5f;
+        public const float MinCalibrationSpan =
+            VortexArena.Protocol.ArenaProtocol.SURVEY_MIN_CALIBRATION_SPAN;
 
         /// <summary>Informational name (labels the generated geometry and the error messages).</summary>
         public string name = string.Empty;

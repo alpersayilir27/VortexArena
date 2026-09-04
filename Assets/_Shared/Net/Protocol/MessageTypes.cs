@@ -23,6 +23,7 @@ namespace VortexArena.Protocol
         // relays the cosmetic ones to everyone.
         public const string ObjectEvent = "object_event";
         public const string SetBodyScale = "set_body_scale"; // the headset reports its own body scale (§10.8)
+        public const string VenueSurvey = "venue_survey"; // manual venue survey upload (§10.11); players only
 
         // Admin only → Server
         public const string StartMatch = "start_match";
@@ -85,5 +86,7 @@ namespace VortexArena.Protocol
         public const string Violation = "violation"; // admins only: edge notification of the violation log (§5.3)
         // Admins only: the answer to the reload_calibration button — an event, not a state (§5.3).
         public const string CalibrationResult = "calibration_result";
+        // Answer to venue_survey — an event, not state (§10.11).
+        public const string VenueSurveyResult = "venue_survey_result";
     }
 }

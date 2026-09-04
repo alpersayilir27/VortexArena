@@ -89,6 +89,12 @@ namespace VortexArena.Net
         /// (and ignores one with no pending row).</para></summary>
         public static event Action<CalibrationResultMsg> OnCalibrationResult;
 
+        /// <summary>Players only (§10.11): the server's answer to a <c>venue_survey</c> upload —
+        /// was the dimensions file written, and where.
+        /// <para><b>An event, not state</b>: nothing in the roster changes, so there is nothing to
+        /// re-read. The uploader logs it and buzzes the controller.</para></summary>
+        public static event Action<VenueSurveyResultMsg> OnVenueSurveyResult;
+
         /// <summary>A remote player's shot/throw event (UDP 0x04 EventBatch, §6.5) — it replaced the WS
         /// <c>shot_fired</c> in v4. Published by <c>UdpStateChannel</c>, NOT <c>ArenaClient</c>, but on
         /// the MAIN thread like the others. Our own events are filtered out in the channel.</summary>
@@ -146,6 +152,7 @@ namespace VortexArena.Net
         internal static void RaiseClearCalibration(bool keepSaved) { OnClearCalibration?.Invoke(keepSaved); }
         internal static void RaiseReloadCalibration() { OnReloadCalibration?.Invoke(); }
         internal static void RaiseCalibrationResult(CalibrationResultMsg msg) { OnCalibrationResult?.Invoke(msg); }
+        internal static void RaiseVenueSurveyResult(VenueSurveyResultMsg msg) { OnVenueSurveyResult?.Invoke(msg); }
         internal static void RaiseAdminState(AdminStateMsg msg) { OnAdminState?.Invoke(msg); }
         internal static void RaiseSelectionState(SelectionStateMsg msg) { OnSelectionState?.Invoke(msg); }
         internal static void RaiseRulesUpdate(RulesUpdateMsg msg) { OnRulesUpdate?.Invoke(msg); }

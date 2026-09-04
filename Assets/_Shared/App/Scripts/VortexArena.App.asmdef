@@ -11,6 +11,7 @@
         "UnityEngine.UI",
         "Unity.XR.Management",
         "Unity.Multiplayer.Playmode",
+        "Unity.ProBuilder",
         "Unity.RenderPipelines.Universal.Runtime"
     ],
     "includePlatforms": [],

@@ -35,6 +35,10 @@ Tümü paylaşılan `ArenaProtocol` statik sınıfında tanımlanır (`Assets/_S
 | `PLAYER_NUMBER_MIN` / `PLAYER_NUMBER_MAX` | `1` / `99` | Forma numarası aralığı (§2). `0` = atanmamış ve aralığın dışındadır. Numara **tüm kayıtlı cihazlar** arasında benzersizdir |
 | `CALIB_MODE_TWO_ANCHOR` / `CALIB_MODE_SAVED_ANCHOR` / `CALIB_MODE_ANCHOR_CLOUD` | `"two_anchor"` / `"saved_anchor"` / `"anchor_cloud"` | Kalibre modunun geçerli değerleri (§5.2/§10.6). Sunucu açılış varsayılanı `two_anchor`. ⚠️ `anchor_cloud` **rezervdir** — sunucu kabul etmez, loglayıp durumu değiştirmez; bilinmeyen/boş değer de aynı şekilde reddedilir (sessizce varsayılana düşmez: mod bir operatör kararıdır, tahmin edilmez) |
 | `CALIB_FLOOR_WARN_METERS` | `0.5` | Elle kalibrasyonda bildirilen zemin sapmasının (`set_calibration.floorOffset`) mutlak değeri bunu aşarsa sunucu adminlere duyuru basar (§10.6). Bir kapı değil **teşhis eşiğidir**: kalibrasyon yine kabul edilir, operatör gözlükte alan verisi temizliğine yönlendirilir |
+| `SURVEY_MIN_PLANE_POINTS` | `3` | Mekan ölçümünde (§10.11) zemin çokgeninin en az köşe sayısı. **İki uçta da aynı kapı**: istemci bu sayının altında göndermez, sunucu da gelirse reddeder — üç noktadan azı bir alan tanımlamaz |
+| `SURVEY_MIN_CALIBRATION_SPAN` | `0.5` m | Ölçümde A ve B kalibrasyon noktaları arasındaki en kısa kabul edilebilir açıklık (§10.11). Altında A→B **yön** vektörü ölçüm değil gürültüdür ve tüm dosyayı yanlış döndürür. ⚠️ `ArenaDimensions.MinCalibrationSpan` bu sabite eşitlenir — eşik iki yerde ayrı yazılırsa istemcinin kabul ettiğini dosya okuyucusu reddeder |
+| `SURVEY_COLUMN_POINTS` | `4` | Bir kolonun kaç noktayla tamamlandığı (§10.11): dördüncü nokta kolonu kapatır, sonraki nokta yeni kolonu başlatır. Kolon tabanı dörtgen varsayılır — daha karmaşık gövde zemin çokgeninin girintisi olarak ölçülür |
+| `SURVEY_FILE_SUFFIX` | `"_dimensions.json"` | Sunucunun yazdığı ölçü dosyasının son eki (§10.11); dosya sunucu exe'sinin **yanına** `<Mekan>_dimensions.json` olarak düşer. Ad `maps.json` katalog anahtarı değildir, dosya adı budur diye bir yere otomatik kopyalanmaz |
 | `BODY_SCALE_MIN` / `BODY_SCALE_MAX` | `0.5` / `1.6` | `set_body_scale` kırpma aralığı (§10.8). Ölçüm istemcide yapılır ama sonuç **herkesin ekranına** gider; sunucu bu yüzden kırpar — bozuk bir istemci arenaya 4 metrelik bir avatar koyamasın. `0` bu aralığın dışındadır ve "ölçülmemiş" demektir |
 | `SNAPSHOT_MAX_ENTRIES_PER_PACKET` | `16` | Tek snapshot datagramına yazılan en fazla oyuncu; fazlası ek pakete taşar (§6.3). 6 + 16×34 = 550 B < MTU |
 | `EVENT_MAX_ENTRIES_PER_PACKET` | `128` | Tek `0x04` datagramına yazılan en fazla olay (§6.5). 6 + 128×9 = 1158 B < MTU. Taşan olay **atılmaz, sonraki tik'e kayar** — "tik başına en fazla bir batch" değişmezi kopya korumasının dayanağıdır |
@@ -250,6 +254,30 @@ YOK SAYILIR ve kayıtlı ölçek DEĞİŞMEZ**: gerekçe adminlere duyurulur ve 
 (`PlayerInfo.scaleError`, §5.3). Başarısızlığı hiç bildirmemek operatörü *"bastım, bir şey olmadı"*
 durumunda bırakır; başarısız ölçümü ölçek olarak yazmak ise sessizce yanlış bir avatar boyu
 üretirdi (§10.8).
+
+**`venue_survey`** (yalnız player) — oyuncu sahada kumandayla mekanın ölçüsünü aldığında, bir kez
+(§10.11). Gövde **ölçü dosyasının şemasıdır**: sunucu `dimensions` nesnesini yorumlamadan diske yazar
+ve yazdığı dosya Unity'nin `ArenaDimensions.Parse`'ı ile okunabilir olmak zorundadır.
+
+```json
+{ "type":"venue_survey",
+  "dimensions": {
+    "name":"<Mekan>",
+    "plane":[{"x":0,"y":0},{"x":8.2,"y":0},{"x":8.2,"y":12.4},{"x":0,"y":12.4}],
+    "columns":[{"name":"Kolon_1","height":0,"points":[{"x":3,"y":4},{"x":3.4,"y":4},{"x":3.4,"y":4.4},{"x":3,"y":4.4}]}],
+    "calibration":{"a":{"x":0,"y":0},"b":{"x":0,"y":4.6}},
+    "defaultColumnHeight":3, "topViewHeight":0 } }
+```
+
+- `plane` = zemin çokgeninin köşeleri, XZ düzleminde (`x` = dünya X, `y` = dünya Z — `ArenaDimensions`
+  sözleşmesi). En az `SURVEY_MIN_PLANE_POINTS` köşe.
+- `columns[].height` `0` = kolonun kendi yüksekliği yok, `defaultColumnHeight` geçerlidir; `topViewHeight`
+  `0` = dosyaya hiç yazılmaz (Unity'nin `ToJson`'u da yazmaz).
+- `calibration` = ölçümde alınan A ve B noktaları; dosyanın **çerçevesini** tanımlar (§10.11).
+- `name` **bilgilendiricidir**: dosya adını sunucu kendi seçili mekanından türetir, bu alandan değil
+  (§10.11). Boş gelirse sunucu kendi mekan adını yazar ki dosyanın `name` alanı boş kalmasın.
+- ⚠️ **Maç sırasında gönderilmez** — kapı istemcidedir (§10.11): ölçüm sahnesine geçmek koşan maçtan
+  düşmek olurdu.
 
 ### 5.2 Yalnız admin → Sunucu
 
@@ -654,6 +682,21 @@ yeniden yüklemeyi dener** ve sonucu bildirir (§10.6): başarıda normal bir
 - ⚠️ Sonuç neden `lobby_state` ile taşınmıyor: zaten kalibreli bir oyuncuda **başarılı** yeniden
   yükleme roster'da hiçbir alanı değiştirmez (§5.3 yayın guard'ı), yani operatörün düğmesi sonsuza
   kadar "yükleniyor" kalırdı.
+
+**`venue_survey_result`** — yalnız **gönderen oyuncuya**; `venue_survey` yüklemesinin cevabı (§10.11):
+
+```json
+{ "type":"venue_survey_result", "ok":true, "file":"…\\<Mekan>_dimensions.json", "error":"" }
+```
+
+- `ok:true` ise `file` yazılan dosyanın **tam yolu**, `error` boştur; `ok:false` ise `file` boş ve
+  `error` insan okuyabilir gerekçedir (doğrulanmayan serbest metin, `calibration_result` ile aynı
+  sözleşme).
+- ⚠️ **Bu bir OLAYDIR, durum değildir** ve **yayınlanmaz**: ölçüm bir oyuncunun tek seferlik işidir,
+  roster'da ya da `admin_state`'te karşılığı olan bir alan yoktur. Adminlere de gitmez — dosyayı
+  sunucu makinesinde bulacak olan operatör konsol satırını görür.
+- Kaybı zararsızdır: mesaj hiç gelmezse gözlükte yalnız "gönderildi" geri bildirimi kalır, dosya yine
+  yazılmıştır ve yerel kopya da diskte durur (§10.11).
 
 ### 5.4 Atma (kick) kapanış dizisi
 
@@ -2593,9 +2636,80 @@ sıfırdan kurulur, yani ikinci tur ilk turun malzemeleriyle başlamaz.
   durumudur, `stage` ve `object_event` ile ifade edilir.
 - **İstemcinin yazdığı `stage`:** aşamayı sunucu yazar; istemci yalnız olay bildirir.
 
+### 10.11 Mekan ölçümü (`venue_survey`)
+
+Bir işletmenin fiziksel ölçüsü (`<Mekan>_dimensions.json`) sahada, gözlüğü takan kişi tarafından
+kumandayla alınabilir: duvar köşeleri ve kolonlar tek tek gezilip işaretlenir, sonuç sunucuya yüklenir.
+Metre/lazerle ölçüp JSON'u elle yazmak da geçerli yoldur (`Docs/Gelistirici/Yemek-Kitabi.md`); bu akış
+onun yerine geçmez, aynı dosyayı üreten ikinci bir yoldur.
+
+⚠️ **Ölçüm bir maç akışı değildir.** Sunucuya yalnız **bir** mesaj gider (`venue_survey`) ve cevabı
+tek satırlık bir olaydır; sunucuda ölçüm durumu, oturumu ya da fazı **yoktur**. Ölçümün gerçekleştiği
+sahne oyuncunun kendi cihazında **yerel** olarak açılır (`AppSession.SceneVenueSurvey`) — `load_match`
+ile yönlendirme değildir, sunucu o sahneden haberdar olmaz ve `LastMatchScene`/`LastModeId`'ye
+dokunulmaz. Bitince istemci sunucunun **açık sahnesine** döner (koşan maç varsa arenası, yoksa lobi).
+
+**Maç sırasında kapalıdır.** Kapı istemcidedir: `SceneRouter.LastMatchScene` doluysa jest hata
+titreşimi verir ve hiçbir şey yapmaz. Sunucu tarafında ayrı bir faz kapısı yoktur — maçtaki bir
+oyuncu ölçüm sahnesine geçseydi zaten poz göndermeyi bırakır, yani kapının yeri sahneyi açan yerdir.
+
+**Jest sözlüğü** (hepsi **sağ** kumanda; A = `Button.One`, B = `Button.Two`):
+
+| Jest | Ölçüm sahnesi dışında | Ölçüm sahnesinde |
+|---|---|---|
+| A + B birlikte ≥ 3 sn | ölçüme gir | bitir ve gönder (hiç nokta alınmadıysa iptal edip dön) |
+| B tek başına ≥ 3 sn | — | bulunulan modda nokta yakala |
+| A basılıyken B'ye 3 tık | — | sonraki mod |
+| A tek başına ≥ 3 sn | — | bulunulan moddaki son noktayı geri al |
+
+Her jest **bir kez** ateşler; yeniden silahlanmak için iki tuşun da bırakılması gerekir. Modlar sırayla
+**kalibrasyon noktaları (A → B, tam iki nokta)** → **duvar köşeleri (≥ `SURVEY_MIN_PLANE_POINTS`)** →
+**kolonlar (her biri `SURVEY_COLUMN_POINTS` nokta)** şeklindedir; mod geri alınmaz, yalnız nokta geri
+alınır. Çıkıntı ve kolon girintisi de bir köşedir.
+
+**Koordinat çerçevesi ve normalizasyon.** Yakalanan nokta sağ kumanda anchor'ının dünya konumudur; rig
+orijinde ve hizasız olduğu için bu izleme uzayıdır. Plana yalnız XZ girer (`x` = dünya X, `y` = dünya Z).
+Dışa aktarımda ölçüm, alınan A/B noktalarıyla tanımlı çerçeveden çıkarılıp dosyanın çerçevesine taşınır:
+
+- **Şablon varsa** (ölçüme girilen sahnenin `ArenaBoundary` planında kalibrasyon noktaları var): eski
+  dosyanın A/B'si çerçeve olur; yeni A→B vektörü eskisinin üstüne döndürülür ve yeni A eski A'ya oturur.
+  ⚠️ **Gerekçe budur ve önemlidir:** zemindeki kalibrasyon bandı sahada fizikseldir ve yerinden
+  oynamaz — düzeltilen şey duvarların banda göre konumudur. Mevcut sahne sanatı eski maketin
+  çerçevesine kurulu olduğundan yeni dosya **aynı çerçevede** kalmak zorundadır, aksi hâlde ölçü
+  düzelirken sahne kayar.
+- **Şablon yoksa:** A→B ekseni +Y'ye (plan uzayında dünya +Z'ye) döndürülür → A = `(0,0)`,
+  B = `(0, |AB|)`. Sıfırdan ölçülen bir mekanın çerçevesini ilk ölçüm tanımlar.
+- Tüm koordinatlar milimetreye yuvarlanır; dosyada okunabilir sayılar durur.
+- Şablon varken yeni ve eski A–B açıklığı belirgin biçimde ayrışırsa **log uyarısı** basılır, gönderim
+  yine yapılır: bant yanlış yerden okunmuş olabilir ama kararı veren operatördür.
+
+**Doğrulama iki uçta da aynı sabitlerle yapılır** (§1): tam iki kalibrasyon noktası ve aralarında en az
+`SURVEY_MIN_CALIBRATION_SPAN`, en az `SURVEY_MIN_PLANE_POINTS` zemin köşesi, sonlu sayılar. İstemci
+eksikse göndermez ve neyin eksik olduğunu söyler; sunucu aynı kapıları **yeniden** uygular ve düşerse
+`ok:false` + gerekçe döner. Noktası eksik kalmış bir kolon istemcide atılır, sunucuya rağmen gelirse
+sunucu da uyarıyla atar — yarım bir kolon dosyada tanımsız bir prizma olurdu.
+
+**Dosya.** Sunucu `dimensions` gövdesini biçimlendirip **kendi exe'sinin yanına**
+`<Mekan>_dimensions.json` olarak yazar (`SURVEY_FILE_SUFFIX`). Mekan adı **sunucunun açılışta seçili
+mekanıdır** (§11.1), mesajdaki `name` değil: dosya adının sahibi sunucunun yapılandırmasıdır, bir
+istemci alanı değil — aksi hâlde yanlış yazılmış bir ad sahada ikinci bir dosya açardı. Ad dosya
+sisteminde geçersiz karakterler içeriyorsa temizlenir. Var olan dosya üzerine yazılmadan önce
+`<Mekan>_dimensions.prev.json`'a kopyalanır; yazım geçici dosya üzerinden atomik yapılır. ⚠️ **Yedek
+tek kuşaktır** — art arda iki hatalı ölçüm ilk iyi dosyayı da götürür; dosya doğrulandıktan sonra
+repoya (`Venues/<İşletme>/Data/`) alınmalıdır, sunucu klasörü arşiv değildir.
+
+**Yerel kopya.** İstemci aynı JSON'u `Application.persistentDataPath/VenueSurvey/` altına da yazar.
+Sunucu bağlı değilken ölçüm **yine tamamlanır** ve tek çıktı budur; gözlükten dosya çekmek bir kabloluk
+iştir, alınmış bir ölçümü bağlantı yok diye çöpe atmak sahada yeniden yürüyüş demektir.
+
+⚠️ **`PROTOCOL_VERSION` bu iki mesaj için ARTMAZ.** Tümüyle eklemedir ve tel DÜZENİNE dokunmaz:
+tanımayan eski bir sunucu bilinmeyen tipi loglayıp yok sayar, tanımayan eski bir istemci sonucu hiç
+almaz. Karışık sürümde kaybolan şey bozuk bir davranış değil **bir sonuç satırıdır** — dosya ya yazılır
+ya yazılmaz, yanlış yazılmaz; oyuncu istemcisinin ölçüm dışındaki hiçbir akışı bu tiplere bakmaz.
+
 ## 11. Sunucu config dosyaları
 
-`Server/config/` altındaki üç dosya; kaynakları FARKLIDIR:
+`Server/config/` altındaki dosyalar; kaynakları FARKLIDIR:
 
 | Dosya | Kaynağı | Not |
 |---|---|---|
@@ -2603,6 +2717,12 @@ sıfırdan kurulur, yani ikinci tur ilk turun malzemeleriyle başlamaz.
 | `devices.json` | **Sunucu üretir** | `deviceId → { "name":"ertu", "number":7 }`; ilk bağlantıda ve `set_identity`'de yazılır (§2). Eski v1 biçimi (`deviceId → "ad"`) okunur — numara `0` sayılır — ve ilk yazımda yeni biçime yükseltilir. UTF-8, BOM'suz. |
 | `maps.json` | **Unity export** | `MapDefinition` SO'larından: `sceneName`, `venue`, `gameType`, `modes` (§10.1, §11.1) + harita başına `objects[]` ve kökte `kinds[]` (§10.10). Arena ölçüsü YOKTUR — sunucu metre kullanmaz, ölçü istemcide sahnenin `ArenaBoundary`'sinde kalır. |
 
+> **`<Mekan>_dimensions.json` config DEĞİLDİR, çıktıdır:** sunucu onu `config/` altına değil **kendi
+> exe'sinin yanına** yazar (`venue_survey`, §10.11) ve bir daha hiç okumaz — arena ölçüsünün tüketicisi
+> Unity'dir (`maps.json` satırında yazdığı gibi sunucu metre kullanmaz). Yanında tek kuşaklık
+> `<Mekan>_dimensions.prev.json` yedeği durur. Dosya, doğrulandıktan sonra elle repoya
+> `Venues/<İşletme>/Data/` altına taşınır; sunucu klasöründe bırakılan kopya kalıcı sayılmaz.
+>
 > **`weapons.json` YOKTUR:** sunucu silah tanımı tutmaz, hasarı istemci bildirir (§10.3). Silah
 > istatistikleri yalnız Unity'deki `WeaponDefinition` SO'larındadır.
 >

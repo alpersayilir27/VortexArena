@@ -226,6 +226,7 @@ büyütmek/kaydırmak koordinatları oynatmaz.
 | ✅ `LocalCenter` | O kutunun yerel merkezi — admin kuş bakışı kadrajı bunu okur. ⚠️ Ölçü genellikle bir köşeden alınır, yani kutu transformun tam ortasında DEĞİLDİR: kadrajlarken `HalfExtents` tek başına yetmez |
 | ✅ `TopDownHeight` | Admin kuş bakışı kamerasının zeminden yüksekliği (boyut dosyasının `topViewHeight`'ı; 0 = kamera kendi varsayılanını kullanır). Ortografik kamerada kadrajı DEĞİL yalnız çatının/yüksek objelerin üstünde kalmayı belirler. Kamera dosyayı kendisi açmaz — JSON'u çözen tek yer bu bileşendir |
 | ✅ `SetSpectatorMode(bool)` | Muhafazayı susturur (karartma + uyarı + titreşim kapanır) ama bileşeni ayakta tutar — kuş bakışı kadrajı `HalfExtents`/`LocalCenter`'ı okumaya devam ediyor |
+| ✅ `Plan` | Çözülmüş planın **salt okunur** görünümü (`ArenaDimensions`); plan yoksa `null`. Bugünkü tüketicisi mekan ölçümünün şablon çerçevesidir. ⚠️ **Kopya DEĞİLDİR — üstünde değişiklik yapma:** plan önbelleklidir, yazılan bir düzeltme muhafazanın mesafe hesabını sessizce başka bir arenaya çevirir |
 | ✅ `TryGetCalibrationMarks(out Vector3 a, out Vector3 b)` | Zemin bandının iki noktası, **dünya** uzayında ve zemin seviyesinde. Dosyada nokta yoksa `false`. `ArenaCalibrator` işaretçilerini bununla konumlandırır — boyut dosyasını iki kere çözen ikinci bir okuyucu olmasın diye |
 
 Ölçünün **tek kaynağı** `dimensionsJson` alanına bağlanan boyut dosyasıdır (`ArenaDimensions`);

@@ -72,6 +72,13 @@ Bu liste, VortexArena'yı yeni bir işletmeye kuran ekibin fiziksel alan ölçü
   > **Dosya İŞLETME başınadır**, arena başına değil: aynı fiziksel odada kaç arena ve lobi oynatılırsa oynatılsın hepsi bu tek dosyayı gösterir. İkinci bir kopya çıkarma — kaçınılmaz olarak birbirinden sapar.
   > **İçine ne yazarsın:** `plane` = alanın çevresini dolaşarak sırayla yazdığın köşeler; `columns` = her kolonun kendi köşe listesi (`points`) + yüksekliği; `calibration` = zemine yapıştıracağın **A ve B** bantlarının yeri (Bölüm 3). **Alan tam kare olsa bile dört köşe** yazılır; girintili/L şeklinde bir alan da aynı tek listeye sığar.
   > Ayrıntılı reçete: `Docs/Gelistirici/Yemek-Kitabi.md`.
+  > **Ölçüyü sahada kumandayla da alabilirsin:** gözlüğü takan kişi duvar köşelerini ve kolonları
+  > tek tek işaretler, aynı dosya sunucu bilgisayarında üretilir ve buraya kopyalanır. Bu yol
+  > özellikle **alan sonradan değiştiğinde** (bölme kaldırıldı, duvar örüldü) tekrar metre çekmeye
+  > gerek bırakmaz. ⚠️ Kopyalama var olan dosyayı **ezer** ve çıktı dosyadaki mevcut A/B
+  > noktalarının çerçevesine yazılır — bantlar yer değiştirdiyse önce onlar düzeltilir.
+  > Reçete: `Docs/Gelistirici/Yemek-Kitabi.md`; sahadaki kişinin izleyeceği adımlar:
+  > `Docs/Kullanim-Kilavuzu.md`.
 - [ ] Unity'de yeni bir sahne aç ve arena kutusuna kaydet: `Assets/Arenas/Venues/<İşletme>/Scenes/<SahneAdı>/<SahneAdı>.unity`.
   > **Kutunun klasör adı sahne adıyla AYNI olmalıdır** (MapDefinition da aynı adla `Data/<SahneAdı>.asset` olarak o kutuya yazılır) — araç bu üçünü karşılaştırır, uyuşmayan kutu uyarı verir.
   > **Mekan klasörü zorunludur** — sunucunun açılışta sorduğu listede görünecek ad odur; aynı işletmenin ikinci arenası da **aynı** mekanın `Scenes/` klasörü altına açılır. Sahne adı katalog anahtarıdır ve benzersiz olmalıdır.

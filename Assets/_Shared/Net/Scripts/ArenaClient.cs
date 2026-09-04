@@ -671,6 +671,14 @@ namespace VortexArena.Net
                         break;
                     }
 
+                    case MessageTypes.VenueSurveyResult:
+                    {
+                        // Only the player who uploaded gets one (§10.11); elsewhere no listener.
+                        VenueSurveyResultMsg msg = JsonUtility.FromJson<VenueSurveyResultMsg>(json);
+                        _mainThreadActions.Enqueue(() => NetEvents.RaiseVenueSurveyResult(msg));
+                        break;
+                    }
+
                     case MessageTypes.AdminState:
                     {
                         // Admin connections only; on a player there is no listener.

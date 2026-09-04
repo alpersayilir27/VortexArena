@@ -191,6 +191,21 @@ namespace VortexArena.Core.Arena
             return true;
         }
 
+        /// <summary>
+        /// Read-only view of the resolved plan (the on-site survey reads its template frame from
+        /// here). <c>null</c> when this scene has no plan.
+        /// <para>⚠️ Callers must NOT mutate it: this is the cached instance every boundary test and
+        /// the calibration anchors already run on.</para>
+        /// </summary>
+        public ArenaDimensions Plan
+        {
+            get
+            {
+                EnsurePlan();
+                return activePlan;
+            }
+        }
+
         // Spectator (admin) mode: the visual boundary goes silent.
         private bool spectatorMode;
 

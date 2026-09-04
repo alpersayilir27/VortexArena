@@ -12,10 +12,13 @@ namespace VortexArena.Core.Editor
     /// ⚠️ The whole mesh cannot be tagged EditorOnly: the calibration anchors sit under it and are
     /// needed at runtime (<see cref="ArenaCalibrator"/> aligns to them) — stamping the root would
     /// silently make the arena unalignable on site.
-    /// <para>⚠️ The visual branch goes for a <b>dependency</b> reason, not size: <c>Plane</c> and
-    /// columns carry <c>ProBuilderMesh</c>, which would drag the <c>Unity.ProBuilder</c> runtime
-    /// assembly into the build. ProBuilder is editor-only here and a scene component must not
-    /// breach that from behind.</para>
+    /// <para>⚠️ The visual branch goes for a <b>meaning</b> reason, not size: a scene
+    /// <c>ProBuilderMesh</c> here is a measurement reference, not art, and shipping it would put a
+    /// second, editable copy of the venue plan in the build next to the JSON.
+    /// <br/>The ProBuilder runtime does enter the build — but only through
+    /// <c>VortexArena.App</c>'s on-site survey guide (<c>App/Scripts/Survey</c>), which builds its
+    /// geometry from code. <b>Core still has NO ProBuilder reference</b> and none is added: this
+    /// hook runs in Core.Editor and must keep working without one.</para>
     /// <para>The scene file is untouched — Unity runs this hook on the temporary build copy. In
     /// the editor and in Play mode the mesh stays (its visual is hidden by
     /// <see cref="ArenaDimensionMesh"/>), hence the no-op when the build report is null.</para>

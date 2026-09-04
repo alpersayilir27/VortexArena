@@ -61,6 +61,22 @@ namespace VortexArena.Protocol
         /// never auto-corrects (that would be a second alignment authority).</para></summary>
         public const float CALIB_FLOOR_WARN_METERS = 0.5f;
 
+        // ---- Venue survey (§10.11) ----
+
+        /// <summary>Minimum corner count of an uploaded floor ring (a triangle).</summary>
+        public const int SURVEY_MIN_PLANE_POINTS = 3;
+
+        /// <summary>Shortest usable A→B span (m); below this the direction is noise. Client and server
+        /// validate against the SAME constant, and <c>ArenaDimensions.MinCalibrationSpan</c> is this
+        /// value — a second threshold would accept a file the other side rejects.</summary>
+        public const float SURVEY_MIN_CALIBRATION_SPAN = 0.5f;
+
+        /// <summary>Corners captured per column before it closes.</summary>
+        public const int SURVEY_COLUMN_POINTS = 4;
+
+        /// <summary>Suffix of the survey file the server writes next to its exe.</summary>
+        public const string SURVEY_FILE_SUFFIX = "_dimensions.json";
+
         /// <summary>Clamp range for <c>set_body_scale.scale</c> (§10.8): the client measures but the
         /// result hits everyone's screen, so the server clamps. <c>0</c> is OUTSIDE this range and
         /// means "not measured" → readers apply <c>1</c>.</summary>
