@@ -265,7 +265,7 @@ sahneleri aynı dosyayı gösterir.
 | ✅ `FromTextAsset(TextAsset, out string error)` | Aynısı `TextAsset` üzerinden; asset `null` ise sessizce `null` |
 | ✅ `LocalBounds()` | Çokgenin yerel XZ sınırlayıcı kutusu (muhafaza ölçüsü + kuş bakışı kadrajı bundan türer) |
 | ✅ `HasCalibration` | İki kalibrasyon noktası yazılmış ve aralarında en az `MinCalibrationSpan` (0,5 m) var mı. ⚠️ `IsValid`'in parçası DEĞİLDİR: noktasız bir dosya muhafazayı çalıştırmaya yeter |
-| ✅ `ToJson(bool pretty)` | Planı metne çevirir — editör araçları dosyayı bununla yazar |
+| ✅ `ToJson(bool pretty)` | Planı metne çevirir — editör araçları dosyayı bununla yazar. Sayılar milimetreye yuvarlanır (`0.###`); `topViewHeight` yalnız sıfırdan büyükse yazılır |
 
 `JsonUtility.FromJsonOverwrite` kullanılır: **JSON'da yazılmayan alan varsayılanında kalır**
 (`FromJson` ile eksik bir `defaultColumnHeight` sessizce 0 olurdu = hiç çizilmeyen kolonlar).

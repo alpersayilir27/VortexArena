@@ -1054,7 +1054,7 @@ ettiği için yarım bir kare tek oyuncuyu değil arenadaki **herkesi** bozuk g�
 - **(a) Body tracking hiç geçerli poz üretmemişse.** Kaynağı açılmayan/izinsiz başlıkta (Link'te
   geliştirici özelliği kapalı, `BODY_TRACKING` izni yok) SDK'nın gönderim kapısı hiç açılmaz ve
   oyuncu diğer ekranlarda tümden görünmez kalırdı — sahada "ağ bozuk" diye okunan bir arıza. Yedeği
-  tanıma süresi dolunca `LocalBodyAvatar` ister; blob karakterin bind (T) pozudur.
+  tanıma süresi dolunca `LocalBodyAvatar` ister.
 - **(b) Oyun içinde SDK'nın ürettiği kök akıl sağlığı denetiminden düşerse.** Zemin/boy çözümü
   karışan başlıkta (çok katlı mekân, bayat izleme haritası) SDK "geçerli" bayrağıyla çöp kök
   üretebilir; kaynak büsbütün de susabilir. İstemci her SDK karesinde kökü **HMD'nin zemin
@@ -1063,10 +1063,17 @@ ettiği için yarım bir kare tek oyuncuyu değil arenadaki **herkesi** bozuk g�
   yerine yedek kare gider; SDK yoluna dönüş **histerezislidir** — ardışık temiz kare sayacı dolana
   kadar temiz kareler de bastırılır, yoksa uzak tarafta gövde iki yol arasında kare kare titrerdi.
 
-İki durumda da `root` HMD'nin zemine izdüşümünden (yalnız yaw) türetilir, yani donuk gövde
-oyuncunun gerçek konumunu izler ve arıza "izlemesi bozuk" diye okunur. Tel açısından bu sıradan bir
-`0x07`'dir — sunucu ve alıcı için özel bir durum YOKTUR. Yedek ile SDK yolu aynı anda asla
-göndermez.
+⚠️ **İki durumda da blob SDK'nın hedef iskeletinin referans T-pozudur** (yerel uzay, ölçeksiz;
+`SkeletonRetargeter.TargetReferencePoseLocal`) — "karakterin o anki kemikleri" gönderen bir dal
+YOKTUR. Bir arızadan sonra o kemikler SDK'nın **son uyguladığı donuk poz**tur ve kıpırdamayan bir
+gövde sahada "ağ bozuk" diye okunur; T-poz ise arızayı olduğu gibi, "izleme bozuk" diye gösterir.
+SDK'nın `AppliedPose` bayrağı yalnız iki dalın **silahlanma koşulunu** ayırır, gönderilen içeriği
+değil: bayrak yalnız retarget hesabı koştuğunda yazılır, kaynak geçersizken son değerinde kalır —
+bir latch DEĞİLDİR, "bir daha asla" anlamı taşımaz.
+
+İki durumda da `root` HMD'nin zemine izdüşümünden (yalnız yaw) türetilir, yani yedek gövde
+oyuncunun gerçek konumunu izler. Tel açısından bu sıradan bir `0x07`'dir — çerçeve biçimi
+değişmez, sunucu ve alıcı için özel bir durum YOKTUR. Yedek ile SDK yolu aynı anda asla göndermez.
 
 `seq` sarmalanır (u16); eski `seq` gelirse paket atılır. `0x01` ile aynı "son gelen kazanır"
 kuralıdır — bu bir **durum** kanalıdır, olay değil (karşılaştır §6.4: olayda sıra zorlaması yoktur).

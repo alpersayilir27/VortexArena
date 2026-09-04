@@ -1,4 +1,6 @@
 using System;
+using System.Globalization;
+using System.Text;
 using UnityEngine;
 
 namespace VortexArena.Core.Arena
@@ -63,7 +65,7 @@ namespace VortexArena.Core.Arena
     ///                   { "x": 3.94, "y": 7.57 }, { "x": 3.27, "y": 7.57 } ] }
     ///   ],
     ///   "calibration": { "a": { "x": 3.17, "y": 1.82 }, "b": { "x": 3.17, "y": 7.19 } },
-    ///   "defaultColumnHeight": 3.0
+    ///   "defaultColumnHeight": 3
     /// }
     /// </code>
     /// </example>
@@ -278,9 +280,147 @@ namespace VortexArena.Core.Arena
         }
 
         /// <summary>Converts the plan into JSON text (used by editor tools when writing the file).</summary>
+        /// <remarks>Written by hand instead of <see cref="JsonUtility.ToJson"/>: that one prints 17
+        /// digits per float (3.17 → 3.1699981689453127), which makes the file's diff unreadable.
+        /// Numbers are rounded to millimeters; the READER stays <see cref="JsonUtility"/>.</remarks>
         public string ToJson(bool pretty = true)
         {
-            return JsonUtility.ToJson(this, pretty);
+            var builder = new StringBuilder(512);
+
+            string nl = pretty ? "\n" : string.Empty;
+            string i1 = pretty ? "  " : string.Empty;
+            string i2 = pretty ? "    " : string.Empty;
+            string i3 = pretty ? "      " : string.Empty;
+            string i4 = pretty ? "        " : string.Empty;
+
+            builder.Append('{').Append(nl);
+            builder.Append(i1).Append("\"name\": ").Append(Quote(name)).Append(',').Append(nl);
+
+            builder.Append(i1).Append("\"plane\": ");
+            AppendRing(builder, plane, nl, i1, i2);
+            builder.Append(',').Append(nl);
+
+            builder.Append(i1).Append("\"columns\": ");
+            if (columns == null || columns.Length == 0)
+            {
+                builder.Append("[]");
+            }
+            else
+            {
+                builder.Append('[').Append(nl);
+                for (int i = 0; i < columns.Length; i++)
+                {
+                    builder.Append(i2).Append('{').Append(nl);
+                    builder.Append(i3).Append("\"name\": ").Append(Quote(columns[i].name)).Append(',').Append(nl);
+                    builder.Append(i3).Append("\"height\": ").Append(Num(columns[i].height)).Append(',').Append(nl);
+                    builder.Append(i3).Append("\"points\": ");
+                    AppendRing(builder, columns[i].points, nl, i3, i4);
+                    builder.Append(nl).Append(i2).Append('}');
+
+                    if (i < columns.Length - 1)
+                    {
+                        builder.Append(',');
+                    }
+
+                    builder.Append(nl);
+                }
+
+                builder.Append(i1).Append(']');
+            }
+
+            builder.Append(',').Append(nl);
+
+            builder.Append(i1).Append("\"calibration\": { \"a\": ").Append(Point(calibration.a))
+                .Append(", \"b\": ").Append(Point(calibration.b)).Append(" },").Append(nl);
+
+            builder.Append(i1).Append("\"defaultColumnHeight\": ").Append(Num(defaultColumnHeight));
+
+            // Only written when set: Parse reads the missing field as 0, so writing a 0 would add a
+            // line to every file that says nothing.
+            if (topViewHeight > 0f)
+            {
+                builder.Append(',').Append(nl).Append(i1)
+                    .Append("\"topViewHeight\": ").Append(Num(topViewHeight));
+            }
+
+            builder.Append(nl).Append('}');
+            return builder.ToString();
+        }
+
+        private static void AppendRing(
+            StringBuilder builder,
+            Vector2[] ring,
+            string nl,
+            string indent,
+            string itemIndent)
+        {
+            if (ring == null || ring.Length == 0)
+            {
+                builder.Append("[]");
+                return;
+            }
+
+            builder.Append('[').Append(nl);
+            for (int i = 0; i < ring.Length; i++)
+            {
+                builder.Append(itemIndent).Append(Point(ring[i]));
+                if (i < ring.Length - 1)
+                {
+                    builder.Append(',');
+                }
+
+                builder.Append(nl);
+            }
+
+            builder.Append(indent).Append(']');
+        }
+
+        private static string Point(Vector2 point)
+        {
+            return "{ \"x\": " + Num(point.x) + ", \"y\": " + Num(point.y) + " }";
+        }
+
+        /// <summary>A number rounded to millimeters, invariant culture.</summary>
+        private static string Num(float value)
+        {
+            double rounded = Math.Round((double)value, 3);
+
+            // Never emit "-0": a tiny negative measurement error would keep flipping the sign in diffs.
+            return rounded == 0d ? "0" : rounded.ToString("0.###", CultureInfo.InvariantCulture);
+        }
+
+        /// <summary>A JSON string literal with the required escapes.</summary>
+        private static string Quote(string value)
+        {
+            var builder = new StringBuilder((value?.Length ?? 0) + 2);
+            builder.Append('"');
+
+            for (int i = 0; value != null && i < value.Length; i++)
+            {
+                char c = value[i];
+                switch (c)
+                {
+                    case '"': builder.Append("\\\""); break;
+                    case '\\': builder.Append("\\\\"); break;
+                    case '\n': builder.Append("\\n"); break;
+                    case '\r': builder.Append("\\r"); break;
+                    case '\t': builder.Append("\\t"); break;
+                    default:
+                        if (c < ' ')
+                        {
+                            builder.Append("\\u").Append(((int)c).ToString("x4", CultureInfo.InvariantCulture));
+                        }
+                        else
+                        {
+                            builder.Append(c);
+                        }
+
+                        break;
+                }
+            }
+
+            builder.Append('"');
+            return builder.ToString();
         }
     }
 }

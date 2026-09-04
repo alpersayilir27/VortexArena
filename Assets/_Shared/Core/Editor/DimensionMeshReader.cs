@@ -42,6 +42,12 @@ namespace VortexArena.Core.Editor
         /// <summary>Collinear vertex cull threshold — cross product of two consecutive edges.</summary>
         private const float CollinearEpsilon = 1e-3f;
 
+        /// <summary>Distance (m) at which a measured height counts as the default height.</summary>
+        private const float HeightTolerance = 0.001f;
+
+        /// <summary>Centroid distance (m) within which a column is matched to a source column.</summary>
+        private const float ColumnMatchRadius = 0.5f;
+
         [MenuItem("Tools/VortexArena/Arena/DimensionMesh'i JSON'a Çevir", false, 3)]
         private static void ConvertSelected()
         {
@@ -137,6 +143,11 @@ namespace VortexArena.Core.Editor
             error = null;
 
             Transform root = target.transform;
+
+            // The file being overwritten is read ONCE here: rings are aligned to it and the
+            // calibration falls back to it. May be null (unreadable/absent file).
+            ArenaDimensions source = ArenaDimensions.FromTextAsset(target.SourceJson, out string _);
+
             DimensionPolygon[] polygons = target.GetComponentsInChildren<DimensionPolygon>(true);
 
             DimensionPolygon planePolygon = null;
@@ -175,6 +186,8 @@ namespace VortexArena.Core.Editor
                 return null;
             }
 
+            planeRing = AlignRing(planeRing, source?.plane);
+
             if (Polygon2D.IsSelfIntersecting(planeRing))
             {
                 warnings?.Add("Okunan taban halkası kendi kendini kesiyor — köşe düzenlemesini gözden geçir.");
@@ -196,9 +209,21 @@ namespace VortexArena.Core.Editor
                     warnings?.Add($"'{polygon.name}' yüksekliği sıfır görünüyor — prizma düzleşmiş olabilir.");
                 }
 
+                // 0 = "use defaultColumnHeight": keeps a hand-written file's column line stable
+                if (Mathf.Abs(height - target.DefaultColumnHeight) <= HeightTolerance)
+                {
+                    height = 0f;
+                }
+
+                int sourceIndex = FindSourceColumn(source, polygon.name, ring);
+                if (sourceIndex >= 0)
+                {
+                    ring = AlignRing(ring, source.columns[sourceIndex].points);
+                }
+
                 columns.Add(new ArenaDimensions.Column
                 {
-                    name = polygon.name,
+                    name = ResolveColumnName(source, sourceIndex, polygon.name),
                     height = height,
                     points = ring
                 });
@@ -209,8 +234,10 @@ namespace VortexArena.Core.Editor
                 name = target.VenueName,
                 plane = planeRing,
                 columns = columns.ToArray(),
-                calibration = ExtractCalibration(target, root, warnings),
-                defaultColumnHeight = target.DefaultColumnHeight
+                calibration = ExtractCalibration(target, root, source, warnings),
+                defaultColumnHeight = target.DefaultColumnHeight,
+                // Not measurable from the mesh: carried over so a round-trip does not drop it.
+                topViewHeight = source != null ? source.topViewHeight : 0f
             };
         }
 
@@ -221,6 +248,7 @@ namespace VortexArena.Core.Editor
         private static ArenaDimensions.CalibrationMarks ExtractCalibration(
             ArenaDimensionMesh target,
             Transform root,
+            ArenaDimensions source,
             List<string> warnings)
         {
             DimensionAnchor[] anchors = target.GetComponentsInChildren<DimensionAnchor>(true);
@@ -247,7 +275,7 @@ namespace VortexArena.Core.Editor
                     "Makette kalibrasyon işaretçisi (DimensionAnchor A/B) yok — dosyadaki " +
                     "'calibration' değerleri OLDUĞU GİBİ korundu. İşaretçileri üretmek için " +
                     "maketi 'JSON'dan DimensionMesh Üret' ile yeniden kur.");
-                return ReadCalibrationFromSource(target);
+                return source != null ? source.calibration : default;
             }
 
             Vector3 localA = root.InverseTransformPoint(a.position);
@@ -270,11 +298,105 @@ namespace VortexArena.Core.Editor
             return marks;
         }
 
-        /// <summary>Calibration points from the source file; empty pair when unreadable.</summary>
-        private static ArenaDimensions.CalibrationMarks ReadCalibrationFromSource(ArenaDimensionMesh target)
+        /// <summary>Turns a read ring into the same direction and starting corner as the source
+        /// file's ring; returns it untouched when there is no usable reference.</summary>
+        /// <remarks>⚠️ <see cref="WalkRing"/> starts at the dictionary-order smallest corner and its
+        /// direction depends on the triangle order, so without this an untouched column's corner
+        /// lines would be reordered on every conversion.</remarks>
+        private static Vector2[] AlignRing(Vector2[] ring, Vector2[] reference)
         {
-            ArenaDimensions existing = ArenaDimensions.FromTextAsset(target.SourceJson, out string _);
-            return existing != null ? existing.calibration : default;
+            if (!Polygon2D.IsValid(ring) || !Polygon2D.IsValid(reference))
+            {
+                return ring;
+            }
+
+            var aligned = new List<Vector2>(ring);
+
+            if (Polygon2D.SignedArea(ring) * Polygon2D.SignedArea(reference) < 0f)
+            {
+                aligned.Reverse();
+            }
+
+            int start = 0;
+            float bestDistance = float.MaxValue;
+            for (int i = 0; i < aligned.Count; i++)
+            {
+                float distance = (aligned[i] - reference[0]).sqrMagnitude;
+                if (distance < bestDistance)
+                {
+                    bestDistance = distance;
+                    start = i;
+                }
+            }
+
+            var result = new Vector2[aligned.Count];
+            for (int i = 0; i < aligned.Count; i++)
+            {
+                result[i] = aligned[(start + i) % aligned.Count];
+            }
+
+            return result;
+        }
+
+        /// <summary>Index of the source column this ring came from, or -1.</summary>
+        /// <remarks>Only an ordering hint: the same source column matching twice is harmless. Name
+        /// first, then the nearest centroid within <see cref="ColumnMatchRadius"/> — an unnamed
+        /// column can only be recognised by where it stands.</remarks>
+        private static int FindSourceColumn(ArenaDimensions source, string name, Vector2[] ring)
+        {
+            if (source?.columns == null)
+            {
+                return -1;
+            }
+
+            if (!string.IsNullOrWhiteSpace(name))
+            {
+                for (int i = 0; i < source.columns.Length; i++)
+                {
+                    if (!string.IsNullOrWhiteSpace(source.columns[i].name) &&
+                        string.Equals(source.columns[i].name, name, StringComparison.Ordinal))
+                    {
+                        return i;
+                    }
+                }
+            }
+
+            Vector2 centre = Polygon2D.Centroid(ring);
+            int best = -1;
+            float bestDistance = ColumnMatchRadius;
+
+            for (int i = 0; i < source.columns.Length; i++)
+            {
+                if (!Polygon2D.IsValid(source.columns[i].points))
+                {
+                    continue;
+                }
+
+                float distance = Vector2.Distance(centre, Polygon2D.Centroid(source.columns[i].points));
+                if (distance <= bestDistance)
+                {
+                    bestDistance = distance;
+                    best = i;
+                }
+            }
+
+            return best;
+        }
+
+        /// <summary>The name to write back for a column.</summary>
+        /// <remarks>A source column left unnamed stays unnamed: DimensionMeshBuilder names it
+        /// <c>Kolon_&lt;index&gt;</c>, and writing that generated name back would fill in a field the
+        /// file deliberately left empty.</remarks>
+        private static string ResolveColumnName(ArenaDimensions source, int sourceIndex, string objectName)
+        {
+            if (sourceIndex < 0 || !string.IsNullOrWhiteSpace(source.columns[sourceIndex].name))
+            {
+                return objectName;
+            }
+
+            return string.Equals(objectName, $"Kolon_{sourceIndex:00}", StringComparison.Ordinal)
+                ? string.Empty
+                : objectName;
         }
 
         /// <summary>Extracts a mesh's footprint ring in <paramref name="root"/>'s local XZ space and

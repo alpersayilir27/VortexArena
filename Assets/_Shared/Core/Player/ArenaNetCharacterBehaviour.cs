@@ -188,6 +188,9 @@ namespace VortexArena.Core.Player
         /// <summary>Has this suspicion episode already warned (no per-frame logging)?</summary>
         private bool _poseSuspectWarned;
 
+        /// <summary>Has the missing-reference-T-pose warning been logged (once per session)?</summary>
+        private bool _referencePoseWarned;
+
         /// <summary>
         /// Sensor source (<c>MetaSourceDataProvider</c>).
         /// <para>⚠️ <b>Never DELETE it from the prefab, only disable it:</b>
@@ -324,8 +327,10 @@ namespace VortexArena.Core.Player
         /// opens and the player stays COMPLETELY invisible to others; the fallback sends the bind (T)
         /// pose with an HMD-derived root instead, so the fault reads as "tracking is broken" rather than
         /// "player missing / network broken".
-        /// <para>⚠️ Once the first real pose is applied the SDK path takes over and this request is
-        /// permanently inert — the two paths never send at once.</para></summary>
+        /// <para>⚠️ Once the first real pose is applied the SDK path takes over and THIS request goes
+        /// quiet; later faults are picked up on their own by the in-flight trigger in
+        /// <see cref="TickTPoseFallback"/>, which does not read this flag. The two paths never send at
+        /// once.</para></summary>
         public void RequestTPoseFallback()
         {
             _tPoseFallbackRequested = true;
@@ -408,17 +413,21 @@ namespace VortexArena.Core.Player
         }
 
         /// <summary>
-        /// Fallback cadence. TWO triggers, both emitting at the SDK's <c>IntervalToSendData</c>.
+        /// Fallback cadence. TWO triggers, both emitting the SAME reference T-pose frame at the SDK's
+        /// <c>IntervalToSendData</c>; only the arming condition differs.
         /// <para><b>(a) Cold start</b> — requested and the SDK applied NO pose this session. ⚠️ The gate
         /// is <c>AppliedPose</c>, NOT <c>RetargeterValid</c>: <c>_isValid</c> flickers frame to frame
         /// (lost sight, scene load) and binding to it would interleave fallback frames with legitimate
-        /// frozen-last-pose frames. <c>AppliedPose</c> is a latch, so this trigger disables itself
-        /// permanently.</para>
+        /// SDK frames.</para>
         /// <para><b>(b) In-flight fault</b> — the SDK applies poses but its root failed the sanity check
         /// (<see cref="_poseSuspect"/>) or the stream went stale. ⚠️ This trigger does NOT depend on
-        /// <see cref="_tPoseFallbackRequested"/> (it arms itself): the latch says the source worked once,
-        /// the fault appears later. Without it a broken floor/height solve shows the player frozen or in
-        /// a random spot — both read as "network broken" on site.</para>
+        /// <see cref="_tPoseFallbackRequested"/>, it arms itself: the source worked once, the fault
+        /// appears later. Without it a broken floor/height solve shows the player frozen or in a random
+        /// spot — both read as "network broken" on site.</para>
+        /// <para>⚠️ <c>AppliedPose</c> is written ONLY inside the SDK's <c>CalculatePose</c>, which is
+        /// skipped entirely while the source is invalid — so it holds its LAST value and must not be
+        /// read as a latch. That is exactly why (b) exists: after the first valid pose every later fault
+        /// lands there.</para>
         /// <para>⚠️ They cannot send simultaneously: (a) runs only while <c>AppliedPose</c> is false, (b)
         /// only while it is true, and while (b) is active the SDK's own frame is suppressed in
         /// <see cref="ReceiveStreamData"/>.</para></summary>
@@ -461,10 +470,12 @@ namespace VortexArena.Core.Player
         }
 
         /// <summary>
-        /// Serialises and sends one fallback frame. The blob holds the character's CURRENT bones: the
-        /// bind (T) pose on cold start, the SDK's last applied (now frozen) pose on an in-flight fault.
-        /// The receiver decodes it as an ordinary <c>0x07</c> frame; no special case on the wire or the
-        /// server (§6.9).
+        /// Serialises and sends one fallback frame carrying the SDK's TARGET REFERENCE T-POSE (local
+        /// space, unscaled) — on both triggers. The receiver decodes it as an ordinary <c>0x07</c> frame;
+        /// no special case on the wire or the server (§6.9).
+        /// <para>⚠️ The character's current bones are deliberately NOT used: after a fault they are the
+        /// last applied, now frozen pose, and a motionless body reads as "network broken" on site. A
+        /// T-pose reads as "tracking is broken", which is the true fault.</para>
         /// <para>⚠️ The root is NOT read from the character (never written on cold start, untrusted on a
         /// fault) but derived from the HMD — floor projection, yaw only; the floor is world y=0 by arena
         /// contract (<see cref="ArenaSpace"/>).</para>
@@ -483,11 +494,14 @@ namespace VortexArena.Core.Player
 
             var worldRoot = new Pose(new Vector3(head.position.x, 0f, head.position.z), head.rotation);
 
-            NativeArray<MSDKUtility.NativeTransform> bodyPose =
-                _retargeter.GetCurrentBodyPose(JointType.NoWorldSpace);
-            if (bodyPose.Length == 0)
+            NativeArray<MSDKUtility.NativeTransform> bodyPose = AcquireFallbackBodyPose();
+            if (!bodyPose.IsCreated || bodyPose.Length == 0)
             {
-                bodyPose.Dispose();
+                if (bodyPose.IsCreated)
+                {
+                    bodyPose.Dispose();
+                }
+
                 return;
             }
 
@@ -549,6 +563,34 @@ namespace VortexArena.Core.Player
             }
 
             SendBlobToRelay(serialized, ArenaSpace.WorldToArena(worldRoot));
+        }
+
+        /// <summary>Temp copy of the joint array a fallback frame is built from (caller disposes).
+        /// <para>⚠️ The SDK's <c>TargetReferencePoseLocal</c> is a PERSISTENT array it keeps using, so it
+        /// is COPIED — the caller overwrites joint 0. Same space (local) and same joint order/count as
+        /// <c>GetCurrentBodyPose(NoWorldSpace)</c>, hence interchangeable for serialisation.</para>
+        /// <para>Fallback to the live bones only if the reference pose is not populated yet; a frozen
+        /// body is still better than no frame at all.</para></summary>
+        private NativeArray<MSDKUtility.NativeTransform> AcquireFallbackBodyPose()
+        {
+            SkeletonRetargeter skeleton = _retargeter.SkeletonRetargeter;
+            if (skeleton != null && skeleton.TargetReferencePoseLocal.IsCreated &&
+                skeleton.TargetReferencePoseLocal.Length > 0 &&
+                skeleton.TargetReferencePoseLocal.Length == skeleton.TargetJointCount)
+            {
+                return new NativeArray<MSDKUtility.NativeTransform>(
+                    skeleton.TargetReferencePoseLocal, Allocator.Temp);
+            }
+
+            if (!_referencePoseWarned)
+            {
+                _referencePoseWarned = true;
+                Debug.LogWarning(
+                    "[ArenaNetCharacterBehaviour] SDK referans T-pozu hazır değil — yedek kare " +
+                    "karakterin mevcut kemikleriyle gönderiliyor.", this);
+            }
+
+            return _retargeter.GetCurrentBodyPose(JointType.NoWorldSpace);
         }
 
         private void Update()

@@ -1458,9 +1458,20 @@ kovalamak yerine **maketi düzelt**:
 Hedef dosya **sorulmaz**: maketin kökündeki işaretçi hangi dosyadan üretildiğini biliyor ve onun
 üstüne yazılır.
 
-✔ **Gidiş-dönüş kayıpsızdır:** tek halka → tek mesh → tek halka. Dokunulmamış bir maketi çevirmek
-dosyayı (kayan nokta yuvarlamasına kadar) aynı bırakır; tek beklenen fark senin taşıdığın
-köşelerdir.
+✔ **Gidiş-dönüş dosyayı bozmaz:** tek halka → tek mesh → tek halka. Dokunulmamış bir maketi
+çevirmek dosyayı olduğu gibi bırakır; tek beklenen fark senin taşıdığın köşelerdir. Bunu ayakta
+tutan yazım kuralları:
+
+| Kural | Ne olur |
+|---|---|
+| Sayı biçimi | Her sayı milimetreye yuvarlanarak (`0.###`) yazılır |
+| Kolon yüksekliği | Ölçülen yükseklik `defaultColumnHeight` ile aynıysa alan `0` kalır (yani "varsayılanı kullan") |
+| Halka yönü ve ilk köşe | Kaynak dosyadaki halkaya hizalanır — kolon önce **adıyla**, adsızsa **en yakın merkeziyle** eşlenir |
+| Kolon adı | Dosyada boş bırakılmış ad boş kalır (makette görünen `Kolon_00` geri yazılmaz) |
+| `topViewHeight` | Maketten ölçülemez; kaynak dosyadaki değer olduğu gibi taşınır |
+
+⚠️ **Elle 3 ondalıktan hassas yazılmış bir sayı milimetreye yuvarlanır** — bu istenen davranıştır:
+şeritmetre milimetrenin altını ölçmez ve daha uzun sayılar dosyanın diff'ini okunmaz yapar.
 
 Araç ayak izini şöyle okur:
 
