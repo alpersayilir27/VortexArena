@@ -30,13 +30,22 @@ namespace VortexArena.Core.Combat
         /// Impact type that hits nothing would otherwise live forever).</summary>
         private const float SafetyExtraSeconds = 10f;
 
+        /// <summary>Damping from the first contact with geometry. PhysX has no rolling resistance:
+        /// a sphere would roll on until the fuse. In flight the prefab's values stay (the derived
+        /// tumble must survive the flight). Same rule on every copy → no extra divergence.</summary>
+        private const float LandedLinearDamping = 1.5f;
+        private const float LandedAngularDamping = 4f;
+
         private static readonly Collider[] EmptyColliders = new Collider[0];
 
         private Rigidbody _body;
         private Collider[] _ownColliders = EmptyColliders;
+        private float _flightLinearDamping;
+        private float _flightAngularDamping;
 
         private bool _armed;
         private bool _triggered;
+        private bool _landed;
 
         private float _nextAvatarScan;
         private float _detonateTime;
@@ -97,6 +106,8 @@ namespace VortexArena.Core.Combat
             if (_body == null)
             {
                 _body = GetComponent<Rigidbody>();
+                _flightLinearDamping = _body.linearDamping;
+                _flightAngularDamping = _body.angularDamping;
             }
 
             _ownColliders = GetComponentsInChildren<Collider>(true);
@@ -124,6 +135,9 @@ namespace VortexArena.Core.Combat
             RigidbodyDrive.SetKinematic(_body, false);
             _body.detectCollisions = true;
             _body.useGravity = true;
+            _body.linearDamping = _flightLinearDamping;
+            _body.angularDamping = _flightAngularDamping;
+            _landed = false;
             _body.linearVelocity = dir * speed;
 
             // 3) ⚠️ Spin is derived too: hand rotation is not on the wire, so a random tumble would
@@ -184,12 +198,23 @@ namespace VortexArena.Core.Combat
 
         private void OnCollisionEnter(Collision collision)
         {
-            if (!_armed || _triggered || Definition.Trigger != ThrowableTrigger.Impact)
+            if (!_armed || _triggered)
             {
                 return;
             }
 
-            Detonate();
+            if (!_landed)
+            {
+                // First contact with geometry: settle from here instead of rolling to the fuse.
+                _landed = true;
+                _body.linearDamping = LandedLinearDamping;
+                _body.angularDamping = LandedAngularDamping;
+            }
+
+            if (Definition.Trigger == ThrowableTrigger.Impact)
+            {
+                Detonate();
+            }
         }
 
         private void Detonate()

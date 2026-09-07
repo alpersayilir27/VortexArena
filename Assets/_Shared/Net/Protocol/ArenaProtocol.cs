@@ -119,6 +119,10 @@ namespace VortexArena.Protocol
         /// backoff never gets its turn.</summary>
         public const float CONNECT_TIMEOUT = 10f;
 
+        /// <summary>Upper bound of one WS send (§8). A send that does not finish is a dead link: the
+        /// socket is aborted and the reconnect loop takes over.</summary>
+        public const float SEND_TIMEOUT = 5f;
+
         // Reconnect backoff sequence; last element is the ceiling.
         public static readonly float[] RECONNECT_BACKOFF = { 1f, 2f, 5f };
 

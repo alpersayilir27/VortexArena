@@ -15,7 +15,8 @@ Tümü paylaşılan `ArenaProtocol` statik sınıfında tanımlanır (`Assets/_S
 | `BEACON_INTERVAL` | 2 sn | Beacon yayın aralığı |
 | `DISCOVERY_TIMEOUT` | 5 sn | Beacon gelmezse statik IP fallback (`StreamingAssets/arena.json`); komut satırı adresi ve elle girilen IP beacon'ın **üstündedir** (zincirin tamamı §4) |
 | `STATUS_INTERVAL` | 5 sn | İstemci status kalp atışı; sunucu her birine `heartbeat` ile cevap verir (§5.3, §8) |
-| `CONNECT_TIMEOUT` | 10 sn | Tek bir WS bağlanma denemesinin tavanı (§8). `ConnectAsync`'in kendi zaman aşımı yoktur: ulaşılamayan adrese SYN dakikalarca yeniden denenir ve backoff sırası hiç gelmez |
+| `CONNECT_TIMEOUT` | 10 sn | Tek bir WS bağlanma denemesinin tavanı (§8). `ConnectAsync`'in kendi zaman aşımı yoktur: ulaşılamayan adrese SYN dakikalarca yeniden denenir ve backoff sırası hiç gelmez. ⚠️ Süre dolunca iptal belirteciyle yetinilmez, soket **`Abort`** edilir — belirteci bağlanma sırasında dinlemeyen bir uygulamada deneme askıda kalır ve döngü bir daha hiç denemez |
+| `SEND_TIMEOUT` | 5 sn | Tek bir WS gönderiminin tavanı (§8). Bitmeyen gönderim = ölü bağlantı: soket `Abort` edilir, yeniden bağlanma döngüsü devralır. Gönderim kilidi **bağlantıya özeldir** — eski soketin askıdaki gönderimi yeni bağlantının `hello`'sunu bekletemez |
 | `HEARTBEAT_TIMEOUT` | 15 sn | **İki yönlü:** sunucuda status gelmezse soket ölü sayılır, kapatılır ve cihaz `reconnecting`'e düşer (§2); istemcide bu kadar süre **hiçbir WS çerçevesi** gelmezse istemci soketi kendisi düşürür ve yeniden bağlanır (§8, sessiz Wi-Fi ölümü). ⚠️ Tek başına "oyuncu gitti" DEMEZ — asıl karar `RECONNECT_GRACE`'indir |
 | `RECONNECT_GRACE` | 45 sn | `reconnecting` cihazın geri beklendiği süre. Dolunca oyuncu oyundan **çıkarılır**: koşan maçın katılımcısıysa kaydı `left` olarak maç sonuna kadar durur, değilse tümden silinir ve `playerId`'si havuza döner (§2, §10.2). Kopuştan çıkarılmaya toplam süre `HEARTBEAT_TIMEOUT + RECONNECT_GRACE` |
 | `RECONNECT_BACKOFF` | 1 → 2 → 5 sn (tavan 5) | Kopunca sonsuz yeniden deneme; her denemede discovery baştan. ⚠️ İstemci `RECONNECT_GRACE` dolsa da denemeyi BIRAKMAZ (§8) |
@@ -1272,7 +1273,9 @@ serbest bırakır (§10.10); tutmasaydı obje alındığı yere ışınlanırdı
        → HEARTBEAT_TIMEOUT (15 sn) boyunca sunucudan HİÇBİR WS çerçevesi gelmezse istemci soketi
          KENDİSİ düşürür (sessiz Wi-Fi ölümü — aşağıdaki nota bak) → Kopma
 Kopma  → 1→2→5 sn backoff ile discovery'den itibaren baştan (SONSUZ — aşağıdaki nota bak); her
-         bağlanma denemesi CONNECT_TIMEOUT (10 sn) ile sınırlı
+         bağlanma denemesi CONNECT_TIMEOUT (10 sn), her gönderim SEND_TIMEOUT (5 sn) ile sınırlı —
+         ikisi de dolunca soket Abort edilir (iptal belirtecine bırakılmaz), gönderim kilidi
+         bağlantıya özeldir
        → bağlantısızlık ~3 sn sürerse istemci hata ekranı gösterir (sunum; §4 notu)
 Sunucu : hello'suz bağlantıyı 10 sn içinde kapat; deviceId çakışmasında eskisini kapat
        → roster değişince TEK yayıncı üzerinden lobby_state (version artar); status.rosterVersion

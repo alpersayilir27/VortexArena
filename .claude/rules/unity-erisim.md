@@ -75,7 +75,7 @@ koştum") — yoksa bozuk MCP kaydı aylarca fark edilmez.
 | Dosya yazma/düzenleme | `Write` / `Edit` | `echo >`, `sed -i`, `Set-Content` |
 | Prefab/sahne/asset içeriği, bileşen alanı, hiyerarşi | `mcp__UnityMCP__manage_prefabs` · `manage_gameobject` · `manage_asset` · `manage_scriptable_object` | prefab/asset **YAML'ını grep'lemek** |
 | Konsol, seçim, editör durumu, menü öğesi | `mcp__unity-editor-mcp__*` | — |
-| "Bu nasıl çalışıyor / nerede" | `mcp__auggie__codebase-retrieval` | — |
+| "Bu nasıl çalışıyor / nerede" | `Grep`/`Glob`; çok dosyaya yayılıyorsa `Explore` alt-ajanı | — |
 
 **Shell'in meşru kaldığı yerler:** `git`, `adb`, `dotnet` ve MCP gerçekten düştüğünde `unity cmd …`.
 
@@ -120,14 +120,13 @@ koşulacağıdır.
 | Kayıt | Komut | Tool seti |
 |---|---|---|
 | `unity-editor-mcp` | `unity mcp` | 140 komut — `unity list` ile birebir aynı (Unity CLI + `com.unity.pipeline`) |
-| `auggie` | `cmd /c auggie --mcp` | 1 tool: `codebase-retrieval` (Augment CLI, `npm i -g @augmentcode/auggie`) |
 | `UnityMCP` | HTTP `http://127.0.0.1:8080/mcp` | ~55 tool: `manage_*` + `mcpforunity://` (`com.coplaydev.unity-mcp`) |
 | `blender` | `uvx blender-mcp` | Blender köprüsü — Blender'da eklenti etkin + *Start MCP Server* tıklanmış olmalı (localhost:9876) |
 | `notion` | HTTP `https://mcp.notion.com/mcp` | Notion çalışma alanı (arama/sayfa/veritabanı). ⚠️ Yetki **OAuth**'la tarayıcıdan verilir — `.mcp.json`'a **token yazılmaz**, o dosya git'e giriyor |
 
 - `UnityMCP` HTTP transport olduğu için köprü 8080'de ayakta ve **editör açık** olmalıdır.
-- → kayıt ayrıntıları (`auggie`'nin `cmd /c` gerekçesi, relay kaydının neden olmadığı, CLI'da
-  karşılığı olmayan tool'lar) ve **yeni PC kurulumu**: `Docs/Gelistirici/Ortam-Kurulumu.md`
+- → kayıt ayrıntıları (relay kaydının neden olmadığı, CLI'da karşılığı olmayan tool'lar) ve
+  **yeni PC kurulumu**: `Docs/Gelistirici/Ortam-Kurulumu.md`
 
 ## 7. Geliştirici makinesi HER ZAMAN Windows
 

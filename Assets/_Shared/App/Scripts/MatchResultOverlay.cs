@@ -397,7 +397,9 @@ namespace VortexArena.App
         {
             switch (column)
             {
-                case 0: return $"{info.name} #{info.playerId}";
+                // Rich text is ON for the columns (departed-row alpha tags) → a name must never open
+                // a tag; '<' becomes a look-alike instead of being parsed.
+                case 0: return $"{info.name?.Replace('<', '‹')} #{info.playerId}";
                 case 1: return info.team == "red" ? "kırmızı" : info.team == "blue" ? "mavi" : "-";
                 case 2: return info.score.ToString();
                 case 3: return info.kills.ToString();

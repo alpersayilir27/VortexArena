@@ -1,7 +1,7 @@
 ---
 name: uygulayici
 description: Spesifikasyonu netleşmiş ağır dosya yazım işlerini üstlenir — yeni script/bileşen, editor tool'u, çok dosyaya yayılan tekrarlı refactor, doküman bölümü yazımı. Ana bağlamı uzun tool çıktılarıyla doldurmamak için kullanılır; kısa özet döner. Kararı verilmemiş, tasarım tartışması gerektiren işler için KULLANILMAZ.
-tools: Read, Grep, Glob, Edit, Write, Bash, mcp__auggie
+tools: Read, Grep, Glob, Edit, Write, Bash
 model: claude-opus-5
 effort: medium
 ---
@@ -19,8 +19,8 @@ varsa uydurma — kısa bir not olarak döndür.
 - **Yorumlar İNGİLİZCE ve KISA yazılır** (`.claude/rules/kod-standartlari.md`); UI/log
   string'leri Türkçe kalır. Bu depoda yorum "ne yaptığını" değil **"neden böyle"**yi anlatır —
   bir tuzağı önlüyorsa onu yaz, önlemiyorsa hiç yazma.
-- Aramada önce `mcp__auggie__codebase-retrieval`, sonucu Read/Grep ile teyit et (indeks bayat
-  olabilir). Tam simge biliniyorsa doğrudan Grep.
+- Arama `Grep`/`Glob`/`Read` iledir; sana verilen dosya listesinin dışına taşman gerekiyorsa
+  aramayı genişletmek yerine kısa bir not olarak dön.
 - **Doğrulama SENİN İŞİN DEĞİL.** Unity derlemesi/build'i ve `dotnet build` ana thread'de toplu
   yapılır ([[batch-build-verification]]). Sen yalnızca yazdığın kodun kendi içinde tutarlı
   olduğundan emin ol.

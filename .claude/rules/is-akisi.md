@@ -2,29 +2,28 @@
 
 > ⛔ **Önce kapı:** `UnityMCP` ayakta değilse Unity verisine dayanan iş yapılmaz → [[unity-erisim]]
 
-## 1. Aramada birincil araç auggie
+## 1. Arama: hedefli Grep, geniş keşif alt-ajana
 
-`mcp__auggie__codebase-retrieval` **birincil bağlam aracıdır**: "bu nasıl çalışıyor / X nerede /
-bunu değiştirirsem nereler etkilenir" sorularında ÖNCE ona sor, dönen dosya/simge listesini
-Read/Grep ile teyit et.
+Tam simge / string / dosya adı biliniyorsa **doğrudan `Grep` / `Glob` / `Read`** — en hızlı ve en
+kesin yol; `.meta`/`.asset`/JSON gibi üretilmiş dosyalarda da tek doğru araç budur.
 
-- **Kullan:** keşif, "hangi bileşen ne yapıyor", çapraz katman izleri (`_Shared/Net` ↔ `Protocol` ↔
-  `Server/`), refactor öncesi etki alanı, adını bilmediğin bir davranışın kaynağı.
-- **Kullanma** (Grep/Glob/Read daha hızlı ve kesin): tam simge/string biliniyorsa, tek dosya
-  okunacaksa, `.meta`/`.asset`/JSON gibi üretilmiş dosyalarda aranacaksa.
-- ⚠️ **Bayatlık:** auggie indeksten cevap verir, oturum içinde az önce yazılanı bilmeyebilir;
-  kullanıcıya verilen `dosya:satır` referansları asla yalnız auggie çıktısına dayanmasın.
-- Kayıt `.mcp.json`'da ([[unity-erisim]] §6); ilk çağrı indeksleme yüzünden gecikebilir, hata
-  alırsan Grep/Glob'a düş — sessizce arama yapmadan kalma.
+- **Alt-ajana ver:** "bu nasıl çalışıyor / X nerede / bunu değiştirirsem nereler etkilenir",
+  çapraz katman izleri (`_Shared/Net` ↔ `Protocol` ↔ `Server/`), refactor öncesi etki alanı, adını
+  bilmediğin bir davranışın kaynağı — yani **çok dosya taranacak ama ana bağlama yalnız sonuç
+  lazımsa**. Salt okuma keşfi için `subagent_type: "Explore"`, model elle `"opus"` (§3).
+- ⚠️ Ajanın döndürdüğü `dosya:satır` referansları kullanıcıya verilmeden önce `Read`/`Grep` ile
+  teyit edilir — ajan alıntıyı özetlerken kaydırabilir.
+- Tek dosya okunacaksa ajan açma; doğrudan `Read`.
 
 ## 2. Bağlam maliyeti — pahalı okuma desenleri
 
 - ⚠️ **Büyük dokümanlarda geniş bağlamlı grep YASAKTIR.** `Docs/Sistem-Ozeti.md` ~500 KB,
   `Docs/ArenaNet-Protokol.md` ~200 KB; `Grep -C 10` + yüksek `head_limit` ile birkaç arama on
-  binlerce token yer. Yerine **tek bir `codebase-retrieval` çağrısı** — auggie `Docs/**`
-  markdown'ını da indeksler ve satır numaralı alıntı döndürür.
-- ⚠️ **Alt soruların HEPSİ tek auggie çağrısında sorulur** (çağrı başına geniş küme dönüyor, üç
-  ayrı çağrı maliyeti üçe katlar). Dönen bölüm kritikse dar bir `Read offset/limit` ile teyit et.
+  binlerce token yer. Yerine: **dar `Grep`** (`-C 2`, düşük `head_limit`) ile bölümü bul, sonra
+  yalnız o bölümü `Read offset/limit` ile oku.
+- ⚠️ **Birden çok bölüm gerekiyorsa iş tek alt-ajan görevine toplanır** — alt soruların hepsi tek
+  görev metninde sorulur; aynı dokümanı üç ayrı aramayla kovalamak maliyeti üçe katlar. Dönen
+  bölüm kritikse dar bir `Read offset/limit` ile teyit et.
 - ⚠️ **1000 satırdan büyük dosya ana bağlama OKUNMAZ** — alt-ajana okutulur, özet alınır (1486
   satırlık bir dosyanın tek okuması 27.6k token). Önce `Grep`/hedefli `Read offset/limit` ile
   aranan bölüm bulunur, yalnız o okunur.
@@ -53,8 +52,9 @@ evetse devret.
   paralel çalışacaklara **ayrık dosya kümeleri** ver.
 - **Kararı verilmemiş iş devredilmez:** tasarım tartışması, kapsam belirleme, kullanıcıya sorulacak
   seçim ana bağlamda kalır — ajan spesifikasyon uygular, yazmaz.
-- **Keşif için önce auggie** (§1): tek çağrı çoğu "nerede/nasıl" sorusunda ajan açmaktan ucuzdur;
-  ajan yine gerekiyorsa auggie çıktısını ona başlangıç bağlamı olarak ver.
+- **Keşif ile uygulamayı ayır** (§1): önce salt okuma `Explore` ajanı nereye dokunulacağını
+  bulur, sonra `uygulayici`'ya o dosya listesi başlangıç bağlamı olarak verilir — uygulama ajanı
+  aramayla vakit harcamaz.
 - Ajanın döndürdüğü özet **kullanıcıya gösterilmez** — önemli olanı sen aktar.
 - Arka planda koşan ajanın yerleşik araç seti kırpılır (MCP araçları kırpılmaz); yeni ajan yazarken
   ihtiyacı olan aracı `tools` listesinde açıkça belirt.
