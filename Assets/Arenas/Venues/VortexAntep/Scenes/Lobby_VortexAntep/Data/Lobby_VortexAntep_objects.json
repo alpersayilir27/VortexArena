@@ -1,6 +1,0 @@
-{
-  "objects": [
-    { "sceneId": 1, "kind": "target_board" },
-    { "sceneId": 2, "kind": "breakable_cover" }
-  ]
-}
