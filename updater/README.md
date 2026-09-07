@@ -32,9 +32,10 @@ Adres değişirse burası düzeltilir ve updater yeniden kurulur — gözlükte 
   klasöre konur ve `python updater_uploader_main.py` ile çalıştırılır. Uçları:
   - `POST /upload?v=<sürüm>` — gelen APK'yı `game_versions/game_v<sürüm>.apk` olarak yazar
     (atomik değiştirme — yarım yükleme mevcut dosyayı bozamaz).
-  - `GET /versions` — updater'ın listeyi çektiği uç; `{"count": …, "versions": [{"version":
+  - `GET /versions` — listeyi veren uç; `{"count": …, "versions": [{"version":
     132, "file": "game_v132.apk", "size": …, "modified": …}, …]}` döner, sürüme göre büyükten
-    küçüğe sıralıdır.
+    küçüğe sıralıdır. İki tüketicisi var: gözlükteki updater ekranı ve `deploy-player-apk.bat`'in
+    sürüm sormadan önce bastığı liste (`scripts/README.md`).
   - `GET /upload` — sağlık kontrolü.
 
   Portlar ayrı olduğu için IIS ile çakışmaz. Windows Firewall'da 8091'e gelen bağlantı

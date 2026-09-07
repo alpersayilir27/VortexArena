@@ -7,7 +7,7 @@ durduğu için o klasör silinmez, yalnız aynı adlı dosya üzerine yazılır.
 | Betik | Kaynak | Çıktı | Ön koşul |
 |---|---|---|---|
 | `deploy-admin-game.bat` | Unity projesi (`Assets/`) | `deploy\admin\VortexArena.exe` | Unity Editor kapalı (betik zorlamaz) |
-| `deploy-player-apk.bat` | Unity projesi (`Assets/`) | `deploy\player\game_v<sürüm>.apk` + `install_game.bat`; sonda APK sunucudaki yayın ucuna POST'lanır (`updater_uploader/` — uç kapalıysa yalnız uyarı, build başarılı sayılır) | Unity Editor kapalı + **Android Build Support** modülü; başlangıçta sürüm numarası sorulur |
+| `deploy-player-apk.bat` | Unity projesi (`Assets/`) | `deploy\player\game_v<sürüm>.apk` + `install_game.bat`; sonda APK sunucudaki yayın ucuna POST'lanır (`updater_uploader/` — uç kapalıysa yalnız uyarı, build başarılı sayılır) | Unity Editor kapalı + **Android Build Support** modülü; başlangıçta sunucudaki yayınlanmış sürümler listelenir ve sürüm numarası sorulur |
 | `deploy-server.bat` | `Server/VortexArena.Server.App` | `deploy\server\VortexArena.Server.App.exe` | .NET 10 SDK |
 | `deploy-launcher.bat` | `launcher/VortexArena.Launcher` (WPF) | `deploy\launcher\VortexArena.Launcher.exe` | .NET 10 SDK + launcher kapalı |
 | `deploy_android_updater.bat` | `updater/` (Kotlin Android) | `deploy\updater\VortexUpdater.apk` + `install_updater.bat` | Unity'nin **Android Build Support** modülü (JDK/Gradle oradan — editör açık olabilir, Unity başlatılmaz); Android SDK'sı `%LOCALAPPDATA%\VortexUpdaterSdk` köküne ilk koşuda iner → ilk koşu internet ister |
@@ -25,6 +25,9 @@ kurulur.
 `deploy-player-apk.bat` açılışta **sürüm numarasını sorar** (pozitif tam sayı); sürümsüz oyuncu
 build'i yoktur. Numaranın komut satırı argümanı **yoktur** — bu yüzden `--no-pause` kipinde betik
 sürümü soramaz ve hata verip durur.
+
+Numara sorulmadan hemen önce **sunucuda yayında olan sürümler listelenir**
+(`lib\list-server-versions.ps1`, aşağıda).
 
 Girilen numara dört yere birden girer: APK adı (`deploy\player\game_v<sürüm>.apk`), Android paket
 adı (`com.vortex.arenav<sürüm>`), `bundleVersion` + `AndroidBundleVersionCode`, ve gözlükte görünen
@@ -223,6 +226,29 @@ Elle çalıştırmak:
 
 ```bat
 powershell -NoProfile -File scripts\lib\explain-build-failure.ps1 -Log deploy\admin-build.log
+```
+
+## Sunucudaki sürümler nasıl listelenir (`lib\list-server-versions.ps1`)
+
+`deploy-player-apk.bat` sürüm numarasını sormadan **hemen önce** bu yardımcıyı çağırır; ekrana
+yayındaki her `game_v<sürüm>.apk` gelir (numara, boyut, yüklenme zamanı — en yeniden eskiye,
+uzun listede kuyruk tek satırlık özete düşer).
+
+- **Tek veri kaynağı sunucudur:** yayın ucunun `GET /versions` yanıtı. Yerel `deploy\player\`
+  klasörü **bilerek okunmaz** — orada duran bir APK hiç yayınlanmamış olabilir ve gözlükteki
+  updater yalnız sunucudakini görür.
+- **Adres tek yerdedir:** `.bat` içindeki `VA_SERVER`; listeleme (`/versions`) ile build sonundaki
+  yükleme (`/upload`) aynı değişkenden türer, ayrı makinelere bakamazlar.
+- ⚠️ **Betik hiçbir yoldan hata döndürmez** (her dalda `exit 0`). Sunucu kapalıysa uyarı basılır ve
+  numara yine sorulur: listeleme kolaylıktır, build'i engellemesi anlamsız olurdu.
+- ⚠️ **"Şu numarayı gir" önerisi yoktur.** Tek bir test yüklemesi (`v999` gibi) "en büyük + 1"
+  önerisini saçmalaştırıyordu; onun yerine **en büyük numara** ile **en son yüklenen sürüm** ayrı
+  satırlarda basılır, seçim operatörde kalır.
+
+Elle çalıştırmak:
+
+```bat
+powershell -NoProfile -File scripts\lib\list-server-versions.ps1 -Url http://<sunucu>:8091/versions
 ```
 
 ## Neden bu ön koşullar?

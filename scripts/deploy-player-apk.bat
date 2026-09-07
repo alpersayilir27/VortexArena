@@ -11,6 +11,10 @@ rem  (com.vortex.arenav<N>, no dot - an Android package segment cannot start
 rem  with a digit), so several versions stay installed side by side on one
 rem  headset. There is no version-less player build.
 rem
+rem  Before the prompt the versions already published on the server are listed
+rem  (lib\list-server-versions.ps1 -> GET /versions). Server unreachable = warning
+rem  only, the prompt still comes.
+rem
 rem  Only the platform differs from the admin build: scene list, role and
 rem  server address resolution are identical. The player build falls to the
 rem  player role at runtime and finds the server over a UDP beacon - no IP
@@ -66,6 +70,10 @@ for %%I in ("%VA_REPO%") do set "VA_REPO=%%~fI"
 set "VA_OUT=%VA_REPO%\deploy\player"
 set "VA_LOG=%VA_REPO%\deploy\player-build.log"
 
+rem  Publish server, single place: the version listing (GET /versions) and the
+rem  upload at the end (POST /upload) must never point at different machines.
+set "VA_SERVER=http://159.100.20.26:8091"
+
 echo === VortexArena : oyuncu ^(Meta Quest / Android^) build ===
 echo   Proje : %VA_REPO%
 echo.
@@ -80,6 +88,17 @@ if defined VA_AUTO (
   set "VA_RC=2"
   goto :son
 )
+
+rem  What is already published, so the number is not chosen blind. A failure here
+rem  is never fatal: the helper always exits 0 and the prompt follows anyway.
+set "VA_LIST=%~dp0lib\list-server-versions.ps1"
+if exist "!VA_LIST!" (
+  powershell -NoProfile -ExecutionPolicy Bypass -File "!VA_LIST!" -Url "%VA_SERVER%/versions"
+) else (
+  echo   [UYARI] Surum listeleyici yok, sunucudaki surumler basilamayacak:
+  echo           "!VA_LIST!"
+)
+echo.
 
 echo   Girilen numara hem APK adina ^(game_v^<numara^>.apk^) hem paket adina
 echo   ^(com.vortex.arenav^<numara^>^) girer; gozlukte diger surumlerin yanina
@@ -261,7 +280,7 @@ rem  The APK is sent to the publish endpoint on the server (updater_uploader
 rem  script) - the Vortex Updater on the headset downloads it from the same
 rem  address. An upload failure does NOT fail the build: the apk exists and
 rem  can be published by hand.
-set "VA_UPLOAD_URL=http://159.100.20.26:8091/upload?v=%VA_VER%"
+set "VA_UPLOAD_URL=%VA_SERVER%/upload?v=%VA_VER%"
 echo.
 echo   Sunucuya yukleniyor: %VA_UPLOAD_URL%
 curl -f --connect-timeout 10 -X POST --data-binary "@%VA_APK%" "%VA_UPLOAD_URL%"

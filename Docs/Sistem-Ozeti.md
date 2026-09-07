@@ -2563,6 +2563,13 @@ yığın iziyle düşerdi.
   `EditorApplication.Exit`'ten **önce** biter (`Exit` süreci anında sonlandırır, `finally`
   çalışmaz). Sürümler ayrı paket adı taşıdığı için aynı gözlükte yan yana kurulu durabilir, bu
   yüzden `deploy\player\` klasörü build'de silinmez. `BuildWindowsAdmin` sürüm almaz.
+- **Numara sorulmadan önce sunucudaki yayınlanmış sürümler listelenir**
+  (`scripts\lib\list-server-versions.ps1` → yayın ucunun `GET /versions` yanıtı). Kaynak
+  bilerek sunucudur, yerel `deploy\player\` değil: orada duran bir APK yayınlanmamış olabilir,
+  gözlükler yalnızca sunucudakini görür. Liste alınamazsa uyarı basılır ve numara yine sorulur —
+  listeleme kolaylıktır, build'i engellemez. ⚠️ Listede **"şu numarayı gir" önerisi yoktur**: tek
+  bir test yüklemesi (`v999` gibi) en büyük numarayı bozar, bu yüzden en büyük numara ile en son
+  yüklenen sürüm ayrı ayrı basılır ve seçim operatörde kalır.
 - **İki Unity build'i de canlı ilerleme basar.** İkisi de Unity'yi doğrudan değil
   `scripts\lib\watch-unity-build.ps1` üzerinden çalıştırır: izleyici kendi log'unu
   (`deploy\admin-build.log` / `deploy\player-build.log`) akarken okur ve tek satırlık durum
