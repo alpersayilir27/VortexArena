@@ -414,7 +414,9 @@ başlığının yeniden başlatılmasıdır.
     "battery":0.87, "ctrlL":1, "ctrlR":3, "scene":"<Arena>",
     "kills":4, "deaths":2, "hp":72.0, "alive":true, "score":7,
     "inMatch":true, "calibrated":true, "calibrationSource":"anchor", "floorOffset":0.07,
-    "bodyScale":1.04, "scaleError":"", "calibrationError":"" } ] }
+    "bodyScale":1.04, "scaleError":"", "calibrationError":"",
+    "obstacleCount":2, "obstacleSeconds":7.4,
+    "outOfBoundsCount":0, "outOfBoundsSeconds":0.0 } ] }
 ```
 
 `version` = **monoton artan** roster sürümü (sunucu ömrü boyunca; sunucu yeniden başlarsa `0`'dan).
@@ -487,6 +489,16 @@ okuyan taraf `1` uygular** — kural değerleriyle aynı sözleşme, alanı hiç
 sessizce doğru davranır. Kalibrasyon alanlarıyla aynı sebepten burada taşınır: değiştiği an
 roster'ın zaten tazelendiği andır ve **iskelet kanalına girmez** — 12 Hz'de her karede tekrar eden
 bir sabit olurdu.
+
+`obstacleCount`/`obstacleSeconds`/`outOfBoundsCount`/`outOfBoundsSeconds` = o oyuncunun bu maçtaki
+**ihlal defteri** (§5.3 `violation` · §10.9): tür başına ihlal sayısı ve toplam süre. Sunucudaki
+defterin aynısıdır ve `return_to_lobby`'de skorla birlikte sıfırlanır. **Neden roster taşıyor:**
+`violation` kenar tetiklidir, yani hiç admin bağlı değilken **başlayıp biten** bir ihlal hiçbir
+mesajla taşınmaz ve sonradan bağlanan operatör onu asla göremezdi; açık ihlal tekrarı da yalnız
+sürmekte olanları kapsar. Defter roster'da taşınınca `rosterVersion` uzlaştırması (§5.1) sayaçları
+da onarır. ⚠️ **Sayaçların sahibi bu alanlardır, `violation` mesajı değil:** admin arayüzü sayacı
+akıştaki satırları toplayarak türetmez — türetseydi geç bağlanan iki operatör aynı maçta iki farklı
+sayı görürdü. Akış satırı yalnız **olayı** anlatır. Admin kaydında hepsi `0` kalır.
 
 **`load_match`** `{ "type":"load_match", "modeId":"tdm", "sceneName":"<Arena>", "roundSeconds":300, "scoreLimit":30, "yourTeam":"red", "sceneElapsed":0, "rules":{ … } }`
 → istemci sahneyi yükler, `status`'ta yeni sahne görünür. Sahne yüklenince istemci `set_ready` (yükleme tamam anlamında) gönderir; herkes hazır olunca sunucu `countdown` başlatır. Bu süre boyunca faz `paused`'dur (`phaseReason` sırayla `loading` → `countdown`); **`load_match`'in gelmesi maçın başladığı anlamına GELMEZ** — maç `phase:"playing"` ile başlar.
@@ -650,6 +662,10 @@ yeniden yüklemeyi dener** ve sonucu bildirir (§10.6): başarıda normal bir
 - `count`/`totalSeconds` = o oyuncunun bu maçtaki **o TÜRDEN** ihlallerinin sayısı ve toplam
   süresi. Sunucuda skor defteriyle aynı yerde yaşar ve `return_to_lobby`'de skorla birlikte
   sıfırlanır — operatörün maç sonunda oyuncuyla konuşurken elinde tuttuğu somut veri budur.
+  ⚠️ **Aynı defter `PlayerInfo`'da da taşınır** (§5.3 `lobby_state`) ve arayüzün gösterdiği sayaç
+  **oradan** okunur: bu mesajdaki iki alan satırın yanındaki bağlamdır, sayacın kaynağı değil.
+  Kenar tetikli bir mesajı toplayarak sayaç tutmak, mesajın kaçırılabildiği her durumda (geç
+  bağlanma, hiç admin yokken kapanan ihlal) sessizce eksik bir tablo üretir.
 - ⚠️ **Bu mesaj KENAR TETİKLİDİR, halkanın kaynağı DEĞİLDİR.** İşaretçi halkası snapshot bitlerinden
   (`FLAG_IN_OBSTACLE` / `FLAG_OUT_OF_BOUNDS`, §6.3) beslenir; yani kaybolan bir `violation` yalnız
   bir **log** kaybıdır, görsel bozulmaz. Ayrım bilinçlidir: durum tabanlı bilgi 20 Hz akışta
@@ -669,6 +685,11 @@ yeniden yüklemeyi dener** ve sonucu bildirir (§10.6): başarıda normal bir
   ihlal için `active:true` satırı yalnız o admine, `lobby_state`'ten **sonra** tekrar gönderilir
   (ad çözülebilsin diye). Kenar hiç admin yokken de ilerler (defter admin'e bağlı değildir), yani
   yeni admin ne "sonsuza kadar açık" bir ihlal görür ne de yalnız bitiş satırını.
+  ⚠️ **Sırayı garanti eden şey, tekrardan önce o bağlantıya gönderilen UNICAST `lobby_state`'tir.**
+  Roster'ın olağan yolu bir yayındır ve yayın bu bağlantının `hello` cevabıyla aynı akışta
+  beklenmez; yalnız ona güvenmek `violation` satırlarını roster'dan **önce** vardırır ve satır
+  `Oyuncu N` diye adsız düşer (iki yarısı iki ayrı olay gibi okunur). Unicast'in yayınla
+  çakışması zararsızdır — `version` monotondur, geç kalan kopya atılır.
 
 **`calibration_result`** — yalnız adminlere; operatörün `reload_calibration` düğmesinin **cevabı**:
 
@@ -1103,14 +1124,32 @@ ettiği için yarım bir kare tek oyuncuyu değil arenadaki **herkesi** bozuk g�
 - **(a) Body tracking hiç geçerli poz üretmemişse.** Kaynağı açılmayan/izinsiz başlıkta (Link'te
   geliştirici özelliği kapalı, `BODY_TRACKING` izni yok) SDK'nın gönderim kapısı hiç açılmaz ve
   oyuncu diğer ekranlarda tümden görünmez kalırdı — sahada "ağ bozuk" diye okunan bir arıza. Yedeği
-  tanıma süresi dolunca `LocalBodyAvatar` ister.
-- **(b) Oyun içinde SDK'nın ürettiği kök akıl sağlığı denetiminden düşerse.** Zemin/boy çözümü
-  karışan başlıkta (çok katlı mekân, bayat izleme haritası) SDK "geçerli" bayrağıyla çöp kök
-  üretebilir; kaynak büsbütün de susabilir. İstemci her SDK karesinde kökü **HMD'nin zemin
-  izdüşümüne yatay uzaklığı** ve **kök yüksekliği** ile yargılar, ayrıca akışın **bayatlamasına**
-  bakar (eşikler `ArenaNetCharacterBehaviour`'daki sabitlerdedir). Düşen kare hiç gönderilmez,
-  yerine yedek kare gider; SDK yoluna dönüş **histerezislidir** — ardışık temiz kare sayacı dolana
-  kadar temiz kareler de bastırılır, yoksa uzak tarafta gövde iki yol arasında kare kare titrerdi.
+  tanıma süresi dolunca `LocalBodyAvatar` ister. ⚠️ **İzin REDDEDİLMİŞSE tanıma süresi
+  beklenmez:** izin durumu işletim sisteminden doğrudan sorulur ve yedek anında kurulur. Gerekçe
+  fazdan bağımsızdır — T-poz operatöre *"bu başlıkta izleme yok"* diyen tek sinyaldir ve **lobide,
+  maç başlamadan** görülmelidir; bekleyen bir yedek, izinsiz oyuncuyu lobide sağlam gösterip arızayı
+  maçın ortasına erteler.
+- **(b) SDK'nın ürettiği kare akıl sağlığı denetiminden düşerse.** Zemin/boy çözümü karışan
+  başlıkta (çok katlı mekân, bayat izleme haritası) SDK "geçerli" bayrağıyla çöp üretebilir; kaynak
+  büsbütün de susabilir. Denetim üç şeye birden bakar (eşikler `ArenaNetCharacterBehaviour`'daki
+  sabitlerdedir):
+  - **Kök makullüğü** — kökün HMD'nin zemin izdüşümüne yatay uzaklığı ve kök yüksekliği.
+  - **Eklem makullüğü** — bind pozuna göre anahtar kemik oranları, ayağın kök zeminine göre yeri,
+    ardışık iki kare arasındaki eklem sıçraması. ⚠️ **Kök tek başına yetmez:** merdivende ya da
+    örtülmede kök kafanın altında makul kalırken gövde katlanır, yani en görünür bozulma yalnız
+    köke bakan bir kapıdan sessizce geçer.
+  - **Akışın donması** — yalnız bayatlama (kare gelmemesi) değil, **birebir aynı kareyi tekrar
+    etmek** de bayattır. ⚠️ Ölçüm eklem-yerel poz üzerinden yapılır, kök üzerinden **yapılamaz**:
+    kök HMD'yi izlediği için donmuş izlemede bile oynamaya devam eder. Gerekçesi `OVRBody`'nin
+    sözleşmesidir: `GetBodyState4` başarılı olduğu sürece geçerlilik bayrağı **koşulsuz** yazılır,
+    güven değeri hesaba girmez ve geçersiz eklem **önceki karenin değerini korur** — yani "veri
+    geçerli" demek "veri taze" demek değildir. Sistem ayarlarından gövde takibini kapatan oyuncu
+    tam olarak bu boşluğa düşer: çalışma zamanı cevap vermeye devam eder, kareler donar ve
+    yalnız bayatlamaya bakan bir kapı hiç açılmaz.
+
+  Düşen kare hiç gönderilmez, yerine yedek kare gider; SDK yoluna dönüş **histerezislidir** —
+  ardışık temiz kare sayacı dolana kadar temiz kareler de bastırılır, yoksa uzak tarafta gövde iki
+  yol arasında kare kare titrerdi.
 
 ⚠️ **İki durumda da blob SDK'nın hedef iskeletinin referans T-pozudur** (yerel uzay, ölçeksiz;
 `SkeletonRetargeter.TargetReferencePoseLocal`) — "karakterin o anki kemikleri" gönderen bir dal
@@ -1192,6 +1231,14 @@ yerine geçtiği retargeter'a bağımlıdır: onunla birlikte ölür ve kendisin
 ⚠️ **Canlı T-poz akışı poz kanalına DEVREDİLMEZ.** Yedek çerçeve üreten gönderen kendi durumu
 hakkında açık bir beyanda bulunuyordur; alıcı onu ikinci kez yorumlamaz. Devir yalnız akış
 **hiçbir şey** üretmediğinde olur.
+
+⚠️ **Poz güdümlü sürücü de KENDİ kanalının tazeliğine kapılanır.** Poz örneği de eskimişse IK
+çözülmez: gövde son uygulanan duruşunda bırakılır. Kapı olmasaydı iki kanalı birden susturan bir
+arıza (uygulamanın arka plana atılması: önce iskelet, hemen ardından poz kanalı susar) gövdeyi
+**son el pozlarına** çözülmüş donuk bir duruşta bırakırdı — kollar T-pozdan kırılır, bacak ve
+omurga T'de kalır, ortaya izlemenin bozuk olduğunu da söylemeyen bir yaratık çıkardı. Kapıyla
+birlikte gönderenin son beyanı (T-poz) olduğu gibi durur ve arıza sahada olduğu gibi okunur.
+Eşik iskelet kökününkiyle aynı sınıftadır ve aynı sebeple periyodun belirgin üstündedir.
 
 ⚠️ **Tazelik testi şarttır, çünkü kayıt defterinde kök örnekleri eskimez.** Yaş sorulmazsa dakikalar
 önce susmuş bir akış gövdeyi son kökünde sonsuza dek dondurur; hiç örnek gelmemişse gövde sıfır

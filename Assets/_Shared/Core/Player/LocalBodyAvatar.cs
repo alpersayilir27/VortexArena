@@ -54,6 +54,11 @@ namespace VortexArena.Core.Player
         /// <summary>Minimum interval between rig/session searches when none is found (s).</summary>
         private const float RigSearchIntervalSeconds = 0.5f;
 
+#if UNITY_ANDROID && !UNITY_EDITOR
+        /// <summary>Android permission id of body tracking — asked of the OS directly.</summary>
+        private const string BodyTrackingPermissionId = "com.oculus.permission.BODY_TRACKING";
+#endif
+
         public static LocalBodyAvatar Instance { get; private set; }
 
         [Tooltip("Ağ köprüsü + SDK sürücüsü. Boşsa alt ağaçtan aranır.")]
@@ -309,6 +314,11 @@ namespace VortexArena.Core.Player
             character.Initialize(client.PlayerId, hasInputAuthority: true);
             _sourceProviderGrace = SourceProviderGraceSeconds;
             SeedHeightHint();
+
+            // The watchdog only starts here (rig + playerId); this line is what tells the field WHEN.
+            Debug.Log($"[LocalBodyAvatar] Gövde bekçisi kuruldu (oyuncu {client.PlayerId}, izin: " +
+                      $"{(HasBodyTrackingPermission() ? "var" : "YOK")}) — gövde izlemesi buradan " +
+                      "itibaren izleniyor.", this);
         }
 
         /// <summary>Silences the body visually: <b>every Renderer in the subtree is disabled, no
@@ -372,6 +382,14 @@ namespace VortexArena.Core.Player
                 return;
             }
 
+            // ⚠️ With the permission REFUSED there is nothing to be patient about: the fallback is armed
+            // at once so the T-pose is visible from the LOBBY. Waiting would show an unpermitted player
+            // as healthy in the lobby and defer the fault to mid-match.
+            if (!_sourceProviderWarned && !HasBodyTrackingPermission())
+            {
+                _sourceProviderGrace = 0f;
+            }
+
             _sourceProviderGrace -= Time.unscaledDeltaTime;
             if (_sourceProviderGrace > 0f)
             {
@@ -394,6 +412,30 @@ namespace VortexArena.Core.Player
             }
 
             AttemptBodyTrackingRepair();
+        }
+
+        /// <summary>Is the OS body-tracking permission granted? Off Android there is no permission model,
+        /// so the answer is "yes" and the ordinary patience window applies unchanged.</summary>
+        private static bool HasBodyTrackingPermission()
+        {
+#if UNITY_ANDROID && !UNITY_EDITOR
+            return UnityEngine.Android.Permission.HasUserAuthorizedPermission(BodyTrackingPermissionId);
+#else
+            return true;
+#endif
+        }
+
+        /// <summary>⚠️ Focus loss kills the sensor while the app is still running for a moment: reporting it
+        /// puts the fallback on the wire in that window instead of after the stale timeout. Once the app
+        /// is actually paused nothing is sent at all — this hook only shortens the transition.</summary>
+        private void OnApplicationFocus(bool hasFocus)
+        {
+            if (hasFocus || !_initialized || character == null)
+            {
+                return;
+            }
+
+            character.NoteSourceInterrupted();
         }
 
         /// <summary>Body is streaming again: clears the episode.</summary>

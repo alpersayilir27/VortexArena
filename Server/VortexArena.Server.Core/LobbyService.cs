@@ -143,8 +143,14 @@ public sealed class LobbyService
 
         _registry.Announce(state, kind); // console line + lobby_state broadcast
 
-        // Violations already open replay to a late admin (§5.3) — AFTER Announce, so the feed can
-        // name the player from the roster it just received.
+        // ⚠️ Announce's broadcast is NOT awaited (it starts a background loop), so it does not order
+        // against the frames below. THIS unicast does: same reconciliation as HandleStatusAsync, and
+        // without it the violation replay would reach the admin before any roster and name nobody.
+        // The broadcast's late copy is dropped by the monotonic version.
+        await SendSafeAsync(connection, BuildLobbyStateJson(), state.Name);
+
+        // Violations already open replay to a late admin (§5.3) — AFTER the unicast roster, so the feed
+        // can name the player.
         if (state.Role == "admin")
         {
             foreach (var json in _director.BuildOpenViolationJsons())

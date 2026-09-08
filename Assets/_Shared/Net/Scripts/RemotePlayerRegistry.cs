@@ -365,6 +365,25 @@ namespace VortexArena.Net
             }
         }
 
+        /// <summary>Age of the NEWEST pose sample in ms; <c>-1</c> when the player has no sample at all.
+        /// <para>⚠️ A reader that only asks for the interpolated pose cannot tell a live channel from one
+        /// that stopped: samples stay in the ring and are clamped to the nearest end, so a dead channel
+        /// keeps answering with its last pose. Anything that DRIVES bones from it has to know (§6.11).</para>
+        /// <para>Same clock as <c>recvMs</c> (<c>Environment.TickCount</c>) → a RECEIVE age, network
+        /// silence included, which is exactly the fault being detected.</para></summary>
+        public int GetPoseAgeMs(int playerId)
+        {
+            lock (_gate)
+            {
+                if (!_entries.TryGetValue(playerId, out RemoteEntry entry) || entry.count == 0)
+                {
+                    return -1;
+                }
+
+                return Environment.TickCount - entry.lastRecvMs;
+            }
+        }
+
         /// <summary>
         /// MAIN THREAD: samples INTERP_DELAY_MS behind and returns arena-space poses interpolated
         /// between two samples; with no bracketing pair it clamps to the nearest end. False when there

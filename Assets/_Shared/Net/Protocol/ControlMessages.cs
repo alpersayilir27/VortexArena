@@ -480,6 +480,22 @@ namespace VortexArena.Protocol
         /// apply <c>1</c>. ⚠️ It does NOT go on the skeleton channel, where it would be a constant
         /// repeated every frame.</summary>
         public float bodyScale;
+
+        // Violation ledger of THIS match (§10.9), per kind: count + total seconds. Always 0 for admins.
+        // ⚠️ It rides the roster because `violation` is edge triggered: one that starts AND ends while no
+        // admin is connected reaches nobody, and the replay carries only still-open ones.
+
+        /// <summary>Obstacle violations this match.</summary>
+        public int obstacleCount;
+
+        /// <summary>Total seconds spent inside an obstacle this match.</summary>
+        public float obstacleSeconds;
+
+        /// <summary>Out-of-bounds violations this match.</summary>
+        public int outOfBoundsCount;
+
+        /// <summary>Total seconds spent out of bounds this match.</summary>
+        public float outOfBoundsSeconds;
     }
 
     [Serializable]

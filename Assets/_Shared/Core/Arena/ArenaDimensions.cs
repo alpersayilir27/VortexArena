@@ -289,8 +289,13 @@ namespace VortexArena.Core.Arena
         /// <remarks>Written by hand instead of <see cref="JsonUtility.ToJson"/>: that one prints 17
         /// digits per float (3.17 → 3.1699981689453127), which makes the file's diff unreadable.
         /// Numbers are rounded to millimeters; the READER stays <see cref="JsonUtility"/>.</remarks>
-        public string ToJson(bool pretty = true)
+        /// <param name="expandedPoints">Writes each point as a three line block (the measurement
+        /// tool's own shape) instead of one line; ignored when not <paramref name="pretty"/>.
+        /// Purpose: rewriting a file keeps its shape, so an untouched plan produces no diff.</param>
+        public string ToJson(bool pretty = true, bool expandedPoints = false)
         {
+            expandedPoints &= pretty;
+
             var builder = new StringBuilder(512);
 
             string nl = pretty ? "\n" : string.Empty;
@@ -303,7 +308,7 @@ namespace VortexArena.Core.Arena
             builder.Append(i1).Append("\"name\": ").Append(Quote(name)).Append(',').Append(nl);
 
             builder.Append(i1).Append("\"plane\": ");
-            AppendRing(builder, plane, nl, i1, i2);
+            AppendRing(builder, plane, nl, i1, i2, expandedPoints);
             builder.Append(',').Append(nl);
 
             builder.Append(i1).Append("\"columns\": ");
@@ -320,7 +325,7 @@ namespace VortexArena.Core.Arena
                     builder.Append(i3).Append("\"name\": ").Append(Quote(columns[i].name)).Append(',').Append(nl);
                     builder.Append(i3).Append("\"height\": ").Append(Num(columns[i].height)).Append(',').Append(nl);
                     builder.Append(i3).Append("\"points\": ");
-                    AppendRing(builder, columns[i].points, nl, i3, i4);
+                    AppendRing(builder, columns[i].points, nl, i3, i4, expandedPoints);
                     builder.Append(nl).Append(i2).Append('}');
 
                     if (i < columns.Length - 1)
@@ -336,8 +341,18 @@ namespace VortexArena.Core.Arena
 
             builder.Append(',').Append(nl);
 
-            builder.Append(i1).Append("\"calibration\": { \"a\": ").Append(Point(calibration.a))
-                .Append(", \"b\": ").Append(Point(calibration.b)).Append(" },").Append(nl);
+            if (expandedPoints)
+            {
+                builder.Append(i1).Append("\"calibration\": {").Append(nl);
+                builder.Append(i2).Append("\"a\": ").Append(Point(calibration.a, nl, i2)).Append(',').Append(nl);
+                builder.Append(i2).Append("\"b\": ").Append(Point(calibration.b, nl, i2)).Append(nl);
+                builder.Append(i1).Append("},").Append(nl);
+            }
+            else
+            {
+                builder.Append(i1).Append("\"calibration\": { \"a\": ").Append(Point(calibration.a))
+                    .Append(", \"b\": ").Append(Point(calibration.b)).Append(" },").Append(nl);
+            }
 
             builder.Append(i1).Append("\"defaultColumnHeight\": ").Append(Num(defaultColumnHeight));
 
@@ -358,7 +373,8 @@ namespace VortexArena.Core.Arena
             Vector2[] ring,
             string nl,
             string indent,
-            string itemIndent)
+            string itemIndent,
+            bool expandedPoints = false)
         {
             if (ring == null || ring.Length == 0)
             {
@@ -369,7 +385,8 @@ namespace VortexArena.Core.Arena
             builder.Append('[').Append(nl);
             for (int i = 0; i < ring.Length; i++)
             {
-                builder.Append(itemIndent).Append(Point(ring[i]));
+                builder.Append(itemIndent)
+                    .Append(expandedPoints ? Point(ring[i], nl, itemIndent) : Point(ring[i]));
                 if (i < ring.Length - 1)
                 {
                     builder.Append(',');
@@ -384,6 +401,17 @@ namespace VortexArena.Core.Arena
         private static string Point(Vector2 point)
         {
             return "{ \"x\": " + Num(point.x) + ", \"y\": " + Num(point.y) + " }";
+        }
+
+        /// <summary>A point as a three line block; <paramref name="indent"/> is the indent of the
+        /// line the block starts on (the fields sit one level deeper).</summary>
+        private static string Point(Vector2 point, string nl, string indent)
+        {
+            string inner = indent + "  ";
+            return "{" + nl +
+                   inner + "\"x\": " + Num(point.x) + ',' + nl +
+                   inner + "\"y\": " + Num(point.y) + nl +
+                   indent + "}";
         }
 
         /// <summary>A number rounded to millimeters, invariant culture.</summary>

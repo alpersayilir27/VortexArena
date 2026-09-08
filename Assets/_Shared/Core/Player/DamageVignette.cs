@@ -4,9 +4,10 @@ using VortexArena.Protocol;
 
 namespace VortexArena.Core.Player
 {
-    /// <summary>Red damage vignette on the HMD: rises fast on health loss, decays with an ease-out
+    /// <summary>Damage vignette on the HMD: rises fast on health loss, decays with an ease-out
     /// curve, and breathes at low health. The centre stays fully clear (the shader's radial ramp) —
-    /// the player is physically walking and blocking their view is a safety problem.</summary>
+    /// the player is physically walking and blocking their view is a safety problem. Red while alive,
+    /// a steady grey frame while dead.</summary>
     /// <remarks>
     /// ⚠️ <b>Must NOT be added as a <see cref="ScreenFade"/> source.</b> The arbiter picks the highest
     /// alpha, so a 0.4 red always loses to a 1.0 obstacle blackout and the player never sees their
@@ -37,7 +38,7 @@ namespace VortexArena.Core.Player
 
         [Tooltip("Kenardaki en yüksek opaklık. Merkezin temiz kalmasını shader'ın yarıçapları sağlar.")]
         [Range(0f, 1f)]
-        [SerializeField] private float maxAlpha = 0.55f;
+        [SerializeField] private float maxAlpha = 0.75f;
 
         [Header("Zamanlama")]
         [Tooltip("Vuruştan sonra tepe opaklığa çıkma süresi (sn).")]
@@ -53,7 +54,7 @@ namespace VortexArena.Core.Player
 
         [Tooltip("Tek vuruşun en düşük yoğunluğu (0..1): küçük hasar da görünür kalsın.")]
         [Range(0f, 1f)]
-        [SerializeField] private float minHitIntensity = 0.35f;
+        [SerializeField] private float minHitIntensity = 0.50f;
 
         [Header("Engel erimesi")]
         [Tooltip("Engelde can erirken karartmanın üstündeki kırmızının tepe opaklığı.")]
@@ -86,6 +87,15 @@ namespace VortexArena.Core.Player
         [Range(0.05f, 3f)]
         [SerializeField] private float lowHpPulseHz = 0.35f;
 
+        [Header("Ölüm")]
+        [Tooltip("Oyuncu ölüyken çerçevenin rengi. Doygunluğu alınmış gri: kırmızı taze hasar demek, " +
+                 "ölü bedende yanıltıcı olur.")]
+        [SerializeField] private Color deathColor = new Color(0.35f, 0.35f, 0.35f);
+
+        [Tooltip("Ölüyken çerçevenin sabit opaklığı. Öldüren vuruş bunun üstünde bir parlama olarak görünür.")]
+        [Range(0f, 1f)]
+        [SerializeField] private float deathAlpha = 0.45f;
+
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
 
         /// <summary>Obstacle health arrives at ~4 Hz; a drop younger than this means "draining".</summary>
@@ -103,6 +113,7 @@ namespace VortexArena.Core.Player
         private float _hitTime = float.NegativeInfinity;
         private float _hitPeak;
         private float _hitFrom;
+        private bool _wasAlive = true;
 
         private void Awake()
         {
@@ -113,6 +124,7 @@ namespace VortexArena.Core.Player
 
             _propertyBlock = new MaterialPropertyBlock();
             _lastHp = ArenaCombat.LocalHp;
+            _wasAlive = ArenaCombat.IsAlive;
             Draw(0f);
         }
 
@@ -144,10 +156,18 @@ namespace VortexArena.Core.Player
 
             if (!ArenaCombat.IsAlive)
             {
-                // The death overlay presents itself; a red frame on top adds no information.
-                _hitPeak = 0f;
-                Draw(0f);
+                // ⚠️ No LowHpAlpha/DrainAlpha here: LowHpAlpha pulses forever at hp = 0, which would
+                // make the grey frame blink without end. Steady floor, killing hit flares over it.
+                _wasAlive = false;
+                Draw(Mathf.Max(HitEnvelope() * maxAlpha, deathAlpha), deathColor);
                 return;
+            }
+
+            if (!_wasAlive)
+            {
+                // Revive edge: drop the envelope left over from death, it is not the new life's damage.
+                _wasAlive = true;
+                _hitPeak = 0f;
             }
 
             Draw(Mathf.Max(HitEnvelope() * maxAlpha, Mathf.Max(LowHpAlpha(hp), DrainAlpha())));
@@ -246,7 +266,9 @@ namespace VortexArena.Core.Player
                    * Mathf.Lerp(lowHpPulseFloor, 1f, breath);
         }
 
-        private void Draw(float alpha)
+        private void Draw(float alpha) => Draw(alpha, vignetteColor);
+
+        private void Draw(float alpha, Color tint)
         {
             if (vignetteRenderer == null)
             {
@@ -266,7 +288,7 @@ namespace VortexArena.Core.Player
             // ⚠️ .linear is REQUIRED: the project renders in Linear space but a serialized Color holds
             // what the picker showed (sRGB), and SetColor does no conversion. Without it #8E1F1F
             // reaches the shader far too bright and the "desaturated" part of the colour is lost.
-            Color color = vignetteColor.linear;
+            Color color = tint.linear;
             color.a = alpha;
             _propertyBlock.SetColor(BaseColorId, color);
             vignetteRenderer.SetPropertyBlock(_propertyBlock);

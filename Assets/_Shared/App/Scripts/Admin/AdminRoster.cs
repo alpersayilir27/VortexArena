@@ -142,10 +142,9 @@ namespace VortexArena.App.Admin
         public float diedAt = -1f;
 
         // ---- Violation ledger (§10.9): the SERVER counts, the admin only displays ----
-        // ⚠️ Never increment these locally. The server is authoritative, so one clock measures the
-        // time and both operators see the same number. The edge-triggered `violation` message
-        // already carries the current total, so a lost message self-heals on the next one; counting
-        // locally would turn it into a permanent drift.
+        // ⚠️ Written ONLY from lobby_state, never incremented locally and never from `violation`:
+        // that message is edge triggered, so one starting and ending before this admin connected
+        // reaches nobody. The roster carries the ledger, so a late panel still shows the full total.
 
         /// <summary>Obstacle violations this match (head inside an inner obstacle).</summary>
         public int obstacleCount;
@@ -549,6 +548,13 @@ namespace VortexArena.App.Admin
                 view.score = info.score;
                 view.hp = info.hp;
 
+                // §10.9 — the ledger is the server's; the roster is its only durable carrier, since
+                // `violation` is edge triggered and an admin that connects late missed the edges.
+                view.obstacleCount = info.obstacleCount;
+                view.obstacleSeconds = info.obstacleSeconds;
+                view.outOfBoundsCount = info.outOfBoundsCount;
+                view.outOfBoundsSeconds = info.outOfBoundsSeconds;
+
                 // §10.6 calibration state. The server always sends false for admin records, so it is
                 // pinned to true here to keep the admin out of "uncalibrated" (see NeedsCalibration).
                 view.calibrated = view.IsPlayer ? info.calibrated : true;
@@ -662,13 +668,8 @@ namespace VortexArena.App.Admin
                 kv.Value.diedAt = -1f;
                 kv.Value.score = 0; // the server resets it too when returning to the lobby (§10.2)
 
-                // The violation ledger resets with the score, mirroring the server's (§10.9): left
-                // alone, the old match's count would linger until the new match's first `violation`
-                // message and read as the new match's.
-                kv.Value.obstacleCount = 0;
-                kv.Value.obstacleSeconds = 0f;
-                kv.Value.outOfBoundsCount = 0;
-                kv.Value.outOfBoundsSeconds = 0f;
+                // The violation ledger is NOT cleared here: it rides the roster (§10.9), so clearing it
+                // locally would blank the panel until the next lobby_state and hide the server's timing.
             }
 
             Raise();
@@ -777,8 +778,8 @@ namespace VortexArena.App.Admin
             Raise();
         }
 
-        /// <summary>Start/end of a physical violation (§10.9). The SERVER is the source — this class
-        /// derives no edges, measures no time and counts nothing; it writes the incoming ledger.
+        /// <summary>Start/end of a physical violation (§10.9) — FEED ONLY: this class derives no edges,
+        /// measures no time and counts nothing. The counters come from the roster (see the field docs).
         /// <para>⚠️ The message is edge triggered: a lost line is only a log loss, since the ring is
         /// fed from the snapshot bit (<c>AdminViolations.Of</c>). Short contacts (below
         /// <see cref="ArenaProtocol.VIOLATION_MIN_SECONDS"/>) are already filtered on the server —
@@ -791,20 +792,12 @@ namespace VortexArena.App.Admin
                 return;
             }
 
-            AdminPlayerView view = Find(msg.playerId);
-            if (view != null)
+            // A row for an id the roster does not know yet is written unnamed ("Oyuncu N"), which reads
+            // like a different event than its named end line — say so, so the field can tell it apart
+            // from a line that never arrived at all.
+            if (Find(msg.playerId) == null)
             {
-                // Counters are the server's totals; no local increment (see the field docs).
-                if (msg.kind == ArenaProtocol.VIOLATION_KIND_OBSTACLE)
-                {
-                    view.obstacleCount = msg.count;
-                    view.obstacleSeconds = msg.totalSeconds;
-                }
-                else if (msg.kind == ArenaProtocol.VIOLATION_KIND_OUT_OF_BOUNDS)
-                {
-                    view.outOfBoundsCount = msg.count;
-                    view.outOfBoundsSeconds = msg.totalSeconds;
-                }
+                Debug.LogWarning($"[AdminRoster] İhlal satırı roster'dan önce geldi: playerId {msg.playerId}");
             }
 
             // Unknown kinds are written with their raw label (AdminViolations.Label): swallowing the

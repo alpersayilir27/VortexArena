@@ -955,6 +955,9 @@ public sealed class MatchDirector
 
             tally.Announced = true;
             tally.Count++;
+            // The ledger now travels in the roster too (§5.3): without this the panel's counter would
+            // stall until some unrelated field changed.
+            _rosterRefreshFor = player;
             if (anyAdmin)
             {
                 QueueAdminBroadcastLocked(outbox, JsonUtil.Serialize(new ViolationMsg
@@ -977,6 +980,7 @@ public sealed class MatchDirector
         {
             var seconds = (float)(now - tally.Since.Value).TotalSeconds;
             tally.TotalSeconds += seconds;
+            _rosterRefreshFor = player; // see the start edge
             if (anyAdmin)
             {
                 QueueAdminBroadcastLocked(outbox, JsonUtil.Serialize(new ViolationMsg
