@@ -14,7 +14,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Arena.MapDefinition
   sceneName: Lobby_VortexAntep
   displayName: Lobi
+  gameType: 0
   supportedModeIds:
   - lobby
   ambienceClip: {fileID: 8300000, guid: 88eb1d7daa77ef842b2564808123bfe5, type: 3}
   ambienceVolume: 0.175
+  musicClip: {fileID: 0}
+  musicVolume: 0.5
