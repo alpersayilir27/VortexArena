@@ -1813,11 +1813,16 @@ MonoBehaviour:
   attackSeconds: 0.06
   decaySeconds: 0.4
   fullIntensityDamage: 25
+  minHitIntensity: 0.5
+  drainAlpha: 0.8
+  drainPulseHz: 1
   lowHpThreshold: 0.3
   lowHpAlpha: 0.16
   lowHpEntryScale: 0.5
   lowHpPulseFloor: 0.55
   lowHpPulseHz: 0.35
+  deathColor: {r: 0.35, g: 0.35, b: 0.35, a: 1}
+  deathAlpha: 0.45
 --- !u!1 &1272451756600780371
 GameObject:
   m_ObjectHideFlags: 0
@@ -8060,7 +8065,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Meta.XR.BuildingBlocks::Meta.XR.BuildingBlocks.BuildingBlock
   blockId: 5817f7c0-f2a5-45f9-a5ca-64264e0166e8
-  instanceId: 80d11bef-ea26-47e1-bcf0-c555b426d090
+  instanceId: 8b91745e-5880-4fe6-b5f7-c72e1a19014f
   version: 1
   installationRoutineCheckpoint:
     _installationRoutineId: 
@@ -8808,7 +8813,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Meta.XR.BuildingBlocks::Meta.XR.BuildingBlocks.BuildingBlock
   blockId: e47682b9-c270-40b1-b16d-90b627a5ce1b
-  instanceId: b0397fab-9c5d-4011-88b8-df477054d270
+  instanceId: 1106ea84-aace-4d4c-980d-b391ca77ef40
   version: 1
   installationRoutineCheckpoint:
     _installationRoutineId: 
@@ -10780,7 +10785,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Meta.XR.BuildingBlocks::Meta.XR.BuildingBlocks.BuildingBlock
   blockId: 5817f7c0-f2a5-45f9-a5ca-64264e0166e8
-  instanceId: 9db0eb1f-8faa-4438-982c-e9bc14281028
+  instanceId: 0b2d60e8-979a-4fcf-bd51-09610dd52270
   version: 1
   installationRoutineCheckpoint:
     _installationRoutineId: 
@@ -11744,7 +11749,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Meta.XR.BuildingBlocks::Meta.XR.BuildingBlocks.BuildingBlock
   blockId: 81f55626-5fad-45e9-a1df-184f330da7ba
-  instanceId: 36172b88-5b04-40f6-b896-183323382f12
+  instanceId: 39e1d623-7f21-44d9-a77f-68c1c5ebebc4
   version: 1
   installationRoutineCheckpoint:
     _installationRoutineId: 2063f481-1b63-4eda-9ee8-a00df98536bc

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text.RegularExpressions;
 using UnityEditor;
 using UnityEngine;
 using VortexArena.Core.Arena;
@@ -111,7 +112,14 @@ namespace VortexArena.Core.Editor
                 return false;
             }
 
-            string json = plan.ToJson();
+            // The file's own shape is kept so that rewriting an untouched mesh gives no diff.
+            SourceFormat format = DetectFormat(target.SourceJson);
+            string json = plan.ToJson(true, format.ExpandedPoints);
+
+            if (format.Crlf)
+            {
+                json = json.Replace("\n", "\r\n"); // safe: ToJson never emits a CR
+            }
 
             // Read back what we just produced: a field JsonUtility silently emptied is caught here
             // and the file is never touched.
@@ -133,6 +141,40 @@ namespace VortexArena.Core.Editor
 
             AssetDatabase.ImportAsset(assetPath, ImportAssetOptions.ForceUpdate);
             return true;
+        }
+
+        /// <summary>An "x" field alone on its line — the mark of the expanded point shape.</summary>
+        /// <remarks>The trailing \r is optional on purpose: in Multiline mode $ matches before the
+        /// \n only, so a CRLF file would never match without it.</remarks>
+        private static readonly Regex ExpandedPointPattern =
+            new Regex("^[ \t]*\"x\"\\s*:\\s*-?[0-9.]+,?[ \t]*\r?$", RegexOptions.Multiline);
+
+        /// <summary>The written file's shape: point layout and line ending.</summary>
+        private readonly struct SourceFormat
+        {
+            public SourceFormat(bool expandedPoints, bool crlf)
+            {
+                ExpandedPoints = expandedPoints;
+                Crlf = crlf;
+            }
+
+            public bool ExpandedPoints { get; }
+
+            public bool Crlf { get; }
+        }
+
+        /// <summary>Reads the existing file's shape so the rewrite can keep it.</summary>
+        /// <remarks>⚠️ Unreadable or absent source → expanded points + CRLF: that is the measurement
+        /// tool's canonical shape; the other shapes are only ever preserved, never chosen.</remarks>
+        private static SourceFormat DetectFormat(TextAsset source)
+        {
+            string text = source != null ? source.text : null;
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return new SourceFormat(true, true);
+            }
+
+            return new SourceFormat(ExpandedPointPattern.IsMatch(text), text.Contains("\r\n"));
         }
 
         // ---------------------------------------------------------------- extract

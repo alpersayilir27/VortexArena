@@ -37,6 +37,14 @@ namespace VortexArena.Core.Player
         /// <see cref="HandFingerRig.LeftWristBoneName"/> and <see cref="SkeletonPoseMirror"/>.</summary>
         public const string HeadBoneName = "mixamorig:Head";
 
+        /// <summary>The POSE channel counts as dead after this long without a sample (ms); past it no IK is
+        /// solved and the skeleton is left in its last applied pose (§6.11).
+        /// <para>⚠️ Without this gate a fault that silences BOTH channels (the app going to background:
+        /// skeleton first, pose right after) would leave the body solved onto its last hand poses — arms
+        /// bent out of a T-pose, legs and spine still in T. Same class of threshold as the skeleton's, and
+        /// for the same reason well above the snapshot period plus the interp buffer.</para></summary>
+        private const int PoseDeadAfterMs = 1000;
+
         private ArenaNetCharacterBehaviour _character;
 
         private Transform _head;
@@ -102,8 +110,21 @@ namespace VortexArena.Core.Player
             }
 
             RemotePlayerRegistry registry = RemotePlayerRegistry.Instance;
-            if (registry == null ||
-                !registry.GetInterpolatedPose(_character.PlayerId, out Pose head, out Pose handL, out Pose handR))
+            if (registry == null)
+            {
+                return;
+            }
+
+            // ⚠️ -1 means "no sample at all" and must read as DEAD, not as fresh: a bare `> threshold`
+            // test lets that case through, and it only fails later by accident (no interpolated pose).
+            int poseAgeMs = registry.GetPoseAgeMs(_character.PlayerId);
+            if (poseAgeMs < 0 || poseAgeMs > PoseDeadAfterMs)
+            {
+                return;
+            }
+
+            if (!registry.GetInterpolatedPose(
+                    _character.PlayerId, out Pose head, out Pose handL, out Pose handR))
             {
                 return;
             }

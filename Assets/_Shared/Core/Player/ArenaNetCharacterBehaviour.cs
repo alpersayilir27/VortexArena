@@ -65,6 +65,37 @@ namespace VortexArena.Core.Player
         /// body would flicker between T-pose and broken pose.</summary>
         private const int RecoverStreakFrames = 12;
 
+        /// <summary>Accepted band for a key bone's length against the SDK's bind pose (ratio). Outside it
+        /// the solve folded the body — the most visible fault a root-only check lets through.</summary>
+        private const float BoneLengthRatioMin = 0.5f;
+
+        /// <inheritdoc cref="BoneLengthRatioMin"/>
+        private const float BoneLengthRatioMax = 2.0f;
+
+        /// <summary>How far below the root's floor a foot may sit (m). The root is the body's floor point,
+        /// so a foot under it means the height solve collapsed.</summary>
+        private const float FootBelowRootMeters = 0.3f;
+
+        /// <summary>Largest per-joint move accepted between two consecutive judged frames (m). ≈83 ms
+        /// apart, so this is ~12 m/s — far above sprinting or a swung arm, well below a solver jump.</summary>
+        private const float JointJumpLimitMeters = 1.0f;
+
+        /// <summary>Longest gap between two frames the jump test may span (s). ⚠️ Beyond it the reference
+        /// is only refreshed, not judged: a legitimately long gap (suppressed frames, hitch) covers real
+        /// movement that would read as a jump.</summary>
+        private const float JointJumpMaxGapSeconds = 0.25f;
+
+        /// <summary>Body-tracking confidence at or below this counts as NONE (the value is 0..1; the
+        /// epsilon only keeps float noise out).</summary>
+        private const float MinBodyConfidence = 0.01f;
+
+        /// <summary>Runtime joint ids of the sanity-checked source joints. ⚠️ <c>Body_*</c> and
+        /// <c>FullBody_*</c> share these two indices, so the constant holds for either joint set.</summary>
+        private const int SourceHipsJointId = (int)OVRPlugin.BoneId.Body_Hips;
+
+        /// <inheritdoc cref="SourceHipsJointId"/>
+        private const int SourceHeadJointId = (int)OVRPlugin.BoneId.Body_Head;
+
         /// <summary>The skeleton stream counts as DEAD after this long without a root (ms); past it the
         /// remote body is drawn from the POSE channel instead (§6.11).
         /// <para>⚠️ Must stay well above the skeleton period (≈83 ms at
@@ -179,6 +210,58 @@ namespace VortexArena.Core.Player
         /// <summary>Has the missing-reference-T-pose warning been logged (once per session)?</summary>
         private bool _referencePoseWarned;
 
+        /// <summary>Has the "fallback frame could not be built" warning been logged (once per session)?
+        /// ⚠️ One-shot on purpose: the fallback runs at the SDK's send cadence, so a per-frame line would
+        /// bury every other clue in the console.</summary>
+        private bool _tPoseSerializeWarned;
+
+        /// <inheritdoc cref="_tPoseSerializeWarned"/>
+        private bool _tPoseHeadMissingWarned;
+
+        /// <summary>Sensor source as <c>OVRBody</c> (<c>MetaSourceDataProvider</c> derives from it) —
+        /// the only way to read confidence and per-joint validity, which the retargeter drops.</summary>
+        private OVRBody _bodySource;
+
+        /// <summary>Known joints the joint sanity check reads, in the order of
+        /// <see cref="_sanityJointIndices"/>.</summary>
+        private static readonly MSDKUtility.KnownJointType[] SanityJoints =
+        {
+            MSDKUtility.KnownJointType.Hips,
+            MSDKUtility.KnownJointType.Neck,
+            MSDKUtility.KnownJointType.LeftUpperLeg,
+            MSDKUtility.KnownJointType.RightUpperLeg,
+            MSDKUtility.KnownJointType.LeftAnkle,
+            MSDKUtility.KnownJointType.RightAnkle
+        };
+
+        /// <summary>Bone segments measured against the bind pose, as index PAIRS into
+        /// <see cref="SanityJoints"/>: torso, left leg, right leg.</summary>
+        private static readonly int[] SanitySegments = { 0, 1, 2, 4, 3, 5 };
+
+        /// <summary>Indices of <see cref="SanityJoints"/> in the TARGET skeleton;
+        /// <c>INVALID_JOINT_INDEX</c> for a joint this rig does not have (upper-body only).</summary>
+        private int[] _sanityJointIndices;
+
+        /// <summary>Bind-pose length of each <see cref="SanitySegments"/> pair (m); <c>0</c> = unmeasurable,
+        /// that segment is skipped.</summary>
+        private float[] _bindSegmentLengths;
+
+        /// <summary>World positions of <see cref="SanityJoints"/> on the last judged frame (jump test).</summary>
+        private Vector3[] _lastSanityJointWorld;
+
+        private float _lastSanityJointTime;
+        private bool _jointSanityUsable;
+
+        /// <summary>Resolution ran and produced nothing usable — do not retry every frame.</summary>
+        private bool _jointSanityFailed;
+
+        /// <summary>Hash of the key joints' LOCAL pose on the last frame that differed, and when it
+        /// changed. The pair is the frozen-stream detector's whole state.</summary>
+        private int _localPoseHash;
+
+        private bool _hasLocalPoseHash;
+        private float _localPoseChangeTime;
+
         /// <summary>
         /// Sensor source (<c>MetaSourceDataProvider</c>).
         /// <para>⚠️ <b>Never DELETE it from the prefab, only disable it:</b>
@@ -263,6 +346,7 @@ namespace VortexArena.Core.Player
             if (retargeter != null)
             {
                 _sourceProvider = retargeter.GetComponent<ISourceDataProvider>() as Behaviour;
+                _bodySource = _sourceProvider as OVRBody;
             }
         }
 
@@ -322,6 +406,19 @@ namespace VortexArena.Core.Player
         public void RequestTPoseFallback()
         {
             _tPoseFallbackRequested = true;
+        }
+
+        /// <summary>Reports a KNOWN source interruption (application focus loss) so the in-flight fallback
+        /// arms on the next tick instead of waiting the stale window out.
+        /// <para>⚠️ Expressed by AGEING the stream marker rather than a second flag: the fallback's arming
+        /// condition stays a single question ("is the stream stale?"), and the first clean SDK frame
+        /// refreshes the marker on its own, so nothing has to be cleared.</para></summary>
+        public void NoteSourceInterrupted()
+        {
+            if (_lastSdkFrameTime > 0f)
+            {
+                _lastSdkFrameTime = Time.time - StaleFrameSeconds - 0.001f;
+            }
         }
 
         /// <summary>
@@ -393,7 +490,7 @@ namespace VortexArena.Core.Player
         /// is <c>AppliedPose</c>, NOT <c>RetargeterValid</c>: <c>_isValid</c> flickers frame to frame
         /// (lost sight, scene load) and binding to it would interleave fallback frames with legitimate
         /// SDK frames.</para>
-        /// <para><b>(b) In-flight fault</b> — the SDK applies poses but its root failed the sanity check
+        /// <para><b>(b) In-flight fault</b> — the SDK applies poses but the frame failed the sanity check
         /// (<see cref="_poseSuspect"/>) or the stream went stale. ⚠️ This trigger does NOT depend on
         /// <see cref="_tPoseFallbackRequested"/>, it arms itself: the source worked once, the fault
         /// appears later. Without it a broken floor/height solve shows the player frozen or in a random
@@ -463,6 +560,14 @@ namespace VortexArena.Core.Player
         {
             if (!TryGetHeadYawPose(out Pose head))
             {
+                if (!_tPoseHeadMissingWarned)
+                {
+                    _tPoseHeadMissingWarned = true;
+                    Debug.LogWarning(
+                        "[ArenaNetCharacterBehaviour] T-poz yedeği kurulamıyor: HMD (centerEyeAnchor) " +
+                        "bulunamadı, kök türetilemiyor — oyuncu diğer ekranlarda hiç görünmeyecek.", this);
+                }
+
                 return;
             }
 
@@ -476,6 +581,7 @@ namespace VortexArena.Core.Player
                     bodyPose.Dispose();
                 }
 
+                LogTPoseSerializeFault("hedef iskelet pozu boş");
                 return;
             }
 
@@ -533,10 +639,26 @@ namespace VortexArena.Core.Player
 
             if (!serializedOk || !serialized.IsCreated || serialized.Length == 0)
             {
+                LogTPoseSerializeFault("SerializeSkeletonAndFace başarısız");
                 return;
             }
 
             SendBlobToRelay(serialized, ArenaSpace.WorldToArena(worldRoot));
+        }
+
+        /// <summary>One-shot report that the fallback frame could not be produced — the fault that leaves
+        /// a player invisible while every other layer looks healthy.</summary>
+        private void LogTPoseSerializeFault(string reason)
+        {
+            if (_tPoseSerializeWarned)
+            {
+                return;
+            }
+
+            _tPoseSerializeWarned = true;
+            Debug.LogWarning(
+                $"[ArenaNetCharacterBehaviour] T-poz yedek karesi üretilemedi ({reason}) — oyuncu diğer " +
+                "ekranlarda hiç görünmeyecek. Retarget yapılandırması hiç koşmamış olabilir.", this);
         }
 
         /// <summary>Temp copy of the joint array a fallback frame is built from (caller disposes).
@@ -752,10 +874,11 @@ namespace VortexArena.Core.Player
         }
 
         /// <summary>
-        /// Is the SDK frame's root plausible enough for the wire? The reference is the HMD: the root
-        /// sits below the hips at floor level, so it must stay near the head's floor projection and near
-        /// arena floor y=0.
-        /// <para>⚠️ With no HMD pose the check is SKIPPED and the frame accepted: dropping frames with
+        /// Is the SDK frame good enough for the wire? Four gates (§6.9): root plausibility against the
+        /// HMD (the root sits below the hips at floor level, near the head's floor projection and near
+        /// arena floor y=0), the source's own confidence/joint validity, joint plausibility against the
+        /// bind pose, and a frozen — bit-identical — stream.
+        /// <para>⚠️ With no HMD pose the ROOT check is SKIPPED and the frame accepted: dropping frames with
         /// no reference would mute the body, and the fallback needs the same reference anyway.</para>
         /// <para>⚠️ Leaving suspicion uses hysteresis (<see cref="RecoverStreakFrames"/>) and clean
         /// frames are suppressed until the counter fills — mixing the paths during recovery gives a
@@ -772,21 +895,28 @@ namespace VortexArena.Core.Player
                 if (horizontal > SuspectHorizontalMeters ||
                     Mathf.Abs(arenaRoot.position.y) > SuspectRootHeightMeters)
                 {
-                    _poseSuspect = true;
-                    _saneStreak = 0;
-                    if (!_poseSuspectWarned)
-                    {
-                        _poseSuspectWarned = true;
-                        Debug.LogWarning(
-                            "[ArenaNetCharacterBehaviour] Gövde kökü akıl sağlığı denetiminden düştü " +
-                            $"(kafaya yatay uzaklık {horizontal:F1} m, kök yüksekliği " +
-                            $"{arenaRoot.position.y:F1} m) — gövde T-poz yedeğine geçti; diğerleri " +
-                            "oyuncuyu konumunu izleyen donuk T-pozda görecek. Zemin/boy çözümü " +
-                            "bozulmuş olabilir (izleme haritası bayat).", this);
-                    }
-
-                    return false;
+                    return RejectFrame(
+                        $"kök makul değil (kafaya yatay uzaklık {horizontal:F1} m, kök yüksekliği " +
+                        $"{arenaRoot.position.y:F1} m); zemin/boy çözümü bozulmuş olabilir (izleme " +
+                        "haritası bayat)");
                 }
+            }
+
+            if (!IsSourceStateValid(out string sourceFault))
+            {
+                return RejectFrame(sourceFault);
+            }
+
+            if (!AreJointsPlausible(out string jointFault))
+            {
+                return RejectFrame(jointFault);
+            }
+
+            if (IsLocalPoseFrozen())
+            {
+                return RejectFrame(
+                    $"eklem pozu {StaleFrameSeconds:F0} sn boyunca birebir aynı kaldı — kareler donmuş " +
+                    "(gövde takibi sistem ayarlarından kapatılmış olabilir)");
             }
 
             _lastSdkFrameTime = Time.time;
@@ -805,8 +935,376 @@ namespace VortexArena.Core.Player
             _poseSuspect = false;
             _poseSuspectWarned = false;
             _saneStreak = 0;
-            Debug.Log("[ArenaNetCharacterBehaviour] Gövde kökü yeniden makul — SDK yoluna dönüldü, " +
+            Debug.Log("[ArenaNetCharacterBehaviour] Gövde pozu yeniden makul — SDK yoluna dönüldü, " +
                       "T-poz yedeği susuyor.", this);
+            return true;
+        }
+
+        /// <summary>Marks the frame suspect and returns <c>false</c> (the caller's answer). Warns once per
+        /// suspicion episode — the cadence is 12 Hz, so a line per frame would bury the console.</summary>
+        private bool RejectFrame(string reason)
+        {
+            _poseSuspect = true;
+            _saneStreak = 0;
+
+            if (!_poseSuspectWarned)
+            {
+                _poseSuspectWarned = true;
+                Debug.LogWarning(
+                    $"[ArenaNetCharacterBehaviour] Gövde karesi akıl sağlığı denetiminden düştü: {reason} " +
+                    "— gövde T-poz yedeğine geçti; diğerleri oyuncuyu konumunu izleyen donuk T-pozda " +
+                    "görecek.", this);
+            }
+
+            return false;
+        }
+
+        /// <summary>Does the SOURCE itself call this frame usable?
+        /// <para>⚠️ The retargeter's own validity bit cannot answer this: <c>OVRBody</c> writes it
+        /// unconditionally whenever <c>GetBodyState4</c> succeeds — confidence never enters it and an
+        /// invalid joint keeps the PREVIOUS frame's value. Confidence and the per-joint validity flags
+        /// are read here because they are the only place that distinction survives.</para>
+        /// <para>With no source or no data yet the frame passes: "not started" belongs to the cold-start
+        /// trigger, not here.</para></summary>
+        private bool IsSourceStateValid(out string fault)
+        {
+            fault = null;
+
+            OVRPlugin.BodyState? state = _bodySource != null ? _bodySource.BodyState : null;
+            if (!state.HasValue)
+            {
+                return true;
+            }
+
+            OVRPlugin.BodyState body = state.Value;
+            if (body.Confidence <= MinBodyConfidence)
+            {
+                fault = $"gövde takibi güveni sıfır ({body.Confidence:F2})";
+                return false;
+            }
+
+            OVRPlugin.BodyJointLocation[] joints = body.JointLocations;
+            if (joints == null)
+            {
+                return true;
+            }
+
+            if (SourceHipsJointId < joints.Length && !joints[SourceHipsJointId].PositionValid)
+            {
+                fault = "kalça ekleminin konumu geçersiz";
+                return false;
+            }
+
+            if (SourceHeadJointId < joints.Length && !joints[SourceHeadJointId].PositionValid)
+            {
+                fault = "kafa ekleminin konumu geçersiz";
+                return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Joint-level plausibility of the retargeted body: key bone lengths against the bind pose, feet
+        /// against the root's floor, and per-joint jump since the last judged frame.
+        /// <para>⚠️ The root check alone is not enough: on stairs or under occlusion the root stays
+        /// sensibly under the head while the body folds, so the most VISIBLE fault walks straight through
+        /// a root-only gate.</para>
+        /// <para>Passes when the data needed is not available — an unmeasurable frame is not a broken
+        /// one.</para></summary>
+        private bool AreJointsPlausible(out string fault)
+        {
+            fault = null;
+
+            if (!EnsureJointSanityData())
+            {
+                return true;
+            }
+
+            NativeArray<MSDKUtility.NativeTransform> pose =
+                _retargeter.GetCurrentBodyPose(JointType.WorldSpaceAllJoints);
+            if (!pose.IsCreated)
+            {
+                return true;
+            }
+
+            try
+            {
+                return JudgeJointPose(pose, out fault);
+            }
+            finally
+            {
+                pose.Dispose();
+            }
+        }
+
+        /// <inheritdoc cref="AreJointsPlausible"/>
+        private bool JudgeJointPose(NativeArray<MSDKUtility.NativeTransform> pose, out string fault)
+        {
+            fault = null;
+
+            for (int i = 0; i < SanitySegments.Length; i += 2)
+            {
+                float bind = _bindSegmentLengths[i / 2];
+                if (bind <= 0f ||
+                    !TryGetSanityJoint(pose, SanitySegments[i], out Vector3 from) ||
+                    !TryGetSanityJoint(pose, SanitySegments[i + 1], out Vector3 to))
+                {
+                    continue;
+                }
+
+                float ratio = Vector3.Distance(from, to) / bind;
+                if (ratio < BoneLengthRatioMin || ratio > BoneLengthRatioMax)
+                {
+                    fault = $"'{SanityJoints[SanitySegments[i]]}→{SanityJoints[SanitySegments[i + 1]]}' " +
+                            $"kemik uzunluğu bind pozunun {ratio:F2} katı";
+                    return false;
+                }
+            }
+
+            // Index 0 is the root joint (the pose job's own convention) — the body's floor point.
+            float rootY = pose.Length > 0 ? pose[0].Position.y : 0f;
+            bool hasHips = TryGetSanityJoint(pose, 0, out Vector3 hips);
+
+            for (int i = 4; i <= 5; i++)
+            {
+                if (!TryGetSanityJoint(pose, i, out Vector3 ankle))
+                {
+                    continue;
+                }
+
+                if (ankle.y < rootY - FootBelowRootMeters)
+                {
+                    fault = $"'{SanityJoints[i]}' kök zemininin {rootY - ankle.y:F2} m altında";
+                    return false;
+                }
+
+                if (hasHips && ankle.y > hips.y)
+                {
+                    fault = $"'{SanityJoints[i]}' kalçanın üstünde";
+                    return false;
+                }
+            }
+
+            return JudgeJointJump(pose, out fault);
+        }
+
+        /// <summary>Per-joint jump since the last judged frame. ⚠️ A long gap only REFRESHES the
+        /// reference: real movement over that time would read as a jump.</summary>
+        private bool JudgeJointJump(NativeArray<MSDKUtility.NativeTransform> pose, out string fault)
+        {
+            fault = null;
+
+            float now = Time.time;
+            bool judge = _lastSanityJointWorld != null && now - _lastSanityJointTime <= JointJumpMaxGapSeconds;
+
+            if (_lastSanityJointWorld == null)
+            {
+                _lastSanityJointWorld = new Vector3[SanityJoints.Length];
+            }
+
+            string jumped = null;
+            for (int i = 0; i < SanityJoints.Length; i++)
+            {
+                if (!TryGetSanityJoint(pose, i, out Vector3 world))
+                {
+                    continue;
+                }
+
+                if (judge && jumped == null &&
+                    Vector3.Distance(world, _lastSanityJointWorld[i]) > JointJumpLimitMeters)
+                {
+                    jumped = $"'{SanityJoints[i]}' eklemi tek karede " +
+                             $"{Vector3.Distance(world, _lastSanityJointWorld[i]):F1} m sıçradı";
+                }
+
+                _lastSanityJointWorld[i] = world;
+            }
+
+            _lastSanityJointTime = now;
+
+            if (jumped == null)
+            {
+                return true;
+            }
+
+            fault = jumped;
+            return false;
+        }
+
+        /// <summary>World position of a <see cref="SanityJoints"/> entry, false when this rig lacks it.</summary>
+        private bool TryGetSanityJoint(
+            NativeArray<MSDKUtility.NativeTransform> pose, int sanityIndex, out Vector3 world)
+        {
+            int jointIndex = _sanityJointIndices[sanityIndex];
+            if (jointIndex < 0 || jointIndex >= pose.Length)
+            {
+                world = default;
+                return false;
+            }
+
+            world = pose[jointIndex].Position;
+            return true;
+        }
+
+        /// <summary>
+        /// Is the joint-local pose bit-for-bit unchanged for <see cref="StaleFrameSeconds"/>?
+        /// <para>⚠️ Measured on LOCAL joint poses, never on the root: the root follows the HMD, so it keeps
+        /// moving even while tracking is frozen and would hide exactly the fault being looked for. Local
+        /// joints come from the same solve every frame, so identical input yields an identical hash.</para>
+        /// </summary>
+        private bool IsLocalPoseFrozen()
+        {
+            if (!EnsureJointSanityData() || !TryGetLocalPoseHash(out int hash))
+            {
+                return false;
+            }
+
+            float now = Time.time;
+            if (!_hasLocalPoseHash || hash != _localPoseHash)
+            {
+                _hasLocalPoseHash = true;
+                _localPoseHash = hash;
+                _localPoseChangeTime = now;
+                return false;
+            }
+
+            return now - _localPoseChangeTime > StaleFrameSeconds;
+        }
+
+        /// <inheritdoc cref="IsLocalPoseFrozen"/>
+        private bool TryGetLocalPoseHash(out int hash)
+        {
+            hash = 0;
+
+            NativeArray<MSDKUtility.NativeTransform> pose =
+                _retargeter.GetCurrentBodyPose(JointType.NoWorldSpace);
+            if (!pose.IsCreated)
+            {
+                return false;
+            }
+
+            try
+            {
+                int combined = 17;
+                bool any = false;
+
+                for (int i = 0; i < _sanityJointIndices.Length; i++)
+                {
+                    int jointIndex = _sanityJointIndices[i];
+                    if (jointIndex < 0 || jointIndex >= pose.Length)
+                    {
+                        continue;
+                    }
+
+                    any = true;
+                    MSDKUtility.NativeTransform joint = pose[jointIndex];
+                    combined = CombineHash(combined, joint.Position.x);
+                    combined = CombineHash(combined, joint.Position.y);
+                    combined = CombineHash(combined, joint.Position.z);
+                    combined = CombineHash(combined, joint.Orientation.x);
+                    combined = CombineHash(combined, joint.Orientation.y);
+                    combined = CombineHash(combined, joint.Orientation.z);
+                    combined = CombineHash(combined, joint.Orientation.w);
+                }
+
+                hash = combined;
+                return any;
+            }
+            finally
+            {
+                pose.Dispose();
+            }
+        }
+
+        /// <summary>⚠️ <c>float.GetHashCode</c> is the BIT pattern, so equal hashes mean an identical
+        /// frame — which is the whole question here, not an approximation of it.</summary>
+        private static int CombineHash(int hash, float value)
+        {
+            unchecked
+            {
+                return hash * 397 ^ value.GetHashCode();
+            }
+        }
+
+        /// <summary>Resolves the sanity joints' target indices and their bind-pose segment lengths (once).
+        /// <para>⚠️ Bind lengths are read from the SDK's own reference pose, not authored as constants: the
+        /// character model may be replaced and hard-coded metres would then judge the wrong body.</para></summary>
+        private bool EnsureJointSanityData()
+        {
+            if (_jointSanityUsable)
+            {
+                return true;
+            }
+
+            if (_jointSanityFailed || _retargeter == null ||
+                _retargeter.RetargetingHandle == MSDKUtility.INVALID_HANDLE)
+            {
+                return false;
+            }
+
+            SkeletonRetargeter skeleton = _retargeter.SkeletonRetargeter;
+            if (skeleton == null || !skeleton.IsInitialized ||
+                !skeleton.TargetReferencePoseLocal.IsCreated || skeleton.TargetReferencePoseLocal.Length == 0)
+            {
+                return false;
+            }
+
+            var indices = new int[SanityJoints.Length];
+            for (int i = 0; i < SanityJoints.Length; i++)
+            {
+                if (!MSDKUtility.GetJointIndexByKnownJointType(
+                        _retargeter.RetargetingHandle, MSDKUtility.SkeletonType.TargetSkeleton,
+                        SanityJoints[i], out int jointIndex))
+                {
+                    jointIndex = MSDKUtility.INVALID_JOINT_INDEX;
+                }
+
+                indices[i] = jointIndex;
+            }
+
+            var lengths = new float[SanitySegments.Length / 2];
+            NativeArray<MSDKUtility.NativeTransform> bind =
+                skeleton.GetWorldPoseFromLocalPose(skeleton.TargetReferencePoseLocal);
+
+            bool anySegment = false;
+            try
+            {
+                for (int i = 0; i < SanitySegments.Length; i += 2)
+                {
+                    int from = indices[SanitySegments[i]];
+                    int to = indices[SanitySegments[i + 1]];
+                    if (from < 0 || to < 0 || from >= bind.Length || to >= bind.Length)
+                    {
+                        continue;
+                    }
+
+                    float length = Vector3.Distance(bind[from].Position, bind[to].Position);
+                    lengths[i / 2] = length;
+                    anySegment |= length > 0f;
+                }
+            }
+            finally
+            {
+                if (bind.IsCreated)
+                {
+                    bind.Dispose();
+                }
+            }
+
+            if (!anySegment)
+            {
+                _jointSanityFailed = true;
+                Debug.LogWarning(
+                    "[ArenaNetCharacterBehaviour] Anahtar kemikler bind pozunda ölçülemedi — eklem " +
+                    "makullüğü denetimi kapalı, yalnız kök denetimi çalışacak. Retarget yapılandırması " +
+                    "bilinen eklemleri (kalça/boyun/bacak) eşlemiyor olabilir.", this);
+                return false;
+            }
+
+            _sanityJointIndices = indices;
+            _bindSegmentLengths = lengths;
+            _jointSanityUsable = true;
             return true;
         }
 

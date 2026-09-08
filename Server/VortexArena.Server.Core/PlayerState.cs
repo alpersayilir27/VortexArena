@@ -326,7 +326,13 @@ public sealed class PlayerState
         bodyScale = BodyScale,
         scaleError = ScaleError,
         // §10.6 — reason of the last reload attempt; empty = fine.
-        calibrationError = CalibrationError
+        calibrationError = CalibrationError,
+        // §10.9 violation ledger. Read WITHOUT MatchDirector's _gate: each field is a single int/float,
+        // and a snapshot one tick behind is self-healing — the next roster carries the settled total.
+        obstacleCount = ObstacleTally.Count,
+        obstacleSeconds = ObstacleTally.TotalSeconds,
+        outOfBoundsCount = OutOfBoundsTally.Count,
+        outOfBoundsSeconds = OutOfBoundsTally.TotalSeconds
     };
 
     private static string ConnectionWire(PlayerConnection connection) => connection switch
@@ -351,8 +357,9 @@ public sealed class PlayerState
 /// and resets on death/lost calibration, while the ledger is the operator's record and is unaffected.
 /// <para>⚠️ No PER-KIND FIELDS: both kinds share the same edge logic, and duplicating four fields
 /// would let the two drift silently. One type, two instances.</para>
-/// <para>Written and read only by <c>MatchDirector</c> (under its <c>_gate</c>); the fields are not
-/// individually atomic, so no other lock touches them.</para></remarks>
+/// <para>Written only by <c>MatchDirector</c> (under its <c>_gate</c>); the fields are not
+/// individually atomic, so no other writer touches them. The roster snapshot
+/// (<see cref="PlayerState.ToPlayerInfo"/>) reads them ungated on purpose — see the note there.</para></remarks>
 public sealed class ViolationTally
 {
     /// <summary>When the violation started; null = no violation.</summary>
