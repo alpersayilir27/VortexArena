@@ -1,6 +1,7 @@
 using System;
 using UnityEngine;
 using VortexArena.Core.Arena;
+using VortexArena.Core.Combat;
 using VortexArena.Net;
 using VortexArena.Protocol;
 
