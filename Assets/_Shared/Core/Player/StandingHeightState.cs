@@ -25,7 +25,7 @@ namespace VortexArena.Core.Player
     /// perfectly valid eye-height reading of nobody. A ceiling poisoned that way has one visible symptom
     /// and it is not obviously about height: the gesture built on it becomes physically unreachable and
     /// dies silently for the rest of the session.</para>
-    /// <para>⚠️ <b>Not stored on the device</b> (unlike <see cref="BodyScaleState"/>): a venue headset
+    /// <para>⚠️ <b>Not stored on the device</b> (like <see cref="BodyScaleState"/>): a venue headset
     /// passes from hand to hand and a stored height would start the next player with the wrong
     /// denominator.</para>
     /// <para>It does NOT live in the scene: a self-bootstrapping persistent singleton (the

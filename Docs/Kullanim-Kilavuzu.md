@@ -335,24 +335,25 @@ düğmeye hiç dokunma — o oyuncunun kendi sıfırlama düğmesini basılı tu
 
 ### 4.2 Karakterlerin boyunu ayarlamak — **ÖLÇ** düğmesi
 
-Herkesin karakteri varsayılan olarak **aynı boydadır**. Oyuncunun kendi boyunda görünmesi için
-ölçüsünü **senin** aldırman gerekir; kalibrasyonla birlikte olmaz, çünkü oyuncu kalibrasyon
-sırasında kumandayı yere değdirmek için **eğilmiş** durumdadır.
+Boy ölçüsü **o andaki gözlük yüksekliğidir**: sistem oyuncunun eğilip eğilmediğini sorgulamaz,
+gözlük o an ne yükseklikteyse oyuncuyu o boyda sayar (1,00–2,20 m arasına sıkıştırır). Ölçü gelene
+kadar herkes **1,80 m** sayılır.
 
-- [ ] **1.** Oyuncu kalibre olduktan sonra **ayakta ve dik** dursun (çömelme, eğilme, yürüme yok).
-- [ ] **2.** Yönetim ekranında o oyuncunun satırındaki **ÖLÇ** düğmesine bas. Onay istemez.
-- [ ] **3.** Düğmenin etiketi ölçülen çarpanı gösterir (`×1.04` gibi) — bu, ölçümün oturduğu
-      anlamına gelir. Karakteri o anda herkeste yeniden boyutlanır.
-- [ ] **4.** Ölçüm tutmazsa düğmede **ÖLÇÜLEMEDİ** yazar (eski değer olduğu gibi durur) ve
-      ekranın duyuru satırında sebebi görünür. İki sebep vardır:
-      - *"oyuncu hareketli/eğilmiş"* → en sık olan. Dik durmasını söyle ve tekrar bas.
-      - *"gövde pozu yok"* → o gözlük gövde takibi üretemiyor; ölçüm hiç yapılamaz.
-        Aynı oyuncu başkalarının ekranında **donuk bir T-pozunda** duruyorsa teşhis kesindir →
-        §4.4'teki bakım adımlarını uygula.
+- **Kendiliğinden:** her kalibrasyondan **10 saniye sonra** ölçü alınır — oyuncu kumandayı yere
+  değdirip doğrulmuş olsun diye. Oyuncuya kalibrasyondan sonra **ayakta ve dik** durmasını söyle.
+- **Elle, her an:** yönetim ekranında o oyuncunun satırındaki **ÖLÇ** düğmesi. Onay istemez.
+  Otomatik ölçü yanlış geldiyse (oyuncu o an eğilmişti, gözlük elindeydi, çocuk sonradan taktı)
+  oyuncuyu dik durdurup bas; yeni ölçü eskisinin yerine geçer.
+- Düğmenin etiketi ölçülen çarpanı gösterir (`×1.04` gibi) — ölçünün oturduğu anlamına gelir.
+  Karakter o anda herkeste yeniden boyutlanır.
+- Ölçüm hiç yapılamazsa düğmede **ÖLÇÜLEMEDİ** yazar (eski değer olduğu gibi durur) ve ekranın
+  duyuru satırında sebebi görünür: *"kalibre yok"* → önce kalibrasyon; *"göz hizası okunamadı"* ya da
+  *"gövde pozu yok"* → o gözlük ölçülemiyor. Aynı oyuncu başkalarının ekranında **donuk bir
+  T-pozunda** duruyorsa teşhis kesindir → §4.4'teki bakım adımlarını uygula.
 
 **Hepsini birden ölçmek için:** İSTATİSTİK paneli (`I`) > listenin altındaki şeritte, sağdaki
-**TÜMÜNÜ ÖLÇEKLENDİR** düğmesi. Herkesin dik durduğu bir an seç — maç başlamadan önceki hazırlık
-en uygunu.
+**TÜMÜNÜ ÖLÇEKLENDİR** düğmesi. Herkesin gözlüğü kafasında ve dik durduğu bir an seç — maç
+başlamadan önceki hazırlık en uygunu.
 
 **Bilmen gerekenler**
 
@@ -360,9 +361,10 @@ en uygunu.
   kalibresizleri atlar ve duyuru satırında **adlarını** yazar — o gözlükleri kalibre edip ÖLÇ'e
   tek tek bas.
 - **Kalibrasyonu sıfırlarsan ölçü de sıfırlanır** (zemin geçersizleştiği için). Oyuncu yeniden
-  kalibre olunca ÖLÇ'e tekrar basman gerekir.
-- Ölçü gözlükte saklanır: aynı oyuncu ertesi gün bağlandığında boyu kendiliğinden geri gelir.
-- Aynı oyuncuyu **iki kez ölçmek zararsızdır** — aynı sonucu verir.
+  kalibre olunca ölçü 10 saniye sonra kendiliğinden gelir.
+- Ölçü gözlükte **saklanmaz**: uygulama her açılışta herkesi 1,80 m sayar, ölçü kalibrasyonla gelir.
+  Gözlük başka birine geçince kalibrasyonu yenile ya da ÖLÇ'e bas.
+- Aynı oyuncuyu **iki kez ölçmek zararsızdır** — dik duruyorsa aynı sonucu verir.
 
 ### 4.3 Kalibre modu — uygulama açılışında ne olsun?
 
@@ -944,8 +946,8 @@ ekranın alt ortasındaki **⏸ DURAKLAT** düğmesi (BAŞLAT ile BİTİR'in ara
 | **Tek bir oyuncu** takılıyor, diğerleri normal | O gözlüğün Wi-Fi kapsaması zayıf | İstatistiklerde o satırın PING'i diğerlerinden belirgin yüksekse oyuncuyu alanın ortasına doğru yönlendir; sürekli tekrarlıyorsa teknik ekibi ara |
 | Oyuncular birbirini yanlış yerde görüyor | Kalibrasyon yapılmadı ya da A–B ters alındı | Arenada **yeniden kalibrasyon** yaptır (Bölüm 4) |
 | Oyuncular birbirini **havada / yere gömülü** görüyor | Kalibrasyonda kumandanın **ucu yere değmemiş** (havada yakalanmış) | O oyuncuya kalibrasyonu tekrarlat; kumandayı nasıl tuttuğu önemli değil, **ucu yere değecek** (Bölüm 4). Herkeste aynı sorun varsa teknik ekibi ara |
-| Bir oyuncunun karakteri **olduğundan kısa/uzun** görünüyor | Boyu hiç ölçülmemiş ya da ölçüm eğilmişken alınmış | Oyuncuyu dik durdurup satırındaki **ÖLÇ** düğmesine bas (§4.2) |
-| **ÖLÇ**'e bastın, düğmede **ÖLÇÜLEMEDİ** yazdı | Duyuru satırında sebebi yazar: oyuncu hareketli/eğilmişti **ya da** o gözlük gövde takibi üretemiyor | Önce oyuncuyu dik durdurup tekrar bas. Sebep "gövde pozu yok" ise §4.4'teki temizliği yap |
+| Bir oyuncunun karakteri **olduğundan kısa/uzun** görünüyor | Kalibrasyondan 10 sn sonraki otomatik ölçüde oyuncu eğilmişti ya da gözlük kafasında değildi; ya da hiç kalibre olmadı (herkes 1,80 m sayılır) | Oyuncuyu dik durdurup satırındaki **ÖLÇ** düğmesine bas (§4.2) |
+| **ÖLÇ**'e bastın, düğmede **ÖLÇÜLEMEDİ** yazdı | Duyuru satırında sebebi yazar: oyuncu kalibresiz **ya da** o gözlük gövde takibi üretemiyor | "kalibre yok" ise önce kalibrasyon. Sebep "gövde pozu yok" ise §4.4'teki temizliği yap |
 | Bir oyuncu diğer ekranlarda **kolları yana açık, donuk** duruyor (T-poz) ama konumu doğru | O gözlükte gövde takibi arızalı — oyuncu görünmez kalmasın diye sistem onu bu şekilde çiziyor | **Önce birkaç saniye bekle:** gözlük takibi kendi kendine yeniden başlatmayı deniyor ve çoğu zaman kendiliğinden düzelir. Geçmezse İstatistik panelinde **GÖVDE YENİLE**, sonra §4.4'teki alan verisi temizliği + yeniden kalibre + **ÖLÇ**. Oyuncunun kendi ekranında belirti olmaz |
 | Bir oyuncunun **karakteri hiç görünmüyor** ama isim etiketi ve silahı doğru yerde duruyor | O gözlükten gövde bilgisi hiç gelmiyor. Sistem gövdeyi kafa ve el konumlarından çizmeye geçer, yani oyuncu görünür ve **vurulabilir** kalır — ama hareketleri sadeleşir (bacaklar oynamaz) | **Önce birkaç saniye bekle** (kendi kendine onarım). Geçmezse **GÖVDE YENİLE**. O da yetmezse §4.4'teki alan verisi temizliği; en son çare gözlüğü tamamen kapatıp açmak |
 | Kalibre etiketi turuncu **KAL ?** oldu | Gözlüğün zemin tahmini ile gerçek zemin arasında büyük fark var — o gözlüğün alan verisi bozulmuş | Maça devam edebilirsin (kalibrasyon geçerli). Seans arasında §4.4'teki temizliği yap |

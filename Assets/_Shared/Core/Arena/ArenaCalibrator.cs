@@ -920,8 +920,9 @@ namespace VortexArena.Core.Arena
         }
 
         /// <summary>Alignment complete → raise the event; both completion paths go through here.
-        /// <para>⚠️ Body measurement does NOT hang off this (§10.8): the operator starts it, since
-        /// auto-measuring would measure a player bent over to touch the floor.</para>
+        /// <para>Body measurement does NOT hang off this event: <c>BodyScaleState</c> watches
+        /// <see cref="CalibrationGeneration"/> and measures 10 s after the alignment (§10.8), since
+        /// measuring at this instant would measure a player bent over to touch the floor.</para>
         /// <para>⚠️ Reopens the auto-restore gate: the alignment returned legitimately, so the
         /// operator's invalidation is spent — leaving it shut loses the next map change.</para></summary>
         private static void RaiseCalibrated(string source)

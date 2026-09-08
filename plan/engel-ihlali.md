@@ -17,7 +17,30 @@ APK engelin içinden ateş edebilir ve kafası içerideyken görmeye devam eder.
       `Instantiate` YOK. Karartma, uyarı yazısı, vinyet ve titreşim koddan geliyor; eksik olan
       yalnız partikül.
 
-## 2. Doğrulama (kullanıcı koşar)
+## 2. Kırmızı çerçeve (`DamageVignette`) — yoğunluk ve öldüren vuruş
+
+Bileşen `Assets/_Shared/Core/Player/DamageVignette.cs`; örneği `VA_CameraRig.prefab` →
+`CenterEyeAnchor/DamageVignette`; yarıçaplar `Assets/_Shared/Materials/M_DamageVignette.mat`.
+⚠️ Ayar alanları **prefabda serileştirilmiştir**: yalnız koddaki varsayılanı değiştirmek build'e
+işlemez; prefab değeri + kod varsayılanı **birlikte** değişir (ayrışırsa Inspector kodu yalanlar).
+Materyalin `_BaseColor`'ı çalışma anında property block ile ezilir — renk koddan gelir, materyalden
+değil.
+
+- [ ] **Daha görünür çerçeve.** Üç kol, etkisi büyükten küçüğe: (1) materyal yarıçapları
+      `_InnerRadius` 0.18 → 0.14 · `_OuterRadius` 0.36 → 0.32 — değer ≈ tan(açı) × 0.46, kırmızı
+      FOV'un içine doğru ~4° ilerler; "ekranın ne kadarı kırmızı" kolu budur, alfa değil;
+      (2) `maxAlpha` 0.55 → 0.75; (3) `minHitIntensity` 0.35 → 0.50 (hafif vuruş da belirgin).
+      Renk değişmez: `.linear` dönüşümü bilinçlidir (kod yorumu), doygunluğu düşük kırmızı konfor
+      kararıdır. Nihai sayı sahada verilir; buradakiler başlangıç değeridir.
+- [ ] **Öldüren vuruşun çerçevesi.** `LateUpdate`'teki ölü dalı zarfı sıfırlayıp 0 çiziyor; ölüm
+      `SetHp(0)` ile aynı geri çağrıda işlendiği için son vuruş hesaplanıp aynı karede atılıyor.
+      Yön göstergesi ve titreşim öldüren vuruşta çalışırken çerçevenin susması tutarsızdır.
+      Kural: ölüyken **yalnız vuruş zarfı** çizilir (`HitEnvelope() * maxAlpha`, ~0.5 sn'de
+      kendiliğinden söner); düşük can nabzı (`LowHpAlpha`, hp = 0'da sonsuza dek nefes alırdı) ve
+      engel erimesi katmanı ölüyken kapalı kalır. Doküman: `Docs/Sistem-Ozeti.md` `DamageVignette`
+      maddesindeki "ölüyken çizilmez" cümlesi.
+
+## 3. Doğrulama (kullanıcı koşar)
 
 - [ ] Yeni APK (tüm başlıklara)
 - [ ] Kafayı engele sok → ekran **0.2 sn'de tam siyah**, uyarı yazısı nabızla görünür

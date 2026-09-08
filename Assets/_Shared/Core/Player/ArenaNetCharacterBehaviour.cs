@@ -65,18 +65,6 @@ namespace VortexArena.Core.Player
         /// body would flicker between T-pose and broken pose.</summary>
         private const int RecoverStreakFrames = 12;
 
-        /// <summary>Top of the head above the HMD's eye anchor (m) — turns a measured eye height into the
-        /// stature <c>OVRBody</c>'s calibration hint wants. Approximate on purpose: the runtime treats it
-        /// as a hint, and a hint from the arena floor beats a solve from a stale floor.</summary>
-        private const float HeadTopAboveEyeMeters = 0.11f;
-
-        /// <summary>Stature range the calibration hint is accepted in (m). Outside it the hint is NOT
-        /// sent: a bad number is worse than none, because the runtime would trust it.</summary>
-        private const float MinHintHeightMeters = 1.2f;
-
-        /// <inheritdoc cref="MinHintHeightMeters"/>
-        private const float MaxHintHeightMeters = 2.2f;
-
         /// <summary>The skeleton stream counts as DEAD after this long without a root (ms); past it the
         /// remote body is drawn from the POSE channel instead (§6.11).
         /// <para>⚠️ Must stay well above the skeleton period (≈83 ms at
@@ -372,11 +360,12 @@ namespace VortexArena.Core.Player
             return true;
         }
 
-        /// <summary>Hands the runtime the player's stature measured against the ARENA floor (local body
-        /// only). Returns the metres sent, <c>0</c> when nothing plausible was available.
+        /// <summary>Hands the runtime the player's stature as the body measurement knows it (local body
+        /// only). Returns the metres sent, <c>0</c> when the runtime refused.
         /// <para>⚠️ Left alone, the runtime infers stature from head height above ITS OWN floor. With
         /// stale space data that floor sits well below the real one: the inferred body is too tall and
-        /// its legs reach the bogus floor, so the remote avatar stands sunk into the ground.</para></summary>
+        /// its legs reach the bogus floor, so the remote avatar stands sunk into the ground. The
+        /// measurement is taken against the ARENA floor, which our alignment pins at y=0.</para></summary>
         public float SeedBodyHeightHint()
         {
             if (!HasInputAuthority || !TryGetHintHeightMeters(out float meters))
@@ -387,29 +376,14 @@ namespace VortexArena.Core.Player
             return OVRBody.SuggestBodyTrackingCalibrationOverride(meters) ? meters : 0f;
         }
 
-        /// <summary>Player stature for the calibration hint, measured against the ARENA floor.
-        /// <para>Standing eye height first (<see cref="StandingHeightState"/>, posture-independent); the
-        /// live HMD only before one is learned — a hint taken mid-stoop would become the stature.</para>
-        /// <para>⚠️ <b>Deliberately not <see cref="BodyScale"/>:</b> that is a RATIO (§10.8) and carries
-        /// no metres at all.</para>
-        /// <para>⚠️ Read in ARENA space on purpose. The headset's own floor is exactly what is
-        /// untrustworthy here; the arena floor is pinned at y=0 by our own alignment, which survives
-        /// stale headset space data.</para></summary>
-        private bool TryGetHintHeightMeters(out float meters)
+        /// <summary>Player stature for the calibration hint: the body measurement's stature, the default
+        /// until measured (<see cref="BodyScaleState.StatureMeters"/>, §10.8).
+        /// <para>⚠️ <b>Deliberately not <see cref="BodyScale"/>:</b> that is a RATIO and carries no
+        /// metres at all.</para></summary>
+        private static bool TryGetHintHeightMeters(out float meters)
         {
-            meters = 0f;
-            if (!StandingHeightState.TryGet(out float eye))
-            {
-                if (!TryGetHeadYawPose(out Pose head))
-                {
-                    return false;
-                }
-
-                eye = ArenaSpace.WorldToArena(head.position).y;
-            }
-
-            meters = eye + HeadTopAboveEyeMeters;
-            return meters >= MinHintHeightMeters && meters <= MaxHintHeightMeters;
+            meters = BodyScaleState.StatureMeters;
+            return meters > 0f;
         }
 
         /// <summary>

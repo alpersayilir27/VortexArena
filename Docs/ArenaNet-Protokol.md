@@ -2154,7 +2154,9 @@ yapar, yerini alır; operatör bunu tek tek anlatmak zorunda kalmaz.
 
 Oyuncular arasındaki boy farkı avatara **tek bir üniform çarpanla** taşınır: `bodyScale`. Değer
 oyuncu başına sunucuda durur, `lobby_state` ile yayılır (§5.3) ve her istemci uzak avatarın
-karakter kökünün ölçeğine yazar. `0` = ölçülmemiş → `1` uygulanır.
+karakter kökünün ölçeğine yazar. `0` = ölçülmemiş → `1` uygulanır. Başlık bağlanır bağlanmaz
+bildiğini bildirdiği için (aşağıda: varsayılan boy) `0` yalnız bildirim gelmeden önce ve kalibrasyon
+sıfırlanınca görülür.
 
 **Kim ne yapar:**
 
@@ -2165,7 +2167,7 @@ karakter kökünün ölçeğine yazar. `0` = ölçülmemiş → `1` uygulanır.
 | Sunucu | Aralığa kırpar, saklar, yayar. **Hesaplamaz** |
 
 **Ölçüm başarısızlığı geri bildirilir.** Başlık ölçemediğinde (kalibre yok, model göz referansı
-okunamadı, oyuncu hareketli ya da eğilmiş…) sessiz kalmaz: `set_body_scale`'i `error` dolu, `scale`
+okunamadı, göz hizası okunamadı) sessiz kalmaz: `set_body_scale`'i `error` dolu, `scale`
 önemsiz olarak yollar. Sunucu ölçeği **yazmaz** (kayıtlı değer aynen durur), gerekçeyi roster'a
 (`PlayerInfo.scaleError`) yazar ve adminlere duyurur.
 ⚠️ **Gerekçe doğrulanmayan serbest bir metindir** (`weaponId`/`calibrationSource` ile aynı
@@ -2174,19 +2176,31 @@ operatörün ekranıdır, yeni bir başarısızlık türü sunucuda iş çıkarm
 ⚠️ **Başarılı ölçüm alanı temizler.** Aksi hâlde bir kez başarısız olan oyuncunun satırında uyarı
 sonsuza kadar kalırdı ve operatör sorunun sürdüğünü sanardı.
 
-**Ölçüm zamana değil komuta bağlıdır.** Ölçünün doğru anını (oyuncu ayakta ve dik) makine bilemez;
-operatör bilir. Kalibrasyondan otomatik tetiklenen bir ölçüm, oyuncu kumandayı zemine değdirmek
-için **eğilmişken** ölçmek demektir.
+**Ölçü, ölçüm ANINDAKİ gözlük yüksekliğidir — duruş kapısı YOKTUR.** Göz hizası + 0,11 m
+oyuncunun boyu sayılır ve **1,00–2,20 m** aralığına kırpılır (alt sınır çocuk oyuncu, üst sınır
+elde/havada tutulan gözlük). Eğilme/hareket sezgisi kullanılmaz: sahada ölçümlerin neredeyse tamamını
+reddediyordu, oysa doğru anı ölçümü tetikleyen bilir ve yanlış bir değer yeniden ölçmekle düzelir.
 
-**Ölçüm iki göz hizasının oranıdır:** oyuncunun gözü (HMD, **arena** zeminine göre — kalibre şart)
-bölü karakter modelinin **dinlenme pozundaki** göz hizası (prefabtan, ölçek 1'de, süreç başında bir
-kez okunur). Gövde takibi ölçüme hiç girmez: takip bozukken de ölçülür ve gözlüğün kendi zemin
-tahmininden etkilenmez. ⚠️ **Karakterin CANLI göz hizası referans olamaz:** retargeter karakterin
-kafasını oyuncunun kafasına sürer, yani "oyuncu gözü / karakter gözü" gözlüğü kim takarsa taksın
-`1` çıkar. ⚠️ **Duruş kapısı:** ~0,5 sn'lik pencerede yayılım %5'i aşarsa (hareket) ya da medyan
-öğrenilmiş ayakta göz hizasının (`StandingHeightState`) %6'dan fazla altındaysa (sabit eğilme)
-ölçüm reddedilir. ⚠️ **Kafa tepesi hiçbir yerde kullanılmaz:** modelin kafası oyuncunun gözüne
-göre hizalansaydı uzun bir kafa, kısa bir gövde satın alınırdı.
+**Üç tetikleyici, tek yol:**
+
+| Tetikleyici | Ne zaman |
+|---|---|
+| Operatörün `measure_body_scale`'i | Her an; bekleyen otomatik ölçümü iptal eder (operatörün kararı üstündür) |
+| Otomatik | Her hizalamadan (`CalibrationGeneration` artışı) **10 sn** sonra — oyuncu hizalama anında kumandayı zemine değdirmek için eğilmiştir, 10 sn doğrulma payıdır. Yeni bir hizalama sayacı baştan başlatır; süre dolduğunda hizalama sunucuca onaylanmamışsa ölçüm yapılmaz |
+| Varsayılan boy | Hiç ölçüm yokken bağlantıda **1,80 m** varsayılıp ölçek olarak bildirilir — kimse düğme beklerken model boyunda çizilmesin |
+
+⚠️ **Ölçüm cihazda saklanmaz.** Uygulama her açılışta varsayılan boyla başlar (işletme gözlüğü elden
+ele geçer, kayıtlı değer bir önceki oyuncunun boyu olurdu); aynı süreç içinde yeniden bağlanış son
+ölçümü yeniden bildirir.
+
+**Ölçüm iki göz hizasının oranıdır:** oyuncunun gözü (HMD, **arena** zeminine göre — kalibre şart;
+~0,5 sn'lik pencerenin medyanı, tek kare solver gürültüsünü taşırdı) bölü karakter modelinin
+**dinlenme pozundaki** göz hizası (prefabtan, ölçek 1'de, süreç başında bir kez okunur). Gövde takibi
+ölçüme hiç girmez: takip bozukken de ölçülür ve gözlüğün kendi zemin tahmininden etkilenmez.
+⚠️ **Karakterin CANLI göz hizası referans olamaz:** retargeter karakterin kafasını oyuncunun kafasına
+sürer, yani "oyuncu gözü / karakter gözü" gözlüğü kim takarsa taksın `1` çıkar. ⚠️ **Kafa tepesi
+hizalamada kullanılmaz** (0,11 m yalnız boy kırpması ve takip ipucu içindir): modelin kafası oyuncunun
+gözüne göre hizalansaydı uzun bir kafa, kısa bir gövde satın alınırdı.
 
 ⚠️ **Ölçek iskelet blob'una GİRMEZ.** Meta Movement SDK'nın `Calibrate()`'i gönderenin gövde
 ORANLARINI değiştirir; blob `SerializationCompressionType.High` ile eklem uzunlukları üzerinden
@@ -2198,13 +2212,13 @@ avatar **bozuk duruşlara** girer. Bu yüzden gönderenin iskeleti prefab oranla
 tele canlı kemik transformlarından, ölçek dahil okunur; kök yerelde ölçeklenseydi ölçek blob'a
 girer ve alıcıda ikinci kez uygulanırdı.
 
-**Boy önerisi gövde takibine arena zemininden verilir.** Kalibre olmuş başlık, öğrenilmiş ayakta
-göz hizası 2 sn sabit kalınca `OVRBody.SuggestBodyTrackingCalibrationOverride(göz + 0,11 m)` çağırır;
-yeniden hizalamada ve boy 3 cm'den fazla değişince (yeni oyuncu) yeniler. Sebep: çalışma zamanı
-boyu **kendi zemin tahmininin** üstündeki kafa yüksekliğinden çıkarır; alan verisi bayatsa o zemin
-gerçeğin altındadır, iskelet fazla uzun çözülür ve bacaklar gerçek zeminin altına iner (uzak avatar
-yere gömülü durur). Arena zemini kendi hizalamamızla `y=0`'a sabit olduğu için ona göre verilen
-boy bu hatadan bağımsızdır. Protokole girmez, yalnız başlığın kendi çalışma zamanına söylenir.
+**Boy önerisi gövde takibine ölçümden verilir.** Başlık gövde açılışında, her ölçüm sonucunda ve
+takip onarımında `OVRBody.SuggestBodyTrackingCalibrationOverride(boy)` çağırır; boy ölçülen (ölçüm
+yokken varsayılan) boydur. Sebep: çalışma zamanı boyu **kendi zemin tahmininin** üstündeki kafa
+yüksekliğinden çıkarır; alan verisi bayatsa o zemin gerçeğin altındadır, iskelet fazla uzun çözülür ve
+bacaklar gerçek zeminin altına iner (uzak avatar yere gömülü durur). Ölçüm arena zeminine göre alındığı
+ve arena zemini kendi hizalamamızla `y=0`'a sabit olduğu için verilen boy bu hatadan bağımsızdır.
+Protokole girmez, yalnız başlığın kendi çalışma zamanına söylenir.
 
 ⚠️ **Kalibrasyon sıfırlanınca `bodyScale` de sıfırlanır.** Ölçü arena zeminine göredir; zemin
 geçersizse ölçü de geçersizdir. Kapı `clear_calibration` değil **kalibrasyonun `false` olması**dır:

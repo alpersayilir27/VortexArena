@@ -108,23 +108,6 @@ namespace VortexArena.Core.Player
         /// <inheritdoc cref="MinRestEyeHeightMeters"/>
         private const float MaxRestEyeHeightMeters = 2.0f;
 
-        /// <summary>The standing height must hold within this band for <see cref="HintSettleSeconds"/>
-        /// before it reaches the runtime: the learned ceiling climbs in steps during the first seconds,
-        /// and every hint re-runs the runtime's body calibration.</summary>
-        private const float HintSettleMeters = 0.01f;
-
-        /// <inheritdoc cref="HintSettleMeters"/>
-        private const float HintSettleSeconds = 2f;
-
-        /// <summary>A settled height this far from the last hint means another player (or a new
-        /// alignment floor) and is sent again.</summary>
-        private const float HintRefreshMeters = 0.03f;
-
-        private float _hintCandidate;
-        private float _hintCandidateSince = -1f;
-        private float _hintedHeight;
-        private int _hintedGeneration = -1;
-
         /// <summary>The character's eye level (a marker under the head bone in the prefab).
         /// <c>null</c> if unbound; the measuring side then refuses to measure and complains.</summary>
         public Transform EyeAnchor => eyeAnchor;
@@ -235,7 +218,6 @@ namespace VortexArena.Core.Player
             }
 
             TickBodyTrackingWatchdog();
-            TickHeightHint();
         }
 
         /// <summary>Reads the model's rest-pose eye height (<see cref="RestEyeHeightMeters"/>).
@@ -276,45 +258,20 @@ namespace VortexArena.Core.Player
                       "ölçümünün referansı.", this);
         }
 
-        /// <summary>Hands the runtime the player's stature once it is known and stable, and again when
-        /// the arena is re-aligned or the stature moves (another player in the headset).
-        /// <para>⚠️ Only while calibrated: before alignment the arena floor IS the runtime's own floor
-        /// guess, so the hint would just echo the number it exists to correct.</para></summary>
-        private void TickHeightHint()
+        /// <summary>Hands the runtime the player's stature as the body measurement knows it
+        /// (<see cref="BodyScaleState.StatureMeters"/>, §10.8): called on init, on every measurement
+        /// result and after a tracking repair. Every hint re-runs the runtime's body calibration.</summary>
+        public void SeedHeightHint()
         {
-            if (!CalibrationState.IsCalibrated || !StandingHeightState.TryGet(out float eye))
+            if (!_initialized)
             {
-                _hintCandidateSince = -1f;
-                return;
+                return; // the init path seeds it itself once the character exists
             }
-
-            if (_hintCandidateSince < 0f || Mathf.Abs(eye - _hintCandidate) > HintSettleMeters)
-            {
-                _hintCandidate = eye;
-                _hintCandidateSince = Time.unscaledTime;
-                return;
-            }
-
-            if (Time.unscaledTime - _hintCandidateSince < HintSettleSeconds)
-            {
-                return;
-            }
-
-            int generation = ArenaCalibrator.CalibrationGeneration;
-            if (generation == _hintedGeneration && Mathf.Abs(eye - _hintedHeight) < HintRefreshMeters)
-            {
-                return;
-            }
-
-            // Recorded even when the runtime refuses: retrying every frame would not change its answer.
-            _hintedGeneration = generation;
-            _hintedHeight = eye;
 
             float sent = character.SeedBodyHeightHint();
             if (sent > 0f)
             {
-                Debug.Log($"[LocalBodyAvatar] Gövde takibine boy önerildi: {sent:F2} m (arena " +
-                          "zeminine göre; gözlüğün kendi zemin tahmini devre dışı).", this);
+                Debug.Log($"[LocalBodyAvatar] Gövde takibine boy önerildi: {sent:F2} m.", this);
             }
         }
 
@@ -351,6 +308,7 @@ namespace VortexArena.Core.Player
 
             character.Initialize(client.PlayerId, hasInputAuthority: true);
             _sourceProviderGrace = SourceProviderGraceSeconds;
+            SeedHeightHint();
         }
 
         /// <summary>Silences the body visually: <b>every Renderer in the subtree is disabled, no

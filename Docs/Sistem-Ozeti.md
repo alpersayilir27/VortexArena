@@ -1344,12 +1344,13 @@ tahmini ile yakalanan zemin noktası karşılaştırılır ve fark `set_calibrat
 bildirilir (§3.11). ⚠️ Ölçü **tracking-yerel** alınır — arena hizalamasından SONRAKİ dünya
 yüksekliği zaten kalibrasyonun kendi çıktısıdır, onunla karşılaştırmak her zaman sıfır verirdi.
 Sapma hizalamayı değiştirmez, yalnız raporlanır.
-⚠️ **Gövde ölçüsü buna BAĞLI DEĞİLDİR:** ölçümü operatör başlatır (`measure_body_scale`, §10.8),
-hizalama değil — hizalamadan otomatik tetiklenen bir ölçüm, oyuncu kumandayı zemine değdirmek için
-**eğilmişken** ölçmek olurdu. `CharacterRetargeter.Calibrate()` bu projede hiç çağrılmaz.
+⚠️ **Gövde ölçüsü buradan tetiklenmez, gecikmeyle izler:** `BodyScaleState` `CalibrationGeneration`'ı
+gözler ve her hizalamadan **10 sn sonra** kendiliğinden ölçer (§10.8) — hizalama anında değil, çünkü
+oyuncu o an kumandayı zemine değdirmek için **eğilmiştir**. `CharacterRetargeter.Calibrate()` bu
+projede hiç çağrılmaz.
 ⚠️ **İki kalibrasyon ayrı şeydir:** bu sınıf rig'i fiziksel arenaya hizalar (sunucu-otoriter durum,
 §10.6), gövde ölçüsü ise ayrı bir eksendir (§10.8) — ölçünün ön koşulu hizalamanın geçerli
-olmasıdır (zemin oradan gelir) ama tetikleyicisi operatördür.
+olmasıdır (zemin oradan gelir); tetikleyicisi operatör ya da hizalama sonrası gecikmedir.
 **Kalibresiz ön-hizalama:** kayıtlı hizalaması olmayan bir başlıkta (PlayerPrefs'te anchor UUID'si
 yok, ya da geri yükleme tüm denemelerde düştü) rig, kafası arenanın A-B ortasında ve A→B'ye bakar
 olacak biçimde **tahminen** yerleştirilir; yükseklik `uncalibratedHeadHeight` (varsayılan 1.8 m,
@@ -1390,21 +1391,24 @@ davranış bu değere bakmaz (§3.11). ⚠️ Değer bağlantı başına donduru
 gelen bir mod değişikliği koşan oturuma uygulanmaz, çünkü kapıladığı karar (açılışta geri yükle
 mi) o an çoktan verilmiştir — sonradan uygulamak "yarısı eski moda göre hizalanmış" bir oturum
 üretirdi),
-**`BodyScaleState`** (kalıcı tekil — gövde ölçüsünü **operatör düğmesiyle** alır ve `set_body_scale`
-ile bildirir, §10.8. Ölçüm: oyuncunun gözü (`centerEyeAnchor`, arena uzayı — kalibre şart) bölü
-modelin **dinlenme pozundaki** göz hizası (`LocalBodyAvatar.RestEyeHeightMeters`, prefabtan
-`Awake`'te bir kez okunur); ~0,5 sn örneklenip medyanı alınır, yayılım %5'i aşarsa (hareket) ya da
-medyan `StandingHeightState`'in ayakta göz hizasının %6'dan fazla altındaysa (sabit eğilme)
-reddedilir. ⚠️ Karakterin **canlı** göz işaretçisi referans olamaz: retargeter kafayı oyuncunun
-kafasına sürer, oran herkeste `1` çıkar (gerekçe Tuzaklar, "ölçümün referansı ölçülene bağlı
-olamaz"). Gövde takibi ölçüme girmez.
-⚠️ **Başarısızlık SESSİZ KALMAZ:** reddedilen ölçüm `set_body_scale.error` ile gerekçesini geri
-bildirir (kalibre yok / model göz referansı yok / oyuncu hareketli-eğilmiş) ve admin satırı ölçek
-yerine "ölçülemedi" yazar. Gerekçe ayrı eylemlere çıktığı için tek bir "olmadı" yetmiyor: biri
-"oyuncuyu dik durdur, tekrar bas", öteki "önce kalibre et", üçüncüsü "prefabın göz işaretçisi
-bozuk". Sonuç cihazda
-saklanır ve yeniden bağlanınca yeniden bildirilir; sunucu ölçeği sıfırlarsa yerel kayıt da silinir —
-yoksa operatörün sıfırlaması bir sonraki bağlanışta sessizce geri alınırdı. ⚠️ Sabit bir "model göz
+**`BodyScaleState`** (kalıcı tekil — gövde ölçüsünü alır ve `set_body_scale` ile bildirir, §10.8.
+Üç tetikleyici: operatör düğmesi (her an, bekleyen otomatiği iptal eder) · her hizalamadan
+(`ArenaCalibrator.CalibrationGeneration` artışı) **10 sn sonra** otomatik · hiç ölçüm yokken bağlantıda
+**1,80 m varsayımı**. Ölçüm: o anki gözlük göz hizası (`centerEyeAnchor`, arena uzayı — kalibre şart,
+~0,5 sn medyanı) + 0,11 m = boy, **1,00–2,20 m**'ye kırpılır; bölü modelin **dinlenme pozundaki** göz
+hizası (`LocalBodyAvatar.RestEyeHeightMeters`, prefabtan `Awake`'te bir kez okunur). **Duruş kapısı
+yoktur** — eğilme/hareket sezgisi sahada ölçümlerin neredeyse tamamını reddediyordu. ⚠️ Karakterin
+**canlı** göz işaretçisi referans olamaz: retargeter kafayı oyuncunun kafasına sürer, oran herkeste `1`
+çıkar (gerekçe Tuzaklar, "ölçümün referansı ölçülene bağlı olamaz"). Gövde takibi ölçüme girmez; ölçülen
+boy ise takibe ipucu olarak verilir (`LocalBodyAvatar.SeedHeightHint` →
+`ArenaNetCharacterBehaviour.SeedBodyHeightHint`).
+⚠️ **Başarısızlık SESSİZ KALMAZ:** ölçülemeyen ölçüm `set_body_scale.error` ile gerekçesini geri
+bildirir (kalibre yok / model göz referansı yok / göz hizası okunamadı) ve admin satırı ölçek
+yerine "ölçülemedi" yazar. Gerekçe ayrı eylemlere çıkar: biri "önce kalibre et", öteki "prefabın göz
+işaretçisi bozuk". ⚠️ **Cihazda saklanmaz** — uygulama her açılışta varsayılan boyla başlar (gözlük
+elden ele geçer); aynı süreçte yeniden bağlanınca son ölçüm yeniden bildirilir; sunucu ölçeği
+sıfırlarsa yerel ölçüm de düşer — yoksa operatörün sıfırlaması bir sonraki bağlanışta sessizce geri
+alınırdı. ⚠️ Sabit bir "model göz
 yüksekliği" sayısı YOKTUR: karakter zaten oyuncuyla aynı pozdadır, oran duruş farkını götürür ve
 model değişince bayatlayacak bir sayı kalmaz. ⚠️ **Ölçüm yolu TEKTİR ve gövde takibiyle
 entegredir** — takipten kopuk ikinci bir ölçüm yolu (jestle zemin+baş ölçüp bind-poz referansına
@@ -3103,12 +3107,12 @@ konsoluna tek satır sebep yazar.
 
 53. **Kendini düzeltmeyen bir tahmin, tek bozuk kareyi KALICI hataya çevirir.** Sabitlenen (mandallı)
     her değer için kural: **tetikleyicisi ve geri dönüş yolu ADI KONMUŞ olmalı.** Bugünkü örneği
-    gövde ölçeğidir (§10.8) — ölçüm o andaki poza sabitlenir ve bir daha kendiliğinden değişmez;
-    tetikleyicisi operatörün `measure_body_scale` düğmesi, geri dönüş yolu da aynı düğmedir (ve
-    kalibrasyonun düşmesi ölçeği sıfırlar). ⚠️ Tetikleyicinin **zaman değil komut** olması bu
-    kuralın sonucudur: hizalamadan otomatik tetiklenen bir ölçüm, oyuncu kumandayı zemine
-    değdirmek için EĞİLMİŞKEN ölçmek olurdu ve o oran maçın kalanı boyunca yanlış boy demektir.
-    Adı konmamış bir mandal ile "yalnız büyüyen" bir değişken aynı kapıya çıkar: er geç bir gürültü
+    gövde ölçeğidir (§10.8) — ölçüm o andaki gözlük yüksekliğine sabitlenir ve bir daha kendiliğinden
+    değişmez; tetikleyicileri operatörün `measure_body_scale` düğmesi ve her hizalamadan 10 sn sonraki
+    otomatik ölçüm, geri dönüş yolu aynı düğmedir (ve kalibrasyonun düşmesi ölçeği sıfırlar). ⚠️
+    Otomatik ölçümün hizalama ANINDA değil gecikmeyle olması bu kuralın sonucudur: hizalama anında
+    ölçmek oyuncuyu kumandayı zemine değdirmek için EĞİLMİŞKEN ölçmek olurdu ve o oran bir sonraki
+    düğmeye kadar yanlış boy demektir. Adı konmamış bir mandal ile "yalnız büyüyen" bir değişken aynı kapıya çıkar: er geç bir gürültü
     örneğine kilitlenir ve geri dönmez.
 
 54. **Sıfır quaternion telde meşru görünür, Unity'de geçersizdir.** Dört sıfır bayt geçerli bir
@@ -4852,8 +4856,8 @@ konsoluna tek satır sebep yazar.
     olmalıdır: modelin **dinlenme pozundaki** göz hizası (`LocalBodyAvatar.RestEyeHeightMeters`),
     SDK karakteri hiç pozlamadan `Awake`'te okunur. Aynı kuralın ikinci yüzü zemin: gövde takibi boyu
     **kendi zemin tahmininin** üstündeki kafadan çıkarır, alan verisi bayatsa iskelet fazla uzun
-    çözülür ve uzak avatar yere gömülür; savunma, boyu takibe **arena zemininden** söylemektir
-    (`LocalBodyAvatar.TickHeightHint` → `SuggestBodyTrackingCalibrationOverride`, §10.8).
+    çözülür ve uzak avatar yere gömülür; savunma, boyu takibe **arena zemininden alınan ölçümden**
+    söylemektir (`LocalBodyAvatar.SeedHeightHint` → `SuggestBodyTrackingCalibrationOverride`, §10.8).
 194. **Transform'la sürülen Rigidbody'de interpolasyon KAPALI olmalıdır; taşınırken kapatılan
     her fizik alanını uçuş kendisi geri açar.** Kinematik yapılıp her karede avuca/bileğe yazılan
     bir gövdede `Interpolate` açık kalırsa fizik, transform'u son iki fizik adımından yeniden yazar:

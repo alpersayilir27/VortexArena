@@ -1,7 +1,6 @@
 using System;
 using UnityEngine;
 using VortexArena.Core.Arena;
-using VortexArena.Core.Combat;
 using VortexArena.Net;
 using VortexArena.Protocol;
 
@@ -10,10 +9,24 @@ namespace VortexArena.Core.Player
     /// <summary>
     /// Takes the local player's <b>body measurement</b> and reports it to the server (§10.8).
     /// <para>
-    /// The scale is the player's eye height above the <b>arena</b> floor over the character model's
-    /// eye height in its <b>rest pose</b> (<see cref="LocalBodyAvatar.RestEyeHeightMeters"/>, read
-    /// once from the prefab at scale 1). Body tracking is not consulted, so the measurement works
-    /// while tracking is broken and does not depend on the headset's own floor guess.
+    /// The measurement is the headset's eye height above the <b>arena</b> floor AT THAT MOMENT: plus
+    /// <see cref="HeadTopAboveEyeMeters"/> it is taken as the player's stature and clamped to
+    /// <see cref="MinStatureMeters"/>–<see cref="MaxStatureMeters"/>. The scale is that eye height over
+    /// the character model's eye height in its <b>rest pose</b>
+    /// (<see cref="LocalBodyAvatar.RestEyeHeightMeters"/>, read once from the prefab at scale 1). Body
+    /// tracking is not consulted, so the measurement works while tracking is broken and does not depend
+    /// on the headset's own floor guess.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>No posture gate.</b> A stoop/motion heuristic rejected nearly every measurement in the field
+    /// and children are handed the headset while standing — whoever triggers the measurement is the judge
+    /// of the moment; a wrong value is corrected by measuring again.
+    /// </para>
+    /// <para>
+    /// <b>Three triggers, one path:</b> the operator (<c>measure_body_scale</c>) at any time; automatically
+    /// <see cref="AutoMeasureDelaySeconds"/> after every alignment (the player has stood up by then; a
+    /// manual measurement cancels a pending automatic one); and, until the first measurement, the
+    /// <see cref="DefaultStatureMeters"/> assumption reported on connect.
     /// </para>
     /// <para>
     /// ⚠️ <b>Never the character's LIVE eye height.</b> The retargeter drives the character's head to
@@ -21,11 +34,9 @@ namespace VortexArena.Core.Player
     /// whatever their height, measures <c>0.99…1.01</c>.
     /// </para>
     /// <para>
-    /// ⚠️ <b>The measurement is not triggered by TIME but by the operator</b>
-    /// (<c>measure_body_scale</c>). A machine cannot know the right moment to measure — the moment the
-    /// player stands upright; a measurement triggered automatically from calibration would measure
-    /// while the player is <b>bent over</b> to touch the controller to the floor. A steady stoop
-    /// passes the spread check, so the learned standing height gates it as well.
+    /// ⚠️ <b>Not stored on the device.</b> A venue headset passes from hand to hand; every app start
+    /// begins with the default stature. Within one process the last measurement is re-reported on
+    /// reconnect, so a network blip does not cost a measurement.
     /// </para>
     /// <para>
     /// It does NOT live in the scene: it bootstraps itself as a persistent singleton (the
@@ -35,30 +46,28 @@ namespace VortexArena.Core.Player
     /// </summary>
     public class BodyScaleState : MonoBehaviour
     {
-        /// <summary>The key the scale is stored under on the device — so a reconnecting player does not
-        /// have to be measured again.</summary>
-        private const string ScalePrefsKey = "VortexArena.BodyScale";
+        /// <summary>Top of the head above the HMD's eye anchor (m). Approximate on purpose: it turns an
+        /// eye height into the stature the clamp and <c>OVRBody</c>'s calibration hint want.</summary>
+        public const float HeadTopAboveEyeMeters = 0.11f;
+
+        /// <summary>Stature assumed until the first measurement (m).</summary>
+        public const float DefaultStatureMeters = 1.80f;
+
+        /// <summary>Smallest stature a measurement can yield (m) — a child; anything lower is taken as
+        /// this. Doubles as the guard against a headset measured off a head.</summary>
+        public const float MinStatureMeters = 1.00f;
+
+        /// <summary>Largest stature a measurement can yield (m) — a headset held overhead is taken as
+        /// this.</summary>
+        public const float MaxStatureMeters = 2.20f;
+
+        /// <summary>Delay from an alignment to the automatic measurement (s). The player is bent over to
+        /// touch the controller to the floor at the alignment itself; this is the time to stand up.</summary>
+        private const float AutoMeasureDelaySeconds = 10f;
 
         /// <summary>Sampling window (s). A single frame would write the SDK's solver noise into the
-        /// measurement.</summary>
+        /// measurement; the window's median is taken.</summary>
         private const float SampleSeconds = 0.5f;
-
-        /// <summary>
-        /// The largest accepted spread between samples (as a ratio of the median). If exceeded the
-        /// measurement is <b>rejected</b>: it means the player was moving or bending at that moment.
-        /// <para>Because a ratio is measured (numerator and denominator move together) this threshold
-        /// catches real posture changes, not the normal sway of the head.</para>
-        /// </summary>
-        private const float MaxSpreadRatio = 0.05f;
-
-        /// <summary>The eye height (m) below which the measurement is considered meaningless — the
-        /// player is on the floor/crouching.</summary>
-        private const float MinEyeHeightMeters = 0.8f;
-
-        /// <summary>The largest dip below the learned standing eye height still accepted (ratio). The
-        /// operator presses while the player stands, but a player holding a stoop steadily passes the
-        /// spread check — this catches them.</summary>
-        private const float MaxStoopRatio = 0.06f;
 
         /// <summary>The smallest difference required to count a scale change as "a new value".</summary>
         private const float ScaleEpsilon = 0.0005f;
@@ -68,18 +77,31 @@ namespace VortexArena.Core.Player
         /// <summary>The scale the server knows about (<c>lobby_state</c>); <c>0</c> = unmeasured.</summary>
         public static float ServerScale { get; private set; }
 
+        /// <summary>The player's stature as currently known (m): the last measurement, else
+        /// <see cref="DefaultStatureMeters"/>. The body-tracking calibration hint reads this.</summary>
+        public static float StatureMeters =>
+            Instance != null && Instance._measuredStature > 0f ? Instance._measuredStature : DefaultStatureMeters;
+
         /// <summary>Raised when the state changes (main thread).</summary>
         public static event Action Changed;
 
         // A single instance so that no new DTO is allocated on every report (the CalibrationState pattern).
         private readonly SetBodyScaleMsg _reportMsg = new SetBodyScaleMsg();
 
-        /// <summary>The scale measured on this device; 0 = none. This value is reported on reconnect.</summary>
-        private float _localScale;
+        /// <summary>Last measurement in this process; 0 = none (the default stature stands in).</summary>
+        private float _measuredScale;
+
+        /// <inheritdoc cref="_measuredScale"/>
+        private float _measuredStature;
 
         private OVRCameraRig _rig;
         private float _rigSearchTime = float.NegativeInfinity;
         private const float RigSearchIntervalSeconds = 0.5f;
+
+        // ── Automatic measurement after alignment ──────────────────────────────────────
+        private int _seenGeneration;
+        private bool _autoPending;
+        private float _autoMeasureAt;
 
         // ── Measurement window ──────────────────────────────────────────────────────────
         private bool _sampling;
@@ -112,7 +134,7 @@ namespace VortexArena.Core.Player
             }
 
             Instance = this;
-            _localScale = PlayerPrefs.GetFloat(ScalePrefsKey, 0f);
+            _seenGeneration = ArenaCalibrator.CalibrationGeneration;
 
             // We are a persistent singleton: we subscribe in Awake/OnDestroy instead of
             // OnEnable/OnDisable so that no event is missed even if the object is disabled.
@@ -137,8 +159,15 @@ namespace VortexArena.Core.Player
 
         // ------------------------------------------------------------- measurement
 
-        /// <summary>The operator requested a measurement → opens the sampling window.</summary>
+        /// <summary>The operator requested a measurement: their judgement of the moment replaces the
+        /// pending automatic one.</summary>
         private void HandleMeasureRequest()
+        {
+            _autoPending = false;
+            BeginMeasurement();
+        }
+
+        private void BeginMeasurement()
         {
             _sampling = true;
             _sampleCount = 0;
@@ -147,6 +176,8 @@ namespace VortexArena.Core.Player
 
         private void Update()
         {
+            TickAutoMeasure();
+
             if (!_sampling)
             {
                 return;
@@ -166,6 +197,38 @@ namespace VortexArena.Core.Player
             FinishMeasurement();
         }
 
+        /// <summary>Every alignment (generation bump) schedules a measurement
+        /// <see cref="AutoMeasureDelaySeconds"/> later; a newer alignment restarts the wait.
+        /// <para>⚠️ Fires only on a player: an admin observer has no rig, and a failed measurement from
+        /// it would be announced to every operator as a player's error.</para></summary>
+        private void TickAutoMeasure()
+        {
+            int generation = ArenaCalibrator.CalibrationGeneration;
+            if (generation != _seenGeneration)
+            {
+                _seenGeneration = generation;
+                _autoPending = true;
+                _autoMeasureAt = Time.unscaledTime + AutoMeasureDelaySeconds;
+            }
+
+            if (!_autoPending || Time.unscaledTime < _autoMeasureAt)
+            {
+                return;
+            }
+
+            _autoPending = false;
+
+            // The alignment was not acknowledged (or no rig): there is no arena floor to measure against.
+            if (!CalibrationState.IsCalibrated || ResolveRig() == null)
+            {
+                return;
+            }
+
+            Debug.Log($"[BodyScaleState] Hizalamadan {AutoMeasureDelaySeconds:F0} sn geçti — boy " +
+                      "kendiliğinden ölçülüyor.", this);
+            BeginMeasurement();
+        }
+
         /// <summary>
         /// This frame's player eye height above the arena floor (m). <c>false</c> if it cannot be
         /// measured — that frame is silently skipped and the total sample count is checked at the end
@@ -183,13 +246,7 @@ namespace VortexArena.Core.Player
                 return false;
             }
 
-            float playerEyeY = ArenaSpace.WorldToArena(rig.centerEyeAnchor.position).y;
-            if (playerEyeY < MinEyeHeightMeters)
-            {
-                return false;
-            }
-
-            eyeHeight = playerEyeY;
+            eyeHeight = ArenaSpace.WorldToArena(rig.centerEyeAnchor.position).y;
             return true;
         }
 
@@ -212,13 +269,12 @@ namespace VortexArena.Core.Player
         }
 
         /// <summary>
-        /// The window is full: take the median, check spread and posture, divide by the model's rest
-        /// eye height, clamp and report.
+        /// The window is full: take the median eye height, clamp the stature it implies, divide by the
+        /// model's rest eye height and report.
         /// <para>⚠️ On a failed measurement <b>no scale is sent but the REASON is</b> (§10.8): the old
         /// scale stays, and the cause is both written to the console and delivered to the operator via
-        /// <c>set_body_scale.error</c>. Writing a wrong height is worse than writing none — only other
-        /// people see the result; but staying silent is bad too, the operator who asked for the
-        /// measurement would think the button does not work.</para>
+        /// <c>set_body_scale.error</c>. Staying silent would make the operator think the button does not
+        /// work.</para>
         /// </summary>
         private void FinishMeasurement()
         {
@@ -238,32 +294,18 @@ namespace VortexArena.Core.Player
 
             Array.Sort(_samples, 0, _sampleCount);
             float medianEye = _samples[_sampleCount / 2];
-            float spread = _samples[_sampleCount - 1] - _samples[0];
 
-            if (medianEye <= 0f || spread / medianEye > MaxSpreadRatio)
+            float stature = medianEye + HeadTopAboveEyeMeters;
+            float clampedStature = Mathf.Clamp(stature, MinStatureMeters, MaxStatureMeters);
+            if (!Mathf.Approximately(stature, clampedStature))
             {
                 Debug.LogWarning(
-                    $"[BodyScaleState] Ölçüm reddedildi: {_sampleCount} örnekte yayılım " +
-                    $"%{spread / Mathf.Max(medianEye, 0.0001f) * 100f:F1} (tavan " +
-                    $"%{MaxSpreadRatio * 100f:F0}). Oyuncu ölçüm anında hareketli ya da eğilmiş — " +
-                    "dik dururken tekrar ölçün.", this);
-                ReportError("oyuncu hareketli/eğilmiş");
-                return;
+                    $"[BodyScaleState] Ölçülen boy {stature:F2} m sınırların " +
+                    $"({MinStatureMeters:F2}–{MaxStatureMeters:F2} m) dışında, {clampedStature:F2} m " +
+                    "sayıldı — gözlük o an bir kafada değil miydi?", this);
             }
 
-            // A held stoop is steady enough to pass the spread check; the learned standing height is
-            // the only reference that knows how tall this player stands.
-            if (StandingHeightState.TryGet(out float standingEye) &&
-                medianEye < standingEye * (1f - MaxStoopRatio))
-            {
-                Debug.LogWarning(
-                    $"[BodyScaleState] Ölçüm reddedildi: göz {medianEye:F2} m, oyuncunun ayakta göz " +
-                    $"hizası {standingEye:F2} m — oyuncu eğilmiş. Dik dururken tekrar ölçün.", this);
-                ReportError("oyuncu eğilmiş");
-                return;
-            }
-
-            float ratio = medianEye / restEye;
+            float ratio = (clampedStature - HeadTopAboveEyeMeters) / restEye;
             float scale = Mathf.Clamp(ratio, ArenaProtocol.BODY_SCALE_MIN, ArenaProtocol.BODY_SCALE_MAX);
             if (!Mathf.Approximately(scale, ratio))
             {
@@ -273,10 +315,17 @@ namespace VortexArena.Core.Player
                     $"{scale:F3} olarak kırpıldı — avatar oyuncunun boyuna tam yetişmeyecek.", this);
             }
 
-            SetLocalScale(scale);
+            _measuredStature = clampedStature;
+            _measuredScale = scale;
             Report(scale);
-            Debug.Log($"[BodyScaleState] Gövde ölçeği {scale:F3} (göz {medianEye:F2} m / model " +
-                      $"{restEye:F2} m, {_sampleCount} örnek).", this);
+            Debug.Log($"[BodyScaleState] Gövde ölçeği {scale:F3} (boy {clampedStature:F2} m — göz " +
+                      $"{medianEye:F2} m / model {restEye:F2} m, {_sampleCount} örnek).", this);
+
+            // The stature is also what body tracking's own calibration wants to know.
+            if (body != null)
+            {
+                body.SeedHeightHint();
+            }
         }
 
         // ------------------------------------------------------------- headset → server
@@ -300,7 +349,7 @@ namespace VortexArena.Core.Player
         /// The measurement failed: the REASON is sent instead of the scale (§10.8). <c>scale = 0</c>
         /// plus a non-empty <c>error</c> tells the server "do not change the stored scale, show the
         /// reason to the operator".
-        /// <para>The clamping branch does NOT come here — a clamped measurement is a success and its
+        /// <para>The clamping branches do NOT come here — a clamped measurement is a success and its
         /// value is written.</para>
         /// </summary>
         private void ReportError(string reason)
@@ -316,46 +365,55 @@ namespace VortexArena.Core.Player
             client.Send(_reportMsg);
         }
 
-        /// <summary>Writes the local record (persisted on the device). <c>0</c> = no measurement.</summary>
-        private void SetLocalScale(float scale)
+        /// <summary>What the server should know right after connecting: the last measurement of this
+        /// process, else the default stature (§10.8) — so nobody is drawn at the model's height for want
+        /// of a button press. Skipped without a rig (admin observer) or without the model reference.</summary>
+        private void ReportKnownScale()
         {
-            _localScale = scale;
-            if (scale > 0f)
+            if (_measuredScale > 0f)
             {
-                PlayerPrefs.SetFloat(ScalePrefsKey, scale);
-            }
-            else
-            {
-                PlayerPrefs.DeleteKey(ScalePrefsKey);
+                Report(_measuredScale);
+                return;
             }
 
-            PlayerPrefs.Save();
+            if (ResolveRig() == null)
+            {
+                return;
+            }
+
+            LocalBodyAvatar body = LocalBodyAvatar.Instance;
+            float restEye = body != null ? body.RestEyeHeightMeters : 0f;
+            if (restEye <= 0f)
+            {
+                return;
+            }
+
+            float scale = Mathf.Clamp((DefaultStatureMeters - HeadTopAboveEyeMeters) / restEye,
+                                      ArenaProtocol.BODY_SCALE_MIN, ArenaProtocol.BODY_SCALE_MAX);
+            Report(scale);
+            Debug.Log($"[BodyScaleState] Henüz ölçüm yok — varsayılan boy {DefaultStatureMeters:F2} m " +
+                      $"bildirildi (ölçek {scale:F3}).", this);
         }
 
         // ------------------------------------------------------------- server → headset
 
         /// <summary>
         /// The server resets the scale on every <c>hello</c> (§10.8, the same rationale as for
-        /// calibration) — if a measurement is stored on the device it is immediately re-reported, so
-        /// the operator does not have to measure again.
+        /// calibration) — the known scale is re-reported at once, so nobody waits for a measurement.
         /// </summary>
         private void HandleConnected(WelcomeMsg msg)
         {
             ServerScale = 0f;
-            if (_localScale > 0f)
-            {
-                Report(_localScale);
-            }
-
+            ReportKnownScale();
             Raise();
         }
 
         /// <summary>
         /// Our own row in the roster is the single source of truth for the scale (§5.3).
-        /// <para>⚠️ If the server published <c>0</c>, <b>the local record is deleted too</b>: when the
-        /// operator resets the calibration the scale drops as well, and if it were not deleted the
-        /// player would bring it back by themselves on the next connection — the reset would have been
-        /// silently undone.</para>
+        /// <para>⚠️ If the server published <c>0</c>, <b>the local measurement is dropped too</b>: when
+        /// the operator resets the calibration the scale drops as well, and if it were kept the player
+        /// would bring it back by themselves on the next connection — the reset would have been
+        /// silently undone. The next alignment measures again by itself.</para>
         /// </summary>
         private void HandleLobbyState(LobbyStateMsg msg)
         {
@@ -380,10 +438,12 @@ namespace VortexArena.Core.Player
 
         private void ApplyServerState(float scale)
         {
-            if (scale <= 0f && _localScale > 0f)
+            if (scale <= 0f && _measuredScale > 0f)
             {
-                SetLocalScale(0f);
-                Debug.Log("[BodyScaleState] Sunucu gövde ölçeğini sıfırladı — yeniden ölçüm gerekiyor.");
+                _measuredScale = 0f;
+                _measuredStature = 0f;
+                Debug.Log("[BodyScaleState] Sunucu gövde ölçeğini sıfırladı — bir sonraki hizalamadan " +
+                          $"{AutoMeasureDelaySeconds:F0} sn sonra yeniden ölçülecek.");
             }
 
             if (Mathf.Abs(ServerScale - scale) < ScaleEpsilon)
