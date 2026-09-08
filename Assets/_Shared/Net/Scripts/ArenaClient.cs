@@ -313,15 +313,43 @@ namespace VortexArena.Net
             _link = null;
             if (link != null)
             {
+                DiscardSocket(link.Socket);
+            }
+        }
+
+        /// <summary>Abandons a socket on a thread of its own: aborts it, then disposes it.</summary>
+        /// <remarks>⚠️ NEVER abort or dispose a <c>ClientWebSocket</c> on the connection loop's thread
+        /// or on the main thread. With the network down Mono blocks inside both calls, which parks the
+        /// reconnect loop on one attempt forever and freezes Unity when Disconnect runs. The abandoned
+        /// socket is left to fault on its own, exactly as <see cref="AwaitBoundedAsync"/> assumes.
+        /// </remarks>
+        private static void DiscardSocket(ClientWebSocket socket)
+        {
+            if (socket == null)
+            {
+                return;
+            }
+
+            _ = Task.Factory.StartNew(() =>
+            {
                 try
                 {
-                    link.Socket.Abort();
+                    socket.Abort();
                 }
                 catch (Exception)
                 {
-                    // Swallow it when the socket is already closed.
+                    // Best effort: the socket may already be gone.
                 }
-            }
+
+                try
+                {
+                    socket.Dispose();
+                }
+                catch (Exception)
+                {
+                    // Best effort.
+                }
+            }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
         }
 
         private async Task RunConnectionLoopAsync(string ip, int port, CancellationToken ct)
@@ -332,6 +360,7 @@ namespace VortexArena.Net
             {
                 DateTime attemptStarted = DateTime.UtcNow;
                 bool established = false;
+                ClientWebSocket socket = null;
 
                 try
                 {
@@ -340,30 +369,37 @@ namespace VortexArena.Net
                     var uri = new Uri($"ws://{ip}:{port}{ArenaProtocol.WS_PATH}");
                     Debug.Log($"[ArenaClient] Bağlanılıyor ({_connectAttempts}. deneme): {uri}");
 
-                    using (var socket = new ClientWebSocket())
-                    {
-                        // Bounded attempt: the timeout lands in the generic catch below (the loop's own
-                        // token is not the one that fired) → backoff, next attempt.
-                        await AwaitBoundedAsync(socket.ConnectAsync(uri, ct), socket,
-                                                ArenaProtocol.CONNECT_TIMEOUT, "Bağlanma", ct);
+                    socket = new ClientWebSocket();
+                    ClientWebSocket attempt = socket;
 
-                        established = true;
-                        _link = new Link(socket);
-                        Interlocked.Exchange(ref _lastReceivedTicks, DateTime.UtcNow.Ticks);
-                        backoffIndex = 0;
-                        _connectAttempts = 0;
-                        _lastError = "";
-                        SetState(ArenaConnectionState.Connected);
-                        Debug.Log("[ArenaClient] Bağlandı; hello gönderiliyor.");
+                    // ⚠️ The connect is STARTED on a thread of its own, not on this one: ConnectAsync's
+                    // SYNCHRONOUS prologue blocks with the network down, and it runs BEFORE the bounded
+                    // await can start its timer — the ceiling below never gets its turn and the loop
+                    // parks on this attempt forever. LongRunning keeps a blocked prologue off the thread
+                    // pool, which is what carries the retry timer and every receive continuation.
+                    Task connect = Task.Factory.StartNew(() => attempt.ConnectAsync(uri, ct), ct,
+                        TaskCreationOptions.LongRunning, TaskScheduler.Default).Unwrap();
 
-                        await SendTextAsync(BuildHelloJson(), ct);
+                    // Bounded attempt: the timeout lands in the generic catch below (the loop's own
+                    // token is not the one that fired) → backoff, next attempt.
+                    await AwaitBoundedAsync(connect, socket, ArenaProtocol.CONNECT_TIMEOUT, "Bağlanma", ct);
 
-                        // The watchdog ends the receive loop by aborting the socket; the loop's
-                        // exception is what lands in the catch below and starts the reconnect.
-                        Task receive = ReceiveLoopAsync(socket, ct);
-                        _ = LinkWatchdogAsync(socket, receive, ct);
-                        await receive;
-                    }
+                    established = true;
+                    _link = new Link(socket);
+                    Interlocked.Exchange(ref _lastReceivedTicks, DateTime.UtcNow.Ticks);
+                    backoffIndex = 0;
+                    _connectAttempts = 0;
+                    _lastError = "";
+                    SetState(ArenaConnectionState.Connected);
+                    Debug.Log("[ArenaClient] Bağlandı; hello gönderiliyor.");
+
+                    await SendTextAsync(BuildHelloJson(), ct);
+
+                    // The watchdog ends the receive loop by aborting the socket; the loop's
+                    // exception is what lands in the catch below and starts the reconnect.
+                    Task receive = ReceiveLoopAsync(socket, ct);
+                    _ = LinkWatchdogAsync(socket, receive, ct);
+                    await receive;
                 }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested)
                 {
@@ -380,6 +416,10 @@ namespace VortexArena.Net
                 finally
                 {
                     _link = null;
+
+                    // ⚠️ Deliberately NOT a `using` block: Dispose on a socket whose connect is still
+                    // in flight blocks right here, and that alone keeps the loop on one attempt.
+                    DiscardSocket(socket);
                 }
 
                 if (ct.IsCancellationRequested || _userDisconnect)
@@ -436,11 +476,19 @@ namespace VortexArena.Net
 
                         try
                         {
-                            await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, string.Empty, ct);
+                            // ⚠️ Bounded and started off this thread, exactly like the connect. A close
+                            // handshake the other side never completes hangs here otherwise, this loop
+                            // never returns, and the reconnect loop waits on it forever.
+                            ClientWebSocket closing = socket;
+                            Task close = Task.Factory.StartNew(
+                                () => closing.CloseAsync(WebSocketCloseStatus.NormalClosure, string.Empty, ct),
+                                ct, TaskCreationOptions.LongRunning, TaskScheduler.Default).Unwrap();
+
+                            await AwaitBoundedAsync(close, socket, ArenaProtocol.SEND_TIMEOUT, "Kapatma", ct);
                         }
                         catch (Exception)
                         {
-                            // The close handshake may fail; the reconnect path handles it.
+                            // The close handshake may fail or time out; the reconnect path handles both.
                         }
 
                         return;
@@ -487,7 +535,7 @@ namespace VortexArena.Net
 
                     Debug.LogWarning($"[ArenaClient] Sunucudan {ArenaProtocol.HEARTBEAT_TIMEOUT:0} sn'dir " +
                                      "mesaj yok — bağlantı ölü sayıldı, yeniden bağlanılacak.");
-                    socket.Abort();
+                    DiscardSocket(socket);
                     return;
                 }
             }
@@ -1020,7 +1068,7 @@ namespace VortexArena.Net
 
             ct.ThrowIfCancellationRequested();
 
-            try { socket.Abort(); } catch (Exception) { /* best effort */ }
+            DiscardSocket(socket);
 
             // The orphan can fault minutes later; observing it keeps it off the unhandled path.
             _ = operation.ContinueWith(t => { _ = t.Exception; }, TaskContinuationOptions.OnlyOnFaulted);

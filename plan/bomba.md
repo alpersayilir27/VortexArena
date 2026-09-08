@@ -20,7 +20,7 @@ Reçetenin tamamı `Docs/Gelistirici/Yemek-Kitabi.md` §11.3.
 
 ## 2. Playtest ayarı
 
-- [ ] **Görsel yarıçap ile `blastRadius` (4 m) okunabilir mi:** oyuncu tehlikeli alanı efekte bakarak
+- [ ] **Görsel yarıçap ile `blastRadius` okunabilir mi:** oyuncu tehlikeli alanı efekte bakarak
       tahmin ediyor. Efekt hasar alanından belirgin büyükse "vurulmayacağım yerde öldüm", belirgin
       küçükse "dumanın içindeydim, hasar almadım" olarak okunur — ikisi de balans değil **okunurluk**
       şikâyeti olarak gelir. Şok dalgası halkası (`Shockwave.startSize`) bu eşleşmenin en görünür

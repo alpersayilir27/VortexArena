@@ -18,11 +18,13 @@ namespace VortexArena.Core.Editor
     /// runtime. Only the anchors are drawn in game; <see cref="ArenaDimensionMesh"/> hides the plane
     /// and columns in <c>Awake</c>. Arena art is built on top of the mesh; no wall is generated
     /// (arena walls belong to the environment).
-    /// <para>The mesh is built UNDER the scene's <see cref="ArenaBoundary"/> at local zero, scale 1,
-    /// so fitting the arena into an existing environment means moving/rotating ONE object (the
-    /// boundary instance) with the mesh and its anchors following. The two must coincide anyway
-    /// (the boundary reads the same file). Without a boundary the mesh goes to the scene root at the
-    /// world origin, unrotated.</para>
+    /// <para>The mesh is built UNDER the scene's <see cref="ArenaBoundary"/> at local zero, scale 1;
+    /// the two must coincide anyway (the boundary reads the same file). Without a boundary the mesh
+    /// goes to the scene root at the world origin, unrotated.</para>
+    /// <para>⚠️ <b>The boundary itself stays at the world origin, unrotated.</b> Arena space IS world
+    /// space, so sliding the boundary slides every player's reported position with it, and reading a
+    /// moved mesh back through world space loses precision. An arena is fitted to an environment by
+    /// moving the ENVIRONMENT onto the arena — never the boundary onto the environment.</para>
     /// <para>⚠️ The mesh's scale is never changed, and under a rotated root the size is NOT read
     /// from the world-axis selection box: a 12×12 plane under a root rotated 48.72° measures
     /// <c>12 × (cos θ + sin θ)</c> = 16.93 in that box and the tool looks like it broke the scale.
@@ -116,11 +118,12 @@ namespace VortexArena.Core.Editor
                 "çalışma anında kullanır — ama taban/kolon görseli oyunda çizilmez. Köşeleri " +
                 "ProBuilder ile, işaretçileri sürükleyerek düzeltip 'DimensionMesh'i JSON'a " +
                 "Çevir' ile aynı dosyaya geri yazabilirsin.\n\n" +
-                "Sahnede ArenaBoundary varsa maket ONUN ALTINA, yerel sıfırda kurulur: arenayı " +
-                "bir environment'ın üstüne oturtmak için yalnız VA_ArenaBoundary örneğini " +
-                "taşırsın/döndürürsün, maket ve kalibrasyon işaretçileri onu izler. Muhafaza " +
-                "yoksa sahne köküne, dünya orijininde ve dönüşsüz kurulur. Geri okuma maketin " +
-                "kendi kökünü referans aldığı için taşınmış/döndürülmüş maketten de doğru çevirir.",
+                "Sahnede ArenaBoundary varsa maket ONUN ALTINA, yerel sıfırda kurulur; muhafaza " +
+                "yoksa sahne köküne kurulur. Her iki durumda da maket dünya orijininde ve " +
+                "dönüşsüz durur.\n\n" +
+                "Arena uzayı dünya uzayıdır: VA_ArenaBoundary'yi TAŞIMA, DÖNDÜRME. Kaydırırsan " +
+                "her oyuncunun ağ konumu onunla kayar. Arenayı bir environment'ın üstüne " +
+                "oturtmak için ENVIRONMENT'ı arenaya taşırsın.",
                 MessageType.Info);
 
             EditorGUILayout.Space();
@@ -213,8 +216,8 @@ namespace VortexArena.Core.Editor
             {
                 result.Warnings.Add(
                     "Sahnede ArenaBoundary yok — maket sahne köküne, dünya orijininde kuruldu. " +
-                    "Muhafazayı 'Template Temellerini Yükle' ile kurup maketi yeniden üretirsen " +
-                    "arenayı tek objeyi taşıyarak yerleştirebilirsin.");
+                    "Muhafazayı 'Template Temellerini Yükle' ile kurup maketi yeniden üret; " +
+                    "muhafaza orijinde kalır, environment ona göre yerleştirilir.");
             }
 
             // The mesh MUST ship (the anchors live under it). The tag is reset explicitly: reusing

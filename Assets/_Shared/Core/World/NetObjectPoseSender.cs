@@ -30,8 +30,16 @@ namespace VortexArena.Core.World
         private NetObject _net;
         private Rigidbody _body;
 
+        /// <summary>How long a "standing on something that can still move" contact keeps counting after
+        /// the physics callback that saw it. ⚠️ Not a per-frame flag: physics does not step every frame,
+        /// so a flag cleared each Update would read "stable ground" on the frames in between.</summary>
+        private const float UnstableSupportMemory = 0.25f;
+
         private float _sendTimer;
         private float _stillSeconds;
+
+        /// <summary>Seconds left of the last unstable-support contact (see the constant).</summary>
+        private float _unstableSupportLeft;
 
         /// <summary>⚠️ <c>object_rest</c> goes out ONCE per flight: the gate stays open until the server
         /// answers by dropping <c>Awake</c>, and a per-frame resend would spam the reliable queue.</summary>
@@ -58,6 +66,7 @@ namespace VortexArena.Core.World
             Vector3 position = transform.position;
             float speed = MeasureSpeed(position, dt);
             _lastPosition = position;
+            _unstableSupportLeft = Mathf.Max(0f, _unstableSupportLeft - dt);
 
             if (_net == null || _net.NetId <= 0 || !_net.IsMine || !_net.IsAwake || _net.IsHeld ||
                 HeldItems.Holds(transform))
@@ -106,7 +115,10 @@ namespace VortexArena.Core.World
         /// a bounce, and the object would freeze in mid-air (<c>OBJECT_REST_SECONDS</c>).</summary>
         private void TrackRest(float speed, float dt)
         {
-            if (speed > ArenaProtocol.OBJECT_REST_SPEED)
+            // ⚠️ Standing still ON A CARRIED OBJECT is not resting: rest ends ownership and the server
+            // freezes the object at that pose, so a knife laid on a held plate stays hanging in the air
+            // once the plate moves out from under it. Only ground that cannot walk away counts.
+            if (speed > ArenaProtocol.OBJECT_REST_SPEED || _unstableSupportLeft > 0f)
             {
                 _stillSeconds = 0f;
                 return;
@@ -126,6 +138,29 @@ namespace VortexArena.Core.World
             RestSent?.Invoke(_net);
         }
 
+        /// <remarks>Contacts arrive only while the body is dynamic, which is exactly the flight window
+        /// this component measures.</remarks>
+        private void OnCollisionStay(Collision collision)
+        {
+            if (IsUnstableSupport(collision.collider))
+            {
+                _unstableSupportLeft = UnstableSupportMemory;
+            }
+        }
+
+        /// <summary>Can this contact walk away from under us — a net object in someone's hand, or one
+        /// already in a LOCAL hand while its <c>Held</c> confirmation is still travelling?</summary>
+        private static bool IsUnstableSupport(Collider other)
+        {
+            if (other == null)
+            {
+                return false;
+            }
+
+            NetObject support = other.GetComponentInParent<NetObject>();
+            return support != null && (support.IsHeld || HeldItems.Holds(support.transform));
+        }
+
         private Pose CurrentWorldPose()
         {
             transform.GetPositionAndRotation(out Vector3 position, out Quaternion rotation);
@@ -139,6 +174,7 @@ namespace VortexArena.Core.World
             _sendTimer = 0f;
             _stillSeconds = 0f;
             _restSent = false;
+            _unstableSupportLeft = 0f;
         }
     }
 }

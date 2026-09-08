@@ -126,9 +126,9 @@ MonoBehaviour:
   excludedLayers:
     serializedVersion: 2
     m_Bits: 0
-  blastRadius: 4
-  blastDamage: 250
-  edgeScale: 0.25
+  blastRadius: 2
+  blastDamage: 150
+  edgeScale: 0.1
   requireLineOfSight: 1
   explosionPrefab: {fileID: 1121192042590650, guid: 36af6a4c113ce124cac2d27cd52c1b6a, type: 3}
   explosionClip: {fileID: 8300000, guid: 91021c81865c40b4acc0683388a2d3db, type: 3}

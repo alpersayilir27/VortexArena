@@ -2612,6 +2612,9 @@ objeyi ilk isteyen alır).
    `Awake` kalkar, **sahip durur**; `object_rest` (obje durunca) → `Awake` düşer, `owner = 0`,
    bildirilen poz dinlenme pozu olur. ⚠️ Aradaki uçuş penceresinde obje **sahipli ama tutulmuyordur**
    — poz akıtma hakkını veren de, yakalamayı açan da tam olarak bu durumdur.
+   ⚠️ **Taşınan bir şeyin üstünde durmak "durdu" DEĞİLDİR:** sahip, temas ettiği zemin tutulan bir
+   ağ nesnesiyken `object_rest` yollamaz. Yollasaydı sunucu objeyi o pozda dondururdu ve altındaki
+   tabak çekilince obje havada asılı kalırdı — hız eşiği bu durumu tek başına ayırt edemez.
 4. **Sahip koparsa sunucu serbest bırakır.** Bağlantı `left`'e düştüğünde ya da oyuncu öldüğünde o
    oyuncunun tuttuğu her obje **son bilinen pozunda** (§6.12'deki kilitsiz slot) bırakılır. ⚠️ Bu
    kapı olmadan bir oyuncunun kopması objeyi **kalıcı olarak kilitler** — kimse alamaz, kimse

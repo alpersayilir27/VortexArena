@@ -1606,11 +1606,28 @@ namespace VortexArena.Core.Editor
                     report.Add("SAĞLIK: ArenaBoundary.dimensionsJson BOŞ — muhafaza kendini kapatır.");
                 }
 
-                // ⚠️ The boundary's POSITION/ROTATION is not checked: the default is the world
-                // origin, but playing a zone inside an existing environment means moving/rotating it
-                // deliberately — distance cannot tell intent apart. SCALE is an error in every case:
-                // the dimensions file is in metres and TransformPoint applies scale too, so anything
-                // off 1 silently builds the boundary, anchors and framing at the wrong size.
+                // ⚠️ Arena space IS world space: the boundary is read in the same frame every network
+                // position is, so a boundary off the origin shifts what every player reports, and
+                // reading the maquette back through world space then loses precision on top. The
+                // environment is moved onto the arena, never the arena onto the environment.
+                Vector3 position = boundary.transform.position;
+                if (position.magnitude > AlignmentTolerance)
+                {
+                    report.Add($"SAĞLIK: ArenaBoundary konumu {position} — orijinde olmalı. Arena " +
+                               "uzayı dünya uzayıdır: muhafazayı kaydırmak her oyuncunun ağ " +
+                               "konumunu kaydırır. Muhafazayı orijine al, environment'ı ona taşı.");
+                }
+
+                float tilt = Quaternion.Angle(boundary.transform.rotation, Quaternion.identity);
+                if (tilt > 0.1f)
+                {
+                    report.Add($"SAĞLIK: ArenaBoundary {tilt:0.0}° döndürülmüş — dönüşsüz olmalı. " +
+                               "Environment'ı arenaya göre döndür, muhafazayı değil.");
+                }
+
+                // SCALE is an error in every case: the dimensions file is in metres and TransformPoint
+                // applies scale too, so anything off 1 silently builds the boundary, anchors and
+                // framing at the wrong size.
                 Vector3 scale = boundary.transform.lossyScale;
                 if (Mathf.Abs(scale.x - 1f) > AlignmentTolerance ||
                     Mathf.Abs(scale.y - 1f) > AlignmentTolerance ||

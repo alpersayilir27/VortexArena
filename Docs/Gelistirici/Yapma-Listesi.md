@@ -43,17 +43,20 @@ Kalibrasyon yasağı canlandırmanın **iki yolunda birden** duruyor (oyuncunun 
 yalnızca `revive_request`); ikinci bir yol eklenip yasak orada tekrarlanmazsa kural sessizce
 işlevsizleşir — hata da vermez.
 
-### ⛔ Arena yerleşimini `ArenaBoundary`'den bağımsız kaydırma
+### ⛔ `VA_ArenaBoundary`'yi taşımak / döndürmek
 
 Arena uzayı **dünya uzayıdır**: ağa giden/gelen tüm pozların sıfırı sahnenin dünya sıfırıdır ve
-telde bunu telafi eden bir origin yoktur. Yerleşimin referansı **`VA_ArenaBoundary`'dir**: varsayılan
-yerleşim dünya orijinidir; hazır bir environment'ın içinde bölge oynatılacaksa boundary (altındaki
-maketiyle) o bölgenin üstüne **bilinçli** taşınır ve kalibrasyon oyuncuları oraya hizalar — bu
-meşrudur. Yasak olan, **sanat ile boundary'yi birbirinden bağımsız** kaydırmak/döndürmektir:
-muhafaza, kalibrasyon işaretçileri ve kadraj boundary'yi izler, sanat izlemez — ayrışırlarsa oyuncu
-fiziksel alanda yanlış yere göre kalibre olur ve hata ancak sahada görünür.
+telde bunu telafi eden bir origin yoktur. Muhafaza bu yüzden **dünya orijininde ve dönüşsüz durur**;
+altındaki maket de yerel sıfırdadır. Arenayı hazır bir environment'ın içine oturtmanın yolu
+**environment'ı arenaya taşımaktır**, tersi değil — `Configure All Build Elements` sağlık raporu
+orijinden kaymış ya da döndürülmüş muhafazayı UYARI ile yazar.
 
-Aynı sebeple oynanan zemin **boundary'nin Y'sinde** (varsayılan: dünya y=0) durmalı: uzak
+Kaydırmanın bedeli iki katmanlıdır: (1) muhafaza, kalibrasyon işaretçileri ve kadraj boundary'yi
+izler, sanat izlemez — ayrışırlarsa oyuncu fiziksel alanda yanlış yere göre kalibre olur ve hata
+ancak sahada görünür; (2) maketin geri okuması dünya uzayından geçtiği için döndürülmüş bir kökte
+hassasiyet kaybeder, ölçü dosyası her gidiş-dönüşte biraz daha kayar.
+
+Aynı sebeple oynanan zemin **dünya y=0'da** (yani muhafazanın Y'sinde) durmalı: uzak
 avatarların kökü arena koordinatına oturur → sanat zemini işaretçilerin zemininden yukarıdaysa
 herkes o yükseklik kadar havada durur. `VA_CameraRig`'in sahnedeki kökü de Y=0'dadır
 (tracking origin `Stage` onu fiziksel zemin sayar; kalibrasyon rig'i zaten taşır).
