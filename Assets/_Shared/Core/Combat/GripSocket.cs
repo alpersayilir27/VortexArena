@@ -11,11 +11,15 @@ namespace VortexArena.Core.Combat
     /// it is taken" (authored in the studio, stored in <see cref="ItemDefinition"/>). Mixing the two
     /// makes an item that is grabbable where the hand does not fit, or vice versa.</para>
     /// <para>⚠️ <b>The sphere the player sees IS the acceptance volume</b> — the indicator prefab is
-    /// authored at 1 m diameter and scaled here to twice <see cref="acceptRadius"/>. Separate numbers
+    /// authored at 1 m diameter and scaled here to twice the radius in force. Separate numbers
     /// produce "I am inside but it will not take", which reads as a broken grab.</para>
     /// <para>⚠️ The measured point is the controller ANCHOR, not the wrist: the hand visual sits
     /// centimetres away from it, so measuring the wrist would refuse a grab where the player is told
     /// "you are in".</para>
+    /// <para><b>Catch mode</b> (<see cref="CatchMode"/>, set by the owner of the socket while the item is
+    /// in flight): the radius grows to <see cref="CatchRadius"/> and the measurement is the closest
+    /// approach DURING the frame, not the sample at its end. At 12 m/s an object moves ~17 cm per frame
+    /// and skips a 12 cm sphere between two samples — the socket would never see it inside.</para>
     /// <para>This is the ONE proximity implementation — <see cref="WristHolster"/> drives it through
     /// <see cref="Configure"/> instead of carrying its own copy.</para>
     /// </summary>
@@ -26,6 +30,16 @@ namespace VortexArena.Core.Combat
         /// same figure as the weapon's front-grip socket (<c>Weapon.SecondaryGripHoverRadius</c>): two
         /// sockets appearing at different distances read as a bug, not as a feature.</summary>
         private const float HoverRadius = 0.30f;
+
+        /// <summary>Accept radius while the item is in FLIGHT (m). A hand cannot be timed onto a 12 cm
+        /// sphere; the volume grows and the frame sweep covers the motion. Code-wide on purpose: the
+        /// prefab radius is the volume of the item at REST, a per-prefab catch radius would be tuned
+        /// once per item for a single feeling.</summary>
+        public const float CatchRadius = 0.20f;
+
+        /// <summary>Relative motion above this in one frame is a teleport (rest-pose snap, <c>Return</c>),
+        /// not flight: swept, a hand anywhere along that line would "catch" the item.</summary>
+        private const float MaxSweepMetres = 1.0f;
 
         /// <summary>Alpha while approaching, and while the controller is INSIDE (slightly more solid to
         /// read as "you are in, press"; colour and size never change).</summary>
@@ -39,7 +53,8 @@ namespace VortexArena.Core.Combat
         [SerializeField] private GameObject socketIndicatorPrefab;
 
         [Tooltip("Kabul yarıçapı (m): kumanda anchor'ı bu kürenin içindeyken kavramaya basılınca eşya " +
-                 "ele gelir. Oyuncunun gördüğü küre de tam bu yarıçapla çizilir (0.12 = 24 cm çap).")]
+                 "ele gelir. Oyuncunun gördüğü küre de tam bu yarıçapla çizilir (0.12 = 24 cm çap). " +
+                 "Uçuştaki eşyada yarıçap koddaki CatchRadius'a kendiliğinden büyür.")]
         [SerializeField] private float acceptRadius = 0.12f;
 
         [Tooltip("SOL el bu soketten alabilir mi.")]
@@ -53,10 +68,26 @@ namespace VortexArena.Core.Combat
         private Material _indicatorMaterial;
         private bool _indicatorPrefabWarned;
 
-        /// <summary>Accept radius (m). ⚠️ The 1 cm floor must stay: a zero radius makes the socket
-        /// mathematically unreachable, and in the field that shows up NOT as an error but as "the item
-        /// cannot be picked up", which is expensive to diagnose.</summary>
+        // Previous frame's socket position RELATIVE to each controller anchor: the sweep's start point.
+        // Relative, so a hand swung toward the item counts as much as the item's own flight.
+        private Vector3 _prevRelativeLeft;
+        private Vector3 _prevRelativeRight;
+        private bool _hasPrevLeft;
+        private bool _hasPrevRight;
+
+        /// <summary>Accept radius (m) at rest. ⚠️ The 1 cm floor must stay: a zero radius makes the
+        /// socket mathematically unreachable, and in the field that shows up NOT as an error but as "the
+        /// item cannot be picked up", which is expensive to diagnose.</summary>
         public float AcceptRadius => Mathf.Max(0.01f, acceptRadius);
+
+        /// <summary>The item is in flight: the radius grows to <see cref="CatchRadius"/> and the
+        /// measurement sweeps the frame. Written every frame by whoever drives the socket; off, the
+        /// socket behaves exactly as at rest.</summary>
+        public bool CatchMode { get; set; }
+
+        /// <summary>Radius the take gate AND the indicator use right now — one number in both modes, so
+        /// "inside but it will not take" cannot happen in either.</summary>
+        public float EffectiveRadius => CatchMode ? Mathf.Max(AcceptRadius, CatchRadius) : AcceptRadius;
 
         /// <summary>Configures a socket created/driven by CODE (the wrist holster keeps its own
         /// serialized fields on the holster and pushes them here) — so there is exactly one proximity
@@ -82,7 +113,8 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>Distance from a controller ANCHOR to the socket; <c>false</c> with no rig
-        /// (spectator, editor session) or a hand this socket does not accept.
+        /// (spectator, editor session) or a hand this socket does not accept. In catch mode the closest
+        /// approach during the last frame, when that is nearer.
         /// <para>The single measurement behind both the indicator and the take gate, so the two can
         /// never disagree.</para></summary>
         public bool TryMeasure(OVRInput.Controller hand, out float distance)
@@ -101,14 +133,25 @@ namespace VortexArena.Core.Combat
                 return false;
             }
 
-            distance = Vector3.Distance(anchor.position, transform.position);
+            Vector3 relative = transform.position - anchor.position;
+            distance = relative.magnitude;
+
+            if (CatchMode && (rightHand ? _hasPrevRight : _hasPrevLeft))
+            {
+                Vector3 previous = rightHand ? _prevRelativeRight : _prevRelativeLeft;
+                if ((relative - previous).sqrMagnitude <= MaxSweepMetres * MaxSweepMetres)
+                {
+                    distance = Mathf.Min(distance, DistanceFromOrigin(previous, relative));
+                }
+            }
+
             return true;
         }
 
-        /// <summary>Is that controller INSIDE the accept radius right now.</summary>
+        /// <summary>Is that controller INSIDE the radius in force right now.</summary>
         public bool IsInside(OVRInput.Controller hand)
         {
-            return TryMeasure(hand, out float distance) && distance <= AcceptRadius;
+            return TryMeasure(hand, out float distance) && distance <= EffectiveRadius;
         }
 
         /// <summary>The accepted hand inside the radius, NEAREST first; <c>false</c> when neither is in.
@@ -119,15 +162,16 @@ namespace VortexArena.Core.Combat
             hand = OVRInput.Controller.None;
             rightHand = false;
 
+            float radius = EffectiveRadius;
             float best = float.MaxValue;
 
-            if (TryMeasure(OVRInput.Controller.LTouch, out float left) && left <= AcceptRadius)
+            if (TryMeasure(OVRInput.Controller.LTouch, out float left) && left <= radius)
             {
                 hand = OVRInput.Controller.LTouch;
                 best = left;
             }
 
-            if (TryMeasure(OVRInput.Controller.RTouch, out float right) && right <= AcceptRadius && right < best)
+            if (TryMeasure(OVRInput.Controller.RTouch, out float right) && right <= radius && right < best)
             {
                 hand = OVRInput.Controller.RTouch;
                 rightHand = true;
@@ -137,10 +181,26 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>One frame of the socket: the sphere appears as an accepted controller approaches and
-        /// gets slightly more solid once the anchor is INSIDE ("press").</summary>
+        /// gets slightly more solid once the anchor is INSIDE ("press"). Also records the frame for the
+        /// next frame's sweep.</summary>
         /// <param name="available">Is the item takeable right now (the caller's rule: already in a hand,
         /// held by someone else, not calibrated…). <c>false</c> hides the socket.</param>
         public void Tick(bool available)
+        {
+            TickIndicator(available);
+            RecordFrame();
+        }
+
+        /// <summary>Hides the indicator. Safe before it was ever built.</summary>
+        public void Hide()
+        {
+            if (_indicator != null && _indicator.gameObject.activeSelf)
+            {
+                _indicator.gameObject.SetActive(false);
+            }
+        }
+
+        private void TickIndicator(bool available)
         {
             if (!available || !TryMeasureNearest(out float distance))
             {
@@ -148,7 +208,7 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
-            float radius = AcceptRadius;
+            float radius = EffectiveRadius;
             if (distance > Mathf.Max(HoverRadius, radius))
             {
                 Hide();
@@ -182,13 +242,40 @@ namespace VortexArena.Core.Combat
             }
         }
 
-        /// <summary>Hides the indicator. Safe before it was ever built.</summary>
-        public void Hide()
+        /// <summary>Stores this frame's socket-to-anchor vectors as the next frame's sweep start. Runs
+        /// even while hidden or at rest: the first frame of a flight must already have a start point.</summary>
+        private void RecordFrame()
         {
-            if (_indicator != null && _indicator.gameObject.activeSelf)
+            _hasPrevLeft = TryRecord(OVRInput.Controller.LTouch, out _prevRelativeLeft);
+            _hasPrevRight = TryRecord(OVRInput.Controller.RTouch, out _prevRelativeRight);
+        }
+
+        private bool TryRecord(OVRInput.Controller hand, out Vector3 relative)
+        {
+            relative = default;
+
+            Transform anchor = WeaponGranter.ResolveHandAnchor(hand);
+            if (anchor == null)
             {
-                _indicator.gameObject.SetActive(false);
+                return false;
             }
+
+            relative = transform.position - anchor.position;
+            return true;
+        }
+
+        /// <summary>Distance from the origin to the segment a→b.</summary>
+        private static float DistanceFromOrigin(Vector3 a, Vector3 b)
+        {
+            Vector3 ab = b - a;
+            float length2 = ab.sqrMagnitude;
+            if (length2 < 1e-8f)
+            {
+                return a.magnitude;
+            }
+
+            float t = Mathf.Clamp01(-Vector3.Dot(a, ab) / length2);
+            return (a + ab * t).magnitude;
         }
 
         private bool TryMeasureNearest(out float distance)
@@ -265,13 +352,18 @@ namespace VortexArena.Core.Combat
         }
 
 #if UNITY_EDITOR
-        /// <summary>Editor gizmo: the acceptance volume at its real size, so the socket can be placed
-        /// without entering play mode. Drawn only when SELECTED — a scene full of props would otherwise
-        /// be a wall of spheres.</summary>
+        /// <summary>Editor gizmo: the acceptance volume at rest (solid) and in flight (faint), so the
+        /// socket can be placed without entering play mode. Drawn only when SELECTED — a scene full of
+        /// props would otherwise be a wall of spheres.</summary>
         private void OnDrawGizmosSelected()
         {
             Gizmos.color = IndicatorColor;
             Gizmos.DrawWireSphere(transform.position, AcceptRadius);
+
+            Color faint = IndicatorColor;
+            faint.a = 0.25f;
+            Gizmos.color = faint;
+            Gizmos.DrawWireSphere(transform.position, Mathf.Max(AcceptRadius, CatchRadius));
         }
 #endif
     }

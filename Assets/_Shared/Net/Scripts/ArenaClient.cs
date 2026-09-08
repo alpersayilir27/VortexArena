@@ -342,16 +342,10 @@ namespace VortexArena.Net
 
                     using (var socket = new ClientWebSocket())
                     {
-                        // Bounded attempt (CONNECT_TIMEOUT): a cancelled connect lands in the generic
-                        // catch below (the loop's own token is not the one that fired) → backoff.
-                        // ⚠️ The token alone is not trusted: an implementation that ignores it during
-                        // the TCP connect would park the attempt for minutes → Abort on expiry too.
-                        using (var connectCts = CancellationTokenSource.CreateLinkedTokenSource(ct))
-                        using (connectCts.Token.Register(socket.Abort))
-                        {
-                            connectCts.CancelAfter(TimeSpan.FromSeconds(ArenaProtocol.CONNECT_TIMEOUT));
-                            await socket.ConnectAsync(uri, connectCts.Token);
-                        }
+                        // Bounded attempt: the timeout lands in the generic catch below (the loop's own
+                        // token is not the one that fired) → backoff, next attempt.
+                        await AwaitBoundedAsync(socket.ConnectAsync(uri, ct), socket,
+                                                ArenaProtocol.CONNECT_TIMEOUT, "Bağlanma", ct);
 
                         established = true;
                         _link = new Link(socket);
@@ -989,14 +983,10 @@ namespace VortexArena.Net
                     return;
                 }
 
-                using (var sendCts = CancellationTokenSource.CreateLinkedTokenSource(ct))
-                using (sendCts.Token.Register(socket.Abort))
-                {
-                    sendCts.CancelAfter(TimeSpan.FromSeconds(ArenaProtocol.SEND_TIMEOUT));
-                    await socket.SendAsync(new ArraySegment<byte>(payload), WebSocketMessageType.Text, true, sendCts.Token);
-                }
+                Task send = socket.SendAsync(new ArraySegment<byte>(payload), WebSocketMessageType.Text, true, ct);
+                await AwaitBoundedAsync(send, socket, ArenaProtocol.SEND_TIMEOUT, "Gönderim", ct);
             }
-            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            catch (TimeoutException)
             {
                 Debug.LogWarning($"[ArenaClient] Gönderim {ArenaProtocol.SEND_TIMEOUT:0} sn'de bitmedi — " +
                                  "bağlantı ölü sayıldı, soket düşürüldü.");
@@ -1006,6 +996,36 @@ namespace VortexArena.Net
             {
                 link.SendGate.Release();
             }
+        }
+
+        /// <summary>Awaits a started socket operation with a hard ceiling, aborting the socket on expiry.</summary>
+        /// <remarks>⚠️ The ceiling may NOT rest on the token: with the network down, Mono's
+        /// <c>ClientWebSocket</c> honours neither the cancellation token nor <c>Abort</c> while a
+        /// connect/send is in flight, so the await never returns and the reconnect loop parks forever —
+        /// stuck on attempt 1 with no further attempt. Racing a timer is the only bound that holds; the
+        /// abandoned operation is left to fault on its own.</remarks>
+        private static async Task AwaitBoundedAsync(Task operation, ClientWebSocket socket,
+                                                    float timeoutSeconds, string what, CancellationToken ct)
+        {
+            using (var timerCts = CancellationTokenSource.CreateLinkedTokenSource(ct))
+            {
+                Task timer = Task.Delay(TimeSpan.FromSeconds(timeoutSeconds), timerCts.Token);
+                if (await Task.WhenAny(operation, timer) == operation)
+                {
+                    timerCts.Cancel();
+                    await operation; // rethrows the real failure
+                    return;
+                }
+            }
+
+            ct.ThrowIfCancellationRequested();
+
+            try { socket.Abort(); } catch (Exception) { /* best effort */ }
+
+            // The orphan can fault minutes later; observing it keeps it off the unhandled path.
+            _ = operation.ContinueWith(t => { _ = t.Exception; }, TaskContinuationOptions.OnlyOnFaulted);
+
+            throw new TimeoutException($"{what} {timeoutSeconds:0} sn'de bitmedi.");
         }
 
         // -------------------------------------------------------------- shutdown

@@ -47,8 +47,8 @@ Unity 6000.3.20f1, URP. VR build = player, Windows build = admin. Online haberle
 
 - **Arama = hedefli Grep/Glob; çok dosyaya yayılan keşif alt-ajana.** Büyük dokümanda geniş
   bağlamlı grep yasak. → `is-akisi.md`
-- **Projeyi ajan DERLEMEZ.** Derleme/build/test/Play kullanıcıya aittir; doğrulama sona
-  batch'lenir. → `is-akisi.md`
+- **Projeyi ajan DERLEMEZ.** Derleme/build/test/Play ajana kapalıdır; doğrulanacaklar sohbete
+  değil Notion `Doğrulama` kartına yazılır (build adımları dahil). → `is-akisi.md`
 - **Shell SON basamaktır** — aynı işi MCP tool'u ya da yerleşik araç yapabiliyorsa açılmaz;
   Unity verisi `manage_*` ile okunur, **YAML grep'lenmez**. Makine HER ZAMAN Windows.
   → `unity-erisim.md`

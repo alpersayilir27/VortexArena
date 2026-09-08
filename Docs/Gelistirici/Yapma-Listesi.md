@@ -504,6 +504,15 @@ Rigidbody".
 gecikmede ayrışır. Bastırma kaynaktadır (`HeldItems` slotu, `ItemDefinition.IsWorldSingle`);
 tüketici tarafında ayrıca "bu objeyi çizme" dalı açılmaz, ilk unutulan yerde geri gelir.
 
+### ⛔ Duran eşyayı sıkılı elle (seviye tetik) aldırma — seviye yalnız uçuştaki obje içindir
+
+Kavrama kenar tetiktir: soketin içinde **basış** alır. Uçuştaki obje (`Awake`, `Held` değil)
+istisnadır — boş ve sıkılı bir el ona değince alır, çünkü gerçek yakalama hareketi "önce kapan,
+sonra gelsin"dir ve 12 m/sn'de basışı zamanlamak imkânsızdır. Bu istisnayı duran objeye genişletme:
+sıkılı elle yanından geçilen her eşya ele yapışır, silahlı el yanından uçan spatulayı tüfeğin yerine
+alır. Yakalanabilirlik için prefab yarıçapını da büyütme — uçuş yarıçapı koddaki
+`GripSocket.CatchRadius`'tır, prefabdaki yarıçap **duran** objenin kabul hacmidir.
+
 ---
 
 ## Serialize edilen veriler

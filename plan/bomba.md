@@ -25,10 +25,6 @@ Reçetenin tamamı `Docs/Gelistirici/Yemek-Kitabi.md` §11.3.
       küçükse "dumanın içindeydim, hasar almadım" olarak okunur — ikisi de balans değil **okunurluk**
       şikâyeti olarak gelir. Şok dalgası halkası (`Shockwave.startSize`) bu eşleşmenin en görünür
       ögesidir.
-- [ ] **Sekme/duruş:** `PM_Bomba` sekme 0.3 (`Maximum` birleşim) + `Throwable`'ın ilk temasta
-      yükselttiği sönüm. Sahada bakılacak: yere atılan bomba bir kez sekip kısa sürede duruyor mu
-      (yuvarlanıp gitmiyor), sekme iki başlıkta aynı yerde mi. Fazla seker/ayrışırsa sekme düşürülür,
-      hâlâ yuvarlanırsa `LandedAngularDamping` yükseltilir — ikisi ayrı düğmedir.
 
 ## 3. Kod tarafında bilinçli olarak YAPILMAYANLAR
 
@@ -38,11 +34,7 @@ Reçetenin tamamı `Docs/Gelistirici/Yemek-Kitabi.md` §11.3.
 
 ## 4. Doğrulama (kullanıcı koşar)
 
-- [ ] Yere atılan bomba zemine çarpıp **sekiyor**, zeminin üstünde kalıyor ve kısa sürede duruyor;
-      duvara atılan duvardan sekiyor, içinden geçmiyor.
 - [ ] Aynı yerde ikinci bomba: siper artık kırık, soğurma yok, hasarın tamamı mesafe düşümüyle gider.
 - [ ] Kırılamayan geometrinin (arena iç duvarı/sütunu) arkasındaki oyuncu hiç hasar almaz.
-- [ ] Başlıkta ve admin'de patlama **aynı** görünür: duman yoğunluğu, ateş rengi ve şok dalgası
-      halkası eşleşir.
 - [ ] Arka arkaya birkaç patlamada kare düşüşü/takılma yok; ilk patlama da takılmıyor (havuz fitil
       başında kuruluyor).

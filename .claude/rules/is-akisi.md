@@ -76,8 +76,8 @@ MCP'den de, shell'den de:
 ⚠️ **"Sadece kontrol etmek için" istisnası YOKTUR:** tek bir `recompile` bile editörü kilitler,
 domain reload tetikler ve kullanıcının elindeki sahne/Play oturumunu bozar.
 
-- Bunun yerine **ne değiştiğini ve neyin doğrulanması gerektiğini** yaz ("şu 3 dosya değişti,
-  derleme gerekiyor"); gerçekten gerekiyorsa **kullanıcıdan iste**.
+- Bunun yerine **ne değiştiğini ve neyin doğrulanması gerektiğini** yaz — yeri sohbet değil,
+  Notion doğrulama kartıdır (§5); gerçekten gerekiyorsa **kullanıcıdan iste**.
 - **Kod doğruluğu yine ajanındır:** imzalar, namespace'ler, asmdef bağımlılıkları ve kullanılan
   API'ler yazmadan önce Read/Grep ile teyit edilir — "derleyici nasılsa yakalar" bir çalışma biçimi
   değildir.
@@ -92,3 +92,11 @@ Tüm implementasyon önce yazılır, sonda TEK birleşik doğrulama geçişi yap
 gerçek bir blocker için, rutin teyit için değil. ⚠️ O tek geçişi de **kullanıcı koşar** (§4) — ajan
 hiç doğrulama tetiklemez, o ana kadar biriktirir. Doküman güncellemesi de aynı geçişe girer
 ([[docs-sync]]).
+
+- ⚠️ **Test maddeleri Notion'a yazılır, sohbete değil.** Kullanıcı derleme/build/testi kendisi
+  koşmaz; iş bitince Notion `Todo` veritabanına (`collection://79d48db8-e104-8306-a23e-87a508fc649c`)
+  `Doğrulama N — <konu>` kartı açılır (Durum *Test bekliyor*): **önce** derleme/dağıtım adımları
+  (hangi betik, hangi sırayla, derleme hatası çıkarsa karta yapıştır), sonra adım adım maddeler +
+  "görmen gereken". Sohbete yalnız kartın bağlantısı düşer; "şunu derle/koş" listesi verilmez.
+- Biten kart "Todo Arşiv" sayfasına taşınır, açık kalan maddesi önce yeni karta aktarılır. Kalıcı
+  bilgi yine repoda ([[docs-sync]]) — kart geçicidir, doküman yerine geçmez.

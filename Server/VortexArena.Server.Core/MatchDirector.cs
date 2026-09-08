@@ -1943,8 +1943,9 @@ public sealed class MatchDirector
 
     // ---- Object ownership, events, dynamic spawn (§10.10) ----
 
-    /// <summary>object_grab (§10.10): the object exists → its kind is grabbable → it is free. On success
-    /// the owner is written and <c>object_state</c> goes to EVERYONE.</summary>
+    /// <summary>object_grab (§10.10): the object exists → its kind is grabbable → it is in nobody's hand
+    /// (free, or in flight = a catch). On success the owner is written and <c>object_state</c> goes to
+    /// EVERYONE.</summary>
     /// <remarks>⚠️ A rejection is SILENT toward the client and always will be: the result is
     /// <c>object_state.owner</c>, and a separate denial would carry the same fact on a second channel
     /// whose ordering against the broadcast is not guaranteed.</remarks>
@@ -1954,12 +1955,24 @@ public sealed class MatchDirector
         lock (_gate)
         {
             if (!ObjectSenderOkLocked(player, MessageTypes.ObjectGrab, msg.netId)) return;
-            if (!_objects.TryGrabLocked(msg.netId, player.PlayerId, msg.hand == 1, out var entry, out var reason))
+            if (!_objects.TryGrabLocked(msg.netId, player.PlayerId, msg.hand == 1, out var entry,
+                    out var previousOwner, out var reason))
             {
                 RejectObject(player, MessageTypes.ObjectGrab, msg.netId, reason);
                 return;
             }
 
+            // A catch is the one ownership change with no message of its own; the console line is the
+            // only server-side evidence the thrower's stream was cut on purpose.
+            if (previousOwner != 0)
+            {
+                Console.WriteLine(previousOwner == player.PlayerId
+                    ? $"[world] netId {entry.NetId} ('{entry.Kind}') havada geri alındı: oyuncu {player.PlayerId}"
+                    : $"[world] netId {entry.NetId} ('{entry.Kind}') havada yakalandı: {previousOwner} → {player.PlayerId}");
+            }
+
+            // The owner (and the Held bit) changed, so the lock-free 0x09 gate follows: the thrower's
+            // late packets drop from here on, the catcher's hand pose already flows on 0x01.
             SyncOwnerLocked(entry);
             QueueBroadcastLocked(outbox, JsonUtil.Serialize(WorldObjectTable.ToStateMsg(entry)));
         }

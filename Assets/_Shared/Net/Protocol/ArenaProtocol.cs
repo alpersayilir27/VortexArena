@@ -185,6 +185,12 @@ namespace VortexArena.Protocol
         /// and an object released there would freeze in mid-air.</para></summary>
         public const float OBJECT_REST_SECONDS = 0.3f;
 
+        /// <summary>How long the client waits for an optimistic <c>object_grab</c> to be confirmed by an
+        /// <c>object_state</c> naming it owner AND held (§10.10); after that the local grab is undone.
+        /// <para>⚠️ A rejection is silent and travels on no other message — without this clock a refused
+        /// grab (the object in someone's hand, an older server) keeps the hand claimed for good.</para></summary>
+        public const float OBJECT_GRAB_CONFIRM_SECONDS = 1f;
+
         /// <summary>Max object entries in the object section of one <c>0x05</c> datagram (§6.8). ⚠️ The
         /// real gate is still the byte budget (<see cref="COMBINED_MAX_BYTES"/>) — 8 + 16×34 + 16×12
         /// = 744 B fits, but the event section shares the same budget; this number is the <c>u8</c>

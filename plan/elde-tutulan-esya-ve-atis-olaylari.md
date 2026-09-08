@@ -25,3 +25,10 @@ Bağlama noktası `WeaponCatalog.secondaryGripIndicatorPrefab`; varsayılan kür
 Silah sabit ana eli mi izleyecek (bugünkü davranış), yoksa iki elin doğrultusuna mı hizalanacak?
 ⚠️ **Tel formatını ETKİLEMEZ**: iki elin pozu da telde olduğu için uzak istemci aynı kuralı kendi
 tarafında yeniden uygular. Yani playtest'te serbestçe değiştirilebilir, protokol sabit kalır.
+
+## 3. Havada yakalama — playtest ayarı
+
+Tek ayar noktası koddaki `GripSocket.CatchRadius` (0.20 m — uçuştaki objenin kabul yarıçapı; küre
+de o boyda çizilir). Az yakalanıyorsa önce bu büyütülür, prefabdaki `acceptRadius` DEĞİL (o duran
+objenin hacmidir). Beklenen ve kabul edilen görüntü: atanın başlığında obje yakalanınca eline göre
+100 ms ilerideki fizik konumundan yakalayanın eline **sıçrar** — tek örnek, iki yer olmaz.

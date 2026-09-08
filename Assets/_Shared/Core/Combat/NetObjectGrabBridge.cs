@@ -2,6 +2,7 @@ using UnityEngine;
 using VortexArena.Core.Arena;
 using VortexArena.Core.Player;
 using VortexArena.Net;
+using VortexArena.Protocol;
 
 namespace VortexArena.Core.Combat
 {
@@ -29,6 +30,11 @@ namespace VortexArena.Core.Combat
     /// <c>NetObjectPoseSender</c> (pose stream + <c>object_rest</c>) and <c>NetObjectBody</c> (free
     /// placement, physics authority) take over. Two writers on one transform is a visible jitter, not a
     /// compile error.</para>
+    /// <para><b>Catch.</b> In the flight window (<c>Awake</c>, not <c>Held</c>) the socket runs in catch
+    /// mode — larger radius, frame sweep — and an EMPTY closed hand takes on contact, no press edge
+    /// needed; the server moves ownership to the catcher (§10.10). The grab stays optimistic: without a
+    /// confirming state inside <see cref="ArenaProtocol.OBJECT_GRAB_CONFIRM_SECONDS"/> it is undone,
+    /// because a rejection travels on no message at all.</para>
     /// </summary>
     /// <remarks>
     /// ⚠️ The held pose is written in <see cref="LateUpdate"/> at the DEFAULT execution order, like
@@ -73,6 +79,11 @@ namespace VortexArena.Core.Combat
 
         /// <summary>Last seen <see cref="NetObject.IsHeld"/> — only its EDGE is acted on.</summary>
         private bool _wasHeld;
+
+        /// <summary>When the server must have confirmed the optimistic grab (owner = us AND held);
+        /// <c>0</c> = nothing pending. ⚠️ A rejection is silent (§10.10) — without this clock a refused
+        /// grab would keep the hand claimed for good.</summary>
+        private float _confirmDeadline;
 
         /// <summary>End of the take/let-go buzz. The arbiter wants a report every frame (heartbeat), so
         /// the clock runs in <see cref="LateUpdate"/> rather than in a coroutine.</summary>
@@ -181,13 +192,22 @@ namespace VortexArena.Core.Combat
                 if (!stillHeld)
                 {
                     ReleaseLocal(true);
+                    return;
                 }
 
+                TickConfirm();
                 return;
             }
 
-            // Already in a hand (ours would have returned above, so: someone else's). No stealing —
-            // ownership is only free after the holder releases (§10.10).
+            // Flight window (§10.10): owned by someone, in nobody's hand — catchable.
+            bool flying = _net.IsAwake && !_net.IsHeld;
+            if (socket != null)
+            {
+                socket.CatchMode = flying;
+            }
+
+            // Already in a hand (ours would have returned above, so: someone else's). No stealing from a
+            // hand — ownership is only up for grabs once the holder releases (§10.10).
             if (_net.IsHeld || !IsTakeable || !CalibrationState.IsCalibrated)
             {
                 return;
@@ -198,13 +218,50 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
-            // ⚠️ The EDGE is tracked per hand across every frame, not only while the hand is inside the
-            // socket: sampled on entry, a hand already squeezing the grip would grab the moment it
-            // drifts into the volume, without the player pressing anything.
-            if (rightHand ? pressRight : pressLeft)
+            // ⚠️ At REST the EDGE is required, tracked per hand across every frame, not only while the
+            // hand is inside the socket: sampled on entry, a hand already squeezing the grip would grab
+            // the moment it drifts into the volume, without the player pressing anything.
+            // In FLIGHT an EMPTY closed hand takes on contact — the real catching motion is "close first,
+            // let it arrive"; a press cannot be timed onto a 30 ms crossing. A full hand still needs the
+            // press, so a spatula flying past a rifle hand does not swap the rifle.
+            bool press = rightHand ? pressRight : pressLeft;
+            bool closed = rightHand ? gripRight : gripLeft;
+            if (press || (flying && closed && HandIsEmpty(rightHand)))
             {
                 Grab(hand, rightHand);
             }
+        }
+
+        private static bool HandIsEmpty(bool rightHand)
+        {
+            return (rightHand ? HeldItems.RightHand : HeldItems.LeftHand).IsEmpty;
+        }
+
+        /// <summary>The optimistic grab's answer is the broadcast state; none in time = refused (§10.10).
+        /// Confirmed means owner AND held: a thrower catching their own object back is already the owner,
+        /// so the owner bit alone would confirm nothing.</summary>
+        private void TickConfirm()
+        {
+            if (_confirmDeadline <= 0f)
+            {
+                return;
+            }
+
+            if (_net.IsMine && _net.IsHeld)
+            {
+                _confirmDeadline = 0f;
+                return;
+            }
+
+            if (Time.unscaledTime < _confirmDeadline)
+            {
+                return;
+            }
+
+            Debug.LogWarning($"[NetObjectGrabBridge] '{name}': kavrama " +
+                             $"{ArenaProtocol.OBJECT_GRAB_CONFIRM_SECONDS:0.#} sn içinde sunucudan " +
+                             "onaylanmadı — yerel kavrama geri alındı.", this);
+            ReleaseLocal(false);
         }
 
         /// <summary>Takes the object into that hand LOCALLY and asks the server. There is no waiting: the
@@ -213,6 +270,7 @@ namespace VortexArena.Core.Combat
         {
             _localHand = hand;
             _localRight = rightHand;
+            _confirmDeadline = Time.unscaledTime + ArenaProtocol.OBJECT_GRAB_CONFIRM_SECONDS;
 
             // ⚠️ Order: close the hand FIRST, then park the weapon — the granter's tick reads the gate
             // and would otherwise re-grant a random weapon into the hand on the very next frame.
@@ -285,6 +343,7 @@ namespace VortexArena.Core.Combat
             }
 
             _localHand = OVRInput.Controller.None;
+            _confirmDeadline = 0f;
 
             // ⚠️ The slot is freed BEFORE the weapon is restored: the restore claims the same hand and
             // would be refused while this object still holds it.
@@ -331,9 +390,9 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>Release axis <c>Physics</c>: the rigidbody is set free with the hand's own velocity.
-        /// <para>⚠️ Ownership is KEPT through the flight (§5.1) — the owner is the only one simulating,
-        /// everyone else follows the streamed pose. A single-instance object must NOT be simulated on
-        /// both headsets: that is one knife in two places.</para></summary>
+        /// <para>⚠️ Ownership is KEPT through the flight (§5.1) until a hand catches it — the owner is the
+        /// only one simulating, everyone else follows the streamed pose. A single-instance object must
+        /// NOT be simulated on both headsets: that is one knife in two places.</para></summary>
         private void ApplyPhysicsRelease(OVRInput.Controller hand)
         {
             if (_body != null)
@@ -422,6 +481,8 @@ namespace VortexArena.Core.Combat
 
             _localHand = hand;
             _localRight = rightHand;
+            // Nothing to confirm: the server already decided.
+            _confirmDeadline = 0f;
 
             // Same order as Grab(): close the hand before parking the weapon.
             WeaponGranter.SetThrowableHeld(hand, true);

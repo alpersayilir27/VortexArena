@@ -1,5 +1,6 @@
 using UnityEngine;
 using VortexArena.Core.Arena;
+using VortexArena.Core.Combat;
 using VortexArena.Net;
 
 namespace VortexArena.Core.World
@@ -8,7 +9,10 @@ namespace VortexArena.Core.World
     /// the resting pose once the stream stops (§6.12/§10.10). It also keeps physics where authority is —
     /// only the OWNER simulates, everyone else stays kinematic.
     /// <para>⚠️ <b>A HELD object is not touched at all</b> — it hangs off the owner's hand and the grab
-    /// side places it. Two writers on one transform is a visible jitter, not a compile error.</para>
+    /// side places it. Two writers on one transform is a visible jitter, not a compile error. An object
+    /// in a LOCAL hand counts as held too (<see cref="HeldItems.Holds"/>): the optimistic grab window,
+    /// where the <c>Held</c> bit has not come back yet — a caught knife must not keep flying past the
+    /// hand that caught it.</para>
     /// <para>⚠️ With no resting pose from the server the object is left <b>where the scene put it</b>: a
     /// baked object that never moved has no pose on the wire, and writing one would teleport it to the
     /// origin.</para></summary>
@@ -45,9 +49,10 @@ namespace VortexArena.Core.World
                 return;
             }
 
-            if (_net.IsHeld)
+            if (_net.IsHeld || HeldItems.Holds(transform))
             {
-                // The grab side owns the transform now; re-seat to the rest pose after it lets go.
+                // The grab side owns the transform now (server-confirmed, or claimed locally while the
+                // answer is on its way); re-seat to the rest pose after it lets go.
                 _restApplied = false;
                 return;
             }

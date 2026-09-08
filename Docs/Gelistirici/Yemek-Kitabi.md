@@ -867,7 +867,9 @@ listeyle bile interactor hover'a girer ve kavrama basışını sessizce yer — 
 **3. Soketi yerleştir.** Prefabda objenin alınacağı yere `GripSocket` koy: kabul yarıçapı + gösterge
 prefabı + hangi ellerin alabileceği. ⚠️ **Oyuncunun gördüğü küre kabul hacminin kendisidir** —
 gösterge ile yarıçapı ayrı ayrı ayarlamak "içindeyim ama almıyor" üretir. Soket "nereden alınır"ı
-söyler, elin nasıl duracağını **söylemez**; o bir sonraki adımdır.
+söyler, elin nasıl duracağını **söylemez**; o bir sonraki adımdır. Yarıçap **duran** objenin kabul
+hacmidir; uçuşta soket koddaki `GripSocket.CatchRadius`'a kendiliğinden büyür ve kareyi süpürür —
+yakalanabilirlik için prefab yarıçapını büyütme.
 
 **4. Kavramayı stüdyoda yaz.** `Tools > VortexArena > Items > Kavrama Pozu Stüdyosu` ile ana kabza
 kaydını yaz. ⚠️ **Kavrama pozu SABİT olmak zorundadır:** obje ele kanonik pozla bağlanır, serbest

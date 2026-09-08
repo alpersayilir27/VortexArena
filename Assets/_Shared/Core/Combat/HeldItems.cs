@@ -114,6 +114,20 @@ namespace VortexArena.Core.Combat
         /// right hand sits on the PRIMARY grip. Only meaningful while <see cref="GripLinked"/>.</summary>
         public static bool PrimaryRight => GripLinked && _right.Kind == GripSocketKind.Primary;
 
+        /// <summary>Is that instance in either local hand — claimed optimistically or confirmed. The one
+        /// question the free-object writers (<c>NetObjectBody</c>, <c>NetObjectPoseSender</c>) ask so
+        /// they stand back while the grab bridge still waits for the server's answer.</summary>
+        public static bool Holds(Transform instance)
+        {
+            if (instance == null)
+            {
+                return false;
+            }
+
+            PruneDead();
+            return _left.Instance == instance || _right.Instance == instance;
+        }
+
         /// <summary>Claims a hand for <paramref name="owner"/>; <c>false</c> when the hand already
         /// holds ANOTHER owner's item (first claim wins).
         /// <para>The caller reports the conflict, not this class: it is the side that knows what it

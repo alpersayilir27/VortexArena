@@ -15,8 +15,8 @@ Tümü paylaşılan `ArenaProtocol` statik sınıfında tanımlanır (`Assets/_S
 | `BEACON_INTERVAL` | 2 sn | Beacon yayın aralığı |
 | `DISCOVERY_TIMEOUT` | 5 sn | Beacon gelmezse statik IP fallback (`StreamingAssets/arena.json`); komut satırı adresi ve elle girilen IP beacon'ın **üstündedir** (zincirin tamamı §4) |
 | `STATUS_INTERVAL` | 5 sn | İstemci status kalp atışı; sunucu her birine `heartbeat` ile cevap verir (§5.3, §8) |
-| `CONNECT_TIMEOUT` | 10 sn | Tek bir WS bağlanma denemesinin tavanı (§8). `ConnectAsync`'in kendi zaman aşımı yoktur: ulaşılamayan adrese SYN dakikalarca yeniden denenir ve backoff sırası hiç gelmez. ⚠️ Süre dolunca iptal belirteciyle yetinilmez, soket **`Abort`** edilir — belirteci bağlanma sırasında dinlemeyen bir uygulamada deneme askıda kalır ve döngü bir daha hiç denemez |
-| `SEND_TIMEOUT` | 5 sn | Tek bir WS gönderiminin tavanı (§8). Bitmeyen gönderim = ölü bağlantı: soket `Abort` edilir, yeniden bağlanma döngüsü devralır. Gönderim kilidi **bağlantıya özeldir** — eski soketin askıdaki gönderimi yeni bağlantının `hello`'sunu bekletemez |
+| `CONNECT_TIMEOUT` | 10 sn | Tek bir WS bağlanma denemesinin tavanı (§8). `ConnectAsync`'in kendi zaman aşımı yoktur: ulaşılamayan adrese SYN dakikalarca yeniden denenir ve backoff sırası hiç gelmez. ⚠️ Tavan **ne iptal belirtecine ne `Abort`'a** bırakılır: ağ yokken Mono'nun `ClientWebSocket`'i askıdaki bağlanma sırasında ikisini de dinlemez, deneme sonsuza kadar asılı kalır ve döngü **1. denemede donar** (bir daha hiç denemez). Süre bir **zamanlayıcıyla yarıştırılır**, dolunca deneme terk edilir |
+| `SEND_TIMEOUT` | 5 sn | Tek bir WS gönderiminin tavanı (§8). Bitmeyen gönderim = ölü bağlantı: tavan aynı zamanlayıcı yarışıdır (`CONNECT_TIMEOUT` satırı), gönderim terk edilir, soket `Abort` edilir ve yeniden bağlanma döngüsü devralır. Gönderim kilidi **bağlantıya özeldir** — eski soketin askıdaki gönderimi yeni bağlantının `hello`'sunu bekletemez |
 | `HEARTBEAT_TIMEOUT` | 15 sn | **İki yönlü:** sunucuda status gelmezse soket ölü sayılır, kapatılır ve cihaz `reconnecting`'e düşer (§2); istemcide bu kadar süre **hiçbir WS çerçevesi** gelmezse istemci soketi kendisi düşürür ve yeniden bağlanır (§8, sessiz Wi-Fi ölümü). ⚠️ Tek başına "oyuncu gitti" DEMEZ — asıl karar `RECONNECT_GRACE`'indir |
 | `RECONNECT_GRACE` | 45 sn | `reconnecting` cihazın geri beklendiği süre. Dolunca oyuncu oyundan **çıkarılır**: koşan maçın katılımcısıysa kaydı `left` olarak maç sonuna kadar durur, değilse tümden silinir ve `playerId`'si havuza döner (§2, §10.2). Kopuştan çıkarılmaya toplam süre `HEARTBEAT_TIMEOUT + RECONNECT_GRACE` |
 | `RECONNECT_BACKOFF` | 1 → 2 → 5 sn (tavan 5) | Kopunca sonsuz yeniden deneme; her denemede discovery baştan. ⚠️ İstemci `RECONNECT_GRACE` dolsa da denemeyi BIRAKMAZ (§8) |
@@ -32,6 +32,7 @@ Tümü paylaşılan `ArenaProtocol` statik sınıfında tanımlanır (`Assets/_S
 | `OBJECT_POSE_RATE_HZ` | `20` | Sahibin obje pozu gönderim frekansı (§6.12) — oyuncu pozuyla (`POSE_RATE_HZ`) **aynı**. ⚠️ Daha düşük tutulmaz: alıcı `INTERP_DELAY_MS` geriden interpolasyon yapar; 10 Hz'de o gecikme TEK örnek aralığına eşittir ve jitter payı kalmaz — fırlatılan eşya gözle görülür takılır. Paket sayısı yine önemsizdir: obje pozu yalnız **uyanık ve tutulmayan** objede akar, yani tipik tikte hiç yoktur (`Docs/Sistem-Ozeti.md` §3.12) |
 | `OBJECT_REST_SPEED` | `0.05` m/s | Bırakılan objenin **durdu** sayılma hız eşiği (§10.10). Altına inip `OBJECT_REST_SECONDS` boyunca kalırsa sahip `object_rest{pos,rot}` yollar ve sahiplik biter |
 | `OBJECT_REST_SECONDS` | `0.3` | Durma eşiğinin altında kesintisiz geçirilmesi gereken süre. ⚠️ Tek karelik bir "durdum" yeterli değildir: sekmenin tepe noktasında hız anlık sıfırlanır, orada bırakılan obje havada donardı |
+| `OBJECT_GRAB_CONFIRM_SECONDS` | `1.0` | İyimser kavramanın (`object_grab`) kendisini sahip + `Held` gösteren bir `object_state` ile onaylanması için istemcinin beklediği süre (§10.10). Dolunca yerel kavrama geri alınır: sessiz red (elde olan obje, eski sunucu) başka hiçbir mesajla gelmez; süre olmasaydı el, objeyi hiç tutmadığı hâlde dolu kalırdı |
 | `OBJECT_MAX_ENTRIES_PER_PACKET` | `16` | Tek `0x05` datagramının obje bölümüne yazılan en fazla girdi (§6.8). 8 + 16×34 + 16×12 = 744 B bütçeye sığar ama olay bölümü aynı bütçeyi paylaşır — gerçek kapı yine boyut kapısıdır (`COMBINED_MAX_BYTES`); bu sayı `objectCount`'un `u8` olmasının tavanı ve bir emniyettir |
 | `PLAYER_NUMBER_MIN` / `PLAYER_NUMBER_MAX` | `1` / `99` | Forma numarası aralığı (§2). `0` = atanmamış ve aralığın dışındadır. Numara **tüm kayıtlı cihazlar** arasında benzersizdir |
 | `CALIB_MODE_TWO_ANCHOR` / `CALIB_MODE_SAVED_ANCHOR` / `CALIB_MODE_ANCHOR_CLOUD` | `"two_anchor"` / `"saved_anchor"` / `"anchor_cloud"` | Kalibre modunun geçerli değerleri (§5.2/§10.6). Sunucu açılış varsayılanı `two_anchor`. ⚠️ `anchor_cloud` **rezervdir** — sunucu kabul etmez, loglayıp durumu değiştirmez; bilinmeyen/boş değer de aynı şekilde reddedilir (sessizce varsayılana düşmez: mod bir operatör kararıdır, tahmin edilmez) |
@@ -196,6 +197,10 @@ nesnesini eline aldığında (§10.10). `hand`: `0` = sol, `1` = sağ.
 > yerel olarak yapar (iyimser tahmin); gelen `object_state`'te sahip kendisi değilse kavramayı
 > **geri alır**. Ayrı bir `object_grab_denied` mesajı yazmak aynı bilgiyi iki kanaldan taşırdı ve
 > ikisinin sırası garanti edilemezdi.
+> **Havada yakalama:** uçuş penceresindeki objeye (sahipli ama `Held` değil, §10.10) gelen
+> `object_grab` **kabul edilir** — sahiplik istekliye geçer, atanın kendisi dahil. Reddedilen tek durum
+> objenin bir **elde** olmasıdır. Onay `OBJECT_GRAB_CONFIRM_SECONDS` (§1) içinde gelmezse istemci
+> kavramayı geri alır.
 
 **`object_release`** `{ "type":"object_release", "netId":41, "pos":[3.2,0.9,-1.4], "rot":[0,0,0,1] }`
 (yalnız **sahip**) — obje **elden çıktığında** (§10.10). Sunucu `Held`'i düşürür, `Awake`'i kaldırır,
@@ -1239,6 +1244,10 @@ Süre sunucunun kendi kararıdır, protokol sabiti değil.
 2. Obje **uyanık** (`flags` bit2 `Awake`) — durmuş obje paket üretmez.
 3. Obje **tutulmuyor** (`flags` bit0 `Held`).
 
+Sahiplik uçuşta el değiştirebilir (**havada yakalama**, §10.10): yakalayan `object_grab` gönderir,
+sunucu sahibi ona yazar; eski sahibin yolda kalan paketleri 1. kapıdan düşer ve bu bir hata değil,
+akışın bitme biçimidir.
+
 ⚠️ **Tutulan obje poz paketi ÜRETMEZ** ve bu kural gevşetilmez: sahibin eli zaten `0x01` ile 20 Hz
 akıyor ve obje o ele **kanonik kavrama poziyle** bağlı. Objeyi ayrıca akıtmak aynı gerçeği iki
 kanaldan taşır, ikisi de gecikince el ile obje birbirinden ayrılır — ürün belirtisi "bıçak elin
@@ -1274,7 +1283,7 @@ serbest bırakır (§10.10); tutmasaydı obje alındığı yere ışınlanırdı
          KENDİSİ düşürür (sessiz Wi-Fi ölümü — aşağıdaki nota bak) → Kopma
 Kopma  → 1→2→5 sn backoff ile discovery'den itibaren baştan (SONSUZ — aşağıdaki nota bak); her
          bağlanma denemesi CONNECT_TIMEOUT (10 sn), her gönderim SEND_TIMEOUT (5 sn) ile sınırlı —
-         ikisi de dolunca soket Abort edilir (iptal belirtecine bırakılmaz), gönderim kilidi
+         tavan zamanlayıcı yarışıdır (ne iptal belirtecine ne Abort'a bırakılır), gönderim kilidi
          bağlantıya özeldir
        → bağlantısızlık ~3 sn sürerse istemci hata ekranı gösterir (sunum; §4 notu)
 Sunucu : hello'suz bağlantıyı 10 sn içinde kapat; deviceId çakışmasında eskisini kapat
@@ -2528,13 +2537,20 @@ objeyi ilk isteyen alır).
 
 1. **Sahibi sunucu verir.** `object_grab` gelince obje boştaysa (`owner == 0`) sahiplik istekliye
    yazılır, `Held` (+ gerekirse `HeldRight`) kalkar ve **herkese** `object_state` gider.
-2. **Çalma yoktur.** Obje doluyken gelen `object_grab` sessizce düşer — istekliye ayrıca bir red
-   gitmez, o zaten yayınlanan `object_state`'te sahibin kendisi olmadığını görüp yerel kavramasını
-   geri alır.
+2. **Elden çalma yoktur, havadan yakalama vardır.** Obje bir **elde** (`Held`) iken gelen
+   `object_grab` sessizce düşer — istekliye ayrıca bir red gitmez, o zaten yayınlanan
+   `object_state`'te sahibin kendisi olmadığını görüp yerel kavramasını geri alır. Obje **uçuş
+   penceresindeyken** (sahipli ama `Held` değil, 3. madde) gelen `object_grab` **kabul edilir**:
+   sahiplik istekliye geçer (atanın kendisi dahil), `Held` kalkar, `Awake` düşer, herkese
+   `object_state` gider. Eski sahibin yolda kalan `0x09` paketleri ve `object_rest`'i sahip olmadığı
+   için kapıdan düşer (§6.12) — akışın bitme biçimi budur. ⚠️ **İstemci onayı süreyle bekler:**
+   `OBJECT_GRAB_CONFIRM_SECONDS` (§1) içinde kendisini sahip + `Held` gösteren bir `object_state`
+   gelmezse iyimser kavrama geri alınır; sessiz red aksi hâlde eli, objeyi hiç tutmadığı hâlde dolu
+   bırakırdı.
 3. **Sahiplik iki adımda biter** (§5.1): `object_release` (obje elden çıkınca) → `Held` düşer,
    `Awake` kalkar, **sahip durur**; `object_rest` (obje durunca) → `Awake` düşer, `owner = 0`,
    bildirilen poz dinlenme pozu olur. ⚠️ Aradaki uçuş penceresinde obje **sahipli ama tutulmuyordur**
-   — poz akıtma hakkını veren tam olarak bu durumdur.
+   — poz akıtma hakkını veren de, yakalamayı açan da tam olarak bu durumdur.
 4. **Sahip koparsa sunucu serbest bırakır.** Bağlantı `left`'e düştüğünde ya da oyuncu öldüğünde o
    oyuncunun tuttuğu her obje **son bilinen pozunda** (§6.12'deki kilitsiz slot) bırakılır. ⚠️ Bu
    kapı olmadan bir oyuncunun kopması objeyi **kalıcı olarak kilitler** — kimse alamaz, kimse

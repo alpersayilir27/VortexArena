@@ -1,5 +1,6 @@
 using UnityEngine;
 using VortexArena.Core.Arena;
+using VortexArena.Core.Combat;
 using VortexArena.Net;
 using VortexArena.Protocol;
 
@@ -9,7 +10,10 @@ namespace VortexArena.Core.World
     /// stops (<c>object_rest</c>, §5.1). The gate is all three at once: ours, awake and NOT held — the
     /// flight window between <c>object_release</c> and <c>object_rest</c>.
     /// <para>⚠️ <b>Stopping is measured here</b>, on the client: the server has no physics and no metres,
-    /// so nobody else can tell when a thrown object came to rest.</para></summary>
+    /// so nobody else can tell when a thrown object came to rest.</para>
+    /// <para>An object in a LOCAL hand closes the gate as well (<see cref="HeldItems.Holds"/>): a thrower
+    /// who catches their own object back is still the owner while the <c>Held</c> confirmation travels,
+    /// and an object resting in a palm must not send <c>object_rest</c> and free itself.</para></summary>
     [RequireComponent(typeof(NetObject))]
     [DisallowMultipleComponent]
     public class NetObjectPoseSender : MonoBehaviour
@@ -55,7 +59,8 @@ namespace VortexArena.Core.World
             float speed = MeasureSpeed(position, dt);
             _lastPosition = position;
 
-            if (_net == null || _net.NetId <= 0 || !_net.IsMine || !_net.IsAwake || _net.IsHeld)
+            if (_net == null || _net.NetId <= 0 || !_net.IsMine || !_net.IsAwake || _net.IsHeld ||
+                HeldItems.Holds(transform))
             {
                 ResetFlight();
                 return;

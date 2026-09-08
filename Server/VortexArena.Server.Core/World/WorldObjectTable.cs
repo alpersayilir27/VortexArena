@@ -234,16 +234,21 @@ public sealed class WorldObjectTable
 
     // ---- Ownership (§10.10) ----
 
-    /// <summary>object_grab gates: the object exists → its kind is grabbable → nobody holds it. On
+    /// <summary>object_grab gates: the object exists → its kind is grabbable → it is in NOBODY'S HAND. On
     /// success the requester becomes the owner and the object hangs off their hand.</summary>
     /// <remarks>⚠️ A grab on a HELD object is a silent rejection by design: there is no stealing and no
     /// denial message — the requester sees someone else in the broadcast <c>object_state</c> and undoes
     /// its optimistic local grab.
+    /// <para>An object in the FLIGHT window (owned, not held) is a CATCH: ownership moves to the
+    /// requester, the thrower included (<paramref name="previousOwner"/> says whose it was). The old
+    /// owner's pose stream and <c>object_rest</c> then fail the owner gate — that is how the stream
+    /// ends, not an error.</para>
     /// <para><c>Awake</c> is cleared: a held object streams no pose (§6.12), its position comes from the
     /// owner's hand.</para></remarks>
     public bool TryGrabLocked(int netId, int playerId, bool rightHand, out NetObjectEntry entry,
-        out string rejectReason)
+        out int previousOwner, out string rejectReason)
     {
+        previousOwner = 0;
         if (!_byNetId.TryGetValue(netId, out var found))
         {
             entry = null!;
@@ -257,14 +262,15 @@ public sealed class WorldObjectTable
             rejectReason = $"'{found.Kind}' tutulamaz (grab none)";
             return false;
         }
-        if (found.Owner != 0)
+        if ((found.Flags & ArenaProtocol.OBJECT_FLAG_HELD) != 0)
         {
             rejectReason = found.Owner == playerId
-                ? $"netId {netId} zaten bu oyuncuda"
-                : $"netId {netId} başkasında (owner {found.Owner})";
+                ? $"netId {netId} zaten bu oyuncunun elinde"
+                : $"netId {netId} başkasının elinde (owner {found.Owner})";
             return false;
         }
 
+        previousOwner = found.Owner;
         found.Owner = playerId;
         found.Flags |= ArenaProtocol.OBJECT_FLAG_HELD;
         if (rightHand) found.Flags |= ArenaProtocol.OBJECT_FLAG_HELD_RIGHT;
