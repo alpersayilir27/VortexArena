@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Burger_VortexAntep
   m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Arena.MapDefinition
   sceneName: Burger_VortexAntep
-  displayName: 'Burger '
+  displayName: Burger
   gameType: 1
   supportedModeIds:
   - burger

@@ -1101,6 +1101,46 @@ tutan** istemci, ya da olayı üreten aleti tutan kişi.
 
 ---
 
+## 13.2 Bir oyun istasyonunu ikinci bir mekana kurmak
+
+Bir çocuk oyununun sahne kurulumu (banko, mutfak/atölye, işaretler, proplar) **tek prefabtır** ve
+`Modes/<Mod>/Prefabs/Station/` altında durur. Parçaları ikinci mekana tek tek taşımak bu bölümdeki
+her tuzağı davet eder.
+
+**1. Kabuk prefaba GİRMEZ.** Zemin, duvar, kapı çerçevesi mekana özgüdür — her işletmenin ölçüsü
+başkadır. Prefab yalnız **oynanan** kısmı taşır; kabuk sahnede kalır.
+
+**2. ⚠️ Görünen parça ile görünmez oyun hacmi aynı prefabın içindedir.** İkisi kardeş obje olursa
+biri taşınır, öbürü unutulur — ve belirtisi **hata değildir**: obje doğru görünür, oyuncu doğru
+hareketi yapar, hiçbir şey olmaz. Kural: her görünmez hacim, ait olduğu görselin **çocuğudur**.
+
+| Görünen | Ona kilitli görünmez parça |
+|---|---|
+| Izgara/ocak gövdesi | pişirme hacmi (`BurgerGrill`) |
+| Banko | slot hacimleri + müşterinin duracağı nokta |
+| Kapı | müşteri yolunun waypoint'leri |
+| Malzeme rafı | dağıtıcıların kavrama soketleri |
+
+**3. Kök döndürülmemiş olur.** İstasyonun (ve tek tek çıkarılan parçaların) kökü `rot 0`, `scale 1`
+alır; yön ve ölçek **çocuklarda** durur. Yeni mekanda kökü döndürmek o zaman bütün istasyonu
+birlikte döndürür, hizalar bozulmaz.
+
+**4. `sceneId` elle yönetilmez.** Prefab, çıkarıldığı sahnenin `sceneId`'lerini taşır; yeni sahnede
+çakışırsa `SceneIdGuard` **sahne kaydında** onarır ve hemen ardından `<Sahne>_objects.json`'ı
+yazar. Yani yeni mekanda yapılacak tek şey: prefabı koy, **sahneyi kaydet**. Ayrı bir export adımı
+yoktur. ⚠️ Kaydetmeden Play'e girersen onarım yalnız bellekte kalır, sunucunun okuduğu liste eski
+kalır — belirti "obje iki kez kayıtlı"dır.
+
+**5. Ölçüler mekana göre yeniden bakılır.** Prefab konumları korur ama **mekanın ölçüsünü bilmez**:
+soketlerin yerden yüksekliği (hedef kitle çocuksa özellikle), müşteri yolunun uzunluğu ve bankonun
+oyun alanına sığıp sığmadığı her mekanda yeniden kontrol edilir.
+
+**6. İstasyonu koymak haritayı oynanabilir yapmaz.** Sahne adı katalog anahtarıdır; haritanın
+`MapDefinition`'ı ve `gameType`'ı olmadan maç başlamaz → [13.1](#131-çocuk-oyunu-eklemek-silahsız-kooperatif) ·
+[14](#14-yeni-arena-eklemek).
+
+---
+
 ## 14. Yeni arena eklemek
 
 Tek düğmeli bir sihirbaz **yoktur** (kaldırıldı). Akış altı adımdır ve her adımın kendi aracı var:
