@@ -5,7 +5,7 @@
 
 | Planlanmış iş | Dosya |
 |---|---|
-| **Meta Movement SDK ile full body avatar**: kod, protokol (`0x07`/`0x08`), doküman ve **prefab kurulumu bitti** (iki avatar da Ch15 retarget config'i + `ArenaNetCharacterBehaviour` ile kurulu, 66 eklem). Kalan: blob boyutu/paket bütçesi ölçümü ve boy-bacak ayarları | `meta-movement-full-body.md` |
+| **Meta Movement SDK ile full body avatar**: kod, protokol (`0x07`/`0x08`), doküman ve **prefab kurulumu bitti** (iki avatar da Ch15 retarget config'i + `ArenaNetCharacterBehaviour` ile kurulu; 66 eklem eşleşmiş, 26'sı akıyor). Kalan: blob boyu ölçümü (loglar yerinde; değer okunup bant genişliği tablosuna işlenecek), boy-bacak ayarları | `meta-movement-full-body.md` |
 | **Maç sonu bekleme · toplanma · dost ateşi anahtarı**: kod/prefab/doküman **bitti**, iki taraf da derleniyor. Kalan: panel ve davranış doğrulaması | `mac-sonu-toplanma-dost-atesi.md` |
 | Elde tutulan eşya + atış olayları: kod, tel formatı, stüdyo ve **13 silahın kavrama kayıtları bitti**. Kalan: ön kabza küresi yerine tasarlanmış görsel (Meta el modeli) · iki elli nişan kuralının his kararı | `elde-tutulan-esya-ve-atis-olaylari.md` |
 | **Bomba ve atılabilirler**: sunucu, istemci kodu ve doküman **bitti** — protokol sürümü DEĞİŞMEDİ (sol bilek kılıfı · silah askıya alma · 5 sn fitil · patlamadan 3 sn sonra dolum · mermi sınırı yok · ağ nesnesi değil, yerel deterministik balistik · kendine hasar = dost ateşi anahtarı · atıcı ölse de hasar verir). Molotof/flashbang/sis aynı zemine oturur, **yeni tür sürüm artırmaz**. Prefab, tanım asset'i, rig'deki kılıf, model, patlama FX/sesi ve kavrama kaydı kuruldu. Kalan: kılıf dolum sesi, görsel yarıçap okunurluğu ve toplu oturum isteyen doğrulama maddeleri (siper/duvar arkası, performans) | `bomba.md` |
@@ -33,8 +33,8 @@
 
 ⚠️ **Sürüm artışı = tüm başlıklara yeni APK + admin + sunucu, AYNI turda**
 (`scripts\deploy-player-apk.bat` + `deploy-admin-game.bat` + `deploy-server.bat`). Karışık kurulum
-hata vermez, **sessizce yanlış çalışır**: bugünkü sürümde (`v18`) `0x05`'in başlığı kaydığı için
-bozulan şey obje değil **snapshot'ın tamamıdır** — uzak oyuncular çöp pozlara ışınlanır.
+hata vermez, **sessizce yanlış çalışır**: `0x05` obje bölümü taşıdığından uyumsuz uçta kayan
+başlık yalnız objeyi değil **snapshot'ın tamamını** bozar — uzak oyuncular çöp pozlara ışınlanır.
 
 Yukarıdaki dosyalarda bekleyen doğrulamaların **hepsi aynı tura bağlıdır**; ayrı ayrı koşturulacak
 işler değildir.

@@ -527,7 +527,7 @@ Yönetim ekranındaki dashboard'da elindeki kontroller:
 
 | Kontrol | Ne yapar | Ne zaman kullanılır |
 |---|---|---|
-| **Oyuncu listesi (roster)** | Bağlı oyuncular, takımları, çevrimiçi/çevrimdışı durumu | Maç öncesi herkesin bağlı olduğunu doğrulamak için |
+| **Oyuncu listesi (roster)** | Bağlı oyuncular, takımları, bağlantı durumu (bağlı · "yeniden bağlanıyor" · "ayrıldı") | Maç öncesi herkesin bağlı olduğunu doğrulamak için |
 | **Kırmızı / Mavi** | Seçili oyuncunun takımını değiştirir | Takımları elle dengelemek için (boş bırakırsan sistem otomatik dengeler) |
 | **Çıkar (kick)** | Oyuncuyu atar — **o gözlükteki oyun kapanır** | Yanlışlıkla bağlanan/oyunda olmaması gereken cihaz |
 | **Mod seçimi** | Oyun türü: **Takım Ölüm Maçı** (kırmızı-mavi), **Herkes Tek** (takım yok, herkes herkese karşı) veya **Turnuva** (turlar hâlinde takım elemesi). Satıra bas, liste aşağı açılır, seçeceğine tıkla | Her maç öncesi — aşağıdaki "Üç oyun modu" kutusuna bak |
@@ -551,7 +551,7 @@ gözünden izle), **MAVİYE/KIRMIZIYA** (takımını değiştir), **AT** (bağla
 düğme "EMİN?" olur). ⚠️ **AT o gözlükteki oyunu kapatır** ve **satırı listeden siler**: oyuncu
 birkaç saniye içinde Quest'in kendi menüsünde bulur kendini, geri dönmesi için oyunun elle yeniden
 açılması gerekir. Yani "AT" molaya çıkarmak için değil, o cihazı oturumdan çıkarmak içindir.
-Listede kalmış **çevrimdışı** bir satırı temizlemek için de AT kullanılır. Atmak yasaklamak
+Listede "ayrıldı" ya da "yeniden bağlanıyor" olarak kalmış bir satırı temizlemek için de AT kullanılır. Atmak yasaklamak
 değildir: aynı gözlük oyunu tekrar açarsa adıyla ve numarasıyla geri gelir.
 
 **Panel açıkken oyun durmaz:** Tercihler/İstatistik panelleri yarı saydamdır, arkada sahneyi
@@ -686,7 +686,9 @@ vurulabildiği için savaş dışıdır.
 ve oyuncu istatistikleri ekranda asılı durur, sistem kendiliğinden bir sonraki tura geçmez, maç
 bitmişse lobiye de dönmez. Bu molanın **süresi yoktur** — istediğin kadar bakabilirsin.
 
-- Tabloyu **İSTATİSTİK panelinden** (`I`) okursun: takım toplamları, oyuncu başına K/D, skor, ping.
+- Tabloyu **İSTATİSTİK panelinden** (`I`) okursun: takım toplamları, oyuncu başına K/D, skor, ping ve
+  **ihlal sayısı ile toplam süresi** (DUVAR / ALAN DIŞI). "Kim kaç kez duvara girdi, ne kadar alan
+  dışında kaldı" sorusunun cevabı bu hücredir.
   Gerekirse burada müdahale de edersin (isim düzeltme, takım değiştirme, kalibrasyon, **AT**).
 - **Devam etmek için paneli kapat.** Panel açıkken sunucu beklediğinde kapat düğmesinin yazısı
   **TURA DEVAM** olur; ona (ya da `I` tuşuna) basmak sıradaki tura geçirir.
@@ -883,6 +885,8 @@ ve **arenanın dışı**. İkisini de sen görürsün, oyuncu da kendi ekranınd
 - Oyuncu arena sınırına yaklaşırsa ekranı hafifçe kararmaya başlar; dışarı çıkarsa tümden kararır,
   uyarı çıkar ve **ateş edemez** → geri içeri girmesi yeterli, silahı anında geri çalışır. Dışarıda
   kalmak **can götürmez**; onu senin görmen için ekranında işaretlenir (aşağıdaki bölüm).
+- Maç başlarken ve biterken (ve harita değiştirdiğinde) gözlüğün ekranı **kısa süre kararır**, yeni
+  sahne siyahtan açılır — normaldir; karartma sürerken yükleme yazısı ve yüzdesi okunmaya devam eder.
 - Maç, süre dolunca veya skor limitine ulaşılınca biter — hangisi önce olursa (skor limiti
   **sınırsız** seçildiyse geriye yalnız süre kalır, maç yine kendiliğinden biter); kazanan duyurulur ve **kazanan ekranı
   sen bir şey seçene kadar ekranda kalır.** Kendiliğinden lobiye dönülmez: sıradaki haritayı seç
@@ -941,7 +945,7 @@ ekranın alt ortasındaki **⏸ DURAKLAT** düğmesi (BAŞLAT ile BİTİR'in ara
 | Launcher "Admin exe bulunamadı" diyor | Oyun dosyası taşınmış/silinmiş | Launcher > **3 · Yönetim oyunu > Gözat** ile `deploy\admin\VortexArena.exe` dosyasını yeniden seç. Dosya yoksa teknik ekibi ara |
 | Launcher "Mekan seçilmedi" diyor, sunucu açılmıyor | İşletme listede seçili değil | **1 · Sunucu** bölümündeki listeden işletmenin adına tıkla. Liste boşsa **Yenile**'ye bas; yine boşsa teknik ekibi ara |
 | Yönetim ekranında **başka bir işletmenin haritaları** çıkıyor | Sunucu yanlış mekanla açılmış | Sunucu penceresini kapat (Ctrl + C), Launcher'da doğru işletmeyi seçip **Sunucuyu Başlat**. Mekan sunucu çalışırken değişmez |
-| Oyuncu listede "çevrimdışı" düşüyor | Wi-Fi zayıf ya da gözlük uykuya geçmiş | Gözlüğü uyandır; kapsama sorunu tekrarlıyorsa teknik ekibi ara |
+| Oyuncu listede "yeniden bağlanıyor" düşüyor | Wi-Fi zayıf ya da gözlük uykuya geçmiş | Gözlüğü uyandır — geri gelince aynı satıra döner; 45 sn içinde dönmezse "ayrıldı" olur. Kapsama sorunu tekrarlıyorsa teknik ekibi ara |
 | **Birden bire HERKES takılmaya başladı** (tek oyuncu değil, hepsi) | Wi-Fi'ı oyun dışı bir şey doldurdu | **Önce İstatistikler panelini aç ve PING kolonuna bak** (aşağıda). Herkesinki yüksekse sırayla: 1) bir gözlükte **ekran yayını (cast/kayıt) açık mı** — en sık sebep budur, kapat. 2) Arena Wi-Fi'ına telefon/dizüstü bağlanmış mı, indirme mi var — çıkar. 3) Sunucu bilgisayarının **ağ kablosu takılı mı** — çıkmışsa tak. Düzelmezse teknik ekibi ara |
 | **Tek bir oyuncu** takılıyor, diğerleri normal | O gözlüğün Wi-Fi kapsaması zayıf | İstatistiklerde o satırın PING'i diğerlerinden belirgin yüksekse oyuncuyu alanın ortasına doğru yönlendir; sürekli tekrarlıyorsa teknik ekibi ara |
 | Oyuncular birbirini yanlış yerde görüyor | Kalibrasyon yapılmadı ya da A–B ters alındı | Arenada **yeniden kalibrasyon** yaptır (Bölüm 4) |
@@ -955,7 +959,7 @@ ekranın alt ortasındaki **⏸ DURAKLAT** düğmesi (BAŞLAT ile BİTİR'in ara
 | Kalibre modunu değiştirdin ama hiçbir şey değişmedi | Gözlükler ayarı yalnız **bağlanırken** okur | O gözlüklerde uygulamayı kapatıp yeniden aç; modu bundan sonra seans başında seç (§4.3) |
 | Oyun ortasında arena birden kaydı | Gözlüğün konum takibi sıfırlandı | Genelde kendiliğinden düzelir. Düzelmezse o oyuncuya kalibrasyonu tekrarlat |
 | Ateş ediyor ama can azalmıyor | Aynı takımdalar (dost ateşi kapalı) ya da maç henüz başlamadı | Takımları kontrol et; geri sayım bitmiş mi bak. Takım arkadaşlarının birbirini vurabilmesini istiyorsan Tercihler → MAÇ → **Dost ateşi**'ni aç |
-| Turnuvada ekranda **"TOPLANMA 4/6"** yazıyor, yeni tur bir türlü başlamıyor | Bir ya da iki oyuncu kendi tabanına dönmedi (takıldı, koptu, oyundan çıktı) | Ekranda kimin eksik olduğunu bul: listedeki çevrimdışı satırı ya da tabanına yürümeyen oyuncuyu **AT** ile çıkar → kalanlar hazırsa tur hemen başlar. Vazgeçtiysen **İPTAL**. Tur eksik oyuncuyla kendiliğinden başlamaz |
+| Turnuvada ekranda **"TOPLANMA 4/6"** yazıyor, yeni tur bir türlü başlamıyor | Bir ya da iki oyuncu kendi tabanına dönmedi (takıldı, koptu, oyundan çıktı) | Ekranda kimin eksik olduğunu bul: listedeki "yeniden bağlanıyor" / "ayrıldı" satırını ya da tabanına yürümeyen oyuncuyu **AT** ile çıkar → kalanlar hazırsa tur hemen başlar. Vazgeçtiysen **İPTAL**. Tur eksik oyuncuyla kendiliğinden başlamaz |
 | Turnuvada geri sayım başlıyor ama hep iptal oluyor | Biri sayım bitmeden tabanından çıkıyor | Oyunculara "sayım bitene kadar kendi renginin köşesinden çıkmayın" de |
 | Ölen oyuncu canlanmıyor | Kendi takımının tabanına girmemiş | Oyuncuya **kendi renginin köşesine yürümesini** söyle — **kendiliğinden canlanmaz**, mutlaka tabana girmeli. Elle canlandırma düğmesi yoktur; şartı yerine getiremiyorsa maçı **İPTAL** edip yeniden başlat (maç başında herkes canlı kalkar) |
 | Oyuncu tabana girdi ama yine canlanmıyor | Oyuncu kalibresiz ya da bir engelin/duvarın içinde duruyor | Satırı kırmızıysa önce kalibre olsun (Bölüm 4); halkası kırmızı yanıp sönüyorsa oyuncuya **engelin içinden çıkmasını** söyle. İkisi de değilse sunucu penceresindeki son satırı teknik ekibe ilet |
@@ -965,6 +969,7 @@ ekranın alt ortasındaki **⏸ DURAKLAT** düğmesi (BAŞLAT ile BİTİR'in ara
 | Bir oyuncu yanlış yerde görünüyor / "nişan aldığım yere gitmiyor" diyor | O gözlüğün kalibrasyonu kaymış | Satırındaki **KAL** düğmesiyle sıfırla, yeniden kalibre ettir (§4.1) |
 | Bir avatar yanıp sönüyor | O oyuncu kalibresiz — ateş edemez, vurulamaz | Yeniden kalibre olmasını söyle (§4.1); bitince kendiliğinden düzelir |
 | Oyuncu "silahım çalışmıyor" diyor, ekranında kalibrasyon yazısı var | Kalibrasyonu sıfırlanmış | Bölüm 4'teki adımlarla yeniden kalibre olsun (§4.1/4) |
+| Sahne değişince gözlük siyah kalıyor | Yükleme uzuyor — karartma yeni sahne açılana kadar sürer | Oyuncunun ekranındaki yükleme kartının **yüzdesine** bak: ilerliyorsa beklemek yeterli. İlerlemiyorsa maçı **İPTAL** edip yeniden başlat |
 | Oyuncu öldü ama canlanmıyor | Kalibresiz oyuncu canlanmaz | Önce kalibre olsun; ardından canlanma şartını yerine getirsin (tabanına girmek / olduğu yerde beklemek) |
 
 ---

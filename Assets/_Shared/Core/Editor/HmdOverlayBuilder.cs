@@ -5,8 +5,9 @@ using VortexArena.Core.Player;
 
 namespace VortexArena.Core.Editor
 {
-    /// <summary>Installs the two warning texts (inside an obstacle + out of bounds) and the damage
-    /// vignette onto <c>CenterEyeAnchor</c> inside <c>VA_CameraRig.prefab</c>. Idempotent.</summary>
+    /// <summary>Installs the two warning texts (inside an obstacle + out of bounds), the damage
+    /// vignette and the scene transition fade quad onto <c>CenterEyeAnchor</c> inside
+    /// <c>VA_CameraRig.prefab</c>. Idempotent.</summary>
     /// <remarks>
     /// <b>Why in the rig prefab:</b> the infrastructure prefab is instanced in every arena, so an
     /// overlay put here reaches all of them for free and adds no per-arena setup step. Same reason
@@ -18,8 +19,8 @@ namespace VortexArena.Core.Editor
     /// infrastructure, so one broken line takes them all down. ⚠️ The font is bound here too:
     /// <c>AddComponent&lt;TextMesh&gt;</c> assigns none and a fontless <c>TextMesh</c> generates no
     /// mesh, so the warning would silently never draw.</para>
-    /// <para>Draw order comes from the DISTANCE in the prefab (texts 0.42 · vignette 0.44 · fade quad
-    /// 0.5) — keep that order when changing numbers. The vignette is additionally in the
+    /// <para>Draw order comes from the DISTANCE in the prefab (texts 0.42 · vignette 0.44 · scene
+    /// transition quad 0.5 · out-of-bounds fade quad 0.5) — keep that order when changing numbers. The vignette is additionally in the
     /// <c>Overlay</c> queue; reason in <see cref="DamageVignette"/>.</para>
     /// <para>⚠️ Both texts can be on at once (the boundary counts scene <c>ArenaObstacle</c>s as out
     /// of bounds → <see cref="VortexArena.Core.Arena.ArenaBoundary"/>), so they are stacked
@@ -39,6 +40,12 @@ namespace VortexArena.Core.Editor
         private const string WarningObjectName = "ObstacleWarningText";
         private const string BoundaryWarningObjectName = "BoundaryWarningText";
         private const string VignetteObjectName = "DamageVignette";
+        private const string TransitionObjectName = "SceneTransitionFade";
+
+        private const string TransitionMaterialPath = "Assets/_Shared/Materials/M_SceneTransitionFade.mat";
+
+        /// <summary>Source of the transition material: URP/Unlit · Transparent · black.</summary>
+        private const string TransitionSourceMaterialPath = "Assets/Materials/M_ScreenFade.mat";
 
         /// <summary>Distance of the warning texts from the camera (m) — must be NEARER than the fade
         /// quad.</summary>
@@ -86,6 +93,20 @@ namespace VortexArena.Core.Editor
         /// <summary>Edge of the vignette quad (m): covers ~130° at 0.44 m, i.e. the whole FOV.</summary>
         private const float VignetteSize = 1.9f;
 
+        /// <summary>Distance of the scene transition quad from the camera (m) — FARTHER than the
+        /// warnings and the vignette, same as the out-of-bounds fade quad.</summary>
+        private const float TransitionZ = 0.5f;
+
+        /// <summary>Edge of the transition quad (m) — same numbers as the out-of-bounds fade quad,
+        /// where FOV coverage at this distance is already verified.</summary>
+        private const float TransitionSize = 1.8f;
+
+        /// <summary>⚠️ Deliberately BELOW UI (3000): the loading and connection cards (world-space
+        /// canvases) must draw ON TOP of the black, so the player can read them while faded.</summary>
+        private const int TransitionRenderQueue = 2990;
+
+        private static readonly int QueueOffsetId = Shader.PropertyToID("_QueueOffset");
+
         /// <summary>Check tolerance. ⚠️ Not <c>Mathf.Approximately</c>: its epsilon scales with
         /// magnitude and the numbers compared here (0.012 m, 0.01 scale) are tiny — a text nudged by
         /// a centimetre would count as "equal".</summary>
@@ -96,6 +117,12 @@ namespace VortexArena.Core.Editor
         {
             Material vignetteMaterial = LoadOrCreateVignetteMaterial();
             if (vignetteMaterial == null)
+            {
+                return;
+            }
+
+            Material transitionMaterial = LoadOrCreateSceneTransitionMaterial();
+            if (transitionMaterial == null)
             {
                 return;
             }
@@ -126,6 +153,7 @@ namespace VortexArena.Core.Editor
                 ConfigureObstacleWarning(anchor, font);
                 ConfigureBoundaryWarning(anchor, font);
                 ConfigureVignette(anchor, vignetteMaterial);
+                ConfigureSceneTransitionFade(anchor, transitionMaterial);
 
                 PrefabUtility.SaveAsPrefabAsset(root, RigPrefabPath);
             }
@@ -136,12 +164,13 @@ namespace VortexArena.Core.Editor
 
             AssetDatabase.SaveAssets();
             Debug.Log($"[HmdOverlay] Kuruldu: {RigPrefabPath} → {AnchorName}/{WarningObjectName} + " +
-                      $"{AnchorName}/{BoundaryWarningObjectName} + {AnchorName}/{VignetteObjectName}.");
+                      $"{AnchorName}/{BoundaryWarningObjectName} + {AnchorName}/{VignetteObjectName} + " +
+                      $"{AnchorName}/{TransitionObjectName}.");
         }
 
         // ------------------------------------------------------------------ check
 
-        /// <summary>Whether the rig prefab's three overlays still match this tool's output —
+        /// <summary>Whether the rig prefab's four overlays still match this tool's output —
         /// <b>WRITES NOTHING</b> (read by the build readiness panel; the user pulls the write
         /// trigger).</summary>
         /// <remarks>⚠️ The prefab is loaded read-only (<see cref="AssetDatabase.LoadAssetAtPath"/>);
@@ -203,7 +232,28 @@ namespace VortexArena.Core.Editor
                 return false;
             }
 
-            detail = "3 katman güncel (engel uyarısı · sınır uyarısı · hasar vinyeti).";
+            Transform transition = anchor.Find(TransitionObjectName);
+            if (transition == null)
+            {
+                detail = $"{TransitionObjectName} yok — sahne geçişi kararmadan yapılır.";
+                return false;
+            }
+
+            var transitionRenderer = transition.GetComponent<MeshRenderer>();
+            if (transitionRenderer == null || transitionRenderer.sharedMaterial == null)
+            {
+                detail = $"{TransitionObjectName} materyalsiz — geçiş karartması Quest'te pembe " +
+                         "çizilir (materyali bu araç üretir).";
+                return false;
+            }
+
+            if (transition.GetComponent<Collider>() != null)
+            {
+                detail = $"{TransitionObjectName} üstünde collider var — ISDK ışını takılır.";
+                return false;
+            }
+
+            detail = "4 katman güncel (engel uyarısı · sınır uyarısı · hasar vinyeti · geçiş karartması).";
             return true;
         }
 
@@ -407,6 +457,51 @@ namespace VortexArena.Core.Editor
             AssignReference(vignette, "vignetteRenderer", renderer);
         }
 
+        // ------------------------------------------------------------------ scene transition fade
+
+        /// <summary>Black quad of the scene transition. ⚠️ It carries NO component: the driver is the
+        /// <c>DontDestroyOnLoad</c> <c>SceneTransitionFade</c> singleton, which finds this quad in
+        /// each new scene — a component here would die with the scene mid-transition.</summary>
+        private static void ConfigureSceneTransitionFade(Transform anchor, Material material)
+        {
+            Transform existing = anchor.Find(TransitionObjectName);
+            GameObject go;
+
+            if (existing != null)
+            {
+                go = existing.gameObject;
+            }
+            else
+            {
+                go = GameObject.CreatePrimitive(PrimitiveType.Quad);
+                go.name = TransitionObjectName;
+                go.transform.SetParent(anchor, false);
+            }
+
+            // Removed on every run: a screen overlay has no business in physics and an ISDK ray
+            // would snag on it.
+            var collider = go.GetComponent<Collider>();
+            if (collider != null)
+            {
+                Object.DestroyImmediate(collider);
+            }
+
+            go.transform.localPosition = new Vector3(0f, 0f, TransitionZ);
+            go.transform.localRotation = Quaternion.identity;
+            go.transform.localScale = new Vector3(TransitionSize, TransitionSize, 1f);
+
+            var renderer = go.GetComponent<MeshRenderer>();
+            if (renderer == null)
+            {
+                Debug.LogError($"[HmdOverlay] '{TransitionObjectName}' üstünde MeshRenderer yok.");
+                return;
+            }
+
+            renderer.sharedMaterial = material;
+            renderer.enabled = false; // nothing to draw at alpha 0; the driver turns it on
+            StripLighting(renderer);
+        }
+
         // ------------------------------------------------------------------ helpers
 
         /// <summary>Vignette material. ⚠️ Generated by the tool: a shader's GUID is unknown before
@@ -434,6 +529,54 @@ namespace VortexArena.Core.Editor
             var material = new Material(shader) { name = "M_DamageVignette" };
             AssetDatabase.CreateAsset(material, VignetteMaterialPath);
             Debug.Log($"[HmdOverlay] Vinyet materyali üretildi: {VignetteMaterialPath}");
+            return material;
+        }
+
+        /// <summary>Scene transition material — a copy of <c>M_ScreenFade</c> (URP/Unlit ·
+        /// Transparent · black) with its queue pushed under UI.</summary>
+        /// <remarks>Copied by the tool, not hand written: a shader's GUID is unknown before import,
+        /// so a hand written <c>.mat</c> would open with a silently empty shader reference.</remarks>
+        private static Material LoadOrCreateSceneTransitionMaterial()
+        {
+            var material = AssetDatabase.LoadAssetAtPath<Material>(TransitionMaterialPath);
+
+            if (material == null)
+            {
+                if (AssetDatabase.LoadAssetAtPath<Material>(TransitionSourceMaterialPath) == null)
+                {
+                    Debug.LogError($"[HmdOverlay] Kaynak materyal bulunamadı: " +
+                                   $"{TransitionSourceMaterialPath}. Geçiş karartması kurulamadı.");
+                    return null;
+                }
+
+                if (!AssetDatabase.CopyAsset(TransitionSourceMaterialPath, TransitionMaterialPath))
+                {
+                    Debug.LogError($"[HmdOverlay] Materyal kopyalanamadı: " +
+                                   $"{TransitionSourceMaterialPath} → {TransitionMaterialPath}");
+                    return null;
+                }
+
+                AssetDatabase.ImportAsset(TransitionMaterialPath);
+                material = AssetDatabase.LoadAssetAtPath<Material>(TransitionMaterialPath);
+
+                if (material == null)
+                {
+                    Debug.LogError($"[HmdOverlay] Kopyalanan materyal açılamadı: {TransitionMaterialPath}");
+                    return null;
+                }
+
+                Debug.Log($"[HmdOverlay] Geçiş materyali üretildi: {TransitionMaterialPath}");
+            }
+
+            // ⚠️ URP shaders derive the queue from _QueueOffset, so the offset and renderQueue are
+            // written together; otherwise the shader would overwrite the queue on the next import.
+            if (material.HasProperty(QueueOffsetId))
+            {
+                material.SetFloat(QueueOffsetId, -10f);
+            }
+
+            material.renderQueue = TransitionRenderQueue;
+            EditorUtility.SetDirty(material);
             return material;
         }
 

@@ -1,7 +1,7 @@
 # Bağlantı kopması: kalan iş (doğrulama)
 
 Kod, protokol ve doküman yerinde: `Docs/ArenaNet-Protokol.md` §1 (`HEARTBEAT_TIMEOUT` ·
-`RECONNECT_GRACE` · `PROTOCOL_VERSION` 8) · §2 (üç değerli bağlantı durumu) · §5.3
+`RECONNECT_GRACE` · `PROTOCOL_VERSION`) · §2 (üç değerli bağlantı durumu) · §5.3
 (`connection`/`reconnectSeconds`/`inMatch`) · §5.4 · §8 · §10.2 (maç katılımcısı defteri);
 `Docs/Sistem-Ozeti.md` §4 (`PlayerRegistry`, `AdminRoster`, `ConnectionOverlay`) + §7 son madde.
 

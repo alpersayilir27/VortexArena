@@ -31,9 +31,10 @@ namespace VortexArena.App.Admin
     /// reaches both. Do not fork it into a second prefab.
     /// </para>
     /// <para>
-    /// ⚠️ <b>HP, scene and violations are absent by DESIGN</b> — HP lives on the side panel card as
-    /// a bar, violations blink live on the HUD strip and card border, and the scene name is the
-    /// same for every headset so per-row repetition was only noise.
+    /// ⚠️ <b>HP and scene are absent by DESIGN</b> — HP lives on the side panel card as a bar, and
+    /// the scene name is the same for every headset so per-row repetition was only noise.
+    /// Violations appear here as a <b>ledger</b> (count + total time) and deliberately do not
+    /// blink: the live channel is the HUD strip and the card border.
     /// </para>
     /// <para>
     /// ⚠️ <b>SIFIRLA is ONE button carrying BOTH reset modes</b> (<see cref="HoldButton"/>): a tap
@@ -196,7 +197,7 @@ namespace VortexArena.App.Admin
         [SerializeField] private TextMeshProUGUI killsText;
         [SerializeField] private TextMeshProUGUI deathsText;
         [SerializeField] private TextMeshProUGUI kdText;
-        [Tooltip("SKOR · pil · kumanda · ping · durum — zengin metin içerir (koddan açılır).")]
+        [Tooltip("SKOR · pil · kumanda · ping · durum · ihlal — zengin metin içerir (koddan açılır).")]
         [SerializeField] private TextMeshProUGUI detailText;
 
         private RectTransform _rect;
@@ -810,7 +811,7 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>
-        /// Detail cell: score · battery · controllers · ping · state.
+        /// Detail cell: score · battery · controllers · ping · state · violations.
         /// <para>Battery thresholds/colours and controller glyphs come from
         /// <see cref="AdminPlayerRow"/> — the same headset must not differ between screens.</para>
         /// </summary>
@@ -821,11 +822,12 @@ namespace VortexArena.App.Admin
             // §6.7: -1 = no measurement. "-" so it does not read as "0 ms ping".
             string ping = view.rttMs < 0 ? "-" : $"{view.rttMs} ms";
             string state = StateText(view);
+            string violations = ViolationTokens(view);
 
             // Drop the controller token when it carries nothing (both hands unreported).
             string line = string.IsNullOrEmpty(controllers)
-                ? $"SKOR {view.score} · {battery} · {ping} · {state}"
-                : $"SKOR {view.score} · {battery} · {controllers} · {ping} · {state}";
+                ? $"SKOR {view.score} · {battery} · {ping} · {state} · {violations}"
+                : $"SKOR {view.score} · {battery} · {controllers} · {ping} · {state} · {violations}";
 
             // ⚠️ The last reload failure reason STAYS on the row (§10.6): the popup closes itself
             // after a few seconds and without a trace the operator is left with "something
@@ -834,6 +836,43 @@ namespace VortexArena.App.Admin
             return string.IsNullOrEmpty(view.calibrationError)
                 ? line
                 : $"{line} · <color=#{ColorUtility.ToHtmlStringRGB(UiKit.Bad)}>{view.calibrationError}</color>";
+        }
+
+        /// <summary>
+        /// Violation ledger tokens (per kind), from the roster's server-side counters.
+        /// <para>⚠️ <b>"ihlal 0" is written out</b> when there is none: an empty cell cannot be told
+        /// apart from a cell that was never drawn.</para>
+        /// <para>⚠️ <b>No blinking, no "ongoing" mark</b> — this is the ledger; the live channel is
+        /// the HUD strip and the card border.</para>
+        /// </summary>
+        private static string ViolationTokens(AdminPlayerView view)
+        {
+            string obstacle = ViolationToken(AdminViolationKind.Obstacle,
+                view.obstacleCount, view.obstacleSeconds);
+            string outOfBounds = ViolationToken(AdminViolationKind.OutOfBounds,
+                view.outOfBoundsCount, view.outOfBoundsSeconds);
+
+            if (obstacle.Length == 0)
+            {
+                return outOfBounds.Length == 0 ? "ihlal 0" : outOfBounds;
+            }
+
+            return outOfBounds.Length == 0 ? obstacle : $"{obstacle} · {outOfBounds}";
+        }
+
+        /// <summary>One kind's token; empty when the count is zero. Label and colour come from
+        /// <see cref="AdminViolations"/> — the same violation must not be named or coloured
+        /// differently on two screens.</summary>
+        private static string ViolationToken(AdminViolationKind kind, int count, float seconds)
+        {
+            if (count <= 0)
+            {
+                return "";
+            }
+
+            string color = ColorUtility.ToHtmlStringRGB(AdminViolations.Tint(kind));
+            return $"<color=#{color}>{AdminViolations.Label(kind)} {count} " +
+                   $"({Mathf.RoundToInt(seconds)} sn)</color>";
         }
 
         /// <summary>⚠️ There is no "offline" state (§2) — a row is either expected back (with a

@@ -158,12 +158,6 @@ namespace VortexArena.App.Admin
         /// <summary>Total time spent out of bounds (s).</summary>
         public float outOfBoundsSeconds;
 
-        /// <summary>Sum of both kinds — for the single stats-table cell.</summary>
-        public int ViolationCount => obstacleCount + outOfBoundsCount;
-
-        /// <inheritdoc cref="ViolationCount"/>
-        public float ViolationSeconds => obstacleSeconds + outOfBoundsSeconds;
-
         public bool IsPlayer => role == AppSession.RolePlayer;
 
         public float HpNormalized => Mathf.Clamp01(hp / ArenaProtocol.PLAYER_MAX_HP);

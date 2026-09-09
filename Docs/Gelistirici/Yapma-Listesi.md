@@ -84,6 +84,14 @@ mekanizma alfa düşünce Renderer'ı kapatırdı — oyuncu uzaktayken duvar t�
 uyarısı artık HMD'ye bağlı karartma quad'ından geliyor (`warnFadeAlpha`), arena geometrisinden
 tümden bağımsız.
 
+### ⛔ Sahne geçişi karartmasını `ScreenFade`'e kaynak yapma, quad'ını paylaştırma ya da taşıma
+
+Geçişin siyahı (`SceneTransitionFade`) hakeme kaynak olarak eklenmez ve alan-dışı karartmasının
+quad'ına (`OutOfBoundsFade`) ikinci bir yazıcı olarak konmaz — kendi quad'ı ve kendi sürücüsü
+vardır. Quad **sahnenindir**: `DontDestroyOnLoad` kökün altına taşınırsa yeni sahnede elle
+gizlenmesi gerekir ve eski sahnede inişi çizecek yüzey kalmaz. Gerekçeler `Docs/Sistem-Ozeti.md`
+bileşen sözlüğünde ve Tuzaklar bölümündedir.
+
 ### ⛔ Ölü oyuncuları uzak oyuncu listesinden eleme
 
 Ölüm bir durum değişimi olduğu için ölünün bedeni sahada durmaya devam eder. Çarpışma/yakınlık

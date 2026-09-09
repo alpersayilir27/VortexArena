@@ -39,7 +39,7 @@ namespace VortexArena.Core.Player
 
         [Tooltip("Kenardaki en yüksek opaklık. Merkezin temiz kalmasını shader'ın yarıçapları sağlar.")]
         [Range(0f, 1f)]
-        [SerializeField] private float maxAlpha = 0.75f;
+        [SerializeField] private float maxAlpha = 0.80f;
 
         [Header("Zamanlama")]
         [Tooltip("Vuruştan sonra tepe opaklığa çıkma süresi (sn).")]
@@ -48,14 +48,14 @@ namespace VortexArena.Core.Player
 
         [Tooltip("Tepeden sıfıra sönme süresi (sn). Eğri sona doğru yavaşlar.")]
         [Range(0.05f, 3f)]
-        [SerializeField] private float decaySeconds = 0.40f;
+        [SerializeField] private float decaySeconds = 0.50f;
 
         [Tooltip("Tek pakette tam yoğunluk sayılan hasar (HP).")]
         [SerializeField] private float fullIntensityDamage = 25f;
 
         [Tooltip("Tek vuruşun en düşük yoğunluğu (0..1): küçük hasar da görünür kalsın.")]
         [Range(0f, 1f)]
-        [SerializeField] private float minHitIntensity = 0.50f;
+        [SerializeField] private float minHitIntensity = 0.60f;
 
         [Header("Engel erimesi")]
         [Tooltip("Engelde can erirken karartmanın üstündeki kırmızının tepe opaklığı.")]

@@ -43,8 +43,17 @@ Açılışta:
 - UDP `47822` state kanalını dinler: `0x00 UdpHello` kayıt + ack, `0x01 PoseUpdate` alımı,
   `0x02 Snapshot` yayını (20 Hz, kayıtlı tüm endpoint'lere — **her admin ayrı hedeftir**).
   16'dan fazla pozlu oyuncu varsa aynı tik MTU'ya sığan parçalara bölünür (istemcide birleştirme
-  gerekmez). Poz akarken konsolda saniyede bir
-  `[state] oyuncu N, pozlu N, snapshot N B [(K parça)], hedef N` özeti görünür.
+  gerekmez). Poz akarken konsolda saniyede bir `[state]` özeti görünür:
+
+  ```
+  [state] oyuncu 6 · pozlu 6 · hedef 7 | paket 412 B/tik | çıkış 58 kB/s 140 p/s | giriş 44 kB/s 720 p/s | tik sapma ort 0,4 maks 2,1 ms (gönderim maks 0,8 ms) | olay 3 | iskelet 60 p/s 22 kB/s | kayıp poz %0,0 olay %0,0
+  ```
+
+  `paket` tek datagramın boyutu, `çıkış`/`giriş` gerçek hacimdir; parçalı tikte `paket`in yanına
+  `×K parça`, reddedilen giriş olduğunda `giriş`in yanına `(red N)` eklenir. `iskelet` parçası
+  yalnız o saniye iskelet aktığında yazılır: `p/s` sunucudan çıkan `0x08` batch paketi/sn,
+  `kB/s` o paketlerin toplam baytıdır (`çıkış` içinde de sayılır). Bir paket N oyuncunun batch'i
+  olduğu için buradan tek oyuncunun blob ortalaması **türetilmez**.
 - Maç tick döngüsü (10 Hz) çalışır: faz makinesi, geri sayım, süre.
 - `config/` bulunamazsa exe yanında oluşturulur ve varsayılanlarla doldurulur
   (`server.json`; `maps.json` **üretilmez** — o Unity export'undan gelir).
@@ -259,9 +268,9 @@ komut uygulanır.
 - **Kimlik:** admin `deviceId`'si `<donanım>:admin:<oturum GUID'i>` — oturum başına benzersizdir.
   Aynı fiziksel PC'de iki admin penceresi açılabilsin diye: ortak kimlikle ikisi aynı kaydı
   paylaşır ve her `hello` diğerinin soketini kapatırdı (sonsuz kick döngüsü).
-- **Kayıt kalıcılığı:** admin bağlantısı kopunca (ya da `OFFLINE_TIMEOUT` dolunca) kaydı
+- **Kayıt kalıcılığı:** admin bağlantısı kopunca (ya da `HEARTBEAT_TIMEOUT` dolunca) kaydı
   **tümüyle silinir**, `playerId`'si havuza döner (konsolda `[-] … kaydı silindi`). Oyuncu kayıtları
-  eskisi gibi çevrimdışı işaretlenir ama durur. Aynı PC'de iki admin varsa roster adları
+  ise `reconnecting`'e düşer ve durur; `RECONNECT_GRACE` dolunca `left` olur ya da silinir (§2). Aynı PC'de iki admin varsa roster adları
   `Ofis-PC`, `Ofis-PC (2)` diye ayrıştırılır.
 - **Ortak durum:** bir sonraki maçın mod/harita seçimi **sunucuda** yaşar. Admin arayüzü onu
   `set_selection` ile değiştirir, sunucu `admin_state` ile TÜM adminlere yayar → bir operatör
@@ -432,7 +441,7 @@ olmayan kancayı hiç ekleme**.
   kick), cihaz adı kalıcılığı.
 - **Poz kanalı:** `0x01 PoseUpdate` alımı (kayıtlı endpoint + u16 seq sarmalama kontrolü) +
   `0x02 Snapshot` yayını (20 Hz; oyuncu sayısı sınırsız, datagram başına en fazla
-  `SNAPSHOT_MAX_ENTRIES_PER_PACKET = 16` girdi ≈ 1382 B, fazlası aynı tik içinde ek datagramlara
+  `SNAPSHOT_MAX_ENTRIES_PER_PACKET = 16` girdi ≈ 550 B, fazlası aynı tik içinde ek datagramlara
   bölünür). Snapshot `flags` bit0 gerçek `alive` durumunu taşır.
 - **Maç:** `MatchDirector` faz makinesi (`load_match` → geri sayım → `playing` → `finished` → lobi) +
   `Modes/TdmMode.cs` + `Modes/FfaMode.cs` (`IGameMode`) + vuruş hattı, can/skor yayını,

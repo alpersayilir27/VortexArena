@@ -286,6 +286,8 @@ namespace VortexArena.App
         /// The <c>set_ready</c> flow is UNCHANGED: <c>sceneLoaded</c> fires during activation and
         /// still calls <see cref="ReportSceneLoaded"/>, which stays the single gate.
         /// </para>
+        /// <para>The headset fade to black runs BEFORE the load and delays it by at most 0.2 s
+        /// (<see cref="SceneTransitionFade"/>); the fade in comes from <c>sceneLoaded</c>.</para>
         /// <para>
         /// ⚠️ <b>Async loading is SLOWER than sync with default settings</b>, purely because of
         /// <see cref="Application.backgroundLoadingPriority"/>: Unity gives integration only a small
@@ -300,6 +302,7 @@ namespace VortexArena.App
             Debug.Log($"[SceneRouter] Sahne yükleniyor → '{sceneName}'.");
 
             LoadingOverlay.Show(sceneName);
+            yield return SceneTransitionFade.FadeOut();
 
             // More time per frame for load integration during the transition; the loading screen
             // must not cost extra seconds. Restored in FinishLoad.

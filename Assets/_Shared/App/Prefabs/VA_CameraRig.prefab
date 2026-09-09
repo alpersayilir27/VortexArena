@@ -1809,11 +1809,11 @@ MonoBehaviour:
   effectEnabled: 1
   vignetteRenderer: {fileID: 4900955760334278813}
   vignetteColor: {r: 0.5569, g: 0.1216, b: 0.1216, a: 1}
-  maxAlpha: 0.55
+  maxAlpha: 0.8
   attackSeconds: 0.06
-  decaySeconds: 0.4
+  decaySeconds: 0.5
   fullIntensityDamage: 25
-  minHitIntensity: 0.5
+  minHitIntensity: 0.6
   drainAlpha: 0.8
   drainPulseHz: 1
   lowHpThreshold: 0.3
@@ -1823,6 +1823,8 @@ MonoBehaviour:
   lowHpPulseHz: 0.35
   deathColor: {r: 0.35, g: 0.35, b: 0.35, a: 1}
   deathAlpha: 0.45
+  deathFlareSeconds: 1
+  deathFlareFadeSeconds: 0.35
 --- !u!1 &1272451756600780371
 GameObject:
   m_ObjectHideFlags: 0
@@ -8065,7 +8067,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Meta.XR.BuildingBlocks::Meta.XR.BuildingBlocks.BuildingBlock
   blockId: 5817f7c0-f2a5-45f9-a5ca-64264e0166e8
-  instanceId: 8b91745e-5880-4fe6-b5f7-c72e1a19014f
+  instanceId: 04121e1e-deac-4871-b020-1d4702d8581e
   version: 1
   installationRoutineCheckpoint:
     _installationRoutineId: 
@@ -8813,7 +8815,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Meta.XR.BuildingBlocks::Meta.XR.BuildingBlocks.BuildingBlock
   blockId: e47682b9-c270-40b1-b16d-90b627a5ce1b
-  instanceId: 1106ea84-aace-4d4c-980d-b391ca77ef40
+  instanceId: 67432684-bead-4406-9d4c-6beea6cb08ab
   version: 1
   installationRoutineCheckpoint:
     _installationRoutineId: 
@@ -10785,7 +10787,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Meta.XR.BuildingBlocks::Meta.XR.BuildingBlocks.BuildingBlock
   blockId: 5817f7c0-f2a5-45f9-a5ca-64264e0166e8
-  instanceId: 0b2d60e8-979a-4fcf-bd51-09610dd52270
+  instanceId: 03d7a32b-d7fb-4ca2-809d-486b8a79e2a1
   version: 1
   installationRoutineCheckpoint:
     _installationRoutineId: 
@@ -11749,7 +11751,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Meta.XR.BuildingBlocks::Meta.XR.BuildingBlocks.BuildingBlock
   blockId: 81f55626-5fad-45e9-a1df-184f330da7ba
-  instanceId: 39e1d623-7f21-44d9-a77f-68c1c5ebebc4
+  instanceId: 3e54e9db-3edd-4e76-b95e-65bb8c0ac2a2
   version: 1
   installationRoutineCheckpoint:
     _installationRoutineId: 2063f481-1b63-4eda-9ee8-a00df98536bc

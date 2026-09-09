@@ -41,7 +41,7 @@ her ihlalde bip istenmiyor. Kanca ve tercih satırı duruyor; klip atanırsa ça
 - [ ] Kalibresiz oyuncu alan dışına çıksın → halka yanıyor ve feed'e giriyor, **can gitmiyor**
 - [ ] Lobide/geri sayımda alan dışına çık → feed **yine yazıyor** (defter fazdan bağımsız)
 
-## 4. Yapılmayanlar — ayrı karar bekliyor
+## 3. Yapılmayanlar — ayrı karar bekliyor
 
 Bu ikisi planın "önlem önerileri" başlığındaydı ve **bu tura dahil edilmedi**:
 
@@ -52,7 +52,7 @@ Bu ikisi planın "önlem önerileri" başlığındaydı ve **bu tura dahil edilm
   kalınlaşır + ses bir kez daha çalar. Kasıtlı hileyi kazadan ayıran tek sinyal tekrardır.
   Defter (`count`) zaten telde olduğu için istemci tarafında tek başına yapılabilir.
 
-## 5. Bilinen davranış
+## 4. Bilinen davranış
 
 `Announced` durumdayken **bağlantısı kopan** oyuncu için feed'e kapanış satırı gitmez (süreye
 kopukluğun geçtiği boşluk yazılmasın diye). Operatör kapanışsız bir başlangıç satırı görebilir;

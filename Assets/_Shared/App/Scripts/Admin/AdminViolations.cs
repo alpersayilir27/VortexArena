@@ -91,10 +91,27 @@ namespace VortexArena.App.Admin
             switch (kind)
             {
                 case AdminViolationKind.Obstacle:
-                    return Pulse(UiKit.Bad, ObstacleBlinkHz);
+                    return Pulse(Tint(kind), ObstacleBlinkHz);
+                case AdminViolationKind.OutOfBounds:
+                    return Pulse(Tint(kind), OutOfBoundsBlinkHz);
+                default:
+                    return UiKit.Border;
+            }
+        }
+
+        /// <summary>
+        /// The violation's steady color — for the ledger cells that must not blink
+        /// (<see cref="AdminStatsRow"/>); <see cref="UiKit.Border"/> when there is none.
+        /// </summary>
+        public static Color Tint(AdminViolationKind kind)
+        {
+            switch (kind)
+            {
+                case AdminViolationKind.Obstacle:
+                    return UiKit.Bad;
                 case AdminViolationKind.OutOfBounds:
                     // "Warning but not an error" is Accent here (low battery, floor drift).
-                    return Pulse(UiKit.Accent, OutOfBoundsBlinkHz);
+                    return UiKit.Accent;
                 default:
                     return UiKit.Border;
             }

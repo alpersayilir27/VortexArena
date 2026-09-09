@@ -830,6 +830,7 @@ public sealed class StateHost
                       + Interlocked.Exchange(ref _txAckBytes, 0);
         var txCombined = _txCombinedPackets;
         var txSkeleton = _txSkeletonPackets;
+        var txSkeletonBytes = _txSkeletonBytes;
         _txSnapshotPackets = 0; _txSnapshotBytes = 0;
         _txEventPackets = 0; _txEventBytes = 0;
         _txSkeletonPackets = 0; _txSkeletonBytes = 0;
@@ -894,7 +895,7 @@ public sealed class StateHost
             $" | tik sapma ort {tickDriftAvgMs:0.0} maks {tickDriftMaxMs:0.0} ms (gönderim maks {sendMaxMs:0.0} ms)" +
             $" | olay {eventsThisSecond}" +
             (txCombined > 0 ? $" (birleşik {txCombined})" : "") +
-            (txSkeleton > 0 ? $" | iskelet {txSkeleton} p/s" : "") +
+            (txSkeleton > 0 ? $" | iskelet {txSkeleton} p/s {txSkeletonBytes / 1024.0:0} kB/s" : "") +
             $" | kayıp poz %{posePct:0.0} olay %{eventPct:0.0}");
     }
 

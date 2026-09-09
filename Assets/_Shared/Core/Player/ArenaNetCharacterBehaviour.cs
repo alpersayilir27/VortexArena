@@ -284,6 +284,17 @@ namespace VortexArena.Core.Player
         /// its grown size.</summary>
         private byte[] _sendScratch;
 
+        /// <summary>Has the first outgoing blob size been logged? Not reset on reconnect — one line per
+        /// component lifetime is the whole point.</summary>
+        private bool _blobSizeLogged;
+
+        /// <summary>Outgoing blob size stats, summarised in <see cref="OnDisable"/>. Total is
+        /// <c>long</c>: a session's worth of frames overflows <c>int</c>.</summary>
+        private int _blobFrames;
+        private int _blobMinBytes;
+        private int _blobMaxBytes;
+        private long _blobTotalBytes;
+
         /// <summary>Last SENT arena root — the comparison reference of the jump guard.</summary>
         private Pose _lastSentRoot;
         private bool _hasLastSentRoot;
@@ -348,6 +359,26 @@ namespace VortexArena.Core.Player
                 _sourceProvider = retargeter.GetComponent<ISourceDataProvider>() as Behaviour;
                 _bodySource = _sourceProvider as OVRBody;
             }
+        }
+
+        /// <summary>Prints the blob size summary and clears the counters, so a re-enabled component
+        /// summarises only its new interval (scene = one measurement window).</summary>
+        private void OnDisable()
+        {
+            if (_blobFrames <= 0)
+            {
+                return;
+            }
+
+            long average = _blobTotalBytes / _blobFrames;
+            Debug.Log($"[ArenaNetCharacterBehaviour] İskelet blob özeti: {_blobFrames} kare · " +
+                      $"en küçük {_blobMinBytes} B · en büyük {_blobMaxBytes} B · ortalama {average} B.",
+                this);
+
+            _blobFrames = 0;
+            _blobMinBytes = 0;
+            _blobMaxBytes = 0;
+            _blobTotalBytes = 0;
         }
 
         private void OnDestroy()
@@ -1329,6 +1360,33 @@ namespace VortexArena.Core.Player
 
             NativeArray<byte>.Copy(bytes, 0, managed, 0, bytes.Length);
             client.UdpChannel.SendSkeleton(managed, bytes.Length, arenaRoot);
+
+            TrackBlobSize(bytes.Length);
+        }
+
+        /// <summary>Blob size measurement against the <see cref="ArenaProtocol.SKELETON_MAX_BLOB_BYTES"/>
+        /// budget — the only place the length is known.</summary>
+        private void TrackBlobSize(int length)
+        {
+            if (!_blobSizeLogged)
+            {
+                _blobSizeLogged = true;
+                Debug.Log($"[ArenaNetCharacterBehaviour] İskelet blob'u {length} B " +
+                          $"(tavan {ArenaProtocol.SKELETON_MAX_BLOB_BYTES} B).", this);
+            }
+
+            if (_blobFrames == 0 || length < _blobMinBytes)
+            {
+                _blobMinBytes = length;
+            }
+
+            if (length > _blobMaxBytes)
+            {
+                _blobMaxBytes = length;
+            }
+
+            _blobFrames++;
+            _blobTotalBytes += length;
         }
 
         /// <summary>
