@@ -83,6 +83,19 @@ görülür, yetki `/mcp` üzerinden geri alınır.
 - ⚠️ Notion **repo dışıdır**: takımın hatırlaması gereken şey oraya yazılmakla kalıcı olmaz, yeri
   yine `Docs/` ya da `plan/`'dır (`.claude/rules/docs-sync.md` tablosu).
 
+### `auggie` kaydı — yetki Augment oturumundan
+
+Kayıt `auggie.cmd --mcp`; tek tool açar: `codebase-retrieval` (anlamsal kod tabanı araması). Sunucu
+açılışta çalışma dizinini indeksler.
+
+| # | Ne | Nasıl |
+|---|---|---|
+| 1 | CLI | `npm i -g @augmentcode/auggie` |
+| 2 | Oturum | `auggie login` — yetki makine başınadır, **`.mcp.json`'a token yazılmaz** |
+
+- ⚠️ Windows'ta komut **`auggie.cmd`**'dir, çıplak `auggie` değil: npm shim'i `.cmd`/`.ps1` olarak
+  kurulur ve çıplak ad süreç olarak başlatılamaz.
+
 ### `unity-mcp` (AI Assistant relay) kaydı neden yok
 
 `com.unity.ai.assistant` içindeki bridge onayı **canlı bağlantı başına** tutuyor

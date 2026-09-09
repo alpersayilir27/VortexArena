@@ -11,17 +11,19 @@ Bu dosya yalnız **içerik** işini tutar; kod, protokol ve prefab alanları yer
 
 ## Kalan içerik işi
 
-⚠️ **Sahnedeki dükkân ve bütün eşyalar prototiptir:** kutu/silindir primitifleriyle kurulmuş banko,
-ızgara, kesme tahtası, montaj masası, dağıtıcılar, müşteri kapısı, malzemeler ve kapsül müşteri.
+⚠️ **Sahnedeki dükkânın çoğu hâlâ prototiptir:** kutu/silindir primitifleriyle kurulmuş banko,
+kesme tahtası, montaj masası, dağıtıcılar, müşteri kapısı ve kapsül müşteri.
 Gerçek modeller gelince yerine geçecek; **yerleşim korunmalı** — istasyon bileşenleri, banko
 slotlarının hacimleri ve müşteri yolu ona bağlı. Her banko slotunda bir servis tahtası durur
 (taşınacak bir tahta yok). İç engeller `Obstacle` layer'ındadır, müşterinin collider'ı **yoktur**
 (free-roam alanda gerçek bir bedeni engellemesin diye).
 
-- [ ] **Gerçek modeller + animasyonlar.** Malzemeler ve servis tahtası `BurgerKit`'ten geliyor;
-      kitte **olmayanlar** ayrı içerik işidir: müşteri (yürüme/bekleme/mutlu/mutsuz animasyonlarıyla),
-      bütün ekmek, bıçak, spatula, ızgara, kesme tahtası, dağıtıcılar ve banko.
+- [ ] **Gerçek modeller + animasyonlar.** Servis tahtası `BurgerKit`'ten, malzemeler ve ızgara asset
+      paketinden geliyor. Kalanlar: müşteri (yürüme/bekleme/mutlu/mutsuz animasyonlarıyla), bütün
+      ekmek, bıçak, spatula, kesme tahtası, dağıtıcılar ve banko.
       ⚠️ Yerleşim korunmalı: bileşenler ona bağlı.
+- [ ] **Yüksek poligonlu malzeme modellerinin materyalleri** asset başına tek tek atanır — paketten
+      gelen modeller materyalsiz geliyor.
 - [ ] **Dört prop tanımının kavrama pozu** (`Kavrama Pozu Stüdyosu`) — yazılmadan obje ele gelir ama
       kumanda anchor'ında durur.
 - [ ] **Taşıma ankorlarının gerçek modele göre ayarı** (`BurgerCarrier`): spatulanın `Cargo` hacmi +

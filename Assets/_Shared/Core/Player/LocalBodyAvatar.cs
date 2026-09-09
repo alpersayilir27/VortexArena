@@ -103,6 +103,17 @@ namespace VortexArena.Core.Player
         /// <summary>Repair attempts in the CURRENT outage episode; reset when the body comes back.</summary>
         private int _repairAttempts;
 
+        /// <summary>Spacing between body-height hint attempts (s).</summary>
+        private const float HeightHintRetrySeconds = 1f;
+
+        /// <summary>How long a refused hint keeps retrying before it is reported as failed (s). Long
+        /// enough to cover a permission dialog the player answers slowly.</summary>
+        private const float HeightHintRetryWindowSeconds = 30f;
+
+        private bool _heightHintPending;
+        private float _heightHintNextTry;
+        private float _heightHintDeadline;
+
         private float _nextRepairTime = float.NegativeInfinity;
 
         /// <summary>Plausible range of the model's rest-pose eye height (m). Outside it the marker is
@@ -223,6 +234,7 @@ namespace VortexArena.Core.Player
             }
 
             TickBodyTrackingWatchdog();
+            TickHeightHint();
         }
 
         /// <summary>Reads the model's rest-pose eye height (<see cref="RestEyeHeightMeters"/>).
@@ -273,11 +285,59 @@ namespace VortexArena.Core.Player
                 return; // the init path seeds it itself once the character exists
             }
 
-            float sent = character.SeedBodyHeightHint();
-            if (sent > 0f)
+            if (TrySeedHeightHint())
             {
-                Debug.Log($"[LocalBodyAvatar] Gövde takibine boy önerildi: {sent:F2} m.", this);
+                return;
             }
+
+            // ⚠️ A refusal is the NORMAL answer at init: the runtime rejects the hint until body
+            // tracking is actually running, which happens well after the character exists. One silent
+            // attempt therefore lands nowhere — the retry below is what makes the hint take effect.
+            _heightHintPending = true;
+            _heightHintNextTry = Time.unscaledTime + HeightHintRetrySeconds;
+            _heightHintDeadline = Time.unscaledTime + HeightHintRetryWindowSeconds;
+        }
+
+        /// <summary>One attempt; logs only the success, so the retry does not spam the console.</summary>
+        private bool TrySeedHeightHint()
+        {
+            float sent = character.SeedBodyHeightHint();
+            if (sent <= 0f)
+            {
+                return false;
+            }
+
+            Debug.Log($"[LocalBodyAvatar] Gövde takibine boy önerildi: {sent:F2} m.", this);
+            _heightHintPending = false;
+            return true;
+        }
+
+        /// <summary>Keeps retrying a refused hint, then reports the giving up ONCE.</summary>
+        /// <remarks>⚠️ The failure must be visible: a hint that never lands leaves body tracking
+        /// inferring stature from its own floor, and the only outward sign is a remote avatar that
+        /// stands slightly sunk — nobody reads that as "the hint was refused".</remarks>
+        private void TickHeightHint()
+        {
+            if (!_heightHintPending || Time.unscaledTime < _heightHintNextTry)
+            {
+                return;
+            }
+
+            if (TrySeedHeightHint())
+            {
+                return;
+            }
+
+            _heightHintNextTry = Time.unscaledTime + HeightHintRetrySeconds;
+            if (Time.unscaledTime < _heightHintDeadline)
+            {
+                return;
+            }
+
+            _heightHintPending = false;
+            Debug.LogWarning("[LocalBodyAvatar] Gövde takibine boy önerilemedi: çalışma zamanı " +
+                             $"{HeightHintRetryWindowSeconds:F0} sn boyunca ipucunu reddetti — gövde " +
+                             "izleme çalışmıyor olabilir (izin reddedilmiş ya da servis kapalı).", this);
         }
 
         /// <summary>Sets the body up only when <b>both</b> conditions hold: an active rig (i.e. the role
@@ -376,7 +436,12 @@ namespace VortexArena.Core.Player
         /// </remarks>
         private void TickBodyTrackingWatchdog()
         {
-            if (retargeter.RetargeterValid)
+            // ⚠️ The permission is judged BEFORE RetargeterValid, never after it. Without permission the
+            // SDK can still report a valid retargeter — it keeps the skeleton it already has — so an
+            // unpermitted headset used to be waved through as healthy and never fell back at all.
+            bool permitted = HasBodyTrackingPermission();
+
+            if (permitted && retargeter.RetargeterValid)
             {
                 NoteBodyTrackingHealthy();
                 return;
@@ -385,7 +450,7 @@ namespace VortexArena.Core.Player
             // ⚠️ With the permission REFUSED there is nothing to be patient about: the fallback is armed
             // at once so the T-pose is visible from the LOBBY. Waiting would show an unpermitted player
             // as healthy in the lobby and defer the fault to mid-match.
-            if (!_sourceProviderWarned && !HasBodyTrackingPermission())
+            if (!_sourceProviderWarned && !permitted)
             {
                 _sourceProviderGrace = 0f;
             }
@@ -403,7 +468,14 @@ namespace VortexArena.Core.Player
                 // Keep the player visible while the repair runs: the body streams via the T-pose fallback
                 // (root follows the HMD). It goes quiet by itself once a real pose is applied.
                 character.RequestTPoseFallback();
-                LogBodyTrackingFault();
+                LogBodyTrackingFault(permitted);
+            }
+
+            // ⚠️ Nothing to repair when the OS is the one refusing: restarting body tracking cannot grant
+            // a permission, and the restart costs a tracking hiccup. The fallback stays armed instead.
+            if (!permitted)
+            {
+                return;
             }
 
             if (Time.unscaledTime < _nextRepairTime)
@@ -480,8 +552,18 @@ namespace VortexArena.Core.Player
 
         /// <summary>The one actionable line for a body that never reached the wire. Two different faults
         /// share this symptom and have different fixes — it says which one it is.</summary>
-        private void LogBodyTrackingFault()
+        private void LogBodyTrackingFault(bool permitted)
         {
+            if (!permitted)
+            {
+                Debug.LogError(
+                    "[LocalBodyAvatar] Cihazda BODY_TRACKING izni verilmemiş — gövde T-poz yedeğine " +
+                    "geçti ve öyle KALACAK; yeniden başlatma denenmez, izni ancak oyuncu verebilir. " +
+                    "⚠️ Oyuncunun KENDİ ekranında hiçbir belirti olmaz (eller rig'den geliyor); " +
+                    "diğerleri onu T-pozda görür.", this);
+                return;
+            }
+
             string cause = character.IsSourceProviderRunning
                 ? "Body tracking açık ama geçerli bir gövde pozu hiç üretmedi"
                 : "Body tracking hiç başlamadı (sebebi konsolda bunun üstündeki [OVRBody] satırı söyler)";
@@ -489,9 +571,8 @@ namespace VortexArena.Core.Player
             Debug.LogError(
                 $"[LocalBodyAvatar] {cause} — gövde izlemesi yeniden başlatılmaya çalışılacak. ⚠️ " +
                 "Oyuncunun KENDİ ekranında hiçbir belirti olmaz (eller rig'den geliyor); bu satır tek " +
-                "uyarıdır. Sık görülen iki sebep: (1) editörden Link ile koşuluyor ve Meta Quest Link " +
-                "uygulamasında ilgili geliştirici çalışma zamanı özelliği kapalı, (2) cihazda " +
-                "BODY_TRACKING izni verilmemiş.", this);
+                "uyarıdır. Sık görülen sebep: editörden Link ile koşuluyor ve Meta Quest Link " +
+                "uygulamasında ilgili geliştirici çalışma zamanı özelliği kapalı.", this);
         }
 
         /// <summary>Operator-triggered repair: forces an attempt NOW and drops the backoff, so a headset

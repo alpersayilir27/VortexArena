@@ -597,6 +597,16 @@ namespace VortexArena.App.Admin
             ScoreLimit = msg.scoreLimit;
             WinnerTeam = "";
             WinnerPlayerId = 0;
+
+            // ⚠️ Both feeds belong to ONE match and are cleared here, not only on the way back to the
+            // lobby: a new match started straight from the score screen never passes through
+            // return_to_lobby, so the operator would read the previous match's kills and violations as
+            // this one's. The server clears its own violation ledger at match start (§10.9).
+            // load_match is only ever sent by start_match — a late-joining admin is caught up with
+            // lobby_state and a violation replay, so nothing already drawn is wiped here.
+            _killFeed.Clear();
+            _violationFeed.Clear();
+
             Raise();
         }
 

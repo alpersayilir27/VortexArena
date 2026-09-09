@@ -123,6 +123,7 @@ koşulacağıdır.
 | `UnityMCP` | HTTP `http://127.0.0.1:8080/mcp` | ~55 tool: `manage_*` + `mcpforunity://` (`com.coplaydev.unity-mcp`) |
 | `blender` | `uvx blender-mcp` | Blender köprüsü — Blender'da eklenti etkin + *Start MCP Server* tıklanmış olmalı (localhost:9876) |
 | `notion` | HTTP `https://mcp.notion.com/mcp` | Notion çalışma alanı (arama/sayfa/veritabanı). ⚠️ Yetki **OAuth**'la tarayıcıdan verilir — `.mcp.json`'a **token yazılmaz**, o dosya git'e giriyor |
+| `auggie` | `auggie.cmd --mcp` | Tek tool: `codebase-retrieval` — anlamsal kod tabanı araması. Yetki Augment oturumundan gelir (`auggie login`), `.mcp.json`'a token yazılmaz |
 
 - `UnityMCP` HTTP transport olduğu için köprü 8080'de ayakta ve **editör açık** olmalıdır.
 - → kayıt ayrıntıları (relay kaydının neden olmadığı, CLI'da karşılığı olmayan tool'lar) ve

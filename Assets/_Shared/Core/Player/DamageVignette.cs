@@ -6,8 +6,9 @@ namespace VortexArena.Core.Player
 {
     /// <summary>Damage vignette on the HMD: rises fast on health loss, decays with an ease-out
     /// curve, and breathes at low health. The centre stays fully clear (the shader's radial ramp) —
-    /// the player is physically walking and blocking their view is a safety problem. Red while alive,
-    /// a steady grey frame while dead.</summary>
+    /// the player is physically walking and blocking their view is a safety problem. Red while alive;
+    /// the killing hit flares red, then the frame settles into a steady grey for as long as the player
+    /// stays dead.</summary>
     /// <remarks>
     /// ⚠️ <b>Must NOT be added as a <see cref="ScreenFade"/> source.</b> The arbiter picks the highest
     /// alpha, so a 0.4 red always loses to a 1.0 obstacle blackout and the player never sees their
@@ -96,6 +97,16 @@ namespace VortexArena.Core.Player
         [Range(0f, 1f)]
         [SerializeField] private float deathAlpha = 0.45f;
 
+        [Tooltip("Öldüren vuruşun KIRMIZI kaldığı süre (sn). Bu süre boyunca çerçeve ölüm grisine değil " +
+                 "hasar kırmızısına boyanır — yoksa seni öldüren vuruş gri zeminin üstünde gri parlar " +
+                 "ve hiç görünmez.")]
+        [Range(0f, 3f)]
+        [SerializeField] private float deathFlareSeconds = 1f;
+
+        [Tooltip("Kırmızıdan ölüm grisine geçiş süresi (sn). Sert kesme 'ekran bozuldu' gibi okunur.")]
+        [Range(0f, 2f)]
+        [SerializeField] private float deathFlareFadeSeconds = 0.35f;
+
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
 
         /// <summary>Obstacle health arrives at ~4 Hz; a drop younger than this means "draining".</summary>
@@ -114,6 +125,9 @@ namespace VortexArena.Core.Player
         private float _hitPeak;
         private float _hitFrom;
         private bool _wasAlive = true;
+
+        /// <summary>When the player last died — the killing hit's red flare is timed from here.</summary>
+        private float _deathTime = float.NegativeInfinity;
 
         private void Awake()
         {
@@ -158,8 +172,13 @@ namespace VortexArena.Core.Player
             {
                 // ⚠️ No LowHpAlpha/DrainAlpha here: LowHpAlpha pulses forever at hp = 0, which would
                 // make the grey frame blink without end. Steady floor, killing hit flares over it.
-                _wasAlive = false;
-                Draw(Mathf.Max(HitEnvelope() * maxAlpha, deathAlpha), deathColor);
+                if (_wasAlive)
+                {
+                    _wasAlive = false;
+                    _deathTime = Time.unscaledTime;
+                }
+
+                Draw(Mathf.Max(HitEnvelope() * maxAlpha, deathAlpha), DeathTint());
                 return;
             }
 
@@ -171,6 +190,31 @@ namespace VortexArena.Core.Player
             }
 
             Draw(Mathf.Max(HitEnvelope() * maxAlpha, Mathf.Max(LowHpAlpha(hp), DrainAlpha())));
+        }
+
+        /// <summary>Frame colour while dead: the killing hit's red first, then grey.</summary>
+        /// <remarks>⚠️ The flare needs its own COLOUR, not just alpha. The envelope was always drawn
+        /// while dead, but in the death grey — a grey flare over a grey frame is invisible, which reads
+        /// as "the killing hit produced no feedback at all".</remarks>
+        private Color DeathTint()
+        {
+            float elapsed = Time.unscaledTime - _deathTime;
+            if (elapsed >= deathFlareSeconds + deathFlareFadeSeconds)
+            {
+                return deathColor;
+            }
+
+            if (elapsed < deathFlareSeconds)
+            {
+                return vignetteColor;
+            }
+
+            if (deathFlareFadeSeconds <= 0f)
+            {
+                return deathColor;
+            }
+
+            return Color.Lerp(vignetteColor, deathColor, (elapsed - deathFlareSeconds) / deathFlareFadeSeconds);
         }
 
         /// <summary>Steady pulse while obstacle health is draining: the ~4 Hz trickle would otherwise

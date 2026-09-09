@@ -11,6 +11,14 @@
     "notion": {
       "type": "http",
       "url": "https://mcp.notion.com/mcp"
+    },
+    "auggie": {
+      "type": "stdio",
+      "command": "auggie.cmd",
+      "args": [
+        "--mcp"
+      ],
+      "env": {}
     }
   }
 }
