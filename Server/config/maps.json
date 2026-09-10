@@ -30,6 +30,13 @@
       "objects": []
     },
     {
+      "sceneName": "Construction_VortexAntep",
+      "venue": "VortexAntep",
+      "gameType": "quickbattle",
+      "modes": ["ffa", "tdm", "tournament"],
+      "objects": []
+    },
+    {
       "sceneName": "Dust_B_Outdoor14x16",
       "venue": "Outdoor14x16",
       "gameType": "quickbattle",
@@ -83,13 +90,6 @@
         { "sceneId": 2, "kind": "breakable_cover" },
         { "sceneId": 3, "kind": "breakable_cover" }
       ]
-    },
-    {
-      "sceneName": "Lobby_VortexAntep",
-      "venue": "VortexAntep",
-      "gameType": "quickbattle",
-      "modes": ["lobby"],
-      "objects": []
     },
     {
       "sceneName": "Military_VortexAntep",
