@@ -218,7 +218,7 @@ public sealed class PlayerRegistry : IDisposable
     public void Announce(PlayerState state, PlayerChangeKind kind) => Changed?.Invoke(state, kind);
 
     /// <summary>status heartbeat (§5.1). ⚠️ <b>Does NOT raise Changed unconditionally</b> — only a
-    /// field VISIBLE in the roster (scene/battery/ctrlL/ctrlR/connection) triggers a broadcast.
+    /// field VISIBLE in the roster (scene/battery/ctrlL/ctrlR/body/connection) triggers a broadcast.
     /// Unconditional broadcasting would turn every status into a full roster JSON: 18 clients × once
     /// per 5 s × 18 receivers ≈ 65 broadcasts a second with nothing changing. <c>Fps</c> is not
     /// carried in PlayerInfo, so it triggers nothing.</summary>
@@ -233,11 +233,13 @@ public sealed class PlayerRegistry : IDisposable
             // values), not a number that moves every status — it rarely triggers a broadcast but
             // must show on the operator's screen the moment it drops.
             changed = !state.IsConnected || state.Scene != scene || state.Battery != status.battery
-                      || state.CtrlL != status.ctrlL || state.CtrlR != status.ctrlR;
+                      || state.CtrlL != status.ctrlL || state.CtrlR != status.ctrlR
+                      || state.Body != status.body;
             state.Scene = scene;
             state.Battery = status.battery;
             state.CtrlL = status.ctrlL;
             state.CtrlR = status.ctrlR;
+            state.Body = status.body;
             state.Fps = status.fps;
             // ⚠️ Network telemetry does NOT enter `changed` — same reason as Fps (§6.7): constantly
             // moving numbers would turn every status into a full roster broadcast. They reach admins

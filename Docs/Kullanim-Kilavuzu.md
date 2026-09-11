@@ -411,8 +411,10 @@ bir katta veya odada kullanıldığında ortamlar birbirine karışır ve tipik 
 
 **Zemin sapması uyarısı (KAL ?) ne demek**
 
-Oyuncu elle kalibre olurken sistem iki şeyi karşılaştırır: gözlüğün kendi zemin tahmini ile
-kumandanın gerçekten yere değdiği nokta. Aradaki fark büyükse yönetim ekranında bir duyuru düşer ve
+Oyuncu kalibre olurken sistem iki şeyi karşılaştırır: gözlüğün kendi zemin tahmini ile gerçek
+zemin noktası (elle kalibrede kumandanın yere değdiği nokta, kayıtlı hizalama kendiliğinden
+gelirken kaydın kendisi — yani açılışta ve her harita geçişinde yeniden ölçülür). Aradaki fark
+büyükse yönetim ekranında bir duyuru düşer ve
 o oyuncunun satırındaki kalibre etiketi turuncu **KAL ?** olur (kırmızı **KAL !** ile karıştırma —
 o "kalibresiz" demektir ve oyuncu oynayamaz).
 

@@ -137,9 +137,9 @@ namespace VortexArena.Core.Arena
         /// <c>ArenaNetCharacterBehaviour</c>) read this and drop their stored reference.</summary>
         public static int CalibrationGeneration { get; private set; }
 
-        /// <summary>Floor offset from the last MANUAL calibration (signed meters), sent as
-        /// <c>set_calibration.floorOffset</c> (§10.6). Zero on the anchor-restore path — nothing is
-        /// measured there and a stale value would warn the operator falsely.</summary>
+        /// <summary>Floor offset of the last calibration (signed meters), sent as
+        /// <c>set_calibration.floorOffset</c> (§10.6): the controller tip on a manual capture, the
+        /// restored anchor on an anchor restore — both sit on the physical floor.</summary>
         public static float LastFloorOffsetMeters { get; private set; }
 
         /// <summary>UUID of the anchor created in THIS process; survives scene changes, dies with
@@ -534,7 +534,8 @@ namespace VortexArena.Core.Arena
         }
 
         /// <summary>Tracking-local Y of a world point (§10.6). Under <c>Stage</c> origin the floor
-        /// guess is tracking-local y=0, so for a tip on the real floor this IS the floor offset.
+        /// guess is tracking-local y=0, so for a point on the real floor (controller tip, restored
+        /// anchor) this IS the floor offset.
         /// ⚠️ Read via <see cref="Transform.InverseTransformPoint"/> and BEFORE alignment — the rig
         /// may already carry a pre-align shift that world Y would include (the capture log prints
         /// both for that reason).</summary>
@@ -645,7 +646,8 @@ namespace VortexArena.Core.Arena
             rig.position += target - anchorPos;
 
             CalibrationGeneration++;
-            Debug.Log($"ArenaCalibrator: rig aligned from saved anchor (yaw {yaw:F1} deg).");
+            Debug.Log($"ArenaCalibrator: rig aligned from saved anchor (yaw {yaw:F1} deg, " +
+                      $"zemin sapması {LastFloorOffsetMeters:F2} m).");
         }
 
         /// <summary>Queues the pre-align once. Two callers: a headset with no saved UUID, and a
@@ -1151,6 +1153,10 @@ namespace VortexArena.Core.Arena
                     return RestoreOutcome.Retry;
                 }
 
+                // Measured BEFORE alignment (see TrackingFloorOffset): the anchor sits on the physical
+                // floor, so its tracking-local height is today's floor drift. A silent restore must
+                // not hide that behind a clean row (§10.6).
+                MeasureFloorOffset(pose.position);
                 AlignRigToAnchorPose(pose.position, pose.rotation);
 
                 var go = new GameObject("ArenaWorldAnchor");
@@ -1162,9 +1168,7 @@ namespace VortexArena.Core.Arena
                 // calibration-mode gate though that path is mode-independent (see ResolveSavedUuid).
                 sessionAnchorUuid = uuid.ToString();
                 capturedCount = 2;
-                // Markers stay hidden: this restore is silent and runs on map change. Floor is not
-                // measured here, so there is no offset to report (§10.6).
-                LastFloorOffsetMeters = 0f;
+                // Markers stay hidden: this restore is silent and runs on map change.
                 RaiseCalibrated(SourceAnchor);
                 return RestoreOutcome.Aligned;
             }

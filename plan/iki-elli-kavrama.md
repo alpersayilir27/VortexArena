@@ -1,49 +1,10 @@
 # Kavrama: kalan iş (doğrulama)
 
-Kod, stüdyo ve 13 silahın kavrama kayıtları yerinde. Kalan iş **başlıkta doğrulamadır**.
+Kod, stüdyo ve 13 silahın kavrama kayıtları yerinde; başlıktaki tek elli / iki elli davranış
+doğrulandı. Kalan: **karşı taraftan** (ikinci gözlük / admin ekranı) görünüm.
 
-## Doğrulama (başlıkta + iki uçta)
+## Doğrulama (kullanıcı koşar)
 
-- [ ] Silah ele geldiğinde ana kavrama noktası avucun ortasında; el döndükçe kaymıyor.
-- [ ] Stüdyoda kumanda kökü çevrilmiş olsa bile silah tek elde kumandayla hizalı geliyor (anchor
-      kaydı dönüş taşımaz); buna karşılık **el modelini** çevirmek yalnız eli çeviriyor, silahı
-      değil.
-- [ ] Stüdyoda **oluştur → hiçbir şeye dokunma → Kaydet** kayıtlı değeri değiştirmiyor (kimlik
-      testi).
-- [ ] Boş elin kumandası ön kabzaya yaklaşınca soket küresi (`VA_GripSocket`, 20 cm çap, açık mavi
-      yarı saydam) beliriyor; kumanda kürenin içine girince biraz dolgunlaşıyor ve o anda grip ikinci
-      eli bağlıyor (kürenin dışında bağlamıyor); ikinci el bağlanınca küre kayboluyor. Ana kabzada
-      soket YOK.
-- [ ] Grip'e basınca silahın yönü ikinci ele döner; bırakınca ~0.08 sn'de yumuşak geri gelir.
-- [ ] **Bağ yalnız tuşla kopar:** ön kabza tutulduktan sonra grip'e basılı tutarken kol uzatılıp
-      toplanınca, silah yukarı/aşağı/yana çevrilince ve gövde döndürülünce bağ **kopmuyor**;
-      yumuşak geri dönüş yalnız tuş bırakıldığında başlıyor.
-- [ ] **Savrulma yok:** ikinci el silahın arkasına geçecek kadar sola/geriye çekilince silah ters
-      yöne **atlamıyor**; takibi yumuşakça bırakıp ana elin duruşuna dönüyor ve el geri gelince
-      aynı yumuşaklıkla tekrar nişanlıyor (`ItemGripSolver.ReachWeight` bandı).
-- [ ] Ana kavrama noktası iki elli tutuşta da ana avuçta duruyor (silah ikinci ele kaymıyor).
-- [ ] **İki elli tutuşta ARKA el de silahla dönüyor:** ön kabzadan silah yukarı/aşağı çevrilince arka
-      el kabzanın üstünde kalıyor, silahın dışında kalmıyor; elin konumu yine kumandada duruyor
-      (silah ele göre kaymıyor).
-- [ ] Silahı önce sol elle tutarsan primary sol olur (el ataması sabit değil).
-- [ ] **Sol el kaydı ayrı doğrulanır:** aynı silah sol elde de kabzada duruyor, içine gömülmüyor.
-- [ ] **Ön kabzada ikinci el silaha yapışık kalıyor:** grip basılıyken kol uzatılıp toplanınca el
-      silahtan kopmuyor (kolun gerilmesi beklenen davranıştır).
-- [ ] **Parmaklar donanımdan OYNAMIYOR:** tetik/kabza basılınca ya da parmak kumandaya değince
-      hiçbir parmak kıpırdamıyor; boş elde parmaklar boşta duruşunda, silahı alınca el o slot için
-      riglenmiş duruşa yumuşakça kapanıyor (~0.15 s), bırakınca geri açılıyor.
-- [ ] **El duruşa SIÇRAMIYOR:** silahı alınca elin kumanda üstündeki yeri/açısı da parmaklarla
-      **aynı sürede** kayarak geçiyor (ikisi birlikte hareket ediyor); bırakınca aynı şekilde geri
-      dönüyor. Geçiş sırasında el kumandayı gecikmeden takip etmeye devam ediyor (karışım anchor
-      uzayında — el gerçek elin arkasından sürüklenmiyor).
-- [ ] **Tezgâh = gözlük:** stüdyoda yerleştirdiğin el ve riglediğin duruş başlıkta birebir aynı
-      görünüyor (elin kumandaya göre yeri/açısı + kemik kemik parmaklar).
-- [ ] **Kopya Al doğru kaynağı gösteriyor:** menüde yalnız o kavrama noktasının o eli yazılmış
-      başka silahlar çıkıyor (silahın kendisi çıkmıyor, sağ el için sol el kaydı çıkmıyor); hiç
-      yoksa kapalı satır geliyor. Seçince el o silahtaki gibi oturuyor + parmaklar o duruşa geçiyor,
-      **silahın kumandaya göre yeri kımıldamıyor**; Kaydet'e basmadan kapatılırsa kayıt değişmiyor.
-- [ ] **Yerleşimi yazılmamış silah bugünkü elini koruyor:** el yerleşimi hiç yazılmamış bir `WD_*`
-      ile oynayınca el eskisi gibi duruyor (paylaşılan varsayılana düşüyor, konsola uyarı gitmiyor).
 - [ ] Uzak avatarın parmakları o slotun duruşuna yakın çiziliyor (ön kabzayı saran el uzakta da
       sarılı) — uzakta ölçü kemik kemik değil parmak başına kapanma oranıdır.
 - [ ] **Uzak elin YERLEŞİMİ de kayıttan geliyor:** gözlemcinin (admin POV ya da ikinci ekran)
@@ -52,10 +13,4 @@ Kod, stüdyo ve 13 silahın kavrama kayıtları yerinde. Kalan iş **başlıkta 
       elin açısı da değişiyor.
 - [ ] İkinci admin ekranında **uzak** oyuncunun silahının duruşu sapmıyor (iki uç aynı kaydı okuyup
       aynı formülle çiziyor).
-- [ ] **Raf değişimi:** elde tüfek varken başka bir çerçeveye nişan alıp grip'e basınca yeni silah
-      geliyor (eski silaha kilitlenme yok). Çift elli seçimde elde her zaman **tek** silah kalıyor.
-- [ ] FFA'da bir elde çift elli silah varken öteki ele ikinci bir silah **verilmiyor** (o el ön
-      kabzaya aday oluyor).
-- [ ] FFA'da (`random`) verilen tüfeğin ön kabzası tutulabiliyor ve göstergesi çiziliyor.
-- [ ] Tek elli yol: bir `WD_*` kopyasında `holdMode = OneHand` → iki elde iki klon, ayrı şarjör.
-      (Kayıtlı silahların hepsi `TwoHand` olduğu için bu yol başka türlü görünmez.)
+- [ ] İki elli tüfek ön kabzadan bağlıyken uzakta ana el ve ön el doğru, silah tek ve doğru yerde.

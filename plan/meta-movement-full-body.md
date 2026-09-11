@@ -26,25 +26,16 @@ düşmüyor · sahne değişince özet satırı geliyor ve adet ≈ süre × 12 
 
 ## 2. Ayar
 
-- [ ] `SkeletonRetargeter.ScaleRange` varsayılanı `0.8–1.2`; **yalnız gövde oranı kalibrasyonu
-      açılırsa** anlamlıdır (kapalıyken herkes prefabın oranlarını kullanır ve ölçek uygulanmaz).
-      Açılacaksa önce uzak gövdedeki bozulma çözülmelidir: blob `High` sıkıştırmada eklem
-      uzunluklarına dayanıyor (§7). **Karar gözle değil konsoldan verilir:** `LocalBodyAvatar`
-      kalibrasyondan sonra uygulanan
-      gövde ölçeğini bir kez basar ve değer aralığın sınırındaysa uyarıya çevirir — sınıra dayanmış
-      bir ölçek, karakterin oyuncunun boyuna yetişemediği, yani **diğer oyuncuların** onu yanlış
-      boyda gördüğü anlamına gelir (yerelde çizilmediği için gözle anlaşılmaz).
+Gövde oranı kalibrasyonu açılmaz (`plan/README.md` "Değişmeyecekler"); `ScaleRange` bu yüzden
+ayarlanmaz.
+
 - Body tracking ayarı **hazır**: `Assets/Resources/OculusRuntimeSettings.asset` (⚠️ dosya adı
   `OVRRuntimeSettings` DEĞİL) `bodyTrackingJointSet: FullBody` + `bodyTrackingFidelity: High`.
   ⚠️ `FullBody` bacakları **izlemez, ÜRETİR**. `OVRBody.StartBodyTracking` bu asset'i okur —
   bileşendeki `ProvidedSkeletonType` alanını DEĞİL; ikisi ayrışırsa SDK uyarı basar.
-- İzinler hazır: manifest'te `BODY_TRACKING`/`USE_ANCHOR_API`/`USE_SCENE`, `OVRManager`'da
-  `requestBodyTrackingPermissionOnStartup` ve `requestScenePermissionOnStartup` açık.
-
-## Doğrulanacaklar (kullanıcı koşar)
-
-- Uzak avatar full body, doğru boyda, arena zemininde; kalibrasyondan sonra kaymıyor.
-- Editörde başlıksız Play'de karakter T-pozunda kalıyor ve konsolu boğmuyor.
+- İzinler hazır: manifest'te `BODY_TRACKING`/`USE_ANCHOR_API`, `OVRManager`'da
+  `requestBodyTrackingPermissionOnStartup` açık. Sahne (uzamsal veri) izni bilerek yok
+  (`Yapma-Listesi.md`).
 
 ## Açık riskler
 

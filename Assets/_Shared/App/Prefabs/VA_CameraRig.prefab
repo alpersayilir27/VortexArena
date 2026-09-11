@@ -8157,7 +8157,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Meta.XR.BuildingBlocks::Meta.XR.BuildingBlocks.BuildingBlock
   blockId: 5817f7c0-f2a5-45f9-a5ca-64264e0166e8
-  instanceId: 322556f1-6203-40b7-b317-46d19f311f86
+  instanceId: 3823b2fc-a057-4665-9643-39cf20f7e4d1
   version: 1
   installationRoutineCheckpoint:
     _installationRoutineId: 
@@ -8905,7 +8905,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Meta.XR.BuildingBlocks::Meta.XR.BuildingBlocks.BuildingBlock
   blockId: e47682b9-c270-40b1-b16d-90b627a5ce1b
-  instanceId: 14cb49e8-e1f2-4ffd-b3fd-adead7dd399e
+  instanceId: 94f74df1-1715-47b6-9d98-a1212906089f
   version: 1
   installationRoutineCheckpoint:
     _installationRoutineId: 
@@ -8995,7 +8995,7 @@ MonoBehaviour:
   requestBodyTrackingPermissionOnStartup: 1
   requestFaceTrackingPermissionOnStartup: 0
   requestEyeTrackingPermissionOnStartup: 0
-  requestScenePermissionOnStartup: 1
+  requestScenePermissionOnStartup: 0
   requestRecordAudioPermissionOnStartup: 0
   requestPassthroughCameraAccessPermissionOnStartup: 0
   _localDimming: 1
@@ -10878,7 +10878,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Meta.XR.BuildingBlocks::Meta.XR.BuildingBlocks.BuildingBlock
   blockId: 5817f7c0-f2a5-45f9-a5ca-64264e0166e8
-  instanceId: af051fe4-742f-439d-9667-cce286124547
+  instanceId: 19bde458-458a-4244-b717-9dbbc59ecfed
   version: 1
   installationRoutineCheckpoint:
     _installationRoutineId: 
@@ -11842,7 +11842,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Meta.XR.BuildingBlocks::Meta.XR.BuildingBlocks.BuildingBlock
   blockId: 81f55626-5fad-45e9-a1df-184f330da7ba
-  instanceId: c007b54c-30c0-45be-ad56-f59f5ded937b
+  instanceId: f0b833b2-a454-47f0-9885-447534aec7a8
   version: 1
   installationRoutineCheckpoint:
     _installationRoutineId: 2063f481-1b63-4eda-9ee8-a00df98536bc

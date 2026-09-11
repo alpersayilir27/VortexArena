@@ -21,6 +21,9 @@ namespace VortexArena.Protocol
         /// an old client sends no <c>targetNetId</c>, so it can break nothing, and it ignores
         /// <c>object_state</c>, so it keeps seeing a cover others already broke — two players on either
         /// side of the same wall see different worlds.</para>
+        /// <para>v21 adds <c>body</c> on <c>status</c>/<see cref="PlayerInfo"/> (§5.1/§5.3): additive,
+        /// but an old APK never sends it, so its T-pose fault stays invisible to the operator — same
+        /// reasoning as v14.</para>
         /// <para>v16 <c>identify</c> REMOVED (both directions) · v15 <c>clear_calibration.keepSaved</c>
         /// (§5.2/§10.6) · v14 out-of-bounds bit + admin
         /// <c>violation</c> (§5.3/§6.3) · v13 calibration mode + diagnostics (§5.2/§10.6/§10.8) ·
@@ -36,7 +39,7 @@ namespace VortexArena.Protocol
         /// <para>v5 net telemetry + packet combining (<c>0x05</c>) · v4 held item on the wire, shot
         /// events moved to UDP · v3 phase machine · v2 <c>set_identity</c>.</para>
         /// </summary>
-        public const int PROTOCOL_VERSION = 20;
+        public const int PROTOCOL_VERSION = 21;
         public const string APP_ID = "VortexArena";
 
         // ---- Calibration mode (§5.2/§10.6): how headsets align AT STARTUP. ----
@@ -300,6 +303,23 @@ namespace VortexArena.Protocol
         /// <summary>Not connected. The sender keeps the last valid hand relative to the head and marks
         /// the pose stale with <c>FLAG_HAND_*_STALE</c> (§6.3).</summary>
         public const int CONTROLLER_LOST = 3;
+
+        // ---- Body tracking state (§5.1/§5.3): body on status and PlayerInfo. ----
+        // ⚠️ 0 = "unknown" for the same reason as CONTROLLER_UNKNOWN.
+
+        /// <summary>Not reported: an admin record, or a client without a body yet.</summary>
+        public const int BODY_UNKNOWN = 0;
+
+        /// <summary>Real skeleton streaming.</summary>
+        public const int BODY_OK = 1;
+
+        /// <summary>T-pose fallback on the wire (tracking outage / focus loss); the headset repairs
+        /// itself.</summary>
+        public const int BODY_FALLBACK = 2;
+
+        /// <summary>OS body-tracking permission refused: the fallback is permanent, only the player can
+        /// grant it.</summary>
+        public const int BODY_NO_PERMISSION = 3;
 
         // ---- Phase values (§10.1). Carried as a string; unknown reads as PAUSED. ----
 

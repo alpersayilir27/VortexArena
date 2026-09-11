@@ -131,6 +131,11 @@ namespace VortexArena.Core.Player
         /// NOTHING hands the body over.</para></summary>
         public bool IsPoseDriven { get; private set; }
 
+        /// <summary>Is this body currently sending the T-pose fallback instead of an SDK frame (§6.11)?
+        /// Meaningful only on the OWNER body — a remote character never sends. Read by
+        /// <c>LocalBodyAvatar.BodyTrackingState</c>, which carries it to <c>status.body</c>.</summary>
+        public bool IsTPoseFallbackStreaming { get; private set; }
+
         /// <inheritdoc cref="INetworkCharacterBehaviour.CharacterPrefab"/>
         /// <remarks>The SDK does not spawn the character (<c>Setup(instantiateCharacter: false)</c>);
         /// this field only satisfies the interface.</remarks>
@@ -561,6 +566,7 @@ namespace VortexArena.Core.Player
             }
 
             _tPoseFallbackElapsed = 0f;
+            IsTPoseFallbackStreaming = true;
             SendTPoseFrame();
         }
 
@@ -951,6 +957,7 @@ namespace VortexArena.Core.Player
             }
 
             _lastSdkFrameTime = Time.time;
+            IsTPoseFallbackStreaming = false;
 
             if (!_poseSuspect)
             {

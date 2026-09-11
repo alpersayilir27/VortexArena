@@ -1,4 +1,5 @@
 using System;
+using System.Text;
 using TMPro;
 using UnityEngine;
 using UnityEngine.Events;
@@ -78,6 +79,7 @@ namespace VortexArena.App.Admin
         private const string GlyphControllerUntracked = "~";
         private const string GlyphControllerLost = "X";
         private const string GlyphControllerUnknown = "-";
+        private const string GlyphBodyFallback = "T";
 
         /// <summary>Row dimming: a device expected back must not look like one removed from the
         /// game (§2) — the first may return, the second needs no action.</summary>
@@ -539,15 +541,32 @@ namespace VortexArena.App.Admin
 
         private static string BuildStatsLine(AdminPlayerView view)
         {
-            string battery = FormatBattery(view);
-            string controllers = FormatControllers(view);
-            string state = BuildState(view);
+            // Unreported tokens are dropped, not shown empty: narrow card space goes to state, not
+            // to an unread column.
+            return JoinTokens($"{view.kills}/{view.deaths}", FormatBattery(view),
+                FormatControllers(view), FormatBody(view), BuildState(view));
+        }
 
-            // Drop the controller token when it carries nothing (both hands unreported): narrow
-            // card space goes to state, not to an unread column.
-            return string.IsNullOrEmpty(controllers)
-                ? $"{view.kills}/{view.deaths} · {battery} · {state}"
-                : $"{view.kills}/{view.deaths} · {battery} · {controllers} · {state}";
+        /// <summary>Joins the non-empty tokens with the row separator.</summary>
+        internal static string JoinTokens(params string[] tokens)
+        {
+            var line = new StringBuilder();
+            foreach (string token in tokens)
+            {
+                if (string.IsNullOrEmpty(token))
+                {
+                    continue;
+                }
+
+                if (line.Length > 0)
+                {
+                    line.Append(" · ");
+                }
+
+                line.Append(token);
+            }
+
+            return line.ToString();
         }
 
         /// <summary>
@@ -587,6 +606,26 @@ namespace VortexArena.App.Admin
             }
 
             return $"K:{ControllerGlyph(view.ctrlL)}{ControllerGlyph(view.ctrlR)}";
+        }
+
+        /// <summary>
+        /// Body tracking as one token (<c>G:</c> + one glyph). Empty when unreported.
+        /// <para>⚠️ The fault has NO local trace: the player's own screen looks normal, the T-pose
+        /// shows only on other screens (§5.1). This token is the operator's only readout.</para>
+        /// </summary>
+        internal static string FormatBody(AdminPlayerView view)
+        {
+            switch (view.body)
+            {
+                case ArenaProtocol.BODY_OK:
+                    return "G:" + Colored(GlyphControllerOk, UiKit.Muted);
+                case ArenaProtocol.BODY_FALLBACK:
+                    return "G:" + Colored(GlyphBodyFallback, UiKit.Accent);
+                case ArenaProtocol.BODY_NO_PERMISSION:
+                    return "G:" + Colored(GlyphControllerLost, UiKit.Bad);
+                default:
+                    return "";
+            }
         }
 
         private static string ControllerGlyph(int state)

@@ -85,6 +85,9 @@ namespace VortexArena.App.Admin
         /// <inheritdoc cref="ctrlL"/>
         public int ctrlR;
 
+        /// <inheritdoc cref="ctrlL"/>
+        public int body;
+
         public float hp = ArenaProtocol.PLAYER_MAX_HP;
         public int kills;
         public int deaths;
@@ -530,10 +533,12 @@ namespace VortexArena.App.Admin
                 {
                     AnnounceControllerChange(view, "SOL", view.ctrlL, info.ctrlL);
                     AnnounceControllerChange(view, "SAĞ", view.ctrlR, info.ctrlR);
+                    AnnounceBodyChange(view, view.body, info.body);
                 }
 
                 view.ctrlL = info.ctrlL;
                 view.ctrlR = info.ctrlR;
+                view.body = info.body;
                 view.scene = info.scene ?? "";
 
                 // Server counters OVERWRITE local ones (§5.3) — drift closes here.
@@ -895,6 +900,47 @@ namespace VortexArena.App.Admin
             if (previous == ArenaProtocol.CONTROLLER_LOST)
             {
                 string back = $"{view.name} (#{view.playerId}) {hand} kumanda geri bağlandı.";
+                AdminCommands.Note(back);
+                Debug.Log(back);
+            }
+        }
+
+        /// <summary>Notifies the operator ONCE when a player's body tracking state changes (§5.1).
+        /// <para>⚠️ Unlike the controller notice, arriving FROM
+        /// <see cref="ArenaProtocol.BODY_UNKNOWN"/> is announced: an unpermitted headset reports its
+        /// fault on the very first status, and staying silent would hide it until the match.</para>
+        /// <para>⚠️ The fault leaves no local trace — the player's own screen looks fine, the T-pose
+        /// exists only on other screens — so this line is the operator's ONLY signal.</para></summary>
+        private static void AnnounceBodyChange(AdminPlayerView view, int previous, int current)
+        {
+            if (previous == current)
+            {
+                return;
+            }
+
+            if (current == ArenaProtocol.BODY_NO_PERMISSION)
+            {
+                string denied = $"{view.name} (#{view.playerId}) gövde takibi izni YOK — T-pozda " +
+                                "çiziliyor ve öyle kalacak; izni gözlükte oyuncu vermeli.";
+                AdminCommands.Note(denied);
+                Debug.LogWarning(denied);
+                return;
+            }
+
+            if (current == ArenaProtocol.BODY_FALLBACK)
+            {
+                string fallback = $"{view.name} (#{view.playerId}) gövde izlemesi düştü — T-pozda " +
+                                  "çiziliyor, gözlük onarmayı deniyor.";
+                AdminCommands.Note(fallback);
+                Debug.LogWarning(fallback);
+                return;
+            }
+
+            // Recovery closes only an announced fault; UNKNOWN → OK is a first report, not news.
+            if (current == ArenaProtocol.BODY_OK &&
+                (previous == ArenaProtocol.BODY_FALLBACK || previous == ArenaProtocol.BODY_NO_PERMISSION))
+            {
+                string back = $"{view.name} (#{view.playerId}) gövde izlemesi geri geldi.";
                 AdminCommands.Note(back);
                 Debug.Log(back);
             }

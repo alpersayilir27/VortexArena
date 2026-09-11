@@ -22,11 +22,6 @@ dinamik ve sahne prefabları, sahne yerleşimi ve export **kuruldu**
 - [ ] Turnuvada tur başı sıfırlama çalışıyor.
 - [ ] Hazırlık panelindeki "Ağ nesneleri" satırı eksik/yinelenen `kind`'ı yakalıyor.
 
-**B2 — sahiplik ve poz:**
-
-- [ ] 17+ oyuncuda fırlatılan obje uzak başlıkta zıplayarak da olsa **doğru yerde duruyor** (snapshot
-      parçalanınca obje bölümü düşer, dinlenme pozu WS'ten gelir).
-
 **B3 — olaylar ve dinamik doğuş:**
 
 - [ ] Türün izin listesinde olmayan bir olay adı **reddediliyor** (tek satır log, sessiz).

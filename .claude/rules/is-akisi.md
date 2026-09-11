@@ -95,8 +95,19 @@ hiç doğrulama tetiklemez, o ana kadar biriktirir. Doküman güncellemesi de ay
 
 - ⚠️ **Test maddeleri Notion'a yazılır, sohbete değil.** Kullanıcı derleme/build/testi kendisi
   koşmaz; iş bitince Notion `Todo` veritabanına (`collection://79d48db8-e104-8306-a23e-87a508fc649c`)
-  `Doğrulama N — <konu>` kartı açılır (Durum *Test bekliyor*): **önce** derleme/dağıtım adımları
+  `Doğrulama N — <konu>` kartı açılır (Durum *Yapılacak*): **önce** derleme/dağıtım adımları
   (hangi betik, hangi sırayla, derleme hatası çıkarsa karta yapıştır), sonra adım adım maddeler +
   "görmen gereken". Sohbete yalnız kartın bağlantısı düşer; "şunu derle/koş" listesi verilmez.
+- ⚠️ **Kart SADE yazılır — testçi yalnız ne yapacağını ve ne göreceğini okur.** Her madde
+  `yap → görmen gereken` biçimindedir. Karta **girmeyenler:** geçmiş anlatısı ("geçen turda şu
+  bulunmuştu", "sebebi şuydu", "şu şöyle değişti"), eski kartlara gönderme ("21'den devredildi",
+  "27 §2'nin kalanı"), plan dosyası/defter notu ("geçerse `plan/x.md` silinir"), ajanın kendi
+  sağlama formülleri. Bunların yeri git geçmişi, `Docs/` ve `plan/`'dır; kart, kararı vermesi
+  gereken kişiye ("Karar (Ertu): …") tek satırlık soru taşıyabilir, gerekçe taşımaz.
+- **Kart Alper'e atanır, Durum *Yapılacak* kalır.** ⚠️ *Test bekliyor* bir Doğrulama kartına
+  KONMAZ: kartın içi zaten testtir, *Test bekliyor* geliştirme kartının "yazıldı, testi bekliyor"
+  hâlidir. Atanmamış kart testçinin listesinde görünmez, eski karta büyük harfli not olarak geri
+  döner. Aynı build turuna bağlı kartlar tek satırla birbirine bağlanır ("28 · 29 · 30 aynı build
+  ile test edilir").
 - Biten kart "Todo Arşiv" sayfasına taşınır, açık kalan maddesi önce yeni karta aktarılır. Kalıcı
   bilgi yine repoda ([[docs-sync]]) — kart geçicidir, doküman yerine geçmez.

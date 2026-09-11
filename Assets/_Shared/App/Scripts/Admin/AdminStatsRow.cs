@@ -10,7 +10,7 @@ namespace VortexArena.App.Admin
 {
     /// <summary>
     /// Single player row in the stats panel: team stripe, name + <c>#id</c>, K/D/KD cells, one
-    /// detail line (score · battery · controllers · ping · state) and actions (SIFIRLA · rename ·
+    /// detail line (score · battery · controllers · body · ping · state) and actions (SIFIRLA · rename ·
     /// AT · ÖLÇ · KALİBRE).
     /// <para>
     /// <b>Why a sibling of <see cref="AdminPlayerRow"/> but a separate class:</b> the side card is
@@ -811,7 +811,7 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>
-        /// Detail cell: score · battery · controllers · ping · state · violations.
+        /// Detail cell: score · battery · controllers · body · ping · state · violations.
         /// <para>Battery thresholds/colours and controller glyphs come from
         /// <see cref="AdminPlayerRow"/> — the same headset must not differ between screens.</para>
         /// </summary>
@@ -819,15 +819,15 @@ namespace VortexArena.App.Admin
         {
             string battery = AdminPlayerRow.FormatBattery(view);
             string controllers = AdminPlayerRow.FormatControllers(view);
+            string body = AdminPlayerRow.FormatBody(view);
             // §6.7: -1 = no measurement. "-" so it does not read as "0 ms ping".
             string ping = view.rttMs < 0 ? "-" : $"{view.rttMs} ms";
             string state = StateText(view);
             string violations = ViolationTokens(view);
 
-            // Drop the controller token when it carries nothing (both hands unreported).
-            string line = string.IsNullOrEmpty(controllers)
-                ? $"SKOR {view.score} · {battery} · {ping} · {state} · {violations}"
-                : $"SKOR {view.score} · {battery} · {controllers} · {ping} · {state} · {violations}";
+            // Unreported controller/body tokens are dropped rather than drawn empty.
+            string line = AdminPlayerRow.JoinTokens($"SKOR {view.score}", battery, controllers, body,
+                ping, state, violations);
 
             // ⚠️ The last reload failure reason STAYS on the row (§10.6): the popup closes itself
             // after a few seconds and without a trace the operator is left with "something

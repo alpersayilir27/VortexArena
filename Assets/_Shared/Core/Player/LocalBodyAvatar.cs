@@ -2,6 +2,7 @@ using Meta.XR.Movement.Networking;
 using UnityEngine;
 using VortexArena.Core.Arena;
 using VortexArena.Net;
+using VortexArena.Protocol;
 
 namespace VortexArena.Core.Player
 {
@@ -84,6 +85,11 @@ namespace VortexArena.Core.Player
         /// <summary>The "sensor did not start" error is printed once (Update runs 72/s).</summary>
         private bool _sourceProviderWarned;
 
+        /// <summary>Last permission answer from the watchdog. Cached because the query is a JNI call —
+        /// <see cref="BodyTrackingState"/> must not ask a second time per frame. Starts optimistic: no
+        /// refusal is known before the first tick.</summary>
+        private bool _permitted = true;
+
         /// <summary>Grace period for the sensor to start (s). Not checked immediately: without permission
         /// <c>OVRBody</c> disables itself waiting for <c>PermissionGranted</c> and re-enables once the
         /// dialog is answered — erroring instantly would make that legitimate path look broken.
@@ -138,6 +144,30 @@ namespace VortexArena.Core.Player
         /// <summary>Is the body actually being solved (initialised + retargeter valid)? Precondition of
         /// the measurement: the eye level of a skeleton with no pose is meaningless.</summary>
         public bool IsBodyPoseValid => _initialized && retargeter != null && retargeter.RetargeterValid;
+
+        /// <summary>Body tracking state for <c>status</c> (§5.1, <c>ArenaProtocol.BODY_*</c>).</summary>
+        public int BodyTrackingState
+        {
+            get
+            {
+                if (!_initialized || character == null)
+                {
+                    return ArenaProtocol.BODY_UNKNOWN;
+                }
+
+                if (!_permitted)
+                {
+                    return ArenaProtocol.BODY_NO_PERMISSION;
+                }
+
+                if (_sourceProviderWarned || character.IsTPoseFallbackStreaming)
+                {
+                    return ArenaProtocol.BODY_FALLBACK;
+                }
+
+                return ArenaProtocol.BODY_OK;
+            }
+        }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
@@ -440,6 +470,7 @@ namespace VortexArena.Core.Player
             // SDK can still report a valid retargeter — it keeps the skeleton it already has — so an
             // unpermitted headset used to be waved through as healthy and never fell back at all.
             bool permitted = HasBodyTrackingPermission();
+            _permitted = permitted;
 
             if (permitted && retargeter.RetargeterValid)
             {

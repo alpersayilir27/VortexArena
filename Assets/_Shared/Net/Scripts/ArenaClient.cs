@@ -114,6 +114,7 @@ namespace VortexArena.Net
         // A client that does not report, and every admin, stays at CONTROLLER_UNKNOWN.
         private int _ctrlL = ArenaProtocol.CONTROLLER_UNKNOWN;
         private int _ctrlR = ArenaProtocol.CONTROLLER_UNKNOWN;
+        private int _body = ArenaProtocol.BODY_UNKNOWN;
 
         // fps measurement: accumulated in Update, read and reset by StatusLoop each interval.
         private int _frameCount;
@@ -262,6 +263,15 @@ namespace VortexArena.Net
         {
             _ctrlL = ctrlL;
             _ctrlR = ctrlR;
+        }
+
+        /// <summary>
+        /// Reports body tracking state (<c>ArenaProtocol.BODY_*</c>). Core measures it via
+        /// <c>LocalBodyAvatar</c>, App carries it here; rides the 5 s <c>status</c>.
+        /// </summary>
+        public void ReportBodyState(int body)
+        {
+            _body = body;
         }
 
         /// <summary>Serialises a protocol DTO to JSON and sends it (no-op when the socket is closed).</summary>
@@ -936,6 +946,7 @@ namespace VortexArena.Net
                 battery = SystemInfo.batteryLevel,
                 ctrlL = _ctrlL,
                 ctrlR = _ctrlR,
+                body = _body,
                 fps = _lastFps,
                 // §5.1 reconciliation: if we fell behind, the server sends the full roster to US only.
                 rosterVersion = _lastRosterVersion

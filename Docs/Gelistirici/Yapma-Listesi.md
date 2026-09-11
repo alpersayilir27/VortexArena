@@ -584,6 +584,13 @@ Her karede değil. Akıcı geri sayım istiyorsan son değeri kendin azalt.
 Meta Project Setup Tool önerse bile. Çektiği `voice` paketi Android namespace çakışmasıyla build'i
 kırar. Bireysel paketler kullanılır: core + interaction + interaction.ovr @203.0.0, audio @85.0.0.
 
+### ⛔ Uzamsal veri (Scene) iznini açma
+
+`USE_SCENE` izni manifest'e, `sceneSupport` `OculusProjectConfig`'e, `requestScenePermissionOnStartup`
+`OVRManager`'a **KONMAZ**: sahne (Scene) API'si hiçbir yerde kullanılmıyor (uzamsal çapa için
+`USE_ANCHOR_API` yeter) ve açılıştaki "uzamsal veriler" dialogu odağı çalıp o pencerede T-poz
+yedeğini tele koyar, sahada da gövde takibi izniyle karıştırılır.
+
 ### ⛔ `.unitypackage` arşivini `Assets/` altına kopyalama
 
 Paket Unity'nin içe aktarma penceresinden alınır; arşivin kendisi projeye girmez. Aynı yayıncının

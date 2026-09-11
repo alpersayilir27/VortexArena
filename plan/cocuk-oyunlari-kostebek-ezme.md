@@ -46,4 +46,5 @@ yükselme mesafesi ve deliğin çapı ona göre ayarlı.
       artırır (karar gerekçesi `Server/README.md` mod bloğunda).
 - [ ] Oyuncu çarpışması görülürse tavan düşürülür — sunucudan mesafe çözümü yoktur.
 
-Doğrulama listesi Notion'da: Todo → "Doğrulama 19 — Çocuk Oyunları: Köstebek Ezme".
+Doğrulama listesi Notion'da: Todo → "Doğrulama 35 — Çocuk Oyunları: Köstebek Ezme (davranış testi)";
+içerik işi "Çocuk oyunları + kavrama: kalan içerik işi" kartında.

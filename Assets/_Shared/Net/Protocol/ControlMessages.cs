@@ -44,6 +44,11 @@ namespace VortexArena.Protocol
         /// <inheritdoc cref="ctrlL"/>
         public int ctrlR;
 
+        /// <summary>Body tracking state (§5.1, <see cref="ArenaProtocol.BODY_OK"/> and friends);
+        /// <c>0</c> = not reported. ⚠️ Discrete state, so it also lives on <see cref="PlayerInfo"/> and
+        /// triggers a roster broadcast like <see cref="ctrlL"/>.</summary>
+        public int body;
+
         public float fps;
 
         /// <summary>Last <see cref="LobbyStateMsg.version"/> the client APPLIED (§5.1); 0 = never → full
@@ -125,8 +130,9 @@ namespace VortexArena.Protocol
         public bool calibrated;
         public string source = "";
 
-        /// <summary>Manual calibration only: how far the system's floor guess is from the real floor
-        /// (m, signed); <c>0</c> when restored from an anchor. The server warns past
+        /// <summary>How far the system's floor guess is from the real floor (m, signed): the
+        /// tracking-local height of the controller tip on manual capture, of the restored anchor on an
+        /// anchor restore — both sit on the physical floor. The server warns past
         /// <see cref="ArenaProtocol.CALIB_FLOOR_WARN_METERS"/> (§10.6). ⚠️ Not a gate — calibration is
         /// accepted whatever the offset.</summary>
         public float floorOffset;
@@ -443,6 +449,11 @@ namespace VortexArena.Protocol
         /// <inheritdoc cref="ctrlL"/>
         public int ctrlR;
 
+        /// <summary>Body tracking state (§5.1, <see cref="ArenaProtocol.BODY_OK"/> and friends); always
+        /// <c>0</c> on admin records. It rides the roster because it is discrete state, like
+        /// <see cref="ctrlL"/>.</summary>
+        public int body;
+
         public string scene;
 
         // Match counters (§10.2) — SERVER-AUTHORITATIVE source of truth for the admin UI; counting only
@@ -463,7 +474,8 @@ namespace VortexArena.Protocol
         public bool calibrated;
         public string calibrationSource;
 
-        /// <summary>Floor offset from the last MANUAL calibration (m, signed; §5.1/§10.6); <c>0</c> = none
+        /// <summary>Floor offset from the last calibration — manual tip or restored anchor (m, signed;
+        /// §5.1/§10.6); <c>0</c> = none
         /// or clean. Rows past <see cref="ArenaProtocol.CALIB_FLOOR_WARN_METERS"/> are flagged in the UI;
         /// <c>clear_calibration</c> resets it.</summary>
         public float floorOffset;

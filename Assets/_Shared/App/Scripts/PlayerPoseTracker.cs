@@ -51,6 +51,7 @@ namespace VortexArena.App
         // (a dying battery).
         private int _loggedStateL = ArenaProtocol.CONTROLLER_UNKNOWN;
         private int _loggedStateR = ArenaProtocol.CONTROLLER_UNKNOWN;
+        private int _loggedBody = ArenaProtocol.BODY_UNKNOWN;
 
         private void Start()
         {
@@ -89,6 +90,7 @@ namespace VortexArena.App
             ControllerTracking.Tick();
 
             ReportControllerState();
+            ReportBodyState();
         }
 
         /// <summary>
@@ -171,6 +173,49 @@ namespace VortexArena.App
             {
                 _loggedStateR = stateR;
                 Debug.LogWarning($"[PlayerPoseTracker] Sağ kumanda durumu: {DescribeState(stateR)}");
+            }
+        }
+
+        /// <summary>
+        /// Pushes the body tracking state to Net (§5.1). Core measures it (<c>LocalBodyAvatar</c>),
+        /// App only carries it — same seam as the controller state.
+        /// </summary>
+        private void ReportBodyState()
+        {
+            LocalBodyAvatar avatar = LocalBodyAvatar.Instance;
+            int state = avatar == null ? ArenaProtocol.BODY_UNKNOWN : avatar.BodyTrackingState;
+
+            ArenaClient.Instance?.ReportBodyState(state);
+
+            if (state == _loggedBody)
+            {
+                return;
+            }
+
+            _loggedBody = state;
+            string line = $"[PlayerPoseTracker] Gövde izleme durumu: {DescribeBody(state)}";
+            if (state == ArenaProtocol.BODY_OK)
+            {
+                Debug.Log(line);
+            }
+            else
+            {
+                Debug.LogWarning(line);
+            }
+        }
+
+        private static string DescribeBody(int state)
+        {
+            switch (state)
+            {
+                case ArenaProtocol.BODY_OK:
+                    return "iskelet akıyor.";
+                case ArenaProtocol.BODY_FALLBACK:
+                    return "T-poz yedeği (izleme kesik, gözlük onarmayı deniyor).";
+                case ArenaProtocol.BODY_NO_PERMISSION:
+                    return "gövde takibi izni YOK (T-poz kalıcı, izni oyuncu vermeli).";
+                default:
+                    return "bilinmiyor.";
             }
         }
 

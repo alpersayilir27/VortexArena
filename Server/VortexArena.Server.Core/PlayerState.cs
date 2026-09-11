@@ -57,6 +57,9 @@ public sealed class PlayerState
     /// <inheritdoc cref="CtrlL"/>
     public int CtrlR { get; set; } = ArenaProtocol.CONTROLLER_UNKNOWN;
 
+    /// <inheritdoc cref="CtrlL"/>
+    public int Body { get; set; } = ArenaProtocol.BODY_UNKNOWN;
+
     public float Fps { get; set; }
     public string Scene { get; set; } = "";
 
@@ -310,6 +313,7 @@ public sealed class PlayerState
         // §5.1/§5.3 — discrete device state; unlike the telemetry numbers it does travel in the roster.
         ctrlL = CtrlL,
         ctrlR = CtrlR,
+        body = Body,
         scene = Scene,
         // §10.2 counters: read by the admin statistics table (§5.3 lobby_state).
         kills = Kills,

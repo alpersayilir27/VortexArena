@@ -39,4 +39,5 @@ slotlarının hacimleri ve müşteri yolu ona bağlı. Her banko slotunda bir se
       başına göre yeniden konumlanır; dilim renkleri (`sliceColors`) malzeme modellerinin renkleriyle
       eşitlenir.
 
-Doğrulama listesi Notion'da: Todo → "Doğrulama 18 — Çocuk Oyunları: Hamburgerci".
+Doğrulama listesi Notion'da: Todo → "Doğrulama 34 — Çocuk Oyunları: Hamburgerci (davranış testi)";
+içerik işi "Çocuk oyunları + kavrama: kalan içerik işi" kartında.
