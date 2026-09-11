@@ -1197,7 +1197,7 @@ iskelet çizmektir. Bu yol sunucunun **uplink** okuyucusudur ve sunucu blob'u ol
 ettiği için yarım bir kare tek oyuncuyu değil arenadaki **herkesi** bozuk gövdeyle çizerdi.
 
 ⚠️ **İzleme bozulduğunda gönderen SUSMAZ — T-poz yedeği devreye girer.** Yedeği üreten
-`ArenaNetCharacterBehaviour`'dur ve **iki** durumda çalışır:
+`ArenaNetCharacterBehaviour`'dur ve **üç** durumda çalışır:
 
 - **(a) Body tracking hiç geçerli poz üretmemişse.** Kaynağı açılmayan/izinsiz başlıkta (Link'te
   geliştirici özelliği kapalı, `BODY_TRACKING` izni yok) SDK'nın gönderim kapısı hiç açılmaz ve
@@ -1228,12 +1228,20 @@ ettiği için yarım bir kare tek oyuncuyu değil arenadaki **herkesi** bozuk g�
   Düşen kare hiç gönderilmez, yerine yedek kare gider; SDK yoluna dönüş **histerezislidir** —
   ardışık temiz kare sayacı dolana kadar temiz kareler de bastırılır, yoksa uzak tarafta gövde iki
   yol arasında kare kare titrerdi.
+- **(c) Tel eklemleri çözülemiyorsa.** Retargeter'ın `JointPairs` listesi `SkeletonWire`'ın
+  indekslerini karşılamıyorsa (kısa liste, boş `Joint` — prefab hatası, Build Readiness'ın iskelet
+  eklem listesi satırı yakalar) canlı kemiklerden kare yazılamaz. SDK poz uygulamaya devam ettiği
+  için (a) da (b) de silahlanmaz; bu dal onun yerine geçer. ⚠️ Çözülemeyen kare **kare denetimine hiç
+  girmez**: girse akış damgasını tazeler ve yedeğin silahlanma koşulunu söndürür, oyuncu hata
+  logundan başka iz bırakmadan görünmez kalır. Yedek kare bind pozundan yazıldığı için tel
+  eklemlerine ihtiyaç duymaz. Uzak uçta aynı arıza kemiklerin yazılmaması demektir: gövde kökünü
+  izleyen bind pozunda çizilir.
 
-⚠️ **İki durumda da blob hedef iskeletin referans T-pozudur:** `SkeletonRetargeter.TargetReferencePoseLocal`'dan
+⚠️ **Üç durumda da blob hedef iskeletin referans T-pozudur:** `SkeletonRetargeter.TargetReferencePoseLocal`'dan
 bind rotasyonları + bind kalça konumu, SDK karesiyle aynı `SkeletonWire.Write` ile yazılır
 (`SerializeSkeletonAndFace` kullanılmaz) — "karakterin o anki kemikleri" gönderen bir dal YOKTUR. Bir arızadan sonra o kemikler SDK'nın **son uyguladığı donuk poz**tur ve kıpırdamayan bir
 gövde sahada "ağ bozuk" diye okunur; T-poz ise arızayı olduğu gibi, "izleme bozuk" diye gösterir.
-SDK'nın `AppliedPose` bayrağı yalnız iki dalın **silahlanma koşulunu** ayırır, gönderilen içeriği
+SDK'nın `AppliedPose` bayrağı yalnız dalların **silahlanma koşulunu** ayırır, gönderilen içeriği
 değil: bayrak yalnız retarget hesabı koştuğunda yazılır, kaynak geçersizken son değerinde kalır —
 bir latch DEĞİLDİR, "bir daha asla" anlamı taşımaz.
 

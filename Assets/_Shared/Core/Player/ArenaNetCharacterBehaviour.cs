@@ -195,6 +195,11 @@ namespace VortexArena.Core.Player
         /// <summary>Has the unusable-<c>JointPairs</c> error been logged (once per component)?</summary>
         private bool _wireJointsWarned;
 
+        /// <summary>Did the last <see cref="TryResolveWireJoints"/> fail? Third arming condition of the
+        /// T-pose fallback: with no wire bones no SDK frame can be sent, yet <c>AppliedPose</c> is true and
+        /// the stream marker never ages — without this the player is simply invisible.</summary>
+        private bool _wireJointsUnusable;
+
         /// <summary>Outgoing frame buffers, sized once: x,y,z,w per wire joint and the encoded blob.</summary>
         private readonly float[] _wireRotations = new float[4 * SkeletonWire.JointCount];
 
@@ -528,8 +533,11 @@ namespace VortexArena.Core.Player
         /// skipped entirely while the source is invalid — so it holds its LAST value and must not be
         /// read as a latch. That is exactly why (b) exists: after the first valid pose every later fault
         /// lands there.</para>
+        /// <para><b>(c) Wire bones unusable</b> — <c>JointPairs</c> cannot supply the wire joints
+        /// (prefab fault, <see cref="TryResolveWireJoints"/>). The SDK keeps applying poses, so neither (a)
+        /// nor (b) fires; this frame is built from the reference pose and needs no wire bones.</para>
         /// <para>⚠️ They cannot send simultaneously: (a) runs only while <c>AppliedPose</c> is false, (b)
-        /// only while it is true, and while (b) is active the SDK's own frame is suppressed in
+        /// and (c) only while it is true, and while either is active the SDK's own frame is suppressed in
         /// <see cref="ReceiveStreamData"/>.</para></summary>
         private void TickTPoseFallback()
         {
@@ -546,7 +554,8 @@ namespace VortexArena.Core.Player
             }
 
             bool coldStart = _tPoseFallbackRequested && !skeleton.AppliedPose;
-            bool inFlightFault = skeleton.AppliedPose && (_poseSuspect || IsSdkStreamStale());
+            bool inFlightFault = skeleton.AppliedPose &&
+                                 (_poseSuspect || IsSdkStreamStale() || _wireJointsUnusable);
             if (!coldStart && !inFlightFault)
             {
                 return;
@@ -821,6 +830,13 @@ namespace VortexArena.Core.Player
 
             // ⚠️ This being a WORLD point depends on ApplyRootScale being OFF in the retargeter (see
             // ApplyArenaRoot, Docs/Sistem-Ozeti.md §7).
+            // ⚠️ Before AcceptSdkFrame: a frame that cannot be built must not refresh the stream marker or
+            // clear IsTPoseFallbackStreaming, or the fallback would never arm and the status would flicker.
+            if (!TryResolveWireJoints())
+            {
+                return;
+            }
+
             Pose candidate = ArenaSpace.WorldToArena(
                 new Pose(_characterRoot.position, _characterRoot.rotation));
 
@@ -829,12 +845,6 @@ namespace VortexArena.Core.Player
                 // ⚠️ A suppressed frame must NOT touch the guard's state (hence GuardRootJump runs after
                 // the decision): a garbage root in _lastSentRoot would make the next clean frame look
                 // like a jump.
-                return;
-            }
-
-            // Before GuardRootJump for the same reason: an unsendable frame must not become its reference.
-            if (!TryResolveWireJoints())
-            {
                 return;
             }
 
@@ -1343,13 +1353,14 @@ namespace VortexArena.Core.Player
 
             if (fault != null)
             {
+                _wireJointsUnusable = true;
                 if (!_wireJointsWarned)
                 {
                     _wireJointsWarned = true;
                     Debug.LogError(
                         $"[ArenaNetCharacterBehaviour] Retargeter JointPairs iskelet teli için kullanılamıyor " +
-                        $"({fault}) — gövde karesi gönderilemez/uygulanamaz. Build Readiness'taki iskelet " +
-                        "eklem listesi satırına bak.", this);
+                        $"({fault}) — yerel gövde T-poz yedeğiyle gider, uzak gövde bind pozunda kalır. " +
+                        "Build Readiness'taki iskelet eklem listesi satırına bak.", this);
                 }
 
                 return false;
@@ -1363,6 +1374,7 @@ namespace VortexArena.Core.Player
 
             _wireHips = pairs[SkeletonWire.HIPS_INDEX].Joint;
             _wireJoints = joints;
+            _wireJointsUnusable = false;
             return true;
         }
 
