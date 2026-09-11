@@ -291,8 +291,8 @@ namespace VortexArena.Net
 
         /// <summary>
         /// A <b>SHARED clock</b> (seconds) on the server's tick axis; false before the first snapshot.
-        /// <para><b>Why:</b> the skeleton blob embeds the sender's timestamp and the receiver
-        /// interpolates against it (§6.9). Without a common epoch the body plays in 12 Hz steps;
+        /// <para><b>Why:</b> the Movement SDK's network interface requires a network time on every
+        /// client. The wire skeleton does NOT use it (it interpolates on receive stamps, §6.9);
         /// <c>Environment.TickCount</c> is machine-specific.</para>
         /// <para><b>Why no clock-sync packet:</b> <c>serverTick</c> is already the same number on every
         /// client — converted to seconds plus time since the last arrival. Error = one-way latency

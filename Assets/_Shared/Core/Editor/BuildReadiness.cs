@@ -126,11 +126,14 @@ namespace VortexArena.Core.Editor
                     null,
                     null,
                     "0x07 iskelet akışının eklem kümesi: LocalBodyAvatar (gönderen) ile RemoteAvatar " +
-                    "(alıcı) aynı listeyi taşımalı ve parmaklar listede OLMAMALI (§6.9). NE ZAMAN: " +
-                    "gövde prefablarından birinin NetworkCharacterRetargeter'ı düzenlenince ya da " +
-                    "karakter modeli değişince. ✗ ise insan adımıdır: blob opak olduğu için ayrışma " +
-                    "hiçbir yerde hata vermez, yalnız uzak gövdeler bozuk çizilir. Liste RUNTIME'da " +
-                    "hesaplanmaz — iki prefabın Inspector'ında düzeltilir."),
+                    "(alıcı) aynı SDK listesini taşımalı, parmaklar listede OLMAMALI; ayrıca tel eklem " +
+                    "listesindeki (SkeletonWire) her indeks iki prefabın JointPairs'inde dolu ve AYNI " +
+                    "kemiğe çözülmeli, kalça indeksi kalça kemiği olmalı ve 'Objects To Hide Until " +
+                    "Valid' boş kalmalı (§6.9). NE ZAMAN: gövde prefablarından birinin " +
+                    "NetworkCharacterRetargeter'ı düzenlenince ya da karakter modeli değişince. ✗ ise " +
+                    "insan adımıdır: blob eklemleri indeksle taşıdığı için ayrışma hiçbir yerde hata " +
+                    "vermez, yalnız uzak gövdeler bozuk çizilir. Liste RUNTIME'da hesaplanmaz — iki " +
+                    "prefabın Inspector'ında düzeltilir."),
 
                 Check(
                     "Ağ nesneleri",

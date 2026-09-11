@@ -151,6 +151,15 @@ düşüş yoludur** ve düzeni sabittir; oraya bir bölüm eklemek bu sefer onla
 pozunun düşmesi bilinçlidir: kaybolan şey objenin son pozu değil hareketinin akıcılığıdır —
 dinlenme pozu güvenilir WS kanalından gelir.
 
+### ⛔ İskelet tel düzenini `SkeletonWire.FORMAT` ve `PROTOCOL_VERSION` artırmadan değiştirme
+
+`SkeletonWire.JOINT_INDICES`'e eklem eklemek, sırasını değiştirmek ya da blob düzenine alan eklemek
+iki ucun aynı baytları başka kemiklere okuması demektir. Uzunluk değişirse alıcı kareyi atar ve uzak
+gövde kafa + kol yedeğine düşer; aynı uzunlukta bir sıra değişikliği ise hiçbir kapıya takılmaz,
+rotasyonlar sessizce yanlış kemiklere yazılır. İkisi birlikte artırılır ve tüm başlıklar + admin +
+sunucu aynı turda dağıtılır. Prefabdaki `_bodyIndicesToSync`/`_bodyIndicesToSend` tele etki etmez —
+tel listesi orada değiştirilmez. Gerekçe: `ArenaNet-Protokol` §6.9.
+
 ### ⛔ Sunucuya kenar tetikli bildirdiğin durumu yeniden bağlanmada tekrar bildirmeden bırakma
 
 Sunucu `hello`'da ve kopuşta oturum durumunu sıfırlar (`ready`, `calibrated`, …). "Değişince
@@ -385,6 +394,14 @@ kopyası aynı kimlikle doğar; `NetObjectRegistry` ikinciyi kaydetmez ve belirt
 kırılmıyor"dur. `SceneIdGuard` sahne kaydında çakışmayı ayırır ama prefab asset'i kirli kalır, her yeni
 sahnede yeniden çakışır. Normal prefabda Apply penceresinde `NetIdentity` satırının işaretini kaldır;
 model prefab (FBX) örneğine Apply zaten yapılamaz, oraya eklemek güvenlidir.
+
+### ⛔ Avatar prefabının retargeter'ında `_objectsToHideUntilValid` listesini doldurma
+
+`NetworkCharacterRetargeter._objectsToHideUntilValid`'deki nesneleri görünür yapan SDK'nın
+`ReceiveData` yoludur ve uzak gövdede o yol hiç çağrılmaz (kemikleri `ArenaNetCharacterBehaviour`
+yazar). Listeye konan nesne uzak gövdede **hiç görünmez**, hata da vermez. `SkeletonStreamGuard` iki
+avatar prefabında da listeyi boş ister, doluysa Hazırlık satırı ✗ olur. Gerekçe: `Docs/Sistem-Ozeti.md`
+§7 "`_objectsToHideUntilValid` uzak gövdede nesneyi kalıcı gizler".
 
 ### ⛔ `.meta` dosyası kopyalayarak asmdef/asset üretme
 

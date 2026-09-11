@@ -25,8 +25,8 @@ namespace VortexArena.Protocol
         /// Latency is measured here, on the channel the game flows through.</para></summary>
         public const byte RttProbe = 0x06;
 
-        /// <summary>0x07 — retargeted skeleton blob + head-anchored root (yaw + offset, v19)
-        /// (<see cref="SkeletonUpdate"/>, §6.9). Client → server,
+        /// <summary>0x07 — VortexArena skeleton blob (<see cref="SkeletonWire"/>) + head-anchored root
+        /// (yaw + offset, v19) (<see cref="SkeletonUpdate"/>, §6.9). Client → server,
         /// <see cref="ArenaProtocol.SKELETON_RATE_HZ"/>; players only.</summary>
         public const byte SkeletonUpdate = 0x07;
 
@@ -97,7 +97,7 @@ namespace VortexArena.Protocol
             return (short)System.Math.Round(scaled);
         }
 
-        private static uint PackRotation(float x, float y, float z, float w)
+        internal static uint PackRotation(float x, float y, float z, float w)
         {
             // Largest |component| is dropped and rebuilt on read.
             int largest = 0;
@@ -129,7 +129,7 @@ namespace VortexArena.Protocol
             return packed;
         }
 
-        private static void UnpackRotation(uint packed, out float x, out float y, out float z, out float w)
+        internal static void UnpackRotation(uint packed, out float x, out float y, out float z, out float w)
         {
             int largest = (int)(packed >> 30);
             float sumSq = 0f;
@@ -805,18 +805,15 @@ namespace VortexArena.Protocol
     /// <summary>
     /// 0x07 — [u8 type][u8 playerId][u16 seq][root: <see cref="SkeletonRootData"/> 8][u16 len][blob]
     /// (client → server, <see cref="ArenaProtocol.SKELETON_RATE_HZ"/>; players only, §6.9).
-    /// <para><b>The blob is OPAQUE:</b> the Meta Movement SDK's native serialisation
-    /// (<c>SerializeSkeletonAndFace</c>). The server neither unpacks nor validates it, it only copies —
-    /// there is NO skeleton table on the server and none will be added. Same reasoning as the
-    /// <c>netItemId</c> bytes (§6.6): <b>client-authoritative presentation info</b>.</para>
-    /// <para>⚠️ <b>Why <c>root</c> is separate:</b> the blob's joint 0 is written with
-    /// <c>JointType.NoWorldSpace</c>, i.e. <b>the sender's world pose</b>, unrelated to the receiver's
-    /// arena. The blob being opaque, we cannot transform the root inside it — so the root rides
-    /// separately (as yaw + head offset since v19, see <see cref="SkeletonRootData"/>) and the
-    /// receiver writes it after <c>ApplyBodyPose</c>.</para>
+    /// <para><b>The blob is the VortexArena skeleton blob</b> (layout: <see cref="SkeletonWire"/>). The
+    /// server copies it without unpacking — there is NO skeleton table on the server and none will be
+    /// added. Same reasoning as the <c>netItemId</c> bytes (§6.6): <b>client-authoritative presentation
+    /// info</b>.</para>
+    /// <para>⚠️ <b>Why <c>root</c> is separate:</b> the blob's joint 0 is only a local rotation; the
+    /// body's arena placement rides here (yaw + head offset since v19, see
+    /// <see cref="SkeletonRootData"/>) and the receiver never applies joint 0.</para>
     /// <para>⚠️ <b>NO fragmentation</b> here: a blob over
-    /// <see cref="ArenaProtocol.SKELETON_MAX_BLOB_BYTES"/> is not sent at all — deserialising half a
-    /// frame means a broken skeleton.</para>
+    /// <see cref="ArenaProtocol.SKELETON_MAX_BLOB_BYTES"/> is not sent at all.</para>
     /// </summary>
     public struct SkeletonUpdate
     {
@@ -835,7 +832,7 @@ namespace VortexArena.Protocol
         /// <summary>Body yaw + root offset from the pose-channel head (§6.9, v19).</summary>
         public SkeletonRootData root;
 
-        /// <summary>The serialised skeleton. ⚠️ Only the first <see cref="blobLength"/> bytes are valid;
+        /// <summary>The skeleton blob (<see cref="SkeletonWire"/>). ⚠️ Only the first <see cref="blobLength"/> bytes are valid;
         /// the array length is not binding, so the sender may pass a pooled buffer.</summary>
         public byte[] blob;
 
@@ -930,8 +927,7 @@ namespace VortexArena.Protocol
 
             // ⚠️ A SHORT READ IS SILENT CORRUPTION: BinaryReader.ReadBytes does NOT throw at an early
             // stream end, it returns a shorter array. Taking the length from the requested byte count
-            // would declare a truncated blob "valid" and the Movement SDK would deserialise it into a
-            // broken skeleton (the remote avatar folding into random shapes). Half a frame is ignored:
+            // would declare a truncated blob "valid" and relay half a frame. Half a frame is ignored:
             // RemoteSkeletonRegistry drops entries with blobLength = 0.
             if (e.blob.Length != len)
             {

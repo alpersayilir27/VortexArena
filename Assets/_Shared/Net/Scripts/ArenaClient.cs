@@ -51,8 +51,8 @@ namespace VortexArena.Net
         public RemotePlayerRegistry Remotes { get; private set; }
 
         /// <summary>Remote player skeleton registry (§6.10): rings <c>0x08</c> entries.
-        /// ⚠️ SEPARATE from <see cref="Remotes"/>: the two channels differ in cadence and entry
-        /// lifetime (the blob is consumed, the root interpolated).</summary>
+        /// ⚠️ SEPARATE from <see cref="Remotes"/>: the two channels differ in cadence and sample
+        /// layout (12 Hz decoded skeleton frames vs 20 Hz pose snapshots).</summary>
         public RemoteSkeletonRegistry RemoteSkeletons { get; private set; }
 
         /// <summary>Remote OBJECT pose registry (§6.12): rings the object section of <c>0x05</c>.

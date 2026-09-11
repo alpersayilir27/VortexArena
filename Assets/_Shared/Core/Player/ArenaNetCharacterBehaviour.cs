@@ -9,23 +9,21 @@ using VortexArena.Protocol;
 
 namespace VortexArena.Core.Player
 {
-    /// <summary>
-    /// The <b>only bridge</b> between the Movement SDK's networking layer and ArenaNet: sends the SDK's
-    /// skeleton blob as <c>0x07</c>, feeds incoming blobs back to the SDK, and places the character root
-    /// in arena space (§6.9/6.10). The SDK's <see cref="INetworkCharacterBehaviour"/> is
-    /// transport-agnostic; no Meta account, entitlement or internet is involved.
-    /// <para><b>Role split comes from one place:</b> <see cref="HasInputAuthority"/>. Local: the SDK
-    /// solves the body from sensors and produces blobs. Remote/admin: no body tracking, incoming blobs
-    /// are applied. Hence one prefab and one retarget config — the difference is the source, not the
-    /// code.</para>
-    /// <para>⚠️ <b>THIS class writes the root, not the SDK.</b> Joint 0 is in the sender's world space
-    /// (§6.9) and the blob is opaque, so the root travels separately — as body yaw + an offset from
-    /// the pose-channel head since v19 (§6.9), rebuilt on the receiver's own interpolated head — and
-    /// is written in <see cref="LateUpdate"/>, AFTER the SDK's <c>ApplyBodyPose</c>.</para>
+    /// <summary>The <b>only bridge</b> between the Movement SDK and ArenaNet's skeleton channel (§6.9/6.10).</summary>
+    /// <remarks>
+    /// Local: the SDK's send hook (<see cref="ReceiveStreamData"/>) is only cadence + gate; the frame is
+    /// rebuilt from the retargeted bones as a <see cref="SkeletonWire"/> blob — SDK bytes never reach the
+    /// wire. Remote/admin: root and bones come from <see cref="RemoteSkeletonRegistry"/>, interpolated on
+    /// one clock and written in <see cref="LateUpdate"/>; the SDK's <c>ReceiveData</c> path is unused.
+    /// <para><b>Role split comes from one place:</b> <see cref="HasInputAuthority"/> — one prefab and one
+    /// retarget config, the difference is the source, not the code.</para>
+    /// <para>⚠️ <b>THIS class writes the root.</b> The blob's joint 0 is never applied; the root travels
+    /// as body yaw + an offset from the pose-channel head (§6.9, v19), rebuilt on the receiver's own
+    /// interpolated head.</para>
     /// <para>⚠️ <b>Never parent the character to anything</b> (especially the rig) — see
     /// Docs/Sistem-Ozeti.md §7 "retarget avatarı hareket eden kökün altına konmaz": the SDK writes the
     /// root joint locally, so a non-identity parent is applied twice.</para>
-    /// </summary>
+    /// </remarks>
     [DefaultExecutionOrder(50)]
     [RequireComponent(typeof(NetworkCharacterHandler))]
     public class ArenaNetCharacterBehaviour : MonoBehaviour, INetworkCharacterBehaviour
@@ -112,9 +110,8 @@ namespace VortexArena.Core.Player
 
         /// <summary>Uniform body scale (§10.8) — <c>1</c> = unmeasured. Written by
         /// <see cref="RemoteAvatar"/> from the roster.
-        /// <para>⚠️ <b>Applied only on the REMOTE body</b> (<see cref="ApplyArenaRoot"/>). The sender's
-        /// skeleton goes on the wire at prefab proportions, read from the live bone transforms scale
-        /// included — a locally scaled root would be streamed and applied a second time.</para></summary>
+        /// <para>⚠️ <b>Applied only on the REMOTE body</b> (<see cref="ApplyArenaRoot"/>): the wire carries
+        /// local rotations + hips position only, no scale, so the receiver's root is its single home.</para></summary>
         public float BodyScale { get; set; } = 1f;
 
         /// <summary>Is the sensor source actually running?
@@ -158,11 +155,9 @@ namespace VortexArena.Core.Player
         /// <inheritdoc cref="INetworkCharacterBehaviour.DeltaTime"/>
         public float DeltaTime => Time.deltaTime;
 
-        /// <summary>Shared axis of the SDK's send stamp and the receiver's interpolation: the server
-        /// tick clock (<see cref="RemotePlayerRegistry.TryGetServerTimeSeconds"/>).
-        /// <para>⚠️ <c>Time.unscaledTime</c> CANNOT be used — it is machine-local, so the two ends sit on
-        /// different epochs and the SDK's interpolation locks up or never runs. Before the snapshot
-        /// stream starts we fall back to local time; there is no remote body to draw then.</para></summary>
+        /// <summary>SDK interface clock (server tick time, local time before the snapshot stream starts).</summary>
+        /// <remarks>Only the SDK's own serialise/interpolate path reads it, and that path no longer reaches
+        /// the wire; remote bodies interpolate on <see cref="RemoteSkeletonRegistry.RenderTickMs"/>.</remarks>
         public float NetworkTime
         {
             get
@@ -177,9 +172,7 @@ namespace VortexArena.Core.Player
             }
         }
 
-        /// <summary>Render time = shared clock − <see cref="ArenaProtocol.INTERP_DELAY_MS"/>. ⚠️ The
-        /// buffer must stay the SAME as the pose channel's, or a constant time offset appears between
-        /// body and hands (weapon in hand, body a tick behind).</summary>
+        /// <summary>SDK interface render time = <see cref="NetworkTime"/> − <see cref="ArenaProtocol.INTERP_DELAY_MS"/>.</summary>
         public float RenderTime => NetworkTime - ArenaProtocol.INTERP_DELAY_MS / 1000f;
 
         private readonly ulong[] _relayTargets = { RelayClientId };
@@ -188,8 +181,27 @@ namespace VortexArena.Core.Player
         private Transform _characterRoot;
         private bool _initialized;
 
-        /// <summary>SDK retargeter — the serialisation gate of the T-pose fallback (handle + bind pose).</summary>
+        /// <summary>SDK retargeter — source of <c>JointPairs</c> (wire bones) and the bind pose.</summary>
         private NetworkCharacterRetargeter _retargeter;
+
+        /// <summary>Highest target index the wire needs (+1) — shorter joint arrays cannot build a frame.</summary>
+        private static readonly int RequiredJointCount = ComputeRequiredJointCount();
+
+        /// <summary>Bone per <see cref="SkeletonWire.JOINT_INDICES"/> slot, resolved once from <c>JointPairs</c>.</summary>
+        private Transform[] _wireJoints;
+
+        private Transform _wireHips;
+
+        /// <summary>Has the unusable-<c>JointPairs</c> error been logged (once per component)?</summary>
+        private bool _wireJointsWarned;
+
+        /// <summary>Outgoing frame buffers, sized once: x,y,z,w per wire joint and the encoded blob.</summary>
+        private readonly float[] _wireRotations = new float[4 * SkeletonWire.JointCount];
+
+        private readonly byte[] _wireBlob = new byte[SkeletonWire.BLOB_BYTES];
+
+        /// <summary>Incoming interpolated rotations (remote body), sized once.</summary>
+        private readonly Quaternion[] _boneRotations = new Quaternion[SkeletonWire.JointCount];
 
         /// <summary>Has the T-pose fallback been requested (local body only)? A latch —
         /// <see cref="TickTPoseFallback"/> re-judges its gate every frame.</summary>
@@ -211,9 +223,6 @@ namespace VortexArena.Core.Player
 
         /// <summary>Has this suspicion episode already warned (no per-frame logging)?</summary>
         private bool _poseSuspectWarned;
-
-        /// <summary>Has the missing-reference-T-pose warning been logged (once per session)?</summary>
-        private bool _referencePoseWarned;
 
         /// <summary>Has the "fallback frame could not be built" warning been logged (once per session)?
         /// ⚠️ One-shot on purpose: the fallback runs at the SDK's send cadence, so a per-frame line would
@@ -280,14 +289,6 @@ namespace VortexArena.Core.Player
         /// close that window.</para>
         /// </summary>
         private Behaviour _sourceProvider;
-
-        /// <summary>Reused native buffer for incoming blobs — a field to avoid per-frame allocation
-        /// (the SDK takes its own copy anyway).</summary>
-        private NativeArray<byte> _receiveScratch;
-
-        /// <summary>Managed copy of the outgoing blob (SDK is native, the wire wants managed); stays at
-        /// its grown size.</summary>
-        private byte[] _sendScratch;
 
         /// <summary>Has the first outgoing blob size been logged? Not reset on reconnect — one line per
         /// component lifetime is the whole point.</summary>
@@ -384,14 +385,6 @@ namespace VortexArena.Core.Player
             _blobMinBytes = 0;
             _blobMaxBytes = 0;
             _blobTotalBytes = 0;
-        }
-
-        private void OnDestroy()
-        {
-            if (_receiveScratch.IsCreated)
-            {
-                _receiveScratch.Dispose();
-            }
         }
 
         /// <summary>Binds the character to a player and starts the SDK.
@@ -577,22 +570,19 @@ namespace VortexArena.Core.Player
             return _lastSdkFrameTime > 0f && Time.time - _lastSdkFrameTime > StaleFrameSeconds;
         }
 
-        /// <summary>
-        /// Serialises and sends one fallback frame carrying the SDK's TARGET REFERENCE T-POSE (local
-        /// space, unscaled) — on both triggers. The receiver decodes it as an ordinary <c>0x07</c> frame;
-        /// no special case on the wire or the server (§6.9).
+        /// <summary>Sends one fallback frame built from the SDK's target reference T-pose (bind local rotations + hips).</summary>
+        /// <remarks>
+        /// Used on both triggers; the receiver decodes it as an ordinary <c>0x07</c> frame (§6.9).
         /// <para>⚠️ The character's current bones are deliberately NOT used: after a fault they are the
         /// last applied, now frozen pose, and a motionless body reads as "network broken" on site. A
         /// T-pose reads as "tracking is broken", which is the true fault.</para>
         /// <para>⚠️ The root is NOT read from the character (never written on cold start, untrusted on a
         /// fault) but derived from the HMD — floor projection, yaw only; the floor is world y=0 by arena
         /// contract (<see cref="ArenaSpace"/>).</para>
-        /// <para>⚠️ Joint 0's scale is pinned to 1: on the cold-start path
-        /// <c>SkeletonRetargeter.RetargetedPose</c> was never written (undefined memory) and the
-        /// receiver applies this scale straight onto the character root.</para>
         /// <para>⚠️ <see cref="GuardRootJump"/> is skipped ON PURPOSE (that gate is for the SDK root
         /// snapping to the rig origin when a controller dies) and <c>_lastSentRoot</c> is not written —
-        /// the guard's reference must come from the SDK path's own frames.</para></summary>
+        /// the guard's reference must come from the SDK path's own frames.</para>
+        /// </remarks>
         private void SendTPoseFrame()
         {
             if (!TryGetHeadYawPose(out Pose head))
@@ -610,77 +600,25 @@ namespace VortexArena.Core.Player
 
             var worldRoot = new Pose(new Vector3(head.position.x, 0f, head.position.z), head.rotation);
 
-            NativeArray<MSDKUtility.NativeTransform> bodyPose = AcquireFallbackBodyPose();
-            if (!bodyPose.IsCreated || bodyPose.Length == 0)
+            SkeletonRetargeter skeleton = _retargeter.SkeletonRetargeter;
+            NativeArray<MSDKUtility.NativeTransform> bind =
+                skeleton != null ? skeleton.TargetReferencePoseLocal : default;
+            if (!bind.IsCreated || bind.Length < RequiredJointCount)
             {
-                if (bodyPose.IsCreated)
-                {
-                    bodyPose.Dispose();
-                }
-
-                LogTPoseSerializeFault("hedef iskelet pozu boş");
+                LogTPoseSerializeFault(
+                    $"SDK referans T-pozu hazır değil ya da {RequiredJointCount} eklemden kısa");
                 return;
             }
 
-            MSDKUtility.NativeTransform rootJoint = bodyPose[0];
-            bodyPose[0] = new MSDKUtility.NativeTransform(rootJoint.Orientation, rootJoint.Position, Vector3.one);
-
-            NativeArray<float> facePose = _retargeter.GetCurrentFacePose(true);
-
-            // Index lists come from the same source as the SDK's SerializeData; BaselineAck = -1 =
-            // full keyframe — delta is disabled in this project anyway (§6.9).
-            int[] bodySync = _retargeter.BodyIndicesToSync;
-            int[] faceSync = _retargeter.FaceIndicesToSync;
-            var bodyIndices = new NativeArray<int>(bodySync?.Length ?? 0, Allocator.Temp,
-                NativeArrayOptions.UninitializedMemory);
-            var faceIndices = new NativeArray<int>(faceSync?.Length ?? 0, Allocator.Temp,
-                NativeArrayOptions.UninitializedMemory);
-            if (bodySync != null && bodySync.Length > 0)
+            int[] indices = SkeletonWire.JOINT_INDICES;
+            for (int i = 0; i < indices.Length; i++)
             {
-                bodyIndices.CopyFrom(bodySync);
+                StoreWireRotation(i, bind[indices[i]].Orientation);
             }
 
-            if (faceSync != null && faceSync.Length > 0)
-            {
-                faceIndices.CopyFrom(faceSync);
-            }
-
-            var snapshot = new MSDKUtility.SnapshotData
-            {
-                BaselineAck = -1,
-                Timestamp = NetworkTime,
-                TargetSkeletonPose = bodyPose,
-                TargetSkeletonIndices = bodyIndices,
-                FacePose = facePose,
-                FaceIndices = faceIndices,
-                RecordingCoordinateSpaceSource = new MSDKUtility.CoordinateSpace(
-                    up: new Vector3(0.0f, 1.0f, 0.0f),
-                    forward: new Vector3(0.0f, 0.0f, 1.0f),
-                    right: new Vector3(1.0f, 0.0f, 0.0f),
-                    metersToUnitScale: 1.0f)
-            };
-
-            NativeArray<byte> serialized = default;
-            bool serializedOk = MSDKUtility.SerializeSkeletonAndFace(
-                _retargeter.RetargetingHandle, snapshot, ref serialized);
-
-            if (bodyPose.IsCreated)
-            {
-                bodyPose.Dispose();
-            }
-
-            if (facePose.IsCreated)
-            {
-                facePose.Dispose();
-            }
-
-            if (!serializedOk || !serialized.IsCreated || serialized.Length == 0)
-            {
-                LogTPoseSerializeFault("SerializeSkeletonAndFace başarısız");
-                return;
-            }
-
-            SendBlobToRelay(serialized, ArenaSpace.WorldToArena(worldRoot));
+            Vector3 hips = bind[SkeletonWire.HIPS_INDEX].Position;
+            int length = SkeletonWire.Write(_wireBlob, 0, hips.x, hips.y, hips.z, _wireRotations);
+            SendBlobToRelay(_wireBlob, length, ArenaSpace.WorldToArena(worldRoot));
         }
 
         /// <summary>One-shot report that the fallback frame could not be produced — the fault that leaves
@@ -696,55 +634,6 @@ namespace VortexArena.Core.Player
             Debug.LogWarning(
                 $"[ArenaNetCharacterBehaviour] T-poz yedek karesi üretilemedi ({reason}) — oyuncu diğer " +
                 "ekranlarda hiç görünmeyecek. Retarget yapılandırması hiç koşmamış olabilir.", this);
-        }
-
-        /// <summary>Temp copy of the joint array a fallback frame is built from (caller disposes).
-        /// <para>⚠️ The SDK's <c>TargetReferencePoseLocal</c> is a PERSISTENT array it keeps using, so it
-        /// is COPIED — the caller overwrites joint 0. Same space (local) and same joint order/count as
-        /// <c>GetCurrentBodyPose(NoWorldSpace)</c>, hence interchangeable for serialisation.</para>
-        /// <para>Fallback to the live bones only if the reference pose is not populated yet; a frozen
-        /// body is still better than no frame at all.</para></summary>
-        private NativeArray<MSDKUtility.NativeTransform> AcquireFallbackBodyPose()
-        {
-            SkeletonRetargeter skeleton = _retargeter.SkeletonRetargeter;
-            if (skeleton != null && skeleton.TargetReferencePoseLocal.IsCreated &&
-                skeleton.TargetReferencePoseLocal.Length > 0 &&
-                skeleton.TargetReferencePoseLocal.Length == skeleton.TargetJointCount)
-            {
-                return new NativeArray<MSDKUtility.NativeTransform>(
-                    skeleton.TargetReferencePoseLocal, Allocator.Temp);
-            }
-
-            if (!_referencePoseWarned)
-            {
-                _referencePoseWarned = true;
-                Debug.LogWarning(
-                    "[ArenaNetCharacterBehaviour] SDK referans T-pozu hazır değil — yedek kare " +
-                    "karakterin mevcut kemikleriyle gönderiliyor.", this);
-            }
-
-            return _retargeter.GetCurrentBodyPose(JointType.NoWorldSpace);
-        }
-
-        private void Update()
-        {
-            // Remote body only: queue the incoming frame for the SDK.
-            // ⚠️ Execution order 50 < the handler's 100: the frame is applied in the SAME frame, with
-            // no one-frame delay.
-            if (!_initialized || HasInputAuthority)
-            {
-                return;
-            }
-
-            RemoteSkeletonRegistry registry = RemoteSkeletonRegistry.Instance;
-            if (registry == null || !registry.TryTakeBlob(PlayerId, out byte[] blob, out int length))
-            {
-                return;
-            }
-
-            EnsureScratch(length);
-            NativeArray<byte>.Copy(blob, 0, _receiveScratch, 0, length);
-            _handler.ReceiveData(_receiveScratch.GetSubArray(0, length));
         }
 
         private void LateUpdate()
@@ -764,22 +653,26 @@ namespace VortexArena.Core.Player
                 return;
             }
 
-            ApplyArenaRoot();
+            // One sampling time for root and bones, so both land on the same two frames.
+            int renderTick = RemoteSkeletonRegistry.RenderTickMs;
+            if (ApplyArenaRoot(renderTick))
+            {
+                ApplyInterpolatedBones(renderTick);
+            }
         }
 
-        /// <summary>
-        /// Places the character root at the interpolated arena-space pose (§6.9).
-        /// <para>⚠️ Must run AFTER the SDK's <c>ApplyBodyPose</c>, which writes joint 0 into the root
-        /// transform; <c>LateUpdate</c> guarantees that ordering.</para>
-        /// <para>⚠️ <b>THIS class also writes the scale</b> (§10.8) and is its single writer — two
-        /// writers would make the drawn height depend on the frame.</para>
+        /// <summary>Places the character root at the interpolated arena-space pose (§6.9); true when the skeleton stream drove it.</summary>
+        /// <remarks>
+        /// ⚠️ <b>THIS class also writes the scale</b> (§10.8) and is its single writer — two writers
+        /// would make the drawn height depend on the frame.
         /// <para>⚠️ <b>The sender's root scale being <c>1</c> depends on <c>ApplyRootScale</c> being OFF
         /// in the retargeter</b>, not on <c>Calibrate()</c> going uncalled: with it on,
         /// <c>_characterRoot.position</c> stops being a world point and drifts with distance from the
-        /// origin. See Docs/Sistem-Ozeti.md §7.</para></summary>
-        private void ApplyArenaRoot()
+        /// origin. See Docs/Sistem-Ozeti.md §7.</para>
+        /// </remarks>
+        private bool ApplyArenaRoot(int renderTick)
         {
-            if (!TryGetEffectiveRoot(out Pose world, out bool fromSkeleton))
+            if (!TryGetEffectiveRoot(renderTick, out Pose world, out bool fromSkeleton))
             {
                 // Neither channel has anything at all — hide by ZERO SCALE rather than draw the bind
                 // pose wherever the root happens to sit.
@@ -787,7 +680,7 @@ namespace VortexArena.Core.Player
                 // uses the scale this class is the SOLE writer of.
                 IsPoseDriven = false;
                 _characterRoot.localScale = Vector3.zero;
-                return;
+                return false;
             }
 
             IsPoseDriven = !fromSkeleton;
@@ -797,12 +690,40 @@ namespace VortexArena.Core.Player
             // ⚠️ Written unconditionally every frame: with a second scale writer (ApplyRootScale
             // re-enabled) a "write only if changed" guard would go stale for a frame.
             _characterRoot.localScale = Vector3.one * BodyScale;
+            return fromSkeleton;
+        }
+
+        /// <summary>Writes the interpolated wire joints onto the remote body: local rotations + hips local position.</summary>
+        /// <remarks>
+        /// Only while the skeleton stream is live; a dead stream leaves the bones to <see cref="RemotePoseBody"/>.
+        /// <para>⚠️ Joint 0 is NOT written: it is <see cref="_characterRoot"/>, whose rotation comes from the
+        /// 8 B root yaw in <see cref="ApplyArenaRoot"/>.</para>
+        /// </remarks>
+        private void ApplyInterpolatedBones(int renderTick)
+        {
+            RemoteSkeletonRegistry skeletons = RemoteSkeletonRegistry.Instance;
+            if (skeletons == null || !TryResolveWireJoints() ||
+                !skeletons.TryGetInterpolatedBones(PlayerId, renderTick, _boneRotations, out Vector3 hips))
+            {
+                return;
+            }
+
+            int[] indices = SkeletonWire.JOINT_INDICES;
+            for (int i = 0; i < indices.Length; i++)
+            {
+                if (indices[i] != 0)
+                {
+                    _wireJoints[i].localRotation = _boneRotations[i];
+                }
+            }
+
+            _wireHips.localPosition = hips;
         }
 
         /// <summary>The root to draw this frame, and whether the SKELETON stream produced it. Computed
         /// from the source, not read from the transform: the writer runs in this class's
         /// <c>LateUpdate</c>, so an earlier reader would get a one-frame stale value; the same
-        /// <c>RenderTime</c> yields an identical result.
+        /// <paramref name="renderTick"/> yields an identical result.
         /// <para>⚠️ <b>The root's POSITION is ALWAYS anchored to the pose channel</b> (§6.9, v19): the
         /// wire carries yaw + an offset from the head's floor projection, and the root is rebuilt here
         /// on the receiver's OWN interpolated head — the same data that draws the name label, so a
@@ -813,7 +734,7 @@ namespace VortexArena.Core.Player
         /// stale lean offset and body yaw forever; a dead stream drops to the head-derived root — same
         /// formula as the sender's T-pose path (floor projection, YAW only), or the body would jump
         /// the moment a real stream returns.</para></summary>
-        private bool TryGetEffectiveRoot(out Pose world, out bool fromSkeleton)
+        private bool TryGetEffectiveRoot(int renderTick, out Pose world, out bool fromSkeleton)
         {
             world = default;
             fromSkeleton = false;
@@ -830,7 +751,7 @@ namespace VortexArena.Core.Player
             int ageMs = skeletons != null ? skeletons.GetRootAgeMs(PlayerId) : -1;
 
             if (ageMs >= 0 && ageMs <= SkeletonDeadAfterMs &&
-                skeletons.TryGetInterpolatedRoot(PlayerId, out float yawDeg, out Vector3 offset))
+                skeletons.TryGetInterpolatedRoot(PlayerId, renderTick, out float yawDeg, out Vector3 offset))
             {
                 var arenaRoot = new Pose(headFloor + offset, Quaternion.Euler(0f, yawDeg, 0f));
                 world = ArenaSpace.ArenaToWorld(arenaRoot);
@@ -862,7 +783,8 @@ namespace VortexArena.Core.Player
         public Vector3 ScalePointAboutRoot(in Vector3 worldPoint)
         {
             float scale = BodyScale;
-            if (scale <= 0f || Mathf.Approximately(scale, 1f) || !TryGetEffectiveRoot(out Pose root, out _))
+            if (scale <= 0f || Mathf.Approximately(scale, 1f) ||
+                !TryGetEffectiveRoot(RemoteSkeletonRegistry.RenderTickMs, out Pose root, out _))
             {
                 return worldPoint;
             }
@@ -872,9 +794,12 @@ namespace VortexArena.Core.Player
 
         /// <inheritdoc cref="INetworkCharacterBehaviour.ReceiveStreamData"/>
         /// <remarks>
-        /// Misleading name — this is the hook where the SDK hands us the data to be <b>sent</b>.
-        /// <para>⚠️ The root is read AT THIS EXACT MOMENT: the character root currently holds the
-        /// sender's world pose; reading it a frame later would separate body and root.</para>
+        /// Misleading name — this is the hook where the SDK hands us a frame to be <b>sent</b>.
+        /// <para>⚠️ The SDK's <paramref name="bytes"/> are DISCARDED: the hook is only cadence + gate
+        /// (retarget done, send interval met). The wire frame is rebuilt from the bones as a
+        /// <see cref="SkeletonWire"/> blob.</para>
+        /// <para>⚠️ Root and bones are read AT THIS EXACT MOMENT: the character currently holds the
+        /// sender's retargeted pose; reading it a frame later would separate body and root.</para>
         /// <para>⚠️ The frame passes a <b>sanity check</b> here: the SDK can produce a garbage root while
         /// flagging it valid (floor/height confusion), which draws the player at a random spot — silent
         /// and undiagnosable. A rejected frame is NOT sent; <see cref="TickTPoseFallback"/> sends a
@@ -907,7 +832,21 @@ namespace VortexArena.Core.Player
                 return;
             }
 
-            SendBlobToRelay(bytes, GuardRootJump(candidate));
+            // Before GuardRootJump for the same reason: an unsendable frame must not become its reference.
+            if (!TryResolveWireJoints())
+            {
+                return;
+            }
+
+            int[] indices = SkeletonWire.JOINT_INDICES;
+            for (int i = 0; i < indices.Length; i++)
+            {
+                StoreWireRotation(i, _wireJoints[i].localRotation);
+            }
+
+            Vector3 hips = _wireHips.localPosition;
+            int length = SkeletonWire.Write(_wireBlob, 0, hips.x, hips.y, hips.z, _wireRotations);
+            SendBlobToRelay(_wireBlob, length, GuardRootJump(candidate));
         }
 
         /// <summary>
@@ -1346,11 +1285,8 @@ namespace VortexArena.Core.Player
             return true;
         }
 
-        /// <summary>Copies the native blob into a managed buffer and sends it on the skeleton channel
-        /// (§6.9) — the shared exit of the SDK path and the T-pose fallback. The copy exists because the
-        /// wire layer's <c>BinaryWriter</c> only takes <c>byte[]</c>; the buffer stays at its grown
-        /// size.</summary>
-        private void SendBlobToRelay(NativeArray<byte> bytes, in Pose arenaRoot)
+        /// <summary>Sends a built blob on the skeleton channel (§6.9) — shared exit of the live path and the T-pose fallback.</summary>
+        private void SendBlobToRelay(byte[] blob, int length, in Pose arenaRoot)
         {
             ArenaClient client = ArenaClient.Instance;
             if (client == null || client.UdpChannel == null)
@@ -1358,17 +1294,87 @@ namespace VortexArena.Core.Player
                 return;
             }
 
-            byte[] managed = _sendScratch;
-            if (managed == null || managed.Length < bytes.Length)
+            client.UdpChannel.SendSkeleton(blob, length, arenaRoot);
+            TrackBlobSize(length);
+        }
+
+        private void StoreWireRotation(int slot, in Quaternion rotation)
+        {
+            int r = 4 * slot;
+            _wireRotations[r] = rotation.x;
+            _wireRotations[r + 1] = rotation.y;
+            _wireRotations[r + 2] = rotation.z;
+            _wireRotations[r + 3] = rotation.w;
+        }
+
+        /// <summary>Resolves the wire bones from the retargeter's <c>JointPairs</c> (once); errors once when unusable.</summary>
+        /// <remarks>Retried on failure: <c>JointPairs</c> is prefab data, so a failure is a config fault that
+        /// <c>SkeletonStreamGuard</c> reports at build time.</remarks>
+        private bool TryResolveWireJoints()
+        {
+            if (_wireJoints != null)
             {
-                managed = new byte[Mathf.NextPowerOfTwo(bytes.Length)];
-                _sendScratch = managed;
+                return true;
             }
 
-            NativeArray<byte>.Copy(bytes, 0, managed, 0, bytes.Length);
-            client.UdpChannel.SendSkeleton(managed, bytes.Length, arenaRoot);
+            CharacterRetargeterConfig.JointPair[] pairs = _retargeter != null ? _retargeter.JointPairs : null;
+            string fault = null;
 
-            TrackBlobSize(bytes.Length);
+            if (pairs == null || pairs.Length < RequiredJointCount)
+            {
+                fault = $"liste {pairs?.Length ?? 0} eleman, en az {RequiredJointCount} gerekli";
+            }
+            else
+            {
+                int[] indices = SkeletonWire.JOINT_INDICES;
+                for (int i = 0; i < indices.Length && fault == null; i++)
+                {
+                    if (pairs[indices[i]].Joint == null)
+                    {
+                        fault = $"{indices[i]}. eklemin Joint alanı boş";
+                    }
+                }
+
+                if (fault == null && pairs[SkeletonWire.HIPS_INDEX].Joint == null)
+                {
+                    fault = $"kalça ({SkeletonWire.HIPS_INDEX}) Joint alanı boş";
+                }
+            }
+
+            if (fault != null)
+            {
+                if (!_wireJointsWarned)
+                {
+                    _wireJointsWarned = true;
+                    Debug.LogError(
+                        $"[ArenaNetCharacterBehaviour] Retargeter JointPairs iskelet teli için kullanılamıyor " +
+                        $"({fault}) — gövde karesi gönderilemez/uygulanamaz. Build Readiness'taki iskelet " +
+                        "eklem listesi satırına bak.", this);
+                }
+
+                return false;
+            }
+
+            var joints = new Transform[SkeletonWire.JointCount];
+            for (int i = 0; i < joints.Length; i++)
+            {
+                joints[i] = pairs[SkeletonWire.JOINT_INDICES[i]].Joint;
+            }
+
+            _wireHips = pairs[SkeletonWire.HIPS_INDEX].Joint;
+            _wireJoints = joints;
+            return true;
+        }
+
+        private static int ComputeRequiredJointCount()
+        {
+            int max = SkeletonWire.HIPS_INDEX;
+            foreach (int index in SkeletonWire.JOINT_INDICES)
+            {
+                max = Mathf.Max(max, index);
+            }
+
+            return max + 1;
         }
 
         /// <summary>Blob size measurement against the <see cref="ArenaProtocol.SKELETON_MAX_BLOB_BYTES"/>
@@ -1504,29 +1510,10 @@ namespace VortexArena.Core.Player
         }
 
         /// <inheritdoc cref="INetworkCharacterBehaviour.ReceiveStreamAck"/>
-        /// <remarks>⚠️ <b>Intentionally empty.</b> Acks only serve delta compression, which is OFF here
-        /// (§6.9): Meta's delta keeps a baseline per receiver while our topology is a server relay
-        /// broadcast, so it would mean one serialisation per receiver per tick. Enabling delta would
-        /// require turning both this method and <see cref="RemoteSkeletonRegistry"/>'s single-frame blob
-        /// slot into queues.</remarks>
+        /// <remarks>⚠️ <b>Intentionally empty.</b> Acks only serve the SDK's delta compression, and SDK
+        /// bytes never reach the wire (§6.9): every <see cref="SkeletonWire"/> frame is independent.</remarks>
         public void ReceiveStreamAck(ulong clientId, int ack)
         {
-        }
-
-        private void EnsureScratch(int length)
-        {
-            if (_receiveScratch.IsCreated && _receiveScratch.Length >= length)
-            {
-                return;
-            }
-
-            if (_receiveScratch.IsCreated)
-            {
-                _receiveScratch.Dispose();
-            }
-
-            _receiveScratch = new NativeArray<byte>(
-                Mathf.NextPowerOfTwo(length), Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
         }
     }
 }

@@ -21,6 +21,10 @@ namespace VortexArena.Protocol
         /// an old client sends no <c>targetNetId</c>, so it can break nothing, and it ignores
         /// <c>object_state</c>, so it keeps seeing a cover others already broke — two players on either
         /// side of the same wall see different worlds.</para>
+        /// <para>⚠️ v22 changes the skeleton blob's CONTENT (§6.9): it is VortexArena-authored
+        /// (<see cref="SkeletonWire"/>: hips position + per-joint local rotation, no SDK serialization).
+        /// Header and root are unchanged, but mixed versions reject each other's frames and remote bodies
+        /// fall back to the pose channel.</para>
         /// <para>v21 adds <c>body</c> on <c>status</c>/<see cref="PlayerInfo"/> (§5.1/§5.3): additive,
         /// but an old APK never sends it, so its T-pose fault stays invisible to the operator — same
         /// reasoning as v14.</para>
@@ -39,7 +43,7 @@ namespace VortexArena.Protocol
         /// <para>v5 net telemetry + packet combining (<c>0x05</c>) · v4 held item on the wire, shot
         /// events moved to UDP · v3 phase machine · v2 <c>set_identity</c>.</para>
         /// </summary>
-        public const int PROTOCOL_VERSION = 21;
+        public const int PROTOCOL_VERSION = 22;
         public const string APP_ID = "VortexArena";
 
         // ---- Calibration mode (§5.2/§10.6): how headsets align AT STARTUP. ----
@@ -134,13 +138,14 @@ namespace VortexArena.Protocol
         public const int INTERP_DELAY_MS = 100;
 
         /// <summary>Skeleton blob send rate (§6.9) — lower than the pose channel because the bottleneck
-        /// is datagram count, not bandwidth. It still looks smooth because the receiver runs the SDK's
-        /// own interpolation, so raising it buys packets, not smoothness.</summary>
+        /// is datagram count, not bandwidth. It still looks smooth because the receiver interpolates
+        /// between frames (<see cref="INTERP_DELAY_MS"/>), so raising it buys packets, not smoothness.</summary>
         public const int SKELETON_RATE_HZ = 12;
 
-        /// <summary>Max skeleton blob size for one player (§6.9). Safety, not budget: with the
-        /// <c>0x07</c> header it must fit one datagram, because this channel has NO fragmentation.
-        /// <para>⚠️ An oversized blob is NOT sent (warns once); fix it by tightening the joint list.</para></summary>
+        /// <summary>Max skeleton blob size for one player (§6.9). Safety ceiling, not budget: the blob is
+        /// fixed at <see cref="SkeletonWire.BLOB_BYTES"/>; with the <c>0x07</c> header it must fit one
+        /// datagram, because this channel has NO fragmentation.
+        /// <para>⚠️ An oversized blob is NOT sent (warns once).</para></summary>
         public const int SKELETON_MAX_BLOB_BYTES = 1024;
 
         /// <summary>Max entries per <c>0x08</c> datagram (§6.10). ⚠️ The real limit is the byte budget

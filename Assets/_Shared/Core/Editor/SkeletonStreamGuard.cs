@@ -1,26 +1,21 @@
 using System;
 using UnityEditor;
 using UnityEngine;
+using VortexArena.Protocol;
 
 namespace VortexArena.Core.Editor
 {
-    /// <summary>Joint list check for the skeleton stream (§6.9 <c>0x07</c>): sender and receiver
-    /// must agree on the joint set.</summary>
+    /// <summary>Joint checks for the skeleton stream (§6.9 <c>0x07</c>): sender and receiver must agree on the joints.</summary>
     /// <remarks>
-    /// The blob is the SDK's opaque native serialization: if the lists drift no error appears
-    /// anywhere, remote bodies are simply drawn wrong. An innocent Inspector edit on either prefab
-    /// comes back from the field as "everyone's body looks strange".
-    /// <para>⚠️ This class WRITES NOTHING (<see cref="BuildReadiness"/> contract). Fixing a drift is
-    /// a human step: which list is correct is a decision, not a preference — the finger-trimming
-    /// list is §6.9 itself, and "copy one onto the other" could spread the wrong one.</para>
-    /// <para>⚠️ The list is not computed at RUNTIME and must not be: it is DATA serialized in two
-    /// prefabs, not a calculation. Rebuilding it by scanning names/hierarchy would open a second
-    /// author for the list and produce exactly the drift this check prevents.</para>
-    /// <para>⚠️ The fields are SDK <b>private</b> fields, so they are read via
-    /// <see cref="SerializedObject"/> and the component is found by NAME, not by type: referencing
-    /// the Movement SDK assembly from <c>VortexArena.Core.Editor</c> just for this check would tie
-    /// the editor assembly to the package. If a field/component name drifts the row reports ✗ with
-    /// its reason instead of silently claiming "clean".</para>
+    /// The blob carries joints by TARGET INDEX (<see cref="SkeletonWire.JOINT_INDICES"/>): if the two
+    /// prefabs resolve an index to different bones no error appears anywhere, remote bodies are simply
+    /// drawn wrong. An innocent Inspector edit on either prefab comes back as "everyone's body looks strange".
+    /// <para>⚠️ This class WRITES NOTHING (<see cref="BuildReadiness"/> contract). Fixing a drift is a human
+    /// step: which side is correct is a decision, and "copy one onto the other" could spread the wrong one.</para>
+    /// <para>⚠️ The fields are SDK <b>private</b> fields, so they are read via <see cref="SerializedObject"/>
+    /// and the component is found by NAME, not by type: referencing the Movement SDK assembly from
+    /// <c>VortexArena.Core.Editor</c> just for this check would tie the editor assembly to the package. If a
+    /// field/component name drifts the row reports ✗ with its reason instead of silently claiming "clean".</para>
     /// </remarks>
     internal static class SkeletonStreamGuard
     {
@@ -34,12 +29,18 @@ namespace VortexArena.Core.Editor
         private const string RetargeterTypeName = "NetworkCharacterRetargeter";
         private const string SyncFieldName = "_bodyIndicesToSync";
         private const string SendFieldName = "_bodyIndicesToSend";
+        private const string JointPairsFieldName = "_jointPairs";
+        private const string JointFieldName = "Joint";
+        private const string HideUntilValidFieldName = "_objectsToHideUntilValid";
+        private const string HipsNameSuffix = "Hips";
 
-        /// <summary>Whether all FOUR lists (<c>sync</c> + <c>send</c> per prefab) are identical.
-        /// </summary>
-        /// <remarks>⚠️ An empty list is ✗ too: the SDK fills an empty array with "all joints" at
-        /// runtime, so the emptied prefab starts sending fingers — the 40 joints §6.9 trims come
-        /// back silently and approach the blob ceiling (<c>SKELETON_MAX_BLOB_BYTES</c>).</remarks>
+        /// <summary>Whether the SDK index lists match AND both prefabs resolve the wire joints to the same bones.</summary>
+        /// <remarks>
+        /// ⚠️ An empty SDK list is ✗ too: the SDK fills an empty array with "all joints" at runtime, which
+        /// brings back the per-frame cost of the trimmed finger joints.
+        /// <para>⚠️ A filled <c>_objectsToHideUntilValid</c> is ✗: only the SDK's <c>ReceiveData</c> shows those
+        /// objects, and that path is no longer called — the remote body would never appear.</para>
+        /// </remarks>
         internal static bool AreJointListsMatched(out string detail)
         {
             if (!TryReadLists(LocalBodyPrefabPath, out int[] localSync, out int[] localSend, out detail) ||
@@ -52,7 +53,7 @@ namespace VortexArena.Core.Editor
                 remoteSync.Length == 0 || remoteSend.Length == 0)
             {
                 detail = "listelerden biri BOŞ — SDK onu çalışma anında 'tüm eklemler' diye doldurur " +
-                         "ve parmaklar tele geri girer (§6.9)";
+                         "ve parmaklar geri girer (§6.9)";
                 return false;
             }
 
@@ -77,27 +78,35 @@ namespace VortexArena.Core.Editor
                 return false;
             }
 
-            detail = $"{localSync.Length} eklem, dört liste de aynı";
+            if (!TryReadWireJoints(LocalBodyPrefabPath, out string[] localNames, out detail) ||
+                !TryReadWireJoints(RemoteAvatarPrefabPath, out string[] remoteNames, out detail))
+            {
+                return false;
+            }
+
+            for (int i = 0; i < localNames.Length; i++)
+            {
+                if (localNames[i] != remoteNames[i])
+                {
+                    detail = $"tel eklemi {SkeletonWire.JOINT_INDICES[i]} iki prefabda farklı kemiğe çözülüyor: " +
+                             $"gönderen '{localNames[i]}', alıcı '{remoteNames[i]}'";
+                    return false;
+                }
+            }
+
+            detail = $"{localSync.Length} eklem, dört liste de aynı · tel listesi {SkeletonWire.JointCount} " +
+                     $"eklem ({SkeletonWire.BLOB_BYTES} B), iki prefabda aynı kemikler";
             return true;
         }
 
-        /// <summary>Reads both lists from a prefab's retargeter; reports why on failure.</summary>
+        /// <summary>Reads both SDK index lists from a prefab's retargeter; reports why on failure.</summary>
         private static bool TryReadLists(string prefabPath, out int[] sync, out int[] send, out string detail)
         {
             sync = Array.Empty<int>();
             send = Array.Empty<int>();
 
-            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
-            if (prefab == null)
+            if (!TryFindRetargeter(prefabPath, out Component retargeter, out detail))
             {
-                detail = $"prefab bulunamadı: {prefabPath}";
-                return false;
-            }
-
-            Component retargeter = FindByTypeName(prefab, RetargeterTypeName);
-            if (retargeter == null)
-            {
-                detail = $"'{RetargeterTypeName}' yok: {prefabPath}";
                 return false;
             }
 
@@ -107,6 +116,114 @@ namespace VortexArena.Core.Editor
             {
                 detail = $"'{SyncFieldName}'/'{SendFieldName}' okunamadı ({prefabPath}) — SDK alan adı " +
                          "değişmiş olabilir";
+                return false;
+            }
+
+            detail = string.Empty;
+            return true;
+        }
+
+        /// <summary>Bone names of <see cref="SkeletonWire.JOINT_INDICES"/> in wire order, plus the root/hips/hide rules.</summary>
+        private static bool TryReadWireJoints(string prefabPath, out string[] names, out string detail)
+        {
+            names = Array.Empty<string>();
+
+            if (!TryFindRetargeter(prefabPath, out Component retargeter, out detail))
+            {
+                return false;
+            }
+
+            var serialized = new SerializedObject(retargeter);
+            SerializedProperty pairs = serialized.FindProperty(JointPairsFieldName);
+            SerializedProperty hide = serialized.FindProperty(HideUntilValidFieldName);
+            if (pairs == null || !pairs.isArray || hide == null || !hide.isArray)
+            {
+                detail = $"'{JointPairsFieldName}'/'{HideUntilValidFieldName}' okunamadı ({prefabPath}) — SDK " +
+                         "alan adı değişmiş olabilir";
+                return false;
+            }
+
+            if (hide.arraySize > 0)
+            {
+                detail = $"'{HideUntilValidFieldName}' dolu ({hide.arraySize} obje, {prefabPath}) — onları açan " +
+                         "SDK ReceiveData yolu çağrılmıyor, uzak gövde hiç görünmez";
+                return false;
+            }
+
+            names = new string[SkeletonWire.JointCount];
+            for (int i = 0; i < names.Length; i++)
+            {
+                int index = SkeletonWire.JOINT_INDICES[i];
+                if (!TryReadJoint(pairs, index, prefabPath, out Transform joint, out detail))
+                {
+                    return false;
+                }
+
+                if (index == 0 && joint != retargeter.transform)
+                {
+                    detail = $"'{JointPairsFieldName}[0]' retargeter'ın kendi objesi değil ('{joint.name}', " +
+                             $"{prefabPath}) — alıcı 0. eklemi kök sayıp yazmaz";
+                    return false;
+                }
+
+                names[i] = joint.name;
+            }
+
+            if (!TryReadJoint(pairs, SkeletonWire.HIPS_INDEX, prefabPath, out Transform hips, out detail))
+            {
+                return false;
+            }
+
+            if (!hips.name.EndsWith(HipsNameSuffix, StringComparison.Ordinal))
+            {
+                detail = $"kalça indeksi {SkeletonWire.HIPS_INDEX} kalça kemiği değil ('{hips.name}', {prefabPath}) " +
+                         "— kalça konumu yanlış kemiğe yazılır";
+                return false;
+            }
+
+            detail = string.Empty;
+            return true;
+        }
+
+        private static bool TryReadJoint(
+            SerializedProperty pairs, int index, string prefabPath, out Transform joint, out string detail)
+        {
+            joint = null;
+
+            if (index >= pairs.arraySize)
+            {
+                detail = $"'{JointPairsFieldName}' {pairs.arraySize} eleman, tel eklemi {index} yok ({prefabPath})";
+                return false;
+            }
+
+            SerializedProperty jointProperty =
+                pairs.GetArrayElementAtIndex(index).FindPropertyRelative(JointFieldName);
+            joint = jointProperty != null ? jointProperty.objectReferenceValue as Transform : null;
+            if (joint == null)
+            {
+                detail = $"'{JointPairsFieldName}[{index}].{JointFieldName}' boş ({prefabPath})";
+                return false;
+            }
+
+            detail = string.Empty;
+            return true;
+        }
+
+        private static bool TryFindRetargeter(string prefabPath, out Component retargeter, out string detail)
+        {
+            retargeter = null;
+
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
+            if (prefab == null)
+            {
+                detail = $"prefab bulunamadı: {prefabPath}";
+                return false;
+            }
+
+            retargeter = FindByTypeName(prefab, RetargeterTypeName);
+            if (retargeter == null)
+            {
+                detail = $"'{RetargeterTypeName}' yok: {prefabPath}";
                 return false;
             }
 
@@ -149,8 +266,7 @@ namespace VortexArena.Core.Editor
             return true;
         }
 
-        /// <summary>⚠️ ORDER is compared too, not just content: the blob carries joints in list
-        /// order.</summary>
+        /// <summary>ORDER is compared too, not just content.</summary>
         private static bool Same(int[] a, int[] b)
         {
             if (a.Length != b.Length)

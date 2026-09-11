@@ -77,10 +77,10 @@ namespace VortexArena.Net
         private readonly Dictionary<int, ushort> _objectSeq = new Dictionary<int, ushort>();
 
         // ---- 0x07 skeleton sending (main thread only) ----
-        // ⚠️ SEPARATE from the pose/event buffers and much larger (variable-length blob, §6.9).
-        // ⚠️ This channel is PUSH, not PULL — the cadence comes from the Movement SDK (its own
-        // keyframe/interval logic), which calls SendSkeleton when a frame is ready. Imposing our own
-        // rate would arbitrarily drop frames the SDK produced.
+        // ⚠️ SEPARATE from the pose/event buffers and larger (blob up to SKELETON_MAX_BLOB_BYTES, §6.9).
+        // ⚠️ This channel is PUSH, not PULL — the cadence comes from the Movement SDK's send interval,
+        // whose hook builds the frame and calls SendSkeleton. Imposing our own rate would arbitrarily
+        // drop frames.
         private byte[] _skeletonBuffer;
         private MemoryStream _skeletonStream;
         private BinaryWriter _skeletonWriter;
@@ -243,8 +243,8 @@ namespace VortexArena.Net
             _objectSeq.Clear();
             _skeletonSendWarned = false;
             _lastSkeletonSendTime = float.NegativeInfinity;
-            // ⚠️ _skeletonSizeWarned is NOT reset: an oversized blob is a CONFIGURATION error (prefab
-            // compression/joint list), not a network one, and reconnecting does not fix it.
+            // ⚠️ _skeletonSizeWarned is NOT reset: an oversized blob is a CONFIGURATION error (wire
+            // joint list), not a network one, and reconnecting does not fix it.
 
             // New session = new server tick axis and new network path → telemetry is reset.
             // ⚠️ Carrying _lastServerTick over would make the first snapshots look like they "went
@@ -386,14 +386,13 @@ namespace VortexArena.Net
         }
 
         /// <summary>
-        /// MAIN THREAD: sends the retargeted skeleton blob + the character root as <c>0x07</c>
-        /// (§6.9); a silent no-op before registration.
-        /// <para><b>PUSH gate:</b> the cadence comes from the Movement SDK, not this class — the caller
-        /// hands over a frame when the SDK produces one. <see cref="SkeletonMinSendInterval"/> is only a
-        /// safety net against a runaway cadence.</para>
-        /// <para>⚠️ <paramref name="arenaRoot"/> is <b>mandatory and replaces the root inside the
-        /// blob</b>: the SDK writes the root joint in the sender's world space, unrelated to the
-        /// receiver's arena (§6.9). The caller does the transform — the Net layer does not see
+        /// MAIN THREAD: sends the skeleton blob (<see cref="SkeletonWire"/>) + the character root as
+        /// <c>0x07</c> (§6.9); a silent no-op before registration.
+        /// <para><b>PUSH gate:</b> the cadence comes from the Movement SDK's send hook, not this class.
+        /// <see cref="SkeletonMinSendInterval"/> is only a safety net against a runaway cadence.</para>
+        /// <para>⚠️ <paramref name="arenaRoot"/> is <b>mandatory</b>: the blob carries only local joint
+        /// data, so the body's arena placement exists nowhere else (§6.9). The caller does the
+        /// transform — the Net layer does not see
         /// <c>ArenaSpace</c>, same as on the pose channel (see <see cref="IPoseSource"/>).</para>
         /// <para>⚠️ The wire form is NOT the absolute pose (v19): the root travels as yaw + offset
         /// from the pose-channel head's floor projection (§6.9), measured here against the SAME
@@ -424,8 +423,8 @@ namespace VortexArena.Net
                     Debug.LogWarning(
                         $"[UdpStateChannel] İskelet blob'u {length} B — tavan " +
                         $"{ArenaProtocol.SKELETON_MAX_BLOB_BYTES} B (§6.9). Kare gönderilmedi: bu kanalda " +
-                        "parçalama yoktur. Sıkıştırmayı yükselt ya da eklem listesini daralt " +
-                        "(parmak eklemleri kumandayla oynanırken gerçek veri taşımaz).");
+                        "parçalama yoktur. Blob boyu SkeletonWire.BLOB_BYTES ile sabittir; tavanı aşıyorsa " +
+                        "tel eklem listesi (SkeletonWire.JOINT_INDICES) büyütülmüş demektir.");
                 }
 
                 return;

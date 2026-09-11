@@ -8,7 +8,7 @@ Tümü paylaşılan `ArenaProtocol` statik sınıfında tanımlanır (`Assets/_S
 
 | Sabit | Değer | Açıklama |
 |---|---|---|
-| `PROTOCOL_VERSION` | `21` | hello/welcome'da taşınır; uyumsuzlukta log uyarısı (bağlantı **kesilmez** — `Server/VortexArena.Server.Core/LobbyService.cs` uyarıyı basıp devam eder). ⚠️ **Karışık sürüm desteklenmez** — sürüm artınca tüm başlıklara yeni APK kurulur; bağlantı reddedilmediği için bunu zorlayan tek şey APK turunun tamamlanmasıdır. v21 `status`/`PlayerInfo` üzerine **`body`** (gövde izleme durumu, §5.1/§5.3) ekler; tümüyle **eklemelidir** (bilmeyen uç `0` = "bildirilmedi" okur) ama sürüm yine artar: alanı yazan **istemcidir**, yani eski APK'lı oyuncunun T-poz yedeği ya da izin reddi operatöre **hiç görünmez** — v14 ile aynı gerekçe. v20 **istemci tarafı ölü-bağlantı bekçisini** getirir (§8): sunucu her `status`'a `heartbeat` ile cevap verir (§5.3), istemci `HEARTBEAT_TIMEOUT` boyunca hiçbir WS çerçevesi almazsa soketi **kendisi** düşürüp yeniden bağlanır; bağlanma denemesi de `CONNECT_TIMEOUT` ile sınırlıdır. Tel formatı eklemelidir ama karışık sürümde kaybolan şey kozmetik DEĞİLDİR: `heartbeat` yollamayan ESKİ sunucuya karşı YENİ istemci her 15 sn'de soketi düşürür ve bağlantı hiç oturmaz — sürüm bu yüzden artar. v19 iki değişikliği birden taşır ve tel DÜZENİNİ kırar. (1) **Poz bloğu quantize edildi** (§6.2): f32 yedi alan (28 B) yerine `[u32 rot][i16 x,y,z]` (10 B) — `0x01` 95→41 B, snapshot girdisi 88→34 B, `0x09` 34→16 B, `0x05` obje girdisi 30→12 B. (2) **İskelet kökü mutlak poz olmaktan çıktı** (§6.9): `0x07`/`0x08` kökü artık `[u16 yaw][i16 dx,dy,dz]` = 8 B'dir ve poz kanalındaki kafanın zemin izdüşümüne göre OFSET taşır — alıcı kökü kendi interpolasyonlu kafasının üstüne kurar, yani iskelet kanalı geciktiğinde/koptuğunda gövde isim etiketiyle AYNI noktada kalır ("gövde başka yerde" ayrışması yapısal olarak kapanır). Karışık sürümde belirti v7'dekiyle aynıdır: eski uç yeni baytları f32 diye okur ve uzak oyuncular çöp pozlara ışınlanır; bozulma iki yönlüdür. v18 **ağ nesnesi modelinin ikinci fazını** getirir: sahiplik ve obje pozu (`object_grab`/`object_release`/`object_rest` §5.1, `object_state`'in `owner`/`pos`/`rot`/`stage` alanları §5.3, UDP `0x09 ObjectPose` §6.12 ve `0x05`'in **obje bölümü** §6.8), obje olayları (`object_event`, **iki yönlü**) ve dinamik doğuş/ölüm (`object_spawn`/`object_despawn`) — kural §10.10, `kinds[]` girdisi `grab` + `events[]` kazanır (§11). ⚠️ **Bu artış tel DÜZENİNİ bozar:** `0x05`'in başlığı 7 B'den 8 B'ye çıkar (`objectCount`), yani eski istemci o paketin **tamamını** yanlış hizalar — karışık sürümde kaybolan şey kozmetik bir obje değil **snapshot'ın kendisidir**: uzak oyuncular çöp pozlara ışınlanır. Bozulma iki yönlüdür — eski APK `object_grab` göndermediği için hiçbir tutulabilir objeyi alamaz, yenilerin taşıdığı objeyi de sahnedeki yerinde donmuş görür. v17 **ağ nesnesi modelinin ilk fazını** getirir: sunucu artık oyuncu olmayan varlıkların (kırılabilir örtü, hedef tahtası) canını da tutar — `object_state` + `world_state` (§5.3), `hit_report.targetNetId` (§5.1), kural §10.10, `maps.json`'da `objects[]` + `kinds[]` (§11). Tel formatı **eklemelidir** ama karışık sürümde kaybolan şey kozmetik DEĞİLDİR: eski APK `targetNetId` göndermediği için hiçbir objeyi kıramaz, gelen `object_state`'i de yok saydığı için başkalarının kırdığı örtüyü **sağlam görmeye devam eder** — iki oyuncu aynı duvarın iki yanında farklı şey görür, biri kendini siperde sanırken diğeri onu açıkta vurur. v16 `identify` mesajını **her iki yönden de KALDIRIR**: admin→sunucu komutu da, sunucu→istemci bildirimi de yoktur. Kırıcı değildir ama sessizdir — eski bir admin komutu yollarsa yeni sunucu tipi `default` dalında yok sayar, düğme basılır ve hiçbir şey olmaz; eski bir başlığa da artık hiç bildirim gitmez. v15 `clear_calibration`'a **`keepSaved` (bool)** ekler (§5.2/§5.3, davranış §10.6): sıfırlama iki eyleme ayrılır — *hizalamayı geçersiz kıl* (gözlükteki kayıtlı çapa ve UUID korunur, `reload_calibration` çalışmaya devam eder) ve *cihaz kaydını da sil*. ⚠️ **Alanın YOKLUĞU `keepSaved:false` demektir** (sert kip): alanı tanımayan bir uç bugünkü davranışı sürdürür, sürpriz yapmaz. Karışık sürümde kaybolan şey bozuk çizim değil, operatörün *yumuşak* seçiminin sert uygulanmasıdır — kayıtlı çapa silinir ve o oyuncuda `reload_calibration` bir daha iş görmez. v14 **alan-dışını tele taşır**: `flags` bit7 = `FLAG_OUT_OF_BOUNDS` (§6.3) + yalnız adminlere giden `violation` akışı (§5.3, §10.9). Tel formatı **değişmez** (95 B / 88 B aynı, bit rezervden alındı, bant artışı sıfır) ama sürüm yine de artar: biti yazan **istemcidir**, yani eski APK'lı oyuncu onu hiç göndermez ve adminde alan dışına çıktığı **hiç görünmez** — kaybolan şey bozuk çizim değil, operatörün göremediği bir ihlaldir. ⚠️ **Bu bit CAN ERİTMEZ** (§10.9): ceza modeli yalnız `FLAG_IN_OBSTACLE`'a bağlıdır. v13 **kalibre modunu** (`set_calibration_mode` §5.2, `admin_state.calibrationMode` + `welcome.calibrationMode` §5.3, davranış §10.6), **zemin sapması bildirimini** (`set_calibration.floorOffset` §5.1 → `PlayerInfo.floorOffset` §5.3) ve **ölçüm başarısızlığı geri bildirimini** (`set_body_scale.error` §5.1 → `PlayerInfo.scaleError` §5.3, §10.8) getirir; tümüyle **eklemelidir**. Karışık sürümde: alanları göndermeyen eski istemcinin zemin sapması ve ölçüm gerekçesi operatöre hiç görünmez, `welcome.calibrationMode`'u okumayan başlık ise modu yok sayıp bugünkü davranışta (diskten çapa geri yükleme) kalır — kaybolan kural, bozuk çizim değil. v12 iskelet blob'undan **parmak eklemlerini çıkarır** (§6.9): hedef iskeletin 40 parmak eklemi tele hiç girmez, parmakları alıcı kendi sentezler. ⚠️ **Bu değişiklik KIRICIDIR ve sessizdir** — blob opak olduğu için eklem listesi uyuşmayan iki uç hata vermez, yalnız gövdeyi bozuk çizer; karışık sürümde belirti "uzak oyuncular garip duruyor"dur. v11 **engel ihlalini** taşır: `flags` bit5 = `FLAG_IN_OBSTACLE` (§6.3) + sunucu tarafında saniyelik can eritme (§10.9) — tümüyle **eklemelidir** (bayt düzeni değişmedi, bit rezervden alındı). Karışık sürümde: eski istemci biti hiç göndermez (o oyuncu duvarda ceza almaz) ve gelen biti yok sayar (admin halkası yanıp sönmez). v10 kumanda durumunu taşır: `flags` bit3/bit4 = **bayat el** (§6.3) + `status`/`PlayerInfo` üzerinde `ctrlL`/`ctrlR` (§5.1/§5.3) — tümüyle **eklemelidir** (bayt düzeni değişmedi, bitler rezervden alındı), bilmeyen uç bitleri yok sayar ve alanları `0` = "bildirilmedi" okur. v10 ayrıca `clear_calibration`'a **sunucu → istemci yönü** ekler (§5.2/§5.3): sıfırlama artık roster'a yazılan bir boole değil hedef başlığa iletilen bir komuttur. Bu yön de eklemelidir — tanımayan eski istemci mesajı yok sayar ve **yarım kalmış elle kalibrasyonu** (A alındı, B alınmadı) başlığında tutmaya devam eder, yani karışık sürümde bozulan tek şey operatörün o oyuncuyu sıfırlayamamasıdır. v9 gövde ölçeğini getirdi (`measure_body_scale` · `set_body_scale` · `PlayerInfo.bodyScale`, §10.8): tümüyle **eklemelidir**, eski istemci alanı bulamayınca `0` okur ve herkesi ölçeksiz çizer — yani karışık sürümde bozulan tek şey avatar boylarıdır. v8'de `lobby_state`'in `online` (bool) alanı yerini üç değerli `connection` + `reconnectSeconds`'a bıraktı (§5.3): alanı tanımayan eski admin her satırı "bağlı" çizer, yani kopan oyuncular hiç fark edilmez. v7'yi kırıcı yapan tel DÜZENİ değil **ANLAMIDIR**: baytlar v6 ile birebir aynı, ama `0x01`/`0x02`/`0x05` pozları, `0x03` atış yönleri ve `0x07`/`0x08` iskelet kökleri artık arena uzayı = dünya uzayı çerçevesinde okunur (§3). Eski istemci aynı baytları kendi sahne marker'ına göre çözer → iki taraf birbirini metrelerce kaymış, zeminin altında veya havada görür; belirti **"uzak oyuncular rastgele yerlere ışınlanıyor"**. v6'da bozulma iki yönlüydü: `0x07`/`0x08`'i tanımayan istemci uzak gövdeleri hiç çizemez, iskelet göndermeyen istemci de gövdesiz görünür (§6.9). v5'te bozulan tek yer `0x05` birleştirmesiydi (§6.8) |
+| `PROTOCOL_VERSION` | `22` | hello/welcome'da taşınır; uyumsuzlukta log uyarısı (bağlantı **kesilmez** — `Server/VortexArena.Server.Core/LobbyService.cs` uyarıyı basıp devam eder). ⚠️ **Karışık sürüm desteklenmez** — sürüm artınca tüm başlıklara yeni APK kurulur; bağlantı reddedilmediği için bunu zorlayan tek şey APK turunun tamamlanmasıdır. v22 iskelet blob'unun **içeriğini** değiştirir (§6.9): SDK'nın native serileştirmesi yerine VortexArena'nın yazdığı sabit boylu düzen (`SkeletonWire`: kalça konumu + eklem rotasyonları) tele girer; `0x07`/`0x08` başlığı, 8 B kök ve `u16` uzunluk aynıdır, sunucu blob'u yine açmaz. Karışık sürümde alıcı uyuşmayan blob'u (`fmt` · uzunluk · eklem sayısı) atar ve uzak gövde §6.11'in kafa + kol IK yedeğine düşer — bozuk gövde değil ama **canlı gövde de yok**; sürüm reddedilmediği için tüm gözlükler + admin + sunucu aynı turda dağıtılır. v21 `status`/`PlayerInfo` üzerine **`body`** (gövde izleme durumu, §5.1/§5.3) ekler; tümüyle **eklemelidir** (bilmeyen uç `0` = "bildirilmedi" okur) ama sürüm yine artar: alanı yazan **istemcidir**, yani eski APK'lı oyuncunun T-poz yedeği ya da izin reddi operatöre **hiç görünmez** — v14 ile aynı gerekçe. v20 **istemci tarafı ölü-bağlantı bekçisini** getirir (§8): sunucu her `status`'a `heartbeat` ile cevap verir (§5.3), istemci `HEARTBEAT_TIMEOUT` boyunca hiçbir WS çerçevesi almazsa soketi **kendisi** düşürüp yeniden bağlanır; bağlanma denemesi de `CONNECT_TIMEOUT` ile sınırlıdır. Tel formatı eklemelidir ama karışık sürümde kaybolan şey kozmetik DEĞİLDİR: `heartbeat` yollamayan ESKİ sunucuya karşı YENİ istemci her 15 sn'de soketi düşürür ve bağlantı hiç oturmaz — sürüm bu yüzden artar. v19 iki değişikliği birden taşır ve tel DÜZENİNİ kırar. (1) **Poz bloğu quantize edildi** (§6.2): f32 yedi alan (28 B) yerine `[u32 rot][i16 x,y,z]` (10 B) — `0x01` 95→41 B, snapshot girdisi 88→34 B, `0x09` 34→16 B, `0x05` obje girdisi 30→12 B. (2) **İskelet kökü mutlak poz olmaktan çıktı** (§6.9): `0x07`/`0x08` kökü artık `[u16 yaw][i16 dx,dy,dz]` = 8 B'dir ve poz kanalındaki kafanın zemin izdüşümüne göre OFSET taşır — alıcı kökü kendi interpolasyonlu kafasının üstüne kurar, yani iskelet kanalı geciktiğinde/koptuğunda gövde isim etiketiyle AYNI noktada kalır ("gövde başka yerde" ayrışması yapısal olarak kapanır). Karışık sürümde belirti v7'dekiyle aynıdır: eski uç yeni baytları f32 diye okur ve uzak oyuncular çöp pozlara ışınlanır; bozulma iki yönlüdür. v18 **ağ nesnesi modelinin ikinci fazını** getirir: sahiplik ve obje pozu (`object_grab`/`object_release`/`object_rest` §5.1, `object_state`'in `owner`/`pos`/`rot`/`stage` alanları §5.3, UDP `0x09 ObjectPose` §6.12 ve `0x05`'in **obje bölümü** §6.8), obje olayları (`object_event`, **iki yönlü**) ve dinamik doğuş/ölüm (`object_spawn`/`object_despawn`) — kural §10.10, `kinds[]` girdisi `grab` + `events[]` kazanır (§11). ⚠️ **Bu artış tel DÜZENİNİ bozar:** `0x05`'in başlığı 7 B'den 8 B'ye çıkar (`objectCount`), yani eski istemci o paketin **tamamını** yanlış hizalar — karışık sürümde kaybolan şey kozmetik bir obje değil **snapshot'ın kendisidir**: uzak oyuncular çöp pozlara ışınlanır. Bozulma iki yönlüdür — eski APK `object_grab` göndermediği için hiçbir tutulabilir objeyi alamaz, yenilerin taşıdığı objeyi de sahnedeki yerinde donmuş görür. v17 **ağ nesnesi modelinin ilk fazını** getirir: sunucu artık oyuncu olmayan varlıkların (kırılabilir örtü, hedef tahtası) canını da tutar — `object_state` + `world_state` (§5.3), `hit_report.targetNetId` (§5.1), kural §10.10, `maps.json`'da `objects[]` + `kinds[]` (§11). Tel formatı **eklemelidir** ama karışık sürümde kaybolan şey kozmetik DEĞİLDİR: eski APK `targetNetId` göndermediği için hiçbir objeyi kıramaz, gelen `object_state`'i de yok saydığı için başkalarının kırdığı örtüyü **sağlam görmeye devam eder** — iki oyuncu aynı duvarın iki yanında farklı şey görür, biri kendini siperde sanırken diğeri onu açıkta vurur. v16 `identify` mesajını **her iki yönden de KALDIRIR**: admin→sunucu komutu da, sunucu→istemci bildirimi de yoktur. Kırıcı değildir ama sessizdir — eski bir admin komutu yollarsa yeni sunucu tipi `default` dalında yok sayar, düğme basılır ve hiçbir şey olmaz; eski bir başlığa da artık hiç bildirim gitmez. v15 `clear_calibration`'a **`keepSaved` (bool)** ekler (§5.2/§5.3, davranış §10.6): sıfırlama iki eyleme ayrılır — *hizalamayı geçersiz kıl* (gözlükteki kayıtlı çapa ve UUID korunur, `reload_calibration` çalışmaya devam eder) ve *cihaz kaydını da sil*. ⚠️ **Alanın YOKLUĞU `keepSaved:false` demektir** (sert kip): alanı tanımayan bir uç bugünkü davranışı sürdürür, sürpriz yapmaz. Karışık sürümde kaybolan şey bozuk çizim değil, operatörün *yumuşak* seçiminin sert uygulanmasıdır — kayıtlı çapa silinir ve o oyuncuda `reload_calibration` bir daha iş görmez. v14 **alan-dışını tele taşır**: `flags` bit7 = `FLAG_OUT_OF_BOUNDS` (§6.3) + yalnız adminlere giden `violation` akışı (§5.3, §10.9). Tel formatı **değişmez** (95 B / 88 B aynı, bit rezervden alındı, bant artışı sıfır) ama sürüm yine de artar: biti yazan **istemcidir**, yani eski APK'lı oyuncu onu hiç göndermez ve adminde alan dışına çıktığı **hiç görünmez** — kaybolan şey bozuk çizim değil, operatörün göremediği bir ihlaldir. ⚠️ **Bu bit CAN ERİTMEZ** (§10.9): ceza modeli yalnız `FLAG_IN_OBSTACLE`'a bağlıdır. v13 **kalibre modunu** (`set_calibration_mode` §5.2, `admin_state.calibrationMode` + `welcome.calibrationMode` §5.3, davranış §10.6), **zemin sapması bildirimini** (`set_calibration.floorOffset` §5.1 → `PlayerInfo.floorOffset` §5.3) ve **ölçüm başarısızlığı geri bildirimini** (`set_body_scale.error` §5.1 → `PlayerInfo.scaleError` §5.3, §10.8) getirir; tümüyle **eklemelidir**. Karışık sürümde: alanları göndermeyen eski istemcinin zemin sapması ve ölçüm gerekçesi operatöre hiç görünmez, `welcome.calibrationMode`'u okumayan başlık ise modu yok sayıp bugünkü davranışta (diskten çapa geri yükleme) kalır — kaybolan kural, bozuk çizim değil. v12 iskelet blob'undan **parmak eklemlerini çıkarır** (§6.9): hedef iskeletin 40 parmak eklemi tele hiç girmez, parmakları alıcı kendi sentezler. ⚠️ **Bu değişiklik KIRICIDIR ve sessizdir** — o sürümün SDK blob'u opak olduğu için eklem listesi uyuşmayan iki uç hata vermez, yalnız gövdeyi bozuk çizer; karışık sürümde belirti "uzak oyuncular garip duruyor"dur. v11 **engel ihlalini** taşır: `flags` bit5 = `FLAG_IN_OBSTACLE` (§6.3) + sunucu tarafında saniyelik can eritme (§10.9) — tümüyle **eklemelidir** (bayt düzeni değişmedi, bit rezervden alındı). Karışık sürümde: eski istemci biti hiç göndermez (o oyuncu duvarda ceza almaz) ve gelen biti yok sayar (admin halkası yanıp sönmez). v10 kumanda durumunu taşır: `flags` bit3/bit4 = **bayat el** (§6.3) + `status`/`PlayerInfo` üzerinde `ctrlL`/`ctrlR` (§5.1/§5.3) — tümüyle **eklemelidir** (bayt düzeni değişmedi, bitler rezervden alındı), bilmeyen uç bitleri yok sayar ve alanları `0` = "bildirilmedi" okur. v10 ayrıca `clear_calibration`'a **sunucu → istemci yönü** ekler (§5.2/§5.3): sıfırlama artık roster'a yazılan bir boole değil hedef başlığa iletilen bir komuttur. Bu yön de eklemelidir — tanımayan eski istemci mesajı yok sayar ve **yarım kalmış elle kalibrasyonu** (A alındı, B alınmadı) başlığında tutmaya devam eder, yani karışık sürümde bozulan tek şey operatörün o oyuncuyu sıfırlayamamasıdır. v9 gövde ölçeğini getirdi (`measure_body_scale` · `set_body_scale` · `PlayerInfo.bodyScale`, §10.8): tümüyle **eklemelidir**, eski istemci alanı bulamayınca `0` okur ve herkesi ölçeksiz çizer — yani karışık sürümde bozulan tek şey avatar boylarıdır. v8'de `lobby_state`'in `online` (bool) alanı yerini üç değerli `connection` + `reconnectSeconds`'a bıraktı (§5.3): alanı tanımayan eski admin her satırı "bağlı" çizer, yani kopan oyuncular hiç fark edilmez. v7'yi kırıcı yapan tel DÜZENİ değil **ANLAMIDIR**: baytlar v6 ile birebir aynı, ama `0x01`/`0x02`/`0x05` pozları, `0x03` atış yönleri ve `0x07`/`0x08` iskelet kökleri artık arena uzayı = dünya uzayı çerçevesinde okunur (§3). Eski istemci aynı baytları kendi sahne marker'ına göre çözer → iki taraf birbirini metrelerce kaymış, zeminin altında veya havada görür; belirti **"uzak oyuncular rastgele yerlere ışınlanıyor"**. v6'da bozulma iki yönlüydü: `0x07`/`0x08`'i tanımayan istemci uzak gövdeleri hiç çizemez, iskelet göndermeyen istemci de gövdesiz görünür (§6.9). v5'te bozulan tek yer `0x05` birleştirmesiydi (§6.8) |
 | `UDP_BEACON_PORT` | `47820` | Sunucu → broadcast (cosmos 47800/47801 ile bilerek çakışmaz) |
 | `CONTROL_PORT` | `47821` | WS TCP, endpoint `/ws` |
 | `STATE_PORT` | `47822` | UDP poz kanalı |
@@ -23,8 +23,8 @@ Tümü paylaşılan `ArenaProtocol` statik sınıfında tanımlanır (`Assets/_S
 | `POSE_RATE_HZ` | `20` | İstemci poz gönderim frekansı |
 | `SNAPSHOT_RATE_HZ` | `20` | Sunucu snapshot yayın frekansı |
 | `INTERP_DELAY_MS` | `100` | Uzak avatar interpolasyon tamponu |
-| `SKELETON_RATE_HZ` | `12` | İskelet blob'u gönderim frekansı (§6.9). Poz kanalından **ayrı ve daha düşük** — blob poz paketinin birkaç katı ve darboğaz paket sayısı. Alıcıda SDK'nın kendi interpolasyonu koştuğu için 12 Hz akış 72 Hz çizime yumuşak yayılır; yükseltmek akıcılık değil yalnız paket satın alır |
-| `SKELETON_MAX_BLOB_BYTES` | `1024` | Tek oyuncunun blob tavanı (§6.9). Bütçe değil **emniyet**: 14 + 1024 = 1038 B < `COMBINED_MAX_BYTES`, çünkü bu kanalda **parçalama yoktur**. Aşan blob hiç gönderilmez |
+| `SKELETON_RATE_HZ` | `12` | İskelet blob'u gönderim frekansı (§6.9). Poz kanalından **ayrı ve daha düşük** — blob poz paketinin birkaç katı ve darboğaz paket sayısı. Alıcı kök ile kemikleri aynı `INTERP_DELAY_MS` tamponunda iki örnek arasında interpole ettiği için 12 Hz akış 72 Hz çizime yumuşak yayılır; yükseltmek akıcılık değil yalnız paket satın alır |
+| `SKELETON_MAX_BLOB_BYTES` | `1024` | Tek oyuncunun blob tavanı (§6.9). Bütçe değil **emniyet**: 14 + 1024 = 1038 B < `COMBINED_MAX_BYTES`, çünkü bu kanalda **parçalama yoktur**. Aşan blob hiç gönderilmez. Gerçek blob sabit boyludur (`SkeletonWire.BLOB_BYTES`); tavan sunucunun tek blob kuralıdır (`0 < len ≤ tavan`) |
 | `SKELETON_MAX_ENTRIES_PER_PACKET` | `16` | Tek `0x08` datagramına yazılan en fazla girdi (§6.10). Asıl kısıt **bayt bütçesidir** (`COMBINED_MAX_BYTES`) — girdiler değişken uzunluklu; bu sayı `count`'un `u8` olmasının tavanıdır |
 | `PLAYER_ID_MAX` | `255` | `playerId` tahsis tavanı. **Ürün kotası değil, tel formatı tavanıdır** — `playerId` UDP paketlerinde `u8`. Eşzamanlı oyuncu/admin sayısına başka sınır YOKTUR (kota ileride lisanslamayla gelecek) |
 | `NET_ID_SCENE_MIN` / `NET_ID_SCENE_MAX` | `1` / `32767` | Sahne objesinin ağ kimliği aralığı (`NetIdentity.sceneId`, §10.10); sahne kaydında `SceneIdGuard` zorlar. `0` = atanmamış ve **hiçbir zaman adreslenmez**. ⚠️ Üst yarı (`32768..65535`) **rezervdir** — sunucunun çalışma zamanında dağıtacağı dinamik obje kimlikleri oraya düşecek; sahne bake'i o aralığa taşarsa bir sahne objesiyle bir dinamik obje aynı kimliği alır ve sunucu hasarı hangisine yazdığını bilemez |
@@ -833,7 +833,7 @@ snapshot'a kopyalar ve yalnız ihlal defterini yazar. Taşınmasının sebebi ot
 bilmezse defter, maç sonu istatistiği ve iki operatörün ortak listesi mümkün olmaz; admin'in kuralı
 kendi hesaplaması ise "alan dışı"nın biri istemcide biri adminde iki kez yaşaması demek olurdu.
 
-⚠️ **İskelet akışı (§6.9) bu paketin yerine GEÇMEZ.** Gövde ayrı bir kanaldan gelir ama poz kanalı durur: silahın ele oturması, eşya baytları ve vuruş bildirimi ham anchor pozundan besleniyor. İki kanalın kadansı da ayrıdır (20 Hz ↔ `SKELETON_RATE_HZ`) — iskeletin gecikmesi silahın gecikmesi olmasın diye. "İskelet zaten el eklemini taşıyor, poz kanalı silinsin" **yapılmaz**: blob opaktır (alıcı içinden tek bir eklemi ucuza okuyamaz) ve o eklem elin fiziksel pozu değil retarget edilmiş bilek kemiğidir.
+⚠️ **İskelet akışı (§6.9) bu paketin yerine GEÇMEZ.** Gövde ayrı bir kanaldan gelir ama poz kanalı durur: silahın ele oturması, eşya baytları ve vuruş bildirimi ham anchor pozundan besleniyor. İki kanalın kadansı da ayrıdır (20 Hz ↔ `SKELETON_RATE_HZ`) — iskeletin gecikmesi silahın gecikmesi olmasın diye. "İskelet zaten el eklemini taşıyor, poz kanalı silinsin" **yapılmaz**: blob yalnız yerel eklem rotasyonu taşır (elin yeri alıcının kendi kemik uzunluklarıyla zincirden çözülür, gönderenin elinin konumu değildir) ve o eklem elin fiziksel pozu değil retarget edilmiş bilek kemiğidir.
 
 ⚠️ **Poz kanalı FİZİKSEL gerçeği taşır.** `handL`/`handR` ham rig anchor'larıdır — eşyaya "yapıştırılmış" düzeltilmiş poz DEĞİL. Çift elli silahta boş elin kabzaya oturtulması bir **sunum** kararıdır ve alıcı tarafta yapılır (§6.6). Bu kanal bir kez bulanırsa (düzeltilmiş poz taşımaya başlarsa) sonraki her tüketici — yakın dövüş, elle etkileşim, admin teşhisi — o bulanıklığı miras alır.
 
@@ -1061,7 +1061,7 @@ Snapshot bloğu `0x02` ile birebir aynı işlenir; tik tekrarında durumu yenide
 [u8 0x07][u8 playerId][u16 seq]
 [kök : u16 yaw][i16 dx][i16 dy][i16 dz]   (8 B)
 [u16 len][blob len B]
-Başlık: 14 B  →  len=200'de 214 B
+Başlık: 14 B  →  len = SkeletonWire.BLOB_BYTES (bugünkü listeyle 112) → 126 B
 
 yaw     : gövdenin arena yaw'ı, 360°/65536 adım.
 dx,dy,dz: kökün, poz kanalındaki (§6.2) KAFANIN ZEMİN İZDÜŞÜMÜNE göre ofseti, milimetre
@@ -1074,9 +1074,64 @@ koşuyor, retarget ediliyor ve **sonuç iskelet** akıyor. Sebep yapısaldır �
 servisidir, dışarıdan poz kabul etmez; uzak avatara "aynı body tracking'i" takmak her avatarın
 **yerel** gövdeyi oynatması demektir.
 
-**`blob` OPAKTIR.** İçeriği SDK'nın native serileştirmesidir; sunucu açmaz, doğrulamaz, kopyalar —
-sunucuda iskelet tablosu YOKTUR ve eklenmez. Gerekçe `netItemId` baytlarınınkiyle aynıdır (§6.6):
-bu bir **istemci-otoriter sunum bilgisidir**.
+**`blob`'u VortexArena yazar, sunucu AÇMAZ.** Düzenin tek kaynağı
+`Assets/_Shared/Net/Protocol/SkeletonWire.cs`'tir (sunucu da aynı dosyayı derler). Sunucunun blob için
+tek kuralı uzunluktur (`0 < len ≤ SKELETON_MAX_BLOB_BYTES`): açmaz, doğrulamaz, kopyalar — sunucuda
+iskelet tablosu YOKTUR ve eklenmez. Gerekçe `netItemId` baytlarınınkiyle aynıdır (§6.6): bu bir
+**istemci-otoriter sunum bilgisidir**. SDK'nın native serileştirmesi (`SerializeSkeletonAndFace`)
+tele girmez.
+
+```
+[u8 fmt][u8 jointCount][i16 hipX][i16 hipY][i16 hipZ]   (8 B)
+jointCount × [u32 rot]                                  (4 B / eklem)
+Toplam: SkeletonWire.BLOB_BYTES = 8 + 4 × eklem sayısı  (bugünkü listeyle 112 B)
+
+fmt        : SkeletonWire.FORMAT (bugün 1).
+jointCount : SkeletonWire.JOINT_INDICES uzunluğu.
+hipX,Y,Z   : kalça kemiğinin (SkeletonWire.HIPS_INDEX) localPosition'ı, milimetre.
+rot        : JOINT_INDICES sırasıyla her eklemin localRotation'ı — smallest-three: 2 bit en büyük
+             bileşenin indeksi + 3 × 10 bit (±1/√2); PoseData (§6.2) ile aynı kodlayıcı.
+```
+
+**Eklem listesi.** Tel sırası `SkeletonWire.JOINT_INDICES`'tir: hedef iskeletin `_jointPairs`
+indeksleri (gövde, bacaklar, omurga, iki kol, baş/boyun; parmak yok — aşağıda). Liste **kodda
+sabittir**, prefabdan okunmaz: `NetworkCharacterRetargeter`'ın `_bodyIndicesToSync`/`_bodyIndicesToSend`
+alanları tele etki etmez (yalnız SDK'nın atılan iç serileştirmesini besler). Kök eklem (indeks 0)
+listededir ama alıcı rotasyonunu yazmaz — dünya yerleşimini 8 B `kök` verir (aşağıda).
+
+**Yalnız rotasyon + kalça.** Ölçek (`localScale`) ve kemik uzunlukları tele girmez: alıcı kendi
+avatarının **bind uzunluklarıyla** çizer, boy ayrıca `bodyScale` ile kök transforma uygulanır (§10.8).
+Gönderenin yerel retarget'i eklem konumlarını oynatsa da uzak gövde bind oranlarıyla çizilir. Kalça
+konumu taşınır, çünkü çömelme ve adım yüksekliği kalçanın yüksekliğidir, rotasyonla ifade edilemez.
+⚠️ Rotasyon-only bacaklar ayağı zeminde tutamazsa çözüm aynı yapıda ek eklem konumları taşıyan
+**yeni bir `fmt`**'dir — mevcut düzene sessizce alan eklemek değil.
+
+⚠️ **Alıcı her kareyi doğrular.** Blob uzunluğu `BLOB_BYTES`'a eşit değilse, `fmt` farklıysa ya da
+`jointCount` yerel listeyle uyuşmuyorsa karenin **tamamı — kök dahil —** atılır ve oyuncu başına bir
+kez uyarı loglanır. İskelet ölü sayıldığı için uzak gövde §6.11'in kafa + kol IK yedeğine düşer:
+uyumsuz iki uç bozuk gövde değil yedek görüntü üretir. Bu kapı bir uyumluluk yolu DEĞİLDİR — sürüm
+uyuşmazlığı bağlantıda reddedilmediği için (§1) tüm gözlükler + admin + sunucu yine aynı turda dağıtılır.
+
+⚠️ **Eklem listesi, sırası ya da blob düzeni değişirse `SkeletonWire.FORMAT` ve `PROTOCOL_VERSION`
+BİRLİKTE artar.** `FORMAT` alıcının uyumsuz kareyi atmasını sağlar, sürüm dağıtım turunu zorlar.
+Aynı uzunlukta yeniden sıralanmış bir liste `FORMAT` artmadan hiçbir kapıya takılmaz ve rotasyonları
+sessizce başka kemiklere yazar.
+
+**Gönderen.** SDK'nın gönderim kancası (`ReceiveStreamData`: retarget bittikten sonra,
+`SKELETON_RATE_HZ` kadansında, aşağıdaki kare denetimlerinden geçmiş) çağrıldığında SDK'nın ürettiği
+baytlar atılır; `JointPairs[idx].Joint.localRotation` ile kalçanın `localPosition`'ı **canlı
+transformdan** okunup `SkeletonWire.Write` ile yazılır.
+
+**Alıcı — tek saat.** `RemoteSkeletonRegistry`'nin kök halkasındaki her örnek kalça + rotasyonları da
+taşır (aynı `Environment.TickCount` damgası). Uzak gövde `LateUpdate`'te önce kökü, sonra kemikleri
+yazar: `TryGetInterpolatedBones` rotasyonları `Slerp`, kalçayı `Lerp` ile kök ofsetiyle **aynı**
+`INTERP_DELAY_MS` gecikmeli saatte ve aynı iki örnek arasında interpole eder; eklemlere `localRotation`,
+kalçaya `localPosition` yazılır, indeks 0'ın rotasyonu yazılmaz. ⚠️ **İkinci bir saat YOKTUR:** kök ile
+kemikler ayrı tamponlardan çizilseydi gövde kökünden farklı bir ana ait duruşla çizilirdi. SDK'nın
+alıcı yolu (`NetworkCharacterHandler.ReceiveData`, SDK interpolasyonu) kullanılmaz; handler ve
+retargeter bileşenleri uzak prefabda yalnız **referans kaynağıdır** (`JointPairs`, bind pozu) —
+`_useInterpolation`/`_maxBufferSize` tele ve çizime etki etmez. İskelet ölüyken kemiklere dokunulmaz
+(§6.11). Yüz/şekil verisi (`_shapePoseData`) tele girmez.
 
 ⚠️ **PARMAK EKLEMLERİ TELE GİRMEZ.** Blob yalnız gövde + kol zincirini taşır; bilek (`…Hand`) dahil,
 bileğin ALTINDAKİ hiçbir eklem gönderilmez. Hedef iskeletin 66 ekleminin **40'ı parmaktır**, yani
@@ -1094,17 +1149,21 @@ Böylece aynı el her ekranda aynı çizilir ve sol/sağ farkı kalmaz — duru�
 ölçülen **beş kapanma oranı** uygulanır (`HandPoseLibrary.MeasureCurl`); ham rotasyonu humanoid
 kemiğe yazmak projenin bir kez öğrendiği tuzaktır. Oran **asset'te saklanmaz**, kayıttan türetilir.
 
-⚠️ **Gönderen ile alıcının eklem listesi AYNI olmak ZORUNDADIR** (`NetworkCharacterRetargeter`'ın
-`_bodyIndicesToSend`/`_bodyIndicesToSync` alanları, iki prefabta birden). Listeler ayrışırsa blob
-yanlış çözülür ve gövde tümden bozulur — bu, sürüm uyumsuzluğunun sessiz biçimidir. Denetimi
-`Configure All Build Elements` penceresinin **Hazırlık** bölümü yapar ("İskelet eklem listesi");
-ayrışma orada ✗ olarak görünür ve **insan adımıdır** — liste iki prefabın Inspector'ında düzeltilir,
-çalışma anında hesaplanmaz (hesaplayan bir yol, listeyi yazan ikinci bir taraf açar).
+⚠️ **Tel listesinin tek kaynağı `SkeletonWire.JOINT_INDICES`'tir; iki avatar prefabı bu indeksleri
+AYNI kemiklere çözmek ZORUNDADIR.** İndeks bir kemik adı değil `_jointPairs` sırasıdır: prefablardan
+birinde eşleşme kayarsa kare doğrulamadan geçer ve rotasyon başka kemiğe yazılır — sürüm
+uyumsuzluğunun sessiz biçimi. Denetimi `Configure All Build Elements` penceresinin **Hazırlık** bölümü
+yapar (`SkeletonStreamGuard`): her `JOINT_INDICES` indeksi iki prefabda da dolu ve aynı kemik adına
+çözülüyor, `_jointPairs[0]` retargeter'ın kendi transformu, `HIPS_INDEX` "Hips" adlı kemik,
+`_objectsToHideUntilValid` boş (gerekçe `Docs/Sistem-Ozeti.md` §7); SDK'nın dört
+`_bodyIndicesToSync`/`_bodyIndicesToSend` listesinin eşitliği de denetlenmeye devam eder. Ayrışma
+✗ olarak görünür ve **insan adımıdır** — prefab Inspector'ında düzeltilir, çalışma anında hesaplanmaz
+(hesaplayan bir yol, listeyi yazan ikinci bir taraf açar).
 
-⚠️ **`kök` neden ayrı bir alan** (blob'un kendi kökü varken): SDK kök eklemi
-`JointType.NoWorldSpace` ile yazıyor, yani **gönderenin dünya pozu** — alıcının arenasıyla ilgisi
-yok ve blob opak olduğu için içindeki kök çevrilemez. Kök bu yüzden ayrıca taşınır ve alıcı
-`ApplyBodyPose`'dan sonra karakterin kökünü bununla yazar; blob'un kendi kökü kullanılmaz. Aynı
+⚠️ **`kök` neden ayrı bir alan** (blob indeks 0'ı taşırken): karakterin kök eklemi
+(`_jointPairs[0]`, retargeter'ın kendi transformu) **gönderenin dünya pozundadır** — alıcının
+arenasıyla ilgisi yoktur ve blob'daki yerel rotasyon dünya yerleşimini taşımaz. Kök bu yüzden arena
+uzayında ayrıca taşınır; alıcı karakterin kökünü bununla yazar, blob'daki indeks 0'ın rotasyonu yazılmaz. Aynı
 madde `Docs/Sistem-Ozeti.md` §7'deki "retarget avatarı hareket eden kökün altına konmaz" tuzağının
 da çözümüdür: karakter hiçbir şeyin altına parent'lanmaz.
 
@@ -1127,8 +1186,9 @@ zaten yalnız yaw üretir.
 
 ⚠️ **Bu kanalda PARÇALAMA YOKTUR.** Blob `SKELETON_MAX_BLOB_BYTES`'ı aşarsa paket **hiç
 gönderilmez** (bir kez uyarı basılır). Yarım bir kareyi deserialize etmek bozuk iskelet demektir ve
-IP parçalanmasına güvenmek tek parçanın kaybında tüm kareyi çöpe atardı. Blob sınırı zorluyorsa
-çözüm eklem listesini daraltmaktır — **parmak eklemleri kumandayla oynanırken gerçek veri
+IP parçalanmasına güvenmek tek parçanın kaybında tüm kareyi çöpe atardı. Blob sabit boyludur
+(`BLOB_BYTES`) ve tavanın çok altındadır; bir düzen değişikliği onu tavana yaklaştırırsa çözüm
+parçalama değil eklem listesini daraltmaktır — **parmak eklemleri kumandayla oynanırken gerçek veri
 taşımaz**.
 
 ⚠️ **Kırpılmış blob = boş blob.** Okuyucu `len` kadar bayt isteyip daha azını alırsa girdi
@@ -1169,9 +1229,9 @@ ettiği için yarım bir kare tek oyuncuyu değil arenadaki **herkesi** bozuk g�
   ardışık temiz kare sayacı dolana kadar temiz kareler de bastırılır, yoksa uzak tarafta gövde iki
   yol arasında kare kare titrerdi.
 
-⚠️ **İki durumda da blob SDK'nın hedef iskeletinin referans T-pozudur** (yerel uzay, ölçeksiz;
-`SkeletonRetargeter.TargetReferencePoseLocal`) — "karakterin o anki kemikleri" gönderen bir dal
-YOKTUR. Bir arızadan sonra o kemikler SDK'nın **son uyguladığı donuk poz**tur ve kıpırdamayan bir
+⚠️ **İki durumda da blob hedef iskeletin referans T-pozudur:** `SkeletonRetargeter.TargetReferencePoseLocal`'dan
+bind rotasyonları + bind kalça konumu, SDK karesiyle aynı `SkeletonWire.Write` ile yazılır
+(`SerializeSkeletonAndFace` kullanılmaz) — "karakterin o anki kemikleri" gönderen bir dal YOKTUR. Bir arızadan sonra o kemikler SDK'nın **son uyguladığı donuk poz**tur ve kıpırdamayan bir
 gövde sahada "ağ bozuk" diye okunur; T-poz ise arızayı olduğu gibi, "izleme bozuk" diye gösterir.
 SDK'nın `AppliedPose` bayrağı yalnız iki dalın **silahlanma koşulunu** ayırır, gönderilen içeriği
 değil: bayrak yalnız retarget hesabı koştuğunda yazılır, kaynak geçersizken son değerinde kalır —
@@ -1197,6 +1257,9 @@ başlatmak sayacı yine 0'a çektiği için arızayı çözmez, pekiştirir.
 [u8 0x08][u8 count][u32 serverTick]
 oyuncu başına: [u8 playerId][kök 8, §6.9 düzeni][u16 len][blob] = 11 + len B
 Başlık: 6 B
+
+len = SkeletonWire.BLOB_BYTES (bugünkü listeyle 112) → girdi 123 B; bayt bütçesine
+(COMBINED_MAX_BYTES = 1200, başlık dahil) datagram başına 9 girdi sığar: 6 + 9 × 123 = 1113 B.
 ```
 
 **Neden batch:** oyuncu başına ayrı datagram, tik başına **hedef başına N** paket demek olurdu. Bu
@@ -2270,15 +2333,16 @@ sürer, yani "oyuncu gözü / karakter gözü" gözlüğü kim takarsa taksın `
 hizalamada kullanılmaz** (0,11 m yalnız boy kırpması ve takip ipucu içindir): modelin kafası oyuncunun
 gözüne göre hizalansaydı uzun bir kafa, kısa bir gövde satın alınırdı.
 
-⚠️ **Ölçek iskelet blob'una GİRMEZ.** Meta Movement SDK'nın `Calibrate()`'i gönderenin gövde
-ORANLARINI değiştirir; blob `SerializationCompressionType.High` ile eklem uzunlukları üzerinden
-sıkıştığı için alıcının hedef iskeleti artık gönderenin kodladığı uzunluklarla uyuşmaz ve uzak
-avatar **bozuk duruşlara** girer. Bu yüzden gönderenin iskeleti prefab oranlarında bırakılır
+⚠️ **Ölçek ve kemik uzunluğu iskelet blob'una GİRMEZ** (§6.9): blob yalnız eklem rotasyonu + kalça
+konumu taşır, alıcı kendi avatarının bind uzunluklarıyla çizer. Meta Movement SDK'nın `Calibrate()`'i
+gönderenin gövde ORANLARINI değiştirir; gönderenin rotasyonları ve kalça yüksekliği o oranlara göre
+çözülür, uzak gövdenin bind uzunluklarıyla uyuşmaz ve uzak avatar **bozuk duruşlara** girer (kalça
+yüksekliği bacak boyuna oturmaz). Bu yüzden gönderenin iskeleti prefab oranlarında bırakılır
 (`Calibrate()` hiç çağrılmaz) ve boy ayrı bir alanda, **bir kez** taşınır.
 
-⚠️ **Yerel karakter ölçeklenmez.** Ölçek yalnız uzak avatarlara uygulanır. Gönderenin iskeleti
-tele canlı kemik transformlarından, ölçek dahil okunur; kök yerelde ölçeklenseydi ölçek blob'a
-girer ve alıcıda ikinci kez uygulanırdı.
+⚠️ **Yerel karakter ölçeklenmez.** Ölçek yalnız uzak avatarlara uygulanır. Yerel gövde hiç
+çizilmediği için yerel ölçeğin karşılığı yoktur ve tele yalnız rotasyon + kalça `localPosition`'ı
+gittiği için (§6.9) alıcıya da ulaşmaz — boyun tek taşıyıcısı bu alandır.
 
 **Boy önerisi gövde takibine ölçümden verilir.** Başlık gövde açılışında, her ölçüm sonucunda ve
 takip onarımında `OVRBody.SuggestBodyTrackingCalibrationOverride(boy)` çağırır; boy ölçülen (ölçüm

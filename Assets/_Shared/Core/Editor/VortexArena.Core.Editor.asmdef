@@ -5,6 +5,7 @@
         "VortexArena.Core",
         "VortexArena.Net",
         "VortexArena.Net.Editor",
+        "VortexArena.Protocol",
         "Unity.ProBuilder",
         "Oculus.Interaction"
     ],

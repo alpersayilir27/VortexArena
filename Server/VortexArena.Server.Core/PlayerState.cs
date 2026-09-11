@@ -221,8 +221,8 @@ public sealed class PlayerState
     // same two threads (recv writes, the 20 Hz broadcast reads) and a second lock would only raise a
     // lock ordering question. Do not add a new lock.
 
-    /// <summary>Last accepted skeleton blob — OPAQUE: the server never unpacks or validates it, only
-    /// copies it into the batch (§6.9); there is no skeleton table on the server and none is
+    /// <summary>Last accepted skeleton blob (VortexArena layout, <c>SkeletonWire</c>) — the server copies
+    /// it into the batch without unpacking (§6.9); there is no skeleton table on the server and none is
     /// added.</summary>
     /// <remarks>⚠️ Never mutate this array in place; replace it on every packet. The broadcast thread
     /// takes the reference under the lock and serialises outside it, so in-place writes would publish a

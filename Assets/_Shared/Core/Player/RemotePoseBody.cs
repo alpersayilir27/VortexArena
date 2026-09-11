@@ -21,8 +21,8 @@ namespace VortexArena.Core.Player
     /// under a root that was being scaled to zero, so every collider collapsed to a point. Drawing the
     /// body restores the hit volume with it — this is a fairness guard, not decoration.</para>
     /// <para>⚠️ <b>Execution order must stay between 100 and 30050.</b> The lower bound is the SDK
-    /// (<c>NetworkCharacterHandler</c>) and <see cref="ArenaNetCharacterBehaviour"/> (50), which own the
-    /// applied pose and the root; writing before them is overwritten in the same frame. The upper bound
+    /// retargeter/handler (up to 100) and <see cref="ArenaNetCharacterBehaviour"/> (50), which write the
+    /// bones and the root; writing before them is overwritten in the same frame. The upper bound
     /// is <see cref="RemoteHandPoser"/> (30050): when the player HOLDS something, seating the hand on the
     /// item must win over the raw hand target written here. <see cref="SkeletonPoseMirror"/> (30100) then
     /// carries everything to the red team body for free.</para>
