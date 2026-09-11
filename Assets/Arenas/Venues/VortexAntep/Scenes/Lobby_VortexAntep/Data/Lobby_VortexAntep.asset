@@ -17,7 +17,7 @@ MonoBehaviour:
   gameType: 0
   supportedModeIds:
   - lobby
-  ambienceClip: {fileID: 8300000, guid: 88eb1d7daa77ef842b2564808123bfe5, type: 3}
+  ambienceClip: {fileID: 8300000, guid: ce0957423e989d3409b4c4680b9079ad, type: 3}
   ambienceVolume: 0.175
   musicClip: {fileID: 0}
   musicVolume: 0.5

@@ -14,6 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.ModeDefinition
   modeId: lobby
   displayName: Lobi
+  gameType: 0
   lobbyProfile: 1
   roundSeconds: 0
   scoreLimit: 0
@@ -25,9 +26,9 @@ MonoBehaviour:
   respawnDelay: 5
   maps:
   - {fileID: 11400000, guid: a0d89b3444595f049bd3d1ed05c21d8c, type: 2}
-  - {fileID: 11400000, guid: c7fac0b075064be08aa75f50faf07984, type: 2}
   - {fileID: 11400000, guid: fc938a3fe0a02b843a9d24f28ab8a2aa, type: 2}
   - {fileID: 11400000, guid: c3f97ebf4477c3a4fbaea0fd8c7cef31, type: 2}
+  - {fileID: 11400000, guid: 500a4b4e9d274644298c12a6519d76fe, type: 2}
   loadout:
   - {fileID: 11400000, guid: 1004acbfc90c5854d995bbfd4f73b494, type: 2}
   - {fileID: 11400000, guid: d42e84326e961f542ba86d57e9a71d20, type: 2}

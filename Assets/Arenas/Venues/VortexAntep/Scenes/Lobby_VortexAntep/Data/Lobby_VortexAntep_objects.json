@@ -1,0 +1,10 @@
+{
+  "objects": [
+    { "sceneId": 1, "kind": "breakable_cover" },
+    { "sceneId": 2, "kind": "breakable_cover" },
+    { "sceneId": 3, "kind": "breakable_cover" },
+    { "sceneId": 4, "kind": "breakable_cover" },
+    { "sceneId": 5, "kind": "target_board" },
+    { "sceneId": 6, "kind": "target_board" }
+  ]
+}
