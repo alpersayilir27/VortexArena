@@ -73,6 +73,7 @@ veri üretir, ama duvarlar çizilmeye devam etmeli.
 |---|---|---|
 | **`ArenaObstacle`** | Sahneye elle konmuş bir engel (kolon, kasa, direk) muhafaza uyarısına girecekse | Engel objesine ekle, `size` alanına zemindeki ölçüsünü yaz (X = genişlik, Y = derinlik). ⚠️ **Collider EKLEMEZ, fizik yapmaz** — tek işi `ArenaBoundary`'nin oyuncuyu engele yaklaşırken uyarmasıdır. Plandan üretilen kolonlara aracın kendisi ekler |
 | **`ArenaRoof`** | Arenanın çatısı varsa | Çatı hiyerarşisinin köküne: `GameObject > VortexArena > Arena Roof`. Admin kuş bakışına geçince çatı çizilmez (gölgesi kalır). Açık tavanlı arenada hiç yapılmaz |
+| **`VA_FloorPortal`** | Arena birden çok kattan oynanacaksa (kat çifti başına bir portal) | Prefabı sahneye bırak (kit yoksa önce `Tools > VortexArena > Arena > Kat Portalı Kitini Üret`; `Template Temellerini Yükle`'nin **Kat sayısı** alanı da koyar). **Kökü kendi katının zeminine** oturur (±0,25 m), `upperHeight` üst katın yüksekliğini **tanımlar** — kat yüksekliği başka hiçbir yere yazılmaz. Üst kat plakasının collider'ı `Default` layer'da kalır, **`Obstacle`'a KONMAZ** (üst kattaki herkes ihlalde sayılır); admin kuş bakışı için plaka `ArenaRoof` kökünün altına alınabilir. Çemberlere collider eklenmez |
 | **`FX_SnowStorm`** | Kar/hava efekti isteniyorsa | Karlı bir arena kutusunun `Prefabs/` klasöründeki prefabı arena orijinine (0,0,0) bırak. 12×12 değilse `Snow_A/B/E` shape scale'lerini arena boyutu + ~3 m payla ölçekle |
 | **`ProximityWarning`** | Çarpışma önleme isteniyorsa | Elle eklenir; `head` ve `haloMaterial` (`_Shared/FX/M_ProximityHalo`) Inspector'dan verilir |
 | **`NetIdentity`** | Dinamik obje senkronu gerekiyorsa | `GameObject > VortexArena > Network Parent` — benzersiz `sceneId` damgalar. Prefabdan gelen objede bileşen prefabda durur (`sceneId` 0), sahnedeki her kopya kimliğini **kayıtta** override olarak alır — `Ctrl+S` yeter, override prefaba Apply edilmez |
@@ -179,6 +180,9 @@ Gerçek testte üç şeye bak:
 - **Ölen oyuncu canlanabiliyor mu?** Canlanamıyorsa `BaseZone`'un takımı oyuncunun
   takımıyla eşleşmiyor, **bileşeni kapalı** (kapalı bölge açık sayılmaz) ya da şeridin kapladığı
   alan sandığından küçüktür — bölgeyi seçip Gizmo'nun çizdiği dikdörtgene bak.
+- **Katlı arenada kat listesi doğru mu?** Konsolda `[ArenaFloors] n kat: 0.00 m / 3.00 m …` satırı
+  beklenen kat sayısını ve yüksekliklerini yazmalı. Satır hiç yoksa sahnede etkin portal yok; kat
+  eksikse o portalın kökü kendi katının zeminine oturmuyordur (aynı yerde uyarı düşer).
 - **Harita değişince kalibrasyon duruyor mu?** Yeni arenada oyuncu fiziksel olarak nerede duruyorsa
   orada kalmalı. Kalmıyorsa kayıtlı `OVRSpatialAnchor` geri yüklenememiştir — konsolda
   `ArenaCalibrator` uyarısını ara. Aynı yerde "boyut dosyasında kalibrasyon noktası yok" uyarısı

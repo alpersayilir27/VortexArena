@@ -175,7 +175,10 @@ namespace VortexArena.Core.Player
         /// headset's floor is a guardian setting and is exactly what is wrong when this measure lies,
         /// while the arena floor is pinned at y=0 by our own alignment — which corrects that setting
         /// (<c>ArenaCalibrator</c> captures the floor at the second anchor). Before calibration there is
-        /// no arena floor yet, so the headset's own is the only answer available.</para></summary>
+        /// no arena floor yet, so the headset's own is the only answer available.</para>
+        /// <para>⚠️ The multi-floor lift is subtracted: the measure is eye height above the floor the
+        /// player is STANDING on, and a raw upper-floor sample would be a storey too tall — every
+        /// body-relative gesture would then demand an impossible reach.</para></summary>
         private static bool TryTakeSample(out float sample)
         {
             sample = 0f;
@@ -186,7 +189,7 @@ namespace VortexArena.Core.Player
             }
 
             sample = CalibrationState.IsCalibrated
-                ? ArenaSpace.WorldToArena(new Vector3(0f, eyeY, 0f)).y
+                ? ArenaSpace.WorldToArena(new Vector3(0f, eyeY, 0f)).y - FloorState.LiftMeters
                 : eyeY - floorY;
 
             return sample >= MinSampleMeters && sample <= MaxSampleMeters;

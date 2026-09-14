@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Text;
 using TMPro;
@@ -34,6 +35,9 @@ namespace VortexArena.App.Admin
         /// <summary>FIXED label of the chip between the scores. The chip is a button, so it says
         /// what it does — not the match phase.</summary>
         private const string ChipLabelText = "İSTATİSTİK";
+
+        /// <summary><c>modeState</c> prefix of a round parked on its result (round-based modes, §10.1).</summary>
+        private const string RoundEndPrefix = "roundend:";
 
         [Header("Oyuncu satırı")]
         [Tooltip("Kolonlara örneklenecek satır prefabı (Resources/UI/AdminPlayerRow).")]
@@ -266,7 +270,11 @@ namespace VortexArena.App.Admin
         /// over an empty arena reads as a stuck match.</summary>
         /// <remarks>What the number MEANS belongs to the mode (§10.1) — a round's remainder in a
         /// round-based match, the whole match's where that mode has no round limit. The panel only
-        /// draws what <c>match_state</c> carries; it does not interpret it.</remarks>
+        /// draws what <c>match_state</c> carries; it does not interpret it.
+        /// <para>⚠️ One exception, and it is why the field is not purely a clock: on a round review the
+        /// server is PARKED and the clock reads 00:00 with nothing to explain it. The wait ends by
+        /// closing the stats panel (<c>mode_continue</c>), so the field names that key — an operator who
+        /// never opened the panel has no other place to learn it.</para></remarks>
         private static string ClockLine(AdminRoster roster)
         {
             bool inLobby = roster.Phase == ArenaProtocol.PHASE_PAUSED &&
@@ -275,6 +283,13 @@ namespace VortexArena.App.Admin
             if (inLobby)
             {
                 return "";
+            }
+
+            if (roster.Phase == ArenaProtocol.PHASE_PAUSED &&
+                roster.PhaseReason == ArenaProtocol.PAUSE_REASON_MODE &&
+                roster.ModeState.StartsWith(RoundEndPrefix, StringComparison.Ordinal))
+            {
+                return "TUR BİTTİ · I: TURA DEVAM";
             }
 
             int total = Mathf.Max(0, Mathf.CeilToInt(roster.TimeRemaining));

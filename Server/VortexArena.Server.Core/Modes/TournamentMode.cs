@@ -482,11 +482,15 @@ public sealed class TournamentMode : IGameMode
 
         _nextRegroupReportAt = now.AddSeconds(RegroupReportIntervalSeconds);
 
+        // Same scope as the gate itself (see CountInBase): an uncalibrated player is not waited for, so
+        // naming them here would send the operator after the wrong headset.
         var missing = string.Join(", ", director.ConnectedPlayers()
-            .Where(p => !p.Ready)
+            .Where(p => p.Calibrated && !p.Ready)
             .Select(p => p.Name));
+        var uncalibrated = director.ConnectedPlayers().Count(p => !p.Calibrated);
+        var note = uncalibrated > 0 ? $" (kalibresiz, sayılmıyor: {uncalibrated})" : "";
         Console.WriteLine($"[tournament] toplanma bekleniyor ({ready}/{total}) — " +
-                          $"tabanına dönmeyenler: {missing}");
+                          $"tabanına dönmeyenler: {missing}{note}");
     }
 
     /// <summary>Schedules the first diagnostic line (on every entry into the regroup).</summary>
@@ -515,15 +519,21 @@ public sealed class TournamentMode : IGameMode
                           "toplanmaya dönüldü.");
     }
 
-    /// <summary>How many players are in their base (<c>ready</c>) out of the connected total.</summary>
+    /// <summary>How many CALIBRATED players are in their base (<c>ready</c>) out of the calibrated
+    /// connected total.</summary>
     /// <remarks>Here <c>ready</c> means "I am in my own base right now" and the client updates it in
-    /// both directions (§10.1) — gate and watchdog read the same counter.</remarks>
+    /// both directions (§10.1) — gate and watchdog read the same counter.
+    /// <para>⚠️ An uncalibrated player is out of BOTH numbers: they are outside the fight (§10.6 —
+    /// "kalibresiz oyuncu savaş dışıdır") and <see cref="EvaluateRound"/> does not count them as standing
+    /// either. Counted here, one unaligned headset would hold the regroup open with nothing left to break
+    /// it — and the round it delays is one it cannot take part in anyway.</para></remarks>
     private static (int ready, int total) CountInBase(MatchDirector director)
     {
         var total = 0;
         var ready = 0;
         foreach (var player in director.ConnectedPlayers())
         {
+            if (!player.Calibrated) continue;
             total++;
             if (player.Ready) ready++;
         }

@@ -49,9 +49,10 @@ namespace VortexArena.Core.Player
         /// or running never puts it this far away.</summary>
         private const float SuspectHorizontalMeters = 1.5f;
 
-        /// <summary>Accepted |y| ceiling for the root in arena space (m). The arena contract pins the
-        /// floor at y=0 (<see cref="ArenaSpace"/>); more means the floor estimate drifted (multi-storey
-        /// venue, stale tracking map).</summary>
+        /// <summary>Accepted |y| ceiling for the root ABOVE THE CURRENT FLOOR LEVEL (m, arena space).
+        /// ⚠️ Measured against <c>FloorState.LiftMeters</c>, not against y=0: on an upper floor the rig is
+        /// lifted legitimately, and an absolute test would reject every frame there. More than this means
+        /// the floor estimate drifted (stale tracking map).</summary>
         private const float SuspectRootHeightMeters = 1.0f;
 
         /// <summary>Stream counts as STALE after this long without an SDK frame (s). A silent source
@@ -73,6 +74,11 @@ namespace VortexArena.Core.Player
         /// <summary>How far below the root's floor a foot may sit (m). The root is the body's floor point,
         /// so a foot under it means the height solve collapsed.</summary>
         private const float FootBelowRootMeters = 0.3f;
+
+        /// <summary>Largest hips shift the foot grounding may apply in one frame (m). A real proportion
+        /// mismatch is centimetres; more means the wire's <c>footY</c> is garbage and the body would be
+        /// thrown off the floor instead of placed on it.</summary>
+        private const float FootGroundLimitMeters = 0.5f;
 
         /// <summary>Largest per-joint move accepted between two consecutive judged frames (m). ≈83 ms
         /// apart, so this is ~12 m/s — far above sprinting or a swung arm, well below a solver jump.</summary>
@@ -111,7 +117,8 @@ namespace VortexArena.Core.Player
         /// <summary>Uniform body scale (§10.8) — <c>1</c> = unmeasured. Written by
         /// <see cref="RemoteAvatar"/> from the roster.
         /// <para>⚠️ <b>Applied only on the REMOTE body</b> (<see cref="ApplyArenaRoot"/>): the wire carries
-        /// local rotations + hips position only, no scale, so the receiver's root is its single home.</para></summary>
+        /// local rotations + hips position (proportion space) + <c>footY</c>, no scale, so the receiver's
+        /// root is its single home.</para></summary>
         public float BodyScale { get; set; } = 1f;
 
         /// <summary>Is the sensor source actually running?
@@ -496,7 +503,8 @@ namespace VortexArena.Core.Player
         /// <para>⚠️ Left alone, the runtime infers stature from head height above ITS OWN floor. With
         /// stale space data that floor sits well below the real one: the inferred body is too tall and
         /// its legs reach the bogus floor, so the remote avatar stands sunk into the ground. The
-        /// measurement is taken against the ARENA floor, which our alignment pins at y=0.</para></summary>
+        /// measurement is a real stature in metres, independent of any floor estimate — which is exactly
+        /// why it survives the rig being lifted onto an upper floor.</para></summary>
         public float SeedBodyHeightHint()
         {
             if (!HasInputAuthority || !TryGetHintHeightMeters(out float meters))
@@ -579,15 +587,15 @@ namespace VortexArena.Core.Player
             return _lastSdkFrameTime > 0f && Time.time - _lastSdkFrameTime > StaleFrameSeconds;
         }
 
-        /// <summary>Sends one fallback frame built from the SDK's target reference T-pose (bind local rotations + hips).</summary>
+        /// <summary>Sends one fallback frame built from the SDK's target reference T-pose (bind local rotations + hips; <c>footY = 0</c>).</summary>
         /// <remarks>
         /// Used on both triggers; the receiver decodes it as an ordinary <c>0x07</c> frame (§6.9).
         /// <para>⚠️ The character's current bones are deliberately NOT used: after a fault they are the
         /// last applied, now frozen pose, and a motionless body reads as "network broken" on site. A
         /// T-pose reads as "tracking is broken", which is the true fault.</para>
         /// <para>⚠️ The root is NOT read from the character (never written on cold start, untrusted on a
-        /// fault) but derived from the HMD — floor projection, yaw only; the floor is world y=0 by arena
-        /// contract (<see cref="ArenaSpace"/>).</para>
+        /// fault) but derived from the HMD — floor projection, yaw only; the floor is the level of the
+        /// CURRENT floor (<c>FloorState.LiftMeters</c>), which is y=0 on the ground floor.</para>
         /// <para>⚠️ <see cref="GuardRootJump"/> is skipped ON PURPOSE (that gate is for the SDK root
         /// snapping to the rig origin when a controller dies) and <c>_lastSentRoot</c> is not written —
         /// the guard's reference must come from the SDK path's own frames.</para>
@@ -607,7 +615,10 @@ namespace VortexArena.Core.Player
                 return;
             }
 
-            var worldRoot = new Pose(new Vector3(head.position.x, 0f, head.position.z), head.rotation);
+            // ⚠️ The root sits on the CURRENT virtual floor, not on y=0: on an upper floor a y=0 root
+            // would send the body one storey below its own head.
+            var worldRoot = new Pose(
+                new Vector3(head.position.x, FloorState.LiftMeters, head.position.z), head.rotation);
 
             SkeletonRetargeter skeleton = _retargeter.SkeletonRetargeter;
             NativeArray<MSDKUtility.NativeTransform> bind =
@@ -625,9 +636,51 @@ namespace VortexArena.Core.Player
                 StoreWireRotation(i, bind[indices[i]].Orientation);
             }
 
+            // Bind hips are already proportion space, and bind feet stand on the floor by definition.
             Vector3 hips = bind[SkeletonWire.HIPS_INDEX].Position;
-            int length = SkeletonWire.Write(_wireBlob, 0, hips.x, hips.y, hips.z, _wireRotations);
+            int length = SkeletonWire.Write(_wireBlob, 0, hips.x, hips.y, hips.z, 0f, _wireRotations);
             SendBlobToRelay(_wireBlob, length, ArenaSpace.WorldToArena(worldRoot));
+        }
+
+        /// <summary>Body scale the RECEIVER will apply to this body (§10.8) — the roster value, so both
+        /// ends divide/multiply by the same number; <c>1</c> until the server publishes one.</summary>
+        private static float GetSenderBodyScale()
+        {
+            float scale = BodyScaleState.ServerScale;
+            return scale > 0.01f && !float.IsNaN(scale) ? scale : 1f;
+        }
+
+        /// <summary>Lowest leg joint above the root (m, REAL metres) — the receiver's grounding target.
+        /// <para>⚠️ Root local space is metres only because the sender's root scale is <c>1</c>
+        /// (<c>ApplyRootScale</c> off, see <see cref="ApplyArenaRoot"/>); the lossy scale is divided back
+        /// out in case that ever changes.</para></summary>
+        private float MeasureFootHeight()
+        {
+            int[] legSlots = SkeletonWire.LEG_SLOTS;
+            float lowest = float.MaxValue;
+
+            for (int i = 0; i < legSlots.Length; i++)
+            {
+                Transform joint = _wireJoints[legSlots[i]];
+                if (joint == null)
+                {
+                    continue;
+                }
+
+                float y = _characterRoot.InverseTransformPoint(joint.position).y;
+                if (y < lowest)
+                {
+                    lowest = y;
+                }
+            }
+
+            if (lowest >= float.MaxValue)
+            {
+                return 0f;
+            }
+
+            float rootScale = _characterRoot.lossyScale.y;
+            return Mathf.Abs(rootScale - 1f) > 1e-4f ? lowest * rootScale : lowest;
         }
 
         /// <summary>One-shot report that the fallback frame could not be produced — the fault that leaves
@@ -702,17 +755,19 @@ namespace VortexArena.Core.Player
             return fromSkeleton;
         }
 
-        /// <summary>Writes the interpolated wire joints onto the remote body: local rotations + hips local position.</summary>
+        /// <summary>Writes the interpolated wire joints onto the remote body: local rotations + hips local position, then grounds the feet with the wire's <c>footY</c>.</summary>
         /// <remarks>
         /// Only while the skeleton stream is live; a dead stream leaves the bones to <see cref="RemotePoseBody"/>.
         /// <para>⚠️ Joint 0 is NOT written: it is <see cref="_characterRoot"/>, whose rotation comes from the
         /// 8 B root yaw in <see cref="ApplyArenaRoot"/>.</para>
+        /// <para>⚠️ ORDER MATTERS: rotations first (they decide where the feet end up), hips shift after.</para>
         /// </remarks>
         private void ApplyInterpolatedBones(int renderTick)
         {
             RemoteSkeletonRegistry skeletons = RemoteSkeletonRegistry.Instance;
             if (skeletons == null || !TryResolveWireJoints() ||
-                !skeletons.TryGetInterpolatedBones(PlayerId, renderTick, _boneRotations, out Vector3 hips))
+                !skeletons.TryGetInterpolatedBones(
+                    PlayerId, renderTick, _boneRotations, out Vector3 hips, out float footY))
             {
                 return;
             }
@@ -726,7 +781,48 @@ namespace VortexArena.Core.Player
                 }
             }
 
+            // Hips are proportion space; the root's BodyScale turns them into real height.
             _wireHips.localPosition = hips;
+
+            // Legs are driven by rotation only and keep the PREFAB's bind lengths, so the sender's real
+            // foot height can only be reached by translating the hips. The shift is expressed in
+            // root-local units, hence the division by the root scale.
+            float scale = _characterRoot.lossyScale.y;
+            if (scale <= 1e-4f || !TryMeasureDrawnFootHeight(out float drawnFoot))
+            {
+                return;
+            }
+
+            // ⚠️ Clamped: a garbage footY must not launch the body instead of grounding it.
+            hips.y += Mathf.Clamp((footY - drawnFoot) / scale, -FootGroundLimitMeters, FootGroundLimitMeters);
+            _wireHips.localPosition = hips;
+        }
+
+        /// <summary>Lowest drawn leg joint above the root (m, WORLD/real metres). Read right after the
+        /// rotation writes — Unity resolves world transforms on access, so this is this frame's pose.</summary>
+        private bool TryMeasureDrawnFootHeight(out float drawnFoot)
+        {
+            int[] legSlots = SkeletonWire.LEG_SLOTS;
+            float lowest = float.MaxValue;
+            float rootY = _characterRoot.position.y;
+
+            for (int i = 0; i < legSlots.Length; i++)
+            {
+                Transform joint = _wireJoints[legSlots[i]];
+                if (joint == null)
+                {
+                    continue;
+                }
+
+                float y = joint.position.y - rootY;
+                if (y < lowest)
+                {
+                    lowest = y;
+                }
+            }
+
+            drawnFoot = lowest < float.MaxValue ? lowest : 0f;
+            return lowest < float.MaxValue;
         }
 
         /// <summary>The root to draw this frame, and whether the SKELETON stream produced it. Computed
@@ -737,7 +833,8 @@ namespace VortexArena.Core.Player
         /// wire carries yaw + an offset from the head's floor projection, and the root is rebuilt here
         /// on the receiver's OWN interpolated head — the same data that draws the name label, so a
         /// lagging skeleton channel cannot separate the body from it. With no head sample at all
-        /// there is nothing to anchor to and the body hides (zero scale in the caller).</para>
+        /// there is nothing to anchor to and the body hides (zero scale in the caller). The projection
+        /// target is THIS player's own floor level, not y=0 (multi-floor arenas).</para>
         /// <para>⚠️ <b>The skeleton contribution counts only while the stream is LIVE.</b> Registry
         /// samples never expire, so without the age test a stream that died minutes ago would keep the
         /// stale lean offset and body yaw forever; a dead stream drops to the head-derived root — same
@@ -754,7 +851,17 @@ namespace VortexArena.Core.Player
                 return false;
             }
 
-            var headFloor = new Vector3(head.position.x, 0f, head.position.z);
+            // The head is projected onto ITS OWN floor, not onto y=0.
+            // ⚠️ The roster floor can lag the pose by a few frames at a hop, so the POSE wins when it is
+            // already below that floor: a head can never be below the floor it stands on, and trusting
+            // the stale roster would hang the body one storey up.
+            float floorY = ArenaFloors.HeightOf(FloorState.PlayerFloor(PlayerId));
+            if (head.position.y < floorY)
+            {
+                floorY = ArenaFloors.HeightOf(ArenaFloors.FloorAt(head.position.y));
+            }
+
+            var headFloor = new Vector3(head.position.x, floorY, head.position.z);
 
             RemoteSkeletonRegistry skeletons = RemoteSkeletonRegistry.Instance;
             int ageMs = skeletons != null ? skeletons.GetRootAgeMs(PlayerId) : -1;
@@ -854,15 +961,20 @@ namespace VortexArena.Core.Player
                 StoreWireRotation(i, _wireJoints[i].localRotation);
             }
 
-            Vector3 hips = _wireHips.localPosition;
-            int length = SkeletonWire.Write(_wireBlob, 0, hips.x, hips.y, hips.z, _wireRotations);
+            // The SDK writes joint positions in the player's REAL proportions ("Source Body
+            // Proportions"), so dividing by the sender's own scale puts the hips into prefab proportion
+            // space; the receiver's root scale (same value via the roster) restores the real height ONCE.
+            // Feet are grounded separately by footY.
+            Vector3 hips = _wireHips.localPosition / GetSenderBodyScale();
+            int length = SkeletonWire.Write(
+                _wireBlob, 0, hips.x, hips.y, hips.z, MeasureFootHeight(), _wireRotations);
             SendBlobToRelay(_wireBlob, length, GuardRootJump(candidate));
         }
 
         /// <summary>
         /// Is the SDK frame good enough for the wire? Four gates (§6.9): root plausibility against the
         /// HMD (the root sits below the hips at floor level, near the head's floor projection and near
-        /// arena floor y=0), the source's own confidence/joint validity, joint plausibility against the
+        /// the CURRENT floor level — <c>FloorState.LiftMeters</c>, not y=0), the source's own confidence/joint validity, joint plausibility against the
         /// bind pose, and a frozen — bit-identical — stream.
         /// <para>⚠️ With no HMD pose the ROOT check is SKIPPED and the frame accepted: dropping frames with
         /// no reference would mute the body, and the fallback needs the same reference anyway.</para>
@@ -878,12 +990,15 @@ namespace VortexArena.Core.Player
                     new Vector2(arenaRoot.position.x, arenaRoot.position.z),
                     new Vector2(arenaHead.x, arenaHead.z));
 
+                // Height is judged against the CURRENT floor: on an upper floor the whole rig is lifted.
+                float aboveFloor = arenaRoot.position.y - FloorState.LiftMeters;
+
                 if (horizontal > SuspectHorizontalMeters ||
-                    Mathf.Abs(arenaRoot.position.y) > SuspectRootHeightMeters)
+                    Mathf.Abs(aboveFloor) > SuspectRootHeightMeters)
                 {
                     return RejectFrame(
-                        $"kök makul değil (kafaya yatay uzaklık {horizontal:F1} m, kök yüksekliği " +
-                        $"{arenaRoot.position.y:F1} m); zemin/boy çözümü bozulmuş olabilir (izleme " +
+                        $"kök makul değil (kafaya yatay uzaklık {horizontal:F1} m, kat zemininden " +
+                        $"yükseklik {aboveFloor:F1} m); zemin/boy çözümü bozulmuş olabilir (izleme " +
                         "haritası bayat)");
                 }
             }

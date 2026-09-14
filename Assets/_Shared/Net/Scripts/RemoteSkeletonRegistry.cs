@@ -11,7 +11,7 @@ namespace VortexArena.Net
     /// and it holds no scene/game knowledge. <see cref="UdpStateChannel"/> ingests on the network thread.
     /// <list type="bullet">
     /// <item>⚠️ <b>ONE ring holds root AND bones:</b> each sample carries yaw + head offset + hips +
-    /// joint rotations under a single receive stamp, so body placement and pose always interpolate
+    /// foot height + joint rotations under a single receive stamp, so body placement and pose always interpolate
     /// between the same two frames on the same clock.</item>
     /// <item>⚠️ <b>The buffer is the pose channel's</b> (<see cref="ArenaProtocol.INTERP_DELAY_MS"/>): the
     /// body streams at 12 Hz next to smooth 20 Hz hands, and a different delay would leave a constant
@@ -39,6 +39,9 @@ namespace VortexArena.Net
             public float yawDeg;
             public Vector3 offset;
             public Vector3 hips;
+
+            /// <summary>Lowest leg joint above the sender's root (m, REAL metres — not proportion space).</summary>
+            public float footY;
         }
 
         private class SkeletonEntryState
@@ -123,7 +126,7 @@ namespace VortexArena.Net
             lock (_gate)
             {
                 if (!SkeletonWire.TryRead(entry.blob, 0, entry.blobLength,
-                        out float hipX, out float hipY, out float hipZ, _decodeScratch))
+                        out float hipX, out float hipY, out float hipZ, out float footY, _decodeScratch))
                 {
                     warn = _decodeWarned.Add(entry.playerId);
                 }
@@ -141,7 +144,8 @@ namespace VortexArena.Net
                         recvMs = recvTickMs,
                         yawDeg = entry.root.yawDeg,
                         offset = new Vector3(entry.root.ox, entry.root.oy, entry.root.oz),
-                        hips = new Vector3(hipX, hipY, hipZ)
+                        hips = new Vector3(hipX, hipY, hipZ),
+                        footY = footY
                     };
 
                     Quaternion[] rotations = state.rotations[slot];
@@ -218,13 +222,16 @@ namespace VortexArena.Net
             }
         }
 
-        /// <summary>MAIN THREAD: interpolated joint local rotations + hips local position at <paramref name="renderTick"/>.</summary>
+        /// <summary>MAIN THREAD: interpolated joint local rotations + hips local position + foot height at <paramref name="renderTick"/>.</summary>
         /// <remarks>
         /// <paramref name="rotationsOut"/> is filled in <see cref="SkeletonWire.JOINT_INDICES"/> order.
         /// Same bracketing pair and end clamping as <see cref="TryGetInterpolatedRoot(int, int, out float, out Vector3)"/>
         /// — pass the SAME <paramref name="renderTick"/> to both so root and bones share one moment.
+        /// <para><paramref name="hipsOut"/> is the sender's PROPORTION space (the caller's root scale
+        /// applies to it); <paramref name="footYOut"/> is real metres above the root (§6.9).</para>
         /// </remarks>
-        public bool TryGetInterpolatedBones(int playerId, int renderTick, Quaternion[] rotationsOut, out Vector3 hipsOut)
+        public bool TryGetInterpolatedBones(int playerId, int renderTick, Quaternion[] rotationsOut,
+            out Vector3 hipsOut, out float footYOut)
         {
             int jointCount = SkeletonWire.JointCount;
             if (rotationsOut == null || rotationsOut.Length < jointCount)
@@ -233,6 +240,7 @@ namespace VortexArena.Net
             }
 
             hipsOut = Vector3.zero;
+            footYOut = 0f;
 
             lock (_gate)
             {
@@ -252,6 +260,7 @@ namespace VortexArena.Net
                     int slot = beforeSlot < 0 ? afterSlot : beforeSlot;
                     Array.Copy(state.rotations[slot], rotationsOut, jointCount);
                     hipsOut = state.ring[slot].hips;
+                    footYOut = state.ring[slot].footY;
                     return true;
                 }
 
@@ -264,6 +273,7 @@ namespace VortexArena.Net
                 }
 
                 hipsOut = Vector3.Lerp(state.ring[beforeSlot].hips, state.ring[afterSlot].hips, t);
+                footYOut = Mathf.Lerp(state.ring[beforeSlot].footY, state.ring[afterSlot].footY, t);
                 return true;
             }
         }

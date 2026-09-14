@@ -1451,6 +1451,8 @@ public sealed class MatchDirector
     /// <remarks>Time is ZEROED: the round is over, and showing a frozen counter would be a lie on the
     /// HUD. Scores and health are untouched. All <c>ready</c> flags are cleared — the gathering gate uses
     /// that flag (§10.1) and a stale <c>true</c> would open it instantly.
+    /// <para>⚠️ The clear is APPLIED here, not left to the tick loop's flush: the pause broadcast must
+    /// never leave the server before the flags are down (see the call below).</para>
     /// <para>Does nothing and returns <c>false</c> outside <see cref="Phase.Playing"/> (an
     /// abort/operator pause may have slipped in).</para></remarks>
     public bool TryPauseForMode(string? modeState)
@@ -1465,8 +1467,13 @@ public sealed class MatchDirector
 
             SetPhaseLocked(Phase.Paused, PauseReason.Mode, DateTime.UtcNow);
             QueueBroadcastLocked(_pendingOutbox, JsonUtil.Serialize(BuildMatchStateLocked()));
-            return true;
         }
+
+        // ⚠️ Outside the lock (SetReady raises Changed → lobby_state) but BEFORE FlushPendingAsync sends
+        // the pause: the client answers that broadcast within ms and reports its base state EDGE-only, so
+        // a clear flushed after the send would wipe the answer and hang the gathering forever.
+        FlushReadyClear();
+        return true;
     }
 
     /// <summary>Round boundary: pulls the whole roster to full health AT ONCE, without waiting for the
@@ -2576,6 +2583,10 @@ public sealed class MatchDirector
         // Protection is granted only to a player revived after DYING (StampSpawnProtectionLocked) and none
         // of these paths is such a revive — the stamp cleared here is not put back.
         player.SpawnProtectedUntil = DateTime.MinValue;
+        // §10.6 "Kat modeli": the floor belongs to the scene being left. The new scene's floor layout can
+        // differ, so a carried-over floor would leave the rig lifted above a floor that does not exist.
+        // Unlike the calibration fields this is NOT preserved across a match boundary.
+        player.Floor = 0;
         _rosterRefreshFor = player;
         player.Kills = 0;
         player.Deaths = 0;

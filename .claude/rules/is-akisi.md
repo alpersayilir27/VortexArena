@@ -94,7 +94,7 @@ hiç doğrulama tetiklemez, o ana kadar biriktirir. Doküman güncellemesi de ay
 ([[docs-sync]]).
 
 - ⚠️ **Test maddeleri Notion'a yazılır, sohbete değil.** Kullanıcı derleme/build/testi kendisi
-  koşmaz; iş bitince Notion `Todo` veritabanına (`collection://79d48db8-e104-8306-a23e-87a508fc649c`)
+  koşmaz; iş bitince Notion `Todo` veritabanına (`collection://014feff7-dd05-8339-8a3e-87437fdc8ff6`)
   `Doğrulama N — <konu>` kartı açılır (Durum *Yapılacak*): **önce** derleme/dağıtım adımları
   (hangi betik, hangi sırayla, derleme hatası çıkarsa karta yapıştır), sonra adım adım maddeler +
   "görmen gereken". Sohbete yalnız kartın bağlantısı düşer; "şunu derle/koş" listesi verilmez.

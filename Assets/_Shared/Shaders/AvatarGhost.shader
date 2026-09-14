@@ -1,18 +1,19 @@
-// Ölü ya da kalibresiz uzak oyuncunun HAYALET gövdesi.
+// GHOST body of a dead or uncalibrated remote player, and the floor silhouette of a player on
+// another floor (_FloorShift).
 //
-// Yarı saydam ve İKİ YÜZÜ de çizilir (Cull Off + ZWrite Off): oyuncu gövdenin içini görür —
-// istenen "gizmo gibi bakınca içi görünen" okuma buradan gelir, tel kafesten DEĞİL. Gerçek
-// wireframe geometry shader ister ve mobil URP'de (Quest) o yol yoktur.
+// Translucent and DOUBLE SIDED (Cull Off + ZWrite Off): the player sees the inside of the body —
+// the wanted "gizmo-like, see-through" read comes from here, NOT from a wireframe. A real
+// wireframe needs a geometry shader and mobile URP (Quest) has no such path.
 //
-// ⚠️ ZTest LEqual'dır ve öyle KALIR: ters derinlik testi hayaleti duvarların arkasından görünür
-// kılardı, yani duvar arkası avantaj üretirdi (Docs/Sistem-Ozeti.md, ters derinlik testi maddesi).
+// ⚠️ ZTest is LEqual and STAYS so: inverted depth test would make the ghost visible through walls,
+// i.e. a see-through-wall advantage (Docs/Sistem-Ozeti.md, inverted depth test item).
 //
-// ⚠️ Renk KODDAN gelir (RemoteAvatar → MaterialPropertyBlock): oyuncunun kendi takımı (kırmızı/
-// mavi, takımsız modda nötr), kalibresizde turuncuya nabız. Materyaldeki değerler yalnız editör
-// önizlemesidir; buradaki varsayılanlara bakıp "renk şu" diye karar verilmez.
+// ⚠️ Colour comes FROM CODE (RemoteAvatar → MaterialPropertyBlock): the player's own team (red/
+// blue, neutral in teamless modes), pulsing orange while uncalibrated. Material values are editor
+// preview only; never decide "the colour is X" from the defaults here.
 //
-// Gölge/derinlik pass'i YOKTUR ve eklenmez: hayalet gövdenin opak bir gölge düşürmesi onu ölü
-// değil canlı gösterirdi.
+// There is NO shadow/depth pass and none is added: an opaque shadow under the ghost body would
+// read as alive rather than dead.
 Shader "VortexArena/AvatarGhost"
 {
     Properties
@@ -20,6 +21,7 @@ Shader "VortexArena/AvatarGhost"
         [MainColor] _BaseColor ("Renk + taban alfa (kod yazar)", Color) = (0.20, 0.45, 0.90, 0.28)
         _RimPower ("Kenar keskinliği", Range(0.5, 8)) = 2.5
         _RimStrength ("Kenar alfa katkısı", Range(0, 3)) = 1.4
+        _FloorShift ("Dünya Y kaydırması (kod yazar)", Float) = 0
     }
 
     SubShader
@@ -65,12 +67,13 @@ Shader "VortexArena/AvatarGhost"
                 UNITY_VERTEX_OUTPUT_STEREO
             };
 
-            // SRP Batcher uyumu için TÜM property'ler bu blokta olmalı (ve hepsi float:
-            // karışık half/float yerleşimi bazı platformlarda batcher'ı devre dışı bırakır).
+            // ALL properties must live in this block for SRP Batcher compatibility (and all as float:
+            // a mixed half/float layout disables the batcher on some platforms).
             CBUFFER_START(UnityPerMaterial)
                 float4 _BaseColor;
                 float _RimPower;
                 float _RimStrength;
+                float _FloorShift;
             CBUFFER_END
 
             Varyings Vert(Attributes input)
@@ -84,8 +87,13 @@ Shader "VortexArena/AvatarGhost"
                 VertexPositionInputs positions = GetVertexPositionInputs(input.positionOS.xyz);
                 VertexNormalInputs normals = GetVertexNormalInputs(input.normalOS);
 
-                output.positionCS = positions.positionCS;
-                output.positionWS = positions.positionWS;
+                // ⚠️ positionWS is shifted BEFORE the clip transform and the shifted value is what the
+                // fragment gets: the rim must be computed from the DRAWN position, not the real one.
+                float3 positionWS = positions.positionWS;
+                positionWS.y += _FloorShift;
+
+                output.positionCS = TransformWorldToHClip(positionWS);
+                output.positionWS = positionWS;
                 output.normalWS = normals.normalWS;
                 return output;
             }
@@ -96,14 +104,14 @@ Shader "VortexArena/AvatarGhost"
 
                 float3 viewDir = normalize(_WorldSpaceCameraPos - input.positionWS);
 
-                // ⚠️ abs() ŞART: Cull Off olduğu için arka yüzlerin normali kameradan UZAĞA bakar.
-                // abs()'siz bir fresnel gövdenin içini tümden söndürür ve "içini görme" hissi —
-                // yani bu shader'ın tek varlık sebebi — kaybolurdu.
+                // ⚠️ abs() is MANDATORY: with Cull Off the back faces' normals point AWAY from the
+                // camera. Without abs() the fresnel kills the body's interior and the "see inside"
+                // read — the only reason this shader exists — would be lost.
                 float facing = abs(dot(normalize(input.normalWS), viewDir));
                 float rim = pow(saturate(1.0 - facing), _RimPower);
 
-                // Taban alfa koddan, kenar parlaması onun ÜSTÜNE eklenir: silüet okunur kalır,
-                // gövdenin ortası şeffaf kalır.
+                // Base alpha from code, the rim glow added ON TOP: the silhouette stays readable while
+                // the middle of the body stays transparent.
                 float alpha = saturate(_BaseColor.a + rim * _RimStrength);
                 return half4(_BaseColor.rgb, alpha);
             }
@@ -111,7 +119,7 @@ Shader "VortexArena/AvatarGhost"
         }
     }
 
-    // Fallback YOK: pembe çizmek, sessizce OPAK bir gövde çizmekten iyidir (opak hayalet,
-    // ölü oyuncuyu canlı gibi gösterir — tam da düzeltilmek istenen hata).
+    // NO fallback: drawing pink is better than silently drawing an OPAQUE body (an opaque ghost shows
+    // a dead player as alive — exactly the fault this fixes).
     Fallback Off
 }

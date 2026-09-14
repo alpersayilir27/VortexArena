@@ -36,6 +36,11 @@ namespace VortexArena.Core.Editor
 
         private const string VenuesRoot = "Assets/Arenas/Venues";
 
+        /// <summary>Stacking step (m) of the placed portals — the prefab's default
+        /// <c>upperHeight</c>, so the placed portals do not overlap. The real level comes from the
+        /// hand-set position + <c>upperHeight</c>.</summary>
+        private const float DefaultFloorHeight = 3f;
+
         // Objects inside VA_CameraRig the boundary looks at. It can resolve only 'head' on its own
         // (Camera.main); the fade quad and warning text have NO fallback, so without wiring the
         // arena silently loses its warning.
@@ -54,6 +59,9 @@ namespace VortexArena.Core.Editor
 
         [SerializeField] private bool includeModeHud = true;
         [SerializeField] private bool includeBaseZones = true;
+
+        /// <summary>Number of floors the arena has; 1 = single floor, no portal.</summary>
+        [SerializeField] private int floorCount = 1;
 
         private Vector2 scroll;
         [System.NonSerialized] private List<string> lastReport;
@@ -86,11 +94,19 @@ namespace VortexArena.Core.Editor
                 new GUIContent("Taban bölgeleri (Base_Red / Base_Blue)",
                     "Lobi sahnesinde İSTENMEZ — lobide canlanma bölgesi yoktur."),
                 includeBaseZones);
+            floorCount = EditorGUILayout.IntSlider(
+                new GUIContent("Kat sayısı",
+                    "1 = tek kat. Her ek kat için bir VA_FloorPortal konur; üst kat yüksekliği " +
+                    "portalın upperHeight alanından ayarlanır, kat zeminleri o yüksekliğe kurulur."),
+                floorCount, 1, 4);
 
             EditorGUILayout.Space();
             EditorGUILayout.HelpBox(
                 "Hepsi prefab ÖRNEĞİ olarak konur ve var olanlar atlanır (idempotent). " +
                 "Boyut dosyası mekan klasöründen çözülüp ArenaBoundary'ye bağlanır.\n\n" +
+                "Kat sayısı 1'den büyükse her ek kat için bir VA_FloorPortal konur; kat " +
+                "yükseklikleri portalların upperHeight alanından türer, üst kat zeminleri elle " +
+                "o yüksekliğe oturtulur.\n\n" +
                 "Kalibrasyon işaretçileri BURADAN gelmez: 'Arena > JSON'dan DimensionMesh Üret' " +
                 "ile üretilen ölçü maketinin anchor_a/anchor_b küpleridir.",
                 MessageType.Info);
@@ -98,7 +114,7 @@ namespace VortexArena.Core.Editor
             EditorGUILayout.Space();
             if (GUILayout.Button("Yükle", GUILayout.Height(28f)))
             {
-                lastReport = Load(includeModeHud, includeBaseZones);
+                lastReport = Load(includeModeHud, includeBaseZones, floorCount);
                 for (int i = 0; i < lastReport.Count; i++)
                 {
                     Debug.Log("[TemplateBasics] " + lastReport[i]);
@@ -123,6 +139,15 @@ namespace VortexArena.Core.Editor
         /// <summary>Places the basics into the active scene and returns what was done, line by
         /// line. Throws NO exception.</summary>
         public static List<string> Load(bool modeHud, bool baseZones)
+        {
+            return Load(modeHud, baseZones, 1);
+        }
+
+        /// <inheritdoc cref="Load(bool,bool)"/>
+        /// <param name="floorCount">Number of floors; every extra floor gets one
+        /// <c>VA_FloorPortal</c>. Floor heights derive from the portals' <c>upperHeight</c>, so the
+        /// tool only places them — the real positions are set by hand.</param>
+        public static List<string> Load(bool modeHud, bool baseZones, int floorCount)
         {
             var report = new List<string>();
             Scene scene = SceneManager.GetActiveScene();
@@ -151,6 +176,8 @@ namespace VortexArena.Core.Editor
                 EnsureBaseZones(report);
             }
 
+            EnsureFloorPortals(floorCount, report);
+
             WireCalibration(calibration, cameraRig, report);
             WireBoundaryToRig(cameraRig, report);
             BindDimensions(scene, report);
@@ -163,7 +190,10 @@ namespace VortexArena.Core.Editor
                        "taban bölgelerini gerçek yerleşime göre taşı · " +
                        "arena geometrisini DÜNYA ORİJİNİNE göre kur (zemin y=0; arena uzayı = " +
                        "dünya uzayı, sahneyi kaydırmak herkesin ağ konumunu kaydırır) · " +
-                       "environment sanatını kur · NavMesh/ışık bake et.");
+                       "environment sanatını kur · NavMesh/ışık bake et · " +
+                       "üst kat zeminlerini portalın upperHeight'ına oturt (k. kat = önceki kat + " +
+                       "o portalın upperHeight'ı) · üst kat plakasına collider koy " +
+                       "(Default layer, Obstacle DEĞİL).");
             report.Add("Sonra 'Tools > VortexArena > Build > Configure All Build Elements' çalıştır.");
             return report;
         }
@@ -245,6 +275,49 @@ namespace VortexArena.Core.Editor
             SpawnBaseZone(asset, "Base_Red", Team.Red, TeamRedMaterial);
             SpawnBaseZone(asset, "Base_Blue", Team.Blue, TeamBlueMaterial);
             report.Add("kondu: Base_Red + Base_Blue (yerleri ELLE ayarlanır)");
+        }
+
+        /// <summary>Places one <c>VA_FloorPortal</c> per extra floor at <c>(0, 3k, 0)</c>. Skipped
+        /// entirely when the scene already has a <see cref="FloorPortal"/> — the existing ones may
+        /// have been positioned and tuned by hand.</summary>
+        /// <remarks>⚠️ The placement is only a STARTING POINT: floor levels are derived from the
+        /// portals (portal at level[k] with <c>upperHeight</c> h defines level[k+1]), so a portal
+        /// left at the default height silently declares a 3 m floor the arena does not have.</remarks>
+        private static void EnsureFloorPortals(int floorCount, List<string> report)
+        {
+            if (floorCount <= 1)
+            {
+                return;
+            }
+
+            FloorPortal[] existing =
+                Object.FindObjectsByType<FloorPortal>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            if (existing.Length > 0)
+            {
+                report.Add($"FloorPortal zaten var, atlandı (×{existing.Length})");
+                return;
+            }
+
+            var asset = AssetDatabase.LoadAssetAtPath<GameObject>(FloorPortalKitBuilder.PrefabPath);
+            if (asset == null)
+            {
+                report.Add("HATA: VA_FloorPortal prefabı yok — önce 'Tools > VortexArena > Arena > " +
+                           "Kat Portalı Kitini Üret' çalıştır");
+                return;
+            }
+
+            int placed = 0;
+            for (int k = 0; k <= floorCount - 2; k++)
+            {
+                var instance = (GameObject)PrefabUtility.InstantiatePrefab(asset);
+                instance.name = $"Portal_Kat{k}_{k + 1}";
+                instance.transform.position = new Vector3(0f, DefaultFloorHeight * k, 0f);
+                Undo.RegisterCreatedObjectUndo(instance, "Kat Portalı");
+                placed++;
+            }
+
+            report.Add($"VA_FloorPortal ×{placed} kondu (kat 0→1 … kat {floorCount - 2}→{floorCount - 1}), " +
+                       "yerini ve upperHeight'ını gerçek yerleşime göre ayarla");
         }
 
         /// <summary>Spawns a team coloured zone from the single <c>VA_BaseZone</c> prefab.</summary>

@@ -23,6 +23,8 @@ namespace VortexArena.Protocol
         // relays the cosmetic ones to everyone.
         public const string ObjectEvent = "object_event";
         public const string SetBodyScale = "set_body_scale"; // the headset reports its own body scale (§10.8)
+        // The player reports its OWN floor in a multi-floor arena (§10.6 "Kat modeli"); players only.
+        public const string SetFloor = "set_floor";
         public const string VenueSurvey = "venue_survey"; // manual venue survey upload (§10.11); players only
 
         // Admin only → Server

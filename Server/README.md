@@ -414,7 +414,11 @@ aynı ortak kanaldan (`set_selection` → `admin_state`) gider, böylece iki ope
 > sırasında tabanından çıkan olursa geri sayım iptal edilir ve toplanmaya dönülür** — kural
 > "tabanda bekle"dir ve iptalin **istisnası yoktur**. Çekirdek bunu dört API ile destekler —
 > `TryPauseForMode` / `SetModeState` / `TryStartRound` / `TryCancelCountdownForMode` — ve
-> `modeState`'i **hiç ayrıştırmaz**. Konsolda `[tournament]` satırları tur akışını anlatır.
+> `modeState`'i **hiç ayrıştırmaz**. `TryPauseForMode` hazır bayraklarını **kendisi** temizler ve
+> temizliği duraklama yayını gönderilmeden ÖNCE uygular: yayından sonra temizlense istemcinin
+> milisaniyeler içinde yolladığı kenar tetikli `set_ready` silinir ve toplanma hiç açılmazdı.
+> Toplanma sayacının paydası yalnız **kalibre** oyuncuları sayar — kalibresiz oyuncu savaş dışıdır,
+> turu ve toplanmayı bekletmez. Konsolda `[tournament]` satırları tur akışını anlatır.
 
 **Yeni mod eklemek:**
 1. `Modes/<Ad>Mode.cs` içinde `IGameMode` uygula.

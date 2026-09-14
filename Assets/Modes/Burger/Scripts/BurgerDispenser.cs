@@ -106,9 +106,13 @@ namespace VortexArena.Modes.Burger
             // still owned by us and invisible under the new one.
             if (!(rightHand ? HeldItems.RightHand : HeldItems.LeftHand).IsEmpty)
             {
+                Debug.Log($"[BurgerDispenser] '{name}': el dolu, malzeme alınmadı (sağ={rightHand}).", this);
                 return;
             }
 
+            // A refusal has no reply (§10.10): the server logs "object_event reddedildi … faz …" and the
+            // headset sees nothing. This line pairs with that log.
+            Debug.Log($"[BurgerDispenser] '{name}': take istendi (sağ={rightHand}, netId={_net.NetId}).", this);
             NetObjectSync.SendEvent(_net.NetId, BurgerKinds.EventTake, new[] { rightHand ? 1 : 0 });
             _cooldown = cooldownSeconds;
 

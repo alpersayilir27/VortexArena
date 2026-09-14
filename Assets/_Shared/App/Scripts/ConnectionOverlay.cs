@@ -4,7 +4,6 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
-using VortexArena.Core.Arena;
 using VortexArena.Core.UI;
 using VortexArena.Net;
 using VortexArena.Protocol;
@@ -40,9 +39,10 @@ namespace VortexArena.App
     /// problem, not a connection one.
     ///
     /// **VR safety rule:** the player walks 1:1 in physical space. (a) NO fullscreen scrim — only a
-    /// translucent card; dimming their view is dangerous. (b) While `ArenaBoundary` reports
-    /// out-of-bounds the overlay hides COMPLETELY: the out-of-bounds dim + warning must always
-    /// dominate — a connection error screen must never make a player walk into a wall.
+    /// translucent card; dimming their view is dangerous. (b) Out of bounds the card STAYS up — a
+    /// disconnected player must learn it — and the two are separated by DRAW ORDER, not by hiding
+    /// one: `ArenaBoundary`'s dim + warning keeps dominating the view, the card is drawn above the
+    /// dim (<see cref="CardSortingOrder"/>) so it stays readable instead of vanishing behind it.
     ///
     /// ⚠️ **The card is lazy-following and stands right in front of the head, so it COVERS any world
     /// UI opened at that moment.** Whoever opens such a panel must file a
@@ -85,6 +85,9 @@ namespace VortexArena.App
 
         /// <summary>Card corner radius (px) — this screen's own value, larger than the panel default.</summary>
         private const float CardRadius = 20f;
+
+        /// <summary>Canvas sorting order — see <see cref="ApplySortingOrder"/>.</summary>
+        private const int CardSortingOrder = 10;
 
         // ----------------------------------------------------------------- state
 
@@ -130,10 +133,6 @@ namespace VortexArena.App
         private float _nextRefresh;
         private bool _forceRefresh = true;
         private bool _visible;
-
-        /// <summary>`ArenaBoundary` cache — avoids a scene scan every frame.</summary>
-        private ArenaBoundary _boundary;
-        private bool _boundarySearched;
 
         // Values currently on screen (TMP untouched unless changed → no garbage).
         private bool _shownKnown;
@@ -184,6 +183,13 @@ namespace VortexArena.App
 
             _instance = this;
 
+            if (_canvas == null)
+            {
+                _canvas = GetComponentInChildren<Canvas>(true);
+            }
+
+            ApplySortingOrder();
+
             if (_reconnectButton != null)
             {
                 // No persistent onClick in the prefab: the button is interactable only when the
@@ -191,6 +197,26 @@ namespace VortexArena.App
                 _reconnectButton.onClick.RemoveAllListeners();
                 _reconnectButton.onClick.AddListener(HandleReconnectPressed);
             }
+        }
+
+        /// <summary>Raises the card above `ArenaBoundary`'s blackout quad: both draw in queue 3000,
+        /// where sorting order decides instead of camera distance — without it the quad 0.5 m from
+        /// the eye paints over the card at 1.1 m.</summary>
+        private void ApplySortingOrder()
+        {
+            if (_canvas == null)
+            {
+                return;
+            }
+
+            // A nested canvas inherits its root's order unless it overrides sorting.
+            if (_canvas.transform.parent != null &&
+                _canvas.transform.parent.GetComponentInParent<Canvas>() != null)
+            {
+                _canvas.overrideSorting = true;
+            }
+
+            _canvas.sortingOrder = CardSortingOrder;
         }
 
         /// <summary>
@@ -285,13 +311,6 @@ namespace VortexArena.App
                 return;
             }
 
-            // SAFETY: while out of bounds, `ArenaBoundary`'s dim + warning stays dominant.
-            if (IsOutOfBounds())
-            {
-                SetVisible(false);
-                return;
-            }
-
             // In VR HudFollow places the card in front of the camera; with no camera yet (early
             // camera-less scenes like Boot) defer showing — the panel must not hang at the origin.
             if (_group == null || (_worldSpace && Camera.main == null))
@@ -317,15 +336,11 @@ namespace VortexArena.App
         }
 
         /// <summary>
-        /// On scene change: drop the `ArenaBoundary` cache (the overlay outlives scenes and must
-        /// re-find it) and restart `HudFollow` so the panel snaps to the new scene's camera instead
+        /// On scene change: restart `HudFollow` so the panel snaps to the new scene's camera instead
         /// of drifting from the old position.
         /// </summary>
         private void HandleActiveSceneChanged(Scene previous, Scene current)
         {
-            _boundary = null;
-            _boundarySearched = false;
-
             if (_hudFollow != null)
             {
                 _hudFollow.enabled = false;
@@ -352,17 +367,6 @@ namespace VortexArena.App
         {
             return _disconnectedSince >= 0f &&
                    Time.unscaledTime - _disconnectedSince >= GraceSeconds;
-        }
-
-        private bool IsOutOfBounds()
-        {
-            if (!_boundarySearched)
-            {
-                _boundary = FindFirstObjectByType<ArenaBoundary>();
-                _boundarySearched = true; // no re-search until the next scene change
-            }
-
-            return _boundary != null && _boundary.IsOutOfBounds;
         }
 
         private void SetVisible(bool visible)

@@ -56,9 +56,13 @@ namespace VortexArena.Core.Editor
                     var collider = go.GetComponent<Collider>();
                     if (collider == null)
                     {
-                        // Layer stamped but no collider: usually the layer applied to children
-                        // (visual meshes) — harmless, reported only to surface the intent.
-                        colliderless.Add(go);
+                        // Only the TOP-MOST stamped object is reported: the layer is normally set on
+                        // a whole group, so every visual child under it would otherwise be listed.
+                        if (!HasLayeredAncestor(all[i], layer))
+                        {
+                            colliderless.Add(go);
+                        }
+
                         continue;
                     }
 
@@ -85,6 +89,23 @@ namespace VortexArena.Core.Editor
             }
 
             Report(nonConvex, triggers, colliderless, swollen, healthy);
+        }
+
+        /// <summary>Whether any ancestor carries the obstacle layer.</summary>
+        private static bool HasLayeredAncestor(Transform t, int layer)
+        {
+            Transform parent = t.parent;
+            while (parent != null)
+            {
+                if (parent.gameObject.layer == layer)
+                {
+                    return true;
+                }
+
+                parent = parent.parent;
+            }
+
+            return false;
         }
 
         // ---------------------------------------------------------------- swelling
@@ -248,6 +269,12 @@ namespace VortexArena.Core.Editor
             {
                 Debug.LogWarning($"[Engel denetimi] '{Path(swollen[i])}' collider'ı görünen yüzeyden " +
                                  "şişkin — oyuncu bu objede boşlukta ceza alır.", swollen[i]);
+            }
+
+            for (int i = 0; i < colliderless.Count; i++)
+            {
+                Debug.Log($"[Engel denetimi] '{Path(colliderless[i])}' layer damgalı ama collider " +
+                          "yok — tespitte hiç görünmez.", colliderless[i]);
             }
 
             EditorUtility.DisplayDialog("Engel hacimleri", text.ToString(), "Tamam");

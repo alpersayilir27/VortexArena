@@ -17,8 +17,10 @@ namespace VortexArena.Core.Arena
     /// standing next to it) and the error would show up nowhere.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Height is ignored</b> (XZ only): the player's HMD is meters above the strip and cannot
-    /// be compared with the strip's own thickness. The measurement is taken <b>once</b>, in
+    /// ⚠️ <b>Height is ignored</b> (XZ only) <b>EXCEPT the floor index</b>: the player's HMD is meters
+    /// above the strip and cannot be compared with the strip's own thickness, but a player standing
+    /// on another floor of a multi-floor arena is above/below the strip and must NOT count
+    /// (<see cref="Floor"/> vs <see cref="FloorState.Local"/>). The measurement is taken <b>once</b>, in
     /// <see cref="Awake"/> — the strip is static in the scene; disabled (hidden) Renderers count
     /// too, because <see cref="BaseZoneVisibility"/> hides the strip in team-less modes.
     /// </para>
@@ -61,6 +63,27 @@ namespace VortexArena.Core.Arena
         private Vector2 _areaMin;
         private Vector2 _areaMax;
 
+        private int _floorVersion = -1;
+        private int _floor;
+
+        /// <summary>Arena floor the strip stands on, derived from the zone's own height.</summary>
+        /// <remarks>Cached against <see cref="ArenaFloors.Version"/>: the level list is rebuilt on
+        /// scene changes, and a value cached forever would keep a lobby-era floor.</remarks>
+        public int Floor
+        {
+            get
+            {
+                if (_floorVersion != ArenaFloors.Version)
+                {
+                    // Version read AFTER the query: the query may trigger the rebuild that bumps it.
+                    _floor = ArenaFloors.FloorAt(transform.position.y);
+                    _floorVersion = ArenaFloors.Version;
+                }
+
+                return _floor;
+            }
+        }
+
         private void Awake()
         {
             if (TryMeasureStrip(out _areaMin, out _areaMax))
@@ -84,7 +107,8 @@ namespace VortexArena.Core.Arena
                 return;
 
             Vector3 local = transform.InverseTransformPoint(head.position);
-            bool inside = local.x >= _areaMin.x && local.x <= _areaMax.x &&
+            bool inside = FloorState.Local == Floor &&
+                          local.x >= _areaMin.x && local.x <= _areaMax.x &&
                           local.z >= _areaMin.y && local.z <= _areaMax.y;
             if (inside == IsPlayerInside)
                 return;

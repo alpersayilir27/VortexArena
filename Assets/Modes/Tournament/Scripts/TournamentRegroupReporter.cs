@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 using VortexArena.Core;
 using VortexArena.Core.Combat;
@@ -35,9 +36,20 @@ namespace VortexArena.Modes.Tournament
     /// <para>Two texts, two altitudes: the HUD's status line carries the DETAILED instruction (which
     /// base, what happens next) and <see cref="ModeHudBase.SetCenterNotice"/> the one-line headline the
     /// player reads without looking for it. The headline shares its element with the countdown.</para>
+    /// <para>⚠️ The mode pause has TWO stages and they wait on different people (§10.1): in
+    /// <c>roundend:…</c> the server is parked on the result until the OPERATOR continues, only in
+    /// <c>regroup:…</c> is the gate on the players. The texts say which — "diğerleri bekleniyor" during
+    /// the review would blame the players for a wait they cannot end.</para>
+    /// <para>The edge-only report is resent on two triggers: a reconnect
+    /// (<see cref="HandleConnected"/>) and the roster showing OUR flag cleared
+    /// (<see cref="HandleLobbyState"/>).</para>
     /// </remarks>
     public class TournamentRegroupReporter : MonoBehaviour
     {
+        /// <summary><c>modeState</c> prefix of the round review — the mode's own vocabulary (§10.1),
+        /// written by <c>TournamentMode</c> and read here and by the HUD.</summary>
+        private const string ReviewPrefix = "roundend:";
+
         // Single instance so the DTO is not reallocated every frame.
         private readonly SetReadyMsg _msg = new SetReadyMsg();
 
@@ -149,11 +161,13 @@ namespace VortexArena.Modes.Tournament
             // walk to the NEAREST strip; if that is the opponent's base the gate never opens and the
             // server just shows "waiting for regroup" — no error, no reason.
             string baseName = BaseLabel(combat.Team);
+
+            // Review = the result stage of the mode pause; the wait there is on the operator, not on us.
+            bool review = modePause && combat.ModeState.StartsWith(ReviewPrefix, StringComparison.Ordinal);
+
             if (_active)
             {
-                combat.SetModePrompt(countdown
-                    ? (inBase ? "Tur başlıyor — tabandan çıkma" : $"{baseName} dön — geri sayım iptal oluyor")
-                    : (inBase ? "Tabandasın — diğerleri bekleniyor" : $"Yeni tur — {baseName} dön"));
+                combat.SetModePrompt(ActivePrompt(countdown, review, inBase, baseName));
             }
             else
             {
@@ -162,7 +176,7 @@ namespace VortexArena.Modes.Tournament
                     : $"Öldün — {baseName} dön, yeni tur orada başlayacak");
             }
 
-            SetNotice(CenterNotice(inBase));
+            SetNotice(CenterNotice(inBase, review));
 
             // Base ENTRY edge: three pulses on both controllers (criterion is the REAL entry).
             bool insideBase = combat.IsInsideOwnBase;
@@ -195,13 +209,39 @@ namespace VortexArena.Modes.Tournament
                       $"açıkTabanVar={combat.HasOpenBaseZone} → set_ready({inBase})");
         }
 
+        /// <summary>Status line while reporting: countdown · review (operator) · regroup (players).</summary>
+        private static string ActivePrompt(bool countdown, bool review, bool inBase, string baseName)
+        {
+            if (countdown)
+            {
+                return inBase ? "Tur başlıyor — tabandan çıkma" : $"{baseName} dön — geri sayım iptal oluyor";
+            }
+
+            if (review)
+            {
+                return inBase
+                    ? "Tabandasın — operatörün devam etmesi bekleniyor"
+                    : $"Tur bitti — operatör devam edince {baseName} dön";
+            }
+
+            return inBase ? "Tabandasın — diğerleri bekleniyor" : $"Yeni tur — {baseName} dön";
+        }
+
         /// <summary>The big centre line: WHAT is being waited for, in one glance. Empty = nothing to
         /// say — the countdown then takes the same element over (<see cref="ModeHudBase"/>).</summary>
         /// <remarks>Order is deliberate: the player's OWN duty comes first. Naming who else is missing
         /// while the player is still outside would send them looking at other people instead of
-        /// walking.</remarks>
-        private string CenterNotice(bool inBase)
+        /// walking.
+        /// <para>Silent through the review: the round result banner already fills the same eye line, and
+        /// every <c>ready</c> flag is down there — a "who is missing" count would read the clear as a
+        /// roster that never came back.</para></remarks>
+        private string CenterNotice(bool inBase, bool review)
         {
+            if (review)
+            {
+                return "";
+            }
+
             if (!inBase)
             {
                 return "BASE'E BEKLENİYORSUNUZ";
@@ -226,6 +266,8 @@ namespace VortexArena.Modes.Tournament
         /// before it), and an edge-only report cannot know that. Forgetting the last edge makes the
         /// next frame resend the current state — a player standing in the base through a Wi-Fi drop
         /// would otherwise hold the regroup open forever.</summary>
+        /// <remarks>One of the two resend triggers; the other is the roster showing our own flag
+        /// cleared (<see cref="HandleLobbyState"/>), which covers every clear we did not live through.</remarks>
         private void HandleConnected(WelcomeMsg msg)
         {
             if (!_active || !_reported)
@@ -260,8 +302,22 @@ namespace VortexArena.Modes.Tournament
 
                 // Same scope as the server's gate: connected PLAYERS only, and our own state is the
                 // inBase flag, not a roster row.
-                if (info == null || info.role == "admin" || info.playerId == selfId)
+                if (info == null || info.role == "admin")
                 {
+                    continue;
+                }
+
+                if (info.playerId == selfId)
+                {
+                    // Our reported flag went down on the server (a clear that landed after our edge):
+                    // forgetting the last edge makes the next frame resend the current state, otherwise
+                    // we would sit in the base while the gate counts us missing.
+                    if (_active && _reported && !info.ready)
+                    {
+                        _reported = false;
+                        Debug.Log("[Regroup] sunucudaki hazır bayrağı düşmüş — taban durumu tekrar bildirilecek.");
+                    }
+
                     continue;
                 }
 

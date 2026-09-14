@@ -159,7 +159,9 @@ Debug.Log($"{vurulan} oyuncu vuruldu");
 ```
 
 Hasar merkeze uzaklıkla doğrusal düşer ve her oyuncuya **en fazla bir** vuruş gider (bir gövdede
-birden çok isabet kutusu vardır). Yarıçaptaki **ağ nesneleri** de aynı yoldan raporlanır
+birden çok isabet kutusu vardır). ⚠️ **Uzaklık gövdeye en YAKIN noktadan ölçülür:** yerelde zemin
+izdüşümü→kafa doğru parçasının en yakın noktası, uzakta oyuncunun en yakın çarpma kutusu. Çömelmek
+hasarı değiştirmez; tek bir noktadan (kafa) ölçen bir düşüm ayağının dibindeki bombayı uzak sayardı. Yarıçaptaki **ağ nesneleri** de aynı yoldan raporlanır
 (`hit_report{targetNetId}`, aynı mesafe düşümü); dönen sayı yine **yalnız oyuncu** isabetidir.
 
 **Duvar arkası** istemiyorsan kendin kurma — son parametreyi aç:
@@ -1286,6 +1288,36 @@ Fiziksel oda değişmedi: ölçü aynı, kalibrasyon bantları aynı yerde.
 > Ağ koordinatları **dünya uzayındadır** ve muhafaza onların sıfırı DEĞİLDİR
 > ([Reçete 16](#16-bir-konumu-ağ-üzerinden-paylaşmak-arena-uzayı)); bölgeyi kaydırmak kimsenin
 > koordinatını bozmaz, çünkü oyuncu da admin de aynı sahneyi yükler.
+
+---
+
+## 14.2 Çok katlı arena (kat portalı)
+
+Arena birden çok katta oynanacak. Oyuncu fiziksel olarak tek katta yürümeye devam eder; kat
+değişimi **dikey sanal ofsettir** (`Docs/Sistem-Ozeti.md` §3.13, ağ tarafı
+`ArenaNet-Protokol.md` §10.6 "Kat modeli").
+
+| # | Yaptığın | Görmen gereken |
+|---|---|---|
+| 1 | `Tools > VortexArena > Arena > Kat Portalı Kitini Üret` | `M_FloorPortal` + `M_FloorPortalFill` ve `VA_FloorPortal.prefab` üretildi/güncellendi (konsolda tek satır). Kit zaten varsa da çalıştırılabilir |
+| 2 | `Tools > VortexArena > Arena > Template Temellerini Yükle` → **Kat sayısı** = kaç kat oynanacaksa (1–4) → *Yükle* | Her ek kat için bir `Portal_Kat{k}_{k+1}` örneği sahnede. Sahnede zaten portal varsa araç hiç dokunmaz (raporda "atlandı") |
+| 3 | Her portalı oynanacak yere **taşı** (ölçek 1 kalır) ve `upperHeight`'ını gerçek kat yüksekliğine yaz | `Üst` çemberi o yükseklikte belirir (Gizmo çemberleri Scene view'de çizilir). ⚠️ Portalın **kökü kendi katının zeminine** oturmalı (±0,25 m) |
+| 4 | Üst kat plakasını (zemin mesh'i) portalın tanımladığı yüksekliğe kur; collider'ı **`Default`** layer'da bırak | Alt kattan yukarı ateş eden oyuncunun mermisi plakada durur. ⚠️ Plakayı **`Obstacle` layer'ına ALMA** — üst kattaki herkes sürekli ihlalde sayılır ve ekranı kararır |
+| 5 | (İsteğe bağlı, admin kuş bakışı için) plakayı `ArenaRoof` kökünün altına al — `GameObject > VortexArena > Arena Roof` | Admin tepeden bakarken üst kat gizlenir, alt kat okunur |
+| 6 | Portalın ses kancalarını bağla: dolum (2 sn boyunca döner) · geçiş anı · meşgul uyarısı | Boş bırakılan kanca sessizdir, uyarı çıkmaz |
+| 7 | Taban bölgelerini **hangi katta oynanacaksa** o katın zeminine koy | Ölen oyuncu o katın zeminine indirilir; bölge yalnız oyuncunun katı ona eşitken içeride sayar |
+| 8 | Play (ya da gözlükte aç) | Konsolda `[ArenaFloors] n kat: 0.00 m / 3.00 m …`. Çemberin üstünde 2 sn durunca HUD'da geri sayım, sonra kısa karartma ve diğer kat |
+| 9 | Admin istatistik panelini aç | Üst kattaki oyuncunun ayrıntı şeridinde `1. kat` jetonu (zemin kat 0'dır, yazılmaz), halkası onun katının zemininde |
+
+- **Kat yüksekliğini hiçbir yere elle yazma:** kat listesinin tek kaynağı portalların kendisidir.
+  Portal hiçbir kat zeminine oturmuyorsa uyarı basar ve **kendini kapatır** — yani "portal çalışmıyor"
+  belirtisi konsoldadır, sessiz değildir.
+- **Üçüncü kat = aynı prefabın bir kopyası**, kökü 1. katın zemininde (yani 1. kat yüksekliğinde).
+  Her portal bir kat ÇİFTİ tanımlar.
+- **Çemberlere collider ekleme** — kapı kafanın XZ mesafesiyle çalışır; collider atış izini yer.
+- **Aynı anda tek oyuncu geçer:** iki kattaki çemberlerin içindeki en düşük `playerId` sahiptir,
+  diğeri kırmızı çember + "Portal meşgul" görür. Ölü oyuncu da geçebilir; kalibre olmayan geçemez.
+- Sunucuda portal, sayaç ya da kilit **yoktur**: sunucu yalnız oyuncunun katını defter olarak tutar.
 
 ---
 

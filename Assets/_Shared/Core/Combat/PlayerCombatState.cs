@@ -545,12 +545,7 @@ namespace VortexArena.Core.Combat
             for (int i = 0; i < _zones.Length; i++)
             {
                 BaseZone zone = _zones[i];
-                if (zone == null || !zone.isActiveAndEnabled)
-                {
-                    continue;
-                }
-
-                if (zone.Team != this.Team && zone.Team != CoreTeam.Neutral && this.Team != CoreTeam.Neutral)
+                if (!IsZoneOpen(zone))
                 {
                     continue;
                 }
@@ -562,6 +557,49 @@ namespace VortexArena.Core.Combat
                     return;
                 }
             }
+        }
+
+        /// <summary>Is this zone usable by the local player (the §10.4 team rule, single copy).</summary>
+        private bool IsZoneOpen(BaseZone zone)
+        {
+            if (zone == null || !zone.isActiveAndEnabled)
+            {
+                return false;
+            }
+
+            return zone.Team == this.Team || zone.Team == CoreTeam.Neutral || this.Team == CoreTeam.Neutral;
+        }
+
+        /// <summary>Lowest floor among the base zones open to the player; <c>false</c> when none is open.</summary>
+        /// <remarks>The floor the player is sent to on death (<c>FloorState</c>): revive means WALKING
+        /// into the base, which a corpse on another floor could never reach. The lowest one is picked
+        /// because floor 0 is the only level every arena is guaranteed to have.
+        /// <para>Rescanned first: the arena scene may have loaded after the last scan.</para></remarks>
+        public bool TryGetOpenBaseFloor(out int floor)
+        {
+            floor = 0;
+            ScanZones();
+
+            bool found = false;
+            for (int i = 0; i < _zones.Length; i++)
+            {
+                BaseZone zone = _zones[i];
+                if (!IsZoneOpen(zone))
+                {
+                    continue;
+                }
+
+                int zoneFloor = zone.Floor;
+                if (found && zoneFloor >= floor)
+                {
+                    continue;
+                }
+
+                floor = zoneFloor;
+                found = true;
+            }
+
+            return found;
         }
 
         // ------------------------------------------------------------ event handlers

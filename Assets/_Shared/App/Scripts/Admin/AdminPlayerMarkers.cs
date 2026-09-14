@@ -16,8 +16,8 @@ namespace VortexArena.App.Admin
     /// no rebuild (positions come from arena space each frame).
     /// </para>
     /// <para>
-    /// <b>Ring:</b> the head pose's x/z lowered to y=0.02 in arena space, so it stays put when the
-    /// player bends over. <b>Label:</b> faces the camera and is offset along -up, so it reads under
+    /// <b>Ring:</b> the head pose's x/z lowered onto the player's OWN floor (floor height + 0.02)
+    /// in arena space, so it stays put when the player bends over. <b>Label:</b> faces the camera and is offset along -up, so it reads under
     /// the circle in both top-down and free mode.
     /// </para>
     /// </summary>
@@ -146,9 +146,12 @@ namespace VortexArena.App.Admin
                     marker.root.SetActive(true);
                 }
 
-                // Footprint: the head pose's x/z, just above the arena floor.
+                // Footprint: the head pose's x/z, just above the floor the player is ON — not
+                // always the ground: in a multi-floor arena a ring left at y=0 would draw the
+                // upper-floor player under the building.
+                float floorY = ArenaFloors.HeightOf(FloorState.PlayerFloor(kv.Key)) + FloorLift;
                 var floorArena = new Pose(
-                    new Vector3(head.position.x, FloorLift, head.position.z), Quaternion.identity);
+                    new Vector3(head.position.x, floorY, head.position.z), Quaternion.identity);
                 Vector3 floorWorld = ArenaSpace.ArenaToWorld(floorArena).position;
 
                 bool selected = kv.Key == selectedId;

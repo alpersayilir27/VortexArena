@@ -109,6 +109,10 @@ namespace VortexArena.App.Admin
         /// stale headset space data.</summary>
         public float floorOffset;
 
+        /// <summary>Which arena floor the player is on; <c>0</c> = ground. Multi-floor arenas only —
+        /// a single-floor arena keeps every row at 0.</summary>
+        public int floor;
+
         /// <summary>Body scale (§10.8); <b>0 = not measured</b>. The row's ÖLÇ button shows it, so
         /// the operator can see who has been measured from the list.</summary>
         public float bodyScale;
@@ -559,6 +563,7 @@ namespace VortexArena.App.Admin
                 view.calibrated = view.IsPlayer ? info.calibrated : true;
                 view.calibrationSource = info.calibrationSource ?? "";
                 view.floorOffset = view.IsPlayer ? info.floorOffset : 0f;
+                view.floor = view.IsPlayer ? info.floor : 0;
                 view.bodyScale = view.IsPlayer ? info.bodyScale : 0f;
                 view.scaleError = view.IsPlayer ? info.scaleError ?? "" : "";
                 view.calibrationError = view.IsPlayer ? info.calibrationError ?? "" : "";

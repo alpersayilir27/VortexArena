@@ -15,7 +15,12 @@ namespace VortexArena.Modes.Burger
     /// <para>⚠️ <b>Stacking order comes from the RESTING pose, not from arrival order:</b> a headset
     /// joining mid-carry gets <c>world_state</c> unordered, so arrival order would scramble ITS burger —
     /// and the recipe is read bottom to top off the board, i.e. the scramble becomes a wrong serve.</para>
-    /// <para>⚠️ Only the OWNER claims and spills; everyone else derives the same placement.</para></summary>
+    /// <para>⚠️ Only the OWNER claims and spills; everyone else derives the same placement.</para>
+    /// <para><b>Two lanes.</b> Ingredients STACK on the anchor. Anything else grabbable resting on the
+    /// carrier at pickup (knife, spatula, whole bun) rides LOOSE: it keeps the offset its published rest
+    /// pose had from the carrier's rest pose, so every headset derives the same placement without a new
+    /// field. Loose cargo is claimed only in the first moments after pickup — later, the carrier's rest
+    /// pose no longer says where it is.</para></summary>
     /// <remarks>⚠️ Runs after <see cref="NetObjectGrabBridge"/> (default order) and before
     /// <c>HandGripPoser</c> (order 100): the anchor must already be at the hand this frame, or the cargo
     /// trails the spatula by one frame.</remarks>
@@ -41,6 +46,10 @@ namespace VortexArena.Modes.Burger
                  "0 = hacmin tamamı.")]
         [SerializeField] private float claimBand;
 
+        [Tooltip("Malzeme dışı eşya (bıçak, spatula, bütün ekmek) için ayrı yer: taşıyıcı kaldırılırken " +
+                 "üstünde duranlar bu sayıya kadar olduğu yerde biner. 0 = binmez.")]
+        [SerializeField] private int looseCapacity = 3;
+
         [Tooltip("Taşıyıcı bu açıdan (derece) fazla yatınca yük dökülür. 0 = hiç dökülmez.")]
         [SerializeField] private float spillAngle = 55f;
 
@@ -51,15 +60,30 @@ namespace VortexArena.Modes.Burger
         /// its own (§10.10) — the only sign is that the owner never becomes us.</summary>
         private const float AskSeconds = 0.5f;
 
+        /// <summary>Window after pickup in which loose cargo may be claimed. Past it the carrier has
+        /// moved away from its rest pose and a rest-derived offset would seat the item mid-air.</summary>
+        private const float LooseClaimSeconds = 0.75f;
+
         private const string HapticSource = "carry";
         private const float HapticSeconds = 0.1f;
         private const float HapticAmplitude = 0.5f;
 
         private NetObject _net;
+        private NetObjectGrabBridge _bridge;
 
         /// <summary>Cargo in stacking order. Rebuilt from state while the carrier is held, and kept for
         /// one more pass after it leaves the hand so the load can be let go of.</summary>
         private readonly List<NetObject> _cargo = new List<NetObject>();
+
+        /// <summary>Loose lane (non-ingredients), same derivation as <see cref="_cargo"/>.</summary>
+        private readonly List<NetObject> _loose = new List<NetObject>();
+
+        /// <summary>Loose grabs sent, no answer yet — kept apart from <see cref="_asked"/> so the two
+        /// capacities do not eat each other.</summary>
+        private readonly Dictionary<int, float> _askedLoose = new Dictionary<int, float>();
+
+        private bool _wasHeld;
+        private float _heldSince;
 
         /// <summary>Bridges whose <see cref="NetObjectGrabBridge.CarryAnchor"/> WE wrote — kept so it can
         /// be handed back when the ingredient stops riding.</summary>
@@ -91,6 +115,7 @@ namespace VortexArena.Modes.Burger
         private void Awake()
         {
             _net = GetComponent<NetObject>();
+            _bridge = GetComponent<NetObjectGrabBridge>();
 
             if (cargoVolume == null)
             {
@@ -120,7 +145,9 @@ namespace VortexArena.Modes.Burger
 
             _anchored.Clear();
             _cargo.Clear();
+            _loose.Clear();
             _asked.Clear();
+            _askedLoose.Clear();
             _dropped.Clear();
 
             if (_hapticUntil > 0f)
@@ -142,6 +169,23 @@ namespace VortexArena.Modes.Burger
 
             TrackVelocity();
 
+            if (_net.IsHeld && !_wasHeld)
+            {
+                _heldSince = Time.time;
+            }
+            _wasHeld = _net.IsHeld;
+
+            // ⚠️ A carrier riding another carrier (spatula on the board) is dormant: the hand's held set
+            // is the board's cargo, and a second carrier seating the same ingredients is two writers on
+            // one transform — and it would scoop the board's patties as its own.
+            if (Riding)
+            {
+                _cargo.Clear();
+                _loose.Clear();
+                WriteAnchors();
+                return;
+            }
+
             if (_net.IsHeld)
             {
                 Rebuild();
@@ -158,7 +202,7 @@ namespace VortexArena.Modes.Burger
                     }
                 }
             }
-            else if (_cargo.Count > 0)
+            else if (_cargo.Count > 0 || _loose.Count > 0)
             {
                 // The carrier left the hand and the load goes with it. ⚠️ Only the owner may say so —
                 // everyone else keeps seating the cargo until the owner's release lands, or the burger
@@ -170,6 +214,7 @@ namespace VortexArena.Modes.Burger
                 else
                 {
                     _cargo.RemoveAll(StoppedBeingHeld);
+                    _loose.RemoveAll(StoppedBeingHeld);
                 }
             }
 
@@ -184,12 +229,22 @@ namespace VortexArena.Modes.Burger
         private void Rebuild()
         {
             _cargo.Clear();
+            _loose.Clear();
 
             foreach (NetObject candidate in NetObjectRegistry.All)
             {
-                if (Rides(candidate))
+                if (!Rides(candidate))
+                {
+                    continue;
+                }
+
+                if (BurgerKinds.IsIngredient(candidate.Kind.Kind))
                 {
                     _cargo.Add(candidate);
+                }
+                else if (candidate.GetComponent<NetObjectGrabBridge>() != null)
+                {
+                    _loose.Add(candidate);
                 }
             }
 
@@ -199,11 +254,14 @@ namespace VortexArena.Modes.Burger
         private bool Rides(NetObject candidate)
         {
             return candidate != null && candidate != _net && candidate.NetId > 0 &&
-                   candidate.Kind != null && BurgerKinds.IsIngredient(candidate.Kind.Kind) &&
+                   candidate.Kind != null &&
                    candidate.IsHeld && candidate.Owner == _net.Owner &&
                    candidate.HeldByRightHand == _net.HeldByRightHand &&
                    !_dropped.Contains(candidate.NetId);
         }
+
+        /// <summary>Seated on another carrier ourselves (the anchor is written by that carrier).</summary>
+        private bool Riding => _bridge != null && _bridge.CarryAnchor != null;
 
         private static bool StoppedBeingHeld(NetObject ingredient) =>
             ingredient == null || !ingredient.IsHeld;
@@ -225,9 +283,19 @@ namespace VortexArena.Modes.Burger
         /// because a tipped carrier spills instead of claiming.</summary>
         private void Claim()
         {
-            PruneAsked();
+            PruneAsked(_asked, _cargo);
+            PruneAsked(_askedLoose, _loose);
 
-            if (Time.time < _reclaimAt || _cargo.Count + _asked.Count >= capacity)
+            if (Time.time < _reclaimAt)
+            {
+                return;
+            }
+
+            bool wantStack = _cargo.Count + _asked.Count < capacity;
+            bool wantLoose = looseCapacity > 0 && _loose.Count + _askedLoose.Count < looseCapacity &&
+                             Time.time - _heldSince <= LooseClaimSeconds;
+
+            if (!wantStack && !wantLoose)
             {
                 return;
             }
@@ -238,40 +306,64 @@ namespace VortexArena.Modes.Burger
 
             for (int i = 0; i < count; i++)
             {
-                NetObject ingredient = Overlap[i] != null
+                NetObject candidate = Overlap[i] != null
                     ? Overlap[i].GetComponentInParent<NetObject>()
                     : null;
 
-                if (!IsClaimable(ingredient))
+                if (!IsFree(candidate))
                 {
                     continue;
+                }
+
+                bool ingredient = BurgerKinds.IsIngredient(candidate.Kind.Kind);
+                Dictionary<int, float> asked;
+
+                if (ingredient)
+                {
+                    if (!wantStack || !InClaimBand(candidate))
+                    {
+                        continue;
+                    }
+                    asked = _asked;
+                }
+                else
+                {
+                    if (!wantLoose || candidate.GetComponent<NetObjectGrabBridge>() == null)
+                    {
+                        continue;
+                    }
+                    asked = _askedLoose;
                 }
 
                 // Optimistic, like every other grab (§10.10): the anchor is written BEFORE the answer, or
                 // the grab bridge would seat the ingredient in the palm for a frame and fight for the
                 // hand the carrier is already in. A refusal leaves it free and PruneAsked takes the
                 // anchor back.
-                Anchor(ingredient);
-                _asked[ingredient.NetId] = Time.time + AskSeconds;
-                NetObjectSync.SendGrab(ingredient.NetId, _net.HeldByRightHand);
+                Anchor(candidate);
+                asked[candidate.NetId] = Time.time + AskSeconds;
+                NetObjectSync.SendGrab(candidate.NetId, _net.HeldByRightHand);
                 Buzz();
 
-                if (_cargo.Count + _asked.Count >= capacity)
+                wantStack = _cargo.Count + _asked.Count < capacity;
+                wantLoose = wantLoose && _loose.Count + _askedLoose.Count < looseCapacity;
+
+                if (!wantStack && !wantLoose)
                 {
                     return;
                 }
             }
         }
 
-        private bool IsClaimable(NetObject ingredient)
+        /// <summary>Resting, unowned, not already in play for this carrier.</summary>
+        private bool IsFree(NetObject candidate)
         {
-            // ⚠️ An AWAKE ingredient is mid-flight: scooping one out of the air is not a gesture the
+            // ⚠️ An AWAKE object is mid-flight: scooping one out of the air is not a gesture the
             // player made, it is the carrier happening to be under it.
-            return ingredient != null && ingredient != _net && ingredient.NetId > 0 &&
-                   ingredient.Kind != null && BurgerKinds.IsIngredient(ingredient.Kind.Kind) &&
-                   ingredient.Owner == 0 && !ingredient.IsHeld && !ingredient.IsAwake &&
-                   !_asked.ContainsKey(ingredient.NetId) && !_dropped.Contains(ingredient.NetId) &&
-                   InClaimBand(ingredient);
+            return candidate != null && candidate != _net && candidate.NetId > 0 &&
+                   candidate.Kind != null &&
+                   candidate.Owner == 0 && !candidate.IsHeld && !candidate.IsAwake &&
+                   !_asked.ContainsKey(candidate.NetId) && !_askedLoose.ContainsKey(candidate.NetId) &&
+                   !_dropped.Contains(candidate.NetId);
         }
 
         /// <summary>Contact band around the TOP of the stack. ⚠️ Without it the whole volume claims: the
@@ -288,9 +380,9 @@ namespace VortexArena.Modes.Burger
             return Mathf.Abs(ingredient.transform.position.y - top) <= claimBand;
         }
 
-        private void PruneAsked()
+        private void PruneAsked(Dictionary<int, float> asked, List<NetObject> lane)
         {
-            if (_asked.Count == 0)
+            if (asked.Count == 0)
             {
                 return;
             }
@@ -298,10 +390,10 @@ namespace VortexArena.Modes.Burger
             float now = Time.time;
             _expired.Clear();
 
-            foreach (KeyValuePair<int, float> entry in _asked)
+            foreach (KeyValuePair<int, float> entry in asked)
             {
                 bool answered = NetObjectRegistry.TryGet(entry.Key, out NetObject ingredient) &&
-                                _cargo.Contains(ingredient);
+                                lane.Contains(ingredient);
 
                 if (answered || now >= entry.Value)
                 {
@@ -312,12 +404,12 @@ namespace VortexArena.Modes.Burger
             for (int i = 0; i < _expired.Count; i++)
             {
                 int netId = _expired[i];
-                _asked.Remove(netId);
+                asked.Remove(netId);
 
                 // Unanswered past the deadline = refused, somebody got there first. The optimistic anchor
                 // comes back off; an answered one is cargo now and keeps it.
                 if (NetObjectRegistry.TryGet(netId, out NetObject ingredient) &&
-                    !_cargo.Contains(ingredient))
+                    !lane.Contains(ingredient))
                 {
                     Unanchor(ingredient);
                 }
@@ -331,14 +423,24 @@ namespace VortexArena.Modes.Burger
         /// serving board hear about the landing through the hooks they already have.</summary>
         private void Spill()
         {
-            if (_cargo.Count == 0)
+            if (_cargo.Count == 0 && _loose.Count == 0)
             {
                 return;
             }
 
-            for (int i = 0; i < _cargo.Count; i++)
+            Release(_cargo);
+            Release(_loose);
+
+            // ⚠️ Without this the load is taken straight back: what was tipped off is still free and still
+            // inside the volume, so levelling the blade again would scoop it out of mid-air.
+            _reclaimAt = Time.time + reclaimDelaySeconds;
+        }
+
+        private void Release(List<NetObject> lane)
+        {
+            for (int i = 0; i < lane.Count; i++)
             {
-                NetObject ingredient = _cargo[i];
+                NetObject ingredient = lane[i];
                 if (ingredient == null)
                 {
                     continue;
@@ -361,11 +463,7 @@ namespace VortexArena.Modes.Burger
                 Unanchor(ingredient);
             }
 
-            _cargo.Clear();
-
-            // ⚠️ Without this the load is taken straight back: what was tipped off is still free and still
-            // inside the volume, so levelling the blade again would scoop it out of mid-air.
-            _reclaimAt = Time.time + reclaimDelaySeconds;
+            lane.Clear();
         }
 
         private bool Tipped => spillAngle > 0f && Vector3.Angle(anchor.up, Vector3.up) > spillAngle;
@@ -427,6 +525,11 @@ namespace VortexArena.Modes.Burger
                 Anchor(_cargo[i]);
             }
 
+            for (int i = 0; i < _loose.Count; i++)
+            {
+                Anchor(_loose[i]);
+            }
+
             for (int i = _anchored.Count - 1; i >= 0; i--)
             {
                 NetObjectGrabBridge bridge = _anchored[i];
@@ -438,7 +541,8 @@ namespace VortexArena.Modes.Burger
 
                 var ingredient = bridge.GetComponent<NetObject>();
                 if (ingredient != null &&
-                    (_cargo.Contains(ingredient) || _asked.ContainsKey(ingredient.NetId)))
+                    (_cargo.Contains(ingredient) || _loose.Contains(ingredient) ||
+                     _asked.ContainsKey(ingredient.NetId) || _askedLoose.ContainsKey(ingredient.NetId)))
                 {
                     continue;
                 }
@@ -517,21 +621,63 @@ namespace VortexArena.Modes.Burger
         /// ones.</summary>
         private void Seat()
         {
-            if (_cargo.Count == 0)
+            if (_cargo.Count > 0)
             {
+                anchor.GetPositionAndRotation(out Vector3 origin, out Quaternion rotation);
+                Vector3 up = anchor.up;
+
+                for (int i = 0; i < _cargo.Count; i++)
+                {
+                    if (_cargo[i] != null)
+                    {
+                        _cargo[i].transform.SetPositionAndRotation(origin + up * (i * slotHeight), rotation);
+                    }
+                }
+            }
+
+            if (_loose.Count > 0)
+            {
+                SeatLoose();
+            }
+        }
+
+        /// <summary>Loose cargo keeps the offset between the two REST poses the server published last
+        /// (item on the carrier, carrier on the counter). Both are on every headset, so the placement is
+        /// the same everywhere; arena→world is rigid, so an arena-space offset is valid in world space.</summary>
+        private void SeatLoose()
+        {
+            RestWorld(_net, out Vector3 carrierRest, out Quaternion carrierRestRotation);
+            Quaternion carrierRestInverse = Quaternion.Inverse(carrierRestRotation);
+            transform.GetPositionAndRotation(out Vector3 origin, out Quaternion rotation);
+
+            for (int i = 0; i < _loose.Count; i++)
+            {
+                NetObject item = _loose[i];
+                if (item == null)
+                {
+                    continue;
+                }
+
+                RestWorld(item, out Vector3 itemRest, out Quaternion itemRestRotation);
+                Vector3 offset = carrierRestInverse * (itemRest - carrierRest);
+                Quaternion twist = carrierRestInverse * itemRestRotation;
+                item.transform.SetPositionAndRotation(origin + rotation * offset, rotation * twist);
+            }
+        }
+
+        /// <summary>Last published rest pose in world space; an object the server never saw move has its
+        /// rest pose in the scene itself (<see cref="NetObject.ScenePosition"/>).</summary>
+        private static void RestWorld(NetObject item, out Vector3 position, out Quaternion rotation)
+        {
+            if (item.HasRestPose)
+            {
+                position = ArenaSpace.ArenaToWorld(item.RestPosition);
+                rotation = ArenaSpace.ArenaToWorld(item.RestRotation);
                 return;
             }
 
-            anchor.GetPositionAndRotation(out Vector3 origin, out Quaternion rotation);
-            Vector3 up = anchor.up;
-
-            for (int i = 0; i < _cargo.Count; i++)
-            {
-                if (_cargo[i] != null)
-                {
-                    _cargo[i].transform.SetPositionAndRotation(origin + up * (i * slotHeight), rotation);
-                }
-            }
+            position = item.ScenePosition;
+            rotation = item.SceneRotation;
         }
     }
 }

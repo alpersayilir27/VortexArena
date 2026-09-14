@@ -20,6 +20,10 @@ hiçbiri yok. Ölüp canlanmak bile bir **durum** değişimidir, konum değişim
 Ölünce dönülecek bir "başlangıç noktası" da yoktur: oyuncu **taban bölgesine** (`BaseZone`) kendi
 ayaklarıyla yürüyerek canlanır.
 
+Tek istisna **dikey** sanal ofsettir: çok katlı arenada kat geçişi rig kökünü yalnız Y'de taşır ve
+bunu yapan tek yer `ArenaCalibrator.SetFloorLift`'tir (`FloorState` üzerinden). Yatayda hiçbir kod
+rig'i oynatmaz; başka hiçbir kod rig kökünü de oynatmaz.
+
 ### ⛔ Harita değişiminde oyuncuyu "yeniden doğurma"
 
 `load_match` oyuncu için yalnız bir sahne değişimidir. Kimse başlangıç noktasına götürülmez ve
@@ -160,13 +164,22 @@ rotasyonlar sessizce yanlış kemiklere yazılır. İkisi birlikte artırılır 
 sunucu aynı turda dağıtılır. Prefabdaki `_bodyIndicesToSync`/`_bodyIndicesToSend` tele etki etmez —
 tel listesi orada değiştirilmez. Gerekçe: `ArenaNet-Protokol` §6.9.
 
+### ⛔ Kalça konumunu ölçeğe bölmeden tele koyma
+
+`SkeletonWire`'a yazılan kalça gönderenin **oran uzayındadır** (`localPosition / bodyScale`); ham SDK
+konumu gerçek metredir ve alıcı ölçeği bir kez daha uygular — hata derlemede değil, oyuncu boyunda
+görünür (kısa oyuncu daha kısa, uzun oyuncu daha uzun çizilir). Ayak yüksekliği ayrı alandır
+(`footY`, gerçek metre) ve bölünmez. Gerekçe: `ArenaNet-Protokol` §6.9.
+
 ### ⛔ Sunucuya kenar tetikli bildirdiğin durumu yeniden bağlanmada tekrar bildirmeden bırakma
 
 Sunucu `hello`'da ve kopuşta oturum durumunu sıfırlar (`ready`, `calibrated`, …). "Değişince
 yolla" diye yazılmış bir bildirim bunu bilemez: oyuncu tabanında dururken Wi-Fi kopup gelirse
 istemci "zaten bildirdim" der, sunucu "hiç gelmedi" der ve toplanma süresiz bekler. Kenar tetikli
 her bildirim `NetEvents.OnConnected`'da son kenarı unutur ve mevcut durumu tekrar yollar
-(`TournamentRegroupReporter`, `CalibrationState`, `SceneRouter` aynı kalıptır).
+(`TournamentRegroupReporter`, `CalibrationState`, `SceneRouter` aynı kalıptır). İkinci tetik
+roster'ın kendisidir: kendi satırında bayrağın düşmüş görünmesi de kenarı unutturur — bayrak yalnız
+kopuşta değil, sunucunun tur sonunda yaptığı temizlikte de düşer ve o yolda `welcome` gelmez.
 
 ### ⛔ Bağlantı kopmasını "soket hata verir" diye TCP'ye bırakma
 
@@ -231,7 +244,10 @@ sipere düşümle küçülmüş bir sayı üzerinden bedel ödetir. Belirti: bom
 verip onu kırar, ama arkasındaki oyuncuya sıfır hasar gider; siper zaten kırıkken (soğurma sıfır)
 aynı bomba aynı yerden öldürür — bu yüzden "menzil sorunu" gibi okunur ve teşhisi pahalıdır.
 Kural üç yolda da aynıdır (uzak oyuncu · ağ nesnesi · kendine hasar); biri sapınca atan
-başkasından farklı bir eğriye tabi olur.
+başkasından farklı bir eğriye tabi olur. Mesafenin ölçüldüğü nokta da sabittir: gövdeye **en yakın
+nokta** — uzakta oyuncunun en yakın çarpma kutusu, yerelde zemin izdüşümü→kafa doğru parçasının en
+yakın noktası. Kafa gibi tek bir noktadan ölçmek ayağının dibindeki bombayı uzak sayar ve çömelmeyi
+hasar ayarına çevirir.
 
 ---
 
@@ -309,6 +325,33 @@ canlanamaz olurdu ve hiçbir yerde uyarı çıkmazdı.
 ⚠️ Aynı sebeple **şeridi silme, Renderer'sız bölge bırakma**: ölçü alınamayan bölge bir kez hata
 basıp kendini kapatır ve "açık taban yok" fail-open'ı devreye girer — belirtisi "taban çalışmıyor"
 değil, herkesin arenanın her yerinde canlanmasıdır.
+
+### ⛔ Üst kat plakasını `Obstacle` layer'ına koyma / collider'sız bırakma
+
+İki yarısı da bağlayıcıdır. `Obstacle` layer'ı **"kafa girerse ceza"** sözleşmesidir: plaka oraya
+damgalanırsa `ObstacleViolationProbe` üst kattaki **herkesi** sürekli ihlalde sayar, ekranları
+kararır.
+
+Collider'ını sökmek ya da plakasız bir üst kat kurmak ise ters yönden kırar: atış ışını maskesizdir
+(`ArenaCombat.TraceShot`), yani alt kattaki oyuncu üst kattakini tavanın içinden vurur. Doğrusu:
+collider **`Default`** layer'da kalır.
+
+Admin kuş bakışı için plakayı `ArenaRoof` kökünün altına al (`GameObject > VortexArena > Arena Roof`)
+— aksi hâlde operatör tepeden alt katı hiç göremez.
+
+### ⛔ Kat yüksekliğini elle yazma
+
+Kat seviyelerinin tek kaynağı sahnedeki `FloorPortal`'lardır: `k`. katın zemini, o kata çıkan
+portalın `upperHeight`'ının tanımladığı yüksekliktedir (`ArenaFloors`). İkinci bir sayı listesi
+mesh'ten sessizce sapar ve oyuncu **altında zemin olmayan** bir yüksekliğe kaldırılır.
+
+Yükümlülük yerleştirmededir: portalın kökü kendi katının zeminine 0,25 m içinde oturmalı — oturmazsa
+portal kat listesine girmez ve uyarı basıp kendini kapatır.
+
+### ⛔ Kat portalı çemberine collider koyma
+
+Kapıyı kafanın çember merkezine XZ mesafesi çözüyor; konan bir collider maskesiz atış ışınını ve
+engel/kavrama ölçümlerini yalanlar — geçiş noktası mermi yiyen görünmez bir disk olur.
 
 ### ⛔ `ArenaObstacle`'ı collider sanma
 

@@ -21,6 +21,14 @@ namespace VortexArena.Protocol
         /// an old client sends no <c>targetNetId</c>, so it can break nothing, and it ignores
         /// <c>object_state</c>, so it keeps seeing a cover others already broke — two players on either
         /// side of the same wall see different worlds.</para>
+        /// <para>v24 adds the floor model (<c>set_floor</c> §5.1, <see cref="PlayerInfo.floor"/> §5.3,
+        /// rule §10.6): the WIRE IS UNCHANGED — the pose channel already carries absolute Y, the floor is
+        /// only a roster ledger. Not cosmetic when mixed though: an old APK sends no <c>set_floor</c>, so
+        /// it can never take a portal and its row stays <c>0</c>, and it draws nobody as a projected
+        /// ghost — the match runs one floor up while that player stays on the ground floor.</para>
+        /// <para>⚠️ v23: skeleton blob FORMAT 2 (<c>footY</c> added, 114 B) and the hips travel in the
+        /// sender's proportion space — mixed versions reject each other's blobs (format + size), so
+        /// remote bodies fall back to the pose channel.</para>
         /// <para>⚠️ v22 changes the skeleton blob's CONTENT (§6.9): it is VortexArena-authored
         /// (<see cref="SkeletonWire"/>: hips position + per-joint local rotation, no SDK serialization).
         /// Header and root are unchanged, but mixed versions reject each other's frames and remote bodies
@@ -43,7 +51,7 @@ namespace VortexArena.Protocol
         /// <para>v5 net telemetry + packet combining (<c>0x05</c>) · v4 held item on the wire, shot
         /// events moved to UDP · v3 phase machine · v2 <c>set_identity</c>.</para>
         /// </summary>
-        public const int PROTOCOL_VERSION = 22;
+        public const int PROTOCOL_VERSION = 24;
         public const string APP_ID = "VortexArena";
 
         // ---- Calibration mode (§5.2/§10.6): how headsets align AT STARTUP. ----
@@ -67,6 +75,18 @@ namespace VortexArena.Protocol
         /// <para>⚠️ Diagnostic threshold, not a gate: calibration is always accepted and the server
         /// never auto-corrects (that would be a second alignment authority).</para></summary>
         public const float CALIB_FLOOR_WARN_METERS = 0.5f;
+
+        // ---- Floor model (§10.6 "Kat modeli") ----
+
+        /// <summary>Highest floor index a player may report; §10.x kat modeli.
+        /// <para>A fixed RANGE gate, not per-map validation: floor count is map data the server does not
+        /// have, it only keeps a ledger (§10.3).</para></summary>
+        public const int MAX_FLOOR_INDEX = 7;
+
+        /// <summary>Client waits this long for its own roster row to echo a set_floor before reverting (s).
+        /// <para>The roster row is the only source of truth; without the revert a client whose report was
+        /// rejected or lost would believe it stands on a floor everyone else draws it off.</para></summary>
+        public const float FLOOR_CONFIRM_SECONDS = 1f;
 
         // ---- Venue survey (§10.11) ----
 

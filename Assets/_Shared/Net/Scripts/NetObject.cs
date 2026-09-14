@@ -91,6 +91,13 @@ namespace VortexArena.Net
         /// <inheritdoc cref="RestPosition"/>
         public bool HasRestPose { get; private set; }
 
+        /// <summary>WORLD pose at <c>Awake</c>: the scene-authored (or spawn) pose. The rest pose of an
+        /// object the server has never seen move, identical on every headset.</summary>
+        public Vector3 ScenePosition { get; private set; }
+
+        /// <inheritdoc cref="ScenePosition"/>
+        public Quaternion SceneRotation { get; private set; } = Quaternion.identity;
+
         /// <summary>State arrived from the server. THE single hook for presentation (breakable cover,
         /// target board, resting pose); raised only on a real value change.</summary>
         public event System.Action<NetObject, NetStateOrigin> StateChanged;
@@ -139,6 +146,10 @@ namespace VortexArena.Net
             Stage = 0;
             Payload = "";
             HasRestPose = false;
+
+            transform.GetPositionAndRotation(out Vector3 scenePosition, out Quaternion sceneRotation);
+            ScenePosition = scenePosition;
+            SceneRotation = sceneRotation;
         }
 
         private void OnEnable()

@@ -286,7 +286,7 @@ namespace VortexArena.App
         /// The <c>set_ready</c> flow is UNCHANGED: <c>sceneLoaded</c> fires during activation and
         /// still calls <see cref="ReportSceneLoaded"/>, which stays the single gate.
         /// </para>
-        /// <para>The headset fade to black runs BEFORE the load and delays it by at most 0.2 s
+        /// <para>The headset fade to black runs BEFORE the load and delays it by at most 0.3 s
         /// (<see cref="SceneTransitionFade"/>); the fade in comes from <c>sceneLoaded</c>.</para>
         /// <para>
         /// ⚠️ <b>Async loading is SLOWER than sync with default settings</b>, purely because of

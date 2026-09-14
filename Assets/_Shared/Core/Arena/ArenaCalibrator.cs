@@ -142,6 +142,11 @@ namespace VortexArena.Core.Arena
         /// restored anchor on an anchor restore — both sit on the physical floor.</summary>
         public static float LastFloorOffsetMeters { get; private set; }
 
+        /// <summary>Vertical lift applied to the rig root for the player's current floor (m, §10.4
+        /// multi-floor): floor 0 = 0. Applied on TOP of the alignment — the player never moves
+        /// physically, so arena space stays world space.</summary>
+        public static float FloorLiftMeters { get; private set; }
+
         /// <summary>UUID of the anchor created in THIS process; survives scene changes, dies with
         /// the app. Separate from the disk record because the map-change restore runs from here and
         /// is INDEPENDENT of calibration mode (<see cref="ResolveSavedUuid"/>).</summary>
@@ -220,6 +225,14 @@ namespace VortexArena.Core.Arena
         /// single contract a marker's transform position already is the floor point.</summary>
         private float VirtualFloorY =>
             anchorA != null ? anchorA.transform.position.y : 0f;
+
+        private void Awake()
+        {
+            // ⚠️ A new scene's rig is born UNLIFTED while the static survives: left alone, the first
+            // SetFloorLift would shift the rig by a stale delta. Awake runs before the sceneLoaded
+            // listeners (FloorState), which drop the floor to 0 on the same load.
+            FloorLiftMeters = 0f;
+        }
 
         private void Start()
         {
@@ -521,7 +534,7 @@ namespace VortexArena.Core.Arena
             }
 
             capturedCount = 2;
-            MeasureFloorOffset(point);
+            MeasureFloorOffset(point, "manuel");
             if (anchorB != null) anchorB.SetActive(true);
             StartCoroutine(Pulse(1, PointBPulseSeconds));
             Debug.Log($"ArenaCalibrator: 2/2 — B yakalandı, fiziksel {point} " +
@@ -546,18 +559,40 @@ namespace VortexArena.Core.Arena
         }
 
         /// <summary>Measures and stores the floor offset. The threshold is a diagnostic, not a
-        /// gate.</summary>
-        private void MeasureFloorOffset(Vector3 floorPoint)
+        /// gate. <paramref name="source"/> names the call site in the log ("manuel" | "çapa" |
+        /// "çapa-yeniden").</summary>
+        private void MeasureFloorOffset(Vector3 floorPoint, string source)
         {
             LastFloorOffsetMeters = TrackingFloorOffset(floorPoint);
+
+            Transform rig = RigRoot;
+            Transform head = HeadAnchor;
+            string headTau = rig != null && head != null
+                ? rig.InverseTransformPoint(head.position).y.ToString("F2")
+                : "-";
+            string origin = OVRManager.instance != null
+                ? OVRManager.instance.trackingOriginType.ToString()
+                : "?";
+            var boundary = FindFirstObjectByType<ArenaBoundary>(FindObjectsInactive.Include);
+            string boundaryPart = boundary != null
+                ? $" sınır={boundary.transform.position.y:F2} m"
+                : "";
+
+            // Reading the line: head ~1.0-1.4 m (bent over) with point ~0.6 m => the tip was held
+            // high at capture, the player's feet will sink. Head ~ standing height + the point value
+            // => only the headset's floor guess is off and the alignment is fine. The post-align head
+            // height logged next must equal the player's real eye height.
+            Debug.Log($"[Kalibre] zemin ölçümü: kaynak={source} nokta={LastFloorOffsetMeters:F2} m " +
+                      $"kafa={headTau} m sanalZemin={VirtualFloorY:F2} m köken={origin}{boundaryPart}");
 
             if (Mathf.Abs(LastFloorOffsetMeters) > ArenaProtocol.CALIB_FLOOR_WARN_METERS)
             {
                 Debug.LogWarning(
                     $"ArenaCalibrator: zemin sapması {LastFloorOffsetMeters:F2} m " +
-                    $"(eşik {ArenaProtocol.CALIB_FLOOR_WARN_METERS:F2} m) — gözlüğün alan verisi " +
-                    "(space setup) bayat. Kalibrasyon yine de kabul edildi; veriyi temizleyip " +
-                    "yeniden kalibre etmek gerekir.", this);
+                    $"(eşik {ArenaProtocol.CALIB_FLOOR_WARN_METERS:F2} m) — ya kumandanın ucu " +
+                    "zeminde değildi ya da gözlüğün alan verisi (space setup) bayat. Hangisi " +
+                    "olduğu yukarıdaki '[Kalibre] zemin ölçümü' satırından okunur. Kalibrasyon " +
+                    "yine de kabul edildi.", this);
             }
         }
 
@@ -617,9 +652,11 @@ namespace VortexArena.Core.Arena
             // capture-time value.
             float rise = virtualFloorY - physicalB.y;
             rig.position += Vector3.up * rise;
+            ApplyFloorLift();
 
             CalibrationGeneration++;
             Debug.Log($"ArenaCalibrator: rig aligned (yaw {yaw:F1} deg, floor {rise:F3} m).");
+            LogHeadHeightAfterAlign();
         }
 
         /// <summary>Aligns the rig from a persisted anchor pose. The anchor sits at the floor point
@@ -644,10 +681,28 @@ namespace VortexArena.Core.Arena
 
             Vector3 target = new Vector3(virtualA.x, VirtualFloorY, virtualA.z);
             rig.position += target - anchorPos;
+            ApplyFloorLift();
 
             CalibrationGeneration++;
+            // Callers MUST MeasureFloorOffset with this same anchor pose first, otherwise the
+            // printed offset belongs to an older alignment.
             Debug.Log($"ArenaCalibrator: rig aligned from saved anchor (yaw {yaw:F1} deg, " +
                       $"zemin sapması {LastFloorOffsetMeters:F2} m).");
+            LogHeadHeightAfterAlign();
+        }
+
+        /// <summary>Head height in arena space right after an alignment: must equal the player's real
+        /// eye height — a smaller value means the feet sink into the floor.</summary>
+        private void LogHeadHeightAfterAlign()
+        {
+            Transform head = HeadAnchor;
+            if (head == null)
+                return;
+
+            // ⚠️ The floor lift is subtracted: on an upper floor the raw value carries the level
+            // height and the diagnostic would read "3.6 m head" instead of a real eye height.
+            Debug.Log("[Kalibre] hizalama sonrası kafa yüksekliği " +
+                      $"{ArenaSpace.WorldToArena(head.position).y - FloorLiftMeters:F2} m");
         }
 
         /// <summary>Queues the pre-align once. Two callers: a headset with no saved UUID, and a
@@ -727,6 +782,7 @@ namespace VortexArena.Core.Arena
             Vector3 mid = (pointA + pointB) * 0.5f;
             Vector3 targetHead = new Vector3(mid.x, VirtualFloorY + uncalibratedHeadHeight, mid.z);
             rig.position += targetHead - head.position;
+            ApplyFloorLift();
 
             // The rig moved legitimately: jump suppressors must not read this as a fault.
             CalibrationGeneration++;
@@ -790,7 +846,13 @@ namespace VortexArena.Core.Arena
                 yield break;
 
             Debug.Log("ArenaCalibrator: tracking origin changed, realigning from the saved anchor.");
+            // Re-measured BEFORE the move (same order as the restore path): the origin shifted, so
+            // the old offset describes a floor that no longer exists.
+            MeasureFloorOffset(worldAnchor.transform.position, "çapa-yeniden");
             AlignRigToAnchorPose(worldAnchor.transform.position, worldAnchor.transform.rotation);
+            // The rig moved without the player doing anything: re-report so set_calibration.floorOffset
+            // is not the value measured before the disturbance.
+            RaiseCalibrated(SourceAnchor);
         }
 
         /// <summary>Invalidates the alignment (§10.6): markers hide, the rig alignment drops, the manual gate
@@ -921,6 +983,54 @@ namespace VortexArena.Core.Arena
                 PurgeSavedAnchor();
         }
 
+        /// <summary>Sets the floor lift: moves the rig root by the DELTA (§10.4 multi-floor).</summary>
+        /// <remarks>
+        /// Static like the other seams (<see cref="ApplyOperatorClear"/>, <see cref="RequestReload"/>):
+        /// the caller (<see cref="FloorState"/>) is a persistent singleton that does not know the
+        /// per-scene calibrator.
+        /// <para>⚠️ A DELTA, not an absolute write: the rig's Y also carries the alignment, and writing
+        /// it absolutely would throw the floor measurement away.</para>
+        /// <para>With no calibrator/rig in the scene the value is still stored — the next alignment
+        /// re-applies it (<see cref="ApplyFloorLift"/>).</para>
+        /// </remarks>
+        public static void SetFloorLift(float meters)
+        {
+            float delta = meters - FloorLiftMeters;
+            FloorLiftMeters = meters;
+            if (Mathf.Approximately(delta, 0f))
+            {
+                return;
+            }
+
+            ArenaCalibrator calibrator = FindFirstObjectByType<ArenaCalibrator>();
+            Transform rig = calibrator != null ? calibrator.RigRoot : null;
+            if (rig == null)
+            {
+                return;
+            }
+
+            rig.position += Vector3.up * delta;
+            // The rig teleported legitimately: continuity guards must not read this as a fault.
+            CalibrationGeneration++;
+        }
+
+        /// <summary>Re-applies the floor lift after an alignment. ⚠️ Mandatory in every aligner: they
+        /// write the rig's height from the arena floor, so without this a recenter or an anchor restore
+        /// would silently drop the player to floor 0 — with the ground mesh above their head.</summary>
+        private void ApplyFloorLift()
+        {
+            if (FloorLiftMeters == 0f)
+            {
+                return;
+            }
+
+            Transform rig = RigRoot;
+            if (rig != null)
+            {
+                rig.position += Vector3.up * FloorLiftMeters;
+            }
+        }
+
         /// <summary>Alignment complete → raise the event; both completion paths go through here.
         /// <para>Body measurement does NOT hang off this event: <c>BodyScaleState</c> watches
         /// <see cref="CalibrationGeneration"/> and measures 10 s after the alignment (§10.8), since
@@ -940,7 +1050,10 @@ namespace VortexArena.Core.Arena
                 Vector3 virtualA = anchorA.transform.position;
                 Vector3 forward = anchorB.transform.position - virtualA;
                 forward.y = 0f;
-                Vector3 floorPoint = new Vector3(virtualA.x, VirtualFloorY, virtualA.z);
+                // ⚠️ The lift is ADDED: the anchor must land on the PHYSICAL floor, and with a lifted
+                // rig that floor shows up at this world height. Saved at VirtualFloorY it would sit
+                // one storey underground and every later restore would align to it.
+                Vector3 floorPoint = new Vector3(virtualA.x, VirtualFloorY + FloorLiftMeters, virtualA.z);
 
                 var go = new GameObject("ArenaWorldAnchor");
                 go.transform.SetPositionAndRotation(floorPoint, Quaternion.LookRotation(forward.normalized, Vector3.up));
@@ -1156,7 +1269,7 @@ namespace VortexArena.Core.Arena
                 // Measured BEFORE alignment (see TrackingFloorOffset): the anchor sits on the physical
                 // floor, so its tracking-local height is today's floor drift. A silent restore must
                 // not hide that behind a clean row (§10.6).
-                MeasureFloorOffset(pose.position);
+                MeasureFloorOffset(pose.position, "çapa");
                 AlignRigToAnchorPose(pose.position, pose.rotation);
 
                 var go = new GameObject("ArenaWorldAnchor");

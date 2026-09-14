@@ -17,6 +17,9 @@ namespace VortexArena.Core.Player
     /// <para>A dead player becomes a <b>ghost body</b> (translucent, coloured by their OWN team), gets
     /// " (ölü)" on the label and loses its hit boxes. The same look marks an uncalibrated player, where
     /// it pulses orange — uncalibrated OVERRIDES dead.</para>
+    /// <para>A player on ANOTHER floor is drawn twice: the real body on its own floor, normal materials
+    /// and hittable, PLUS a ghost <b>floor silhouette</b> projected onto the viewer's floor — the two
+    /// really stand on that floor, so the silhouette is a collision cue (never hittable).</para>
     /// <para>The <b>spawn protection shield</b> (§10.4) is not a material swap but a second renderer on
     /// top (a shell), and is PRESENTATION only — the server decides who is protected.</para>
     /// <para><b>Held items</b> (§6.6): <c>itemL</c>/<c>itemR</c> are resolved via
@@ -117,6 +120,13 @@ namespace VortexArena.Core.Player
         private const string DeadLabelSuffix = " (ölü)";
         private const string UncalibratedLabelSuffix = " (KALİBRESİZ)";
 
+        /// <summary>Floor suffixes, relative to the VIEWER's floor — not an absolute floor number: what
+        /// the player needs is "above me / below me".</summary>
+        private const string UpperFloorLabelSuffix = " (ÜST KAT)";
+
+        /// <inheritdoc cref="UpperFloorLabelSuffix"/>
+        private const string LowerFloorLabelSuffix = " (ALT KAT)";
+
         /// <summary>Pulse rate of an uncalibrated avatar (full round trips per second).</summary>
         private const float UncalibratedPulseHz = 1.6f;
 
@@ -151,6 +161,10 @@ namespace VortexArena.Core.Player
 
         /// <summary>Is this player's alignment valid per the server (§10.6; from the roster)?</summary>
         public bool IsCalibrated { get; private set; } = true;
+
+        /// <summary>Arena floor this player stands on (roster datum; 0 when unknown). The REAL body is
+        /// always drawn — and stays hittable — on this floor.</summary>
+        public int Floor { get; private set; }
 
         /// <summary>Spawn protection flag from the last snapshot (§10.4; false when there is no record).
         /// ⚠️ PRESENTATION only: duration and damage blocking belong to the server; the client follows
@@ -304,6 +318,36 @@ namespace VortexArena.Core.Player
         /// ghost colour would reach the shell too.</summary>
         private MaterialPropertyBlock _shieldBlock;
 
+        // ── Floor silhouette (multi-floor arena) ────────────────────────────────────────
+        // A player on another floor is drawn TWICE: the REAL body stays on its own floor with normal
+        // materials and its hit boxes (someone on a balcony must be shootable), and these shells draw
+        // the same mesh shifted onto the VIEWER's floor — physically the two share that floor, so the
+        // silhouette is a collision cue. Shells are never hittable and cast no shadow.
+        private Renderer[] _bodySilhouetteShells;
+        private Renderer[] _redSilhouetteShells;
+
+        /// <summary>Name of the silhouette shell object.</summary>
+        private const string SilhouetteShellName = "FloorSilhouette";
+
+        /// <summary>World Y shift the ghost shader applies to the silhouette (<c>_FloorShift</c>).</summary>
+        private static readonly int FloorShiftId = Shader.PropertyToID("_FloorShift");
+
+        /// <summary>Property block of the silhouette shells — SEPARATE from the body's and the shield's:
+        /// a block applies per renderer as a whole, so a shared one would leak <c>_FloorShift</c> onto
+        /// the real body's ghost.</summary>
+        private MaterialPropertyBlock _silhouetteBlock;
+
+        /// <summary>Is this player on a DIFFERENT floor than the viewer? Drives the silhouette and the
+        /// label suffix.</summary>
+        private bool _otherFloor;
+
+        /// <summary>World Y shift written to the silhouette: viewer floor height − this player's floor
+        /// height.</summary>
+        private float _silhouetteShift;
+
+        /// <summary>Missing silhouette setup warns once per instance.</summary>
+        private bool _silhouetteSetupWarned;
+
         // ── Team body ───────────────────────────────────────────────────────────────────
         /// <summary>Renderers of the red team body; null when <see cref="redBodyRoot"/> is empty.</summary>
         private Renderer[] _redBodyRenderers;
@@ -354,6 +398,13 @@ namespace VortexArena.Core.Player
                 ? _redShieldShells
                 : _bodyShieldShells;
 
+        /// <summary>Floor silhouette shells of the drawn body (same order as
+        /// <see cref="ActiveBodyRenderers"/> — the shift is written against each source's bounds).</summary>
+        private Renderer[] ActiveSilhouetteShells =>
+            _useRedBody && _redBodyRenderers != null && _redBodyRenderers.Length > 0
+                ? _redSilhouetteShells
+                : _bodySilhouetteShells;
+
         /// <summary>Draw state of the body. Ghost and shield use different mechanisms but there is ONE
         /// state, not two flags: two flags would leave the override order to the caller and the body
         /// could be drawn ghosted and shielded in the same frame.</summary>
@@ -401,6 +452,7 @@ namespace VortexArena.Core.Player
             // ⚠️ Shells come AFTER CacheRedBody: _redBodyRenderers is collected with
             // GetComponentsInChildren, and a leaked shell would get the body's enable/ghost swap too.
             CacheShieldShells();
+            CacheSilhouetteShells();
         }
 
         /// <summary>Collects the red team body ONCE and spawns it DISABLED (the team arrives with the
@@ -447,8 +499,18 @@ namespace VortexArena.Core.Player
         /// material bound no shell is built and protection still works on the server.</para></summary>
         private void CacheShieldShells()
         {
-            _bodyShieldShells = BuildShieldShells(bodyRenderers, shieldMaterial);
-            _redShieldShells = BuildShieldShells(_redBodyRenderers, shieldMaterial);
+            _bodyShieldShells = BuildShells(bodyRenderers, shieldMaterial, ShieldShellName, ShieldBoundsPadding);
+            _redShieldShells = BuildShells(_redBodyRenderers, shieldMaterial, ShieldShellName, ShieldBoundsPadding);
+        }
+
+        /// <summary>Builds the floor silhouette shells ONCE, for BOTH bodies, with the ghost material: a
+        /// player on another floor is ALSO drawn projected onto the viewer's floor, as a collision cue.
+        /// <para>⚠️ Padding is 0 here — the shift is only known at draw time and is written into
+        /// <c>localBounds</c> per frame in <see cref="RefreshSilhouette"/>.</para></summary>
+        private void CacheSilhouetteShells()
+        {
+            _bodySilhouetteShells = BuildShells(bodyRenderers, ghostMaterial, SilhouetteShellName, 0f);
+            _redSilhouetteShells = BuildShells(_redBodyRenderers, ghostMaterial, SilhouetteShellName, 0f);
         }
 
         /// <summary>Stores a body's original material arrays (the single source for undoing the swap).</summary>
@@ -503,11 +565,12 @@ namespace VortexArena.Core.Player
             return built;
         }
 
-        /// <summary>Builds a body's shield shells (same order as the source array); <c>null</c> when no
+        /// <summary>Builds a body's shells (same order as the source array); <c>null</c> when no
         /// material is bound.</summary>
-        private static Renderer[] BuildShieldShells(Renderer[] sources, Material shieldMaterial)
+        private static Renderer[] BuildShells(Renderer[] sources, Material material, string name,
+            float boundsPadding)
         {
-            if (sources == null || sources.Length == 0 || shieldMaterial == null)
+            if (sources == null || sources.Length == 0 || material == null)
             {
                 return null;
             }
@@ -515,7 +578,7 @@ namespace VortexArena.Core.Player
             var shells = new Renderer[sources.Length];
             for (int i = 0; i < sources.Length; i++)
             {
-                shells[i] = BuildShieldShell(sources[i], shieldMaterial);
+                shells[i] = BuildShell(sources[i], material, name, boundsPadding);
             }
 
             return shells;
@@ -523,12 +586,14 @@ namespace VortexArena.Core.Player
 
         /// <summary>Builds one body renderer's shell: an identity-transform child under the source
         /// drawing its mesh on the same bones, born disabled.
-        /// <para>⚠️ Shadows off — a translucent shield casting an opaque shadow reads as a solid body.
-        /// ⚠️ The shell draws the mesh <b>as is</b>; thickness comes from
+        /// <para>⚠️ Shadows off — a translucent shield casting an opaque shadow reads as a solid body,
+        /// and the floor silhouette is drawn shifted, so its shadow would land nowhere real.
+        /// ⚠️ The shell draws the mesh <b>as is</b>; shield thickness comes from
         /// <c>CharacterShieldV2</c>'s vertex stage, and inflating by duplicating the mesh will not come
         /// back (FBX Read/Write is off, and thickness would become tunable from two places).</para>
         /// <para>Unsupported renderer types and mesh-less sources are skipped.</para></summary>
-        private static Renderer BuildShieldShell(Renderer source, Material shieldMaterial)
+        private static Renderer BuildShell(Renderer source, Material material, string name,
+            float boundsPadding)
         {
             if (source == null)
             {
@@ -552,7 +617,7 @@ namespace VortexArena.Core.Player
 
             Mesh shellMesh = sourceMesh;
 
-            var shellObject = new GameObject(ShieldShellName)
+            var shellObject = new GameObject(name)
             {
                 // Layer copied from the source: the shell follows the body's culling rules.
                 layer = source.gameObject.layer
@@ -573,10 +638,10 @@ namespace VortexArena.Core.Player
                 shellSkinned.rootBone = skinned.rootBone;
                 shellSkinned.quality = skinned.quality;
 
-                // ⚠️ Bounds are EXPANDED a little: the shader offsets vertices along their normals, so
-                // verbatim source bounds would cull the bubble's edge while the body is on screen.
+                // ⚠️ Bounds are EXPANDED a little: the shader offsets vertices (shield normals, floor
+                // shift), so verbatim source bounds would cull the shell while the body is on screen.
                 Bounds shellBounds = skinned.localBounds;
-                shellBounds.Expand(ShieldBoundsPadding);
+                shellBounds.Expand(boundsPadding);
                 shellSkinned.localBounds = shellBounds;
 
                 shellSkinned.updateWhenOffscreen = skinned.updateWhenOffscreen;
@@ -593,7 +658,7 @@ namespace VortexArena.Core.Player
             var materials = new Material[Mathf.Max(1, shellMesh.subMeshCount)];
             for (int m = 0; m < materials.Length; m++)
             {
-                materials[m] = shieldMaterial;
+                materials[m] = material;
             }
 
             shellRenderer.sharedMaterials = materials;
@@ -617,6 +682,13 @@ namespace VortexArena.Core.Player
             }
 
             PlayerId = playerId;
+
+            // ⚠️ The floor belongs to the PLAYER, not the instance: a handover would keep the old
+            // owner's silhouette until their floors happened to differ again.
+            Floor = 0;
+            _otherFloor = false;
+            _silhouetteShift = 0f;
+            RefreshSilhouette();
 
             // Driven by the networked skeleton: this avatar never has input authority (our own body is
             // LocalBodyAvatar's). This also disables the sensor source.
@@ -647,6 +719,9 @@ namespace VortexArena.Core.Player
             RefreshLabelVisibility();
             ApplyTeamColor();
             ApplyBodyVisual();
+
+            // The silhouette is team-toned as well, so a team change must rewrite it.
+            RefreshSilhouette();
         }
 
         /// <summary>Picks the body to draw by team; only ONE is drawn at a time.
@@ -721,12 +796,19 @@ namespace VortexArena.Core.Player
         /// <summary>Name label; suffixed " (ölü)" while dead and " (KALİBRESİZ)" while uncalibrated. The
         /// COLOUR is the team (darkened while dead), matching the admin card and top-view marker.
         /// <para>⚠️ Not an exception to "team colour is never written to the character mesh": the label
-        /// already spells out identity, opens no new information and is depth-tested.</para></summary>
+        /// already spells out identity, opens no new information and is depth-tested.</para>
+        /// <para>Suffix precedence: state first (uncalibrated OVERRIDES dead), then the floor suffix
+        /// APPENDED to it — the floor is a second, independent fact about the same player.</para></summary>
         private void ApplyLabelText()
         {
             if (nameLabel != null)
             {
                 string suffix = !IsCalibrated ? UncalibratedLabelSuffix : IsAlive ? "" : DeadLabelSuffix;
+                if (_otherFloor)
+                {
+                    suffix += Floor > FloorState.Local ? UpperFloorLabelSuffix : LowerFloorLabelSuffix;
+                }
+
                 string prefix = _number > 0 ? _number + " · " : "";
                 nameLabel.text = prefix + _displayName + suffix;
                 nameLabel.color = IsAlive
@@ -934,6 +1016,10 @@ namespace VortexArena.Core.Player
             SetRenderersEnabled(passive, false);
 
             SyncShieldShells();
+
+            // ⚠️ Re-applied here too: a body switch selects NEW shells that have never had _FloorShift
+            // written, so they would draw at the material's default (unshifted, over the real body).
+            RefreshSilhouette();
             RefreshRedBodyDriver();
         }
 
@@ -950,6 +1036,109 @@ namespace VortexArena.Core.Player
 
             Renderer[] passive = ReferenceEquals(active, _bodyShieldShells) ? _redShieldShells : _bodyShieldShells;
             SetRenderersEnabled(passive, false);
+        }
+
+        /// <summary>Reads this player's floor and the viewer's; refreshes label + silhouette on change.
+        /// <para>Asked at DRAW time rather than from an event: both the roster floor and the local floor
+        /// change mid-match and one missed event would strand a silhouette on screen.</para></summary>
+        private void UpdateFloor()
+        {
+            int floor = FloorState.PlayerFloor(PlayerId);
+            int viewer = FloorState.Local;
+            bool other = floor != viewer;
+            float shift = ArenaFloors.HeightOf(viewer) - ArenaFloors.HeightOf(floor);
+
+            if (floor == Floor && other == _otherFloor && Mathf.Approximately(shift, _silhouetteShift))
+            {
+                return;
+            }
+
+            Floor = floor;
+            _otherFloor = other;
+            _silhouetteShift = shift;
+
+            ApplyLabelText();
+            RefreshSilhouette();
+        }
+
+        /// <summary>Draws the ACTIVE body's silhouette shells while this player is on ANOTHER floor: the
+        /// same mesh, ghost material, shifted onto the viewer's floor.
+        /// <para>⚠️ The real body is NOT touched — it stays on its own floor with its hit boxes (a player
+        /// on a balcony must be shootable); this is only a collision cue for the floor the two really
+        /// share. Shells are outside <see cref="GhostTargets"/> and <see cref="RefreshColliders"/>.</para>
+        /// <para>⚠️ No uncalibrated pulse here: the pulse means "this position is a lie", while the
+        /// silhouette's position is true.</para></summary>
+        private void RefreshSilhouette()
+        {
+            Renderer[] shells = ActiveSilhouetteShells;
+
+            // The passive body's shells are ALWAYS off — a team change would otherwise leave a second
+            // silhouette hanging on the undrawn body.
+            Renderer[] passive = ReferenceEquals(shells, _bodySilhouetteShells)
+                ? _redSilhouetteShells
+                : _bodySilhouetteShells;
+            SetRenderersEnabled(passive, false);
+
+            bool draw = _visible && _otherFloor;
+            if (draw && (shells == null || shells.Length == 0))
+            {
+                WarnMissingSilhouetteSetup();
+                return;
+            }
+
+            SetRenderersEnabled(shells, draw);
+            if (!draw || shells == null)
+            {
+                return;
+            }
+
+            Color color = _ghostTeamColor;
+            color.a = GhostBaseAlpha;
+
+            _silhouetteBlock ??= new MaterialPropertyBlock();
+            _silhouetteBlock.SetColor(BaseColorId, color);
+            _silhouetteBlock.SetFloat(FloorShiftId, _silhouetteShift);
+
+            Renderer[] sources = ActiveBodyRenderers;
+            float padding = 2f * Mathf.Abs(_silhouetteShift);
+
+            for (int i = 0; i < shells.Length; i++)
+            {
+                Renderer shell = shells[i];
+                if (shell == null)
+                {
+                    continue;
+                }
+
+                shell.SetPropertyBlock(_silhouetteBlock);
+
+                // ⚠️ Bounds come from the SOURCE every time (never accumulated) and grow on ALL axes:
+                // root-bone space is not world aligned, so the shift can leave through any face.
+                // Expand() grows the SIZE, hence 2× — each side gains |shift|.
+                if (shell is SkinnedMeshRenderer shellSkinned &&
+                    i < sources.Length && sources[i] is SkinnedMeshRenderer sourceSkinned)
+                {
+                    Bounds bounds = sourceSkinned.localBounds;
+                    bounds.Expand(padding);
+                    shellSkinned.localBounds = bounds;
+                }
+            }
+        }
+
+        /// <summary>Silhouette needed but no shell could be built — WARNING once per instance: only the
+        /// cue is missing, both players' real bodies are drawn correctly.</summary>
+        private void WarnMissingSilhouetteSetup()
+        {
+            if (_silhouetteSetupWarned)
+            {
+                return;
+            }
+
+            _silhouetteSetupWarned = true;
+            Debug.LogWarning(
+                $"[RemoteAvatar] Oyuncu {PlayerId}: başka kattaki oyuncunun kat silüeti çizilemiyor — " +
+                "RemoteAvatar prefabında 'ghostMaterial' (M_AvatarGhost) bağlanmalı ve çizilen " +
+                "gövdenin 'bodyRenderers' listesi dolu olmalı. Çarpışma uyarısı görünmüyor.", this);
         }
 
         /// <summary>Toggles the red body bridge: driven only while that body is ACTIVE and the avatar is
@@ -1178,6 +1367,7 @@ namespace VortexArena.Core.Player
             }
 
             SetVisible(true);
+            UpdateFloor();
             UpdateAlive(registry);
             UpdateSpawnProtection(registry);
             TickShieldFade();
@@ -2093,6 +2283,10 @@ namespace VortexArena.Core.Player
             // The ghost decision depends on _visible too, or a returning avatar freezes in its previous
             // state.
             ApplyBodyVisual();
+
+            // ⚠️ Called separately: ApplyBodyVisual returns early on an unchanged state, and a hidden
+            // avatar's silhouette would keep drawing on the viewer's floor.
+            RefreshSilhouette();
         }
     }
 }

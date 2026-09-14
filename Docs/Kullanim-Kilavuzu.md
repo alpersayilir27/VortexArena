@@ -421,6 +421,9 @@ o "kalibresiz" demektir ve oyuncu oynayamaz).
 - **Kalibrasyon yine de geçerlidir** — ölçüm zemini zaten düzeltiyor, maça devam edebilirsin.
 - **KAL ?** bir **bakım sinyalidir**: o gözlüğün alan verisi bozulmuş demektir. Seans arasında
   temizle, yoksa aynı gözlükte yükseklik sorunları tekrarlar.
+- ⚠️ **Aynı uyarı yanlış yakalamadan da çıkar:** oyuncuya elle kalibrede **kumandanın ucu iki
+  noktada da zeminde olsun** dedir — uç havadayken alınan nokta hizalamayı yukarı kaydırır ve o
+  oyuncu başkalarının ekranında ayakları yere batmış görünür.
 
 **Temizlik adımları**
 
@@ -696,13 +699,17 @@ bitmişse lobiye de dönmez. Bu molanın **süresi yoktur** — istediğin kadar
   **TURA DEVAM** olur; ona (ya da `I` tuşuna) basmak sıradaki tura geçirir.
 - Devam etmek istemiyorsan çıkışlar aynı: **■ BİTİR** maçı o anki skorla bitirir, **✕ İPTAL**
   sonuçsuz kaldırır.
-- Oyuncular bu sırada "TUR BİTTİ" ve turu kimin aldığını görür; canları çoktan dolmuştur, kimse
+- Ekranının üstünde, maç saatinin yerinde **TUR BİTTİ · I: TURA DEVAM** yazar — sıradaki adımın
+  ne olduğunu oradan da görürsün.
+- Oyuncular bu sırada "TUR BİTTİ" ve turu kimin aldığını görür, altında da **"operatörün devam
+  etmesi bekleniyor"** yazar (yapacakları bir şey yoktur); canları çoktan dolmuştur, kimse
   ölüm ekranında beklemez.
 
 **2) TOPLANMA — herkes tabanına döner.**
 
 - Sen devam dedikten sonra herkes **kendi renkli tabanına yürür**. Ekranda kaç kişinin
-  toplandığı yazar (ör. "TOPLANMA 4/6").
+  toplandığı yazar (ör. "TOPLANMA 4/6"). Sağdaki sayı yalnız **kalibreli** oyuncuları sayar:
+  kalibresiz oyuncu zaten oyun dışıdır, turu bekletmez.
 - **Herkes tabanına girdiğinde** geri sayım başlar (varsayılan 5 saniye) ve yeni tur açılır —
   herkes **tam can, tam şarjörle** ayağa kalkar.
 - ⚠️ **Geri sayım sırasında biri tabanından çıkarsa sayım iptal edilir** ve toplanmaya dönülür.
@@ -869,7 +876,8 @@ ve **arenanın dışı**. İkisini de sen görürsün, oyuncu da kendi ekranınd
 
 ## 6. Maç sırasında ne oluyor?
 
-- Oyuncular arenada serbest yürür; **kimse ışınlanmaz**, ekranda "hareket" tuşu yoktur.
+- Oyuncular arenada serbest yürür; **kimse ışınlanmaz** (katlı arenada kat geçişi de bir ışınlanma
+  değildir: oyuncu yerinden oynamaz, yalnız gördüğü yükseklik değişir), ekranda "hareket" tuşu yoktur.
 - Vurulan oyuncunun canı azalır; canı bitince **ölüm ekranı** görür ve ateş edemez.
 - **Canlanma fiziksel bir iştir** ve moda göre değişir:
   - **Takım Ölüm Maçı:** ölen oyuncu **5 saniye** bekler, sonra **kendi takımının renkli taban
@@ -894,6 +902,25 @@ ve **arenanın dışı**. İkisini de sen görürsün, oyuncu da kendi ekranınd
   sen bir şey seçene kadar ekranda kalır.** Kendiliğinden lobiye dönülmez: sıradaki haritayı seç
   (herkes oraya geçer), harita listesinden **Lobi**'yi seç ya da **İPTAL**'e bas. Böylece maç
   sonunu konuşmak, ödül vermek ya da sıradaki turu anlatmak için istediğin kadar vaktin olur.
+
+**Katlı arenalar**
+
+Bazı arenalar birden çok kattan oynanır. Oyuncu **hiçbir zaman yerinden oynamaz** — salonda
+yürüdüğü yer aynı kalır, değişen yalnız gözlükte gördüğü kattır.
+
+- Zeminde **yuvarlak bir portal** vardır. Oyuncu onun üstünde **2 saniye** durur: daire dolar,
+  ekranın ortasında geri sayım yazar, sonra ekran kısa süre kararır ve diğer katta açılır.
+- **Aynı anda tek kişi geçer.** İkinci kişi beklerken dairesi **kırmızı** olur ve "Portal meşgul"
+  yazar — sırayla geçmeleri gerekir. Oyuncuya söylenecek cümle: **"Daire kırmızıysa bekle, sıra
+  sende değil."**
+- **Ölen oyuncu otomatik olarak kendi tabanının katına iner** (ekranı kısa süre kararır). Aksi hâlde
+  üst katta ölen oyuncu, aşağıdaki taban bölgesine hiç ulaşamaz ve canlanamazdı.
+- **Başka kattaki rakip yarı saydam bir siluet** olarak görünür: nerede olduğu anlaşılır ama
+  **o siluet vurulamaz.** Oyuncunun gerçek gövdesi kendi katındadır ve orada vurulur; adının yanında
+  "(ÜST KAT)" ya da "(ALT KAT)" yazar. Oyuncuya söylenecek cümle: **"Hayalet gibi görünen rakibe
+  ateş etme, o başka katta."**
+- Yönetim ekranındaki oyuncu listesinde, üst kattaki oyuncunun satırında **"1. kat"** gibi bir not
+  çıkar (zemin katta bir şey yazmaz; zemin 0, bir üstü 1. kattır) ve kuş bakışında halkası o katın zemininde durur.
 
 **Maçı geçici olarak durdurmak (DURAKLAT)**
 
@@ -956,7 +983,7 @@ ekranın alt ortasındaki **⏸ DURAKLAT** düğmesi (BAŞLAT ile BİTİR'in ara
 | **ÖLÇ**'e bastın, düğmede **ÖLÇÜLEMEDİ** yazdı | Duyuru satırında sebebi yazar: oyuncu kalibresiz **ya da** o gözlük gövde takibi üretemiyor | "kalibre yok" ise önce kalibrasyon. Sebep "gövde pozu yok" ise §4.4'teki temizliği yap |
 | Bir oyuncu diğer ekranlarda **kolları yana açık, donuk** duruyor (T-poz) ama konumu doğru | O gözlükte gövde takibi arızalı — oyuncu görünmez kalmasın diye sistem onu bu şekilde çiziyor | **Önce birkaç saniye bekle:** gözlük takibi kendi kendine yeniden başlatmayı deniyor ve çoğu zaman kendiliğinden düzelir. Geçmezse İstatistik panelinde **GÖVDE YENİLE**, sonra §4.4'teki alan verisi temizliği + yeniden kalibre + **ÖLÇ**. Oyuncunun kendi ekranında belirti olmaz |
 | Bir oyuncunun **karakteri hiç görünmüyor** ama isim etiketi ve silahı doğru yerde duruyor | O gözlükten gövde bilgisi hiç gelmiyor. Sistem gövdeyi kafa ve el konumlarından çizmeye geçer, yani oyuncu görünür ve **vurulabilir** kalır — ama hareketleri sadeleşir (bacaklar oynamaz) | **Önce birkaç saniye bekle** (kendi kendine onarım). Geçmezse **GÖVDE YENİLE**. O da yetmezse §4.4'teki alan verisi temizliği; en son çare gözlüğü tamamen kapatıp açmak |
-| Kalibre etiketi turuncu **KAL ?** oldu | Gözlüğün zemin tahmini ile gerçek zemin arasında büyük fark var — o gözlüğün alan verisi bozulmuş | Maça devam edebilirsin (kalibrasyon geçerli). Seans arasında §4.4'teki temizliği yap |
+| Kalibre etiketi turuncu **KAL ?** oldu | Gözlüğün zemin tahmini ile gerçek zemin arasında büyük fark var (alan verisi bozulmuş) — ya da oyuncu kalibre ederken kumandanın ucunu yere değdirmemiş | Maça devam edebilirsin (kalibrasyon geçerli). Oyuncuya **kumandanın ucu iki noktada da zeminde olsun** deyip tekrar kalibre ettir; yine çıkıyorsa seans arasında §4.4'teki temizliği yap |
 | Oyuncular uygulamayı her açtığında yeniden kalibre olmak zorunda kalıyor | Kalibre modu **2 ÇAPA** (varsayılan) | Beklenen davranış. Tek katlı, sorunsuz bir kurulumda hızlandırmak istersen TERCİHLER > MAÇ > KALİBRASYON > **ESKİ KALİBRE** (§4.3) |
 | Kalibre modunu değiştirdin ama hiçbir şey değişmedi | Gözlükler ayarı yalnız **bağlanırken** okur | O gözlüklerde uygulamayı kapatıp yeniden aç; modu bundan sonra seans başında seç (§4.3) |
 | Oyun ortasında arena birden kaydı | Gözlüğün konum takibi sıfırlandı | Genelde kendiliğinden düzelir. Düzelmezse o oyuncuya kalibrasyonu tekrarlat |

@@ -16,11 +16,14 @@ namespace VortexArena.App
     /// </remarks>
     public class SceneTransitionFade : MonoBehaviour
     {
-        /// <summary>Fade to black before the load (s) — it blocks, so it stays short.</summary>
-        private const float FadeOutSeconds = 0.2f;
+        /// <summary>Fade to black before the load (s) — it blocks the load, so it stays short.</summary>
+        private const float FadeOutSeconds = 0.3f;
 
         /// <summary>Fade back in after activation (s).</summary>
-        private const float FadeInSeconds = 0.35f;
+        private const float FadeInSeconds = 0.5f;
+
+        /// <summary>Longest frame the fade in may consume (s) — see <see cref="Update"/>.</summary>
+        private const float MaxFadeStepSeconds = 1f / 30f;
 
         /// <summary>Quad under <c>CenterEyeAnchor</c>, installed by <c>HmdOverlayBuilder</c>.</summary>
         private const string QuadName = "SceneTransitionFade";
@@ -34,8 +37,15 @@ namespace VortexArena.App
         private float _alpha;
         private bool _fadingIn;
 
+        /// <summary>Activation frame is skipped once — see <see cref="Update"/>.</summary>
+        private bool _skipFrame;
+
         /// <summary>Warned once per session — a missing layer would otherwise spam every scene.</summary>
         private bool _warnedMissingQuad;
+
+        /// <summary>Errored once per session; separate from the warning so a lobby warning does not
+        /// swallow the arena error.</summary>
+        private bool _erroredMissingQuad;
 
         /// <summary>Installs the singleton. ⚠️ <b>Unconditional</b> — the "is it needed in this
         /// session" decision belongs to <see cref="AppSingletons"/> (rationale is there).</summary>
@@ -130,6 +140,7 @@ namespace VortexArena.App
             _alpha = 1f;
             Apply();
             _fadingIn = true;
+            _skipFrame = true;
         }
 
         /// <summary>⚠️ The head is <c>OVRCameraRig.centerEyeAnchor</c>, never <c>Camera.main</c> — all
@@ -145,18 +156,39 @@ namespace VortexArena.App
             Transform quad = rig.centerEyeAnchor.Find(QuadName);
             if (quad == null)
             {
-                if (!_warnedMissingQuad)
+                string sceneName = SceneManager.GetActiveScene().name;
+                string message = $"[SceneTransitionFade] '{sceneName}' sahnesinde rig altında " +
+                                 $"'{QuadName}' katmanı yok — sahne geçişi kararmadan yapılacak. " +
+                                 "'Tools > VortexArena > Arena > HMD Katmanlarını Kur' çalıştırılmalı.";
+
+                // Match scene: the arena is the one place where the pop is visible to a player.
+                if (IsMatchScene(sceneName))
+                {
+                    if (!_erroredMissingQuad)
+                    {
+                        _erroredMissingQuad = true;
+                        Debug.LogError(message);
+                    }
+                }
+                else if (!_warnedMissingQuad)
                 {
                     _warnedMissingQuad = true;
-                    Debug.LogWarning($"[SceneTransitionFade] Rig altında '{QuadName}' katmanı yok — " +
-                                     "sahne geçişi kararmadan yapılacak. " +
-                                     "'Tools > VortexArena > Arena > HMD Katmanlarını Kur' çalıştırılmalı.");
+                    Debug.LogWarning(message);
                 }
 
                 return null;
             }
 
             return quad.GetComponent<MeshRenderer>();
+        }
+
+        /// <summary>True when the scene is the server's match scene (<see cref="SceneRouter"/> holds
+        /// the only authority on scene kind; the lobby leaves it empty).</summary>
+        private static bool IsMatchScene(string sceneName)
+        {
+            SceneRouter router = SceneRouter.Instance;
+            return router != null && router.LastMatchScene.Length > 0 &&
+                   router.LastMatchScene == sceneName;
         }
 
         private void Update()
@@ -166,8 +198,17 @@ namespace VortexArena.App
                 return;
             }
 
-            // unscaledDeltaTime: a presentation layer must not depend on timeScale.
-            _alpha = Mathf.Max(0f, _alpha - Time.unscaledDeltaTime / FadeInSeconds);
+            if (_skipFrame)
+            {
+                // Activation frame: its delta covers the whole load, it would eat the fade at once.
+                _skipFrame = false;
+                return;
+            }
+
+            // unscaledDeltaTime: a presentation layer must not depend on timeScale. Clamped so a
+            // hitch frame cannot consume the fade in one step.
+            float step = Mathf.Min(Time.unscaledDeltaTime, MaxFadeStepSeconds) / FadeInSeconds;
+            _alpha = Mathf.Max(0f, _alpha - step);
             Apply();
 
             if (_alpha <= 0f)

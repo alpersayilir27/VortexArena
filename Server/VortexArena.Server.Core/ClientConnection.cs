@@ -171,6 +171,18 @@ public sealed class ClientConnection
                 if (msg != null) _lobby.HandleSetCalibration(this, msg);
                 return;
             }
+            case MessageTypes.SetFloor:
+            {
+                if (State == null) return;
+                if (State.Role != "player")
+                {
+                    Console.WriteLine($"[ClientConnection] set_floor yalnız player içindir ({State.Name}) — yok sayıldı.");
+                    return;
+                }
+                var msg = JsonUtil.Deserialize<SetFloorMsg>(json);
+                if (msg != null) _lobby.HandleSetFloor(this, msg);
+                return;
+            }
             case MessageTypes.SetBodyScale:
             {
                 if (State == null) return;

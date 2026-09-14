@@ -138,6 +138,7 @@ Kalıcı tekil, kendini önyükler (`Instance`). Sahneye koyma.
 | ✅ `HpChanged` / `AliveChanged` / `StatusChanged` | olay | `float` / `bool` / `string` |
 | ✅ `LocalTeamChanged` | **statik** olay | `Team` — yalnız değer değişince. Statik olmasının sebebi: dinleyicileri kendini önyükleyen kalıcı tekiller ve `Instance`'tan önce doğabiliyorlar |
 | ✅ `LocalAliveChanged` | **statik** olay | `bool` — `AliveChanged` ile aynı anda, aynı statik-olma gerekçesiyle (`LocalTeamChanged`) |
+| ✅ `TryGetOpenBaseFloor(out int floor)` | `bool` | Oyuncuya **açık** taban bölgelerinin en alçağının katı; hiçbiri açık değilse `false`. Ölümde gidilecek kat budur (`FloorState`) — en alçağı seçilir, çünkü kat 0 her arenada var olan tek seviyedir |
 
 > ⛔ Bu sınıf hasar uygulamaz, skor tutmaz, faz değiştirmez — ve **hiçbir koşulda rig'i taşımaz.**
 
@@ -343,6 +344,17 @@ durumdur: PlayerPrefs'te anchor UUID'si hiç yok, ya da geri yükleme tüm denem
 > Koşmadığı durumlar: kayıtlı anchor geri yüklendiyse, oyuncu jeste başladıysa, operatör
 > sıfırladıysa, rig kökü kapalıysa (admin gözlemci) ve işaretçiler yok/aynıysa.
 
+**Kat ofseti — rig'i taşımanın TEK meşru yolu:**
+
+| Üye | Tip | Açıklama |
+|---|---|---|
+| ✅ `ArenaCalibrator.FloorLiftMeters` | `static float` | Rig köküne uygulanmış dikey sanal ofset (m) |
+| ✅ `ArenaCalibrator.SetFloorLift(float meters)` | `static void` | Ofseti yazar ve farkı rig köküne uygular; her hizalama yolunun kuyruğunda yeniden uygulanır |
+
+> ⛔ **Bunu doğrudan çağırma** — katın sahibi `FloorState`'tir (`Request` / `MoveWithFade`), yoksa
+> rig'in ofseti ile oyuncunun bildirdiği kat ayrışır. Başka hiçbir kod rig kökünü oynatmaz ve
+> **yatayda hiçbir kod oynatamaz** (`Docs/Sistem-Ozeti.md` §3.13).
+
 ### ArenaObstacle
 
 Elle konan engel (kolon, kasa, direk): `ArenaBoundary` onu muhafaza hesabına katar, oyuncu
@@ -377,6 +389,60 @@ oyuncunun takımı boşsa (takımsız mod). Aynı takımdan birden çok bölge k
 > ⛔ **Şeridi silme, Renderer'sız bırakma.** Ölçü alınamayan bölge bir kez hata basıp kendini
 > kapatır (açık başarısızlık); `PlayerCombatState` bunu "açık taban yok" diye okur ve fail-open'ı
 > devreye girer — belirti "taban çalışmıyor" değil, herkesin her yerde canlanmasıdır.
+
+| Üye | Açıklama |
+|---|---|
+| ✅ `BaseZone.Floor` | Bölgenin katı — Y'sinden türer, kat listesinin sürümüne göre önbelleklidir. İçeride sayılmak için `FloorState.Local == Floor` olmalıdır (`Docs/Sistem-Ozeti.md` §3.13) |
+
+### ArenaFloors — statik
+
+Arenanın kat seviyelerinin tek kaynağı. Kat 0 = dünya y 0; üstü sahnedeki `FloorPortal`'lardan
+türer. ⛔ **Elle seviye listesi yok** — sayı yazacak bir alan aranmaz.
+
+| Üye | Tip | Açıklama |
+|---|---|---|
+| ✅ `Count` | `int` | Kat sayısı; portal yoksa `1` |
+| ✅ `Version` | `int` | Her yeniden kurulumda artar — türettiğin katı buna karşı önbelleğe al |
+| ✅ `HeightOf(int floor)` | `float` | Katın dünya yüksekliği (m); indeks aralığa kırpılır |
+| ✅ `FloorAt(float worldY)` | `int` | Bu yükseklikteki bir objenin katı (her seviyenin altındaysa `0`) |
+| ✅ `LevelToleranceMeters` | `const float` | `0.25` — bir objenin Y'si bir kat zeminine bu kadar yakınsa o katta sayılır |
+| ⛔ `MarkDirty()` | | Portal ve sahne yükleme çağırır; listeyi elle bayatlatma |
+
+> Kat sayısı 1'den büyükse konsola `[ArenaFloors] n kat: 0.00 m / 3.00 m` düşer — kurulumun denetim
+> yolu bu satırdır.
+
+### FloorState — statik
+
+Yerel oyuncunun katı + roster aynası. Kendini önyükleyen kalıcı tekil; **sahneye koyma.**
+
+| Üye | Tip | Açıklama |
+|---|---|---|
+| ✅ `Local` | `int` | Yerel oyuncunun katı (set dışarıya kapalı) |
+| ✅ `LiftMeters` | `float` | O katın zemin yüksekliği = rig kökünün dikey ofseti |
+| ✅ `Changed` | olay | Yerel kat değişti |
+| ✅ `PlayerFloor(int playerId)` | `int` | Herhangi bir oyuncunun roster katı (kendisi dahil); bilinmiyorsa `0` |
+| ✅ `Request(int floor, string reason)` | `bool` | Katı hemen uygular + `set_floor` yollar; `false` = aralık dışı. `reason` yalnız logda çağrı yerini adlandırır |
+| ✅ `MoveWithFade(int floor, string reason, float fadeOut, float hold, float fadeIn)` | `void` | Aynı iş karartmanın arkasında. ⚠️ Süren bir geçiş varken ikinci çağrı **yok sayılır** |
+
+> ⚠️ **Onay beklenir:** `FLOOR_CONFIRM_SECONDS` içinde kendi roster satırında yankı gelmezse yerel
+> kat geri alınır. Sunucu yalnız defter tutar — `Docs/ArenaNet-Protokol.md` §10.6 "Kat modeli".
+
+### FloorPortal
+
+İki kat arasındaki geçiş noktası (prefabı `VA_FloorPortal`). Kural tümüyle istemci tarafındadır:
+kafa kendi katındaki çemberin içinde 2 sn kalınca diğer kata geçilir, aynı anda tek oyuncu geçer.
+
+| Üye | Tip | Açıklama |
+|---|---|---|
+| ✅ `UpperHeight` | `float` | Inspector'daki `upperHeight` — **üst katın yüksekliğini TANIMLAYAN ölçü** (min 0,5) |
+| ✅ `LowerFloor` / `UpperFloor` | `int` | Kökün oturduğu kat ve onun bir üstü |
+| ✅ `LowerDisc` / `UpperDisc` | `Transform` | Alt/üst çember kökleri (`Üst` konumunu `OnValidate` yazar) |
+
+> ⛔ **Çemberlere collider koyma** — kapı kafanın XZ mesafesiyle çalışır; collider maskesiz atış
+> ışınını yer.
+
+> ⚠️ Kökü hiçbir kat zeminine oturmayan portal uyarı basıp **kendini kapatır** ve kat listesine
+> girmez.
 
 ---
 
@@ -602,6 +668,8 @@ tabanda **değildir** (aşağıdaki nota bak).
 | `POSE_RATE_HZ` / `SNAPSHOT_RATE_HZ` | `20` | Poz gönderim/yayın hızı |
 | `INTERP_DELAY_MS` | `100` | Uzak poz interpolasyon gecikmesi |
 | `PLAYER_ID_MAX` | `255` | `playerId` UDP'de `u8` |
+| `MAX_FLOOR_INDEX` | `7` | En yüksek geçerli kat indeksi — sunucunun `set_floor` aralık kapısı; arenanın gerçek kat sayısını **`ArenaFloors.Count`** verir |
+| `FLOOR_CONFIRM_SECONDS` | `1` | `set_floor`'un roster'da yankılanması için beklenen süre; dolarsa istemci yerel katı geri alır |
 | `LOADING_TIMEOUT` | `20` | Sahne yükleme kapısı |
 | `OBJECT_POSE_RATE_HZ` | `20` | Sahibin obje pozu gönderim hızı (oyuncu pozuyla aynı; interpolasyon gecikmesine iki örnek payı) |
 | `OBJECT_REST_SPEED` / `OBJECT_REST_SECONDS` | `0.05` m/s / `0.3` | Objenin "durdu" eşiği ve altında kesintisiz kalması gereken süre — ⚠️ tek karelik durma yeterli değildir (sekmenin tepesinde hız sıfırlanır) |
@@ -618,7 +686,8 @@ tabanda **değildir** (aşağıdaki nota bak).
 |---|---|
 | `Tools > VortexArena > Development > Dev` | Rol (player · admin) · sunucu hedefi · Play başlangıcı · sunucusuz sandbox. Kısayol **Ctrl+Alt+R** (iki rolü çevirir) |
 | `Tools > VortexArena > Items > Kavrama Pozu Stüdyosu` | **Elde tutulan her eşyanın** (silah, bomba, ileride mutfak eşyası) elde nasıl duracağını **gözlüksüz** yazar (`GripPoseStudio`). Hedef bir **eşya tanımıdır**; prefabı prefab kipinde aç → *Ana/Ön Kabza Ellerini Oluştur* → kumanda çerçevelerini kabzalara oturt → el modelini o kumandanın üstüne yerleştir (taşı **ve çevir** — eşya kımıldamaz) → parmakları o eşyaya göre rigle (penceredeki eklem listesinden seç, Scene View'da çevir) → **Kaydet**. Tanım iki yoldan çözülür: prefabın üstünde tanımı taşıyan bileşen (`IItemHolder` — `Weapon`), yoksa `prefab` alanı bu prefabı gösteren `ItemDefinition` (**ters arama** — bombanın yolu budur, `Throwable` tanımını çalışma zamanında alır). ⚠️ Aynı prefabı gösteren iki tanım varsa stüdyo **yazmaz**, tanımı elle seçmeni ister. Kayıt tanım asset'ine gider (kumanda anchor'ının eşyaya göre KONUMU + el modelinin kumandaya göre POZU + riglenmiş parmak eklemleri); prefaba hiçbir şey yazılmaz, eller stage'in ayrı kökleridir. *Kopya Al* elin GÖRSELİNİ (yerleşim + parmak rigi) başka bir eşyadan aynen alır — listede yalnız aynı kavrama noktasının aynı eli yazılmış eşyalar çıkar, eşyanın kumandaya göre yeri kopyalanmaz. Kaydet ayrıca **eşitleme koşturur** (`Configure All Build Elements`'a gitmeye gerek yok): silahsa silah kiti, değilse yalnız eşya kataloğu; kit açık prefabı yeniden yazdığı için tezgâhtaki eller kalkabilir, *Elleri Oluştur* onları kayıttan aynı yere getirir. ⚠️ Kumanda kökü yalnız TAŞINIR — anchor kaydı dönüş taşımaz, silahın dönüşü ana kumandadan gelir (çevrilen kök geri hizalanır); dönüş yazılabilen tek şey **el modelidir** ve o silahı çevirmez |
-| `Tools > VortexArena > Arena > Template Temellerini Yükle` | Aktif sahneye altyapı prefab ÖRNEKLERİ + `ArenaCalibrator` ve `ArenaBoundary`'nin rig alanlarını bağlama + boyut dosyası bağlama; idempotent (`TemplateBasicsLoader`). ⚠️ Kalibrasyon işaretçisi koymaz — onlar maketle gelir |
+| `Tools > VortexArena > Arena > Template Temellerini Yükle` | Aktif sahneye altyapı prefab ÖRNEKLERİ + `ArenaCalibrator` ve `ArenaBoundary`'nin rig alanlarını bağlama + boyut dosyası bağlama; idempotent (`TemplateBasicsLoader`). ⚠️ Kalibrasyon işaretçisi koymaz — onlar maketle gelir. **Kat sayısı** (1–4) 1'den büyükken her ek kat için bir `VA_FloorPortal` örneği koyar (yerini ve `upperHeight`'ını tasarımcı ayarlar); sahnede zaten portal varsa hiç dokunmaz |
+| `Tools > VortexArena > Arena > Kat Portalı Kitini Üret` | Kat geçişinin malzemelerini (`M_FloorPortal` · `M_FloorPortalFill`, URP Unlit saydam) ve `VA_FloorPortal.prefab`'ını üretir/günceller (`FloorPortalKitBuilder`); yeniden çalıştırılabilir, sahnedeki örnekler bağını korur |
 | `Tools > VortexArena > Arena > JSON'dan DimensionMesh Üret` | Boyut dosyasından ölçü maketi (`Plane` + `Columns/*` + kalibrasyon işaretçileri `anchor_a`/`anchor_b`), **`ArenaBoundary`'nin altına yerel-kimlikte** (muhafaza yoksa sahne köküne, dönüşsüz); idempotent (`DimensionMeshBuilder`). ⚠️ Her arenada zorunlu: sahnenin kalibrasyon işaretçilerinin tek kaynağı budur |
 | `Tools > VortexArena > Arena > DimensionMesh'i JSON'a Çevir` | Maketi (köşeler + kalibrasyon işaretçileri) okuyup kaynak boyut dosyasının üstüne yazar; doğrulanamayan çıktıda dosyaya dokunmaz, işaretçi yoksa `calibration` korunur (`DimensionMeshReader`) |
 | `Tools > VortexArena > Build > Configure All Build Elements` | **Hepsini Çalıştır** (tek düğme): aktif sahne bir arena kutusuysa önce onun `MapDefinition`'ını yazar, sonra her durumda `GameCatalog` + dolu `ModeDefinition.maps` + `ModeDefinition.loadout` (rastgele silah havuzu) + Build Settings + silah kiti + net eşya kataloğu + `maps.json`'ı `Venues/*/Scenes/*/` ağacına göre eşitler (fazla/ölü kayıt silinir, eksik olan uyarı olur), HMD katmanlarını yalnız bayatsa kurar, sonda sağlık raporu basar. Sahne açık olmadan da çalışır (`BuildElementsConfigurator`). *Ağ nesneleri* satırının **Onar** düğmesi tüm arena sahnelerini açıp `sceneId` onarır ve obje listelerini tazeler — Hepsini Çalıştır'a dahil DEĞİL, merge/kopya sonrası elle basılır (`SceneIdBatchRepair`) |

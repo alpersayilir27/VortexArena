@@ -150,8 +150,9 @@ namespace VortexArena.Core.Arena
             // (a non-empty error makes the server ignore the alignment, §10.6) — same trap as in
             // BodyScaleState.Report.
             _reportMsg.error = "";
-            // Floor offset only means something when MEASURED (§10.6); resending the last one would
-            // show the operator a stale warning.
+            // The LAST measured offset is resent on every report, reconnect included (§10.6) — this is
+            // intended: it is re-measured on every alignment (manual, anchor restore, realign after a
+            // tracking disturbance), so it always describes the alignment currently in force.
             _reportMsg.floorOffset = calibrated ? ArenaCalibrator.LastFloorOffsetMeters : 0f;
             client.Send(_reportMsg);
         }

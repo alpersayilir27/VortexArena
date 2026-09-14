@@ -171,6 +171,9 @@ public sealed class PlayerRegistry : IDisposable
             // Diagnostic fields belong to that alignment and go with it: the offset described that
             // alignment and the error that session — carrying them over shows a solved problem.
             state.FloorOffset = 0f;
+            // §10.6 "Kat modeli": the server cannot know which floor a reconnecting headset stands on (the
+            // app may have restarted). The client re-reports its local floor from its own roster row.
+            state.Floor = 0;
             state.ScaleError = "";
             state.CalibrationError = "";
             // §10.8: body scale depends on the alignment, so it counts as unknown too. The headset
@@ -436,6 +439,27 @@ public sealed class PlayerRegistry : IDisposable
             if (!scaleChanged && !errorCleared) return false;
             state.BodyScale = clamped;
             state.ScaleError = "";
+        }
+        Changed?.Invoke(state, PlayerChangeKind.Updated);
+        return true;
+    }
+
+    /// <summary>Writes the floor the CLIENT reported (§10.6 "Kat modeli"). Changed → lobby_state
+    /// broadcast; there is no separate message, the floor travels with the roster (§5.3).
+    /// <para>A LEDGER, not authority: the range is checked by the caller (LobbyService), the server has no
+    /// geometry to validate against (§10.3).</para>
+    /// <para>No broadcast if unchanged — same reason as <see cref="SetCalibration"/>: on a map change every
+    /// client re-reports its floor, which without the guard is N players × N receivers.</para>
+    /// <para>Admins do not walk floors: <c>role != "player"</c> is rejected silently.</para></summary>
+    public bool SetFloor(int playerId, int floor)
+    {
+        if (!TryGetByPlayerId(playerId, out var state)) return false;
+        if (state.Role != "player") return false;
+
+        lock (_gate)
+        {
+            if (state.Floor == floor) return false;
+            state.Floor = floor;
         }
         Changed?.Invoke(state, PlayerChangeKind.Updated);
         return true;

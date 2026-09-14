@@ -144,6 +144,18 @@ namespace VortexArena.Protocol
         public string error = "";
     }
 
+    /// The player reporting its OWN floor in a multi-floor arena (§10.6 "Kat modeli"). Players only;
+    /// <c>playerId</c> comes from the connection. The CLIENT decides (portal, death); the server only
+    /// range-checks against <see cref="ArenaProtocol.MAX_FLOOR_INDEX"/> and mirrors it in the roster.
+    [Serializable]
+    public class SetFloorMsg
+    {
+        public string type = MessageTypes.SetFloor;
+
+        /// <summary>Floor index; <c>0</c> = ground. Out of range = logged and IGNORED, no reply.</summary>
+        public int floor;
+    }
+
     /// The headset reporting its OWN body scale (§10.8). Players only; <c>playerId</c> comes from the
     /// connection. The CLIENT measures; the server only clamps and broadcasts.
     [Serializable]
@@ -479,6 +491,13 @@ namespace VortexArena.Protocol
         /// or clean. Rows past <see cref="ArenaProtocol.CALIB_FLOOR_WARN_METERS"/> are flagged in the UI;
         /// <c>clear_calibration</c> resets it.</summary>
         public float floorOffset;
+
+        /// <summary>Floor index in a multi-floor arena (§5.1 <c>set_floor</c>, §10.6 "Kat modeli");
+        /// <c>0</c> = ground, always 0 for admins. Written by the client, only mirrored by the server, so
+        /// this row is the source of truth for BOTH sides: the owner confirms its own floor from it, the
+        /// others decide whether to draw a projected ghost. Reset to 0 on hello / load_match / lobby
+        /// return.</summary>
+        public int floor;
 
         /// <summary>Why the last body measurement failed; empty = fine (§10.8). ⚠️ A successful measurement
         /// CLEARS it, or one failure would leave a permanent warning on the row.</summary>

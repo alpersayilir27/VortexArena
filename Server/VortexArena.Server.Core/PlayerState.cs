@@ -132,6 +132,14 @@ public sealed class PlayerState
     /// offset belonged to that alignment.</remarks>
     public float FloorOffset { get; set; }
 
+    /// <summary>Floor index the CLIENT reported in a multi-floor arena (§10.6 "Kat modeli"); 0 = ground.
+    /// </summary>
+    /// <remarks>A ledger like <see cref="Calibrated"/>: the server has no geometry and validates nothing
+    /// beyond the range. ⚠️ Unlike the calibration fields it does NOT survive a match boundary — it is
+    /// reset on hello, on match setup and on the lobby return, since the new scene's floor layout can be
+    /// different (a stale floor would leave the player walking on nothing).</remarks>
+    public int Floor { get; set; }
+
     /// <summary>Failure reason of the last body measurement, empty = fine (§10.8).</summary>
     /// <remarks>A successful measurement clears it; otherwise one failure would leave a warning on the
     /// player's row forever.</remarks>
@@ -326,6 +334,8 @@ public sealed class PlayerState
         calibrationSource = CalibrationSource,
         // §10.6 — floor estimate deviation; the UI marks rows past the threshold with ⚠.
         floorOffset = FloorOffset,
+        // §10.6 "Kat modeli" — the client's own floor report; readers draw cross-floor players as ghosts.
+        floor = Floor,
         // §10.8 — 0 = not measured; the reader applies 1.
         bodyScale = BodyScale,
         scaleError = ScaleError,

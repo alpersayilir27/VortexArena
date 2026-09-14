@@ -303,6 +303,27 @@ public sealed class LobbyService
             $"⚠ {state.Name}: zemin sapması {msg.floorOffset:F2} m — gözlükte alan verisi temizliği önerilir");
     }
 
+    /// <summary>set_floor: the player reports its OWN floor (§5.1, §10.6 "Kat modeli"). Like
+    /// <c>set_calibration</c> it can only write its own record — no playerId on the wire.
+    /// <para>The server is a LEDGER here: the only check is the range, there is no geometry to validate
+    /// against (§10.3). An out-of-range value is logged and IGNORED, with no reply — the client learns the
+    /// outcome from its own roster row (<c>FLOOR_CONFIRM_SECONDS</c>).</para>
+    /// <para>No broadcast when the floor did not change (guard lives in <see cref="PlayerRegistry.SetFloor"/>).
+    /// </para></summary>
+    public void HandleSetFloor(ClientConnection connection, SetFloorMsg msg)
+    {
+        var state = connection.State;
+        if (state == null) return;
+
+        if (msg.floor < 0 || msg.floor > ArenaProtocol.MAX_FLOOR_INDEX)
+        {
+            Console.WriteLine($"[Lobby] set_floor reddedildi ({state.Name}): kat {msg.floor} aralık dışı.");
+            return;
+        }
+
+        _registry.SetFloor(state.PlayerId, msg.floor);
+    }
+
     /// <summary>
     /// clear_calibration: an admin resets a player's calibration (playerId 0 = EVERYONE) (§5.2).
     /// The admin can only RESET — the "calibrated" mark is set by the headset alone (§10.6), because
