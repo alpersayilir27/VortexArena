@@ -40,6 +40,14 @@ Oyuncu HUD'ları ayrı yerdedir (mod kutularında):
 | `Assets/Modes/TeamDeathmatch/UI/TdmHud.prefab` | TDM oyuncu HUD'ı |
 | `Assets/Modes/FreeForAll/UI/FfaHud.prefab` | FFA oyuncu HUD'ı |
 | `Assets/Modes/Tournament/UI/TournamentHud.prefab` | Turnuva oyuncu HUD'ı |
+| `Assets/Modes/Mole/UI/MoleHud.prefab` | Köstebek oyuncu HUD'ı — aşağıdaki istisna |
+
+⚠️ **`MoleHud` şeridi başka dizer:** bu modda can yoktur, bu yüzden iç içe `HealthHud` örneğinde
+`Backdrop` **kapatılmıştır** (silinmez) ve `RoundScore` örnekte x 0 · y 0'a alınmıştır — saat üstte,
+skor paneli hemen altında. Panelin `Panel`'ine örnekte iki çocuk eklenir: `RedHits` (x −330, sağa
+yaslı) ve `BlueHits` (x +330, sola yaslı); 260×72, 44 punto kalın, `HealthBar.mat`. Renk metnin
+kendisinde (rich text: `D` yeşil, `Y` kırmızı) — metin rengi beyaz kalır. `MoleHud` kökünün ölçeği
+de diğer HUD'lar gibi **0,0005**'tir; şerit bu ölçeği bekler. `DeathHud` bu HUD'da yoktur.
 
 Üçünün de içi **bilerek boştur**: taşıdıkları tek şey nested prefab örnekleridir — `HealthHud`
 (kafaya kilitli şerit: can barı + maç saati + durum satırı + tur/skor paneli + tur sonucu) ve
@@ -50,8 +58,8 @@ prefablardır, alan `ModeHudBase`'de zaten hazır.
 
 ⚠️ **Şeritteki tur/skor ögeleri `ModeHudBase`'in alanı DEĞİLDİR** — taban takım-agnostiktir (bkz.
 `ScoreLine`), bu yüzden `TeamScorePanel` ve `RoundResultBanner` referansları **takımlı alt
-sınıfların** alanlarıdır: `TdmHud` yalnız skor panelini bağlar, `TournamentHud` ikisini de, `FfaHud`
-hiçbirini. Prefab örneği üçünde de duruyor; FFA'da panel kendini `ModeRuntime.IsTeamless` ile kapatır.
+sınıfların** alanlarıdır: `TdmHud` ve `MoleHud` yalnız skor panelini bağlar, `TournamentHud` ikisini
+de, `FfaHud` hiçbirini. Prefab örneği üçünde de duruyor; FFA'da panel kendini `ModeRuntime.IsTeamless` ile kapatır.
 
 ⚠️ **Saat `timeText` + `timeFrame` olarak İKİ alan bağlanır** (üç HUD'da da): metin
 `HealthHud/Clock/Panel/Time`, kök `HealthHud/Clock`. Kökün de bağlanması şart, çünkü saatin arkasında

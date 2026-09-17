@@ -26,13 +26,13 @@ public sealed class MoleMode : IGameMode
     /// <summary>How long a mole stays up and hittable. ⚠️ The client's rise animation plays INSIDE this
     /// window (§10.5): an animation longer than the window would still show a mole the server has
     /// already taken down.</summary>
-    private const float MoleUpSeconds = 2f;
+    private const float MoleUpSeconds = 3.5f;
 
     /// <summary>Gap between pop ATTEMPTS; an attempt is skipped while the cap is full.</summary>
     private const float PopIntervalSeconds = 1.5f;
 
     /// <summary>How long the squashed mole stays visible before the hole empties.</summary>
-    private const float SquashedSeconds = 0.6f;
+    private const float SquashedSeconds = 0.9f;
 
     /// <summary>Moles standing at once: one per player, within these bounds. Tied to the roster because
     /// the field feels empty for a crowd and unfair for one child at the same fixed number.</summary>
