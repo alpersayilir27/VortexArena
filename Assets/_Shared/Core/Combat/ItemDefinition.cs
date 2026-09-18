@@ -111,6 +111,8 @@ namespace VortexArena.Core.Combat
         // read PER FRAME (HandGripPoser / RemoteHandPoser). NOT serialized: derived data — a second
         // copy in the asset would draw the old pose in game once the rig changed and the cache was
         // forgotten. Editor write gates drop the cache (InvalidateGripCache).
+        private static readonly int TeamTintColorId = Shader.PropertyToID("_BaseColor");
+
         [NonSerialized] private Quaternion[][] _gripJointCache;
         [NonSerialized] private HandPoseProfile[] _gripCurlCache;
         [NonSerialized] private bool[] _gripCurlResolved;
@@ -143,6 +145,13 @@ namespace VortexArena.Core.Combat
         //     cost is GC/draw calls, not BYTES — the wire already carries 9 B per event.
         [Tooltip("Kaçta bir mermiye tracer çizilir. 1 = her mermi, 0/negatif = tracer kapalı.")]
         [SerializeField] private int tracerEveryNthRound = 3;
+
+        // ⚠️ Opt-in per item: a live player's team colour is otherwise never drawn (marking enemies is an
+        // advantage). Names, not references — the remote copy is stripped of every MonoBehaviour.
+        [Header("Takım rengi (yerel + uzak sunum)")]
+        [Tooltip("Görselleri TUTANIN takım rengini alacak çocuk objelerin ADLARI (ör. vuruş yüzü " +
+                 "göstergesi). Boşsa eşya boyanmaz. Uzak elde de çizilir — rakip bu rengi görür.")]
+        [SerializeField] private string[] teamTintChildren = Array.Empty<string>();
 
         /// <summary>Name shown in the UI.</summary>
         public string DisplayName => displayName;
@@ -477,5 +486,32 @@ namespace VortexArena.Core.Combat
         /// eats the draw/GC budget under heavy fire (the real cost is draw calls, not bytes).</para>
         /// </summary>
         public int TracerEveryNthRound => tracerEveryNthRound;
+
+        /// <summary>Child object names whose renderers take the holder's team colour; empty = none.</summary>
+        public string[] TeamTintChildren => teamTintChildren;
+
+        /// <summary>Writes <paramref name="color"/> to <c>_BaseColor</c> of every renderer under the
+        /// <see cref="TeamTintChildren"/> of <paramref name="instance"/>. Property block, so no material
+        /// instance leaks per rebuild.</summary>
+        public void ApplyTeamTint(Transform instance, Color color, MaterialPropertyBlock block)
+        {
+            if (instance == null || teamTintChildren == null || teamTintChildren.Length == 0)
+            {
+                return;
+            }
+
+            var renderers = instance.GetComponentsInChildren<Renderer>(true);
+            for (int i = 0; i < renderers.Length; i++)
+            {
+                if (Array.IndexOf(teamTintChildren, renderers[i].gameObject.name) < 0)
+                {
+                    continue;
+                }
+
+                renderers[i].GetPropertyBlock(block);
+                block.SetColor(TeamTintColorId, color);
+                renderers[i].SetPropertyBlock(block);
+            }
+        }
     }
 }

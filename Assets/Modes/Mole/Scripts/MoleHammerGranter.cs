@@ -4,8 +4,8 @@ using VortexArena.Core.Combat;
 
 namespace VortexArena.Modes.Mole
 {
-    /// <summary>Puts a hammer in BOTH of the local player's hands and keeps it there, tinted in the
-    /// player's team colour.
+    /// <summary>Puts a hammer in BOTH of the local player's hands and keeps it there, its hit-face
+    /// indicators tinted in the player's team colour.
     /// <para>⚠️ The hammer is an ITEM, not a weapon: this mode is <c>weaponSource:"none"</c> (§10.5), so
     /// nothing else grants, holsters or fires. Handing it out through <c>WeaponDefinition</c> instead
     /// would open the damage path this whole family is built without.</para>
@@ -41,6 +41,8 @@ namespace VortexArena.Modes.Mole
         private Team _paintedTeam = Team.Neutral;
 
         private bool _painted;
+
+        private MaterialPropertyBlock _tintBlock;
 
         private void Awake()
         {
@@ -150,18 +152,12 @@ namespace VortexArena.Modes.Mole
             Paint(_right, color);
         }
 
-        private static void Paint(Transform hammer, Color color)
+        /// <summary>Only the definition's <c>teamTintChildren</c> — the same list remote avatars paint, so
+        /// both ends show the same parts.</summary>
+        private void Paint(Transform hammer, Color color)
         {
-            if (hammer == null)
-            {
-                return;
-            }
-
-            var renderers = hammer.GetComponentsInChildren<Renderer>(true);
-            for (int i = 0; i < renderers.Length; i++)
-            {
-                renderers[i].material.color = color;
-            }
+            _tintBlock ??= new MaterialPropertyBlock();
+            hammerDefinition.ApplyTeamTint(hammer, color, _tintBlock);
         }
     }
 }

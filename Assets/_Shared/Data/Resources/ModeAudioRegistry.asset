@@ -15,6 +15,7 @@ MonoBehaviour:
   rules:
   - modeId: 
     sceneName: 
+    gameType: 0
     trigger: 0
     clips:
     - {fileID: 8300000, guid: 39676e7217468394c9ac712044057eff, type: 3}
@@ -24,6 +25,7 @@ MonoBehaviour:
     warningSeconds: 5
   - modeId: tournament
     sceneName: 
+    gameType: 0
     trigger: 1
     clips:
     - {fileID: 8300000, guid: d5d3648d32213874b984af2af1a46844, type: 3}
@@ -31,6 +33,7 @@ MonoBehaviour:
     warningSeconds: 5
   - modeId: 
     sceneName: 
+    gameType: 0
     trigger: 2
     clips:
     - {fileID: 8300000, guid: d5d3648d32213874b984af2af1a46844, type: 3}
@@ -38,8 +41,17 @@ MonoBehaviour:
     warningSeconds: 5
   - modeId: tournament
     sceneName: 
+    gameType: 0
     trigger: 3
     clips:
     - {fileID: 8300000, guid: d8c8a724d04b03247bba90f03f513260, type: 3}
     volume: 1
     warningSeconds: 0
+  - modeId: mole
+    sceneName: 
+    gameType: 0
+    trigger: 0
+    clips:
+    - {fileID: 8300000, guid: 42e5e234f46f5a54ca04ec728c82f4b6, type: 3}
+    volume: 1
+    warningSeconds: 5

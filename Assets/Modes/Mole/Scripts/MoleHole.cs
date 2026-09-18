@@ -24,6 +24,11 @@ namespace VortexArena.Modes.Mole
     /// <para>Sound lives on THIS object, not on the model: an <c>AudioSource</c> on the hole root is
     /// found automatically, so swapping the model keeps the sounds. The hole is also the right place
     /// for them — it never moves, while the mole travels through the floor.</para>
+    /// <para><b>Clip-driven mole:</b> when an <see cref="Animator"/> is present under the hole, the
+    /// rise/idle/descend clips own the movement and this component only forwards the stage into the
+    /// <c>stage</c> int parameter — the pivot then never moves and the mole is never switched off, so
+    /// the model must bring its OWN hole to hide in. ⚠️ Both drivers at once put two writers on one
+    /// transform; that is why the lerp bails out completely instead of blending.</para>
     /// <para>⚠️ <b><c>Model</c>'s own transform must stay at zero</b> (position, rotation, scale 1): it is
     /// the swap point, not a placement. An offset there moves the mole away from its hole in EVERY
     /// arena at once, and the mole is below the floor while hidden — so the mistake shows up as holes
@@ -37,17 +42,27 @@ namespace VortexArena.Modes.Mole
                  "çocuğundadır). Boşsa 'Mole' adlı çocuk aranır.")]
         [SerializeField] private Transform mole;
 
-        [Tooltip("Takım rengini ALACAK görseller — gövde, kafa, pençeler. Göz ve burun gibi sabit " +
-                 "renkli parçalar buraya KONMAZ. Boşsa köstebeğin altındaki tüm görseller boyanır.")]
+        [Tooltip("Takım rengini ALACAK parçayı taşıyan görseller. Boşsa köstebeğin altındaki tüm " +
+                 "görseller aranır.")]
         [SerializeField] private Renderer[] teamRenderers;
 
-        [Tooltip("Köstebeğin delikten yükseldiği mesafe (m).")]
+        [Tooltip("Yalnız bu materyali kullanan SLOTLAR boyanır (ör. kask). Tek mesh'li modelde renkli " +
+                 "parça ayrı alt-mesh + ayrı materyal olmalıdır. Boşsa görselin tüm slotları boyanır.")]
+        [SerializeField] private Material teamMaterial;
+
+        [Tooltip("Köstebeğin animatörü. ATANDIĞINDA yükseliş/iniş hareketini KLİP sürer ve bu " +
+                 "bileşen yalnız aşamayı animatöre bildirir; aşağıdaki hareket ayarları o durumda " +
+                 "OKUNMAZ. Boşsa alt ağaçta aranır.")]
+        [SerializeField] private Animator animator;
+
+        [Tooltip("Köstebeğin delikten yükseldiği mesafe (m). Animatör varsa kullanılmaz.")]
         [SerializeField] private float riseHeight = 0.4f;
 
-        [Tooltip("Yükselme/inme süresi (sn). ⚠️ Sunucunun havada kalma penceresinden KISA olmalı.")]
+        [Tooltip("Yükselme/inme süresi (sn). ⚠️ Sunucunun havada kalma penceresinden KISA olmalı. " +
+                 "Animatör varsa kullanılmaz.")]
         [SerializeField] private float riseSeconds = 0.25f;
 
-        [Tooltip("Ezilince köstebeğin indiği dikey ölçek oranı.")]
+        [Tooltip("Ezilince köstebeğin indiği dikey ölçek oranı. Animatör varsa kullanılmaz.")]
         [SerializeField] private float squashScale = 0.3f;
 
         [SerializeField] private Color redColor = new Color(0.86f, 0.22f, 0.20f);
@@ -56,6 +71,22 @@ namespace VortexArena.Modes.Mole
         [Tooltip("YANLIŞ rengi ezince köstebeğin aldığı renk. Çocuk 'yanlışa vurdum'u puandan " +
                  "değil buradan anlar — takım renklerinden ikisine de benzemeyen bir ton seç.")]
         [SerializeField] private Color wrongColor = new Color(0.22f, 0.20f, 0.18f);
+
+        [Tooltip("Materyal rengine yazılan takım rengi payı (0 = materyalin kendi rengi, 1 = tam " +
+                 "takım rengi). Dokusuz düz renkli parçada 1 kalır.")]
+        [Range(0f, 1f)]
+        [SerializeField] private float baseTint = 1f;
+
+        [Tooltip("Takım renginin ışıma gücü — gölgede de rengin okunması için. ⚠️ Materyalde " +
+                 "Emission AÇIK olmalı, yoksa etkisizdir.")]
+        [SerializeField] private float glow = 0.15f;
+
+        [Header("Efekt")]
+        [Tooltip("DOĞRU rengi ezince oynayan partikül (deliğin çocuğu, Play On Awake kapalı).")]
+        [SerializeField] private ParticleSystem correctFx;
+
+        [Tooltip("YANLIŞ rengi ezince oynayan partikül (deliğin çocuğu, Play On Awake kapalı).")]
+        [SerializeField] private ParticleSystem wrongFx;
 
         [Header("Ses")]
         [Tooltip("Köstebeğin sesleri buradan çalar. Boşsa bu objedeki AudioSource aranır; o da " +
@@ -75,6 +106,14 @@ namespace VortexArena.Modes.Mole
         [SerializeField] private AudioClip descendClip;
 
         private NetObject _net;
+
+        /// <summary>Animator contract: the stage goes in as an int, the clips do the moving.</summary>
+        private static readonly int StageParam = Animator.StringToHash("stage");
+        private static readonly int HiddenState = Animator.StringToHash("Hidden");
+        private static readonly int IdleState = Animator.StringToHash("Idle");
+
+        private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
+        private static readonly int EmissionColorId = Shader.PropertyToID("_EmissionColor");
 
         /// <summary>Material INSTANCES of the team-coloured renderers. Instances on purpose: writing the
         /// shared asset would repaint every hole in the scene at once.</summary>
@@ -127,6 +166,11 @@ namespace VortexArena.Modes.Mole
                 teamRenderers = mole.GetComponentsInChildren<Renderer>(true);
             }
 
+            if (animator == null)
+            {
+                animator = GetComponentInChildren<Animator>(true);
+            }
+
             if (audioSource == null)
             {
                 audioSource = GetComponent<AudioSource>();
@@ -135,14 +179,28 @@ namespace VortexArena.Modes.Mole
             _restLocalPosition = mole.localPosition;
             _restLocalScale = mole.localScale;
 
-            _teamMaterials = new Material[teamRenderers.Length];
+            var tinted = new System.Collections.Generic.List<Material>();
             for (int i = 0; i < teamRenderers.Length; i++)
             {
-                if (teamRenderers[i] != null)
+                Renderer target = teamRenderers[i];
+                if (target == null)
                 {
-                    _teamMaterials[i] = teamRenderers[i].material;
+                    continue;
+                }
+
+                // Slot match on the SHARED material, before instancing replaces the references.
+                Material[] shared = target.sharedMaterials;
+                Material[] instances = target.materials;
+                for (int s = 0; s < instances.Length; s++)
+                {
+                    if (teamMaterial == null || shared[s] == teamMaterial)
+                    {
+                        tinted.Add(instances[s]);
+                    }
                 }
             }
+
+            _teamMaterials = tinted.ToArray();
         }
 
         private void OnEnable()
@@ -175,15 +233,34 @@ namespace VortexArena.Modes.Mole
                 return;
             }
 
+            if (animator != null)
+            {
+                animator.SetInteger(StageParam, _net.Stage);
+            }
+
             PlayStageSound(_lastStage, _net.Stage);
             _lastStage = _net.Stage;
         }
 
-        /// <summary>Sound of a stage CHANGE. ⚠️ Never runs for a snapshot: a late joiner would hear
-        /// every standing mole pop at once, as if the whole board had just come up.</summary>
+        /// <summary>Sound (and squash particles) of a stage CHANGE. ⚠️ Never runs for a snapshot: a late
+        /// joiner would hear every standing mole pop at once, as if the whole board had just come up.</summary>
         private void PlayStageSound(int from, int to)
         {
-            if (audioSource == null || from == to)
+            if (from == to)
+            {
+                return;
+            }
+
+            if (to == MoleKinds.StageSquashed)
+            {
+                ParticleSystem fx = _wasCorrect ? correctFx : wrongFx;
+                if (fx != null)
+                {
+                    fx.Play(true);
+                }
+            }
+
+            if (audioSource == null)
             {
                 return;
             }
@@ -230,11 +307,15 @@ namespace VortexArena.Modes.Mole
             {
                 tint = wrongColor;
             }
+            // Emission keeps the hue readable in shadow, where base colour alone goes near-black.
+            Color baseColor = Color.Lerp(Color.white, tint, baseTint);
+            Color emission = tint * glow;
             for (int i = 0; i < _teamMaterials.Length; i++)
             {
                 if (_teamMaterials[i] != null)
                 {
-                    _teamMaterials[i].color = tint;
+                    _teamMaterials[i].SetColor(BaseColorId, baseColor);
+                    _teamMaterials[i].SetColor(EmissionColorId, emission);
                 }
             }
         }
@@ -242,12 +323,29 @@ namespace VortexArena.Modes.Mole
         /// <summary>Jumps straight to the state's pose (no animation) — used on enable and on snapshots.</summary>
         private void ApplyImmediate()
         {
+            if (animator != null)
+            {
+                // The END of the target state, not its start: a snapshot shows a mole that is ALREADY
+                // up or down, and replaying the climb is exactly what a snapshot must not do.
+                animator.SetInteger(StageParam, _net.Stage);
+                animator.Play(_net.Stage == MoleKinds.StageHidden ? HiddenState : IdleState, 0, 1f);
+                animator.Update(0f);
+                return;
+            }
+
             _height = _net.Stage == MoleKinds.StageHidden ? 0f : 1f;
             ApplyPose();
         }
 
         private void Update()
         {
+            // Clip-driven mole: the animation owns the movement. Lerping here as well would put two
+            // writers on one transform, seen as a mole that jitters or never reaches the top.
+            if (animator != null)
+            {
+                return;
+            }
+
             float target = _net.Stage == MoleKinds.StageHidden ? 0f : 1f;
             _height = Mathf.MoveTowards(_height, target, Time.deltaTime / Mathf.Max(0.01f, riseSeconds));
             ApplyPose();

@@ -240,6 +240,7 @@ namespace VortexArena.Core.Player
         private ItemDefinition _itemDefR;
         private Transform _itemInstanceL;
         private Transform _itemInstanceR;
+        private MaterialPropertyBlock _itemTintBlock;
 
         // HoldMode ↔ GRIP_LINKED conflict is logged ONCE per state (at 20 Hz it would be a flood).
         private bool _holdModeMismatchWarned;
@@ -732,6 +733,10 @@ namespace VortexArena.Core.Player
 
             // The silhouette is team-toned as well, so a team change must rewrite it.
             RefreshSilhouette();
+
+            // Held items are rebuilt only when their byte changes, so a team change repaints them here.
+            TintHeldItem(_itemInstanceL, _itemDefL);
+            TintHeldItem(_itemInstanceR, _itemDefR);
         }
 
         /// <summary>Picks the body to draw by team; only ONE is drawn at a time.
@@ -1722,6 +1727,19 @@ namespace VortexArena.Core.Player
             instance = spawned.transform;
 
             CacheRecoilPivot(ref recoil, instance);
+            TintHeldItem(instance, definition);
+        }
+
+        /// <summary>Holder's team colour on the item's opted-in children (<see cref="ItemDefinition.TeamTintChildren"/>).</summary>
+        private void TintHeldItem(Transform instance, ItemDefinition definition)
+        {
+            if (instance == null || definition == null)
+            {
+                return;
+            }
+
+            _itemTintBlock ??= new MaterialPropertyBlock();
+            definition.ApplyTeamTint(instance, _teamColor, _itemTintBlock);
         }
 
         /// <summary>Caches the <c>Model</c> child recoil applies to and its BASE local TRS — the same

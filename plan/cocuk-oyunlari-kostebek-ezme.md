@@ -9,26 +9,12 @@ mod sözleşmesinin tamamı (tür, olay, `stage`/`s`, nonce kapısı, skor kanal
 
 ## Kalan içerik işi
 
-⚠️ **Sahnedeki her şey prototiptir:** delik bir halka (yassı silindir), köstebek bir kapsül, balyoz
-silindir sap + kutu baş. Gerçek modeller gelince yerine geçecek; **yerleşim korunmalı** — köstebeğin
-yükselme mesafesi ve deliğin çapı ona göre ayarlı.
-
-- [ ] **Gerçek modeller + animasyonlar:** köstebek (çıkış / bekleme / ezilme / iniş), delik halkası,
-      balyoz. ⚠️ Yükseliş animasyonu sunucunun havada kalma penceresinin **içinde** bitmeli — dışına
-      taşarsa sunucunun indirdiği köstebek ekranda hâlâ tırmanıyor görünür.
-      ⚠️ **Köstebek modeli için tek dokunulacak yer `Mole/Model`:** prototip parçaları (gövde, kafa,
-      burun, göz, pençe) silinip gerçek model oraya konur. Ayakları pivotun orijinine oturmalı
-      (köstebek yükselince zemin hizasında durur), kafası bugünkü kafanın hizasında olmalı. Sonra
-      takım rengini alacak görseller `teamRenderers`'a sürüklenir ve köstebeğin **trigger**
-      collider'ı kontrol edilir. Kodda ölçü yoktur — vuruşun cevabı collider'lardan çıkar.
-- [ ] **Balyoz kavrama pozu** (`Kavrama Pozu Stüdyosu`, sağ + sol ana kabza) — yazılmadan balyoz ele
-      gelir ama kumanda anchor'ında, yanlış açıyla durur.
-- [ ] **Ses klipleri:** çıkış, doğru vuruş (neşeli), yanlış vuruş (uyarı), iniş. Kancalar
-      `MoleHole`'da hazır ve aşama DEĞİŞİMİNE bağlı; klipler alanlara sürüklenir, delik kökündeki
-      `AudioSource` çalar. ⚠️ Ayrı bir "ezilme" sesi yoktur: doğru/yanlış vuruş sesi onun yerine
-      geçer.
-- [ ] **HUD sanatı** (bugün Hamburgerci HUD'ının kopyası).
-- [ ] Sahnenin ortam sesi boş; köstebek arenasına uygun bir `ambienceClip` seçilecek.
+- [ ] **Kalıcı ses ve efektler:** doğru/yanlış vuruş sesi `Modes/Mole/Audio/SFX_Mole_*_TEMP.wav`
+      (sentetik, geçici), partiküller `NO_mole_hole` altındaki `FX_Correct`/`FX_Wrong` — moda özel
+      materyali yok, namlu alevi ve toz materyali ödünç. Çıkış/iniş sesleri yerinde. Klipler
+      `MoleHole` alanlarına sürüklenir; `_TEMP` dosyaları değiştirilince silinir. ⚠️ Ayrı bir "ezilme" sesi yoktur: doğru/yanlış vuruş sesi onun yerine geçer.
+- [ ] Köstebek haritalarının `MapDefinition`'ında `ambienceClip` boş (müzik dolu) — arenaya uygun
+      bir ortam sesi seçilecek.
 - [ ] Açık hava köstebek sahnesinde çit hattı arena düzlemiyle hizalı değil (batı ve kuzey çitleri
       oyun alanının içinde kalıyor); çitler `VA_ArenaBoundary` düzlemine oturtulacak. Delikler
       düzlem **ve** çit kesişiminin içinde dizildi, çit taşınınca yerinde kalır.
@@ -37,7 +23,9 @@ yükselme mesafesi ve deliğin çapı ona göre ayarlı.
 
 - [ ] `MinSwingSpeed` (dokunarak ezmeyi kapatan eşik) ve balyoz ucundaki vuruş küresinin yarıçapı —
       küçük küre "ıskaladım" hissi, büyük küre "değmeden ezdim" hissi verir.
-- [ ] Çıkış aralığı / aynı anda ayakta köstebek tavanı — kalabalıkta yoğunluk hissi.
+- [ ] Çıkış aralığı / ayakta kalma süresi / aynı anda ayakta köstebek tavanı (`MoleMode` sabitleri)
+      ve köstebek klip hızları (`AC_Mole` durum `speed`'leri) — kalabalıkta yoğunluk ve çocuk için
+      vurma rahatlığı.
 - [ ] Puan ve ceza oranı; ceza caydırmıyorsa artırılır.
 - [ ] Yanlış vuruş rengi (`wrongColor`): iki takım renginden de yeterince ayrılıyor mu — çocuk
       "yanlışa vurdum"u puandan değil oradan anlıyor.
