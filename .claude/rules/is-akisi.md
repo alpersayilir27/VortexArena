@@ -93,21 +93,29 @@ gerçek bir blocker için, rutin teyit için değil. ⚠️ O tek geçişi de **
 hiç doğrulama tetiklemez, o ana kadar biriktirir. Doküman güncellemesi de aynı geçişe girer
 ([[docs-sync]]).
 
-- ⚠️ **Test maddeleri Notion'a yazılır, sohbete değil.** Kullanıcı derleme/build/testi kendisi
-  koşmaz; iş bitince Notion `Todo` veritabanına (`collection://014feff7-dd05-8339-8a3e-87437fdc8ff6`)
-  `Doğrulama N — <konu>` kartı açılır (Durum *Yapılacak*): **önce** derleme/dağıtım adımları
-  (hangi betik, hangi sırayla, derleme hatası çıkarsa karta yapıştır), sonra adım adım maddeler +
-  "görmen gereken". Sohbete yalnız kartın bağlantısı düşer; "şunu derle/koş" listesi verilmez.
-- ⚠️ **Kart SADE yazılır — testçi yalnız ne yapacağını ve ne göreceğini okur.** Her madde
-  `yap → görmen gereken` biçimindedir. Karta **girmeyenler:** geçmiş anlatısı ("geçen turda şu
-  bulunmuştu", "sebebi şuydu", "şu şöyle değişti"), eski kartlara gönderme ("21'den devredildi",
-  "27 §2'nin kalanı"), plan dosyası/defter notu ("geçerse `plan/x.md` silinir"), ajanın kendi
-  sağlama formülleri. Bunların yeri git geçmişi, `Docs/` ve `plan/`'dır; kart, kararı vermesi
-  gereken kişiye ("Karar (Ertu): …") tek satırlık soru taşıyabilir, gerekçe taşımaz.
-- **Kart Alper'e atanır, Durum *Yapılacak* kalır.** ⚠️ *Test bekliyor* bir Doğrulama kartına
+- ⚠️ **Test maddeleri Notion'a yazılır, sohbete değil.** İş bitince Notion `Todo` veritabanına
+  (`collection://014feff7-dd05-8339-8a3e-87437fdc8ff6`) bir kart açılır (Durum *Yapılacak*).
+  Sohbete yalnız kartın bağlantısı düşer.
+- ⚠️ **Kart yalnız TEST EDİLECEK ŞEYİ yazar — birkaç satırı geçmez.** Testçi kartı açtığında neye
+  bakacağını tek okumada anlar; fazlası kafasını karıştırır ve kart okunmaz olur. Ölçü: *"Tüm
+  sahnelere tepeden 10 derece eğimle güneş verildi o test edilecek"* kadarı yeterlidir. Gerçekten
+  ayrı ayrı bakılacak noktalar varsa kısa maddeler eklenir, her biri tek satır.
+- ⚠️ **Başlık kısadır ve TEK konuyu söyler** — "Arena güneşi: tepeden 10° eğim" gibi. `Doğrulama N`
+  numarası/öneki YOK; birbirinden bağımsız konuları `·` ile aynı başlığa dizme, ayrı kart aç.
+- ⚠️ **"Derleme ve dağıtım" bölümü YAZILMAZ.** Hangi betiğin hangi sırayla koşacağı, "derleme
+  hatası çıkarsa yapıştır", "bu bölüm build istemez, editörde yapılır" — hiçbiri karta girmez;
+  testçi bunu zaten biliyor.
+- ⚠️ **Kartlar arası gönderme ve durum duyurusu YAZILMAZ:** "28 · 29 · 30 aynı build ile test
+  edilir", "açık maddeler 38'e taşındı", "bu kart kapalı", "21'den devredildi". Kartın durumu
+  `Durum` alanında yaşar, cümlede değil.
+- Karta ayrıca **girmeyenler:** geçmiş anlatısı ("sebebi şuydu", "şu şöyle değişti"), plan
+  dosyası/defter notu, ajanın kendi sağlama formülleri, "şiddeti düşürülür" gibi ayar önerileri.
+  Bunların yeri git geçmişi, `Docs/` ve `plan/`'dır. Kart, kararı vermesi gereken kişiye
+  ("Karar (Ertu): …") tek satırlık soru taşıyabilir, gerekçe taşımaz.
+- **Kart Alper'e atanır, Durum *Yapılacak* kalır.** ⚠️ *Test bekliyor* bir doğrulama kartına
   KONMAZ: kartın içi zaten testtir, *Test bekliyor* geliştirme kartının "yazıldı, testi bekliyor"
   hâlidir. Atanmamış kart testçinin listesinde görünmez, eski karta büyük harfli not olarak geri
-  döner. Aynı build turuna bağlı kartlar tek satırla birbirine bağlanır ("28 · 29 · 30 aynı build
-  ile test edilir").
-- Biten kart "Todo Arşiv" sayfasına taşınır, açık kalan maddesi önce yeni karta aktarılır. Kalıcı
-  bilgi yine repoda ([[docs-sync]]) — kart geçicidir, doküman yerine geçmez.
+  döner.
+- Biten kart "Todo Arşiv" sayfasına taşınır, açık kalan maddesi önce yeni karta aktarılır —
+  aktarma **sessiz** yapılır, iki kartta da duyurusu yazılmaz. Kalıcı bilgi yine repoda
+  ([[docs-sync]]) — kart geçicidir, doküman yerine geçmez.
