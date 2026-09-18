@@ -1153,7 +1153,7 @@ Tek düğmeli bir sihirbaz **yoktur** (kaldırıldı). Akış altı adımdır ve
 | 2 | Ağ altyapısını koy | `Tools > VortexArena > Arena > Template Temellerini Yükle` |
 | 3 | Mekanın ölçü maketini + kalibrasyon işaretçilerini üret | `… > Arena > JSON'dan DimensionMesh Üret` |
 | 4 | Ölçü yanlışsa köşeleri düzelt, dosyaya geri yaz | ProBuilder + `… > Arena > DimensionMesh'i JSON'a Çevir` |
-| 5 | Environment sanatı (**dünya orijinine**, zemin y=0), bake | elle |
+| 5 | Environment sanatı (**dünya orijinine**, zemin y=0), hareketsiz dekora **static flag**, bake | elle + `… > Arena > Sahne Bütçesini Ölç` |
 | 6 | Tüm kayıtları yap | `… > Build > Configure All Build Elements` |
 
 **3. adımın boyut dosyası hazır olmalıdır.** Dosya elle yazılabilir (§17.2) ya da sahada kumandayla
@@ -1207,6 +1207,14 @@ değeri sahne objesinde durduğu için arena başına elle yapılır ve **atlan�
 - Sonunda `Tools > VortexArena > Arena > Engel Hacimlerini Denetle` koşulur: konveks olmayan,
   şişkin ve trigger collider'lar düzeltilene kadar o objeler yanlış ceza üretir. Rapor tüm açık
   sahneleri kapsar, hiçbir şeyi düzeltmez.
+
+**5. adımın bütçe kuralı.** Environment yerleştikten sonra `Tools > VortexArena > Arena > Sahne
+Bütçesini Ölç` koşulur: tenant'ın sahneleri yan yana, eşiği aşan hücre kırmızı (1M+ LOD0 üçgen ·
+1500+ aktif renderer · birden çok terrain · static flag'siz dekor). Hareketsiz dekor **Static**
+işaretlenir (yapraklı vegetasyon/çimde Occluder kapalı; `Animator`/`Rigidbody` altındaki obje
+işaretsiz), bake **ondan sonra** alınır — işaretsiz objeye bake uygulanmaz
+([Yapma Listesi](Yapma-Listesi.md)). Hazır environment paketleri **çok parçalı terrain**le gelir;
+Quest'te terrain batch'lenmez — tek terrain'e indirilir ya da mesh'e çevrilir.
 
 ⚠️ **Ölçekleme yoktur ve eklenmez.** Her işletmenin alanı farklı ölçüde ve çoğu kare/dikdörtgen
 bile değil — orantılı ölçekleme elle düzeltilecek bir yalancı-doğru üretir.

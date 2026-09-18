@@ -503,6 +503,24 @@ Quest'te pahalıdır ve iki platformun ek-ışık bütçesi farklı olduğu içi
 
 Kurulu örnek: `_Shared/FX/Materials/M_Blast*` (patlama efektinin platform-bağımsız materyal takımı).
 
+### ⛔ Arena dekorunu static flag'siz bırakma
+
+Hareketsiz environment objesi (duvar, taş, ağaç, prop) **Static** işaretlenmeden sahnede kalmaz:
+işaretsiz obje static batching'e girmez (her biri ayrı draw call), occlusion'a girmez, lightmap
+almaz — sahne klasöründe lightmap dosyası dursa bile bake **hiçbir renderer'a uygulanmaz**. Hata
+vermez; sahne yalnız Quest'te kasar. Yapraklı vegetasyon ve çimde **Occluder kapalı** kalır
+(yaprak örtmez, Umbra bake'i şişer); `Animator`/`Rigidbody` altındaki obje **işaretlenmez** — static
+batching transform'u dondurur, obje görünürde kımıldamaz. Kontrol:
+`Tools > VortexArena > Arena > Sahne Bütçesini Ölç` → "static flag yok" uyarısı.
+Gerekçe → Sistem Özeti, Tuzaklar ("Arena dekoru static flag'siz bırakılmaz").
+
+### ⚠️ `VA_CameraRig`'in el küreleri editörde çizilir, Quest'te çizilmez
+
+Meta `HandSphereMap` prefabındaki `sphere` objeleri (yüzlerce, gölge açık) yalnız editörde görünür;
+`HandSphereMap.Start()` onları okuyup `SetActive(false)` yapar. Editör istatistiğinde çıkan üçgeni
+sahnenin yükü sanma. **GameObject'ini kapatma** — script yalnız `activeSelf` küreleri okur, kapatılan
+küre kavrama haritasından düşer.
+
 ### ⛔ `VenueSurvey` sahnesine elle bileşen koyma
 
 Ölçüm sahnesinde yalnız rig, ışık ve zemin durur; denetleyiciyi, rehber geometriyi ve etiketi
