@@ -6,7 +6,7 @@ LightingSettings:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: Mole_VortexAntep
+  m_Name: MoleFarm
   serializedVersion: 10
   m_EnableBakedLightmaps: 1
   m_EnableRealtimeLightmaps: 0
@@ -22,8 +22,8 @@ LightingSettings:
   m_BakeResolution: 10
   m_Padding: 2
   m_LightmapCompression: 3
-  m_LightmapPackingMode: 1
-  m_LightmapPackingMethod: 0
+  m_LightmapPackingMode: 0
+  m_LightmapPackingMethod: 1
   m_XAtlasPackingAttempts: 16384
   m_XAtlasBruteForce: 0
   m_XAtlasBlockAlign: 0

@@ -94,6 +94,19 @@ sahne hata vermez, yalnızca **tamamen düz** görünür — arena sanatı ne ka
   tutar ve arena zemininde yön farkı yaratmaz.
 - Işığın modu bake'e katılacaksa **Mixed** olur. `Realtime` ışık bake'e hiç girmez; `Baked` ışık da
   dinamik objeye (oyuncu avatarı, silah) hiç değmez — ikisini karıştırma.
+- **Karışık modun kipi `Shadowmask`tır** (`<SahneAdı>.lighting` → Mixed Lighting; çalışma anındaki
+  karşılığı Quality Settings → *Mobile* → **Shadowmask**, `Distance Shadowmask` DEĞİL). Kazanç
+  buradadır: `Shadowmask`ta statik gölge maskeden okunur ve **statik objeler gerçek zamanlı gölge
+  geçişine hiç girmez** — geçiş yalnız dinamiklere (oyuncu, silah, ağ nesneleri) kalır.
+  `Distance Shadowmask` gölge mesafesi içinde statikleri yeniden çizer, yani Quest'te kazancı
+  götürür; masaüstü admin seviyesinde kalması sorun değildir.
+- **Yere serili bitki örtüsü gölge ATMAZ** (`Cast Shadows: Off`). Tepeden 10° güneşte çimin gölgesi
+  gürültüdür, ama gölge geçişinin üçte birini yer ve bake'te lightmap çözünürlüğünü yutar.
+  Terrain'de gölge **`On`**'dur — `Two Sided` bedava değildir ve arazide karşılığı yoktur.
+- **Bake'e giren sahnede `VA_LightProbes` bulunur:** sahne kökünde, transform'u sıfırda bir
+  `LightProbeGroup`; probe'lar arena sınırını **+3 m payla** kaplar, yatayda ~3 m aralıklı,
+  **üç yükseklikte** (zemin üstü · gövde · baş üstü). Probe yalnız dinamiklerin gittiği yerde işe
+  yarar — bütün mekanı kaplamak bake süresini boşa uzatır.
 - ⚠️ **Sahnenin aydınlatması İKİ dosyaya bağlıdır ve ikisi de sahnenin kendi klasöründe olmalıdır:**
   `<SahneAdı>.lighting` (bake **ayarları**) ve `<SahneAdı>/LightingData.asset` (bake **çıktısı**).
   Var olan bir sahne kopyalanarak yeni sahne açıldığında ikisi de kaynak sahneyi göstermeye devam
@@ -105,6 +118,12 @@ sahne hata vermez, yalnızca **tamamen düz** görünür — arena sanatı ne ka
   alınır, sonra bir kez kendi başına bake edilir.
 - ⚠️ **Bake edilmiş sahnede `LightProbeGroup` yoksa** dinamik objeler baked ışıkların hiçbirini
   almaz; yalnız ambient + Mixed directional ile aydınlanır ve ortamdan kopuk görünürler.
+- ⚠️ **Lightmap sahnenin kendisine aittir, kopyayla taşınmaz.** Ana haritayı bake etmek ondan
+  türetilen mekan sahnesine hiçbir şey kazandırmaz: bake çıktısı renderer başına sahne dosyasına
+  yazılır. Kopyayla geçen şey **kurulumdur** (`VA_LightProbes`, `.lighting`, static flag'ler, gölge
+  işaretleri, güneş transform'u) — kurulum ana haritada bir kez yapılır, **bake her mekan sahnesinde
+  yeniden** koşulur, hem de çit/delik gibi mekana özel yerleştirme bittikten SONRA. Yerleştirme
+  değişince eski bake sessizce bayatlar, kendiliğinden güncellenmez.
 
 **Gölge kalitesi sahnede değil, quality level'ın URP asset'inde ayarlanır** — iki seviye vardır:
 oyuncu/Quest `Mobile_RPAsset`, admin/Windows ve editör `PC_RPAsset`. Shadow distance arenayı ancak

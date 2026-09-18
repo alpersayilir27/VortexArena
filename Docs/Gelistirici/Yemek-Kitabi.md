@@ -1216,6 +1216,13 @@ işaretsiz), bake **ondan sonra** alınır — işaretsiz objeye bake uygulanmaz
 ([Yapma Listesi](Yapma-Listesi.md)). Hazır environment paketleri **çok parçalı terrain**le gelir;
 Quest'te terrain batch'lenmez — tek terrain'e indirilir ya da mesh'e çevrilir.
 
+⚠️ **Aydınlatma kurulumu ana haritada bir kez, bake her mekan sahnesinde.** Ana harita
+(`Assets/Maps/<Harita>/`) mekan sahnelerinin kopyalandığı kaynaktır: `VA_LightProbes`, `.lighting`
+(Mixed + Shadowmask), static flag'ler, gölge işaretleri ve güneş transform'u orada kurulur ve
+kopyayla gelir. **Lightmap gelmez** — bake sahnenin kendisine yazılır, o yüzden her mekan sahnesi
+çiti ve mekana özel yerleştirmesi bittikten sonra **kendi başına** bake edilir
+([Sahne Kurulumu](Sahne-Kurulumu.md)).
+
 ⚠️ **Ölçekleme yoktur ve eklenmez.** Her işletmenin alanı farklı ölçüde ve çoğu kare/dikdörtgen
 bile değil — orantılı ölçekleme elle düzeltilecek bir yalancı-doğru üretir.
 

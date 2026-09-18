@@ -514,6 +514,16 @@ batching transform'u dondurur, obje görünürde kımıldamaz. Kontrol:
 `Tools > VortexArena > Arena > Sahne Bütçesini Ölç` → "static flag yok" uyarısı.
 Gerekçe → Sistem Özeti, Tuzaklar ("Arena dekoru static flag'siz bırakılmaz").
 
+### ⛔ Rüzgârda sallanan bitkiyi "hareketli" sayıp bake dışında bırakma
+
+Ağaç ve çimin sallanması **shader'daki vertex animasyonudur** (`_WindScroll` / `_WindJitter`,
+dünya konumu + vertex renginden); transform kımıldamaz. Bake rüzgârı **durdurmaz** — tek yan etki
+yaprağın yere düşen gölgesinin sallanmamasıdır ve tepeden 10° güneşte bu görünmez. Bitkiyi
+`Contribute GI` dışında bırakırsan tersini alırsın: zemin bake'li, bitki yalnız ambient'te kalır,
+ortama yapıştırılmış görünür ve gerçek zamanlı gölge maliyetini ödemeye devam edersin.
+⚠️ Ayrımı **Animator/Rigidbody** yapar, rüzgâr değil: gerçek controller'ı olan obje (yel değirmeni,
+testere) ve ağ nesneleri static işaretlenmez. Kurulum → [Sahne Kurulumu](Sahne-Kurulumu.md).
+
 ### ⚠️ `VA_CameraRig`'in el küreleri editörde çizilir, Quest'te çizilmez
 
 Meta `HandSphereMap` prefabındaki `sphere` objeleri (yüzlerce, gölge açık) yalnız editörde görünür;
