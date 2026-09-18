@@ -50,6 +50,9 @@ namespace VortexArena.Modes.Tournament
         /// written by <c>TournamentMode</c> and read here and by the HUD.</summary>
         private const string ReviewPrefix = "roundend:";
 
+        /// <summary><c>modeState</c> prefix of the regroup; the rest is the gate's <c>&lt;ready&gt;/&lt;total&gt;</c>.</summary>
+        private const string RegroupPrefix = "regroup:";
+
         // Single instance so the DTO is not reallocated every frame.
         private readonly SetReadyMsg _msg = new SetReadyMsg();
 
@@ -165,9 +168,13 @@ namespace VortexArena.Modes.Tournament
             // Review = the result stage of the mode pause; the wait there is on the operator, not on us.
             bool review = modePause && combat.ModeState.StartsWith(ReviewPrefix, StringComparison.Ordinal);
 
+            // The gate's own "<ready>/<total>" (§10.1). The HUD's phase label carries the same token, but
+            // the player reads the centre line and the status line, not the corner.
+            string counts = modePause && !review ? RegroupCounts(combat.ModeState) : "";
+
             if (_active)
             {
-                combat.SetModePrompt(ActivePrompt(countdown, review, inBase, baseName));
+                combat.SetModePrompt(ActivePrompt(countdown, review, inBase, baseName, counts));
             }
             else
             {
@@ -176,7 +183,7 @@ namespace VortexArena.Modes.Tournament
                     : $"Öldün — {baseName} dön, yeni tur orada başlayacak");
             }
 
-            SetNotice(CenterNotice(inBase, review));
+            SetNotice(CenterNotice(inBase, review, counts));
 
             // Base ENTRY edge: three pulses on both controllers (criterion is the REAL entry).
             bool insideBase = combat.IsInsideOwnBase;
@@ -209,8 +216,13 @@ namespace VortexArena.Modes.Tournament
                       $"açıkTabanVar={combat.HasOpenBaseZone} → set_ready({inBase})");
         }
 
-        /// <summary>Status line while reporting: countdown · review (operator) · regroup (players).</summary>
-        private static string ActivePrompt(bool countdown, bool review, bool inBase, string baseName)
+        /// <summary>Status line while reporting: countdown · review (operator) · regroup (players).
+        /// <paramref name="counts"/> is the gate's "<c>ready/total</c>", empty outside the regroup.</summary>
+        /// <remarks>The review line sends the player to the base RIGHT AWAY: walking there during the
+        /// review costs nothing (the flags are cleared on entering the regroup anyway) and shortens the
+        /// regroup that follows.</remarks>
+        private static string ActivePrompt(bool countdown, bool review, bool inBase, string baseName,
+            string counts)
         {
             if (countdown)
             {
@@ -221,30 +233,34 @@ namespace VortexArena.Modes.Tournament
             {
                 return inBase
                     ? "Tabandasın — operatörün devam etmesi bekleniyor"
-                    : $"Tur bitti — operatör devam edince {baseName} dön";
+                    : $"Tur bitti — {baseName} dön, operatör devam edince yeni tur başlar";
             }
 
-            return inBase ? "Tabandasın — diğerleri bekleniyor" : $"Yeni tur — {baseName} dön";
+            string tail = counts.Length > 0 ? $" ({counts} tabanda)" : "";
+            return inBase ? $"Tabandasın — diğerleri bekleniyor{tail}" : $"Yeni tur — {baseName} dön{tail}";
         }
 
         /// <summary>The big centre line: WHAT is being waited for, in one glance. Empty = nothing to
         /// say — the countdown then takes the same element over (<see cref="ModeHudBase"/>).</summary>
         /// <remarks>Order is deliberate: the player's OWN duty comes first. Naming who else is missing
         /// while the player is still outside would send them looking at other people instead of
-        /// walking.
+        /// walking. The gate's count (<paramref name="counts"/>) rides at the END of every regroup line —
+        /// it is the one number that says the wait is moving.
         /// <para>Silent through the review: the round result banner already fills the same eye line, and
         /// every <c>ready</c> flag is down there — a "who is missing" count would read the clear as a
         /// roster that never came back.</para></remarks>
-        private string CenterNotice(bool inBase, bool review)
+        private string CenterNotice(bool inBase, bool review, string counts)
         {
             if (review)
             {
                 return "";
             }
 
+            string tail = counts.Length > 0 ? $" · TOPLANMA {counts}" : "";
+
             if (!inBase)
             {
-                return "BASE'E BEKLENİYORSUNUZ";
+                return $"BASE'E BEKLENİYORSUNUZ{tail}";
             }
 
             // Mid-round death: the round has not closed, so no one else is being called to a base and
@@ -256,10 +272,26 @@ namespace VortexArena.Modes.Tournament
 
             if (_teammatesMissing > 0)
             {
-                return "TAKIM ARKADAŞLARINIZ BASE'DE BEKLENİYOR";
+                return $"TAKIM ARKADAŞLARINIZ BASE'DE BEKLENİYOR{tail}";
             }
 
-            return _opponentsMissing > 0 ? "RAKİP BASE'DE BEKLENİYOR" : "";
+            if (_opponentsMissing > 0)
+            {
+                return $"RAKİP BASE'DE BEKLENİYOR{tail}";
+            }
+
+            // Everyone the roster shows is in, yet the gate has not opened (a reconnecting player is
+            // not on the roster's count): the number alone tells the player the wait is not on them.
+            return counts.Length > 0 ? $"TOPLANMA {counts}" : "";
+        }
+
+        /// <summary>The "<c>ready/total</c>" token of <c>regroup:…</c>; empty for any other state.</summary>
+        private static string RegroupCounts(string modeState)
+        {
+            return !string.IsNullOrEmpty(modeState) &&
+                   modeState.StartsWith(RegroupPrefix, StringComparison.Ordinal)
+                ? modeState.Substring(RegroupPrefix.Length)
+                : "";
         }
 
         /// <summary>Reconnect: the server zeroes every <c>ready</c> flag on hello (and on the drop

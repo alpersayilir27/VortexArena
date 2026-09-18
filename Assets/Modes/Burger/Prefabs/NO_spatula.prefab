@@ -305,6 +305,7 @@ MonoBehaviour:
   capacity: 1
   slotHeight: 0.03
   claimBand: 0
+  looseCapacity: 0
   spillAngle: 55
   reclaimDelaySeconds: 0.6
 --- !u!1001 &3881543536619490407

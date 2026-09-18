@@ -20,7 +20,9 @@ namespace VortexArena.Modes.Burger
     /// carrier at pickup (knife, spatula, whole bun) rides LOOSE: it keeps the offset its published rest
     /// pose had from the carrier's rest pose, so every headset derives the same placement without a new
     /// field. Loose cargo is claimed only in the first moments after pickup — later, the carrier's rest
-    /// pose no longer says where it is.</para></summary>
+    /// pose no longer says where it is. ⚠️ The loose lane is OPT-IN per prefab (<see cref="looseCapacity"/>,
+    /// default 0): only the serving board carries it. A spatula with a loose lane lifts the knife — or the
+    /// board — lying next to the patty it was aimed at.</para></summary>
     /// <remarks>⚠️ Runs after <see cref="NetObjectGrabBridge"/> (default order) and before
     /// <c>HandGripPoser</c> (order 100): the anchor must already be at the hand this frame, or the cargo
     /// trails the spatula by one frame.</remarks>
@@ -47,8 +49,9 @@ namespace VortexArena.Modes.Burger
         [SerializeField] private float claimBand;
 
         [Tooltip("Malzeme dışı eşya (bıçak, spatula, bütün ekmek) için ayrı yer: taşıyıcı kaldırılırken " +
-                 "üstünde duranlar bu sayıya kadar olduğu yerde biner. 0 = binmez.")]
-        [SerializeField] private int looseCapacity = 3;
+                 "üstünde duranlar bu sayıya kadar olduğu yerde biner. 0 = binmez (varsayılan; yalnız " +
+                 "servis tahtası açar — spatulada açıksa yanındaki bıçağı da tahtayı da kaldırır).")]
+        [SerializeField] private int looseCapacity;
 
         [Tooltip("Taşıyıcı bu açıdan (derece) fazla yatınca yük dökülür. 0 = hiç dökülmez.")]
         [SerializeField] private float spillAngle = 55f;

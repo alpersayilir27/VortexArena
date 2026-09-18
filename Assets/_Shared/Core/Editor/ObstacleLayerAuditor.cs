@@ -241,7 +241,9 @@ namespace VortexArena.Core.Editor
             {
                 text.AppendLine();
                 text.AppendLine($"ℹ️ Collider'sız ({colliderless.Count}) — layer damgalı ama collider yok;");
-                text.AppendLine("bu objeler tespitte hiç görünmez:");
+                text.AppendLine("bu objeler tespitte hiç görünmez, ihlal de üretmez. Sayı yüzlerceyse layer");
+                text.AppendLine("bilerek verilmemiştir: ithal model kendi layer İNDEKSİYLE gelir ve o indeks bu");
+                text.AppendLine("projede Obstacle'a denk düşer — kökün layer'ını Default'a çek (çocuklarıyla):");
                 AppendNames(text, colliderless);
             }
 

@@ -391,7 +391,7 @@ namespace VortexArena.App.Admin
             {
                 // ⚠️ BASE colour here, token colours via rich text: a TMP has one `.color`, but
                 // battery and controllers must colour independently.
-                detailText.text = BuildDetailLine(view, iconButtons);
+                detailText.text = BuildDetailLine(view);
                 detailText.color = view.IsConnected ? UiKit.Muted : UiKit.Faint;
             }
 
@@ -814,10 +814,8 @@ namespace VortexArena.App.Admin
         /// Detail cell: score · battery · controllers · body · ping · state · violations.
         /// <para>Battery thresholds/colours and controller glyphs come from
         /// <see cref="AdminPlayerRow"/> — the same headset must not differ between screens.</para>
-        /// <para><paramref name="narrow"/> (the split/team columns, <see cref="iconButtons"/>): the
-        /// violation seconds are dropped there, they overflow half a row's width.</para>
         /// </summary>
-        private static string BuildDetailLine(AdminPlayerView view, bool narrow)
+        private static string BuildDetailLine(AdminPlayerView view)
         {
             string battery = AdminPlayerRow.FormatBattery(view);
             string controllers = AdminPlayerRow.FormatControllers(view);
@@ -825,7 +823,7 @@ namespace VortexArena.App.Admin
             // §6.7: -1 = no measurement. "-" so it does not read as "0 ms ping".
             string ping = view.rttMs < 0 ? "-" : $"{view.rttMs} ms";
             string state = StateText(view);
-            string violations = ViolationTokens(view, narrow);
+            string violations = ViolationTokens(view);
             // Ground floor is the norm, so it is NOT written: a "0. kat" on every row of every
             // single-floor arena would be noise the operator learns to skip.
             string floor = view.floor > 0 ? $"{view.floor}. kat" : "";
@@ -850,12 +848,10 @@ namespace VortexArena.App.Admin
         /// <para>⚠️ <b>No blinking, no "ongoing" mark</b> — this is the ledger; the live channel is
         /// the HUD strip and the card border.</para>
         /// </summary>
-        private static string ViolationTokens(AdminPlayerView view, bool narrow)
+        private static string ViolationTokens(AdminPlayerView view)
         {
-            string obstacle = ViolationToken(AdminViolationKind.Obstacle,
-                view.obstacleCount, view.obstacleSeconds, narrow);
-            string outOfBounds = ViolationToken(AdminViolationKind.OutOfBounds,
-                view.outOfBoundsCount, view.outOfBoundsSeconds, narrow);
+            string obstacle = ViolationToken(AdminViolationKind.Obstacle, view.obstacleCount);
+            string outOfBounds = ViolationToken(AdminViolationKind.OutOfBounds, view.outOfBoundsCount);
 
             if (obstacle.Length == 0)
             {
@@ -865,13 +861,13 @@ namespace VortexArena.App.Admin
             return outOfBounds.Length == 0 ? obstacle : $"{obstacle} · {outOfBounds}";
         }
 
-        /// <summary>One kind's token; empty when the count is zero. Label and colour come from
-        /// <see cref="AdminViolations"/> — the same violation must not be named or coloured
+        /// <summary>One kind's token (<c>Etiket N</c>); empty when the count is zero. Label and colour come
+        /// from <see cref="AdminViolations"/> — the same violation must not be named or coloured
         /// differently on two screens.
-        /// <para>Narrow (split/team) columns drop the seconds suffix: the count is the ledger, the
-        /// duration is what overflows half a row.</para></summary>
-        private static string ViolationToken(AdminViolationKind kind, int count, float seconds,
-            bool narrow)
+        /// <para>⚠️ Count only, no seconds, in BOTH row variants: the duration overflowed even the
+        /// full-width row and a cropped cell hides the count itself. The roster still carries the
+        /// seconds; nothing on this panel draws them.</para></summary>
+        private static string ViolationToken(AdminViolationKind kind, int count)
         {
             if (count <= 0)
             {
@@ -879,10 +875,7 @@ namespace VortexArena.App.Admin
             }
 
             string color = ColorUtility.ToHtmlStringRGB(AdminViolations.Tint(kind));
-            string body = narrow
-                ? $"{AdminViolations.Label(kind)} {count}"
-                : $"{AdminViolations.Label(kind)} {count} ({Mathf.RoundToInt(seconds)} sn)";
-            return $"<color=#{color}>{body}</color>";
+            return $"<color=#{color}>{AdminViolations.Label(kind)} {count}</color>";
         }
 
         /// <summary>⚠️ There is no "offline" state (§2) — a row is either expected back (with a

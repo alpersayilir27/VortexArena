@@ -106,6 +106,10 @@ unity cmd get_console_logs --json  # 0 hata / 0 uyarı bekleriz
 
 `unity` komutu Unity CLI'dır (`%LOCALAPPDATA%\Unity\bin`) ve editör açıkken ona bağlanır.
 
+Oyuncu tarafının konsolu **gözlüktedir**: `scripts\quest-logcat.bat [süzgeç]` bağlı gözlüğün Unity
+logunu akıtır (`scripts/README.md`). Test kartlarındaki "logcat"tan kasıt budur — editör konsolu da
+sunucu konsolu da oyuncu uygulamasının `Debug.Log` satırlarını göstermez.
+
 > ⚠️ Editör **açıkken** `unity build` / `unity test` çalıştırma — ayrı bir batch-mode editör
 > başlatır ve proje kilidine takılır. In-editor `unity cmd build` / `run_tests` kullan.
 

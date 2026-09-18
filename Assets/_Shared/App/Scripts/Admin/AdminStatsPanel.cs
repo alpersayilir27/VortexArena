@@ -182,6 +182,14 @@ namespace VortexArena.App.Admin
         /// <inheritdoc cref="_closeDefaultText"/>
         private Color _closeDefaultColor = Color.white;
 
+        /// <inheritdoc cref="_closeDefaultText"/>
+        private float _closeDefaultWidth;
+
+        /// <summary>Close button width while it reads TURA DEVAM. The prefab's button is an `X` square
+        /// and the label auto-sizes, so the long text shrank to an unreadable dot; the button grows
+        /// leftwards (top-right anchor + pivot) and the stretched label follows.</summary>
+        private const float CloseWaitingWidth = 150f;
+
         private float WideRowHeight => HeightOf(ref _wideRowHeight, _rowPrefab);
 
         private float NarrowRowHeight => HeightOf(ref _narrowRowHeight, NarrowPrefab);
@@ -212,6 +220,11 @@ namespace VortexArena.App.Admin
             {
                 _closeDefaultText = _closeLabel.text;
                 _closeDefaultColor = _closeLabel.color;
+            }
+
+            if (_closeButton != null)
+            {
+                _closeDefaultWidth = ((RectTransform)_closeButton.transform).sizeDelta.x;
             }
 
             // ⚠️ No persistent onClick entries in the prefab (see AdminPreferencesPanel.WireButtons).
@@ -666,6 +679,14 @@ namespace VortexArena.App.Admin
 
             _closeLabel.text = waiting ? "TURA DEVAM" : _closeDefaultText;
             _closeLabel.color = waiting ? UiKit.Good : _closeDefaultColor;
+
+            if (_closeButton != null && _closeDefaultWidth > 0f)
+            {
+                var rect = (RectTransform)_closeButton.transform;
+                Vector2 size = rect.sizeDelta;
+                size.x = waiting ? Mathf.Max(CloseWaitingWidth, _closeDefaultWidth) : _closeDefaultWidth;
+                rect.sizeDelta = size;
+            }
         }
 
         private void RefreshMatchInfo(AdminRoster roster)

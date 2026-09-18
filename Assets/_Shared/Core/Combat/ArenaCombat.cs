@@ -755,10 +755,12 @@ namespace VortexArena.Core.Combat
         /// <para><b>Why this is not part of <see cref="ReportAreaHit"/>:</b> that one finds targets from
         /// <see cref="RemoteHitBox"/> colliders and <b>the local rig has none</b>, so self damage could
         /// never come out of it. The distance is measured to the closest point of the vertical
-        /// floor→head segment (<see cref="WeaponGranter.TryResolveHead"/> +
-        /// <see cref="WeaponGranter.TryResolveEyeAndFloor"/>) — the local rig's body proxy, so a bomb
-        /// at your feet is not scored from your eyes and crouching does not change the answer. The
-        /// falloff formula is shared with the area path.</para>
+        /// floor→head segment (<see cref="WeaponGranter.TryResolveHead"/> + the ARENA floor of the
+        /// player's own storey, <see cref="ArenaFloors"/>) — the local rig's body proxy, so a bomb at
+        /// your feet is not scored from your eyes and crouching does not change the answer. ⚠️ The
+        /// floor is NOT the rig's tracking space: with an eye-level tracking origin that plane sits at
+        /// the head, the segment collapses to the eyes and a bomb at the feet scores as one two metres
+        /// away. The falloff formula is shared with the area path.</para>
         /// <para>⚠️ <b>The friendly-fire switch is read on the CLIENT too</b> (§10.3, 5th gate): with it
         /// off the server rejects a self hit anyway, so sending would only print a rejection line per
         /// blast. The decision stays the server's — this is a noise gate, not a rule.</para>
@@ -783,10 +785,17 @@ namespace VortexArena.Core.Combat
             }
 
             // Closest point of the vertical floor→head segment — the local rig's body proxy, the same
-            // "closest body point" rule ReportAreaHit uses on remote hit boxes. Head only when the
-            // floor is unknown, so a missing rig reference never makes the answer worse than before.
+            // "closest body point" rule ReportAreaHit uses on remote hit boxes. The floor is the arena
+            // floor of the player's storey (arena space == world space); the roster floor can lag a hop
+            // by a few frames, so a head already below it takes the storey it is actually on.
+            float floorY = ArenaFloors.HeightOf(FloorState.PlayerFloor(playerId));
+            if (head.y < floorY)
+            {
+                floorY = ArenaFloors.HeightOf(ArenaFloors.FloorAt(head.y));
+            }
+
             Vector3 self = head;
-            if (WeaponGranter.TryResolveEyeAndFloor(out float _, out float floorY) && floorY <= head.y)
+            if (floorY <= head.y)
             {
                 self.y = Mathf.Clamp(worldCenter.y, floorY, head.y);
             }

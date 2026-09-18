@@ -96,6 +96,21 @@ açılışta çalışma dizinini indeksler.
 - ⚠️ Windows'ta komut **`auggie.cmd`**'dir, çıplak `auggie` değil: npm shim'i `.cmd`/`.ps1` olarak
   kurulur ve çıplak ad süreç olarak başlatılamaz.
 
+### `UnityMCP` kaydı — köprü **8080**'dedir, port kapılabilir
+
+Sunucuyu (`mcp-for-unity`) editör kendi başlatır ve `http://127.0.0.1:8080/mcp` adresine bağlar;
+port Unity içindeki *MCP For Unity* penceresinden gelir, `.mcp.json` yalnız aynı adresi gösterir.
+
+- ⚠️ **8080 yaygın bir varsayılan porttur** (Adminer, Keycloak, uygulama konteynerleri). Başka bir
+  servis portu önce kaparsa MCP sunucusu bind edemez ve Claude'un isteği o servisin **HTML** sayfasına
+  düşer; belirti `Unexpected content type: text/html` / `JSON Parse error: '<'` olur — yani "Unity
+  kapalı" gibi değil, **kimlik doğrulama hatası** gibi görünür.
+- Teşhis tek adımdır: `Get-NetTCPConnection -LocalPort 8080 -State Listen` ile portu tutan süreci
+  bul. Unity'nin python süreci değilse sebep odur; port boşalır boşalmaz sunucu kendi bağlanır,
+  editörü yeniden başlatmak gerekmez.
+- Docker tarafında portu bir konteyner tutuyorsa (`docker ps` → `0.0.0.0:8080->8080`) kalıcı çözüm o
+  projenin eşlemesini değiştirmektir; 8080 bu projede köprüye ayrılmıştır.
+
 ### `unity-mcp` (AI Assistant relay) kaydı neden yok
 
 `com.unity.ai.assistant` içindeki bridge onayı **canlı bağlantı başına** tutuyor

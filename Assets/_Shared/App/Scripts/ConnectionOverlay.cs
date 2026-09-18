@@ -134,6 +134,13 @@ namespace VortexArena.App
         private bool _forceRefresh = true;
         private bool _visible;
 
+        /// <summary>Hide ramp length. Short: the card leaves on the same beat as the reconnect and must
+        /// not linger over the scene that follows.</summary>
+        private const float HideFadeSeconds = 0.25f;
+
+        /// <summary>Seconds left on the hide ramp; 0 = no ramp running (see <see cref="TickHideFade"/>).</summary>
+        private float _hideFadeLeft;
+
         // Values currently on screen (TMP untouched unless changed → no garbage).
         private bool _shownKnown;
         private bool _shownExpelled;
@@ -189,6 +196,13 @@ namespace VortexArena.App
             }
 
             ApplySortingOrder();
+
+            // The VR card is drawn in the world and depth-tested: standing at the boundary puts a
+            // wall between head and card. The card must stay readable there of all places.
+            if (_worldSpace && _hudFollow != null)
+            {
+                _hudFollow.AvoidWalls = true;
+            }
 
             if (_reconnectButton != null)
             {
@@ -286,6 +300,8 @@ namespace VortexArena.App
                 return;
             }
 
+            TickHideFade();
+
             // The event may have been missed: this singleton can be born BEFORE `ArenaClient` and
             // the first state change may fire before we subscribe → poll the state too.
             ArenaClient client = ArenaClient.Instance;
@@ -377,15 +393,39 @@ namespace VortexArena.App
             }
 
             _visible = visible;
-            _canvas.enabled = visible; // zero draw cost while hidden
-            _group.alpha = visible ? 1f : 0f;
             _group.blocksRaycasts = visible && !_worldSpace;
             _group.interactable = visible && !_worldSpace;
 
             if (visible)
             {
+                _hideFadeLeft = 0f; // a show cancels a running hide ramp
+                _canvas.enabled = true;
+                _group.alpha = 1f;
                 _forceRefresh = true; // texts must be fresh when becoming visible
                 EnsureClickableOnDesktop();
+                return;
+            }
+
+            // Fades out instead of cutting: the hide lands on the reconnect (often mid scene change) and
+            // a hard cut there reads as the app dropping a frame. The canvas is switched off at the end
+            // of the ramp (TickHideFade) — zero draw cost while hidden.
+            _hideFadeLeft = HideFadeSeconds;
+        }
+
+        /// <summary>Runs the hide ramp; disables the canvas once the alpha reaches zero.</summary>
+        private void TickHideFade()
+        {
+            if (_hideFadeLeft <= 0f || _group == null || _canvas == null)
+            {
+                return;
+            }
+
+            _hideFadeLeft = Mathf.Max(0f, _hideFadeLeft - Time.unscaledDeltaTime);
+            _group.alpha = _hideFadeLeft / HideFadeSeconds;
+
+            if (_hideFadeLeft <= 0f)
+            {
+                _canvas.enabled = false;
             }
         }
 
