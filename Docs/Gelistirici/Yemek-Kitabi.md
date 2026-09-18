@@ -158,10 +158,10 @@ int vurulan = ArenaCombat.ReportAreaHit(
 Debug.Log($"{vurulan} oyuncu vuruldu");
 ```
 
-Hasar merkeze uzaklıkla doğrusal düşer ve her oyuncuya **en fazla bir** vuruş gider (bir gövdede
-birden çok isabet kutusu vardır). ⚠️ **Uzaklık gövdeye en YAKIN noktadan ölçülür:** yerelde zemin
-izdüşümü→kafa doğru parçasının en yakın noktası, uzakta oyuncunun en yakın çarpma kutusu. Çömelmek
-hasarı değiştirmez; tek bir noktadan (kafa) ölçen bir düşüm ayağının dibindeki bombayı uzak sayardı. Yarıçaptaki **ağ nesneleri** de aynı yoldan raporlanır
+Hasar merkeze uzaklıkla doğrusal düşer ve her oyuncuya **bir** vuruş gider. ⚠️ **Oyuncu gövde
+kapsülüyle ölçülür, isabet kutularıyla değil:** arena zemini→kafa dikey kapsülünün yüzeyine olan
+uzaklık (merkez içerideyse sıfır); atan da diğerleri de aynı kapsülle puanlanır. Çömelmek hasarı
+değiştirmez; kutudan ya da kafadan ölçen bir düşüm ayağının dibindeki bombayı uzak sayardı. Yarıçaptaki **ağ nesneleri** de aynı yoldan raporlanır
 (`hit_report{targetNetId}`, aynı mesafe düşümü); dönen sayı yine **yalnız oyuncu** isabetidir.
 
 **Duvar arkası** istemiyorsan kendin kurma — son parametreyi aç:

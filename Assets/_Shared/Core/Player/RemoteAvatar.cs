@@ -171,6 +171,15 @@ namespace VortexArena.Core.Player
         /// always drawn — and stays hittable — on this floor.</summary>
         public int Floor { get; private set; }
 
+        /// <summary>Head centre in world space from the last interpolated pose — the top of the body
+        /// capsule area damage scores this player with (<c>ArenaCombat</c>). Valid only while
+        /// <see cref="IsTargetable"/>.</summary>
+        public Vector3 HeadWorld { get; private set; }
+
+        /// <summary>Can this player take damage right now — the same gate that enables the hit boxes,
+        /// plus "a pose has arrived" (before that <see cref="HeadWorld"/> sits at the origin).</summary>
+        public bool IsTargetable => _visible && IsAlive && IsCalibrated && _hasPose;
+
         /// <summary>Spawn protection flag from the last snapshot (§10.4; false when there is no record).
         /// ⚠️ PRESENTATION only: duration and damage blocking belong to the server; the client follows
         /// the flag and counts nothing.</summary>
@@ -192,6 +201,9 @@ namespace VortexArena.Core.Player
         private float _cameraRetryTimer;
 
         private bool _visible = true;
+
+        /// <summary>First interpolated pose applied — until then <see cref="HeadWorld"/> is unset.</summary>
+        private bool _hasPose;
 
         // Name/number/colour are stored in SetInfo; the dead look is applied on top of them.
         private string _displayName = "";
@@ -1404,6 +1416,8 @@ namespace VortexArena.Core.Player
 
             // Poses are in arena space — convert to world.
             Pose headWorld = ArenaSpace.ArenaToWorld(headPose);
+            HeadWorld = headWorld.position;
+            _hasPose = true;
             Pose handLWorld = ArenaSpace.ArenaToWorld(handLPose);
             Pose handRWorld = ArenaSpace.ArenaToWorld(handRPose);
 

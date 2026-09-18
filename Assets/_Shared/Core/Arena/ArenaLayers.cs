@@ -70,9 +70,10 @@ namespace VortexArena.Core.Arena
         }
 
         /// <summary>
-        /// The layers an <b>area effect</b> looks for its targets on: <c>Default</c> (player hit
-        /// boxes and free-standing network objects) + <see cref="ObstacleName"/> (breakable cover,
-        /// which sits on the obstacle layer to be a violation volume too).
+        /// The layers an <b>area effect</b> looks for its NETWORK OBJECT targets on: <c>Default</c>
+        /// (free-standing network objects) + <see cref="ObstacleName"/> (breakable cover, which sits
+        /// on the obstacle layer to be a violation volume too). Players are not found through this
+        /// query — <c>ArenaCombat</c> scores them on a body capsule from the avatar list.
         /// <para>
         /// ⚠️ <b>Why not <c>~0</c>:</b> a maskless overlap pulls every grab volume, interaction
         /// trigger, boundary volume and piece of scenery into the query's buffer. A FULL buffer
@@ -80,9 +81,9 @@ namespace VortexArena.Core.Arena
         /// narrowing the query is a correctness rule, not only a cost one.
         /// </para>
         /// <para>
-        /// ⚠️ <b>The invariant this depends on:</b> anything that can take damage carries a
-        /// NON-TRIGGER collider on <c>Default</c> or <see cref="ObstacleName"/>. A hit box moved to
-        /// another layer, or turned into a trigger, stops taking blast damage <b>without any
+        /// ⚠️ <b>The invariant this depends on:</b> every network object that can take damage
+        /// carries a NON-TRIGGER collider on <c>Default</c> or <see cref="ObstacleName"/>. One moved
+        /// to another layer, or turned into a trigger, stops taking blast damage <b>without any
         /// error</b>. Add the layer here when that changes.
         /// </para>
         /// <para>Falls back to <c>Default</c> alone when the obstacle layer is undefined — the same

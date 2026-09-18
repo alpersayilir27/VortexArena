@@ -116,12 +116,13 @@ MonoBehaviour:
   tracerWidth: 0.02
   tracerLifetime: 0.1
   tracerEveryNthRound: 3
+  teamTintChildren: []
   throwableId: bomba
   trigger: 0
   fuseSeconds: 5
   holsterRefillSeconds: 3
-  throwSpeedScale: 1
-  maxThrowSpeed: 12
+  throwSpeedScale: 1.2
+  maxThrowSpeed: 24
   spinDegreesPerSecond: 180
   excludedLayers:
     serializedVersion: 2

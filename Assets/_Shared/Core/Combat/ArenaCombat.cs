@@ -63,24 +63,14 @@ namespace VortexArena.Core.Combat
         /// <summary>One cover counts once even with several colliders on the line.</summary>
         private static readonly HashSet<int> AreaBlockersOnce = new HashSet<int>();
 
-        /// <summary>One slot per player found by <see cref="ReportAreaHit"/>, holding that player's
-        /// CLOSEST hit box point to the blast centre (parallel arrays, slot from
-        /// <see cref="AreaPlayerSlots"/>) — filled while the overlap buffer is walked, spent after.
-        /// <para>⚠️ Taking the first collider instead makes the damage depend on
-        /// <c>OverlapSphere</c>'s undefined order: head box vs leg box is a 3× difference on the same
-        /// bomb.</para></summary>
-        private static readonly int[] AreaPlayerIds = new int[AreaBufferSize];
-        private static readonly Vector3[] AreaPlayerPoints = new Vector3[AreaBufferSize];
-        private static readonly float[] AreaPlayerSqrDistances = new float[AreaBufferSize];
+        /// <summary>Radius (m) of the body proxy an area effect scores a PLAYER with: a vertical
+        /// capsule from the player's arena floor up to the head (the collision-hull rule of every
+        /// shooter, not the hit boxes). ⚠️ One proxy for the thrower and everyone else — hit boxes
+        /// ride animated bones that lag and sink, and the local rig has none, so a hit-box rule can
+        /// never be symmetric.</summary>
+        private const float BodyProxyRadiusMeters = 0.25f;
 
-        /// <summary>Collider the closest point came from — the line-of-sight probe needs its
-        /// <c>bounds.center</c>, not the surface point.</summary>
-        private static readonly Collider[] AreaPlayerColliders = new Collider[AreaBufferSize];
-
-        /// <summary>playerId → slot in the arrays above; also the once-per-player gate.</summary>
-        private static readonly Dictionary<int, int> AreaPlayerSlots = new Dictionary<int, int>();
-
-        /// <summary>⚠️ Separate set on purpose: a <c>netId</c> and a <c>playerId</c> collide numerically.</summary>
+        /// <summary>One hit per network object even with several colliders in the sphere.</summary>
         private static readonly HashSet<int> AreaHitObjectsOnce = new HashSet<int>();
 
         // ------------------------------------------------------------------ state
@@ -593,21 +583,26 @@ namespace VortexArena.Core.Combat
         /// protocol (§10.3), an area effect means n <c>hit_report</c>s.
         /// <para>
         /// Damage falls off linearly with distance: <paramref name="damage"/> at the centre,
-        /// <paramref name="damage"/> × <paramref name="edgeScale"/> at the edge. At most ONE hit per
-        /// player (a body has several hit boxes) and one per object.
+        /// <paramref name="damage"/> × <paramref name="edgeScale"/> at the edge. One hit per player
+        /// and one per object.
         /// </para>
+        /// <para><b>Players are scored on a body capsule, not on hit boxes</b> (<see cref="TryScoreBody"/>):
+        /// every drawn <see cref="RemoteAvatar"/> is walked and measured on the vertical capsule from
+        /// its arena floor to its head pose. Hit boxes stay the weapon raycast's business — they hang
+        /// on animated bones that lag and sink, and a per-box rule made the same bomb read the head
+        /// (≈1,7 m up) for a player standing one step away.</para>
         /// <para>⚠️ <b>Order with cover: absorb first, fall off second.</b> Breakable cover is
         /// subtracted from the CENTRE damage and the falloff then runs on the remainder — the blast
         /// spends its energy on the cover, and what survives travels the same curve it always would.
         /// Falling off first and subtracting after charges the cover against an already-reduced
         /// number, and a bomb that provably breaks a cover reaches nobody behind it
         /// (Docs/Gelistirici/Yapma-Listesi.md, "Alan hasarı ve siper").</para>
-        /// <para>⚠️ <b>The local player is NOT in this list and cannot be</b>: player targets are found
-        /// from <see cref="RemoteHitBox"/> colliders and the local rig carries none. Self damage goes
-        /// through <see cref="ReportAreaSelfHit"/>.</para>
+        /// <para>⚠️ <b>The local player is NOT in this list</b>: it has no <see cref="RemoteAvatar"/>.
+        /// Self damage goes through <see cref="ReportAreaSelfHit"/> — the same capsule rule.</para>
         /// </summary>
-        /// <param name="layerMask">Layers to look for targets on; <c>0</c> means
-        /// <see cref="ArenaLayers.AreaTargetMask"/>. Triggers never match.</param>
+        /// <param name="layerMask">Layers to look for network OBJECTS on; <c>0</c> means
+        /// <see cref="ArenaLayers.AreaTargetMask"/>. Triggers never match. Players are not found
+        /// through this query.</param>
         /// <param name="requireLineOfSight">Make cover count: solid cover between the target and the
         /// centre blocks the blast, breakable cover only ABSORBS its remaining health
         /// (<see cref="TryPenetrateArea"/>). Off by default — a blast wrapping a corner is the old
@@ -622,7 +617,27 @@ namespace VortexArena.Core.Combat
                 return 0;
             }
 
-            AreaPlayerSlots.Clear();
+            int reported = 0;
+
+            // Players: every drawn remote avatar on its body capsule (head pose + arena floor).
+            RemoteAvatar[] avatars = Object.FindObjectsByType<RemoteAvatar>(FindObjectsSortMode.None);
+            for (int i = 0; i < avatars.Length; i++)
+            {
+                RemoteAvatar avatar = avatars[i];
+                if (avatar == null || avatar.PlayerId <= 0 || !avatar.IsTargetable)
+                {
+                    continue;
+                }
+
+                if (TryScoreBody(worldCenter, radius, damage, edgeScale, requireLineOfSight,
+                        avatar.PlayerId, avatar.HeadWorld, out Vector3 playerPoint, out float applied))
+                {
+                    ReportHit(avatar.PlayerId, playerPoint, applied, weaponId);
+                    reported++;
+                }
+            }
+
+            // Objects: overlap query on the damageable layers.
             AreaHitObjectsOnce.Clear();
 
             // 0 = "the damageable layers", not "nothing": no caller ever wants a query that can match
@@ -643,37 +658,13 @@ namespace VortexArena.Core.Combat
                                "yarıçapı küçült ya da layerMask ver — HEDEF ATLANMIŞ OLABİLİR.");
             }
 
-            int reported = 0;
             for (int i = 0; i < count; i++)
             {
                 Collider collider = OverlapBuffer[i];
 
-                if (TryGetTargetPlayerId(collider, out int playerId))
+                // Hit boxes are players — scored above on the capsule, never here.
+                if (TryGetTargetPlayerId(collider, out int _))
                 {
-                    // ⚠️ A body has several hit boxes and OverlapSphere returns them in an UNDEFINED
-                    // order: taking the first one made the same bomb read the head box or the leg box,
-                    // a 3× damage difference. Keep the CLOSEST point, decide after the walk.
-                    Vector3 candidate = collider.ClosestPoint(worldCenter);
-                    float candidateSqr = (candidate - worldCenter).sqrMagnitude;
-
-                    if (AreaPlayerSlots.TryGetValue(playerId, out int slot))
-                    {
-                        if (candidateSqr < AreaPlayerSqrDistances[slot])
-                        {
-                            AreaPlayerPoints[slot] = candidate;
-                            AreaPlayerSqrDistances[slot] = candidateSqr;
-                            AreaPlayerColliders[slot] = collider;
-                        }
-
-                        continue;
-                    }
-
-                    slot = AreaPlayerSlots.Count;
-                    AreaPlayerSlots[playerId] = slot;
-                    AreaPlayerIds[slot] = playerId;
-                    AreaPlayerPoints[slot] = candidate;
-                    AreaPlayerSqrDistances[slot] = candidateSqr;
-                    AreaPlayerColliders[slot] = collider;
                     continue;
                 }
 
@@ -710,57 +701,17 @@ namespace VortexArena.Core.Combat
                 ReportObjectHit(netId, point, appliedToObject, weaponId);
             }
 
-            // One hit per player, measured from the closest body point collected above.
-            int players = AreaPlayerSlots.Count;
-            for (int s = 0; s < players; s++)
-            {
-                Collider collider = AreaPlayerColliders[s];
-                Vector3 playerPoint = AreaPlayerPoints[s];
-                float through = damage;
-
-                // ⚠️ The LOS ray goes to the collider's CENTRE, not to the closest point: the closest
-                // point sits ON the surface, and a wall touching the target would read as clear.
-                if (requireLineOfSight)
-                {
-                    if (!TryPenetrateArea(worldCenter, collider.bounds.center, 0, out float absorbed))
-                    {
-                        continue;
-                    }
-
-                    through = damage - absorbed;
-                }
-
-                // ⚠️ Cover is subtracted from the CENTRE damage and falloff runs on what is left —
-                // never the other way round. Falloff first would charge the cover against an
-                // already-reduced number, so a 250 bomb would fail to reach past a 200 cover it
-                // demonstrably breaks (Yapma-Listesi, "Alan hasarı ve siper").
-                float applied = through > 0f
-                    ? AreaFalloff(worldCenter, playerPoint, radius, through, edgeScale)
-                    : 0f;
-
-                if (applied <= 0f)
-                {
-                    continue;
-                }
-
-                ReportHit(AreaPlayerIds[s], playerPoint, applied, weaponId);
-                reported++;
-            }
-
             return reported;
         }
 
         /// <summary>
         /// <b>The blast damaged ME</b> — the local player's own share of an area effect.
-        /// <para><b>Why this is not part of <see cref="ReportAreaHit"/>:</b> that one finds targets from
-        /// <see cref="RemoteHitBox"/> colliders and <b>the local rig has none</b>, so self damage could
-        /// never come out of it. The distance is measured to the closest point of the vertical
-        /// floor→head segment (<see cref="WeaponGranter.TryResolveHead"/> + the ARENA floor of the
-        /// player's own storey, <see cref="ArenaFloors"/>) — the local rig's body proxy, so a bomb at
-        /// your feet is not scored from your eyes and crouching does not change the answer. ⚠️ The
-        /// floor is NOT the rig's tracking space: with an eye-level tracking origin that plane sits at
-        /// the head, the segment collapses to the eyes and a bomb at the feet scores as one two metres
-        /// away. The falloff formula is shared with the area path.</para>
+        /// <para><b>Why this is not part of <see cref="ReportAreaHit"/>:</b> that one walks the
+        /// <see cref="RemoteAvatar"/>s and <b>the local player has none</b>. The body is the same
+        /// capsule (<see cref="TryScoreBody"/>) from the local head
+        /// (<see cref="WeaponGranter.TryResolveHead"/>) down to the arena floor, so the thrower is
+        /// scored exactly like everyone else: a bomb at the feet is distance 0 and crouching changes
+        /// nothing.</para>
         /// <para>⚠️ <b>The friendly-fire switch is read on the CLIENT too</b> (§10.3, 5th gate): with it
         /// off the server rejects a self hit anyway, so sending would only print a rejection line per
         /// blast. The decision stays the server's — this is a noise gate, not a rule.</para>
@@ -784,46 +735,8 @@ namespace VortexArena.Core.Combat
                 return false;
             }
 
-            // Closest point of the vertical floor→head segment — the local rig's body proxy, the same
-            // "closest body point" rule ReportAreaHit uses on remote hit boxes. The floor is the arena
-            // floor of the player's storey (arena space == world space); the roster floor can lag a hop
-            // by a few frames, so a head already below it takes the storey it is actually on.
-            float floorY = ArenaFloors.HeightOf(FloorState.PlayerFloor(playerId));
-            if (head.y < floorY)
-            {
-                floorY = ArenaFloors.HeightOf(ArenaFloors.FloorAt(head.y));
-            }
-
-            Vector3 self = head;
-            if (floorY <= head.y)
-            {
-                self.y = Mathf.Clamp(worldCenter.y, floorY, head.y);
-            }
-
-            if (Vector3.Distance(worldCenter, self) > radius)
-            {
-                return false;
-            }
-
-            float through = damage;
-
-            if (requireLineOfSight)
-            {
-                // Ray target stays the HEAD: a ray to a point on the floor is meaningless.
-                if (!TryPenetrateArea(worldCenter, head, 0, out float absorbed))
-                {
-                    return false;
-                }
-
-                through = damage - absorbed;
-            }
-
-            // Same order as ReportAreaHit: cover comes off the centre damage, falloff runs on the rest.
-            float applied = through > 0f
-                ? AreaFalloff(worldCenter, self, radius, through, edgeScale)
-                : 0f;
-
-            if (applied <= 0f)
+            if (!TryScoreBody(worldCenter, radius, damage, edgeScale, requireLineOfSight, playerId, head,
+                    out Vector3 self, out float applied))
             {
                 return false;
             }
@@ -834,10 +747,76 @@ namespace VortexArena.Core.Combat
 
         // ---------------------------------------------------------------- helpers
 
-        /// <summary>Linear falloff shared by both area paths: <paramref name="damage"/> at the centre,
-        /// <c>damage × edgeScale</c> at the radius. ⚠️ One formula AND one measuring rule (closest
-        /// body point, both paths), or the thrower would take damage on a different curve than
-        /// everyone else.</summary>
+        /// <summary>
+        /// Scores ONE player against an area effect on the body proxy: a vertical capsule of
+        /// <see cref="BodyProxyRadiusMeters"/> from the player's arena floor up to
+        /// <paramref name="head"/>. The distance runs to the capsule SURFACE (centre inside the body
+        /// = 0 = full damage), the cover ray to the capsule's centre.
+        /// <para>⚠️ The floor is the ARENA floor of the player's storey (<see cref="ArenaFloors"/>,
+        /// arena space == world space) — never the rig's tracking space: with an eye-level tracking
+        /// origin that plane sits at the head, the capsule collapses to the eyes and a bomb at the
+        /// feet scores as one two metres away.</para>
+        /// </summary>
+        /// <param name="point">Capsule point the hit is reported at.</param>
+        /// <param name="applied">Damage after cover and falloff.</param>
+        /// <returns><c>false</c> = out of range, blocked by solid cover, or nothing left.</returns>
+        private static bool TryScoreBody(in Vector3 worldCenter, float radius, float damage, float edgeScale,
+            bool requireLineOfSight, int playerId, in Vector3 head, out Vector3 point, out float applied)
+        {
+            applied = 0f;
+
+            // The roster floor can lag a hop by a few frames: a head already below it takes the storey
+            // it is actually on.
+            float floorY = ArenaFloors.HeightOf(FloorState.PlayerFloor(playerId));
+            if (head.y < floorY)
+            {
+                floorY = ArenaFloors.HeightOf(ArenaFloors.FloorAt(head.y));
+            }
+
+            Vector3 foot = new Vector3(head.x, Mathf.Min(floorY, head.y), head.z);
+            Vector3 axisPoint = head;
+            axisPoint.y = Mathf.Clamp(worldCenter.y, foot.y, head.y);
+
+            Vector3 delta = worldCenter - axisPoint;
+            float axisDistance = delta.magnitude;
+            point = axisDistance > BodyProxyRadiusMeters
+                ? axisPoint + delta * (BodyProxyRadiusMeters / axisDistance)
+                : worldCenter;
+
+            if (Vector3.Distance(worldCenter, point) > radius)
+            {
+                return false;
+            }
+
+            float through = damage;
+
+            if (requireLineOfSight)
+            {
+                // Ray to the capsule's CENTRE, not the surface point: a wall touching the body would
+                // read as clear from a point on the surface.
+                Vector3 centreMass = (foot + head) * 0.5f;
+                if (!TryPenetrateArea(worldCenter, centreMass, 0, out float absorbed))
+                {
+                    return false;
+                }
+
+                through = damage - absorbed;
+            }
+
+            // ⚠️ Cover is subtracted from the CENTRE damage and falloff runs on what is left — never
+            // the other way round, or a 250 bomb fails to reach past a 200 cover it demonstrably
+            // breaks (Yapma-Listesi, "Alan hasarı ve siper").
+            applied = through > 0f
+                ? AreaFalloff(worldCenter, point, radius, through, edgeScale)
+                : 0f;
+
+            return applied > 0f;
+        }
+
+        /// <summary>Linear falloff shared by every area path: <paramref name="damage"/> at the centre,
+        /// <c>damage × edgeScale</c> at the radius. ⚠️ One formula AND one measuring rule (the body
+        /// capsule for every player, the closest collider point for objects), or the thrower would
+        /// take damage on a different curve than everyone else.</summary>
         private static float AreaFalloff(in Vector3 worldCenter, in Vector3 point, float radius,
             float damage, float edgeScale)
         {

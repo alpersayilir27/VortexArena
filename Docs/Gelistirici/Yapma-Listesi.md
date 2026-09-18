@@ -244,9 +244,10 @@ sipere düşümle küçülmüş bir sayı üzerinden bedel ödetir. Belirti: bom
 verip onu kırar, ama arkasındaki oyuncuya sıfır hasar gider; siper zaten kırıkken (soğurma sıfır)
 aynı bomba aynı yerden öldürür — bu yüzden "menzil sorunu" gibi okunur ve teşhisi pahalıdır.
 Kural üç yolda da aynıdır (uzak oyuncu · ağ nesnesi · kendine hasar); biri sapınca atan
-başkasından farklı bir eğriye tabi olur. Mesafenin ölçüldüğü nokta da sabittir: gövdeye **en yakın
-nokta** — uzakta oyuncunun en yakın çarpma kutusu, yerelde zemin izdüşümü→kafa doğru parçasının en
-yakın noktası. Kafa gibi tek bir noktadan ölçmek ayağının dibindeki bombayı uzak sayar ve çömelmeyi
+başkasından farklı bir eğriye tabi olur. Mesafenin ölçüldüğü nokta da sabittir: oyuncu için
+**gövde kapsülünün yüzeyi** (arena zemini→kafa; atan ve diğerleri için aynı kapsül), ağ nesnesi için
+collider'ın en yakın noktası. Kafa gibi tek bir noktadan ya da kemiğe asılı isabet kutularından
+ölçmek ayağının dibindeki bombayı uzak sayar, bir adım ötedekini kafasından puanlar ve çömelmeyi
 hasar ayarına çevirir.
 
 ---
