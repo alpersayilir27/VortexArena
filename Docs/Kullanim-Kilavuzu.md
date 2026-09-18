@@ -913,14 +913,21 @@ yürüdüğü yer aynı kalır, değişen yalnız gözlükte gördüğü kattır
 - **Aynı anda tek kişi geçer.** İkinci kişi beklerken dairesi **kırmızı** olur ve "Portal meşgul"
   yazar — sırayla geçmeleri gerekir. Oyuncuya söylenecek cümle: **"Daire kırmızıysa bekle, sıra
   sende değil."**
-- **Ölen oyuncu otomatik olarak kendi tabanının katına iner** (ekranı kısa süre kararır). Aksi hâlde
-  üst katta ölen oyuncu, aşağıdaki taban bölgesine hiç ulaşamaz ve canlanamazdı.
-- **Başka kattaki rakip yarı saydam bir siluet** olarak görünür: nerede olduğu anlaşılır ama
-  **o siluet vurulamaz.** Oyuncunun gerçek gövdesi kendi katındadır ve orada vurulur; adının yanında
-  "(ÜST KAT)" ya da "(ALT KAT)" yazar. Oyuncuya söylenecek cümle: **"Hayalet gibi görünen rakibe
-  ateş etme, o başka katta."**
+- **Ölen oyuncu otomatik olarak kendi tabanının katına iner** (ekranı kısa süre kararır) — ölüm
+  oyuncuyu her zaman **aşağı** taşır, asla yukarı. Aksi hâlde üst katta ölen oyuncu, aşağıdaki taban
+  bölgesine hiç ulaşamaz ve canlanamazdı.
+- **Başka kattaki rakip soluk, düz bir siluet** olarak görünür: takım renginde ama **yüzde 20
+  saydamlıkta**, kenarı parlamayan bir figür — nerede olduğu anlaşılır ama **o siluet vurulamaz.**
+  Oyuncunun gerçek gövdesi kendi katındadır ve orada vurulur; adının yanında "(ÜST KAT)" ya da
+  "(ALT KAT)" yazar. Ölü oyuncunun hayaleti buna benzemez (kenarı parlar) — siluet **canlı** bir
+  rakiptir. Oyuncuya söylenecek cümle: **"Soluk görünen rakibe ateş etme, o başka katta."**
 - Yönetim ekranındaki oyuncu listesinde, üst kattaki oyuncunun satırında **"1. kat"** gibi bir not
   çıkar (zemin katta bir şey yazmaz; zemin 0, bir üstü 1. kattır) ve kuş bakışında halkası o katın zemininde durur.
+- **Katlı arenada alt barda kat düğmeleri belirir** — BAŞLAT/BİTİR düğmelerinin sağında **Zemin**,
+  **1. kat**, **2. kat** … Bir kata basmak ekranı o katın kuş bakışına alır ve **yalnız o katı**
+  gösterir: diğer katların oyuncuları, halkaları ve zeminleri görünmez olur, yani üst kat plakası
+  alt kattaki kalabalığı gizlemez. Serbest kamerada ve oyuncu gözünde (POV) böyle bir ayıklama
+  yoktur. Yeni harita yüklenince seçim **Zemin**'e döner.
 
 **Maçı geçici olarak durdurmak (DURAKLAT)**
 

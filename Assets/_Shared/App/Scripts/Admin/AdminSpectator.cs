@@ -129,6 +129,9 @@ namespace VortexArena.App.Admin
             // where, so the spectator is exempt.
             RemoteAvatar.SpectatorMode = true;
 
+            // The observer stands on no floor: no floor silhouettes, no "(ÜST KAT)" suffixes.
+            FloorState.ViewerHasFloor = false;
+
             // Window mode restores the operator's last choice (F11 / preferences). ⚠️ Admin role
             // only: the player client runs on Quest, where there are no windows.
             AdminSession.ApplyScreenMode();
@@ -157,8 +160,9 @@ namespace VortexArena.App.Admin
             Camera = cameraGo.AddComponent<Camera>();
             Camera.clearFlags = CameraClearFlags.Skybox;
             Camera.fieldOfView = 70f;
-            Camera.nearClipPlane = 0.05f;
-            Camera.farClipPlane = 300f;
+            // Same consts the camera driver restores per mode entry — one source for the range.
+            Camera.nearClipPlane = AdminSpectatorCamera.DefaultNearClip;
+            Camera.farClipPlane = AdminSpectatorCamera.DefaultFarClip;
 
             // Post-processing: admin only. URP defaults it to off on a camera built at runtime, so
             // the project's default volume profile (tonemapping/bloom/vignette) would never render.
@@ -259,6 +263,9 @@ namespace VortexArena.App.Admin
             //    ArenaRoof.OnEnable applies the last alpha itself, so this is only a refresh for
             //    preferences changed before the scene loaded.
             RefreshRoof();
+
+            // 6) A new arena starts on the ground floor; the old selection may not exist here.
+            AdminSession.Floor = 0;
 
             if (_cameraDriver != null)
             {

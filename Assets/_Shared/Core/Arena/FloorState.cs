@@ -35,6 +35,11 @@ namespace VortexArena.Core.Arena
         /// <summary>Local player's floor index.</summary>
         public static int Local { get; private set; }
 
+        /// <summary>False on the admin observer: it stands on no floor, so "my floor" comparisons
+        /// (silhouettes, label suffixes) mean nothing there. Set by the App layer at startup —
+        /// Core cannot see the role.</summary>
+        public static bool ViewerHasFloor { get; set; } = true;
+
         /// <summary>Vertical lift currently applied to the rig for <see cref="Local"/> (m).</summary>
         public static float LiftMeters => ArenaFloors.HeightOf(Local);
 
@@ -50,6 +55,20 @@ namespace VortexArena.Core.Arena
         private static int _serverFloor;
         private static bool _pending;
         private static float _confirmUntil;
+
+        // Running fade: the target is a field so a second request can RETARGET it before the black
+        // moment; past black only a queued request can still be honoured.
+        private static int _fadeTarget;
+        private static bool _fadeSend;
+        private static bool _fadeAtBlack;
+
+        private static bool _hasQueued;
+        private static int _queuedFloor;
+        private static string _queuedReason;
+        private static float _queuedOut;
+        private static float _queuedHold;
+        private static float _queuedIn;
+        private static bool _queuedSend;
 
         private Coroutine _fadeRoutine;
 
@@ -109,10 +128,8 @@ namespace VortexArena.Core.Arena
         /// <remarks><paramref name="reason"/> only names the call site in the log ("portal" | "ölüm").</remarks>
         public static bool Request(int floor, string reason)
         {
-            if (floor < 0 || floor >= ArenaFloors.Count || floor > ArenaProtocol.MAX_FLOOR_INDEX)
+            if (!IsValidFloor(floor, reason))
             {
-                Debug.LogWarning($"[Kat] {reason}: kat {floor} bu arenada yok (kat sayısı " +
-                                 $"{ArenaFloors.Count}) — istek yok sayıldı.");
                 return false;
             }
 
@@ -128,27 +145,90 @@ namespace VortexArena.Core.Arena
             return true;
         }
 
-        /// <summary>Floor change behind a black screen: fade out, move at full black, fade in.</summary>
-        /// <remarks>A second call while one runs is IGNORED — restarting the fade would show the
-        /// player the arena from the wrong floor mid-blink.</remarks>
-        public static void MoveWithFade(
+        /// <summary>Floor change behind a black screen: fade out, move at full black, fade in;
+        /// <c>false</c> = nothing will move.</summary>
+        /// <remarks>A second call while one runs is NOT ignored: before the black moment it RETARGETS
+        /// the running fade, after it the request is QUEUED and run when the fade ends — the fade is
+        /// never restarted, which would show the player the arena from the wrong floor mid-blink.</remarks>
+        public static bool MoveWithFade(
             int floor, string reason, float fadeOutSeconds, float holdSeconds, float fadeInSeconds)
         {
+            return MoveWithFadeInternal(
+                floor, reason, fadeOutSeconds, holdSeconds, fadeInSeconds, send: true);
+        }
+
+        /// <summary><paramref name="send"/> false = apply locally only, for floors the SERVER already
+        /// wrote (echoing them back would ping-pong with its own reset).</summary>
+        private static bool MoveWithFadeInternal(
+            int floor, string reason, float outS, float holdS, float inS, bool send)
+        {
+            if (!IsValidFloor(floor, reason))
+            {
+                return false;
+            }
+
             FloorState instance = Instance;
             if (instance == null)
             {
-                Request(floor, reason); // no singleton (edit-mode/teardown): the move still matters
-                return;
+                // No singleton (edit-mode/teardown): the move still matters, just without the fade.
+                if (send)
+                {
+                    Request(floor, reason);
+                }
+                else
+                {
+                    ApplyLocal(floor);
+                }
+
+                return true;
             }
 
-            if (instance._fadeRoutine != null)
+            if (instance._fadeRoutine == null)
             {
-                Debug.Log($"[Kat] {reason}: bir kat geçişi sürüyor — istek yok sayıldı.");
-                return;
+                if (floor == Local)
+                {
+                    return false;
+                }
+
+                _fadeTarget = floor;
+                _fadeSend = send;
+                _fadeAtBlack = false;
+                instance._fadeRoutine = instance.StartCoroutine(
+                    instance.FadeMove(reason, outS, holdS, inS));
+                return true;
             }
 
-            instance._fadeRoutine = instance.StartCoroutine(
-                instance.FadeMove(floor, reason, fadeOutSeconds, holdSeconds, fadeInSeconds));
+            if (!_fadeAtBlack)
+            {
+                _fadeTarget = floor;
+                _fadeSend = send;
+                Debug.Log($"[Kat] {reason}: sürmekte olan geçişin hedefi kat {floor} olarak güncellendi.");
+                return true;
+            }
+
+            // Past black: only one request is kept — a newer one replaces the older.
+            _hasQueued = true;
+            _queuedFloor = floor;
+            _queuedReason = reason;
+            _queuedOut = outS;
+            _queuedHold = holdS;
+            _queuedIn = inS;
+            _queuedSend = send;
+            Debug.Log($"[Kat] {reason}: kat {floor} isteği kuyruğa alındı.");
+            return true;
+        }
+
+        /// <summary>Range gate shared by <see cref="Request"/> and the fade path.</summary>
+        private static bool IsValidFloor(int floor, string reason)
+        {
+            if (floor >= 0 && floor < ArenaFloors.Count && floor <= ArenaProtocol.MAX_FLOOR_INDEX)
+            {
+                return true;
+            }
+
+            Debug.LogWarning($"[Kat] {reason}: kat {floor} bu arenada yok (kat sayısı " +
+                             $"{ArenaFloors.Count}) — istek yok sayıldı.");
+            return false;
         }
 
         private void Update()
@@ -167,12 +247,21 @@ namespace VortexArena.Core.Arena
             }
 
             Debug.LogWarning($"[Kat] sunucu kat {Local} isteğini yankılamadı — geri alındı.");
-            ApplyLocal(_serverFloor);
+            MoveWithFadeInternal(_serverFloor, "geri alma", 0.25f, 0.1f, 0.4f, send: false);
         }
 
         /// <summary>Writes the floor locally: rig lift + event. Sends NOTHING — the callers decide.</summary>
         private static void ApplyLocal(int floor)
         {
+            // The server keeps only a ledger and knows no geometry: a stale roster row must not leave
+            // Local outside the arena.
+            if (floor < 0 || floor >= ArenaFloors.Count)
+            {
+                Debug.LogWarning($"[Kat] kat {floor} bu arenada yok (kat sayısı {ArenaFloors.Count}) — " +
+                                 "0. kata düşürüldü.");
+                floor = 0;
+            }
+
             Local = floor;
             ArenaCalibrator.SetFloorLift(ArenaFloors.HeightOf(floor));
             Changed?.Invoke();
@@ -193,7 +282,7 @@ namespace VortexArena.Core.Arena
         }
 
         private IEnumerator FadeMove(
-            int floor, string reason, float fadeOutSeconds, float holdSeconds, float fadeInSeconds)
+            string reason, float fadeOutSeconds, float holdSeconds, float fadeInSeconds)
         {
             // Unscaled throughout: the blackout is presentation and must finish even if the match is
             // paused with timeScale.
@@ -206,7 +295,18 @@ namespace VortexArena.Core.Arena
             }
 
             ScreenFade.Report(FadeSourceId, 1f, Color.black);
-            Request(floor, reason);
+
+            // Target read HERE, not from a parameter: a request arriving during the fade-out
+            // retargets this same blink instead of starting a second one.
+            _fadeAtBlack = true;
+            if (_fadeSend)
+            {
+                Request(_fadeTarget, reason);
+            }
+            else
+            {
+                ApplyLocal(_fadeTarget);
+            }
 
             elapsed = 0f;
             while (elapsed < holdSeconds)
@@ -228,6 +328,13 @@ namespace VortexArena.Core.Arena
             // timeout, which would hold the screen dark a quarter second longer.
             ScreenFade.Report(FadeSourceId, 0f, Color.black);
             _fadeRoutine = null;
+
+            if (_hasQueued)
+            {
+                _hasQueued = false;
+                MoveWithFadeInternal(
+                    _queuedFloor, _queuedReason, _queuedOut, _queuedHold, _queuedIn, _queuedSend);
+            }
         }
 
         private void HandleConnected(WelcomeMsg msg)
@@ -287,7 +394,7 @@ namespace VortexArena.Core.Arena
             }
 
             Debug.Log($"[Kat] sunucu katı {_serverFloor} yazdı — rig o kata alındı.");
-            ApplyLocal(_serverFloor);
+            MoveWithFadeInternal(_serverFloor, "sunucu", 0.25f, 0.1f, 0.4f, send: false);
         }
 
         /// <summary>On death the player is taken to their base's floor: reviving means walking into
@@ -303,6 +410,10 @@ namespace VortexArena.Core.Arena
                          PlayerCombatState.Instance.TryGetOpenBaseFloor(out int baseFloor)
                 ? baseFloor
                 : 0;
+
+            // Never UP: floor 0 always carries a base (project rule), and lifting a corpse onto a
+            // plate that may not be under it would hang it in the air.
+            target = Mathf.Min(target, Local);
 
             if (target == Local)
             {
@@ -321,7 +432,20 @@ namespace VortexArena.Core.Arena
                 return;
             }
 
+            // A fade crossing a scene load would re-apply the OLD arena's floor after this reset.
+            if (_fadeRoutine != null)
+            {
+                StopCoroutine(_fadeRoutine);
+                _fadeRoutine = null;
+            }
+
+            _hasQueued = false;
+            ScreenFade.Report(FadeSourceId, 0f, Color.black);
+
             _pending = false;
+            Floors.Clear();
+            _serverFloor = 0;
+
             if (Local != 0)
             {
                 ApplyLocal(0);

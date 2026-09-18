@@ -141,6 +141,11 @@ namespace VortexArena.Core.Player
         /// always more opaque.</summary>
         private const float GhostBaseAlpha = 0.28f;
 
+        /// <summary>Silhouette opacity: flat 20 %, deliberately unlike the dead ghost (rim glow on
+        /// <see cref="GhostBaseAlpha"/>) — a silhouette is a LIVE opponent on another floor and must
+        /// not read as a corpse.</summary>
+        private const float SilhouetteAlpha = 0.2f;
+
         /// <summary>RED team colour of the ghost body. ⚠️ The opaque team colours are not reused: a
         /// colour picked for an opaque body washes out at <see cref="GhostBaseAlpha"/>. Second tones of
         /// the same team, not a second palette.</summary>
@@ -331,6 +336,9 @@ namespace VortexArena.Core.Player
 
         /// <summary>World Y shift the ghost shader applies to the silhouette (<c>_FloorShift</c>).</summary>
         private static readonly int FloorShiftId = Shader.PropertyToID("_FloorShift");
+
+        /// <summary>Ghost rim strength (<c>_RimStrength</c>), zeroed on the silhouette.</summary>
+        private static readonly int RimStrengthId = Shader.PropertyToID("_RimStrength");
 
         /// <summary>Property block of the silhouette shells — SEPARATE from the body's and the shield's:
         /// a block applies per renderer as a whole, so a shared one would leak <c>_FloorShift</c> onto
@@ -644,7 +652,9 @@ namespace VortexArena.Core.Player
                 shellBounds.Expand(boundsPadding);
                 shellSkinned.localBounds = shellBounds;
 
-                shellSkinned.updateWhenOffscreen = skinned.updateWhenOffscreen;
+                // ⚠️ Forced off (not copied): true lets Unity rewrite localBounds every frame and the
+                // shift padding above would be lost silently.
+                shellSkinned.updateWhenOffscreen = false;
                 shellRenderer = shellSkinned;
             }
             else
@@ -791,6 +801,7 @@ namespace VortexArena.Core.Player
             }
 
             character.BodyScale = applied;
+            RefreshSilhouette(); // the shell bounds padding is divided by this scale
         }
 
         /// <summary>Name label; suffixed " (ölü)" while dead and " (KALİBRESİZ)" while uncalibrated. The
@@ -804,7 +815,7 @@ namespace VortexArena.Core.Player
             if (nameLabel != null)
             {
                 string suffix = !IsCalibrated ? UncalibratedLabelSuffix : IsAlive ? "" : DeadLabelSuffix;
-                if (_otherFloor)
+                if (_otherFloor && FloorState.ViewerHasFloor)
                 {
                     suffix += Floor > FloorState.Local ? UpperFloorLabelSuffix : LowerFloorLabelSuffix;
                 }
@@ -1079,7 +1090,7 @@ namespace VortexArena.Core.Player
                 : _bodySilhouetteShells;
             SetRenderersEnabled(passive, false);
 
-            bool draw = _visible && _otherFloor;
+            bool draw = _visible && _otherFloor && FloorState.ViewerHasFloor;
             if (draw && (shells == null || shells.Length == 0))
             {
                 WarnMissingSilhouetteSetup();
@@ -1093,14 +1104,20 @@ namespace VortexArena.Core.Player
             }
 
             Color color = _ghostTeamColor;
-            color.a = GhostBaseAlpha;
+            color.a = SilhouetteAlpha;
 
             _silhouetteBlock ??= new MaterialPropertyBlock();
             _silhouetteBlock.SetColor(BaseColorId, color);
             _silhouetteBlock.SetFloat(FloorShiftId, _silhouetteShift);
+            _silhouetteBlock.SetFloat(RimStrengthId, 0f);
 
             Renderer[] sources = ActiveBodyRenderers;
-            float padding = 2f * Mathf.Abs(_silhouetteShift);
+
+            // localBounds live in root-bone space and the character root is scaled by BodyScale
+            // (ArenaNetCharacterBehaviour writes _characterRoot.localScale): without the divide a 0.5
+            // body would get half the padding and the shell could be culled while drawn on screen.
+            float rootScale = character != null && character.BodyScale > 0f ? character.BodyScale : 1f;
+            float padding = 2f * Mathf.Abs(_silhouetteShift) / rootScale;
 
             for (int i = 0; i < shells.Length; i++)
             {

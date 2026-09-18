@@ -138,7 +138,7 @@ Kalıcı tekil, kendini önyükler (`Instance`). Sahneye koyma.
 | ✅ `HpChanged` / `AliveChanged` / `StatusChanged` | olay | `float` / `bool` / `string` |
 | ✅ `LocalTeamChanged` | **statik** olay | `Team` — yalnız değer değişince. Statik olmasının sebebi: dinleyicileri kendini önyükleyen kalıcı tekiller ve `Instance`'tan önce doğabiliyorlar |
 | ✅ `LocalAliveChanged` | **statik** olay | `bool` — `AliveChanged` ile aynı anda, aynı statik-olma gerekçesiyle (`LocalTeamChanged`) |
-| ✅ `TryGetOpenBaseFloor(out int floor)` | `bool` | Oyuncuya **açık** taban bölgelerinin en alçağının katı; hiçbiri açık değilse `false`. Ölümde gidilecek kat budur (`FloorState`) — en alçağı seçilir, çünkü kat 0 her arenada var olan tek seviyedir |
+| ✅ `TryGetOpenBaseFloor(out int floor)` | `bool` | Oyuncuya **açık** taban bölgelerinin en alçağının katı; hiçbiri açık değilse `false`. Ölümde gidilecek kat budur (`FloorState`) — en alçağı seçilir, çünkü kat 0 her arenada var olan tek seviyedir. `FloorState` hedefi ayrıca bulunduğu katla sınırlar (`min(taban katı, bulunduğu kat)`): ölüm yukarı taşımaz |
 
 > ⛔ Bu sınıf hasar uygulamaz, skor tutmaz, faz değiştirmez — ve **hiçbir koşulda rig'i taşımaz.**
 
@@ -421,8 +421,9 @@ Yerel oyuncunun katı + roster aynası. Kendini önyükleyen kalıcı tekil; **s
 | ✅ `LiftMeters` | `float` | O katın zemin yüksekliği = rig kökünün dikey ofseti |
 | ✅ `Changed` | olay | Yerel kat değişti |
 | ✅ `PlayerFloor(int playerId)` | `int` | Herhangi bir oyuncunun roster katı (kendisi dahil); bilinmiyorsa `0` |
+| ✅ `ViewerHasFloor` | `bool` | İzleyenin bir katı var mı — admin gözlemcide `false`, o yüzden kat silüeti ve kat etiketi soneki çizilmez |
 | ✅ `Request(int floor, string reason)` | `bool` | Katı hemen uygular + `set_floor` yollar; `false` = aralık dışı. `reason` yalnız logda çağrı yerini adlandırır |
-| ✅ `MoveWithFade(int floor, string reason, float fadeOut, float hold, float fadeIn)` | `void` | Aynı iş karartmanın arkasında. ⚠️ Süren bir geçiş varken ikinci çağrı **yok sayılır** |
+| ✅ `MoveWithFade(int floor, string reason, float fadeOut, float hold, float fadeIn)` | `bool` | Aynı iş karartmanın arkasında; `false` = geçersiz kat ya da zaten o kat (ses/durum harcamadan önce buna bak). Süren bir geçiş varken: karartma tepesine ulaşılmadıysa **hedef güncellenir**, ulaşıldıysa **kuyruğa alınır** |
 
 > ⚠️ **Onay beklenir:** `FLOOR_CONFIRM_SECONDS` içinde kendi roster satırında yankı gelmezse yerel
 > kat geri alınır. Sunucu yalnız defter tutar — `Docs/ArenaNet-Protokol.md` §10.6 "Kat modeli".

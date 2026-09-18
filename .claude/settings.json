@@ -3,5 +3,8 @@
   "statusLine": {
     "type": "command",
     "command": "python .claude/statusline.py"
+  },
+  "enabledPlugins": {
+    "unity@claude-plugins-official": true
   }
 }

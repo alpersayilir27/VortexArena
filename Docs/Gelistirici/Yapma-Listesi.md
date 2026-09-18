@@ -353,6 +353,27 @@ portal kat listesine girmez ve uyarı basıp kendini kapatır.
 Kapıyı kafanın çember merkezine XZ mesafesi çözüyor; konan bir collider maskesiz atış ışınını ve
 engel/kavrama ölçümlerini yalanlar — geçiş noktası mermi yiyen görünmez bir disk olur.
 
+### ⛔ Portal disklerini aynı X/Z'ye koyma
+
+Kat geçişi oyuncuyu yatayda kıpırdatmaz: üst kata çıkan kafa doğrudan diğer portalın dolum
+çemberinin içine iner ve oyuncu diskten çıkmadıkça katlar arasında zincirlenir. `ArenaFloors`
+çakışan diskleri uyarır, şablon aracı portalları X'te 2 m aralıkla dizer — aralığı kapatma.
+Gerekçe: `Docs/Sistem-Ozeti.md` §7 "İki kat portalının diskleri aynı X/Z'ye KONMAZ".
+
+### ⛔ Zeminin altına kat ya da üst kata taban şeridi koyma
+
+Zemin kat (kat 0, dünya y = 0) her arenada **zorunludur**, üst katlar isteğe bağlıdır ve zeminin
+altında kat **yoktur**. Taban şeritleri de zemin kattadır: ölüm oyuncuyu tabanının katına indirir ve
+hedef hiçbir zaman bulunduğu kattan yukarı olmaz — üst kata konan bir taban, o tabana ait oyuncunun
+canlanma şartını hiç sağlayamaz.
+
+### ⛔ Alıcıda iskelet köküne kat yüksekliği ekleme
+
+İskelet karesinin `dy`'si kökün **mutlak** arena yüksekliğidir (`ArenaNet-Protokol.md` §6.9), kat
+bilgisi zaten içindedir. Üstüne kat yüksekliği eklenirse üst kattaki gövde **bir kat daha** yukarıda,
+tavanın içinde çizilir ve hata basılmaz. Kat defteri yalnız iskelet akışı yokken kullanılan yedek
+yola aittir. Gerekçe: `Docs/Sistem-Ozeti.md` §7 "Alıcıda iskelet köküne kat yüksekliği EKLENMEZ".
+
 ### ⛔ `ArenaObstacle`'ı collider sanma
 
 Fizik YAPMAZ, collider EKLEMEZ, hiçbir şeyi durdurmaz. Free-roam'da oyuncuyu durduran şey gerçek

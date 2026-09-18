@@ -139,11 +139,61 @@ namespace VortexArena.Core.Arena
                 Levels.Add(upper);
             }
 
+            WarnOverlappingPortals(portals);
+
             Version++;
 
             if (Levels.Count > 1)
             {
                 LogSummary();
+            }
+        }
+
+        /// <summary>Warns about portals whose discs share one X/Z spot on a touching floor pair: the
+        /// player arriving from one lands inside the other's dwell and is bounced on. O(n²) on
+        /// purpose — a scene holds a handful of portals.</summary>
+        private static void WarnOverlappingPortals(FloorPortal[] portals)
+        {
+            float minSeparation = 2f * FloorPortal.RadiusMeters;
+
+            for (int i = 0; i < portals.Length; i++)
+            {
+                FloorPortal a = portals[i];
+                if (a == null || !a.isActiveAndEnabled)
+                {
+                    continue;
+                }
+
+                int lowerA = IndexAt(a.transform.position.y);
+
+                for (int j = i + 1; j < portals.Length; j++)
+                {
+                    FloorPortal b = portals[j];
+                    if (b == null || !b.isActiveAndEnabled)
+                    {
+                        continue;
+                    }
+
+                    Vector3 pa = a.transform.position;
+                    Vector3 pb = b.transform.position;
+                    float dx = pa.x - pb.x;
+                    float dz = pa.z - pb.z;
+                    if (dx * dx + dz * dz >= minSeparation * minSeparation)
+                    {
+                        continue;
+                    }
+
+                    int lowerB = IndexAt(pb.y);
+                    bool touching = lowerA == lowerB || lowerA + 1 == lowerB || lowerB + 1 == lowerA;
+                    if (!touching)
+                    {
+                        continue;
+                    }
+
+                    Debug.LogWarning(
+                        $"[ArenaFloors] '{a.name}' ile '{b.name}' diskleri aynı noktada — bir portaldan " +
+                        "gelen oyuncu doğrudan diğerinin dolumuna girer; portalları X/Z'de ayır.", a);
+                }
             }
         }
 

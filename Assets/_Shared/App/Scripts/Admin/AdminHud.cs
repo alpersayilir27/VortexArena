@@ -129,6 +129,13 @@ namespace VortexArena.App.Admin
             // HUD buttons die silently.
             UiKit.EnsureEventSystem();
 
+            // Attached from code so the prefab needs no edit: the floor row is built from
+            // ArenaFloors at runtime and only exists in multi-floor arenas.
+            if (GetComponent<AdminFloorControls>() == null)
+            {
+                gameObject.AddComponent<AdminFloorControls>();
+            }
+
             WireButtons();
         }
 

@@ -1091,6 +1091,10 @@ dx,dy,dz: kökün, poz kanalındaki (§6.2) KAFANIN ZEMİN İZDÜŞÜMÜNE göre
           arena yüksekliğidir.
 ```
 
+⚠️ **Alıcı iskelet yolunda kökün y'sini doğrudan `dy`'den alır** — `dy` mutlaktır, üstüne kat
+yüksekliği eklenmez. Roster'dan gelen kat yalnız **iskelet akışı yokken** kullanılan yedek yola
+aittir.
+
 Gövde artık üç noktadan **türetilmiyor**: sahibinin cihazında Meta Movement SDK'nın body tracking'i
 koşuyor, retarget ediliyor ve **sonuç iskelet** akıyor. Sebep yapısaldır — body tracking bir cihaz
 servisidir, dışarıdan poz kabul etmez; uzak avatara "aynı body tracking'i" takmak her avatarın

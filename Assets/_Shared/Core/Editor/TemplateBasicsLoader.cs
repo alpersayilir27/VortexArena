@@ -41,6 +41,10 @@ namespace VortexArena.Core.Editor
         /// hand-set position + <c>upperHeight</c>.</summary>
         private const float DefaultFloorHeight = 3f;
 
+        /// <summary>X spacing (m) between the placed portals. ⚠️ Stacked at one X/Z, portal k's upper
+        /// disc IS portal k+1's lower disc: an arriving player lands inside the next dwell.</summary>
+        private const float PortalSpacingMeters = 2f;
+
         // Objects inside VA_CameraRig the boundary looks at. It can resolve only 'head' on its own
         // (Camera.main); the fade quad and warning text have NO fallback, so without wiring the
         // arena silently loses its warning.
@@ -277,7 +281,7 @@ namespace VortexArena.Core.Editor
             report.Add("kondu: Base_Red + Base_Blue (yerleri ELLE ayarlanır)");
         }
 
-        /// <summary>Places one <c>VA_FloorPortal</c> per extra floor at <c>(0, 3k, 0)</c>. Skipped
+        /// <summary>Places one <c>VA_FloorPortal</c> per extra floor at <c>(2k, 3k, 0)</c>. Skipped
         /// entirely when the scene already has a <see cref="FloorPortal"/> — the existing ones may
         /// have been positioned and tuned by hand.</summary>
         /// <remarks>⚠️ The placement is only a STARTING POINT: floor levels are derived from the
@@ -311,13 +315,14 @@ namespace VortexArena.Core.Editor
             {
                 var instance = (GameObject)PrefabUtility.InstantiatePrefab(asset);
                 instance.name = $"Portal_Kat{k}_{k + 1}";
-                instance.transform.position = new Vector3(0f, DefaultFloorHeight * k, 0f);
+                instance.transform.position =
+                    new Vector3(PortalSpacingMeters * k, DefaultFloorHeight * k, 0f);
                 Undo.RegisterCreatedObjectUndo(instance, "Kat Portalı");
                 placed++;
             }
 
             report.Add($"VA_FloorPortal ×{placed} kondu (kat 0→1 … kat {floorCount - 2}→{floorCount - 1}), " +
-                       "yerini ve upperHeight'ını gerçek yerleşime göre ayarla");
+                       "X'te 2 m aralıkla, yerini ve upperHeight'ını gerçek yerleşime göre ayarla");
         }
 
         /// <summary>Spawns a team coloured zone from the single <c>VA_BaseZone</c> prefab.</summary>

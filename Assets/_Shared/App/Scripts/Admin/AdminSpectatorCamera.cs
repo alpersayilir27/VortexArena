@@ -20,7 +20,8 @@ namespace VortexArena.App.Admin
     /// zooms. ⚠️ The framing's ONLY source is the scene's <see cref="ArenaBoundary"/> (no default
     /// size), as is the height (the dimension file's <c>topViewHeight</c>, else
     /// <see cref="DefaultTopDownHeight"/>). An <see cref="ArenaRoof"/> is hidden on entering this
-    /// mode (preference <c>AdminSession.Roof</c>) and restored on leaving.</item>
+    /// mode (preference <c>AdminSession.Roof</c>) and restored on leaving. In a multi-floor arena
+    /// only <c>AdminSession.Floor</c> is drawn — see <see cref="ApplyFloorBand"/>.</item>
     /// </list>
     /// <para>Poses are read in <c>LateUpdate</c>, like <c>RemoteAvatar</c>, so the camera does not
     /// lag one frame behind.</para>
@@ -44,10 +45,25 @@ namespace VortexArena.App.Admin
         private const float PovForwardOffset = 0.1f;
 
         /// <summary>
-        /// DEFAULT top-down camera height (m) — only affects clipping in orthographic. The venue's
-        /// <c>topViewHeight</c> wins when set: 20 m can sit below the roof in a tall venue.
+        /// DEFAULT top-down camera height (m) — in orthographic it only decides what the clip planes
+        /// reach. The venue's <c>topViewHeight</c> wins when set: 20 m can sit below the roof in a
+        /// tall venue. In a multi-floor arena the camera is additionally lifted above the topmost
+        /// floor (<see cref="TopFloorClearanceMeters"/>).
         /// </summary>
         private const float DefaultTopDownHeight = 20f;
+
+        /// <summary>Camera clip planes outside the top-down floor band.</summary>
+        public const float DefaultNearClip = 0.05f;
+        public const float DefaultFarClip = 300f;
+
+        /// <summary>How far below the selected floor's level the view still reaches (its own plate).</summary>
+        private const float FloorBandBelowMeters = 0.5f;
+
+        /// <summary>How far below the NEXT floor's level the view stops (keeps that plate's underside out).</summary>
+        private const float FloorBandCeilingMeters = 0.5f;
+
+        /// <summary>Minimum camera height above the highest floor level (m).</summary>
+        private const float TopFloorClearanceMeters = 5f;
 
         /// <summary>Top-down framing margin, so the arena edge does not touch the screen.</summary>
         private const float TopDownMargin = 1.08f;
@@ -110,6 +126,11 @@ namespace VortexArena.App.Admin
         private void EnterMode(AdminCameraMode mode)
         {
             _camera.orthographic = mode == AdminCameraMode.TopDown;
+
+            // Full depth range on entry: POV/free must see everything. Top-down narrows it to the
+            // selected floor's band every frame.
+            _camera.nearClipPlane = DefaultNearClip;
+            _camera.farClipPlane = DefaultFarClip;
 
             // Roof hides on entering top-down and returns on leaving (preference: AdminSession.Roof).
             AdminSpectator.RefreshRoof();
@@ -239,9 +260,11 @@ namespace VortexArena.App.Admin
                 // ⚠️ No invented framing size: look down from above the world origin and leave the
                 // orthographic size as is (the operator adjusts with the wheel).
                 WarnMissingBoundary();
+                float fallbackY = TopDownCameraHeight(DefaultTopDownHeight);
                 transform.SetPositionAndRotation(
-                    Vector3.up * DefaultTopDownHeight,
+                    Vector3.up * fallbackY,
                     Quaternion.Euler(90f, 0f, 0f));
+                ApplyFloorBand(fallbackY);
                 return;
             }
 
@@ -250,9 +273,45 @@ namespace VortexArena.App.Admin
             float sizeFromX = halfExtents.x / aspect;
             _camera.orthographicSize = Mathf.Max(sizeFromZ, sizeFromX) * TopDownMargin * _zoom;
 
+            float cameraY = center.y + TopDownCameraHeight(height);
             transform.SetPositionAndRotation(
-                center + Vector3.up * height,
+                new Vector3(center.x, cameraY, center.z),
                 Quaternion.Euler(90f, yaw, 0f));
+            ApplyFloorBand(cameraY);
+        }
+
+        /// <summary>
+        /// Height above the boundary plane. Orthographic, so this does not change the framing — but a
+        /// camera below the arena's top floor would clip it away before the band is even applied.
+        /// </summary>
+        private static float TopDownCameraHeight(float preferred)
+        {
+            return Mathf.Max(preferred, ArenaFloors.HeightOf(ArenaFloors.Count - 1) + TopFloorClearanceMeters);
+        }
+
+        /// <summary>
+        /// Narrows the top-down depth range to the selected floor (<see cref="AdminSession.Floor"/>).
+        /// <para>⚠️ A CLIP band, not a layer/tag filter: floors carry neither, their only
+        /// discriminator is world Y — <c>BaseZone</c> and <c>FloorPortal</c> derive their floor the
+        /// same way.</para>
+        /// </summary>
+        private void ApplyFloorBand(float cameraY)
+        {
+            int count = ArenaFloors.Count;
+            int floor = Mathf.Clamp(AdminSession.Floor, 0, count - 1);
+            float floorY = ArenaFloors.HeightOf(floor);
+            bool top = floor >= count - 1;
+
+            // Near: everything above the band top is cut (the next plate and the floors above it).
+            _camera.nearClipPlane = top
+                ? DefaultNearClip
+                : Mathf.Max(DefaultNearClip, cameraY - (ArenaFloors.HeightOf(floor + 1) - FloorBandCeilingMeters));
+
+            // Far: everything below the band is cut; the ground floor keeps the default (nothing is
+            // authored under it).
+            _camera.farClipPlane = floor == 0
+                ? DefaultFarClip
+                : Mathf.Max(_camera.nearClipPlane + 0.1f, cameraY - (floorY - FloorBandBelowMeters));
         }
 
         /// <summary>

@@ -101,6 +101,7 @@ namespace VortexArena.App.Admin
 
         private static AdminCameraMode _cameraMode = AdminCameraMode.TopDown;
         private static int _selectedPlayerId;
+        private static int _floor;
         private static AdminPanelKind _openPanel = AdminPanelKind.None;
 
         private static AdminMarkerVisibility _markers = AdminMarkerVisibility.TopDownOnly;
@@ -131,6 +132,22 @@ namespace VortexArena.App.Admin
                 }
 
                 _cameraMode = value;
+                Raise();
+            }
+        }
+
+        /// <summary>Floor shown by the top-down camera in a multi-floor arena; 0 = ground.</summary>
+        public static int Floor
+        {
+            get => _floor;
+            set
+            {
+                if (_floor == value)
+                {
+                    return;
+                }
+
+                _floor = value;
                 Raise();
             }
         }

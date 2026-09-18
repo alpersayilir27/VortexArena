@@ -851,10 +851,12 @@ namespace VortexArena.Core.Player
                 return false;
             }
 
-            // The head is projected onto ITS OWN floor, not onto y=0.
-            // ⚠️ The roster floor can lag the pose by a few frames at a hop, so the POSE wins when it is
-            // already below that floor: a head can never be below the floor it stands on, and trusting
-            // the stale roster would hang the body one storey up.
+            // ⚠️ FALLBACK ONLY. The wire root's oy is the root's ABSOLUTE arena height (§6.9: the head
+            // projection has y = 0), so the skeleton path takes y straight from the wire — adding the
+            // roster floor there would lift an upper-floor body one storey above its own head.
+            // Here the head is projected onto ITS OWN floor, not onto y=0; the roster floor can lag the
+            // pose by a few frames at a hop, so the POSE wins when it is already below that floor (a
+            // head can never be below the floor it stands on).
             float floorY = ArenaFloors.HeightOf(FloorState.PlayerFloor(PlayerId));
             if (head.position.y < floorY)
             {
@@ -869,7 +871,9 @@ namespace VortexArena.Core.Player
             if (ageMs >= 0 && ageMs <= SkeletonDeadAfterMs &&
                 skeletons.TryGetInterpolatedRoot(PlayerId, renderTick, out float yawDeg, out Vector3 offset))
             {
-                var arenaRoot = new Pose(headFloor + offset, Quaternion.Euler(0f, yawDeg, 0f));
+                var arenaRoot = new Pose(
+                    new Vector3(headFloor.x + offset.x, offset.y, headFloor.z + offset.z),
+                    Quaternion.Euler(0f, yawDeg, 0f));
                 world = ArenaSpace.ArenaToWorld(arenaRoot);
                 fromSkeleton = true;
                 return true;

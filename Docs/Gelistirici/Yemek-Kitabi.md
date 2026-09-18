@@ -1297,15 +1297,22 @@ Arena birden çok katta oynanacak. Oyuncu fiziksel olarak tek katta yürümeye d
 değişimi **dikey sanal ofsettir** (`Docs/Sistem-Ozeti.md` §3.13, ağ tarafı
 `ArenaNet-Protokol.md` §10.6 "Kat modeli").
 
+**Haritanın kat kuralları — tasarıma başlamadan önce:**
+
+- **Zemin kat (kat 0, dünya y = 0) zorunludur**, üst katlar isteğe bağlıdır.
+- **Zeminin altına kat konmaz** (bodrum diye bir seviye yoktur).
+- **Her takımın taban şeridi zemin kattadır**, üst kata taban konmaz: ölüm oyuncuyu tabanının katına
+  indirir ve hedef hiçbir zaman bulunduğu kattan yukarı değildir.
+
 | # | Yaptığın | Görmen gereken |
 |---|---|---|
 | 1 | `Tools > VortexArena > Arena > Kat Portalı Kitini Üret` | `M_FloorPortal` + `M_FloorPortalFill` ve `VA_FloorPortal.prefab` üretildi/güncellendi (konsolda tek satır). Kit zaten varsa da çalıştırılabilir |
-| 2 | `Tools > VortexArena > Arena > Template Temellerini Yükle` → **Kat sayısı** = kaç kat oynanacaksa (1–4) → *Yükle* | Her ek kat için bir `Portal_Kat{k}_{k+1}` örneği sahnede. Sahnede zaten portal varsa araç hiç dokunmaz (raporda "atlandı") |
-| 3 | Her portalı oynanacak yere **taşı** (ölçek 1 kalır) ve `upperHeight`'ını gerçek kat yüksekliğine yaz | `Üst` çemberi o yükseklikte belirir (Gizmo çemberleri Scene view'de çizilir). ⚠️ Portalın **kökü kendi katının zeminine** oturmalı (±0,25 m) |
+| 2 | `Tools > VortexArena > Arena > Template Temellerini Yükle` → **Kat sayısı** = kaç kat oynanacaksa (1–4) → *Yükle* | Her ek kat için bir `Portal_Kat{k}_{k+1}` örneği sahnede, X'te 2 m aralıkla dizili (`Portal_Kat0_1` (0,0,0), `Portal_Kat1_2` (2,3,0) …). Sahnede zaten portal varsa araç hiç dokunmaz (raporda "atlandı") |
+| 3 | Her portalı oynanacak yere **taşı** (ölçek 1 kalır) ve `upperHeight`'ını gerçek kat yüksekliğine yaz | `Üst` çemberi o yükseklikte belirir (Gizmo çemberleri Scene view'de çizilir). ⚠️ Portalın **kökü kendi katının zeminine** oturmalı (±0,25 m); ⚠️ iki portalın diskleri **aynı X/Z'ye gelmez** — konsolda çakışma uyarısı görürsen portalı kaydır |
 | 4 | Üst kat plakasını (zemin mesh'i) portalın tanımladığı yüksekliğe kur; collider'ı **`Default`** layer'da bırak | Alt kattan yukarı ateş eden oyuncunun mermisi plakada durur. ⚠️ Plakayı **`Obstacle` layer'ına ALMA** — üst kattaki herkes sürekli ihlalde sayılır ve ekranı kararır |
 | 5 | (İsteğe bağlı, admin kuş bakışı için) plakayı `ArenaRoof` kökünün altına al — `GameObject > VortexArena > Arena Roof` | Admin tepeden bakarken üst kat gizlenir, alt kat okunur |
 | 6 | Portalın ses kancalarını bağla: dolum (2 sn boyunca döner) · geçiş anı · meşgul uyarısı | Boş bırakılan kanca sessizdir, uyarı çıkmaz |
-| 7 | Taban bölgelerini **hangi katta oynanacaksa** o katın zeminine koy | Ölen oyuncu o katın zeminine indirilir; bölge yalnız oyuncunun katı ona eşitken içeride sayar |
+| 7 | Taban bölgelerini **zemin kata** koy (üst kata taban konmaz) | Ölen oyuncu tabanının katına iner; bölge yalnız oyuncunun katı ona eşitken içeride sayar |
 | 8 | Play (ya da gözlükte aç) | Konsolda `[ArenaFloors] n kat: 0.00 m / 3.00 m …`. Çemberin üstünde 2 sn durunca HUD'da geri sayım, sonra kısa karartma ve diğer kat |
 | 9 | Admin istatistik panelini aç | Üst kattaki oyuncunun ayrıntı şeridinde `1. kat` jetonu (zemin kat 0'dır, yazılmaz), halkası onun katının zemininde |
 
@@ -1317,6 +1324,15 @@ değişimi **dikey sanal ofsettir** (`Docs/Sistem-Ozeti.md` §3.13, ağ tarafı
 - **Çemberlere collider ekleme** — kapı kafanın XZ mesafesiyle çalışır; collider atış izini yer.
 - **Aynı anda tek oyuncu geçer:** iki kattaki çemberlerin içindeki en düşük `playerId` sahiptir,
   diğeri kırmızı çember + "Portal meşgul" görür. Ölü oyuncu da geçebilir; kalibre olmayan geçemez.
+- **Portal disklerini aynı X/Z'ye koyma:** geçiş yatayda kıpırdatmadığı için gelen oyuncu doğrudan
+  diğerinin dolumuna iner ve katlar arasında zincirlenir. Şablon aracının 2 m aralığı bunun içindir.
+- **Admin kat seçicisi için sahnede hiçbir şey kurmazsın** (kat düğmeleri kat sayısından türer), ama
+  bedeli şudur: kuş bakışı katları yalnız **dünya Y'sine** göre ayırır — üst kat plakası gerçek
+  yükseklikte **gerçek geometri** olmalıdır, "göze öyle dursun" diye alçağa kurulmuş bir plaka
+  operatörün kat görüntüsünü yalanlar.
+- **Başka kattaki oyuncu** izleyenin katına düz, kenar parlaması olmayan, %20 saydamlıkta takım
+  tonunda bir **silüet** olarak düşer (ölü/kalibresiz hayaletten bilerek farklı görünür); gerçek
+  gövde kendi katında vurulabilir kalır.
 - Sunucuda portal, sayaç ya da kilit **yoktur**: sunucu yalnız oyuncunun katını defter olarak tutar.
 
 ---

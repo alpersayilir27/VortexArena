@@ -23,13 +23,16 @@ namespace VortexArena.Core.Arena
     public class FloorPortal : MonoBehaviour
     {
         /// <summary>Disc radius (m) — a 50 cm disc: one person, not two.</summary>
-        private const float RadiusMeters = 0.25f;
+        public const float RadiusMeters = 0.25f;
 
         /// <summary>Uninterrupted standing time that triggers the hop (s).</summary>
         private const float DwellSeconds = 2f;
 
         /// <summary>Minimum interval between rig searches when none is found (s).</summary>
         private const float RigSearchIntervalSeconds = 0.5f;
+
+        /// <summary>Minimum interval between HUD searches when none is found (s).</summary>
+        private const float HudSearchIntervalSeconds = 0.5f;
 
         private static readonly Color IdleColor = new Color(0.35f, 0.85f, 1f, 0.45f);
         private static readonly Color ChargedColor = Color.white;
@@ -60,7 +63,7 @@ namespace VortexArena.Core.Arena
 
         private MaterialPropertyBlock _block;
         private ModeHudBase _hud;
-        private bool _hudSearched;
+        private float _hudSearchTime;
         private OVRCameraRig _rig;
         private float _rigSearchTime;
 
@@ -94,9 +97,9 @@ namespace VortexArena.Core.Arena
         private void OnEnable()
         {
             ArenaFloors.MarkDirty();
+            FloorState.Changed += HandleFloorChanged;
             _floorVersion = -1;
             _hud = null;
-            _hudSearched = false;
             _armed = true;
             ResetDwell();
         }
@@ -104,6 +107,16 @@ namespace VortexArena.Core.Arena
         private void OnDisable()
         {
             ArenaFloors.MarkDirty();
+            FloorState.Changed -= HandleFloorChanged;
+            ResetDwell();
+        }
+
+        /// <summary>ANY floor change (this portal's, another portal's, the death drop, a server reset)
+        /// lands the player on whichever disc shares this spot: disarm, or the dwell would restart
+        /// under a player who never stepped here. Re-armed the moment the head leaves the disc.</summary>
+        private void HandleFloorChanged()
+        {
+            _armed = false;
             ResetDwell();
         }
 
@@ -181,16 +194,20 @@ namespace VortexArena.Core.Arena
                 return;
             }
 
-            // Disarmed BEFORE the move: the fade puts the player on the paired disc, which is inside
-            // this portal too.
+            if (!FloorState.MoveWithFade(target, "portal", 0.25f, 0.1f, 0.4f))
+            {
+                ResetDwell(); // nothing moved: do not spend the portal, do not play the sound
+                return;
+            }
+
+            // Disarmed once the move is accepted: the fade puts the player on the paired disc, which
+            // is inside this portal too.
             _armed = false;
             ResetDwell();
             if (teleportSound != null)
             {
                 teleportSound.Play();
             }
-
-            FloorState.MoveWithFade(target, "portal", 0.25f, 0.1f, 0.4f);
         }
 
         /// <summary>Refreshes the cached floor and validates the root height; the portal DISABLES
@@ -375,11 +392,17 @@ namespace VortexArena.Core.Arena
                 return;
             }
 
-            // Searched ONCE per enable: a scene-wide type search per frame would run for the whole
-            // dwell in the lobby, where there is no mode HUD at all.
-            if (_hud == null && !_hudSearched)
+            // Throttled, not once-per-enable: a mode change without a scene change destroys and
+            // respawns the HUD (ModeHudSpawner), and a single search would leave this portal silent
+            // for the rest of the scene. Per-frame scene-wide searches are still too costly.
+            if (_hud == null)
             {
-                _hudSearched = true;
+                if (Time.unscaledTime - _hudSearchTime < HudSearchIntervalSeconds)
+                {
+                    return;
+                }
+
+                _hudSearchTime = Time.unscaledTime;
                 _hud = FindFirstObjectByType<ModeHudBase>();
             }
 
