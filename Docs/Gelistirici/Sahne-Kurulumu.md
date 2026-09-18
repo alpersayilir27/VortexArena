@@ -87,6 +87,11 @@ sahne hata vermez, yalnızca **tamamen düz** görünür — arena sanatı ne ka
 
 - **Zorunlu:** sahnede bir `Directional Light` bulunur ve `Shadow Type` = **Soft**. Bake yapılmayan
   bir arenada görünen tek gölge kaynağı budur.
+- **Güneşin transform'u sahne genelinde aynı kuralla kurulur:** konum, arena sınırının (`ArenaBoundary`)
+  X/Z merkezinin üstünde, yakın geometrinin tepesinden ~10 m yukarıda; rotasyon **`(80, 135, 0)`** —
+  yani tam tepeden 10° eğimli. Konumun görüntüye etkisi yoktur (yön yalnız rotasyondan gelir), ama
+  ışığı arenanın üstünde tutmak sahne görünümünde onu bulunabilir kılar; 10°'lik eğim gölgeyi kısa
+  tutar ve arena zemininde yön farkı yaratmaz.
 - Işığın modu bake'e katılacaksa **Mixed** olur. `Realtime` ışık bake'e hiç girmez; `Baked` ışık da
   dinamik objeye (oyuncu avatarı, silah) hiç değmez — ikisini karıştırma.
 - ⚠️ **Sahnenin aydınlatması İKİ dosyaya bağlıdır ve ikisi de sahnenin kendi klasöründe olmalıdır:**
