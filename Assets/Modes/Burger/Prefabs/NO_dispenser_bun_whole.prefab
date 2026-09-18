@@ -150,6 +150,7 @@ MonoBehaviour:
   socket: {fileID: 4296350083226800231}
   cooldownSeconds: 0.4
   takeSound: {fileID: 0}
+  hideGrabIndicator: 1
 --- !u!1001 &3867422116043802154
 PrefabInstance:
   m_ObjectHideFlags: 0

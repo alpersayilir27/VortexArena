@@ -583,6 +583,16 @@ Perde kaydırması sesi "farklı silah" yapmaz, yalnız **ödünç alınmış kl
 kendi klibi bağlanmadığı sürece kulak tanıdık sesi tanımaya devam eder. Doğrusu klibi
 `WD_*.asset`'in Inspector'ına sürüklemektir — silah seslerinin tek doğruluk kaynağı orasıdır.
 
+### ⛔ Yakınlık grip basışına doğrudan kavramayla cevap verme
+
+Kendi `GripSocket`'ini okuyup basışta objeyi doğrudan alan ya da olayını yollayan her bileşen, tek
+soket gördüğü için yanındaki soketi göremez: soketlerin çakıştığı yerde (üst üste duran eşyalar,
+dağıttığı malzemenin arasında duran dağıtıcı) tek basışa birden çok taraf cevap verir — tek avuca
+birkaç obje, telde birkaç mesaj, tek ele birkaç yazar. Belirti sessizdir, hata vermez. Doğru yol
+`IGrabClaimant` uygulamak ve basışta yalnız `GrabArbiter.Submit` ile aday olmaktır; kavramayı
+hakemin çağırdığı `CommitGrab` yapar. Bilerek çoklu kavrayan bir yol (taşıyıcının kargo hacmi)
+hakemden geçmez, ama o istisna **basış yolu değildir**.
+
 ### ⛔ Tutulabilir bir türün prefabında kavrama pozunu serbest bırakma
 
 Ağ nesnesi ele **kanonik kavrama poziyle** bağlanır ve duruş telde gitmez: iki uç aynı kaydı okur.

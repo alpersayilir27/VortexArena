@@ -103,6 +103,7 @@ MonoBehaviour:
   socket: {fileID: 2538992141937010627}
   cooldownSeconds: 0.4
   takeSound: {fileID: 0}
+  hideGrabIndicator: 1
 --- !u!1 &9220718537123721579
 GameObject:
   m_ObjectHideFlags: 0

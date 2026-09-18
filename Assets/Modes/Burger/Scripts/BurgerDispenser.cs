@@ -13,7 +13,7 @@ namespace VortexArena.Modes.Burger
     /// or attached locally here.</para></summary>
     [RequireComponent(typeof(NetObject))]
     [DisallowMultipleComponent]
-    public sealed class BurgerDispenser : MonoBehaviour
+    public sealed class BurgerDispenser : MonoBehaviour, IGrabClaimant
     {
         [Tooltip("Elin yaklaşacağı soket (gösterge + kabul yarıçapı). Boşsa çocuklarda aranır.")]
         [SerializeField] private GripSocket socket;
@@ -23,6 +23,12 @@ namespace VortexArena.Modes.Burger
 
         [Tooltip("Malzeme alınırken çalan ses. Atanmazsa sessizdir.")]
         [SerializeField] private AudioSource takeSound;
+
+        // ⚠️ Named INVERTED, like ItemDefinition.hideGrabIndicator: a field that was never written
+        // deserializes to 0, so 0 has to mean today's behaviour — the sphere is drawn.
+        [Tooltip("Kabul küresi (gizmo) bu dağıtıcıda ÇİZİLMESİN. Yalnız GÖRSELİ susturur — kabul " +
+                 "yarıçapı ve alma kapısı aynı kalır, malzeme yine alınır.")]
+        [SerializeField] private bool hideGrabIndicator;
 
         private NetObject _net;
 
@@ -64,7 +70,10 @@ namespace VortexArena.Modes.Burger
                 return;
             }
 
-            socket.Tick(true);
+            // ⚠️ The flag is ANDed into "is it available", never into the socket's radius: the accept
+            // volume and the take gate stay as they were, so hiding the sphere cannot make a dispenser
+            // harder to use.
+            socket.Tick(!hideGrabIndicator);
             TickInput();
         }
 
@@ -91,7 +100,7 @@ namespace VortexArena.Modes.Burger
                 return;
             }
 
-            if (!socket.TryResolveHand(out OVRInput.Controller _, out bool rightHand))
+            if (!socket.TryResolveHand(out OVRInput.Controller hand, out bool rightHand))
             {
                 return;
             }
@@ -110,6 +119,20 @@ namespace VortexArena.Modes.Burger
                 return;
             }
 
+            // ⚠️ The take is NOT sent from here: this socket overlaps the ingredients lying around the
+            // dispenser, and a press answered by both would fill the palm twice — one object grabbed,
+            // one spawned on top of it. The arbiter calls back the nearest claimant only.
+            if (!socket.TryMeasure(hand, out float distance))
+            {
+                return;
+            }
+
+            GrabArbiter.Submit(this, rightHand, distance);
+        }
+
+        /// <summary>The arbiter's callback: this dispenser won that hand this frame.</summary>
+        public void CommitGrab(bool rightHand)
+        {
             // A refusal has no reply (§10.10): the server logs "object_event reddedildi … faz …" and the
             // headset sees nothing. This line pairs with that log.
             Debug.Log($"[BurgerDispenser] '{name}': take istendi (sağ={rightHand}, netId={_net.NetId}).", this);

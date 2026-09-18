@@ -44,7 +44,7 @@ namespace VortexArena.Core.Combat
     /// </remarks>
     [RequireComponent(typeof(NetObject))]
     [DisallowMultipleComponent]
-    public sealed class NetObjectGrabBridge : MonoBehaviour
+    public sealed class NetObjectGrabBridge : MonoBehaviour, IGrabClaimant
     {
         [Tooltip("Eşya tanımı: kavrama kaydı (elin nasıl duracağı) + örnekleme/bırakma eksenleri. " +
                  "Örnekleme WorldSingle olmalı — kopyalanan bir eşyanın sahiplik devrine ihtiyacı yok.")]
@@ -226,10 +226,34 @@ namespace VortexArena.Core.Combat
             // press, so a spatula flying past a rifle hand does not swap the rifle.
             bool press = rightHand ? pressRight : pressLeft;
             bool closed = rightHand ? gripRight : gripLeft;
-            if (press || (flying && closed && HandIsEmpty(rightHand)))
+            if (!press && !(flying && closed && HandIsEmpty(rightHand)))
             {
-                Grab(hand, rightHand);
+                return;
             }
+
+            // ⚠️ NOT Grab() from here. This socket sees only itself, and where sockets overlap every
+            // bridge would answer the same press — one palm, several objects. The offer is ranked by
+            // distance and the nearest is called back this frame (GrabArbiter).
+            if (!socket.TryMeasure(hand, out float distance))
+            {
+                return;
+            }
+
+            GrabArbiter.Submit(this, rightHand, distance);
+        }
+
+        /// <summary>The arbiter's callback: this bridge won that hand this frame.</summary>
+        public void CommitGrab(bool rightHand)
+        {
+            OVRInput.Controller hand = rightHand ? OVRInput.Controller.RTouch : OVRInput.Controller.LTouch;
+            if (!Grab(hand, rightHand))
+            {
+                return;
+            }
+
+            // The arbiter runs after this bridge's LateUpdate, so the frame's own pose pass already ran
+            // with an empty hand. Seating it here keeps the object from spending a frame where it lay.
+            TickHeldPose();
         }
 
         private static bool HandIsEmpty(bool rightHand)
@@ -266,7 +290,8 @@ namespace VortexArena.Core.Combat
 
         /// <summary>Takes the object into that hand LOCALLY and asks the server. There is no waiting: the
         /// answer is <see cref="HandleOwnerChanged"/>.</summary>
-        private void Grab(OVRInput.Controller hand, bool rightHand)
+        /// <returns><c>false</c> when the hand refused the item and nothing was taken.</returns>
+        private bool Grab(OVRInput.Controller hand, bool rightHand)
         {
             _localHand = hand;
             _localRight = rightHand;
@@ -286,16 +311,24 @@ namespace VortexArena.Core.Combat
 
             // Claims the hand in the slot registry: this is what feeds the FINGER pose. The wire byte
             // stays 0 for a WorldSingle item — suppressed inside HeldItems, not here (§6.6).
+            // ⚠️ The slot registry has the LAST word, and its refusal is now a full rollback, not a
+            // warning: the slot is what feeds the finger pose, so an item forced past it used to land in
+            // a hand that never closed around it — and the object was already on the wire. Reported only
+            // AFTER the stow, because the parked weapon frees the hand on its own event and a claim made
+            // before that would always be refused (WristHolster follows the same order).
             if (!HeldItems.Report(this, rightHand, item, transform, GripSocketKind.Primary, hand))
             {
                 Debug.LogWarning($"[NetObjectGrabBridge] '{name}': el başka bir eşya tarafından " +
-                                 "tutuluyor — obje ele alındı ama parmaklar kavramayı almadı.", this);
+                                 "tutuluyor — kavrama geri alındı.", this);
+                ReleaseLocal(false);
+                return false;
             }
 
             socket.Hide();
             Buzz(rightHand, GrabHapticAmplitude, GrabHapticSeconds);
 
             NetObjectSync.SendGrab(_net.NetId, rightHand);
+            return true;
         }
 
         /// <summary>Short buzz in the hand that took or let go — the grab is optimistic and has no other
@@ -509,8 +542,11 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
-            socket.Tick(IsTakeable && !_net.IsHeld && _localHand == OVRInput.Controller.None &&
-                        CalibrationState.IsCalibrated);
+            // ⚠️ The definition's indicator flag is ANDed into "is it available", never into the socket's
+            // radius: the accept volume and the take gate stay exactly as they were, so hiding the
+            // sphere cannot make an item harder to pick up.
+            socket.Tick(IsTakeable && item.ShowGrabIndicator && !_net.IsHeld &&
+                        _localHand == OVRInput.Controller.None && CalibrationState.IsCalibrated);
         }
 
         /// <summary>Does the definition actually route this object through a socket. The grab path is the

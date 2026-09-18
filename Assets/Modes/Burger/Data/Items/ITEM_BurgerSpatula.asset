@@ -19,6 +19,7 @@ MonoBehaviour:
   grabPath: 1
   instancing: 1
   releaseMode: 1
+  hideGrabIndicator: 1
   primaryGripRight:
     authored: 0
     position: {x: 0, y: 0, z: 0}

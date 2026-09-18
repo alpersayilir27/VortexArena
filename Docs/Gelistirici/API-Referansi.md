@@ -536,6 +536,7 @@ Oyuncu olmayan varlıklar: durumu sunucuda, sunumu sende. Kural
 | ✅ `ItemDefinition.GrabPath` | `DistanceGrab` · `ProximitySocket` · `WristHolster` · `None` | Eşya ele **nasıl gelir**. ⚠️ `DistanceGrab` değilse prefabda mesafeli kavrama bileşeni bulunmaz (`Yapma-Listesi`) |
 | ✅ `ItemDefinition.Instancing` / `IsWorldSingle` | `PerViewerClone` · `WorldSingle` | **Ne gelir:** her bakanın kendi kopyası mı, tek örnek mi. `WorldSingle`'da eşya baytı `0` kalır |
 | ✅ `ItemDefinition.ReleaseMode` | `Return` · `Physics` | Bırakılınca yerine mi oturur, serbest mi düşer |
+| ✅ `ItemDefinition.ShowGrabIndicator` | `true` (varsayılan) · `false` | Soketin gösterge küresi çizilsin mi. Serialize alan **tersten** (`hideGrabIndicator`) yazılır — yazılmamış alan `0` okunur ve `0` bugünkü davranış olmak zorunda. ⚠️ **Yalnız görseli** susturur: kabul yarıçapı ve alma kapısı aynı kalır |
 
 `VortexArena.Core.Combat.GripSocket` — yakınlık kavrama soketi (eşyanın **nereden** alındığı).
 
@@ -550,6 +551,21 @@ Oyuncu olmayan varlıklar: durumu sunucuda, sunumu sende. Kural
 
 > Kavrama pozu (elin nasıl duracağı) burada DEĞİL `ItemDefinition`'ın kavrama kayıtlarındadır ve
 > stüdyoda yazılır. Soket "nereden alınır", kayıt "alınınca nasıl durur" sorusunun cevabıdır.
+
+`VortexArena.Core.Combat.GrabArbiter` — yakınlık grip basışının hakemi (statik). Basışa doğrudan
+kavramayla cevap veren bileşen yazılmaz (`Yapma-Listesi`).
+
+| Üye | Açıklama |
+|---|---|
+| ✅ `IGrabClaimant.CommitGrab(bool rightHand)` | Hakemin **kazanana** yaptığı geri çağrı — kavrama burada yapılır |
+| ✅ `GrabArbiter.Submit(IGrabClaimant claimant, bool rightHand, float distance)` | O karenin adaylığı. `distance` **`GripSocket.TryMeasure`** sonucudur — alma kapısıyla aynı sayı |
+| ⚠️ `GrabArbiter.Resolve()` | El başına tek kazanan (**en yakın**; beraberlikte önceki talep kalır). Yalnız `GrabArbiterPump` çağırır — ikinci bir çağıran talepleri karenin ortasında tüketir |
+| ✅ `GrabArbiter.Reset()` | Bekleyen talepleri düşürür |
+
+> `GrabArbiterPump` kendini önyükleyen DDOL tekildir, sahneye KONMAZ. ⚠️ Execution order **40** bir
+> sözleşmedir: talep sahipleri 0'da yazar, `HandGripPoser` 100'de eli kilitler — aralığın dışına
+> taşınan bir çözüm kavramayı bir kare geciktirir ve obje elde sıçrar. 50 değil 40: `BurgerCarrier`
+> 50'dedir ve aynı sırayı paylaşan iki bileşenin koşma düzeni tanımsızdır.
 
 ---
 

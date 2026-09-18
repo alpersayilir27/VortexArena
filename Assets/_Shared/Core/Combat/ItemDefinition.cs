@@ -63,6 +63,13 @@ namespace VortexArena.Core.Combat
                  "serbest kalır (bomba, fırlatılan prop).")]
         [SerializeField] private ItemReleaseMode releaseMode = ItemReleaseMode.Return;
 
+        // ⚠️ Named INVERTED on purpose, for the same reason the three enums above start at today's
+        // behaviour: a field that was never written deserializes to 0, and 0 here must keep every
+        // definition authored before this field drawing its socket sphere.
+        [Tooltip("Kabul küresi (gizmo) bu eşyada ÇİZİLMESİN. Yalnız GÖRSELİ susturur — kabul " +
+                 "yarıçapı ve alma kapısı aynı kalır, eşya yine alınır.")]
+        [SerializeField] private bool hideGrabIndicator;
+
         // ⚠️ ALL FOUR RECORDS ARE IN THE SAME SPACE: each is the hand's CONTROLLER ANCHOR position
         // local to the ITEM (item → anchor; ItemGripPose — the anchor record has no rotation, the
         // weapon is always aligned with the controller). Written in one direction only; describing a
@@ -189,6 +196,13 @@ namespace VortexArena.Core.Combat
 
         /// <summary>What happens on release (<see cref="ItemReleaseMode"/>).</summary>
         public ItemReleaseMode ReleaseMode => releaseMode;
+
+        /// <summary>Is the proximity socket's accept sphere drawn for this item.
+        /// <para>⚠️ The VISUAL only. The accept radius and the take gate are untouched, so switching it
+        /// off cannot produce "my hand is in it but it will not take" — the invariant
+        /// <c>GripSocket.EffectiveRadius</c> exists to protect. Consumer:
+        /// <c>NetObjectGrabBridge.TickSocket</c>.</para></summary>
+        public bool ShowGrabIndicator => !hideGrabIndicator;
 
         /// <summary>Single instance, ownership handed over (shortcut).
         /// <para>⚠️ Also the gate that keeps this item's <c>itemL</c>/<c>itemR</c> byte at <b>0</b>
