@@ -531,6 +531,11 @@ namespace VortexArena.Core.Combat
             {
                 socket.Hide();
             }
+
+            // Buzzed like Grab(): a dispenser hands the ingredient over from the SERVER, so this is the
+            // only confirmation the player gets — the dispenser has no socket sphere of its own to hide
+            // and nothing else answers the press.
+            Buzz(rightHand, GrabHapticAmplitude, GrabHapticSeconds);
         }
 
         // ------------------------------------------------------------------- per frame

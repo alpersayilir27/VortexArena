@@ -256,8 +256,15 @@ geçişindeki sessiz geri yükleme de, takip bozulunca yapılan sessiz yeniden h
 `source` `anchor` kalır) — yani oturum içinde biriken kayma satıra düşer.
 ⚠️ **Sayı tek başına iki durumu ayırmaz:** "kumandanın ucu yakalamada yüksekti" (hizalama kaymıştır,
 oyuncunun ayakları zemine batar) ile "başlığın zemin tahmini kaymış" (hizalama doğru, sapma
-zararsız) aynı değeri üretir. Ayrımı istemci logu verir: `[Kalibre] zemin ölçümü` satırı ile onu
-izleyen `hizalama sonrası kafa yüksekliği` satırı. Sunucu değeri yorumlamaz: roster'a yazar
+zararsız) aynı değeri üretir; **oturum içi hiçbir ölçüm de ayıramaz** — gereken bilgi dışarıdan
+gelir: oyuncunun gerçek göz yüksekliği. İstemci karşılaştırılacak sayıyı basar: `hizalama sonrası
+kafa yüksekliği` satırı, hizalamadan sonraki birkaç saniyenin **en yüksek** değeridir. Tek kare
+ölçüm yanıltır ve **ters yönde** yanıltır: doğru yakalama işaretin üstüne eğilerek yapılır, o kare
+çömelmeyi ölçer; ucu havada tutulan hatalı yakalama ise ayakta yapılır. Gerçek göz yüksekliğine
+eşitse hizalama doğru, belirgin düşükse kaymıştır ve ayaklar zemine batar; ayakta durulamayacak
+kadar düşük bir değer ayrıca uyarı basar. `[Kalibre] zemin ölçümü` satırı bu okumanın bağlamıdır
+(`kaynak` yakalama elle mi çapadan mı, `köken` takip kökeni — `Stage` değilse nokta değeri zaten
+anlamsızdır). Sunucu değeri yorumlamaz: roster'a yazar
 (`PlayerInfo.floorOffset`, §5.3) ve `CALIB_FLOOR_WARN_METERS` eşiğini aşarsa operatörü uyarır
 (§10.6). ⚠️ **Bir kapı değildir** — sapma ne olursa olsun kalibrasyon kabul edilir; oyuncuyu
 savaş dışı bırakmak operatörün kararıdır.
@@ -1897,7 +1904,7 @@ olmalı, tanınmayan `modeId` reddedilir):
 > | `bun_whole` | `anyone` | `cut` (`anyone`) | — | — |
 > | `bun_bottom` · `bun_top` · `cheese` · `bacon` · `lettuce` · `onion` · `pickle` · `tomato` · `sauce` | `anyone` | — | — | — |
 > | `patty` | `anyone` | `grill` (`anyone`) | `0` çiğ · `1` pişmiş · `2` yanmış | — |
-> | `board` | `anyone` | `serve` (`anyone`) | — | — |
+> | `board` | `none` | `serve` (`anyone`) | — | — |
 > | `knife` · `spatula` | `anyone` | — | — | — |
 > | `customer` | `none` | — | `0` geliyor · `1` bekliyor · `2` mutlu · `3` mutsuz | `slot:<n>;r:<tarif>` |
 >

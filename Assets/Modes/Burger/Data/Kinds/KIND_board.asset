@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: VortexArena.Net::VortexArena.Net.NetObjectKind
   kind: board
   maxHp: 0
-  grab: 1
+  grab: 0
   events:
   - name: serve
     policy: 0

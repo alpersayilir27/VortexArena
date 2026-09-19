@@ -27,7 +27,22 @@
       "venue": "VortexAntep",
       "gameType": "kids",
       "modes": ["burger"],
-      "objects": []
+      "objects": [
+        { "sceneId": 1, "kind": "dispenser_bun_whole" },
+        { "sceneId": 2, "kind": "dispenser_patty" },
+        { "sceneId": 3, "kind": "dispenser_cheese" },
+        { "sceneId": 4, "kind": "dispenser_bacon" },
+        { "sceneId": 5, "kind": "dispenser_lettuce" },
+        { "sceneId": 6, "kind": "dispenser_onion" },
+        { "sceneId": 7, "kind": "dispenser_pickle" },
+        { "sceneId": 8, "kind": "dispenser_tomato" },
+        { "sceneId": 9, "kind": "dispenser_sauce" },
+        { "sceneId": 10, "kind": "board" },
+        { "sceneId": 11, "kind": "board" },
+        { "sceneId": 12, "kind": "board" },
+        { "sceneId": 13, "kind": "knife" },
+        { "sceneId": 14, "kind": "spatula" }
+      ]
     },
     {
       "sceneName": "Construction_VortexAntep",
@@ -196,7 +211,7 @@
   ],
   "kinds": [
     { "kind": "bacon", "maxHp": 0, "grab": "anyone", "events": [] },
-    { "kind": "board", "maxHp": 0, "grab": "anyone", "events": [
+    { "kind": "board", "maxHp": 0, "grab": "none", "events": [
         { "name": "serve", "policy": "anyone", "phaseGate": "playing" }
       ] },
     { "kind": "breakable_cover", "maxHp": 200, "grab": "none", "events": [] },

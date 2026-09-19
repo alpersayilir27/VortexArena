@@ -100,12 +100,26 @@ namespace VortexArena.Modes.Burger
                 return;
             }
 
-            if (!socket.TryResolveHand(out OVRInput.Controller hand, out bool rightHand))
+            // ⚠️ BOTH hands are offered, not the socket's nearest one. At the counter the other hand is
+            // usually full (spatula, board, an ingredient) and it is often the nearer of the two: asking
+            // the socket for one hand answered THAT hand's press, found it full and refused — while the
+            // empty hand a few centimetres further back was never looked at. The symptom is "the
+            // dispenser gives nothing", with the take gate working exactly as written.
+            Offer(false, pressLeft);
+            Offer(true, pressRight);
+        }
+
+        /// <summary>Offers this dispenser as that hand's candidate, when the hand pressed this frame, is
+        /// inside the socket and is empty.</summary>
+        private void Offer(bool rightHand, bool press)
+        {
+            if (!press)
             {
                 return;
             }
 
-            if (!(rightHand ? pressRight : pressLeft))
+            OVRInput.Controller hand = rightHand ? OVRInput.Controller.RTouch : OVRInput.Controller.LTouch;
+            if (!socket.TryMeasure(hand, out float distance) || distance > socket.EffectiveRadius)
             {
                 return;
             }
@@ -122,17 +136,19 @@ namespace VortexArena.Modes.Burger
             // ⚠️ The take is NOT sent from here: this socket overlaps the ingredients lying around the
             // dispenser, and a press answered by both would fill the palm twice — one object grabbed,
             // one spawned on top of it. The arbiter calls back the nearest claimant only.
-            if (!socket.TryMeasure(hand, out float distance))
-            {
-                return;
-            }
-
             GrabArbiter.Submit(this, rightHand, distance);
         }
 
         /// <summary>The arbiter's callback: this dispenser won that hand this frame.</summary>
         public void CommitGrab(bool rightHand)
         {
+            // Both hands can win in the same frame; the cooldown is what keeps one press from emptying
+            // two ingredients out of one dispenser.
+            if (_cooldown > 0f)
+            {
+                return;
+            }
+
             // A refusal has no reply (§10.10): the server logs "object_event reddedildi … faz …" and the
             // headset sees nothing. This line pairs with that log.
             Debug.Log($"[BurgerDispenser] '{name}': take istendi (sağ={rightHand}, netId={_net.NetId}).", this);

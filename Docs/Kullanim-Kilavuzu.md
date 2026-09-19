@@ -795,7 +795,8 @@ Akış: kapıdan **müşteri** gelir, bankonun önünde durur, başının üstü
 ve **resimli** görünür (alttan üste dilimler, okuma bilmeyen çocuk için). Çocuklar dağıtıcılardan
 malzeme alır (yan tuş), bütün ekmeği tahtada bıçakla keser, köfteyi ızgarada pişirir (**renk
 değişince pişmiştir; kararırsa yanmıştır, yanmış köfte kabul edilmez**), hamburgeri banko
-tahtasına **alttan üste** dizer: en alta alt ekmek, en üste üst ekmek. Üst ekmek konunca servis
+tahtasına **alttan üste** dizer: en alta alt ekmek, en üste üst ekmek. Tahta bankoya **sabittir**,
+alınmaz ve taşınmaz — hamburger müşterinin önünde, yerinde kurulur. Üst ekmek konunca servis
 kendiliğinden olur: sipariş tutuyorsa müşteri mutlu gider, servis eden çocuğun puanı ve ortak
 toplam artar. Tutmuyorsa kısa bir red sesi çalar ve müşterinin balonunda **sebep** yazar
 ("Köfte pişmemiş", "Peynir eksik", "En üste üst ekmek"…); yığın bozulmaz, düzeltip yeniden
@@ -811,13 +812,14 @@ mutsuz gider, **puan düşmez**. Vardiya ilerledikçe müşteriler daha sık gel
 **Sık durumlar:**
 - **Ekran karardı:** çocuk kafasını bankonun/ızgaranın içine sokmuştur. Karartma ve halka aynı
   şekilde çalışır ama **bu modda can gitmez, kimse ölmez** — sesle "geri çekil" demek yeter.
-- **Tahta ya da spatula yere düştü:** çocuk eğilip yan tuşla geri alır. Yerde biriken malzemeler
-  çoğalınca **en eskileri kendiliğinden silinir**; elde tutulan eşyaya dokunulmaz, tahta ve spatula
-  silinmez.
+- **Spatula ya da bıçak yere düştü:** çocuk eğilip yan tuşla geri alır. Yerde biriken malzemeler
+  çoğalınca **en eskileri kendiliğinden silinir**; elde tutulan eşyaya dokunulmaz, alet silinmez.
+- **Çocuk tahtayı alamıyor:** tahta bankoya sabittir, alınacak bir eşya değildir — malzeme onun
+  üstüne konur.
 - **Ekmek kesilmiyor:** bütün ekmek kesme tahtasında dururken bıçağın ağzı ona değmeli; elde
   tutulan ekmek kesilmez.
-- **Köfte tahtaya konmuyor / uçuyor:** malzeme henüz havada (düşüyor) ise tahta almaz; durmasını
-  bekle.
+- **Hamburger gitmiyor:** servis yalnız **üst ekmek tahtaya oturunca** olur — malzeme havadayken
+  (düşerken) sayılmaz, durmasını bekle.
 - **Hiç müşteri gelmiyor:** maç başlamamıştır (BAŞLAT'a bas) ya da harita çocuk haritası değildir.
 
 > Aynı ailenin diğer oyunu **Köstebek Ezme** de silahsız ve ölümsüzdür; farkı iki takım ve takım

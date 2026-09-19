@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using VortexArena.Core.Audio;
 
 namespace VortexArena.Core.Combat
 {
@@ -251,10 +252,18 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
+            // Same channel as the shot that caused it: muting weapons must not leave the impacts
+            // clanging on. Particles are unaffected — the level decides who HEARS, not what plays.
+            float channel = AudioMix.Weapons;
+            if (channel <= 0f)
+            {
+                return;
+            }
+
             node.Audio.pitch = surface.PickPitch();
             // PlayOneShot, not Play: a recycled node may still be sounding the previous impact and
             // Play would cut it off mid-tick.
-            node.Audio.PlayOneShot(clip, surface.Volume);
+            node.Audio.PlayOneShot(clip, Mathf.Clamp01(surface.Volume * channel));
         }
 
         private void OnDestroy()

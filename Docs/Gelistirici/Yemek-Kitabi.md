@@ -1119,7 +1119,7 @@ hareketi yapar, hiçbir şey olmaz. Kural: her görünmez hacim, ait olduğu gö
 | Görünen | Ona kilitli görünmez parça |
 |---|---|
 | Izgara/ocak gövdesi | pişirme hacmi (`BurgerGrill`) |
-| Banko | slot hacimleri + müşterinin duracağı nokta |
+| Banko | slot hacimleri + müşterinin duracağı nokta. ⚠️ Servis tahtası sabittir ve yuvasına **konumuyla** bağlanır (slot numarasıyla değil): tahta ile slot hacmi aynı prefabta, tahta hacmin içinde durur — ayrı düşerse mod sessizce hiç servis yapmaz |
 | Kapı | müşteri yolunun waypoint'leri |
 | Malzeme rafı | dağıtıcıların kavrama soketleri |
 
@@ -1204,6 +1204,10 @@ değeri sahne objesinde durduğu için arena başına elle yapılır ve **atlan�
 - **Dekor haritalı arenada** (collider'sız tek mesh harita) görünmez sınır kutuları hem yüzey
   etiketi hem layer taşır — yenisini eklerken ikisi de kopyalanır
   ([Sistem Özeti, `SurfaceTag`](../Sistem-Ozeti.md)).
+- **Environment paketinin prop'ları materyale çözülmüyorsa** (collider ile renderer ayrı objelerde)
+  etiket prop başına değil **grup köküne** konur — etiket collider'dan yukarı arandığı için tek
+  bileşen yüzlerce collider'ı kapsar; oyun alanı içindeki prop'lar ise materyal eşlemesiyle
+  çözülmeye devam eder.
 - Sonunda `Tools > VortexArena > Arena > Engel Hacimlerini Denetle` koşulur: konveks olmayan,
   şişkin ve trigger collider'lar düzeltilene kadar o objeler yanlış ceza üretir. Rapor tüm açık
   sahneleri kapsar, hiçbir şeyi düzeltmez.

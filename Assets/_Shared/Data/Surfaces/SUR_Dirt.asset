@@ -14,7 +14,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.SurfaceDefinition
   surfaceId: toprak
   impactPrefab: {fileID: 9061092144596281082, guid: c7fee757e34df0c49ab6dadb8b6e29fd, type: 3}
-  impactClips: []
+  impactClips:
+  - {fileID: 8300000, guid: 171a628f0e425c3438a2af4417438209, type: 3}
+  - {fileID: 8300000, guid: 4ea434b49d0931343b36e5df8632e7d4, type: 3}
+  - {fileID: 8300000, guid: f61a92cf82f246449847898fda0aef63, type: 3}
   volume: 0.8
   pitchRange: {x: 0.94, y: 1.06}
   lifetimeSeconds: 1.5

@@ -16,7 +16,7 @@ MonoBehaviour:
   netItemId: 0
   prefab: {fileID: 5661166045434174964, guid: ea2c25a920de21140986197c7531625b, type: 3}
   holdMode: 0
-  grabPath: 1
+  grabPath: 3
   instancing: 1
   releaseMode: 1
   hideGrabIndicator: 1

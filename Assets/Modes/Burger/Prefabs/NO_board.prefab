@@ -96,7 +96,6 @@ GameObject:
   - component: {fileID: 8903393108289448972}
   - component: {fileID: 940784436937764869}
   - component: {fileID: 9209811424471376328}
-  - component: {fileID: 1660131241805459449}
   m_Layer: 0
   m_Name: NO_board
   m_TagString: Untagged
@@ -252,25 +251,6 @@ MonoBehaviour:
   rejectSound: {fileID: 0}
   serveCooldownSeconds: 1
   noticeSeconds: 2.5
---- !u!114 &1660131241805459449
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 5661166045434174964}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: ca9df931f2accd448b78e2d5273b8379, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: VortexArena.Modes.Burger::VortexArena.Modes.Burger.BurgerCarrier
-  cargoVolume: {fileID: 9160765601308308341}
-  anchor: {fileID: 5338013819401894637}
-  capacity: 8
-  slotHeight: 0.03
-  claimBand: 0.04
-  spillAngle: 55
-  reclaimDelaySeconds: 0.6
 --- !u!1 &8946993903199983806
 GameObject:
   m_ObjectHideFlags: 0

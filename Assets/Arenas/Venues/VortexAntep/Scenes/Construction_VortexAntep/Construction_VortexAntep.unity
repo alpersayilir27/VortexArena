@@ -459,13 +459,34 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 2710002419124436915, guid: 3d4c4a8e8e35dea4885e5228fd9c3c66, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 13183428}
   m_SourcePrefab: {fileID: 100100000, guid: 3d4c4a8e8e35dea4885e5228fd9c3c66, type: 3}
 --- !u!4 &13183426 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 2710002419124436876, guid: 3d4c4a8e8e35dea4885e5228fd9c3c66, type: 3}
   m_PrefabInstance: {fileID: 13183425}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &13183427 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 2710002419124436915, guid: 3d4c4a8e8e35dea4885e5228fd9c3c66, type: 3}
+  m_PrefabInstance: {fileID: 13183425}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &13183428
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 13183427}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b96ece079555195488efdbac65179f44, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.SurfaceTag
+  surface: {fileID: 11400000, guid: 5fcb4a446ce5e1843a30c3f59c8a2109, type: 2}
 --- !u!1001 &24398177
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -2395,13 +2416,47 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 8039980714721586197, guid: b73ec2680abfe7740bc8fdee5172a114, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 207809173}
   m_SourcePrefab: {fileID: 100100000, guid: b73ec2680abfe7740bc8fdee5172a114, type: 3}
 --- !u!4 &207809171 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 8039980714721586196, guid: b73ec2680abfe7740bc8fdee5172a114, type: 3}
   m_PrefabInstance: {fileID: 207809170}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &207809172 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 8039980714721586197, guid: b73ec2680abfe7740bc8fdee5172a114, type: 3}
+  m_PrefabInstance: {fileID: 207809170}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &207809173
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 207809172}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b96ece079555195488efdbac65179f44, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.SurfaceTag
+  surface: {fileID: 11400000, guid: 09b81fdba3fa51446bf28c61591c6c4b, type: 2}
+--- !u!114 &220987482
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 228561813}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b96ece079555195488efdbac65179f44, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.SurfaceTag
+  surface: {fileID: 11400000, guid: 09b81fdba3fa51446bf28c61591c6c4b, type: 2}
 --- !u!1 &227530301
 GameObject:
   m_ObjectHideFlags: 0
@@ -2453,6 +2508,146 @@ Transform:
   - {fileID: 2079944122}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &228561811 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 3761400478478091895, guid: 1a45ea2d119eb6f4dadd5406e1665366, type: 3}
+  m_PrefabInstance: {fileID: 920548648}
+  m_PrefabAsset: {fileID: 0}
+--- !u!1 &228561812 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 4609427478461368335, guid: 1a45ea2d119eb6f4dadd5406e1665366, type: 3}
+  m_PrefabInstance: {fileID: 920548648}
+  m_PrefabAsset: {fileID: 0}
+--- !u!1 &228561813 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 2727534125284934899, guid: 1a45ea2d119eb6f4dadd5406e1665366, type: 3}
+  m_PrefabInstance: {fileID: 920548648}
+  m_PrefabAsset: {fileID: 0}
+--- !u!1 &228561814 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 2124480887485971872, guid: 1a45ea2d119eb6f4dadd5406e1665366, type: 3}
+  m_PrefabInstance: {fileID: 920548648}
+  m_PrefabAsset: {fileID: 0}
+--- !u!1 &228561815 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 912899090813746763, guid: 1a45ea2d119eb6f4dadd5406e1665366, type: 3}
+  m_PrefabInstance: {fileID: 920548648}
+  m_PrefabAsset: {fileID: 0}
+--- !u!1 &228561816 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 912899090676027606, guid: 1a45ea2d119eb6f4dadd5406e1665366, type: 3}
+  m_PrefabInstance: {fileID: 920548648}
+  m_PrefabAsset: {fileID: 0}
+--- !u!1 &228561817 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 912899091155997458, guid: 1a45ea2d119eb6f4dadd5406e1665366, type: 3}
+  m_PrefabInstance: {fileID: 920548648}
+  m_PrefabAsset: {fileID: 0}
+--- !u!1 &228561818 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 912899089365861138, guid: 1a45ea2d119eb6f4dadd5406e1665366, type: 3}
+  m_PrefabInstance: {fileID: 920548648}
+  m_PrefabAsset: {fileID: 0}
+--- !u!1 &228561819 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 912899090137742217, guid: 1a45ea2d119eb6f4dadd5406e1665366, type: 3}
+  m_PrefabInstance: {fileID: 920548648}
+  m_PrefabAsset: {fileID: 0}
+--- !u!1 &228561820 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 912899090219266086, guid: 1a45ea2d119eb6f4dadd5406e1665366, type: 3}
+  m_PrefabInstance: {fileID: 920548648}
+  m_PrefabAsset: {fileID: 0}
+--- !u!1 &228561821 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 912899089778208181, guid: 1a45ea2d119eb6f4dadd5406e1665366, type: 3}
+  m_PrefabInstance: {fileID: 920548648}
+  m_PrefabAsset: {fileID: 0}
+--- !u!1 &228561822 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 912899090400147769, guid: 1a45ea2d119eb6f4dadd5406e1665366, type: 3}
+  m_PrefabInstance: {fileID: 920548648}
+  m_PrefabAsset: {fileID: 0}
+--- !u!1 &228561823 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 912899091061268721, guid: 1a45ea2d119eb6f4dadd5406e1665366, type: 3}
+  m_PrefabInstance: {fileID: 920548648}
+  m_PrefabAsset: {fileID: 0}
+--- !u!1 &228561824 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 912899089558438226, guid: 1a45ea2d119eb6f4dadd5406e1665366, type: 3}
+  m_PrefabInstance: {fileID: 920548648}
+  m_PrefabAsset: {fileID: 0}
+--- !u!1 &228561825 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 912899090909291389, guid: 1a45ea2d119eb6f4dadd5406e1665366, type: 3}
+  m_PrefabInstance: {fileID: 920548648}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &228561826
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 228561821}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b96ece079555195488efdbac65179f44, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.SurfaceTag
+  surface: {fileID: 11400000, guid: e5d4819236169294fa96d7a421e11a5b, type: 2}
+--- !u!114 &228561827
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 228561822}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b96ece079555195488efdbac65179f44, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.SurfaceTag
+  surface: {fileID: 11400000, guid: 5fcb4a446ce5e1843a30c3f59c8a2109, type: 2}
+--- !u!114 &228561828
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 228561823}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b96ece079555195488efdbac65179f44, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.SurfaceTag
+  surface: {fileID: 11400000, guid: 5fcb4a446ce5e1843a30c3f59c8a2109, type: 2}
+--- !u!114 &228561829
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 228561824}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b96ece079555195488efdbac65179f44, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.SurfaceTag
+  surface: {fileID: 11400000, guid: 129634762b864a045af986bff538db71, type: 2}
+--- !u!114 &228561830
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 228561825}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b96ece079555195488efdbac65179f44, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.SurfaceTag
+  surface: {fileID: 11400000, guid: 5fcb4a446ce5e1843a30c3f59c8a2109, type: 2}
 --- !u!1001 &273505606
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -3370,6 +3565,19 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 342968906}
   m_Mesh: {fileID: 4300002, guid: 26fceea930a99df4bafb1841b346f354, type: 3}
+--- !u!114 &347748422
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 228561816}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b96ece079555195488efdbac65179f44, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.SurfaceTag
+  surface: {fileID: 11400000, guid: 09b81fdba3fa51446bf28c61591c6c4b, type: 2}
 --- !u!1001 &374527475
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -4500,13 +4708,34 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: -8679921383154817045, guid: fb1b970c4372f87429e6e2b087dda891, type: 3}
       insertIndex: -1
       addedObject: {fileID: 1490490859}
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: fb1b970c4372f87429e6e2b087dda891, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 477915223}
   m_SourcePrefab: {fileID: 100100000, guid: fb1b970c4372f87429e6e2b087dda891, type: 3}
 --- !u!4 &477915221 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: fb1b970c4372f87429e6e2b087dda891, type: 3}
   m_PrefabInstance: {fileID: 477915220}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &477915222 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 919132149155446097, guid: fb1b970c4372f87429e6e2b087dda891, type: 3}
+  m_PrefabInstance: {fileID: 477915220}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &477915223
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 477915222}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b96ece079555195488efdbac65179f44, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.SurfaceTag
+  surface: {fileID: 11400000, guid: 5fcb4a446ce5e1843a30c3f59c8a2109, type: 2}
 --- !u!1 &489543798
 GameObject:
   m_ObjectHideFlags: 0
@@ -5047,13 +5276,34 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: -8679921383154817045, guid: fb1b970c4372f87429e6e2b087dda891, type: 3}
       insertIndex: -1
       addedObject: {fileID: 1725975159}
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: fb1b970c4372f87429e6e2b087dda891, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 533990448}
   m_SourcePrefab: {fileID: 100100000, guid: fb1b970c4372f87429e6e2b087dda891, type: 3}
 --- !u!4 &533990446 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: fb1b970c4372f87429e6e2b087dda891, type: 3}
   m_PrefabInstance: {fileID: 533990445}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &533990447 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 919132149155446097, guid: fb1b970c4372f87429e6e2b087dda891, type: 3}
+  m_PrefabInstance: {fileID: 533990445}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &533990448
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 533990447}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b96ece079555195488efdbac65179f44, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.SurfaceTag
+  surface: {fileID: 11400000, guid: 5fcb4a446ce5e1843a30c3f59c8a2109, type: 2}
 --- !u!1001 &539036768
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -5329,13 +5579,34 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 7065458001286319791, guid: b225394c49922704fa45299726e0b3f7, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 553923211}
   m_SourcePrefab: {fileID: 100100000, guid: b225394c49922704fa45299726e0b3f7, type: 3}
 --- !u!4 &553923209 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 7065458001286319788, guid: b225394c49922704fa45299726e0b3f7, type: 3}
   m_PrefabInstance: {fileID: 553923208}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &553923210 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 7065458001286319791, guid: b225394c49922704fa45299726e0b3f7, type: 3}
+  m_PrefabInstance: {fileID: 553923208}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &553923211
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 553923210}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b96ece079555195488efdbac65179f44, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.SurfaceTag
+  surface: {fileID: 11400000, guid: 09b81fdba3fa51446bf28c61591c6c4b, type: 2}
 --- !u!1 &554905520
 GameObject:
   m_ObjectHideFlags: 0
@@ -5426,6 +5697,19 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 554905520}
   m_Mesh: {fileID: 4300002, guid: 464ccac0137aaac4dbd205802a023216, type: 3}
+--- !u!114 &556488135
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 228561820}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b96ece079555195488efdbac65179f44, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.SurfaceTag
+  surface: {fileID: 11400000, guid: 09b81fdba3fa51446bf28c61591c6c4b, type: 2}
 --- !u!1001 &565715288
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -7153,6 +7437,19 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 0.301292, y: 0.4560704, z: 0.27387086}
   m_Center: {x: 0.0015303344, y: 0.2280352, z: -0.000000029802322}
+--- !u!114 &664714626
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 228561812}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b96ece079555195488efdbac65179f44, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.SurfaceTag
+  surface: {fileID: 11400000, guid: e5d4819236169294fa96d7a421e11a5b, type: 2}
 --- !u!1001 &676274118
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -7929,13 +8226,34 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 8736835257637971504, guid: f36fb2bf682509041bcd17c2a6a7e868, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 777185638}
   m_SourcePrefab: {fileID: 100100000, guid: f36fb2bf682509041bcd17c2a6a7e868, type: 3}
 --- !u!4 &777185636 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 8736835257637971519, guid: f36fb2bf682509041bcd17c2a6a7e868, type: 3}
   m_PrefabInstance: {fileID: 777185635}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &777185637 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 8736835257637971504, guid: f36fb2bf682509041bcd17c2a6a7e868, type: 3}
+  m_PrefabInstance: {fileID: 777185635}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &777185638
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 777185637}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b96ece079555195488efdbac65179f44, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.SurfaceTag
+  surface: {fileID: 11400000, guid: 5fcb4a446ce5e1843a30c3f59c8a2109, type: 2}
 --- !u!1001 &785805593
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -9708,7 +10026,52 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 5955998809722614708, guid: 1a45ea2d119eb6f4dadd5406e1665366, type: 3}
       insertIndex: 0
       addedObject: {fileID: 1179554208}
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 912899090909291389, guid: 1a45ea2d119eb6f4dadd5406e1665366, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 228561830}
+    - targetCorrespondingSourceObject: {fileID: 912899089558438226, guid: 1a45ea2d119eb6f4dadd5406e1665366, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 228561829}
+    - targetCorrespondingSourceObject: {fileID: 912899091061268721, guid: 1a45ea2d119eb6f4dadd5406e1665366, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 228561828}
+    - targetCorrespondingSourceObject: {fileID: 912899090400147769, guid: 1a45ea2d119eb6f4dadd5406e1665366, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 228561827}
+    - targetCorrespondingSourceObject: {fileID: 912899089778208181, guid: 1a45ea2d119eb6f4dadd5406e1665366, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 228561826}
+    - targetCorrespondingSourceObject: {fileID: 912899090219266086, guid: 1a45ea2d119eb6f4dadd5406e1665366, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 556488135}
+    - targetCorrespondingSourceObject: {fileID: 912899090137742217, guid: 1a45ea2d119eb6f4dadd5406e1665366, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1679177995}
+    - targetCorrespondingSourceObject: {fileID: 912899089365861138, guid: 1a45ea2d119eb6f4dadd5406e1665366, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1969254194}
+    - targetCorrespondingSourceObject: {fileID: 912899091155997458, guid: 1a45ea2d119eb6f4dadd5406e1665366, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 2046415963}
+    - targetCorrespondingSourceObject: {fileID: 912899090676027606, guid: 1a45ea2d119eb6f4dadd5406e1665366, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 347748422}
+    - targetCorrespondingSourceObject: {fileID: 912899090813746763, guid: 1a45ea2d119eb6f4dadd5406e1665366, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1184563130}
+    - targetCorrespondingSourceObject: {fileID: 2124480887485971872, guid: 1a45ea2d119eb6f4dadd5406e1665366, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 2094926183}
+    - targetCorrespondingSourceObject: {fileID: 2727534125284934899, guid: 1a45ea2d119eb6f4dadd5406e1665366, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 220987482}
+    - targetCorrespondingSourceObject: {fileID: 4609427478461368335, guid: 1a45ea2d119eb6f4dadd5406e1665366, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 664714626}
+    - targetCorrespondingSourceObject: {fileID: 3761400478478091895, guid: 1a45ea2d119eb6f4dadd5406e1665366, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 981475281}
   m_SourcePrefab: {fileID: 100100000, guid: 1a45ea2d119eb6f4dadd5406e1665366, type: 3}
 --- !u!4 &920548649 stripped
 Transform:
@@ -10349,6 +10712,19 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 1.4539623, y: 0.63725173, z: 0.048101228}
   m_Center: {x: -0.00000014901161, y: 0, z: 0.000000033527613}
+--- !u!114 &981475281
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 228561811}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b96ece079555195488efdbac65179f44, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.SurfaceTag
+  surface: {fileID: 11400000, guid: 09b81fdba3fa51446bf28c61591c6c4b, type: 2}
 --- !u!1 &982559823
 GameObject:
   m_ObjectHideFlags: 0
@@ -12035,6 +12411,19 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 6433916078301984438, guid: e196500361afa954a824a76930e6b1c3, type: 3}
   m_PrefabInstance: {fileID: 1183858874}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &1184563130
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 228561815}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b96ece079555195488efdbac65179f44, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.SurfaceTag
+  surface: {fileID: 11400000, guid: 09b81fdba3fa51446bf28c61591c6c4b, type: 2}
 --- !u!1001 &1198661698
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -12217,13 +12606,34 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 9026014591441484377, guid: b28b9dc0ed62924489c9c760ec2b7e2d, type: 3}
       insertIndex: -1
       addedObject: {fileID: 106898202}
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 9026014591441484376, guid: b28b9dc0ed62924489c9c760ec2b7e2d, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1230027014}
   m_SourcePrefab: {fileID: 100100000, guid: b28b9dc0ed62924489c9c760ec2b7e2d, type: 3}
 --- !u!4 &1230027012 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 9026014591441484377, guid: b28b9dc0ed62924489c9c760ec2b7e2d, type: 3}
   m_PrefabInstance: {fileID: 1230027011}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &1230027013 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 9026014591441484376, guid: b28b9dc0ed62924489c9c760ec2b7e2d, type: 3}
+  m_PrefabInstance: {fileID: 1230027011}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &1230027014
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1230027013}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b96ece079555195488efdbac65179f44, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.SurfaceTag
+  surface: {fileID: 11400000, guid: 5fcb4a446ce5e1843a30c3f59c8a2109, type: 2}
 --- !u!1001 &1230430616
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -12365,13 +12775,34 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 4345652647458663010, guid: 12cec36ff883dbd4eb08dd0b52d265ff, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1237336790}
   m_SourcePrefab: {fileID: 100100000, guid: 12cec36ff883dbd4eb08dd0b52d265ff, type: 3}
 --- !u!4 &1237336788 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 4345652647458663009, guid: 12cec36ff883dbd4eb08dd0b52d265ff, type: 3}
   m_PrefabInstance: {fileID: 1237336787}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &1237336789 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 4345652647458663010, guid: 12cec36ff883dbd4eb08dd0b52d265ff, type: 3}
+  m_PrefabInstance: {fileID: 1237336787}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &1237336790
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1237336789}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b96ece079555195488efdbac65179f44, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.SurfaceTag
+  surface: {fileID: 11400000, guid: 5fcb4a446ce5e1843a30c3f59c8a2109, type: 2}
 --- !u!1001 &1244231875
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -13626,13 +14057,34 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 5452726360179954674, guid: ac6aa9458722dff4c96667e2fc1b45fd, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1357305078}
   m_SourcePrefab: {fileID: 100100000, guid: ac6aa9458722dff4c96667e2fc1b45fd, type: 3}
 --- !u!4 &1357305076 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 5452726360179954673, guid: ac6aa9458722dff4c96667e2fc1b45fd, type: 3}
   m_PrefabInstance: {fileID: 1357305075}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &1357305077 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 5452726360179954674, guid: ac6aa9458722dff4c96667e2fc1b45fd, type: 3}
+  m_PrefabInstance: {fileID: 1357305075}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &1357305078
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1357305077}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b96ece079555195488efdbac65179f44, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.SurfaceTag
+  surface: {fileID: 11400000, guid: 09b81fdba3fa51446bf28c61591c6c4b, type: 2}
 --- !u!1001 &1361365879
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -15332,13 +15784,34 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 7464926091823193950, guid: 895d73090167de343980dd3d8adf8d45, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1510605394}
   m_SourcePrefab: {fileID: 100100000, guid: 895d73090167de343980dd3d8adf8d45, type: 3}
 --- !u!4 &1510605392 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 7464926091823193951, guid: 895d73090167de343980dd3d8adf8d45, type: 3}
   m_PrefabInstance: {fileID: 1510605391}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &1510605393 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 7464926091823193950, guid: 895d73090167de343980dd3d8adf8d45, type: 3}
+  m_PrefabInstance: {fileID: 1510605391}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &1510605394
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1510605393}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b96ece079555195488efdbac65179f44, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.SurfaceTag
+  surface: {fileID: 11400000, guid: e5d4819236169294fa96d7a421e11a5b, type: 2}
 --- !u!1001 &1525527999
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -16428,13 +16901,47 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 9206887368531345727, guid: f2c4ccb1609ea834998270505427bd9c, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1672144555}
   m_SourcePrefab: {fileID: 100100000, guid: f2c4ccb1609ea834998270505427bd9c, type: 3}
 --- !u!4 &1672144553 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 9206887368531345720, guid: f2c4ccb1609ea834998270505427bd9c, type: 3}
   m_PrefabInstance: {fileID: 1672144552}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &1672144554 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 9206887368531345727, guid: f2c4ccb1609ea834998270505427bd9c, type: 3}
+  m_PrefabInstance: {fileID: 1672144552}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &1672144555
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1672144554}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b96ece079555195488efdbac65179f44, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.SurfaceTag
+  surface: {fileID: 11400000, guid: 09b81fdba3fa51446bf28c61591c6c4b, type: 2}
+--- !u!114 &1679177995
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 228561819}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b96ece079555195488efdbac65179f44, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.SurfaceTag
+  surface: {fileID: 11400000, guid: 09b81fdba3fa51446bf28c61591c6c4b, type: 2}
 --- !u!1001 &1682831329
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -16498,13 +17005,34 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 1976324654502644291, guid: a33d337aef01134489ba741df746d2cd, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1682831332}
   m_SourcePrefab: {fileID: 100100000, guid: a33d337aef01134489ba741df746d2cd, type: 3}
 --- !u!4 &1682831330 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 1976324654502644290, guid: a33d337aef01134489ba741df746d2cd, type: 3}
   m_PrefabInstance: {fileID: 1682831329}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &1682831331 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 1976324654502644291, guid: a33d337aef01134489ba741df746d2cd, type: 3}
+  m_PrefabInstance: {fileID: 1682831329}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &1682831332
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1682831331}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b96ece079555195488efdbac65179f44, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.SurfaceTag
+  surface: {fileID: 11400000, guid: 09b81fdba3fa51446bf28c61591c6c4b, type: 2}
 --- !u!1001 &1710358240
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -16675,13 +17203,34 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 5104482425645313076, guid: a080223b2ff0efd44b1e78d262dd9e91, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1718494314}
   m_SourcePrefab: {fileID: 100100000, guid: a080223b2ff0efd44b1e78d262dd9e91, type: 3}
 --- !u!4 &1718494312 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 5104482425645313077, guid: a080223b2ff0efd44b1e78d262dd9e91, type: 3}
   m_PrefabInstance: {fileID: 1718494311}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &1718494313 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 5104482425645313076, guid: a080223b2ff0efd44b1e78d262dd9e91, type: 3}
+  m_PrefabInstance: {fileID: 1718494311}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &1718494314
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1718494313}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b96ece079555195488efdbac65179f44, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.SurfaceTag
+  surface: {fileID: 11400000, guid: 09b81fdba3fa51446bf28c61591c6c4b, type: 2}
 --- !u!1 &1725975158
 GameObject:
   m_ObjectHideFlags: 0
@@ -17576,13 +18125,34 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 7464926091823193950, guid: 895d73090167de343980dd3d8adf8d45, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1824762934}
   m_SourcePrefab: {fileID: 100100000, guid: 895d73090167de343980dd3d8adf8d45, type: 3}
 --- !u!4 &1824762932 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 7464926091823193951, guid: 895d73090167de343980dd3d8adf8d45, type: 3}
   m_PrefabInstance: {fileID: 1824762931}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &1824762933 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 7464926091823193950, guid: 895d73090167de343980dd3d8adf8d45, type: 3}
+  m_PrefabInstance: {fileID: 1824762931}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &1824762934
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1824762933}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b96ece079555195488efdbac65179f44, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.SurfaceTag
+  surface: {fileID: 11400000, guid: e5d4819236169294fa96d7a421e11a5b, type: 2}
 --- !u!1001 &1825463746
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -17807,13 +18377,34 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 3882424844527701710, guid: cc4ea5df018402c4eacaba3662be5cd9, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1860143456}
   m_SourcePrefab: {fileID: 100100000, guid: cc4ea5df018402c4eacaba3662be5cd9, type: 3}
 --- !u!4 &1860143454 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 3882424844527701705, guid: cc4ea5df018402c4eacaba3662be5cd9, type: 3}
   m_PrefabInstance: {fileID: 1860143453}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &1860143455 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 3882424844527701710, guid: cc4ea5df018402c4eacaba3662be5cd9, type: 3}
+  m_PrefabInstance: {fileID: 1860143453}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &1860143456
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1860143455}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b96ece079555195488efdbac65179f44, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.SurfaceTag
+  surface: {fileID: 11400000, guid: 5fcb4a446ce5e1843a30c3f59c8a2109, type: 2}
 --- !u!1001 &1890985806
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -18737,6 +19328,19 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 0.5374813, y: 1.4551505, z: 0.058415845}
   m_Center: {x: 0.000000014901168, y: 0.00000002980234, z: 0.00000008475038}
+--- !u!114 &1969254194
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 228561818}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b96ece079555195488efdbac65179f44, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.SurfaceTag
+  surface: {fileID: 11400000, guid: 09b81fdba3fa51446bf28c61591c6c4b, type: 2}
 --- !u!1001 &1969887625
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -18796,13 +19400,34 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 7347595156033412911, guid: 4b252f53a518e654b908a0317d638f64, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1969887628}
   m_SourcePrefab: {fileID: 100100000, guid: 4b252f53a518e654b908a0317d638f64, type: 3}
 --- !u!4 &1969887626 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 7347595156033412910, guid: 4b252f53a518e654b908a0317d638f64, type: 3}
   m_PrefabInstance: {fileID: 1969887625}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &1969887627 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 7347595156033412911, guid: 4b252f53a518e654b908a0317d638f64, type: 3}
+  m_PrefabInstance: {fileID: 1969887625}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &1969887628
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1969887627}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b96ece079555195488efdbac65179f44, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.SurfaceTag
+  surface: {fileID: 11400000, guid: 5fcb4a446ce5e1843a30c3f59c8a2109, type: 2}
 --- !u!1001 &1971989666
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -19096,13 +19721,34 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 658395568613380618, guid: ab224fa15c8d1ae4e8c4df10068e9af4, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1990814917}
   m_SourcePrefab: {fileID: 100100000, guid: ab224fa15c8d1ae4e8c4df10068e9af4, type: 3}
 --- !u!4 &1990814915 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 658395568613380613, guid: ab224fa15c8d1ae4e8c4df10068e9af4, type: 3}
   m_PrefabInstance: {fileID: 1990814914}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &1990814916 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 658395568613380618, guid: ab224fa15c8d1ae4e8c4df10068e9af4, type: 3}
+  m_PrefabInstance: {fileID: 1990814914}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &1990814917
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1990814916}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b96ece079555195488efdbac65179f44, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.SurfaceTag
+  surface: {fileID: 11400000, guid: 09cf2e5c0b89bf14eabe58eb62511ca0, type: 2}
 --- !u!1 &1991023571
 GameObject:
   m_ObjectHideFlags: 0
@@ -19883,6 +20529,19 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 0.301292, y: 0.4560704, z: 0.24568573}
   m_Center: {x: 0.0015303348, y: 0.2280357, z: 0.014092582}
+--- !u!114 &2046415963
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 228561817}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b96ece079555195488efdbac65179f44, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.SurfaceTag
+  surface: {fileID: 11400000, guid: 09b81fdba3fa51446bf28c61591c6c4b, type: 2}
 --- !u!1 &2079944121
 GameObject:
   m_ObjectHideFlags: 0
@@ -19892,6 +20551,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 2079944122}
+  - component: {fileID: 2079944123}
   m_Layer: 0
   m_Name: Vehicle
   m_TagString: Untagged
@@ -19923,6 +20583,19 @@ Transform:
   - {fileID: 1002097165}
   m_Father: {fileID: 227530302}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &2079944123
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2079944121}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b96ece079555195488efdbac65179f44, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.SurfaceTag
+  surface: {fileID: 11400000, guid: 09b81fdba3fa51446bf28c61591c6c4b, type: 2}
 --- !u!1001 &2092966761
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -20026,6 +20699,19 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 0.53748107, y: 1.4551507, z: 0.058415376}
   m_Center: {x: 0.000000014901161, y: 0.00000002980233, z: 0.00000008475036}
+--- !u!114 &2094926183
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 228561814}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b96ece079555195488efdbac65179f44, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.SurfaceTag
+  surface: {fileID: 11400000, guid: e5d4819236169294fa96d7a421e11a5b, type: 2}
 --- !u!1001 &2097793227
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -20502,13 +21188,34 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 6571849775416813852, guid: 07e4d3bb22f622448ae4f3a5c39adc1f, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 2131807277}
   m_SourcePrefab: {fileID: 100100000, guid: 07e4d3bb22f622448ae4f3a5c39adc1f, type: 3}
 --- !u!4 &2131807275 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 6571849775416813853, guid: 07e4d3bb22f622448ae4f3a5c39adc1f, type: 3}
   m_PrefabInstance: {fileID: 2131807274}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &2131807276 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 6571849775416813852, guid: 07e4d3bb22f622448ae4f3a5c39adc1f, type: 3}
+  m_PrefabInstance: {fileID: 2131807274}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &2131807277
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2131807276}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b96ece079555195488efdbac65179f44, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.SurfaceTag
+  surface: {fileID: 11400000, guid: 09b81fdba3fa51446bf28c61591c6c4b, type: 2}
 --- !u!1001 &2136529174
 PrefabInstance:
   m_ObjectHideFlags: 0

@@ -91,6 +91,19 @@ namespace VortexArena.Core.Arena
         // nauseating in VR.
         private const float FloorMismatchWarn = 0.03f;
         private const float FloorMismatchReject = 0.10f;
+
+        /// <summary>How long the post-align head height keeps sampling (s). ⚠️ A single frame taken at
+        /// the capture LIES and lies backwards: a correct capture is made bent over the floor mark, so
+        /// frame zero reads a crouch, while a bad capture made standing reads taller. The window is
+        /// long enough for the operator to straighten up; the MAX is the standing value.</summary>
+        private const float HeadSettleSeconds = 3f;
+
+        /// <summary>Below this the post-align head height is not a height a standing player can have,
+        /// so the alignment itself is wrong (same physical bound gates the samples in
+        /// <c>StandingHeightState</c>). Deliberately low: it must not fire on a small child, because
+        /// this is a hint, not a gate.</summary>
+        private const float HeadHeightImplausibleMeters = 0.8f;
+
         private const float LongPulseSeconds = 0.6f;
 
         /// <summary>Point A captured: one SHORT pulse.</summary>
@@ -184,6 +197,7 @@ namespace VortexArena.Core.Arena
         private bool trackingEventsHooked;
         private bool realignQueued;
         private Coroutine markerHideRoutine;
+        private Coroutine headSettleRoutine;
 
         /// <summary>Pre-align already queued. It has two triggers (no saved UUID / restore failed
         /// outright) that can fire back to back; a second run would shift the rig again.</summary>
@@ -578,10 +592,12 @@ namespace VortexArena.Core.Arena
                 ? $" sınır={boundary.transform.position.y:F2} m"
                 : "";
 
-            // Reading the line: head ~1.0-1.4 m (bent over) with point ~0.6 m => the tip was held
-            // high at capture, the player's feet will sink. Head ~ standing height + the point value
-            // => only the headset's floor guess is off and the alignment is fine. The post-align head
-            // height logged next must equal the player's real eye height.
+            // ⚠️ `kafa` is the head above the HEADSET's floor guess, so it cannot settle the cause on
+            // its own — the operator is bent over the mark while this is taken. What decides is the
+            // post-align head height (logged a few seconds later) against the player's real eye
+            // height. These fields are context for that reading: `kaynak` says whether the capture
+            // was manual or a restored anchor, `köken` must be Stage for the point value to mean
+            // anything at all.
             Debug.Log($"[Kalibre] zemin ölçümü: kaynak={source} nokta={LastFloorOffsetMeters:F2} m " +
                       $"kafa={headTau} m sanalZemin={VirtualFloorY:F2} m köken={origin}{boundaryPart}");
 
@@ -590,9 +606,11 @@ namespace VortexArena.Core.Arena
                 Debug.LogWarning(
                     $"ArenaCalibrator: zemin sapması {LastFloorOffsetMeters:F2} m " +
                     $"(eşik {ArenaProtocol.CALIB_FLOOR_WARN_METERS:F2} m) — ya kumandanın ucu " +
-                    "zeminde değildi ya da gözlüğün alan verisi (space setup) bayat. Hangisi " +
-                    "olduğu yukarıdaki '[Kalibre] zemin ölçümü' satırından okunur. Kalibrasyon " +
-                    "yine de kabul edildi.", this);
+                    "zeminde değildi (hizalama kaydı, ayaklar batar) ya da gözlüğün alan verisi " +
+                    "(space setup) bayat (hizalama doğru, sapma zararsız). Hangisi olduğunu bu " +
+                    "satır SÖYLEYEMEZ: birkaç saniye sonraki 'hizalama sonrası kafa yüksekliği' " +
+                    "satırını oyuncunun gerçek göz yüksekliğiyle karşılaştır. Kalibrasyon yine de " +
+                    "kabul edildi.", this);
             }
         }
 
@@ -656,7 +674,7 @@ namespace VortexArena.Core.Arena
 
             CalibrationGeneration++;
             Debug.Log($"ArenaCalibrator: rig aligned (yaw {yaw:F1} deg, floor {rise:F3} m).");
-            LogHeadHeightAfterAlign();
+            ReportHeadHeightAfterAlign();
         }
 
         /// <summary>Aligns the rig from a persisted anchor pose. The anchor sits at the floor point
@@ -688,21 +706,72 @@ namespace VortexArena.Core.Arena
             // printed offset belongs to an older alignment.
             Debug.Log($"ArenaCalibrator: rig aligned from saved anchor (yaw {yaw:F1} deg, " +
                       $"zemin sapması {LastFloorOffsetMeters:F2} m).");
-            LogHeadHeightAfterAlign();
+            ReportHeadHeightAfterAlign();
         }
 
-        /// <summary>Head height in arena space right after an alignment: must equal the player's real
-        /// eye height — a smaller value means the feet sink into the floor.</summary>
-        private void LogHeadHeightAfterAlign()
+        /// <summary>Head height in arena space after an alignment: must equal the player's real eye
+        /// height — a smaller value means the feet sink into the floor. Sampled over
+        /// <see cref="HeadSettleSeconds"/> and reported as the MAX; a single frame reads the crouch.</summary>
+        private void ReportHeadHeightAfterAlign()
         {
-            Transform head = HeadAnchor;
-            if (head == null)
+            // ⚠️ A diagnostic must never be able to break an alignment: StartCoroutine throws on an
+            // inactive object, and the spectator build aligns with this component switched off.
+            if (HeadAnchor == null || !isActiveAndEnabled)
                 return;
 
-            // ⚠️ The floor lift is subtracted: on an upper floor the raw value carries the level
-            // height and the diagnostic would read "3.6 m head" instead of a real eye height.
-            Debug.Log("[Kalibre] hizalama sonrası kafa yüksekliği " +
-                      $"{ArenaSpace.WorldToArena(head.position).y - FloorLiftMeters:F2} m");
+            // A re-align inside the window restarts it: the old samples belong to the old rig pose.
+            if (headSettleRoutine != null)
+                StopCoroutine(headSettleRoutine);
+
+            headSettleRoutine = StartCoroutine(SettleHeadHeight());
+        }
+
+        private IEnumerator SettleHeadHeight()
+        {
+            // ⚠️ Resolved ONCE: the accessor falls back to a scene-wide search, which per frame for
+            // the whole window is a cost the headset pays for a diagnostic. A rig that disappears
+            // mid-window (scene change) ends the sample instead of restarting that search.
+            Transform head = HeadAnchor;
+            float deadline = Time.unscaledTime + HeadSettleSeconds;
+            float tallest = float.NegativeInfinity;
+
+            while (Time.unscaledTime < deadline)
+            {
+                if (head == null)
+                {
+                    headSettleRoutine = null;
+                    yield break;
+                }
+
+                // ⚠️ The floor lift is subtracted: on an upper floor the raw value carries the
+                // level height and the diagnostic would read "3.6 m head", not an eye height.
+                tallest = Mathf.Max(tallest,
+                                    ArenaSpace.WorldToArena(head.position).y - FloorLiftMeters);
+
+                yield return null;
+            }
+
+            headSettleRoutine = null;
+
+            if (float.IsNegativeInfinity(tallest))
+                yield break;
+
+            // ⚠️ The number does NOT say which fault it is on its own: "tip captured high" and
+            // "headset floor estimate stale" produce the same floorOffset, and only the player's
+            // REAL eye height tells them apart. That comparison is the reader's, so the line asks
+            // for it instead of announcing a cause.
+            Debug.Log($"[Kalibre] hizalama sonrası kafa yüksekliği {tallest:F2} m " +
+                      $"({HeadSettleSeconds:F0} sn içindeki en yüksek değer) — oyuncunun GERÇEK göz " +
+                      "yüksekliğiyle karşılaştır: eşitse hizalama doğru, belirgin düşükse hizalama " +
+                      "kaymıştır ve ayaklar zemine batar.");
+
+            if (tallest < HeadHeightImplausibleMeters)
+            {
+                Debug.LogWarning(
+                    $"ArenaCalibrator: hizalama sonrası kafa yüksekliği {tallest:F2} m — ayakta " +
+                    "duran bir oyuncunun göz yüksekliği olamaz, hizalama kaymış demektir. B'yi " +
+                    "kumandanın ucu YERDEYKEN yeniden yakala.", this);
+            }
         }
 
         /// <summary>Queues the pre-align once. Two callers: a headset with no saved UUID, and a
@@ -923,6 +992,13 @@ namespace VortexArena.Core.Arena
             {
                 StopCoroutine(markerHideRoutine);
                 markerHideRoutine = null;
+            }
+            // A pending verdict describes the alignment being thrown away; printing it after the
+            // reset would read as a verdict on the next one.
+            if (headSettleRoutine != null)
+            {
+                StopCoroutine(headSettleRoutine);
+                headSettleRoutine = null;
             }
             SetMarkersVisible(false);
             if (worldAnchor != null)

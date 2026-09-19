@@ -7,13 +7,17 @@ using VortexArena.Protocol;
 
 namespace VortexArena.Modes.Burger
 {
-    /// <summary>The serving board: while it sits in a counter slot it reports the stack to the waiting
-    /// customer with <c>serve</c> (<c>i:[müşteri netId, malzeme netId'leri alttan üste]</c>, §10.5).
-    /// <para><b>Two moments trigger it, and the burger must be CLOSED for either:</b> placing the TOP BUN
-    /// on a board that is already parked, or putting a finished board down into a slot. The first is what
-    /// makes the game playable — a parked board never rests again, so without it a burger built where the
-    /// customer stands could never be handed over.</para>
-    /// <para>⚠️ Only the client that brought the object to rest reports
+    /// <summary>The serving board: a FIXED workstation standing in a counter slot, reporting its stack to
+    /// the waiting customer with <c>serve</c> (<c>i:[müşteri netId, malzeme netId'leri alttan üste]</c>,
+    /// §10.5).
+    /// <para>⚠️ <b>The board is never picked up</b> — kind <c>board</c> is <c>grab: none</c> and its
+    /// definition's grab path is <c>None</c>. Nobody can own it, so it never leaves kinematic and stays
+    /// where the scene put it. That position is the ONLY thing tying it to a slot, because
+    /// <see cref="ResolveSlot"/> searches by VOLUME: a board authored outside every slot's collider takes
+    /// ingredients happily and then silently never serves.</para>
+    /// <para><b>Placing the TOP BUN is the serve gesture</b> — it closes the burger, and the stack must be
+    /// closed for the report to go out.</para>
+    /// <para>⚠️ Only the client that brought the ingredient to rest reports
     /// (<see cref="NetObjectPoseSender.RestSent"/>) — one serve per gesture, from one headset.</para>
     /// <para>⚠️ <b>A rejection has no message of its own:</b> a correct serve produces
     /// <c>object_state</c>, while a wrong recipe is relayed back as the <c>serve</c> EVENT itself
@@ -40,7 +44,6 @@ namespace VortexArena.Modes.Burger
         private const float AcceptWindowSeconds = 2f;
 
         private NetObject _net;
-        private NetObjectPoseSender _sender;
 
         /// <summary>Customer of the serve this headset sent, so only the player who handed the burger
         /// over feels the confirmation.</summary>
@@ -48,10 +51,10 @@ namespace VortexArena.Modes.Burger
 
         private float _servedUntil;
 
-        /// <summary>⚠️ Both triggers can fire for ONE burger: a loaded board carried into a slot rests,
-        /// and the top bun riding it rests right after. The second <c>serve</c> names ingredients the
-        /// server has already despawned, and a rejection is relayed as the event itself (§10.5) — the
-        /// player would hear the reject sound on a burger that was accepted.</summary>
+        /// <summary>⚠️ One burger can still report twice: a top bun that settles, gets nudged and settles
+        /// again sends a second <c>serve</c> naming ingredients the server has already despawned, and a
+        /// rejection is relayed as the event itself (§10.5) — the player would hear the reject sound on a
+        /// burger that was accepted.</summary>
         private float _serveCooldown;
 
         private readonly List<NetObject> _stack = new List<NetObject>();
@@ -71,7 +74,6 @@ namespace VortexArena.Modes.Burger
         private void Awake()
         {
             _net = GetComponent<NetObject>();
-            _sender = GetComponent<NetObjectPoseSender>();
 
             if (stackTrigger == null)
             {
@@ -82,21 +84,11 @@ namespace VortexArena.Modes.Burger
 
         private void OnEnable()
         {
-            if (_sender != null)
-            {
-                _sender.RestSent += HandleRestSent;
-            }
-
             _net.EventReceived += HandleEventReceived;
         }
 
         private void OnDisable()
         {
-            if (_sender != null)
-            {
-                _sender.RestSent -= HandleRestSent;
-            }
-
             _net.EventReceived -= HandleEventReceived;
 
             foreach (KeyValuePair<NetObject, NetObjectPoseSender> entry in _watched)
@@ -151,10 +143,9 @@ namespace VortexArena.Modes.Burger
 
         /// <summary>An ingredient WE put down settled on the board. The TOP BUN is the serve gesture —
         /// placing it is what closes the burger.</summary>
-        /// <remarks>⚠️ Without this the loop cannot be closed at all: the board's own rest is the only
-        /// other trigger, and a board already sitting in its slot never rests again. Stacking onto a
-        /// parked board would then never reach the customer. Gating on the top bun also keeps a wrong
-        /// order from being re-rejected on every single ingredient.</remarks>
+        /// <remarks>⚠️ This is the ONLY trigger: the board never moves, so it never comes to rest and has
+        /// no rest event of its own to serve from. Gating on the top bun also keeps a wrong order from
+        /// being re-rejected on every single ingredient.</remarks>
         private void HandleIngredientRest(NetObject ingredient)
         {
             if (ingredient == null || ingredient.Kind == null ||
@@ -176,9 +167,6 @@ namespace VortexArena.Modes.Burger
         }
 
         // ------------------------------------------------------------------- serving
-
-        /// <summary>The board itself came to rest — the "assemble elsewhere, carry it over" flow.</summary>
-        private void HandleRestSent(NetObject net) => TryServe();
 
         private void Update()
         {

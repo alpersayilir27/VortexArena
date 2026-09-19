@@ -14,7 +14,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.SurfaceDefinition
   surfaceId: metal
   impactPrefab: {fileID: 371613135301754936, guid: a85b785059162f247a31d154e8f64f0b, type: 3}
-  impactClips: []
+  impactClips:
+  - {fileID: 8300000, guid: 2ffd2cf5597dfb44493ea64f976e7b0e, type: 3}
+  - {fileID: 8300000, guid: a0f33ddfa773ce64e964248e24ee0382, type: 3}
+  - {fileID: 8300000, guid: 6d35ff63f1e990742ba36dee0871b631, type: 3}
   volume: 0.8
   pitchRange: {x: 0.9, y: 1.14}
   lifetimeSeconds: 1.5
@@ -24,3 +27,19 @@ MonoBehaviour:
   - {fileID: -977237120110461261, guid: d84c88d6c4dc27a4086004e67109e7a1, type: 3}
   - {fileID: -4078237145039042201, guid: 46db3a7dd4740a1428394710c39c4a6a, type: 3}
   - {fileID: 2100000, guid: f4d818922caea8b46b04ac27d02ab8a8, type: 2}
+  - {fileID: 7554325558224765451, guid: ef72abf80621e2c44a55b3195e5e35a0, type: 3}
+  - {fileID: 806107016660696590, guid: 35eba7e91f497fb47b7c3a34f93240a6, type: 3}
+  - {fileID: 2808097466608043500, guid: 3e19024e7ce796645a7c4c0376346c37, type: 3}
+  - {fileID: 2100000, guid: 1cd92d418323dd34abbe6fd9e6d942dd, type: 2}
+  - {fileID: 2100000, guid: e309fee46e70baf4c898e5ea5329e449, type: 2}
+  - {fileID: -2317110199934127957, guid: dd964c1c1eb0b7c47995efc5d7693bf9, type: 3}
+  - {fileID: 2014767908261441754, guid: 02630e82942264a4da68c71564d0a158, type: 3}
+  - {fileID: -6889950964703377576, guid: 534368d567dfc034d9c653ee38e5ef5d, type: 3}
+  - {fileID: -2612246142819449423, guid: f7b42046ce9db2245bfc484ac1e8389c, type: 3}
+  - {fileID: 7713251871081783534, guid: f4bed298267bc4f45bc887813101fbcf, type: 3}
+  - {fileID: 2100000, guid: 0363925bef286974b93729b2489be79f, type: 2}
+  - {fileID: -2612246142819449423, guid: f834969a3cde834448bd6b07d54ed762, type: 3}
+  - {fileID: -2612246142819449423, guid: 423ce786f3104d347b1eeefdc583f8e9, type: 3}
+  - {fileID: 7713251871081783534, guid: aec1f0eadb6a7044c8cfb9dd93b5fba7, type: 3}
+  - {fileID: -6889950964703377576, guid: 7f3640ef9965aa7449ca11f27c358356, type: 3}
+  - {fileID: 7713251871081783534, guid: c56b2568717a846419b683bdc9aef88d, type: 3}

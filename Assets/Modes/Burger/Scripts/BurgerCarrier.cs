@@ -7,7 +7,8 @@ using VortexArena.Net;
 
 namespace VortexArena.Modes.Burger
 {
-    /// <summary>Carries ingredients on a HELD object — the spatula's blade, the serving board's face.
+    /// <summary>Carries ingredients on a HELD object — the spatula's blade. ⚠️ NOT the serving board: that
+    /// one is a fixed workstation nobody picks up (<see cref="BurgerServingBoard"/>).
     /// <para><b>Nothing new goes on the wire.</b> Cargo is claimed with a plain <c>object_grab</c>, so a
     /// carried ingredient is simply "held by the carrier's owner, in the carrier's hand" (§10.5). Every
     /// client derives the same set from that state and seats it on the anchor; a separate field would be
@@ -17,12 +18,13 @@ namespace VortexArena.Modes.Burger
     /// and the recipe is read bottom to top off the board, i.e. the scramble becomes a wrong serve.</para>
     /// <para>⚠️ Only the OWNER claims and spills; everyone else derives the same placement.</para>
     /// <para><b>Two lanes.</b> Ingredients STACK on the anchor. Anything else grabbable resting on the
-    /// carrier at pickup (knife, spatula, whole bun) rides LOOSE: it keeps the offset its published rest
-    /// pose had from the carrier's rest pose, so every headset derives the same placement without a new
-    /// field. Loose cargo is claimed only in the first moments after pickup — later, the carrier's rest
-    /// pose no longer says where it is. ⚠️ The loose lane is OPT-IN per prefab (<see cref="looseCapacity"/>,
-    /// default 0): only the serving board carries it. A spatula with a loose lane lifts the knife — or the
-    /// board — lying next to the patty it was aimed at.</para></summary>
+    /// carrier at pickup (knife, whole bun) rides LOOSE: it keeps the offset its published rest pose had
+    /// from the carrier's rest pose, so every headset derives the same placement without a new field.
+    /// Loose cargo is claimed only in the first moments after pickup — later, the carrier's rest pose no
+    /// longer says where it is. ⚠️ The loose lane is OPT-IN per prefab (<see cref="looseCapacity"/>,
+    /// default 0) and NO prefab opens it today. Its only filter is "does the candidate have a grab
+    /// bridge", so opening it on a carrier lifts the knife lying next to the patty that was aimed at — a
+    /// kind allow-list has to come first.</para></summary>
     /// <remarks>⚠️ Runs after <see cref="NetObjectGrabBridge"/> (default order) and before
     /// <c>HandGripPoser</c> (order 100): the anchor must already be at the hand this frame, or the cargo
     /// trails the spatula by one frame.</remarks>
@@ -48,9 +50,9 @@ namespace VortexArena.Modes.Burger
                  "0 = hacmin tamamı.")]
         [SerializeField] private float claimBand;
 
-        [Tooltip("Malzeme dışı eşya (bıçak, spatula, bütün ekmek) için ayrı yer: taşıyıcı kaldırılırken " +
-                 "üstünde duranlar bu sayıya kadar olduğu yerde biner. 0 = binmez (varsayılan; yalnız " +
-                 "servis tahtası açar — spatulada açıksa yanındaki bıçağı da tahtayı da kaldırır).")]
+        [Tooltip("Malzeme dışı eşya (bıçak, bütün ekmek) için ayrı yer: taşıyıcı kaldırılırken üstünde " +
+                 "duranlar bu sayıya kadar olduğu yerde biner. 0 = binmez (varsayılan; şu an hiçbir " +
+                 "prefab açmıyor — açan taşıyıcı yanındaki bıçağı da kaldırır).")]
         [SerializeField] private int looseCapacity;
 
         [Tooltip("Taşıyıcı bu açıdan (derece) fazla yatınca yük dökülür. 0 = hiç dökülmez.")]
