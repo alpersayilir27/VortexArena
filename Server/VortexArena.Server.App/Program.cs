@@ -39,6 +39,12 @@ internal static class Program
     {
         Console.OutputEncoding = Encoding.UTF8;
 
+        // ⚠️ Stays BELOW OutputEncoding: setting the encoding replaces Console.Out and would drop the tee.
+        // One file per run: a session can be carried out of the venue whole.
+        var logPath = Path.Combine(AppContext.BaseDirectory, "logs",
+            $"server-{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.log");
+        ConsoleTee.Install(logPath);
+
         var configDir = ResolveConfigDir();
         var config = ServerConfig.Load(Path.Combine(configDir, "server.json"));
         // No weapon table (§10.3): the client computes damage, the server applies it as-is.
@@ -76,6 +82,7 @@ internal static class Program
         Console.WriteLine($"  Lobi       : {DescribeLobby(director.LobbyScene, maps)}");
         Console.WriteLine("  Hasar      : istemci bildirir (silah tablosu ve hile denetimi yok)");
         Console.WriteLine($"  Config     : {configDir}");
+        Console.WriteLine($"  Günlük     : {logPath}");
 
         registry.Changed += (player, kind) =>
         {

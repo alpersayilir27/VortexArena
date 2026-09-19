@@ -1255,11 +1255,16 @@ varsayılanı `QuickBattle`'dır; yalnız Çocuk Oyunları haritasında `Kids` s
 hiçbir yerde hata vermez: harita yalnız kendi ailesinin modlarıyla başlatılabilir, diğerlerinde
 `start_match` reddedilir — sahadaki belirti **"maç başlamıyor"**dur.
 
+⚠️ **Köstebek arenasında `moleDensity` de o tanımdadır** — aynı anda kaç köstebeğin ayakta duracağını
+belirler (`1` = temel yoğunluk) ve alanın varsayılanı yeni bir mekanın başlayacağı değerdir. Delikleri
+seyrek ya da salonu büyük bir mekanda yükselt, dar mekanda düşür; değer 6. adımda `maps.json`'a girer
+(protokol §10.5). Diğer arenalarda alana **dokunulmaz**, oralarda hiçbir şeye bağlı değildir.
+
 ⚠️ **Arena sildiysen/taşıdıysan aynı pencereden `Hepsini Çalıştır`** — sahne açık olmadan da koşar
 (o durumda `MapDefinition` adımı atlanır) ve kalıntı kayıtları temizler; kayıtlar elle düzenlenmez.
 
 > Arena ölçüsü **sunucuya gitmez** (maps.json'a yalnız `sceneName` + `gameType` + `modes` +
-> ağ nesneleri yazılır); arenanın
+> `moleDensity` + ağ nesneleri yazılır); arenanın
 > tek ölçü kaynağı **boyut dosyasıdır**. Export'u ise ölçü için değil,
 > **yeni `sceneName` tabloya girsin** diye çalıştırıyorsun — 6. adım atlanırsa `start_match`
 > sessizce reddedilir.

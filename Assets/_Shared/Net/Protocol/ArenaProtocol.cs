@@ -21,6 +21,9 @@ namespace VortexArena.Protocol
         /// an old client sends no <c>targetNetId</c>, so it can break nothing, and it ignores
         /// <c>object_state</c>, so it keeps seeing a cover others already broke — two players on either
         /// side of the same wall see different worlds.</para>
+        /// <para>v25 adds <c>client_log</c> (§5.1): additive and inert — an old APK never sends it, an old
+        /// server logs it as an unknown type and ignores it. Mixed versions cost only diagnostics: the
+        /// headset that does not send it stays unreadable in the field.</para>
         /// <para>v24 adds the floor model (<c>set_floor</c> §5.1, <see cref="PlayerInfo.floor"/> §5.3,
         /// rule §10.6): the WIRE IS UNCHANGED — the pose channel already carries absolute Y, the floor is
         /// only a roster ledger. Not cosmetic when mixed though: an old APK sends no <c>set_floor</c>, so
@@ -51,7 +54,7 @@ namespace VortexArena.Protocol
         /// <para>v5 net telemetry + packet combining (<c>0x05</c>) · v4 held item on the wire, shot
         /// events moved to UDP · v3 phase machine · v2 <c>set_identity</c>.</para>
         /// </summary>
-        public const int PROTOCOL_VERSION = 24;
+        public const int PROTOCOL_VERSION = 25;
         public const string APP_ID = "VortexArena";
 
         // ---- Calibration mode (§5.2/§10.6): how headsets align AT STARTUP. ----
@@ -103,6 +106,36 @@ namespace VortexArena.Protocol
 
         /// <summary>Suffix of the survey file the server writes next to its exe.</summary>
         public const string SURVEY_FILE_SUFFIX = "_dimensions.json";
+
+        // ---- Client diagnostics (§5.1 client_log) ----
+
+        /// <summary>Longest relayed log line; both sides cut at it.</summary>
+        /// <remarks>A stack trace would fill the control channel with text nobody reads in the field —
+        /// the first line names the fault, the rest belongs in a debugger.</remarks>
+        public const int LOG_TEXT_MAX_CHARS = 400;
+
+        /// <summary>Relay ceiling per client (lines/s). ⚠️ Enforced on BOTH sides: a per-frame error is
+        /// the normal case for this channel, and it must not crowd out authority traffic.</summary>
+        public const int LOG_MAX_LINES_PER_SECOND = 5;
+
+        /// <summary>An identical line repeating inside this window (s) is counted, not sent
+        /// (<c>client_log.repeat</c>) — a stuck error stays one line instead of a wall.</summary>
+        public const float LOG_DUPLICATE_WINDOW_SECONDS = 10f;
+
+        /// <summary>Client-side queue depth; a full queue drops its OLDEST line — the newest fault is
+        /// the one being chased.</summary>
+        public const int LOG_QUEUE_MAX = 64;
+
+        /// <summary>Relayed severities (§5.1); free labels, an unknown one reads as
+        /// <see cref="LOG_LEVEL_WARN"/>.</summary>
+        public const string LOG_LEVEL_WARN = "warn";
+
+        /// <inheritdoc cref="LOG_LEVEL_WARN"/>
+        public const string LOG_LEVEL_ERROR = "error";
+
+        /// <summary>Deliberately relayed line that is neither a warning nor an error (calibration
+        /// result, §10.6): the venue procedure reads it off the server.</summary>
+        public const string LOG_LEVEL_INFO = "info";
 
         /// <summary>Clamp range for <c>set_body_scale.scale</c> (§10.8): the client measures but the
         /// result hits everyone's screen, so the server clamps. <c>0</c> is OUTSIDE this range and
@@ -378,6 +411,19 @@ namespace VortexArena.Protocol
 
         /// <summary>Full player health; server-authoritative (health_update cannot exceed it).</summary>
         public const float PLAYER_MAX_HP = 100f;
+
+        /// <summary>Delay after the LAST damage before health starts refilling (s, §10.3).</summary>
+        /// <remarks>⚠️ EVERY path that lowers health restarts it — the hit line and the obstacle drain
+        /// alike: a player under fire must not heal, and a drain that healed faster than it drained
+        /// would stop killing.</remarks>
+        public const float PLAYER_REGEN_DELAY_SECONDS = 5f;
+
+        /// <summary>Health added once per second after the delay, capped at <see cref="PLAYER_MAX_HP"/>
+        /// (§10.3).</summary>
+        /// <remarks>⚠️ A one-second STEP, not a per-tick rate: the step IS the health_update throttle
+        /// (one packet per wounded player per second), so this needs no cadence clock of its own.
+        /// ⚠️ Server-only, like the obstacle constants: changing it needs a server build, not an APK.</remarks>
+        public const float PLAYER_REGEN_PER_SECOND = 15f;
 
         /// <summary>Grace inside an obstacle before health drains (s, §10.9). The screen is already
         /// black during it, so what is free is health, not vision — hence it can be generous.

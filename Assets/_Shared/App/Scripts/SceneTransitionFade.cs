@@ -17,10 +17,16 @@ namespace VortexArena.App
     public class SceneTransitionFade : MonoBehaviour
     {
         /// <summary>Fade to black before the load (s) — it blocks the load, so it stays short.</summary>
-        private const float FadeOutSeconds = 0.3f;
+        private const float FadeOutSeconds = 0.5f;
 
         /// <summary>Fade back in after activation (s).</summary>
-        private const float FadeInSeconds = 0.5f;
+        private const float FadeInSeconds = 1f;
+
+        /// <summary>Black held after activation before the fade in starts (s).</summary>
+        /// <remarks>The frames right after a scene activates still hitch (shader warmup, object wake-up);
+        /// opening into them shows the arena while it is still settling, which reads as a pop rather than
+        /// a transition.</remarks>
+        private const float BlackHoldSeconds = 0.25f;
 
         /// <summary>Longest frame the fade in may consume (s) — see <see cref="Update"/>.</summary>
         private const float MaxFadeStepSeconds = 1f / 30f;
@@ -39,6 +45,9 @@ namespace VortexArena.App
 
         /// <summary>Activation frame is skipped once — see <see cref="Update"/>.</summary>
         private bool _skipFrame;
+
+        /// <summary>Unscaled time the black hold ends at — see <see cref="BlackHoldSeconds"/>.</summary>
+        private float _holdUntil;
 
         /// <summary>Warned once per session — a missing layer would otherwise spam every scene.</summary>
         private bool _warnedMissingQuad;
@@ -202,7 +211,13 @@ namespace VortexArena.App
             {
                 // Activation frame: its delta covers the whole load, it would eat the fade at once.
                 _skipFrame = false;
+                _holdUntil = Time.unscaledTime + BlackHoldSeconds;
                 return;
+            }
+
+            if (Time.unscaledTime < _holdUntil)
+            {
+                return; // see BlackHoldSeconds
             }
 
             // unscaledDeltaTime: a presentation layer must not depend on timeScale. Clamped so a

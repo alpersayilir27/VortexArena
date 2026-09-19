@@ -80,6 +80,13 @@ namespace VortexArena.Core.Player
         /// thrown off the floor instead of placed on it.</summary>
         private const float FootGroundLimitMeters = 0.5f;
 
+        /// <summary>Grounding shift worth reporting (m) — well above the centimetres a healthy solve needs,
+        /// so a silent log means the feet are on the floor.</summary>
+        private const float GroundReportThresholdMeters = 0.08f;
+
+        /// <summary>Gap between two grounding reports of ONE body (s); each body throttles its own.</summary>
+        private const float GroundReportIntervalSeconds = 5f;
+
         /// <summary>Largest per-joint move accepted between two consecutive judged frames (m). ≈83 ms
         /// apart, so this is ~12 m/s — far above sprinting or a swung arm, well below a solver jump.</summary>
         private const float JointJumpLimitMeters = 1.0f;
@@ -198,6 +205,9 @@ namespace VortexArena.Core.Player
         private Transform[] _wireJoints;
 
         private Transform _wireHips;
+
+        /// <summary>Next unscaled time <see cref="ReportGrounding"/> may speak for THIS body.</summary>
+        private float _nextGroundReportAt;
 
         /// <summary>Has the unusable-<c>JointPairs</c> error been logged (once per component)?</summary>
         private bool _wireJointsWarned;
@@ -794,8 +804,31 @@ namespace VortexArena.Core.Player
             }
 
             // ⚠️ Clamped: a garbage footY must not launch the body instead of grounding it.
-            hips.y += Mathf.Clamp((footY - drawnFoot) / scale, -FootGroundLimitMeters, FootGroundLimitMeters);
+            float wanted = (footY - drawnFoot) / scale;
+            float applied = Mathf.Clamp(wanted, -FootGroundLimitMeters, FootGroundLimitMeters);
+            hips.y += applied;
             _wireHips.localPosition = hips;
+
+            ReportGrounding(footY, drawnFoot, scale, wanted, applied);
+        }
+
+        /// <summary>Names a grounding that is not doing its job; silent while the feet are on the floor.</summary>
+        /// <remarks>⚠️ The fault is invisible on the headset: sunken feet, a saturated clamp and a wrong body
+        /// scale all look alike, and the hips stop answering a crouch once the clamp binds. Throttled per
+        /// body; a healthy solve needs centimetres, so any line here is already the fault.</remarks>
+        private void ReportGrounding(float footY, float drawnFoot, float scale, float wanted, float applied)
+        {
+            if (Mathf.Abs(wanted) < GroundReportThresholdMeters) return;
+
+            float now = Time.unscaledTime;
+            if (now < _nextGroundReportAt) return;
+
+            _nextGroundReportAt = now + GroundReportIntervalSeconds;
+
+            string limit = Mathf.Approximately(wanted, applied) ? "" : " — SINIRA DAYANDI";
+            Debug.LogWarning($"[İskelet] oyuncu {PlayerId}: ayak oturtma {wanted:F2} m, uygulanan " +
+                             $"{applied:F2} m{limit} (telFootY={footY:F2} çizilenAyak={drawnFoot:F2} " +
+                             $"ölçek={scale:F2}).");
         }
 
         /// <summary>Lowest drawn leg joint above the root (m, WORLD/real metres). Read right after the

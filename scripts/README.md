@@ -13,7 +13,6 @@ durduğu için o klasör silinmez, yalnız aynı adlı dosya üzerine yazılır.
 | `deploy_android_updater.bat` | `updater/` (Kotlin Android) | `deploy\updater\VortexUpdater.apk` + `install_updater.bat` | Unity'nin **Android Build Support** modülü (JDK/Gradle oradan — editör açık olabilir, Unity başlatılmaz); Android SDK'sı `%LOCALAPPDATA%\VortexUpdaterSdk` köküne ilk koşuda iner → ilk koşu internet ister |
 | `docs-setup.bat` | — | `..\vortexarena-docs-site\` (repo DIŞI) | Node 22+, git, internet (yalnız kurulumda) |
 | `defender-exclusions.cmd` | `defender-exclusions.ps1` | Windows Defender dışlama listesi | **Yönetici** + Defender'ın etkin olması |
-| `quest-logcat.bat [süzgeç]` | Bağlı gözlük | Gözlüğün **Unity logu** bu pencereye akar (`adb logcat`, yalnız `Unity` etiketi; isteğe bağlı argüman büyük/küçük harf duyarsız alt-dize süzgecidir). Test kartlarındaki "logcat" budur — editör konsolu ya da sunucu konsolu değil: oyuncu uygulaması gözlükte koşar, `Debug.Log` satırları yalnız oradadır | `adb` PATH'te ya da Unity'nin **Android Build Support** modülü kurulu; gözlük USB'de (ya da `adb connect`) ve USB hata ayıklama onaylı (`install_game.bat` onayı yürütür) |
 
 İki Unity betiği aynı `PlayerBuildTool` sınıfını farklı `-executeMethod` ile çağırır ve **aynı
 sahne listesini** kullanır (Build Settings). Fark yalnız platformdur: Windows = admin, Android =

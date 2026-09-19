@@ -166,6 +166,9 @@ public sealed class MatchDirector
     /// carries it; the client HUD reads it. Preserved across pauses so the mode can resume.</summary>
     private string _modeState = "";
 
+    /// <summary>Last phase <see cref="TryStartRound"/> was refused in, so the tick reports it once.</summary>
+    private string _lastRoundStartRefusal = "";
+
     /// <summary>An operator <c>mode_continue</c> waiting to be picked up (§5.2).</summary>
     /// <remarks>⚠️ The core does NOT act on it — it only carries the press to the mode's next tick,
     /// which CONSUMES it (<see cref="ConsumeModeContinue"/>). Handling it here would make the core the
@@ -394,6 +397,16 @@ public sealed class MatchDirector
         $"maç kurulu ({Describe(_phase, _pauseReason)}) — önce İPTAL edin";
 
     // ---- Public API used by IGameModes (all lock-safe, called from OUTSIDE the lock) ----
+
+    /// <summary>The open scene's catalog row (§11) — the modes' read-only channel to per-map tuning;
+    /// null when the scene is not in the table (no maps.json = no validation).</summary>
+    /// <remarks>⚠️ SETUP path, like <see cref="ObjectIdsOfKind"/>: a mode resolves what it needs in
+    /// <c>OnMatchStart</c>. Reading a row that only changes with the scene on every tick would take the
+    /// match lock ten times a second for a constant.</remarks>
+    public MapEntry? CurrentMap
+    {
+        get { lock (_gate) return _maps.TryGet(_sceneName, out var entry) ? entry : null; }
+    }
 
     public int ScoreRed
     {
@@ -788,6 +801,9 @@ public sealed class MatchDirector
         _timeRemaining = MathF.Max(0f, _timeRemaining - deltaSeconds);
 
         TickObstacleLocked(outbox, now, deltaSeconds);
+        // After the drain, never before: the drain restamps the regen delay, so a player being punished
+        // cannot heal on the same tick.
+        TickRegenLocked(outbox, now);
 
         if (now >= _nextSecondAt)
         {
@@ -847,6 +863,7 @@ public sealed class MatchDirector
             }
 
             player.Hp = MathF.Max(0f, player.Hp - damage);
+            DelayRegenLocked(player, now);
 
             // ⚠️ Announcements are THROTTLED, and this is not a micro-optimisation: this damage is
             // CONTINUOUS, not event-based. Broadcast every tick, a single obstacle death (≈8 s × tickHz)
@@ -871,6 +888,51 @@ public sealed class MatchDirector
             // does not).
             KillPlayerLocked(outbox, player, null, ArenaProtocol.WEAPON_ID_OBSTACLE, now);
             Console.WriteLine($"[match] engel ölümü: {player.Name}");
+        }
+    }
+
+    /// <summary>Restarts the health regen delay (§10.3); EVERY path that lowers health calls it.</summary>
+    /// <remarks>⚠️ A drain that forgets this does not fail loudly — the wound simply starts closing while
+    /// it is still being made (the obstacle penalty would net 5 HP/s instead of 20 and stop killing).</remarks>
+    private static void DelayRegenLocked(PlayerState player, DateTime now)
+    {
+        player.RegenAt = now.AddSeconds(ArenaProtocol.PLAYER_REGEN_DELAY_SECONDS);
+    }
+
+    /// <summary>§10.3: refills health by <see cref="ArenaProtocol.PLAYER_REGEN_PER_SECOND"/> once per
+    /// second, once the delay since the last damage has passed.</summary>
+    /// <remarks>The gates are the DAMAGE gates: phase Playing (this only runs from the Live tick), alive,
+    /// calibrated. ⚠️ ALIVE IS LOAD-BEARING, not tidiness: the client reads any health_update with hp &gt; 0
+    /// as a revive (<c>PlayerCombatState</c>), so healing a corpse would stand it back up without a
+    /// revive. Calibrated keeps the symmetry with damage — an uncalibrated player takes none either, so
+    /// without the gate dropping calibration would be a free full heal.
+    /// <para>⚠️ The step is ONE SECOND and that is also the announcement cadence: unlike
+    /// <see cref="TickObstacleLocked"/> this needs no throttle clock, because it writes health once per
+    /// second per wounded player instead of every tick.</para>
+    /// <para>⚠️ No weaponless-mode gate: health never drops in those modes, so there is nothing to refill
+    /// (the same reason there is no "damage off" rule, §10.5).</para></remarks>
+    private void TickRegenLocked(List<Outgoing> outbox, DateTime now)
+    {
+        foreach (var player in ConnectedPlayersLocked())
+        {
+            if (player.Hp >= ArenaProtocol.PLAYER_MAX_HP || !player.Alive || !player.Calibrated ||
+                now < player.RegenAt)
+            {
+                continue;
+            }
+
+            player.Hp = MathF.Min(ArenaProtocol.PLAYER_MAX_HP,
+                player.Hp + ArenaProtocol.PLAYER_REGEN_PER_SECOND);
+            // One second on, not a tunable cadence: the constant is PER_SECOND.
+            player.RegenAt = now.AddSeconds(1.0);
+
+            // attackerId = 0: no attacker, the same value revive and environmental damage use (§10.3).
+            QueueHealthUpdateLocked(outbox, player, JsonUtil.Serialize(new HealthUpdateMsg
+            {
+                playerId = player.PlayerId,
+                hp = player.Hp,
+                attackerId = 0
+            }));
         }
     }
 
@@ -1580,13 +1642,29 @@ public sealed class MatchDirector
     /// right now" and must stay alive through the countdown — it is the only basis for the mode to cancel
     /// the countdown (<see cref="TryCancelCountdownForMode"/>) and return to gathering. Clearing happens
     /// in <see cref="TryPauseForMode"/> (once, at the START of gathering).</para>
-    /// <para>Works only from a mode pause; returns <c>false</c> otherwise.</para></remarks>
+    /// <para>Works only from a mode pause; returns <c>false</c> otherwise.</para>
+    /// <para>⚠️ A refusal is REPORTED, unlike the operator commands above: this one is called on the tick,
+    /// so a stuck phase would otherwise hold the gathering shut with an empty server window — the mode's
+    /// own "waiting" line runs only while the roster is incomplete.</para></remarks>
     public bool TryStartRound()
     {
         lock (_gate)
         {
-            if (_phase != Phase.Paused || _pauseReason != PauseReason.Mode) return false;
+            if (_phase != Phase.Paused || _pauseReason != PauseReason.Mode)
+            {
+                // Edge only: the caller retries ten times a second.
+                var refusal = $"{PhaseWire(_phase)}" +
+                              $"{(_pauseReason != PauseReason.None ? "/" + ReasonWire(_pauseReason) : "")}";
+                if (refusal != _lastRoundStartRefusal)
+                {
+                    _lastRoundStartRefusal = refusal;
+                    Console.WriteLine($"[match] tur açılamadı: durum {refusal} " +
+                                      "(yalnız mod duraklamasından tur açılır) — toplanma bekliyor.");
+                }
+                return false;
+            }
 
+            _lastRoundStartRefusal = "";
             _modeState = "";
             EnterCountdownLocked(_pendingOutbox, DateTime.UtcNow);
             return true;
@@ -1851,6 +1929,7 @@ public sealed class MatchDirector
             weaponId = msg.weaponId ?? "";
             appliedDamage = msg.damage;
             target.Hp = MathF.Max(0f, target.Hp - appliedDamage);
+            DelayRegenLocked(target, now);
             // Targeted send (§10.3): victim + admins. Other players were discarding this message anyway.
             QueueHealthUpdateLocked(outbox, target, JsonUtil.Serialize(new HealthUpdateMsg
             {

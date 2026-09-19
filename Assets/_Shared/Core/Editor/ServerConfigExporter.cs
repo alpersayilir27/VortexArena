@@ -504,9 +504,9 @@ namespace VortexArena.Core.Editor
 
         // ----------------------------------------------------------------- json
 
-        /// <summary><c>{ "maps": [ { "sceneName", "venue", "gameType", "modes": ["&lt;modId&gt;"],
-        /// "objects": [ { "sceneId", "kind" } ] } ], "kinds": [ { "kind", "maxHp", "grab",
-        /// "events": [ { "name", "policy", "phaseGate" } ] } ] }</c> — for the server's
+        /// <summary><c>{ "maps": [ { "sceneName", "venue", "gameType", "moleDensity",
+        /// "modes": ["&lt;modId&gt;"], "objects": [ { "sceneId", "kind" } ] } ], "kinds": [ { "kind",
+        /// "maxHp", "grab", "events": [ { "name", "policy", "phaseGate" } ] } ] }</c> — for the server's
         /// <c>start_match</c> validation, venue selection and object table (§10.10).</summary>
         /// <remarks>⚠️ <b>Objects and kinds are separate on purpose</b> — not repetition but ownership:
         /// the IDENTITY list belongs to the scene, the KIND rule belongs to the content. One kind runs
@@ -540,6 +540,10 @@ namespace VortexArena.Core.Editor
                         .Append("      \"sceneName\": \"").Append(EscapeJson(map.SceneName)).Append("\",\n")
                         .Append("      \"venue\": \"").Append(EscapeJson(VenueOf(map))).Append("\",\n")
                         .Append("      \"gameType\": \"").Append(GameTypeIds.ToWire(map.GameType)).Append("\",\n")
+                        // InvariantCulture: on a Turkish machine the separator would be a comma and the
+                        // server's JSON parser would reject the file.
+                        .Append("      \"moleDensity\": ")
+                        .Append(map.MoleDensity.ToString(CultureInfo.InvariantCulture)).Append(",\n")
                         .Append("      \"modes\": ").Append(BuildModesArray(map.SupportedModeIds)).Append(",\n")
                         .Append("      \"objects\": ")
                         .Append(BuildObjectsArray(ReadSceneObjects(map, knownKinds, result))).Append('\n')

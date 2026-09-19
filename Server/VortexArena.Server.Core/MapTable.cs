@@ -34,6 +34,12 @@ public sealed class MapEntry
     /// battle.</summary>
     public string gameType = "";
 
+    /// <summary>Mole density multiplier of this map (§10.5): 1 = base density, <c>&lt;= 0</c> = old
+    /// export → the mode's own default.</summary>
+    /// <remarks>Per-map because venues differ in hole count and floor size. Only <c>MoleMode</c> reads
+    /// it; on every other map it is carried and ignored.</remarks>
+    public float moleDensity;
+
     /// <summary>modIds supported by this map; EMPTY = no restriction.</summary>
     /// <remarks>Same semantics as MapDefinition.SupportsMode — a field forgotten on a new map must not
     /// hide the mode.</remarks>

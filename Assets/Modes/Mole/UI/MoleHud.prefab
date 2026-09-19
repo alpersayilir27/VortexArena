@@ -242,6 +242,9 @@ MonoBehaviour:
   positionSmoothTime: 0.175
   yawDeadZoneDegrees: 9
   yawSmoothTime: 0.175
+  avoidWalls: 0
+  minDistance: 0.55
+  wallClearance: 0.08
 --- !u!114 &8430254425945555535
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -437,6 +440,10 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 4647684427740298490}
     m_Modifications:
+    - target: {fileID: 695199490520228219, guid: 5ff3c669afc37ee489adf83b1df0dc8f, type: 3}
+      propertyPath: m_AnchoredPosition.y
+      value: -85
+      objectReference: {fileID: 0}
     - target: {fileID: 1030185164154898354, guid: 5ff3c669afc37ee489adf83b1df0dc8f, type: 3}
       propertyPath: m_IsActive
       value: 0
@@ -527,6 +534,10 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 3961202353889997449, guid: 5ff3c669afc37ee489adf83b1df0dc8f, type: 3}
       propertyPath: m_AnchoredPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3961202353889997449, guid: 5ff3c669afc37ee489adf83b1df0dc8f, type: 3}
+      propertyPath: m_AnchoredPosition.y
       value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []

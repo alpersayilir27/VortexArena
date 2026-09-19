@@ -91,6 +91,12 @@ public sealed class PlayerState
     /// <summary>0..PLAYER_MAX_HP; refilled on entering Live and on revive.</summary>
     public float Hp { get; set; } = ArenaProtocol.PLAYER_MAX_HP;
 
+    /// <summary>UTC instant health may next RISE (§10.3): pushed to now + PLAYER_REGEN_DELAY_SECONDS by
+    /// every path that lowers health, then one second on per refill step.</summary>
+    /// <remarks>Nothing but damage can lower health, so a stale value is never read: at full health the
+    /// regen tick never looks at it.</remarks>
+    public DateTime RegenAt { get; set; }
+
     /// <summary>Feeds snapshot flags bit0 (FLAG_ALIVE); everyone is alive in the Lobby phase.</summary>
     public bool Alive { get; set; } = true;
 

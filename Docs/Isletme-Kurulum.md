@@ -137,7 +137,7 @@ Arena, her başlıkta **2 nokta** ile fiziksel alana hizalanır (`ArenaCalibrato
 >
 > ⚠️ **Bu sayı yalnız kumanda geometrisi değildir** — gözlüğün *kendi* zemin tahmininin sapmasını da yutar. Guardian kurulmadığı için (§5) o tahmin ölçüm değildir ve gerçek zeminin altında kalabilir; kumanda ucu gerçek zemine değdiğinde pivot olduğundan yüksek okunur, kalibrasyon dünyayı o kadar aşağı indirir ve **avatarların ayakları zeminin altında kalır** (kafa/eller doğru yerdedir, çünkü onlar doğrudan izlenir; gövde iskeletinin kökü gözlüğün zemin tahminine çakılıdır). Bu yüzden değer donanım sabiti gibi bir kez yazılıp unutulmaz, **kapalı döngü ayarlanır**:
 >
-> 1. Kalibre ol, log'daki `ArenaCalibrator: rig aligned (yaw …, floor R m)` satırını oku (`adb logcat -s Unity:V`).
+> 1. Kalibre ol, **sunucu konsolundaki** `ArenaCalibrator: rig aligned (yaw …, floor R m)` satırını oku — gözlük bu satırı sunucuya kendisi taşır (`client_log`), aynısı günlük dosyasında da durur (`Server/README.md`).
 > 2. `floorProbeDropMeters_yeni = floorProbeDropMeters_eski − R`. (`R` negatifse avatarlar `|R|` metre gömülüdür; pozitifse o kadar havada. ⚠️ Alan bir **derinliktir**, yani işareti eski `tipLocalOffset.y`'nin tersidir.)
 > 3. `R` ±0.01 m'ye inene kadar tekrarla.
 >

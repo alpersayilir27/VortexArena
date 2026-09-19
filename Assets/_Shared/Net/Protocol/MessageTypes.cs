@@ -26,6 +26,8 @@ namespace VortexArena.Protocol
         // The player reports its OWN floor in a multi-floor arena (§10.6 "Kat modeli"); players only.
         public const string SetFloor = "set_floor";
         public const string VenueSurvey = "venue_survey"; // manual venue survey upload (§10.11); players only
+        // A diagnostic line from the device's own log (§5.1); the server prints and files it, nothing else.
+        public const string ClientLog = "client_log";
 
         // Admin only → Server
         public const string StartMatch = "start_match";

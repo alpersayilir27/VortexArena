@@ -523,7 +523,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.UI.HeadLockedHud
   head: {fileID: 0}
   distance: 1
-  pitchDegrees: 20
+  pitchDegrees: 16
   yawDegrees: 0
   lockPitch: 1
   tiltToEye: 1
@@ -562,7 +562,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0, y: -215}
+  m_AnchoredPosition: {x: 0, y: -371}
   m_SizeDelta: {x: 560, y: 130}
   m_Pivot: {x: 0.5, y: 1}
 --- !u!223 &3945689574163848887
@@ -952,7 +952,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0, y: -85}
+  m_AnchoredPosition: {x: 0, y: -241}
   m_SizeDelta: {x: 900, y: 110}
   m_Pivot: {x: 0.5, y: 1}
 --- !u!222 &5839595188963943552
@@ -1500,7 +1500,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 510, y: 0}
+  m_AnchoredPosition: {x: 0, y: -156}
   m_SizeDelta: {x: 380, y: 142}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &8899979391816522666

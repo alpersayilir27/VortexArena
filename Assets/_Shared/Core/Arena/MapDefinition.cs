@@ -22,6 +22,13 @@ namespace VortexArena.Core.Arena
         [Tooltip("Bu haritanın desteklediği modId'ler; boş bırakılırsa tüm modlar sayılır.")]
         [SerializeField] private string[] supportedModeIds = Array.Empty<string>();
 
+        [Header("Köstebek modu")]
+        [Range(0.25f, 4f)]
+        [Tooltip("Aynı anda ayakta duran köstebek yoğunluğu; 1 = temel yoğunluk. Yalnız Köstebek modunda okunur, " +
+                 "diğer haritalarda hiçbir şeye dokunmaz.")]
+        // Default = what a NEW venue starts with: existing assets pick it up WITHOUT being touched.
+        [SerializeField] private float moleDensity = 1.5f;
+
         [Header("Ortam sesi")]
         [Tooltip("Sahne yüklenir yüklenmez loop olarak başlayan ambiyans. Boş = sessiz.")]
         [SerializeField] private AudioClip ambienceClip;
@@ -46,6 +53,10 @@ namespace VortexArena.Core.Arena
 
         /// <summary>Supported modId list (empty = no restriction).</summary>
         public string[] SupportedModeIds => supportedModeIds;
+
+        /// <summary>Mole density multiplier of the map (1 = base density); read only by the mole
+        /// mode, through maps.json.</summary>
+        public float MoleDensity => moleDensity;
 
         /// <summary>The scene's ambience clip; silent when unassigned.
         /// <c>SceneAmbience</c> reads and loops it on scene load — there is NO scene setup step.</summary>

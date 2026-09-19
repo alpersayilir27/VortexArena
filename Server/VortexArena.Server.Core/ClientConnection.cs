@@ -22,6 +22,11 @@ public sealed class ClientConnection
     private readonly SemaphoreSlim _sendLock = new(1, 1);
     private readonly CancellationTokenSource _cts = new();
 
+    // client_log rate window, per connection (§5.1).
+    private long _logWindowSecond = -1;
+    private int _logLinesThisSecond;
+    private bool _logThrottleAnnounced;
+
     /// <summary>Set once hello is handled and the record exists; null before that.</summary>
     public PlayerState? State { get; internal set; }
 
@@ -207,6 +212,22 @@ public sealed class ClientConnection
                 if (msg != null) await _lobby.HandleVenueSurveyAsync(this, msg);
                 return;
             }
+            case MessageTypes.ClientLog:
+            {
+                if (State == null) return; // log before hello — no record to name it under
+                var msg = JsonUtil.Deserialize<ClientLogMsg>(json);
+                if (msg == null || string.IsNullOrWhiteSpace(msg.text)) return;
+                if (!AllowLogLine()) return;
+                // Second gate: the sender cuts too, but the ceiling must hold for any peer.
+                var text = msg.text.Length > ArenaProtocol.LOG_TEXT_MAX_CHARS
+                    ? msg.text.Substring(0, ArenaProtocol.LOG_TEXT_MAX_CHARS)
+                    : msg.text;
+                // ⚠️ Diagnostics only: the content is NEVER interpreted — no game state, roster or authority.
+                var tag = msg.level == ArenaProtocol.LOG_LEVEL_ERROR ? "[cihaz/HATA]" : "[cihaz]";
+                var repeat = msg.repeat > 0 ? $" (aynısından {msg.repeat} tane bastırıldı)" : "";
+                Console.WriteLine($"{tag} {State.Name}: {text}{repeat}");
+                return;
+            }
             case MessageTypes.Kick:
             {
                 if (!RequireAdmin(type)) return;
@@ -369,6 +390,33 @@ public sealed class ClientConnection
     {
         if (IsAdmin) return true;
         Console.WriteLine($"[ClientConnection] '{type}' admin komutu yetkisiz bağlantıdan geldi ({State?.Name ?? "hello öncesi"}) — yok sayıldı.");
+        return false;
+    }
+
+    /// <summary>Per-connection client_log ceiling (§5.1); false = the line is dropped.</summary>
+    /// <remarks>The overflow is announced ONCE per window — a per-drop notice would itself be the
+    /// flood the ceiling exists to stop.</remarks>
+    private bool AllowLogLine()
+    {
+        var second = Environment.TickCount64 / 1000;
+        if (second != _logWindowSecond)
+        {
+            _logWindowSecond = second;
+            _logLinesThisSecond = 0;
+            _logThrottleAnnounced = false;
+        }
+
+        if (_logLinesThisSecond < ArenaProtocol.LOG_MAX_LINES_PER_SECOND)
+        {
+            _logLinesThisSecond++;
+            return true;
+        }
+
+        if (!_logThrottleAnnounced)
+        {
+            _logThrottleAnnounced = true;
+            Console.WriteLine($"[cihaz] {State?.Name}: saniyede {ArenaProtocol.LOG_MAX_LINES_PER_SECOND} satır aşıldı — günlük kısıldı.");
+        }
         return false;
     }
 

@@ -48,6 +48,8 @@ Tümü paylaşılan `ArenaProtocol` statik sınıfında tanımlanır (`Assets/_S
 | `EVENT_MAX_ENTRIES_PER_PACKET` | `128` | Tek `0x04` datagramına yazılan en fazla olay (§6.5). 6 + 128×9 = 1158 B < MTU. Taşan olay **atılmaz, sonraki tik'e kayar** — "tik başına en fazla bir batch" değişmezi kopya korumasının dayanağıdır |
 | `EVENT_TICK_HISTORY` | `64` | İstemcinin kopya ayıklama için hatırladığı `0x04` tik sayısı (§6.5) |
 | `PLAYER_MAX_HP` | `100` | Oyuncu tam canı (sunucu-otoriter; §10) |
+| `PLAYER_REGEN_DELAY_SECONDS` | `5` | Canın dolmaya başlaması için **son hasarın** üzerinden geçmesi gereken süre (§10.3). ⚠️ Canı düşüren **her yol** saati yeniden kurar (vuruş da, engel erimesi de) — çatışmanın içindeki oyuncu iyileşmez |
+| `PLAYER_REGEN_PER_SECOND` | `15` | Gecikme dolduktan sonra **saniyede bir** eklenen can (§10.3); `PLAYER_MAX_HP`'de durur. ⚠️ Sürekli bir akış değil **saniyelik adımdır**: adımın kendisi `health_update` kısmasıdır, bu yüzden engel erimesinin ayrı kısma saatine ihtiyacı yoktur. ⚠️ İkisini de yalnız sunucu tüketir — değişmeleri sunucu derlemesi ister, yeni APK değil |
 | `OBSTACLE_GRACE_SECONDS` | `3` | Engelin içinde **can erimeye başlamadan önceki** tolerans (§10.9). Bu sürede oyuncunun ekranı zaten kapkaranlıktır: bedava olan görüş değil **yalnız candır**. ⚠️ Engelden çıkınca **tümden sıfırlanır** (kısmi sönüm yok) — girip çıkan oyuncu her girişinde yeniden kör kalıyor, yani kazandığı bir şey yok |
 | `OBSTACLE_DRAIN_SECONDS` | `5` | Tolerans dolduktan sonra **tam candan** ölüme geçen süre (§10.9). Engelde geçirilebilen toplam süre `OBSTACLE_GRACE_SECONDS` + bu değerdir (**8 sn**). ⚠️ Yaralı oyuncu daha çabuk ölür: erime bir HIZ'dır, geri sayım değil |
 | `OBSTACLE_DAMAGE_PER_SECOND` | `20` | Engel ihlalinde saniyelik can kaybı (§10.9). ⚠️ **Elle yazılmaz, türetilir:** `PLAYER_MAX_HP / OBSTACLE_DRAIN_SECONDS`. Tasarım parametresi süredir, hız onun sonucudur — ikisini ayrı ayrı yazmak aynı sayının iki kaynağı olurdu. ⚠️ **Üçünün de tek tüketicisi sunucudur** — değerleri değiştirmek yeni APK gerektirmez, sunucu derlemesi yeter |
@@ -320,6 +322,27 @@ ve yazdığı dosya Unity'nin `ArenaDimensions.Parse`'ı ile okunabilir olmak zo
   (§10.11). Boş gelirse sunucu kendi mekan adını yazar ki dosyanın `name` alanı boş kalmasın.
 - ⚠️ **Maç sırasında gönderilmez** — kapı istemcidedir (§10.11): ölçüm sahnesine geçmek koşan maçtan
   düşmek olurdu.
+
+**`client_log`** — gönderen cihazın **kendi logundan** tek satır; sunucu konsola basar ve günlük
+dosyasına yazar (`Server/README.md`), başka hiçbir şey okumaz:
+
+```json
+{ "type":"client_log", "level":"warn", "text":"[İskelet] oyuncu 3: ayak oturtma 0.52 m …", "repeat":0 }
+```
+
+- `level` = `warn` | `error` | `info` (`ArenaProtocol.LOG_LEVEL_*`): `source` gibi **serbest,
+  doğrulanmayan** etikettir — tanınmayan değer uyarı okunur.
+- `text` = tek satır, iki tarafta da `LOG_TEXT_MAX_CHARS`'ta kırpılır; yığın izi taşınmaz.
+- `repeat` = son gönderimden beri **bastırılan** aynı satır sayısı (`0` = yok).
+- Her iki rol de gönderir. **Otoriteye, maç durumuna ve roster'a etkisi YOKTUR** — sunucu içeriği
+  yorumlamaz, biçim ve dil tamamen gönderenindir.
+- ⚠️ **Neden var:** oyuncu uygulaması gözlükte koşar, `Debug.Log` satırları yalnız o cihazda kalır ve
+  işletmede USB yoktur. Bu kanal olmadan sahadaki arıza — çöken bir bileşen de, kalibrasyonun
+  bildirdiği sayı da — hiç okunamaz.
+- ⚠️ **Tavanlar istemcidedir, sunucu ikinci kapıyı yine de uygular:** saniyede en çok
+  `LOG_MAX_LINES_PER_SECOND` satır, aynı satır `LOG_DUPLICATE_WINDOW_SECONDS` içinde tekrarlarsa
+  gönderilmez (sayılır), kuyruk `LOG_QUEUE_MAX`'te dolarsa **en eski** satır düşer. Kare başına
+  tekrarlayan hata bu kanalın olağan hâlidir; tavansız bir teşhis kanalı otorite trafiğini boğar.
 
 ### 5.2 Yalnız admin → Sunucu
 
@@ -1720,8 +1743,33 @@ kontrolleridir — kaldırılırlarsa çift ölüm / maç dışı hasar gibi hat
 6. `damage` sonlu ve pozitif bir sayı mı? (NaN/∞ canı kalıcı bozar; sayı denetimi, hile denetimi değil)
 
 Geçerse: `hp -= damage` (istemcinin bildirdiği değer) → `health_update{playerId, hp, attackerId}`
-**herkese** yayınlanır. `hp ≤ 0` ise `alive=0`, `kill_event{killerId, victimId, weaponId}` +
-`IGameMode.OnKill` (skor) + kurbana `respawn{delaySeconds:RESPAWN_DELAY}`.
+**kurbana ve adminlere** gider (§5, dar gönderim). `hp ≤ 0` ise `alive=0`,
+`kill_event{killerId, victimId, weaponId}` + `IGameMode.OnKill` (skor) + kurbana
+`respawn{delaySeconds:RESPAWN_DELAY}`.
+
+**Can yenilenmesi.** Son hasarın üzerinden `PLAYER_REGEN_DELAY_SECONDS` geçince oyuncunun canı
+**saniyede `PLAYER_REGEN_PER_SECOND`** artar ve `PLAYER_MAX_HP`'de durur; her adım kendi
+`health_update{attackerId:0}`'ını üretir (saldırgan yok — canlanmanın ve çevresel hasarın
+kullandığı değerin aynısı). Saat **sunucunundur** ve canı düşüren **her yol** onu yeniden kurar:
+
+- **Kapılar hasarın kapılarının aynısıdır:** faz `playing` · oyuncu **canlı** · oyuncu **kalibre**.
+  ⚠️ **Canlı kapısı düzen değil ZORUNLULUKTUR:** istemci `hp > 0` taşıyan **her** `health_update`'i
+  canlanma sayar (§10.4), yani ölüye gönderilen tek bir yenilenme adımı onu canlanma olmadan ayağa
+  kaldırırdı — ölünün canını yalnız canlanma doldurur. Kalibrasyon kapısı ise simetriyi korur:
+  kalibresiz oyuncu hasar almadığı gibi yarasını da kapatmaz, yoksa kalibrasyonu düşürmek bedava
+  tam can olurdu (§10.6).
+- ⚠️ **Engel erimesi de saati kurar** (§10.9) ve kurmak zorundadır: kurmasaydı 20 HP/sn'lik ceza
+  15 HP/sn'lik yenilenmeyle net 5 HP/sn'ye iner, engelde ölüm 5 saniye yerine 20 saniye sürer ve
+  tolerans süresi anlamını yitirirdi. Kural bu yüzden "vuruş saati kurar" değil **"canı düşüren her
+  yol saati kurar"**tır — yeni bir hasar kaynağı eklendiğinde unutulursa yara, açılırken kapanır.
+- ⚠️ **Adım SANİYELİKTİR, tik kadansında sürekli değil.** Engel erimesinin aksine ayrı bir kısma
+  saati yoktur çünkü kısma adımın kendisidir: yaralı oyuncu başına saniyede bir paket. Sürekli
+  yazılsaydı aynı bilgi on kat paketle taşınırdı — HUD zaten yuvarlanmış tam sayı çiziyor.
+- ⚠️ **Bir mod ayarı DEĞİLDİR, çekirdek kuralıdır** ve `rules`'a alan olarak eklenmez (§10.5):
+  silahsız modda can hiç düşmediği için yenilenecek bir şey de yoktur — "hasar kapalı" anahtarının
+  eklenmeme gerekçesinin aynısı. İstemciye sayı da gitmez: tek tüketicisi sunucudur, istemci
+  `health_update`'i olduğu gibi çiziyor ve **artan** cana zaten sessiz (hasar vinyeti yalnız
+  düşüşte yanar, yön göstergesi `attackerId:0`'da hiç çalışmaz).
 
 **Hedef bir AĞ NESNESİ ise** (`targetNetId != 0`) yukarıdaki liste koşmaz; kapılar §10.10'dadır ve
 **bilerek farklıdır**: faz kapısı `playing` **veya** `rules.fireWhilePaused`'dur (lobideki hedef
@@ -1763,7 +1811,7 @@ yolu yalnız onu ve `Alive`/`Calibrated`'ı okur. Bir tik gecikme sunum için ö
 Fiziksel oyuncuya yatay ışınlanma yoktur; kat geçişi yalnız dikey sanal ofsettir (§10.6 "Kat modeli")
 → **respawn = konum değil durum değişimi**:
 
-1. Ölünce sunucu `respawn{playerId, delaySeconds}` gönderir (`delaySeconds` = `rules.respawnDelay`, §10.5); istemci ölüm ekranı gösterir, **silah elde kalır ama ateşlemez**, avatar **hayalete döner** (yarı saydam; renk oyuncunun kendi takımı, takımsız modda nötr) ve hayaletin **elindeki eşya çizilmez** — yani silahı yalnız sahibi görür. Ölüm silahı elden almaz (ölü oyuncu tezgâhtan yenisini de seçebilir): hasarı kapatan şey fazdır, tutma değil. Kalibresizlik bunun İSTİSNASIDIR — orada silah gerçekten alınır (§10.6).
+1. Ölünce sunucu `respawn{playerId, delaySeconds}` gönderir (`delaySeconds` = `rules.respawnDelay`, §10.5); istemci ölüm ekranı gösterir, **eldeki silah o an elden gider**, avatar **hayalete döner** (yarı saydam; renk oyuncunun kendi takımı, takımsız modda nötr) ve hayaletin **elindeki eşya çizilmez** — yani silahı yalnız sahibi görür. Silahın gitmesi **bir kezliktir, kapı değildir**: grip bırakılıp yeniden basılınca aynı silah aynı mermisiyle geri gelir — ölü oyuncu silah tutabilir, tezgâhtan yenisini de seçebilir; hasarı kapatan şey fazdır, tutma değil. Kalibresizlik bunun İSTİSNASIDIR — orada silah alınır ve **kalibre olana kadar geri verilmez** (§10.6).
 2. `delaySeconds` dolduktan **ve modun canlanma şartı sağlandıktan** sonra istemci `revive_request` gönderir (canlanana dek ~1 sn'de bir tekrarlar). Şart `rules.reviveAnchor` ile seçilir:
    - **`"base"`** (varsayılan, TDM): oyuncu bir **taban bölgesine** (`BaseZone` — arenadaki kırmızı/mavi şerit) fiziken girer. Ölüm ekranı "Tabanına dön ve canlan" der.
    - **`"standstill"`**: oyuncu ölüm anındaki HMD konumunu çapa alır ve `REVIVE_HOLD_RADIUS` içinde `REVIVE_HOLD_SECONDS` boyunca kesintisiz sabit durur; çapadan çıkınca sayaç ve çapa sıfırlanır. Taban bölgesi olmayan modlar (FFA) bunu kullanır. ⚠️ **İç engelin içinde geçen süre sayılmaz** (§10.9): sayaç orada ilerlemez, çapa her karede tazelenir ve süre engelden **çıkıldıktan sonra** sıfırdan başlar — şart "kıpırdama" değil, *meşru bir yerde* kıpırdamamaktır; sayılsaydı engel bir sığınağa dönerdi (içeride bekle, çıkar çıkmaz canlan).
@@ -2040,9 +2088,21 @@ olmalı, tanınmayan `modeId` reddedilir):
 > köstebeğe hâlâ vurulabiliyormuş gibi gösterirdi. Sunucu köstebeğin nerede olduğunu bilmez, yalnız
 > **hangi aşamada** olduğunu bilir (müşterinin yürüyüşüyle aynı kural).
 >
+> **Yoğunluk HARİTA verisidir, kod sabiti değil** (`maps.json → moleDensity`, §11): bir mekanın delik
+> sayısı, aralıkları ve zemini ötekine benzemez — "aynı anda kaç köstebek" bu yüzden mekan başına
+> ayarlanır. Çarpan `1` temel yoğunluktur, alan yazılmamışsa modun varsayılanı işler ve **yeni bir
+> mekan onunla başlar**. Eşzamanlı köstebek tavanı ayrıca **oyuncu sayısına** bağlıdır: aynı sabit
+> sayı kalabalıkta boş, tek çocukta haksız bir saha yapardı.
+>
+> ⚠️ **Sahayı dolduran şey TAVAN DEĞİL ÇIKIŞ SIKLIĞIDIR.** Köstebek sabit bir süre ayakta kalır, yani
+> sahada duran sayı ≈ *ayakta kalma süresi ÷ çıkış aralığı*'dır ve tavan çoğu zaman hiç dolmaz;
+> aralığa dokunmadan tavanı büyütmek **hiçbir şeyi değiştirmez**. Çarpan bu yüzden ikisine birden
+> uygulanır — aralığı böler, tavanı çarpar. ⚠️ **Ayakta kalma penceresine dokunulmaz:** onu istemcideki
+> yükseliş animasyonu izler (üstteki kural), yoğunluk için kısaltılırsa köstebek daha çıkmadan iner.
+>
 > ⚠️ **"Yan yana iki delikten aynı anda çıkarma" sunucudan YAPILAMAZ** — sunucu delik konumlarını
-> bilmez. Delikler arası aralık bir **yerleşim** kararıdır; sunucunun elindeki tek kaldıraç aynı anda
-> ayakta duran köstebek sayısının tavanıdır.
+> bilmez. Delikler arası aralık bir **yerleşim** kararıdır; sunucunun elindeki tek kaldıraç yukarıdaki
+> yoğunluktur, hangi deliğin seçildiği rastgeledir.
 
 > ⚠️ **`friendlyFire` bu tabloda YOKTUR:** artık bir mod kuralı değil **operatör anahtarıdır**
 > (§5.2) ve üç modda da aynı kaynaktan gelir. Modlar onu bildirmez.
@@ -2584,6 +2644,9 @@ gözetimli özel alan). Sunucunun işi **sebebi doğrulamak değil sonucu sını
 **Can eritme kapıları** (hepsi gerekli, sırayla): faz `playing` (`hit_report` ile **aynı** kapı) ·
 oyuncu canlı · oyuncu **kalibre** (§10.6) · bayrak taze.
 
+⚠️ **Erime, can yenilenmesinin saatini de kurar** (§10.3) — vuruşla aynı yoldan: ceza işlerken can
+dolmaz. Kurmasaydı yenilenme cezanın dörtte üçünü geri verir, engel de öldürmez olurdu.
+
 ⚠️ **Kalibrasyon kapısı zorunludur:** hizalaması kaymış bir başlıkta sanal engel gerçeğinden
 sapar ve tespit yalancı pozitif üretir — oyuncu durduk yere ölürdü. Kalibresiz oyuncu zaten ateş
 edemez ve hasar yemez; ceza da aynı kapıya girer.
@@ -3001,7 +3064,7 @@ ya yazılmaz, yanlış yazılmaz; oyuncu istemcisinin ölçüm dışındaki hiç
 |---|---|---|
 | `server.json` | **Elle** | Portlar + `venueName` + `tickHz` + `venue` + `lobbyScene`; yoksa varsayılanlarla oluşturulur (§1 sabitleri). `venue` = açılışta seçilecek mekan (boş = konsolda sorulur). `lobbyScene` = lobi sahnesi (§10.7); **boş = seçilen mekanın lobi haritası otomatik bulunur**. ⚠️ Çözülemezse sunucu **açılmaz** (aşağı). |
 | `devices.json` | **Sunucu üretir** | `deviceId → { "name":"ertu", "number":7 }`; ilk bağlantıda ve `set_identity`'de yazılır (§2). Eski v1 biçimi (`deviceId → "ad"`) okunur — numara `0` sayılır — ve ilk yazımda yeni biçime yükseltilir. UTF-8, BOM'suz. |
-| `maps.json` | **Unity export** | `MapDefinition` SO'larından: `sceneName`, `venue`, `gameType`, `modes` (§10.1, §11.1) + harita başına `objects[]` ve kökte `kinds[]` (§10.10). Arena ölçüsü YOKTUR — sunucu metre kullanmaz, ölçü istemcide sahnenin `ArenaBoundary`'sinde kalır. |
+| `maps.json` | **Unity export** | `MapDefinition` SO'larından: `sceneName`, `venue`, `gameType`, `modes`, `moleDensity` (§10.1, §10.5, §11.1) + harita başına `objects[]` ve kökte `kinds[]` (§10.10). Arena ölçüsü YOKTUR — sunucu metre kullanmaz, ölçü istemcide sahnenin `ArenaBoundary`'sinde kalır. |
 
 > **`<Mekan>_dimensions.json` config DEĞİLDİR, çıktıdır:** sunucu onu `config/` altına değil **kendi
 > exe'sinin yanına** yazar (`venue_survey`, §10.11) ve bir daha hiç okumaz — arena ölçüsünün tüketicisi
@@ -3017,6 +3080,12 @@ ya yazılmaz, yanlış yazılmaz; oyuncu istemcisinin ölçüm dışındaki hiç
 > `gameType` bir üst katmandır ve operatörün ilk seçimidir. Sunucudaki tüketicisi `start_match`
 > doğrulamasıdır (§10.1): modun tipiyle haritanın tipi uyuşmazsa komut reddedilir. **Boş = eski
 > export** → `"quickbattle"` sayılır, yani bugünkü arenalar tek satır iş bile gerektirmez.
+>
+> **`moleDensity` = KÖSTEBEK YOĞUNLUĞU ÇARPANI** (§10.5): o haritada aynı anda kaç köstebeğin ayakta
+> duracağını belirleyen **harita başına** ayar — `1` temel yoğunluktur. Tek tüketicisi `mole` modudur;
+> başka haritalarda da yazılıdır ama hiçbir şeye dokunmaz. **Eksik/`0` = eski export** → modun kendi
+> varsayılanı işler, yani mevcut arenalar tek satır iş gerektirmez. ⚠️ Sunucu değeri makul bir aralığa
+> **kırpar**: yanlış yazılmış bir sayı ne çıkışları durdurabilmeli ne salonu köstebeğe boğabilmeli.
 >
 
 > **Ağ nesneleri `maps.json`'a iki yerden girer** (§10.10): harita girdisinde

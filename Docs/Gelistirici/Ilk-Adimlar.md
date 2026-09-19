@@ -106,9 +106,11 @@ unity cmd get_console_logs --json  # 0 hata / 0 uyarı bekleriz
 
 `unity` komutu Unity CLI'dır (`%LOCALAPPDATA%\Unity\bin`) ve editör açıkken ona bağlanır.
 
-Oyuncu tarafının konsolu **gözlüktedir**: `scripts\quest-logcat.bat [süzgeç]` bağlı gözlüğün Unity
-logunu akıtır (`scripts/README.md`). Test kartlarındaki "logcat"tan kasıt budur — editör konsolu da
-sunucu konsolu da oyuncu uygulamasının `Debug.Log` satırlarını göstermez.
+Oyuncu uygulaması **gözlükte** koşar, `Debug.Log` satırları da yalnız orada durur — editör konsolu
+onları göstermez. Bu yüzden cihazdaki **uyarı ve hata** satırları kontrol kanalından sunucuya taşınır
+(`client_log`, `Docs/ArenaNet-Protokol.md` §5.1): sunucu konsoluna basılır ve günlük dosyasına yazılır
+(`Server/README.md`). Test kartlarında "gözlükten gelen satır" denince kastedilen orasıdır —
+işletmede USB yoktur, cihaza bağlanarak log okumak bir çalışma biçimi değildir.
 
 > ⚠️ Editör **açıkken** `unity build` / `unity test` çalıştırma — ayrı bir batch-mode editör
 > başlatır ve proje kilidine takılır. In-editor `unity cmd build` / `run_tests` kullan.

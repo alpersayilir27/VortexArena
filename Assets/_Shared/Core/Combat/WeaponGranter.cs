@@ -192,6 +192,21 @@ namespace VortexArena.Core.Combat
         private static bool _throwableLeft;
         private static bool _throwableRight;
 
+        // Per-hand DEATH latch; same reason for being static, reset in Awake.
+        private static bool _deathLatchLeft;
+        private static bool _deathLatchRight;
+
+        /// <summary>Is this hand still inside the grip press that DEATH interrupted.
+        /// <para>Death empties the hands ONCE (<see cref="HandleAliveChanged"/>); the very next frame
+        /// would hand the weapon straight back, because grip is still down. The latch opens on
+        /// RELEASE, so the weapon returns with a new press and the player is never left waiting.</para>
+        /// </summary>
+        private static bool IsGripHeldSinceDeath(OVRInput.Controller hand)
+        {
+            return hand == OVRInput.Controller.LTouch ? _deathLatchLeft
+                 : hand == OVRInput.Controller.RTouch && _deathLatchRight;
+        }
+
         /// <summary>Does a throwable occupy this hand — the gate that keeps every weapon path off it
         /// (grant, frame summon, front grip, rack selection).</summary>
         public static bool IsThrowableHeld(OVRInput.Controller hand)
@@ -379,6 +394,8 @@ namespace VortexArena.Core.Combat
             _gripWasHeldRight = false;
             _throwableLeft = false;
             _throwableRight = false;
+            _deathLatchLeft = false;
+            _deathLatchRight = false;
 
             // Persistent singleton: subscribe in Awake/OnDestroy so rule/scene events are not
             // missed while the object is disabled (PlayerCombatState pattern).
@@ -413,6 +430,8 @@ namespace VortexArena.Core.Combat
             _canSelectRight = true;
             _throwableLeft = false;
             _throwableRight = false;
+            _deathLatchLeft = false;
+            _deathLatchRight = false;
 
             Instance = null;
         }
@@ -503,8 +522,10 @@ namespace VortexArena.Core.Combat
             // deciding the right hand's press — both are judged by the same pre-summon snapshot.
             bool handsFree = HandsFree;
 
-            TickHandGate(OVRInput.Controller.LTouch, ref _gripWasHeldLeft, ref _canSelectLeft, handsFree);
-            TickHandGate(OVRInput.Controller.RTouch, ref _gripWasHeldRight, ref _canSelectRight, handsFree);
+            TickHandGate(OVRInput.Controller.LTouch, ref _gripWasHeldLeft, ref _canSelectLeft,
+                ref _deathLatchLeft, handsFree);
+            TickHandGate(OVRInput.Controller.RTouch, ref _gripWasHeldRight, ref _canSelectRight,
+                ref _deathLatchRight, handsFree);
         }
 
         /// <summary>One hand's latch: it follows the hands while the grip is up, freezes on the press
@@ -515,9 +536,17 @@ namespace VortexArena.Core.Combat
         /// clone into it — that clone is the press's own doing, not a second weapon
         /// (see <see cref="CanSelectWith"/>).</para></summary>
         private static void TickHandGate(OVRInput.Controller hand, ref bool gripWasHeld,
-            ref bool canSelect, bool handsFree)
+            ref bool canSelect, ref bool deathLatch, bool handsFree)
         {
             bool gripHeld = OVRInput.Get(OVRInput.Axis1D.PrimaryHandTrigger, hand) >= GripThreshold;
+
+            // The death latch opens on RELEASE, not on the next press: judged on the press edge it
+            // would still be shut on the frame the press arrives and the weapon would come one press
+            // late — "the first press after dying does nothing".
+            if (!gripHeld)
+            {
+                deathLatch = false;
+            }
 
             if (!gripHeld || !gripWasHeld)
             {
@@ -553,10 +582,11 @@ namespace VortexArena.Core.Combat
         private static bool HidesSceneWeapons => ModeDistributesWeapons || ModeRuntime.IsWeaponless;
 
         /// <summary>May the player hold a weapon right now: must be CALIBRATED.
-        /// <para>⚠️ DEATH IS NOT A GATE HERE and is not added back. A dead player keeps the weapon
-        /// in hand and may take one from a frame: in a round-based mode death parks the player in
-        /// the ghost state until the round CLOSES (no revive) — up to a whole round — so taking the
-        /// gun away would mean minutes of empty hands and a second walk to the rack every round.</para>
+        /// <para>⚠️ DEATH IS NOT A GATE HERE and is not added back. Death takes the weapon ONCE, on
+        /// the frame it happens (<see cref="HandleAliveChanged"/>), and the next grip press gives it
+        /// back — a dead player may hold a weapon and may take one from a frame. As a GATE it would
+        /// park a round-based mode's ghost empty-handed until the round CLOSES (no revive) — up to a
+        /// whole round — and cost a second walk to the rack every round.</para>
         /// <para><b>Damage stays impossible and is not re-checked here.</b> The trigger is closed
         /// by <c>PlayerCombatState.CanFire</c> (ALIVE + phase/<c>fireWhilePaused</c>), and even if
         /// a round left the muzzle the server drops <c>hit_report</c> outside <c>playing</c>
@@ -687,7 +717,7 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
-            bool gripHeld = OVRInput.Get(OVRInput.Axis1D.PrimaryHandTrigger, hand) >= GripThreshold;
+            bool gripHeld = IsHandGripping(hand);
 
             // ⚠️ A hand carrying a throwable holds grip the whole time, so without this branch the
             // next line would grant a random weapon INTO the hand holding the bomb. Nothing is revoked
@@ -1072,11 +1102,15 @@ namespace VortexArena.Core.Combat
             weapon.SetSecondaryHand(ResolveSecondaryHand(weapon, other, IsHandGripping(other)));
         }
 
-        /// <summary>Is this hand pressing grip AND free to use it for a weapon — a hand carrying a
-        /// throwable is holding grip for the bomb, not for a weapon.</summary>
+        /// <summary>Is this hand pressing grip AND free to use it for a weapon: a hand carrying a
+        /// throwable holds grip for the bomb, not for a weapon, and a hand that has not let go since
+        /// death is still inside the press death interrupted
+        /// (<see cref="IsGripHeldSinceDeath"/>).
+        /// <para>⚠️ BOTH delivery paths read this one answer (random grant and frame clone) — a gate
+        /// written into only one of them would hold per mode.</para></summary>
         private static bool IsHandGripping(OVRInput.Controller hand)
         {
-            return !IsThrowableHeld(hand) &&
+            return !IsThrowableHeld(hand) && !IsGripHeldSinceDeath(hand) &&
                    OVRInput.Get(OVRInput.Axis1D.PrimaryHandTrigger, hand) >= GripThreshold;
         }
 
@@ -1271,17 +1305,37 @@ namespace VortexArena.Core.Combat
             _aliveSubscribed = true;
         }
 
-        /// <summary>A revived player returns with a FULL magazine.
-        /// <para>⚠️ <c>Weapon.HandleAliveChanged</c> is NOT enough: it requires <c>IsHeld</c>, and a
-        /// clone that was stowed while dead (grip released, rig unresolved) is DISABLED — it has
-        /// unsubscribed and would never refill, so the player would return with the previous life's
-        /// half magazine. This path reaches the clone whatever state it is in.</para></summary>
+        /// <summary>Death empties the hands ONCE; a revived player returns with a FULL magazine.
+        /// <para><b>Death is a ONE-SHOT sweep, not a gate</b> (<see cref="CanHoldWeapon"/>): the
+        /// weapon leaves the hand at the moment of death — that emptied hand is what makes dying
+        /// readable in VR, where there is no third-person body to fall over — and comes back with the
+        /// NEXT grip press, dead or alive. The per-hand latch is what separates the two: without it
+        /// the next frame would hand the weapon straight back (grip is still down), with a permanent
+        /// gate a round-based mode's ghost would stand empty-handed for minutes and walk to the rack
+        /// again every round.</para>
+        /// <para>The SELECTION survives (<see cref="_selected"/> untouched, the clone is stowed not
+        /// destroyed): re-pressing grip brings the same weapon back, so no second walk to the frame.</para>
+        /// <para>⚠️ <c>Weapon.HandleAliveChanged</c> is NOT enough for the refill: it requires
+        /// <c>IsHeld</c>, and a clone that was stowed while dead (grip released, rig unresolved) is
+        /// DISABLED — it has unsubscribed and would never refill, so the player would return with the
+        /// previous life's half magazine. This path reaches the clone whatever state it is in.</para>
+        /// </summary>
         private void HandleAliveChanged(bool alive)
         {
             if (alive)
             {
                 RefillSummoned();
+                return;
             }
+
+            _deathLatchLeft = true;
+            _deathLatchRight = true;
+
+            // Both sources, same as the weaponless branch in Update: the disposable grant (and its
+            // stowed twin) is DESTROYED, the frame clone only HIDDEN — destroying it would reset the
+            // magazine the player earned and break "the same weapon returns".
+            RevokeAll();
+            StowAllSummoned();
         }
 
         /// <summary>Every countdown (§10.1 <c>phaseReason:"countdown"</c>) refills the held weapon.

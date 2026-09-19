@@ -673,7 +673,10 @@ namespace VortexArena.Core.Arena
             ApplyFloorLift();
 
             CalibrationGeneration++;
-            Debug.Log($"ArenaCalibrator: rig aligned (yaw {yaw:F1} deg, floor {rise:F3} m).");
+            // Relayed too: the venue calibration procedure reads this line off the SERVER log.
+            string aligned = $"ArenaCalibrator: rig aligned (yaw {yaw:F1} deg, floor {rise:F3} m).";
+            Debug.Log(aligned);
+            VortexArena.Net.ClientLogRelay.Report(aligned);
             ReportHeadHeightAfterAlign();
         }
 
@@ -704,8 +707,10 @@ namespace VortexArena.Core.Arena
             CalibrationGeneration++;
             // Callers MUST MeasureFloorOffset with this same anchor pose first, otherwise the
             // printed offset belongs to an older alignment.
-            Debug.Log($"ArenaCalibrator: rig aligned from saved anchor (yaw {yaw:F1} deg, " +
-                      $"zemin sapması {LastFloorOffsetMeters:F2} m).");
+            string aligned = $"ArenaCalibrator: rig aligned from saved anchor (yaw {yaw:F1} deg, " +
+                             $"zemin sapması {LastFloorOffsetMeters:F2} m).";
+            Debug.Log(aligned);
+            VortexArena.Net.ClientLogRelay.Report(aligned);
             ReportHeadHeightAfterAlign();
         }
 

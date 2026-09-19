@@ -170,6 +170,29 @@ namespace VortexArena.Protocol
         public string error = "";
     }
 
+    /// A diagnostic line from the sending device's own log (§5.1). Both roles send it; the server
+    /// prints it and writes it to its log file, and NOTHING else reads it — no game state, no authority.
+    /// ⚠️ The reason it exists: the player app runs on the headset, so its log lives only there, and a
+    /// venue has no USB. Without this channel a fault in the field is simply unreadable.
+    [Serializable]
+    public class ClientLogMsg
+    {
+        public string type = MessageTypes.ClientLog;
+
+        /// <summary>"warn" | "error" | "info" (<c>ArenaProtocol.LOG_LEVEL_*</c>); a free, unvalidated
+        /// label like <c>source</c> — an unknown value reads as a warning.</summary>
+        public string level = ArenaProtocol.LOG_LEVEL_WARN;
+
+        /// <summary>One line, already formatted, cut at <c>ArenaProtocol.LOG_TEXT_MAX_CHARS</c> by the
+        /// sender and again by the receiver.</summary>
+        public string text = "";
+
+        /// <summary>Identical lines SUPPRESSED since the last send (0 = none) — see
+        /// <c>ArenaProtocol.LOG_DUPLICATE_WINDOW_SECONDS</c>. Carried so a stuck fault reads as one line
+        /// with a count instead of disappearing into the rate cap.</summary>
+        public int repeat;
+    }
+
     // ---- Admin → Server only ----
 
     /// start_match (§5.2). roundSeconds/scoreLimit/countdownSeconds apply to THAT match only: 0 or

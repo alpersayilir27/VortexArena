@@ -655,6 +655,13 @@ Sorun yaşandığında ilk bakılacak yer burasıdır ve sana üç şeyi ayırt 
 | Ölünce | 5 saniye bekle, sonra **kendi renkli tabanına yürü** | Tabana gitmek yok: **5 saniye boyunca olduğun yerde kıpırdamadan dur** (1 metreden fazla yürürsen sayaç başa döner) | **Canlanma yok** — tur bitene kadar beklersin, yeni tur herkesi tam canla ayağa kaldırır |
 | Varsayılan süre / puan | 300 sn (5 dk) / 30 | 300 sn (5 dk) / 20 | 600 sn (10 dk) / **4 tur** |
 
+**Can üç modda da kendiliğinden dolar:** oyuncu **5 saniye** boyunca hiç vurulmazsa canı saniyede
+**15** artmaya başlar ve 100'e kadar dolar. Araya bir vuruş girerse sayaç başa döner — yani
+çatışmanın ortasında can dolmaz, çekilip birkaç saniye beklemek gerekir. Oyuncuya tek cümle:
+*"Yaralandıysan siperde birkaç saniye bekle, canın kendiliğinden dolar."*
+⚠️ Ölünce dolmaz (ölü oyuncunun canını yalnız canlanma doldurur) ve **duvarın içindeyken de dolmaz**
+— orada can gitmeye devam eder.
+
 **Herkes Tek'te oyunculara söylenecek iki cümle:**
 1. *"Silah almak için kumandanın yan tuşunu basılı tut — bıraktığında silah kaybolur."*
 2. *"Öldüğünde bir yere yürüme; olduğun yerde 5 saniye kıpırdamadan dur, kendiliğinden canlanacaksın.

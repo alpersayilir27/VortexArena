@@ -15,7 +15,7 @@ Server/
                               # Modes/ (IGameMode, TdmMode, FfaMode)
   VortexArena.Server.App/     # konsol exe (UI YOK — yönetim UI'ı Unity admin build'i)
   config/server.json          # portlar + mekan adı + tickHz + venue + lobbyScene + burger (ELLE)
-  config/maps.json            # harita tablosu (sceneName + venue + gameType + modes + objects) + kinds[] — Unity export
+  config/maps.json            # harita tablosu (sceneName + venue + gameType + modes + moleDensity + objects) + kinds[] — Unity export
   config/devices.json         # deviceId -> { ad, forma numarası }; otomatik doldurulur
   firewall-kur.cmd            # Windows Firewall kuralları (yönetici olarak çalıştırın)
 ```
@@ -63,6 +63,23 @@ Açılış başlığında `Modlar : tdm, ffa, tournament` ve `Haritalar : …` s
 tablosunu özetler (`maps.json` yoksa `Haritalar : yok (doğrulama kapalı)`); `Lobi :` satırı
 yapılandırılmış lobi sahnesini gösterir ve o sahne `maps.json`'da yoksa uyarır; `Hasar : istemci
 bildirir` satırı sunucuda silah tablosu ve hile denetimi olmadığını hatırlatır (§10.3).
+
+## Günlük dosyası
+
+Sunucu konsola bastığı **her satırı** aynı anda exe'nin yanındaki `logs/` klasörüne yazar;
+dosya adı `server-<yyyy-MM-dd_HH-mm-ss>.log` ve yolu açılış başlığındaki `Günlük :` satırında
+görünür.
+
+- **Her çalıştırma kendi dosyasını açar** — bir seans tek dosya olarak taşınır, eski seanslar
+  üzerine yazılmaz.
+- İçinde konsoldaki her şey vardır: bağlanan/kopan cihazlar, maç ve mod satırları, uyarılar,
+  kapanış sırası.
+- Gözlüklerden gelen `client_log` satırları da buradadır (`[cihaz] <oyuncu>: …`, hata ise
+  `[cihaz/HATA]`) — oyuncu uygulaması gözlükte koştuğu için sahadaki arızanın okunabildiği tek yer.
+- **İşletmeden geri taşınacak şey bu dosyadır;** sorunu incelemek için konsol ekran görüntüsü değil
+  ilgili seansın `.log` dosyası istenir.
+- Dosya açılamazsa sunucu tek satır uyarı basıp **dosyasız devam eder** — günlük hiçbir zaman
+  sunucuyu durdurmaz.
 
 ## Kapanış
 
@@ -374,7 +391,7 @@ aynı ortak kanaldan (`set_selection` → `admin_state`) gider, böylece iki ope
 | `ffa` | `Modes/FfaMode.cs` | Takımsız · bireysel skor · sabit durarak canlanma · silahı mod dağıtır · gecikme 0 | 300 sn / 20 |
 | `tournament` | `Modes/TournamentMode.cs` | TDM varsayılanından tek farkı: **canlanma yok** (`Revive = None`, gecikme 0). Tur tabanlı takım elemesi | 120 sn (**turun** süresi) / 4 tur (operatör **sınırsız** da seçebilir) |
 | `burger` | `Modes/BurgerMode.cs` | **Oyun tipi `kids`** · silah yok (`Weapons = None`, dolayısıyla hasar yok) · takımsız · canlanma yok (gecikme 0) · ortak skor (`PlayerAndShared`) · denge `server.json → burger` | 600 sn / **sınırsız** (limit yok) |
-| `mole` | `Modes/MoleMode.cs` | **Oyun tipi `kids`** · silah yok (`Weapons = None`, dolayısıyla hasar yok) · **iki takım + takım skoru** · canlanma yok (gecikme 0) | 300 sn / **sınırsız** (limit yok) |
+| `mole` | `Modes/MoleMode.cs` | **Oyun tipi `kids`** · silah yok (`Weapons = None`, dolayısıyla hasar yok) · **iki takım + takım skoru** · canlanma yok (gecikme 0) · köstebek yoğunluğu harita başına (`maps.json → moleDensity`; yazılmamışsa modun varsayılanı) | 300 sn / **sınırsız** (limit yok) |
 
 > `ffa` skoru `AddPlayerScore(killerId, 1)` ile yazar ve kazananı `TryGetLeader` ile bulur;
 > eşitlikte `TryGetLeader` false döndüğü için maç berabere biter. Oyuncusuz başlatılan maçta
@@ -419,6 +436,9 @@ aynı ortak kanaldan (`set_selection` → `admin_state`) gider, böylece iki ope
 > milisaniyeler içinde yolladığı kenar tetikli `set_ready` silinir ve toplanma hiç açılmazdı.
 > Toplanma sayacının paydası yalnız **kalibre** oyuncuları sayar — kalibresiz oyuncu savaş dışıdır,
 > turu ve toplanmayı bekletmez. Konsolda `[tournament]` satırları tur akışını anlatır.
+> ⚠️ **Toplanmanın tıkandığı iki hâl de konsola yazılır:** sayılacak oyuncu kalmaması ve tur açma
+> isteğinin faz yüzünden reddedilmesi. İkisi de sahada "kimse bir şey yapmıyor" gibi görünür, tek
+> ayrımları o satırdır — bu yüzden ikisi de sessiz geçilmez.
 
 **Yeni mod eklemek:**
 1. `Modes/<Ad>Mode.cs` içinde `IGameMode` uygula.

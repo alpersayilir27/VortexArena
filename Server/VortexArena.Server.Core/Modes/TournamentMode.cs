@@ -459,7 +459,11 @@ public sealed class TournamentMode : IGameMode
         // value on arrival rather than polling for it (§10.1).
         director.SetModeState($"regroup:{ready}/{total}"); // broadcasts only if it CHANGED
 
-        if (total == 0) return; // nobody left — wait for the operator's abort_match
+        if (total == 0)
+        {
+            ReportRegroupStalled(director); // wait for the operator's abort_match
+            return;
+        }
 
         if (ready < total)
         {
@@ -491,6 +495,21 @@ public sealed class TournamentMode : IGameMode
         var note = uncalibrated > 0 ? $" (kalibresiz, sayılmıyor: {uncalibrated})" : "";
         Console.WriteLine($"[tournament] toplanma bekleniyor ({ready}/{total}) — " +
                           $"tabanına dönmeyenler: {missing}{note}");
+    }
+
+    /// <summary>Diagnostic for a gathering nobody is counted in (<see cref="CountInBase"/> empty).</summary>
+    /// <remarks>Without it an all-uncalibrated roster holds the gathering with a SILENT server window:
+    /// the waiting line above runs only while somebody is counted.</remarks>
+    private void ReportRegroupStalled(MatchDirector director)
+    {
+        var now = DateTime.UtcNow;
+        if (now < _nextRegroupReportAt) return;
+
+        _nextRegroupReportAt = now.AddSeconds(RegroupReportIntervalSeconds);
+
+        var connected = director.ConnectedPlayers().Count();
+        Console.WriteLine($"[tournament] toplanma açılamıyor — sayılan oyuncu yok (bağlı {connected}, " +
+                          "kalibresiz sayılmaz); operatörün abort_match'i bekleniyor.");
     }
 
     /// <summary>Schedules the first diagnostic line (on every entry into the regroup).</summary>

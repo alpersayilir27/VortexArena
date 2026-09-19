@@ -28,16 +28,29 @@ public sealed class MoleMode : IGameMode
     /// already taken down.</summary>
     private const float MoleUpSeconds = 3.5f;
 
-    /// <summary>Gap between pop ATTEMPTS; an attempt is skipped while the cap is full.</summary>
+    /// <summary>Gap between pop ATTEMPTS at density 1; an attempt is skipped while the cap is full.</summary>
+    /// <remarks>⚠️ THIS is what fills the field, not the cap: a mole stands for
+    /// <see cref="MoleUpSeconds"/>, so the number up settles around <c>MoleUpSeconds / gap</c> and the
+    /// cap is rarely reached. Raising only the cap changes nothing in the hall.</remarks>
     private const float PopIntervalSeconds = 1.5f;
 
     /// <summary>How long the squashed mole stays visible before the hole empties.</summary>
     private const float SquashedSeconds = 0.9f;
 
-    /// <summary>Moles standing at once: one per player, within these bounds. Tied to the roster because
-    /// the field feels empty for a crowd and unfair for one child at the same fixed number.</summary>
+    /// <summary>Moles standing at once BEFORE density: one per player, within these bounds. Tied to the
+    /// roster because the field feels empty for a crowd and unfair for one child at the same fixed
+    /// number.</summary>
     private const int MinConcurrentUp = 2;
     private const int MaxConcurrentUp = 6;
+
+    /// <summary>Density of a map that sets none (§10.5) — what a NEW venue starts with.</summary>
+    /// <remarks>The per-map number lives on the MapDefinition SO and arrives through maps.json; this
+    /// constant only covers an old export whose rows have no field.</remarks>
+    private const float DefaultDensity = 1.5f;
+
+    /// <summary>Density clamp: a mis-typed export must neither stop the pops nor flood the hall.</summary>
+    private const float MinDensity = 0.25f;
+    private const float MaxDensity = 4f;
 
     /// <summary>Points for the right colour; the wrong one takes the same amount away.</summary>
     private const int WhackPoints = 10;
@@ -69,6 +82,10 @@ public sealed class MoleMode : IGameMode
     private readonly Random _rng = new();
 
     private float _popTimer;
+
+    /// <summary>The map's density and the pop gap it produces, resolved once at match start.</summary>
+    private float _density = DefaultDensity;
+    private float _popInterval = PopIntervalSeconds;
 
     /// <summary>Hidden holes, reused every pop attempt so a 10 Hz tick allocates nothing.</summary>
     private readonly List<int> _candidates = new();
@@ -107,6 +124,10 @@ public sealed class MoleMode : IGameMode
         _deck.Clear();
         _popTimer = 0f;
 
+        // Density is map data (§10.5): read at setup, never on the tick.
+        _density = ResolveDensity(director);
+        _popInterval = PopIntervalSeconds / _density;
+
         foreach (var netId in director.ObjectIdsOfKind(HoleKind))
         {
             _holes.Add(netId);
@@ -126,8 +147,8 @@ public sealed class MoleMode : IGameMode
             return;
         }
 
-        Console.WriteLine($"[mole] maç başladı — {director.RoundSeconds} sn, {_holes.Count} delik; " +
-                          "skor limiti yok, süre bitince yüksek skor kazanır.");
+        Console.WriteLine($"[mole] maç başladı — {director.RoundSeconds} sn, {_holes.Count} delik, " +
+                          $"yoğunluk ×{_density:0.##}; skor limiti yok, süre bitince yüksek skor kazanır.");
     }
 
     /// <summary>Time is the ONLY end condition (§10.5); the leading team wins, a tie is a draw.</summary>
@@ -178,7 +199,7 @@ public sealed class MoleMode : IGameMode
         _popTimer -= deltaSeconds;
         if (_popTimer > 0f) return;
 
-        _popTimer = PopIntervalSeconds;
+        _popTimer = _popInterval;
         if (_holes.Count == 0) return;
 
         if (StandingCount() >= ConcurrentCap(director)) return;
@@ -208,12 +229,24 @@ public sealed class MoleMode : IGameMode
         director.SetObjectStage(chosen, StageUp);
     }
 
-    /// <summary>One mole per player, clamped — see <see cref="MinConcurrentUp"/>.</summary>
-    private static int ConcurrentCap(MatchDirector director)
+    /// <summary>The map's density (§10.5), clamped; the mode's default when the map sets none.</summary>
+    private static float ResolveDensity(MatchDirector director)
+    {
+        // <= 0 = old export with no field, or a scene outside the catalog: the map asks for nothing.
+        float density = director.CurrentMap?.moleDensity ?? 0f;
+        return density > 0f ? Math.Clamp(density, MinDensity, MaxDensity) : DefaultDensity;
+    }
+
+    /// <summary>One mole per player (see <see cref="MinConcurrentUp"/>), scaled by the map's
+    /// density.</summary>
+    /// <remarks>Never below 1 — a rounded-down cap would leave the arena empty for the whole
+    /// round.</remarks>
+    private int ConcurrentCap(MatchDirector director)
     {
         int players = 0;
         foreach (var _ in director.ConnectedPlayers()) players++;
-        return Math.Clamp(players, MinConcurrentUp, MaxConcurrentUp);
+        int roster = Math.Clamp(players, MinConcurrentUp, MaxConcurrentUp);
+        return Math.Max(1, (int)MathF.Round(roster * _density, MidpointRounding.AwayFromZero));
     }
 
     private int StandingCount()
