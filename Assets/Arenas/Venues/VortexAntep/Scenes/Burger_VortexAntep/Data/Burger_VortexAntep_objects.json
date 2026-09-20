@@ -9,10 +9,18 @@
     { "sceneId": 7, "kind": "dispenser_pickle" },
     { "sceneId": 8, "kind": "dispenser_tomato" },
     { "sceneId": 9, "kind": "dispenser_sauce" },
-    { "sceneId": 10, "kind": "board" },
-    { "sceneId": 11, "kind": "board" },
-    { "sceneId": 12, "kind": "board" },
-    { "sceneId": 13, "kind": "knife" },
-    { "sceneId": 14, "kind": "spatula" }
+    { "sceneId": 19, "kind": "knife" },
+    { "sceneId": 20, "kind": "spatula" },
+    { "sceneId": 21, "kind": "knife" },
+    { "sceneId": 22, "kind": "spatula" },
+    { "sceneId": 25, "kind": "spatula" },
+    { "sceneId": 28, "kind": "spatula" },
+    { "sceneId": 30, "kind": "board" },
+    { "sceneId": 31, "kind": "board" },
+    { "sceneId": 32, "kind": "board" },
+    { "sceneId": 33, "kind": "knife" },
+    { "sceneId": 34, "kind": "knife" },
+    { "sceneId": 35, "kind": "spatula" },
+    { "sceneId": 36, "kind": "spatula" }
   ]
 }
