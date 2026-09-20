@@ -17,6 +17,7 @@ MonoBehaviour:
   gameType: 1
   supportedModeIds:
   - burger
+  moleDensity: 1.5
   ambienceClip: {fileID: 0}
   ambienceVolume: 0.175
   musicClip: {fileID: 0}

@@ -4,6 +4,7 @@
       "sceneName": "Burger_Outdoor14x16",
       "venue": "Outdoor14x16",
       "gameType": "kids",
+      "moleDensity": 1.5,
       "modes": ["burger"],
       "objects": [
         { "sceneId": 1, "kind": "dispenser_bun_whole" },
@@ -26,6 +27,7 @@
       "sceneName": "Burger_VortexAntep",
       "venue": "VortexAntep",
       "gameType": "kids",
+      "moleDensity": 1.5,
       "modes": ["burger"],
       "objects": [
         { "sceneId": 1, "kind": "dispenser_bun_whole" },
@@ -48,6 +50,7 @@
       "sceneName": "Construction_VortexAntep",
       "venue": "VortexAntep",
       "gameType": "quickbattle",
+      "moleDensity": 1.5,
       "modes": ["ffa", "tdm", "tournament"],
       "objects": []
     },
@@ -55,6 +58,7 @@
       "sceneName": "Dust_B_Outdoor14x16",
       "venue": "Outdoor14x16",
       "gameType": "quickbattle",
+      "moleDensity": 1.5,
       "modes": ["ffa", "tdm", "tournament"],
       "objects": []
     },
@@ -62,6 +66,7 @@
       "sceneName": "IceWorld_Outdoor12x12",
       "venue": "Outdoor12x12",
       "gameType": "quickbattle",
+      "moleDensity": 1.5,
       "modes": ["ffa", "tdm", "tournament"],
       "objects": []
     },
@@ -69,6 +74,7 @@
       "sceneName": "IceWorld_Outdoor12x16",
       "venue": "Outdoor12x16",
       "gameType": "quickbattle",
+      "moleDensity": 1.5,
       "modes": ["ffa", "tdm", "tournament"],
       "objects": []
     },
@@ -76,6 +82,7 @@
       "sceneName": "IceWorld_Outdoor14x16",
       "venue": "Outdoor14x16",
       "gameType": "quickbattle",
+      "moleDensity": 1.5,
       "modes": ["ffa", "tdm", "tournament"],
       "objects": []
     },
@@ -83,6 +90,7 @@
       "sceneName": "Lobby_Outdoor12x12",
       "venue": "Outdoor12x12",
       "gameType": "quickbattle",
+      "moleDensity": 1.5,
       "modes": ["lobby"],
       "objects": [
         { "sceneId": 1, "kind": "target_board" }
@@ -92,6 +100,7 @@
       "sceneName": "Lobby_Outdoor12x16",
       "venue": "Outdoor12x16",
       "gameType": "quickbattle",
+      "moleDensity": 1.5,
       "modes": ["lobby"],
       "objects": []
     },
@@ -99,6 +108,7 @@
       "sceneName": "Lobby_Outdoor14x16",
       "venue": "Outdoor14x16",
       "gameType": "quickbattle",
+      "moleDensity": 1.5,
       "modes": ["lobby"],
       "objects": [
         { "sceneId": 1, "kind": "target_board" },
@@ -110,6 +120,7 @@
       "sceneName": "Lobby_VortexAntep",
       "venue": "VortexAntep",
       "gameType": "quickbattle",
+      "moleDensity": 1.5,
       "modes": ["lobby"],
       "objects": [
         { "sceneId": 1, "kind": "breakable_cover" },
@@ -124,6 +135,7 @@
       "sceneName": "Military_VortexAntep",
       "venue": "VortexAntep",
       "gameType": "quickbattle",
+      "moleDensity": 1.5,
       "modes": ["ffa", "tdm", "tournament"],
       "objects": [
         { "sceneId": 1, "kind": "breakable_cover" },
@@ -138,6 +150,7 @@
       "sceneName": "Mirage_A_Outdoor14x16",
       "venue": "Outdoor14x16",
       "gameType": "quickbattle",
+      "moleDensity": 1.5,
       "modes": ["ffa", "tdm", "tournament"],
       "objects": []
     },
@@ -145,6 +158,7 @@
       "sceneName": "Mole_Outdoor14x16",
       "venue": "Outdoor14x16",
       "gameType": "kids",
+      "moleDensity": 1.5,
       "modes": ["mole"],
       "objects": [
         { "sceneId": 1, "kind": "mole_hole" },
@@ -173,6 +187,7 @@
       "sceneName": "Mole_VortexAntep",
       "venue": "VortexAntep",
       "gameType": "kids",
+      "moleDensity": 1.5,
       "modes": ["mole"],
       "objects": [
         { "sceneId": 1, "kind": "mole_hole" },
@@ -202,6 +217,7 @@
       "sceneName": "Test_VortexAntep",
       "venue": "VortexAntep",
       "gameType": "quickbattle",
+      "moleDensity": 1.5,
       "modes": ["ffa", "tdm", "tournament"],
       "objects": [
         { "sceneId": 1, "kind": "breakable_cover" },
