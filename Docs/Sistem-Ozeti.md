@@ -5288,6 +5288,36 @@ konsoluna tek satır sebep yazar.
     Tahta kavranamaz ve kalıcı kinematik olduğu için konumunu **yalnız sahne belirler**; oyuncu
     onu yuvaya itip düzeltemez. Banko prefabı çıkarılırken tahta ile yuva hacmi **birlikte** taşınır.
 
+215. **Shader varyant uzayı TOPLAMSAL değil ÇARPIMSALDIR — tek bir shader tüm build'i domine
+    edebilir.** Her `multi_compile` keyword'ü ve her grafik API'si varyant uzayını **katlar**: URP
+    `Lit` shader'ının ForwardLit pass'i gölge cascade sayısı, soft shadow kalitesi, fog formülü,
+    light cookie, LOD cross-fade gibi onlarca ekseni birden taşır. Bu yüzden tek bir ayarın
+    açılması build süresine sabit bir ek değil **çarpan** olarak yansır ve o tek shader'ın
+    derlemesi projedeki her şeyin toplamını gölgede bırakabilir. Kurallar (yasak biçimi
+    `Docs/Gelistirici/Yapma-Listesi.md`, "Build ve paketler"):
+    **(a)** Android grafik API listesi yalnız **Vulkan**'dır; OpenGLES3 eklemek her varyantı
+    birebir ikiye katlar ve Quest 3/3S'te karşılığı olmayan bir yedek üretir.
+    **(b)** Eleyici, **projedeki her kalite seviyesinin** URP asset'ini ve
+    `Project Settings > Graphics > Default Render Pipeline` alanını birlikte okur. ⚠️ Kalite
+    seviyesindeki `excludedTargetPlatforms` **elemeyi etkilemez**: bir seviye Android'den dışlanmış
+    olsa da asset'i Quest build'inin varyant uzayına girer. Masaüstü seviyesinin gölge cascade
+    sayısı ve soft shadow kalitesi bu yolla Quest build'ini ikiye katlar; hangi asset'in sızdığı,
+    derlenen varyantlardaki keyword'ün (`_MAIN_LIGHT_SHADOWS_CASCADE`, `_SHADOWS_SOFT_*`) hangi
+    asset'in değerine karşılık geldiğine bakılarak bulunur. `Default Render Pipeline` alanının
+    mobil asset'i göstermesi doğrudur ama tek başına yetmez — kalite seviyeleri de sayılır.
+    **(c)** `Shader Stripping > Fog Modes` **Custom**'dır ve yalnız **Linear** işaretlidir; tüm
+    sahneler Linear fog kullanır. Yeni bir sahnede Exponential / ExponentialSquared seçmek, o
+    formülün shader varyantları elendiği için **sahnede sisi sessizce kaybettirir** — ne derleyici
+    ne çalışma anı uyarır, sis yalnızca yoktur. Başka bir formül gerçekten gerekiyorsa önce eleme
+    ayarı açılmalıdır; bedeli varyant sayısının ~1,5 katına çıkmasıdır.
+    **(d)** Mobil URP asset'inde **Light Cookies** ve **LOD Cross Fade** kapalıdır; her biri
+    açıldığında varyant sayısı ikiye çıkar. Sonuçları da sessizdir: cookie'li bir ışık cookie'siz
+    çizilir, LOD geçişleri yumuşamaz, ani değişir — ikisi de ilgili ayar açılmadan düzelmez.
+    **Teşhis:** yavaş bir build'de `deploy/player-build.log` içindeki
+    `Pass <ad> (vp, <api>) finished in <N> seconds ... compiled <N> variants` satırları hangi
+    shader'ın kaç varyant derlediğini verir; `Logs/shadercompiler-*.log` ise varyant başına açık
+    keyword listesini taşır, hangi çarpanın açık kaldığı oradan çıkar.
+
 ---
 
 ## 8. Durum ve sıradaki işler

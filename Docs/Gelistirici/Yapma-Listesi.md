@@ -741,6 +741,24 @@ bitmiş olmalıdır. `Exit` süreci anında sonlandırır — `finally` bloğu �
 ⚠️ Paket eki **noktasızdır** (`com.vortex.arenav132`, `com.vortex.arena.v132` DEĞİL): Android paket
 segmenti rakamla başlayamaz.
 
+### ⛔ Shader varyantını katlayan ayarları açma
+
+Android grafik API listesi **yalnız Vulkan** kalır: listeye OpenGLES3 eklemek her shader varyantını
+birebir ikiye katlar, Quest 3/3S Vulkan ile koşar, GLES3 yedeğine ihtiyaç yoktur.
+URP'nin varyant eleyicisi **projedeki TÜM kalite seviyelerinin** URP asset'ini ve
+`Graphics > Default Render Pipeline` alanını okur — kalite seviyesindeki `excludedTargetPlatforms`
+elemeyi **etkilemez**. Yani masaüstü kalite seviyesinin asset'indeki yüksek gölge cascade sayısı ve
+soft shadow kalitesi, Android dışlanmış olsa bile Quest build'ine sızıp varyantı ikiye katlar; bir
+kalite seviyesinin asset'ini "nasılsa o platforma girmiyor" diye zenginleştirme.
+`Shader Stripping > Fog Modes` = Custom, yalnız **Linear** işaretli: başka bir fog
+formülü seçen sahne **sisi sessizce kaybeder** (hata vermez) — gerçekten gerekiyorsa önce eleme
+ayarı açılır, bedeli varyant sayısının ~1,5 katına çıkmasıdır. Mobil asset'te **Light Cookies** ve
+**LOD Cross Fade** kapalıdır, her biri varyantı ikiye katlar: cookie'li ışık kullanılacaksa önce
+Light Cookies açılır (yoksa cookie sessizce çizilmez), kapalı cross-fade'de LOD geçişi yumuşamaz.
+⚠️ Yavaş build'in teşhisi `deploy/player-build.log` içindeki `compiled <N> variants` satırları,
+hangi çarpanın açık kaldığı ise `Logs/shadercompiler-*.log`. Gerekçe: `Docs/Sistem-Ozeti.md`,
+"Tuzaklar".
+
 ### ⚠️ Build/import "sebepsiz" yavaşsa önce Defender dışlamalarına bak
 
 Yeni bilgisayarda `scripts\defender-exclusions.cmd` (yönetici) bir kez çalıştırılır. Gerçek zamanlı

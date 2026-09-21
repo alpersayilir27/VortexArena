@@ -17,7 +17,7 @@ sunucuları) kurulumu. Ömründe bir kez okunur; günlük çalışma kuralları 
 |---|---|---|
 | 1 | **Unity Hub + Editor 6000.3.20f1** | Android Build Support + SDK/NDK + OpenJDK modülleriyle. CLI kuruluysa: `unity install 6000.3.20f1 -m android --cm --accept-eula` (`--cm` = çocuk modülleri de kurulur) |
 | 2 | **Unity CLI** | PowerShell: `$env:UNITY_CLI_CHANNEL='beta'; irm https://public-cdn.cloud.unity3d.com/hub/prod/cli/install.ps1 \| iex` → `%LOCALAPPDATA%\Unity\bin` PATH'e girer. Doğrula: `unity --version`, sonra `unity auth login` |
-| 3 | **Git + Git LFS** | `git lfs install` — repo LFS kullanıyor, manifest'te git URL'li paket var |
+| 3 | **Git + Git LFS** | `git lfs install` — repo LFS kullanıyor, manifest'te git URL'li paket var. **Projeyi açmadan önce** LFS içeriğinin tam indiğini doğrula (aşağı bak) |
 | 4 | **.NET 10 SDK** | Sunucuyu ve launcher'ı derlemek için |
 | 5 | **Defender dışlamaları** | `scripts\defender-exclusions.cmd` → sağ tık, *Yönetici olarak çalıştır*. **Projeyi ilk kez açmadan önce** |
 | 6 | Projeyi Unity'de bir kez aç | UPM paketleri (`com.unity.pipeline` dahil) manifest'ten iner |
@@ -26,6 +26,20 @@ sunucuları) kurulumu. Ömründe bir kez okunur; günlük çalışma kuralları 
 
 Sunucu tarafını hiç derlemeyeceksen 4. adımı atlayabilirsin — ama o zaman **hiç maç kuramazsın**:
 maç verisini yalnız sunucu üretir ve maçı yalnız bir admin başlatır.
+
+### ⚠️ Eksik LFS içeriği hata vermez — sahne boş açılır
+
+Model, texture, lightmap ve ses dosyaları LFS'tedir (`.gitattributes`); sahnelerin kendisi
+(`*.unity`) değildir. LFS indirmesi yarıda kesilirse (kopan bağlantı, bant genişliği limiti)
+o dosyalar diskte **129 baytlık pointer metni** olarak kalır: git temiz görünür, Unity hata
+vermez, sahne açılır — ama içi boştur. Sahneler boş/pembe açılıyorsa önce bunu kontrol et:
+
+```bash
+git lfs ls-files | awk '{print $2}' | sort | uniq -c   # hepsi '*' olmalı; '-' = inmemiş
+git lfs pull                                           # eksikleri çeker
+```
+
+`git lfs pull` sonrası Unity binlerce dosyayı yeniden import eder; uzun sürer, beklenendir.
 
 **5. adım neden ilk açılıştan önce:** ilk import ve ilk IL2CPP build'i projenin en çok dosya üreten
 adımlarıdır — on binlerce `.cpp`/`.obj` üretilir ve `Library/` sürekli okunur; Defender'ın gerçek
