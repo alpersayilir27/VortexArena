@@ -192,6 +192,7 @@ public sealed class PlayerRegistry : IDisposable
             lock (state.PoseGate)
             {
                 state.HasPose = false;
+                state.LastHands = null;
                 state.LastSeq = 0;
                 // §6.9: the skeleton ledger resets WITH the pose ledger. A restarted client counts
                 // from 0 again; against a stale high LastSkeletonSeq the u16 wrap check would

@@ -122,7 +122,9 @@ namespace VortexArena.Core.Combat
 
             // A weaponless mode carries no bomb at all: the trigger gate alone only refuses the take
             // and would leave the wrist item visible on a family that has nothing to throw.
-            if (ModeRuntime.IsWeaponless)
+            // A children's session waiting in a MILITARY lobby is the same family, seen from the
+            // selection instead of the rules (WeaponGranter.IsKidsPlayground).
+            if (ModeRuntime.IsWeaponless || WeaponGranter.IsKidsPlayground)
             {
                 ClearForWeaponless();
                 return;

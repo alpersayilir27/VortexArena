@@ -338,6 +338,9 @@ public sealed class StateHost
             state.LastPoseStamp = stamp;
 
             state.LastPose = pose;
+            // §10.10: MatchDirector parks a dropped owner's object under the hand that held it and does
+            // NOT take PoseGate — hence the immutable mirror written here.
+            state.LastHands = new HandPoses(pose.head, pose.handL, pose.handR);
             state.LastSeq = pose.seq;
             state.HasPose = true;
             state.LastPoseAt = DateTime.UtcNow;

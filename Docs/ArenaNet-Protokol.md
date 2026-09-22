@@ -32,6 +32,7 @@ Tümü paylaşılan `ArenaProtocol` statik sınıfında tanımlanır (`Assets/_S
 | `OBJECT_POSE_RATE_HZ` | `20` | Sahibin obje pozu gönderim frekansı (§6.12) — oyuncu pozuyla (`POSE_RATE_HZ`) **aynı**. ⚠️ Daha düşük tutulmaz: alıcı `INTERP_DELAY_MS` geriden interpolasyon yapar; 10 Hz'de o gecikme TEK örnek aralığına eşittir ve jitter payı kalmaz — fırlatılan eşya gözle görülür takılır. Paket sayısı yine önemsizdir: obje pozu yalnız **uyanık ve tutulmayan** objede akar, yani tipik tikte hiç yoktur (`Docs/Sistem-Ozeti.md` §3.12) |
 | `OBJECT_REST_SPEED` | `0.05` m/s | Bırakılan objenin **durdu** sayılma hız eşiği (§10.10). Altına inip `OBJECT_REST_SECONDS` boyunca kalırsa sahip `object_rest{pos,rot}` yollar ve sahiplik biter |
 | `OBJECT_REST_SECONDS` | `0.3` | Durma eşiğinin altında kesintisiz geçirilmesi gereken süre. ⚠️ Tek karelik bir "durdum" yeterli değildir: sekmenin tepe noktasında hız anlık sıfırlanır, orada bırakılan obje havada donardı |
+| `OBJECT_DROP_CLEARANCE` | `0.05` m | Sahibi ölünce/kopunca zemine indirilen objenin arena zemininden (y = 0, §3) yüksekliği (§10.10). Sunucu objenin yarı yüksekliğini bilmez — obje türüne göre bir miktar batar ya da havada durur; bu pay "zemine gömülü görünmesin" içindir, fizik değildir |
 | `OBJECT_GRAB_CONFIRM_SECONDS` | `1.0` | İyimser kavramanın (`object_grab`) kendisini sahip + `Held` gösteren bir `object_state` ile onaylanması için istemcinin beklediği süre (§10.10). Dolunca yerel kavrama geri alınır: sessiz red (elde olan obje, eski sunucu) başka hiçbir mesajla gelmez; süre olmasaydı el, objeyi hiç tutmadığı hâlde dolu kalırdı |
 | `OBJECT_MAX_ENTRIES_PER_PACKET` | `16` | Tek `0x05` datagramının obje bölümüne yazılan en fazla girdi (§6.8). 8 + 16×34 + 16×12 = 744 B bütçeye sığar ama olay bölümü aynı bütçeyi paylaşır — gerçek kapı yine boyut kapısıdır (`COMBINED_MAX_BYTES`); bu sayı `objectCount`'un `u8` olmasının tavanı ve bir emniyettir |
 | `PLAYER_NUMBER_MIN` / `PLAYER_NUMBER_MAX` | `1` / `99` | Forma numarası aralığı (§2). `0` = atanmamış ve aralığın dışındadır. Numara **tüm kayıtlı cihazlar** arasında benzersizdir |
@@ -233,7 +234,8 @@ pozu **dinlenme pozu** olarak tabloya yazar ve `object_state` yayınlar.
 > ⚠️ **Uçuş boyunca sahiplik SÜRER** — poz akıtma hakkı sahibindir (§6.12) ve fırlatılan objeyi
 > havada başkasının kapması bir oyun kararıdır, protokolün kendiliğinden verdiği bir şey değil.
 > ⚠️ Sahip **kopar ya da ölürse** ikisi de hiç gelmez; sunucu sahipliği kendi bildiği son pozla
-> serbest bırakır (§10.10). Bu yüzden poz akışı kesilse de obje sahipsiz kilitli kalmaz.
+> serbest bırakır ve o pozu **zemine indirir** (§10.10). Bu yüzden poz akışı kesilse
+> de obje sahipsiz kilitli ya da havada asılı kalmaz.
 > ⚠️ **Durmayı istemci ölçer** (`OBJECT_REST_SPEED` / `OBJECT_REST_SECONDS`, §1), sunucu değil:
 > sunucunun fiziği yoktur. Ölçüyü "poz akışı kesildi" diye sunucuya yaptırmak **güvenilmez kanaldan
 > karar vermek** olurdu — birkaç kayıp paket objeyi havada dondururdu.
@@ -1917,8 +1919,9 @@ yollar. Amaç tek: **istemci modun ne olduğunu TAHMİN ETMESİN.** Kural telden
   engel cezası da (§10.9) bu kuralda koşmaz.
 - **Lobi profili tek değildir; seçimi AÇIK SAHNENİN oyun ailesi yapar** (§10.7): `quickbattle`
   haritasında `weaponSource:"random"` + `fireWhilePaused:true`, `kids` haritasında
-  `weaponSource:"none"` + `fireWhilePaused:false`. İstemci için ek kural yoktur — ikisi de aynı
-  `rules` alanlarıyla taşınır.
+  `weaponSource:"none"` + `fireWhilePaused:false`; ikisi de aynı `rules` alanlarıyla taşınır.
+  ⚠️ Askeri bir lobi sahnesinde beklenen çocuk oturumunu sahne kapısı göremez — istemci orada
+  **seçili modun ailesine** bakar (§10.7).
 **Kayıtlı modlar** (sunucuda `MatchDirector.RegisterModes()`; `start_match.modeId` bunlardan biri
 olmalı, tanınmayan `modeId` reddedilir):
 
@@ -2412,7 +2415,7 @@ hasar veremeden.
 | Faz ne olur? | `paused` + `phaseReason:"lobby"` (§10.1). Lobi diye bir faz YOKTUR |
 | Oyuncuya hasar? | **İmkânsız** — `hit_report` yalnız `playing` fazında işlenir (§10.3) |
 | Atış görünür mü? | Evet — `rules.fireWhilePaused:true` olduğu için atış olayı relay edilir (§6.5/§10.3) |
-| Silah nereden gelir? | **Mod dağıtır** (`weaponSource:"random"`): grip'e basılı tutulan elde loadout'tan rastgele bir silah durur, bırakınca yok olur. Loadout'u istemci `modeId:"lobby"` ile kendi katalogundan çözer. Lobi bilinçli olarak `"weaponcanvas"` değil `"random"` taşır: iki lobi sahnesine elle silah yerleştirme işi doğmasın diye. ⚠️ **Açık sahne `gameType:"kids"` ise silah hiç gelmez** — sahneleme bölümüne bak |
+| Silah nereden gelir? | **Mod dağıtır** (`weaponSource:"random"`): grip'e basılı tutulan elde loadout'tan rastgele bir silah durur, bırakınca yok olur. Loadout'u istemci `modeId:"lobby"` ile kendi katalogundan çözer. Lobi bilinçli olarak `"weaponcanvas"` değil `"random"` taşır: iki lobi sahnesine elle silah yerleştirme işi doğmasın diye. ⚠️ **Açık sahne `gameType:"kids"` ise ya da seçili mod çocuk ailesindense silah hiç gelmez** — sahneleme bölümüne bak |
 | Taban şeritleri görünür mü? | **Seçili mod belirler** (`selection_state.teamMode`, §5.3): takımlı mod seçiliyken (`tdm`/`tournament`) kırmızı/mavi şeritler durur, takımsız mod seçiliyken (`ffa`) gizlenir. Kapı **silah kaynağı DEĞİLDİR** — aktif kural hâlâ lobi profilidir, değişen yalnız sunumdur. Sunucu bu mesajı hiç yollamamışsa istemci aktif kuralın `teamMode`'una düşer |
 | Canlanma / skor / süre? | Yok. Herkes canlı (`hp=PLAYER_MAX_HP`), sayaçlar 0 (§5.3) |
 | Takım? | Vardır ve **yalnız admin atar** (`set_team`, §5.2) — her fazda, sunucuya bağlı herkes için. Oyuncu kendi takımını seçemez; bunun için protokol mesajı YOKTUR ve eklenmeyecektir |
@@ -2472,8 +2475,17 @@ yapar, yerini alır; operatör bunu tek tek anlatmak zorunda kalmaz.
 > `weaponSource:"none"` + `fireWhilePaused:false` taşır (çocuk lobi profili). Tezgâh gizlenir,
 > grip silah vermez, atış relay edilmez. Gerekçe: çocuk oyununda **bekleme süresinde de** silah
 > olmamalıdır — normal lobi profili rastgele silah dağıtır, yani maç başlamadan çocuğun eline
-> silah verirdi. İstemci için ek kural yoktur: `none` zaten hem çerçeveyi hem grant yolunu
-> kapatıyor (§10.5). Lobi haritasına dönüşte normal profil geri gelir.
+> silah verirdi. `none` istemcide hem çerçeveyi hem grant yolunu kapatır (§10.5). Lobi haritasına
+> dönüşte normal profil geri gelir.
+>
+> ⚠️ **Sahne kapısı tek başına yetmez:** lobi sahnesi askeri (`quickbattle`) bir harita olabilir ve
+> orada çocuk oturumu beklenir — profil sahneye baktığı için `random` taşır ve tezgâhtaki silah
+> alınabilir kalır. Bu yüzden istemci ikinci bir kapı uygular: **lobi profili işlerken** seçili
+> modun ailesi (`selection_state.modeId` → yerel katalogdaki `gameType`) `kids` ise silah verilmez,
+> tezgâh süpürülür. Kapı **yalnız lobi profilinde** okunur; maç kurulduğunda cevabı çalışan kuralın
+> `weaponSource`'u verir, yoksa operatörün sonraki tur seçimi koşan maçın ellerini boşaltırdı.
+> Aile **telde taşınmaz** (seçim yalnız `modeId` + `teamMode` taşır, §5.3): `gameType` yazarlık
+> verisidir, istemci onu kendi katalogundan çözer.
 
 ### 10.8 Gövde ölçeği (`bodyScale`)
 
@@ -2868,6 +2880,13 @@ sunucu kırık, istemci sağlam sanar. Tur tabanlı modlar tur başında `TryRes
 aynı sıfırlamayı tetikler ve `world_state` yayınlar — turnuvanın ikinci turu kırık siperlerle
 başlamaz.
 
+⚠️ **İstemci de `load_match` / lobiye dönüş mesajında dünyayı sıfırlar** (`NetObjectSpawner`): dinamik
+objelerin tamamını yok eder, sahne objelerini bake'li durumuna ve pozuna döndürür. Sahne yüklemesine
+bağlanamaz — aynı harita ikinci kez sahnelenirken sahne **zaten açıktır ve yeniden yüklenmez**. Sıra
+zorunludur: sıfırlama, o mesajın ardından gelen `world_state` uygulanmadan ÖNCE biter, çünkü **dinamik
+kimlik havuzu her sahnelemede baştan başlar** — kalan bir obje yeni maçın aynı `netId`'li objesini
+"zaten var" gösterir ve yenisi hiç doğmaz.
+
 **Geç katılan** `welcome`'dan hemen sonra yalnız kendisine `world_state` alır; sahne henüz yüklü
 değilse istemci mesajı tamponlar (§5.3).
 
@@ -2897,10 +2916,16 @@ objeyi ilk isteyen alır).
    ⚠️ **Taşınan bir şeyin üstünde durmak "durdu" DEĞİLDİR:** sahip, temas ettiği zemin tutulan bir
    ağ nesnesiyken `object_rest` yollamaz. Yollasaydı sunucu objeyi o pozda dondururdu ve altındaki
    tabak çekilince obje havada asılı kalırdı — hız eşiği bu durumu tek başına ayırt edemez.
-4. **Sahip koparsa sunucu serbest bırakır.** Bağlantı `left`'e düştüğünde ya da oyuncu öldüğünde o
-   oyuncunun tuttuğu her obje **son bilinen pozunda** (§6.12'deki kilitsiz slot) bırakılır. ⚠️ Bu
-   kapı olmadan bir oyuncunun kopması objeyi **kalıcı olarak kilitler** — kimse alamaz, kimse
-   göremez, tur sıfırlamasına kadar oyun malzemesi eksilir.
+4. **Sahip koparsa sunucu serbest bırakır.** Oyuncu **öldüğünde** ya da **bağlantısı koptuğunda**
+   (`connection` `connected` olmaktan çıktığı an — `reconnecting` de dahil; kaydı silinen kick de
+   aynı) tuttuğu her obje sahipsiz kalır ve pozu **zemine indirilir**: son bilinen pozun (obje elde
+   tutulurken sunucunun aldığı son obje pozu yoktur, o yüzden önce **sahibin o objeyi tutan elinin**
+   son pozu kullanılır) tam altında, `y = OBJECT_DROP_CLEARANCE`. ⚠️ Sahipsiz obje kinematiktir:
+   el hizasında bırakılsa herkesin ekranında havada asılı kalırdı. ⚠️ Bekleme `left`'e (`RECONNECT_GRACE`) uzatılmaz:
+   obje o süre boyunca herkesin ekranında havada asılı kalır ve oyun malzemesi sahada eksilir.
+   ⚠️ Yeniden bağlanan oyuncu objeyi **geri almaz** — sahiplik bitmiştir, isteyen `object_grab`
+   ile alır. ⚠️ Bu kapı olmadan bir oyuncunun kopması objeyi **kalıcı olarak kilitler** — kimse
+   alamaz, kimse göremez, tur sıfırlamasına kadar oyun malzemesi eksilir.
 
 ⚠️ **Teklik ayrı bir kilit DEĞİLDİR, sahipliğin kendisidir.** "Aynı anda tek kişi tutsun" diye ikinci
 bir mekanizma yazılmaz; tek örnek vardır, sahibi bir kişidir. Silahlar bu yolu **kullanmaz** — onlar

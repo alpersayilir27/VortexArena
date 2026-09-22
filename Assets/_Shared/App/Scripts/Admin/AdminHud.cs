@@ -57,6 +57,9 @@ namespace VortexArena.App.Admin
         [SerializeField] private TextMeshProUGUI scoreBlueText;
         [Tooltip("FFA lider tablosu satırı; takımlı modda boş kalır.")]
         [SerializeField] private TextMeshProUGUI leaderboardText;
+        [Tooltip("Ko-op müşteri sayacı satırı (Mutlu/Mutsuz). Atanmazsa sayaç lider tablosu " +
+                 "satırında gösterilir.")]
+        [SerializeField] private TextMeshProUGUI customerCountsText;
         [Tooltip("Üst banttaki maç saati. Koşan maçta geri sayar; maç yokken boştur.")]
         [SerializeField] private TextMeshProUGUI clockText;
         [Tooltip("Skorların ortasındaki chip: faz/süre yazar, tıklanınca istatistikleri açar.")]
@@ -255,9 +258,23 @@ namespace VortexArena.App.Admin
                 scoreBlueText.text = ffa ? "" : roster.ScoreBlue.ToString();
             }
 
+            // Co-op counters come from the same modeState line the stats panel reads (§10.1) — the
+            // operator must not see a second set of numbers.
+            bool coop = AdminModeState.TryCustomerCounts(roster.ModeState, out int happy, out int unhappy);
+            string customerLine = coop ? $"Mutlu {happy} · Mutsuz {unhappy}" : "";
+
+            if (customerCountsText != null)
+            {
+                customerCountsText.text = customerLine;
+            }
+
             if (leaderboardText != null)
             {
-                leaderboardText.text = ffa ? LeaderboardLine(roster) : "";
+                // Without a dedicated field the counters take the leaderboard slot: a co-op mode has no
+                // leaderboard to hide, and the operator would otherwise have to open the stats panel.
+                leaderboardText.text = customerCountsText == null && coop
+                    ? customerLine
+                    : ffa ? LeaderboardLine(roster) : "";
             }
 
             if (chipText != null)

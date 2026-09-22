@@ -1098,7 +1098,7 @@ public sealed class MatchDirector
         victim.Deaths++;
         // §10.10: a dead owner never sends object_release — freeing here is what keeps a held object from
         // being locked away until the round resets.
-        ReleaseObjectsOfLocked(outbox, victim.PlayerId);
+        ReleaseObjectsOfLocked(outbox, victim.PlayerId, dropToGround: true);
         // A suicide adds a death but NO kill (§10.2): killer and victim are the same record, and
         // crediting it would inflate K/D. The kill_event still goes out with killerId == victimId.
         if (killer != null && !ReferenceEquals(killer, victim))
@@ -2216,9 +2216,12 @@ public sealed class MatchDirector
 
     /// <summary>Frees every object held by this player and broadcasts one <c>object_state</c> each
     /// (§10.10): the owner died, dropped or was kicked and will never send <c>object_release</c>.</summary>
-    private void ReleaseObjectsOfLocked(List<Outgoing> outbox, int playerId)
+    /// <param name="dropToGround">Park the object on the floor, reachable by anyone — an ownerless
+    /// object is kinematic and would otherwise hang at hand height.</param>
+    private void ReleaseObjectsOfLocked(List<Outgoing> outbox, int playerId, bool dropToGround)
     {
-        var released = _objects.ReleaseOwnedByLocked(playerId, LastObjectPose);
+        var released = _objects.ReleaseOwnedByLocked(playerId,
+            entry => RestPoseForLostOwnerLocked(entry, playerId, dropToGround));
         foreach (var entry in released)
         {
             SyncOwnerLocked(entry);
@@ -2230,12 +2233,53 @@ public sealed class MatchDirector
     private PoseData? LastObjectPose(int netId) =>
         _lastObjectPoses.TryGetValue(netId, out var pose) ? pose : null;
 
-    /// <summary>Sweep for owners the server will never hear from again (§10.10): a record that dropped to
-    /// <c>left</c> or was removed entirely (kick).</summary>
-    /// <remarks>⚠️ A sweep and not an event hook because the two ways out differ: <c>left</c> is raised by
+    /// <summary>Resting pose of an object whose owner is gone (§10.10): the last streamed object pose,
+    /// or — for an object still IN A HAND, which streams none (§6.12) — the owner's last hand pose.
+    /// Null = keep whatever the table holds.</summary>
+    /// <remarks>⚠️ The held case must not prefer the streamed pose: for a carried object that pose is
+    /// from BEFORE the pickup, so the object would reappear at the shelf it was taken from.</remarks>
+    private PoseData? RestPoseForLostOwnerLocked(NetObjectEntry entry, int playerId, bool dropToGround)
+    {
+        var held = (entry.Flags & ArenaProtocol.OBJECT_FLAG_HELD) != 0;
+        var pose = held
+            ? HandPoseOfLocked(playerId, entry) ?? LastObjectPose(entry.NetId)
+            : LastObjectPose(entry.NetId) ?? HandPoseOfLocked(playerId, entry);
+
+        if (!dropToGround || !pose.HasValue) return pose;
+
+        // Arena floor is y = 0 (§3). Upper floors are not modelled here: the server has no geometry, so
+        // an object dropped upstairs lands on the ground floor rather than at an invented height.
+        var grounded = pose.Value;
+        grounded.py = ArenaProtocol.OBJECT_DROP_CLEARANCE;
+        return grounded;
+    }
+
+    /// <summary>Last pose of the hand that held the object (bit3), read from the lock-free mirror; falls
+    /// back to the head, which is tracked even when a hand is not.</summary>
+    private PoseData? HandPoseOfLocked(int playerId, NetObjectEntry entry)
+    {
+        if (!_registry.TryGetByPlayerId(playerId, out var owner)) return null;
+        var hands = owner.LastHands;
+        if (hands == null) return null;
+
+        var hand = (entry.Flags & ArenaProtocol.OBJECT_FLAG_HELD_RIGHT) != 0 ? hands.Right : hands.Left;
+        if (IsFinitePosition(hand)) return hand;
+        return IsFinitePosition(hands.Head) ? hands.Head : null;
+    }
+
+    private static bool IsFinitePosition(PoseData pose) =>
+        float.IsFinite(pose.px) && float.IsFinite(pose.py) && float.IsFinite(pose.pz);
+
+    /// <summary>Sweep for owners whose hand is no longer in the arena (§10.10): a record that is not
+    /// <c>connected</c> any more (<c>reconnecting</c> counts) or was removed entirely (kick). The object
+    /// is dropped to the floor, free for anyone.</summary>
+    /// <remarks>⚠️ A sweep and not an event hook because the two ways out differ: the drop is raised by
     /// the registry, but a KICKED player's record is gone, so no event could name the owner any more —
     /// and the object would stay locked until the round reset. Death is handled at its own single writer
-    /// (<see cref="KillPlayerLocked"/>), so it never reaches this sweep.</remarks>
+    /// (<see cref="KillPlayerLocked"/>), so it never reaches this sweep.
+    /// <para>⚠️ The gate is the DROP, not <c>left</c>: waiting out RECONNECT_GRACE leaves the object
+    /// hanging in mid-air on every screen for the whole grace and takes it out of play. A returning
+    /// player does not get it back — ownership is over.</para></remarks>
     private void TickObjectOwnersLocked(List<Outgoing> outbox)
     {
         if (_objectOwners.IsEmpty) return;
@@ -2245,13 +2289,13 @@ public sealed class MatchDirector
         {
             var playerId = pair.Value.PlayerId;
             var gone = !_registry.TryGetByPlayerId(playerId, out var owner)
-                       || owner.Connection == PlayerConnection.Left;
+                       || owner.Connection != PlayerConnection.Connected;
             if (!gone) continue;
             (lost ??= new List<int>()).Add(playerId);
         }
         if (lost == null) return;
 
-        foreach (var playerId in lost.Distinct()) ReleaseObjectsOfLocked(outbox, playerId);
+        foreach (var playerId in lost.Distinct()) ReleaseObjectsOfLocked(outbox, playerId, dropToGround: true);
     }
 
     /// <summary>May this player stream the object's pose (§6.12)? Owner, and the object is NOT in a hand

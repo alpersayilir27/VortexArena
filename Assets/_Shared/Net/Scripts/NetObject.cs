@@ -293,6 +293,33 @@ namespace VortexArena.Net
             StateChanged?.Invoke(this, origin);
         }
 
+        /// <summary>Clears server state back to the authored baseline and republishes it as a snapshot.</summary>
+        /// <remarks>⚠️ A new match on the SAME scene does not reload it, so last match's flags, stage,
+        /// payload and REST POSE would survive: the new <c>world_state</c> carries a pose only for objects
+        /// that moved, so nothing would ever overwrite the stale one. The pose itself is the consumer's
+        /// job — this only drops <see cref="HasRestPose"/> so <see cref="ScenePosition"/> rules again.</remarks>
+        public void ResetToAuthoredState()
+        {
+            int previousOwner = Owner;
+
+            Hp = MaxHp;
+            Flags = 0;
+            Owner = 0;
+            Stage = 0;
+            Payload = "";
+            HasRestPose = false;
+            RestPosition = Vector3.zero;
+            RestRotation = Quaternion.identity;
+
+            if (previousOwner != 0)
+            {
+                OwnerChanged?.Invoke(this, previousOwner);
+            }
+
+            // Snapshot: a reset is not a live change, presentation must stay silent.
+            StateChanged?.Invoke(this, NetStateOrigin.Snapshot);
+        }
+
         /// <summary>Publishes a relayed cosmetic event on this object.</summary>
         internal void RaiseEvent(ObjectEventMsg msg)
         {

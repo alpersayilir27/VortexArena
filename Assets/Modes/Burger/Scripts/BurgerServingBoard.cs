@@ -14,7 +14,7 @@ namespace VortexArena.Modes.Burger
     /// definition's grab path is <c>None</c>. Nobody can own it, so it never leaves kinematic and stays
     /// where the scene put it. That position is the ONLY thing tying it to a slot, because
     /// <see cref="ResolveSlot"/> searches by VOLUME: a board authored outside every slot's collider takes
-    /// ingredients happily and then silently never serves.</para>
+    /// ingredients happily and then never serves — every blocked serve says why in the log.</para>
     /// <para><b>Placing the TOP BUN is the serve gesture</b> — it closes the burger, and the stack must be
     /// closed for the report to go out.</para>
     /// <para>⚠️ Only the client that brought the ingredient to rest reports
@@ -33,6 +33,10 @@ namespace VortexArena.Modes.Burger
         [Tooltip("Yanlış servis sesi. Atanmazsa yalnız log yazılır.")]
         [SerializeField] private AudioSource rejectSound;
 
+        [Tooltip("Yığına yeni katman oturunca çalan kısa ses. Atanmazsa yalnız görsel/haptik geri " +
+                 "bildirim verilir.")]
+        [SerializeField] private AudioSource stackSound;
+
         [Tooltip("İki servis denemesi arasındaki en kısa süre (saniye).")]
         [SerializeField] private float serveCooldownSeconds = 1f;
 
@@ -42,6 +46,36 @@ namespace VortexArena.Modes.Burger
         /// <summary>How long a serve WE sent is watched for an acceptance. Acceptance has no message of
         /// its own — the only sign is the customer turning happy (§10.5).</summary>
         private const float AcceptWindowSeconds = 2f;
+
+        /// <summary>Shortest gap between two logs of the SAME gate.</summary>
+        private const float GateLogSeconds = 2f;
+
+        private const float RetryIntervalSeconds = 0.25f;
+
+        // ---------------------------------------------------------------- seat feedback (one place)
+
+        /// <summary>How often the stack is re-read for a new layer (s). Polled rather than driven by the
+        /// trigger: a settling ingredient jitters in and out of the volume, and every enter would be a
+        /// "pop" on an ingredient that was already there.</summary>
+        private const float SeatPollSeconds = 0.1f;
+
+        /// <summary>Peak scale of the seat pop (visual only, see <see cref="Pop"/>) and how long it
+        /// lasts (s).</summary>
+        private const float SeatPopScale = 1.12f;
+
+        private const float SeatPopSeconds = 0.12f;
+
+        /// <summary>The silent early returns of <see cref="TryServe"/>, named so the log is rate limited
+        /// per reason.</summary>
+        private enum ServeGate
+        {
+            None = 0,
+            Board,
+            Cooldown,
+            Slot,
+            Stack,
+            Customer
+        }
 
         private NetObject _net;
 
@@ -57,6 +91,17 @@ namespace VortexArena.Modes.Burger
         /// burger that was accepted.</summary>
         private float _serveCooldown;
 
+        /// <summary>Which gate blocked the last serve — the rate limiter's key, so a changing reason is
+        /// always logged and a stuck one is not.</summary>
+        private ServeGate _lastGate;
+
+        private float _lastGateLogTime = float.NegativeInfinity;
+
+        /// <summary>A closed stack waiting only for a customer; see <see cref="TickPendingServe"/>.</summary>
+        private bool _pendingServe;
+
+        private float _nextRetryTime;
+
         private readonly List<NetObject> _stack = new List<NetObject>();
         private readonly List<int> _payload = new List<int>();
 
@@ -68,6 +113,25 @@ namespace VortexArena.Modes.Burger
         /// <summary>Ingredients currently over the board, with the sender we subscribed to.</summary>
         private readonly Dictionary<NetObject, NetObjectPoseSender> _watched =
             new Dictionary<NetObject, NetObjectPoseSender>();
+
+        /// <summary>Layers already seated, so the feedback fires ONCE per layer.</summary>
+        private readonly HashSet<int> _seated = new HashSet<int>();
+
+        /// <summary>Ingredients THIS headset brought to rest — the haptic belongs to the hand that
+        /// placed the layer, while the sound and the pop belong to everyone watching.</summary>
+        private readonly HashSet<int> _localRested = new HashSet<int>();
+
+        /// <summary>Pops in flight, with the scale to put back. Kept here rather than in the coroutine:
+        /// a disabled board stops its coroutines WITHOUT unwinding them, and the ingredient would stay
+        /// stretched forever.</summary>
+        private readonly Dictionary<Transform, Vector3> _popping = new Dictionary<Transform, Vector3>();
+
+        private readonly List<int> _stale = new List<int>();
+
+        private float _nextSeatPoll;
+
+        /// <summary>Has the first stack poll run — see <see cref="TickSeatFeedback"/>.</summary>
+        private bool _seatPrimed;
 
         private static readonly Collider[] Overlap = new Collider[64];
 
@@ -100,6 +164,11 @@ namespace VortexArena.Modes.Burger
             }
 
             _watched.Clear();
+            _seated.Clear();
+            _localRested.Clear();
+            RestorePops();
+            _seatPrimed = false;
+            _pendingServe = false;
         }
 
         // ------------------------------------------------------------------- the closing gesture
@@ -134,6 +203,7 @@ namespace VortexArena.Modes.Burger
             }
 
             _watched.Remove(ingredient);
+            _localRested.Remove(ingredient.NetId);
 
             if (sender != null)
             {
@@ -148,8 +218,16 @@ namespace VortexArena.Modes.Burger
         /// being re-rejected on every single ingredient.</remarks>
         private void HandleIngredientRest(NetObject ingredient)
         {
-            if (ingredient == null || ingredient.Kind == null ||
-                ingredient.Kind.Kind != BurgerKinds.BunTop)
+            if (ingredient == null || ingredient.Kind == null)
+            {
+                return;
+            }
+
+            // Every rest is noted, not just the bun's: it marks the layer as OURS so only the hand that
+            // placed it feels the seat buzz.
+            _localRested.Add(ingredient.NetId);
+
+            if (ingredient.Kind.Kind != BurgerKinds.BunTop)
             {
                 return;
             }
@@ -176,6 +254,167 @@ namespace VortexArena.Modes.Burger
             }
 
             TickAccepted();
+            TickPendingServe();
+            TickSeatFeedback();
+        }
+
+        // ------------------------------------------------------------------- seat feedback
+
+        /// <summary>Short sound + scale pop (+ a buzz for the placing hand) the moment a layer settles on
+        /// the stack.</summary>
+        /// <remarks>⚠️ A layer counts as seated only once it is free AND asleep: an ingredient still in a
+        /// hand hovering over the board, or one bouncing after the drop, is inside the volume too and
+        /// would pop several times per placement.</remarks>
+        private void TickSeatFeedback()
+        {
+            if (stackTrigger == null || Time.time < _nextSeatPoll)
+            {
+                return;
+            }
+
+            _nextSeatPoll = Time.time + SeatPollSeconds;
+            CollectStack();
+
+            // First pass only records: a headset joining mid-shift finds finished burgers on the boards
+            // and would announce every layer of them as freshly placed.
+            bool silent = !_seatPrimed;
+            _seatPrimed = true;
+
+            bool added = false;
+            bool mine = false;
+
+            for (int i = 0; i < _stack.Count; i++)
+            {
+                NetObject layer = _stack[i];
+                if (layer.IsHeld || layer.IsAwake || !_seated.Add(layer.NetId))
+                {
+                    continue;
+                }
+
+                added = true;
+                mine |= _localRested.Remove(layer.NetId);
+
+                if (!silent)
+                {
+                    Pop(layer);
+                }
+            }
+
+            if (added && !silent)
+            {
+                if (stackSound != null)
+                {
+                    stackSound.Play();
+                }
+
+                if (mine)
+                {
+                    ControllerHaptics.PulseBoth(this, 1);
+                }
+            }
+
+            PruneSeated();
+        }
+
+        /// <summary>A layer that left the board may be seated again — that IS a new placement.</summary>
+        private void PruneSeated()
+        {
+            if (_seated.Count == 0)
+            {
+                return;
+            }
+
+            _stale.Clear();
+            foreach (int netId in _seated)
+            {
+                if (!ContainsNetId(_stack, netId))
+                {
+                    _stale.Add(netId);
+                }
+            }
+
+            for (int i = 0; i < _stale.Count; i++)
+            {
+                _seated.Remove(_stale[i]);
+            }
+        }
+
+        private static bool ContainsNetId(List<NetObject> stack, int netId)
+        {
+            for (int i = 0; i < stack.Count; i++)
+            {
+                if (stack[i] != null && stack[i].NetId == netId)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>Pops the layer's collider-free visual children only — scaling the root would grow its
+        /// collider and shove the neighbouring layers of the stack.</summary>
+        private void Pop(NetObject layer)
+        {
+            if (layer == null)
+            {
+                return;
+            }
+
+            Transform root = layer.transform;
+            for (int i = 0; i < root.childCount; i++)
+            {
+                Transform visual = root.GetChild(i);
+                if (_popping.ContainsKey(visual) ||
+                    visual.GetComponent<Renderer>() == null ||
+                    visual.GetComponent<Collider>() != null)
+                {
+                    continue;
+                }
+
+                _popping.Add(visual, visual.localScale);
+                StartCoroutine(PopRoutine(visual));
+            }
+        }
+
+        private System.Collections.IEnumerator PopRoutine(Transform visual)
+        {
+            Vector3 baseScale = _popping[visual];
+            float started = Time.unscaledTime;
+
+            while (visual != null)
+            {
+                float t = (Time.unscaledTime - started) / SeatPopSeconds;
+                if (t >= 1f)
+                {
+                    break;
+                }
+
+                // Up and back down within one pop: a half sine, so the end lands exactly on the base.
+                visual.localScale = baseScale * (1f + (SeatPopScale - 1f) * Mathf.Sin(t * Mathf.PI));
+                yield return null;
+            }
+
+            if (visual != null)
+            {
+                visual.localScale = baseScale;
+            }
+
+            _popping.Remove(visual);
+        }
+
+        /// <summary>Puts back every scale a running pop still owes.</summary>
+        private void RestorePops()
+        {
+            foreach (KeyValuePair<Transform, Vector3> entry in _popping)
+            {
+                if (entry.Key != null)
+                {
+                    entry.Key.localScale = entry.Value;
+                }
+            }
+
+            _popping.Clear();
         }
 
         /// <summary>The confirmation buzz for OUR serve. Watched instead of listened for: acceptance
@@ -205,20 +444,23 @@ namespace VortexArena.Modes.Burger
 
         private void TryServe()
         {
-            if (stackTrigger == null || _net == null || _net.NetId <= 0 || _serveCooldown > 0f)
+            if (stackTrigger == null || _net == null || _net.NetId <= 0)
             {
+                ReportGate(ServeGate.Board, "tahta ağa bağlı değil ya da yığın hacmi atanmamış");
+                return;
+            }
+
+            if (_serveCooldown > 0f)
+            {
+                ReportGate(ServeGate.Cooldown, "önceki servisin bekleme süresi dolmadı");
                 return;
             }
 
             BurgerCounterSlot slot = ResolveSlot();
             if (slot == null)
             {
-                return;
-            }
-
-            BurgerCustomer customer = FindWaitingCustomer(slot.SlotIndex);
-            if (customer == null)
-            {
+                _pendingServe = false;
+                ReportGate(ServeGate.Slot, "tahta hiçbir tezgah yuvasının hacmi içinde değil");
                 return;
             }
 
@@ -229,8 +471,23 @@ namespace VortexArena.Modes.Burger
             if (_stack.Count < 2 ||
                 _stack[_stack.Count - 1].Kind.Kind != BurgerKinds.BunTop)
             {
+                _pendingServe = false;
+                ReportGate(ServeGate.Stack, "yığın kapalı değil — en üstte üst ekmek yok");
                 return;
             }
+
+            // The customer is checked LAST so a ready stack can be retried: the gate below is the only
+            // one that clears by itself (a customer walks in).
+            BurgerCustomer customer = FindWaitingCustomer(slot.SlotIndex);
+            if (customer == null)
+            {
+                _pendingServe = true;
+                ReportGate(ServeGate.Customer, $"{slot.SlotIndex} numaralı yuvada bekleyen müşteri yok");
+                return;
+            }
+
+            _pendingServe = false;
+            _lastGate = ServeGate.None;
 
             _payload.Clear();
             _payload.Add(customer.NetId);
@@ -244,6 +501,37 @@ namespace VortexArena.Modes.Burger
 
             _servedCustomer = customer.NetId;
             _servedUntil = Time.time + AcceptWindowSeconds;
+        }
+
+        /// <summary>One warning per blocked serve — a silent early return looks like "servis gözlükten hiç
+        /// çıkmıyor" in the field. Rate limited BY GATE: a board with a closed burger retries forever.</summary>
+        private void ReportGate(ServeGate gate, string reason)
+        {
+            // A pending retry repeats its gate every tick — log it once, not every two seconds.
+            if (gate == _lastGate && (_pendingServe || Time.time < _lastGateLogTime + GateLogSeconds))
+            {
+                return;
+            }
+
+            _lastGate = gate;
+            _lastGateLogTime = Time.time;
+            Debug.LogWarning($"[Hamburgerci] Servis gönderilmedi — {reason}.", this);
+        }
+
+        /// <summary>Re-sends a serve whose stack was ready while the slot had no waiting customer yet: the
+        /// customer walks in AFTER the burger is closed, and the closing gesture (the top bun coming to
+        /// rest) never happens a second time.</summary>
+        /// <remarks>Polled because a customer has no "started waiting" event — its stage is plain
+        /// <c>object_state</c>. ⚠️ Only the REQUEST is repeated; the outcome stays the server's (§10.5).</remarks>
+        private void TickPendingServe()
+        {
+            if (!_pendingServe || _serveCooldown > 0f || Time.time < _nextRetryTime)
+            {
+                return;
+            }
+
+            _nextRetryTime = Time.time + RetryIntervalSeconds;
+            TryServe();
         }
 
         /// <summary>Which slot the board was put down in. Searched by VOLUME rather than by number: the
@@ -265,12 +553,14 @@ namespace VortexArena.Modes.Burger
             return null;
         }
 
+        /// <summary>The customer waiting at this slot. Read from the registry rather than
+        /// <c>FindObjectsByType</c>: the pending-serve retry asks repeatedly and a scene scan per retry
+        /// allocates.</summary>
         private static BurgerCustomer FindWaitingCustomer(int slotIndex)
         {
-            BurgerCustomer[] customers =
-                FindObjectsByType<BurgerCustomer>(FindObjectsSortMode.None);
+            IReadOnlyList<BurgerCustomer> customers = BurgerCustomer.All;
 
-            for (int i = 0; i < customers.Length; i++)
+            for (int i = 0; i < customers.Count; i++)
             {
                 BurgerCustomer customer = customers[i];
                 if (customer != null && customer.Slot == slotIndex &&

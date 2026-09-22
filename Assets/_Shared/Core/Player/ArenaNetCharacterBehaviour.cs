@@ -75,6 +75,11 @@ namespace VortexArena.Core.Player
         /// so a foot under it means the height solve collapsed.</summary>
         private const float FootBelowRootMeters = 0.3f;
 
+        /// <summary>How far above the hips a foot may sit before the solve counts as folded (m).
+        /// ⚠️ Not zero: in a deep crouch or on one knee the hips drop to ankle height, so a bare
+        /// comparison would call a normal pose broken.</summary>
+        private const float FootAboveHipsMeters = 0.25f;
+
         /// <summary>Largest hips shift the foot grounding may apply in one frame (m). A real proportion
         /// mismatch is centimetres; more means the wire's <c>footY</c> is garbage and the body would be
         /// thrown off the floor instead of placed on it.</summary>
@@ -285,6 +290,11 @@ namespace VortexArena.Core.Player
         /// <see cref="SanityJoints"/>: torso, left leg, right leg.</summary>
         private static readonly int[] SanitySegments = { 0, 1, 2, 4, 3, 5 };
 
+        /// <summary>Does the matching <see cref="SanitySegments"/> pair span a bending joint (the knee)?
+        /// ⚠️ Such a segment is bounded from ABOVE only: a crouch legitimately shortens hip→ankle well
+        /// below half the bind length, and the lower bound would call every deep crouch broken.</summary>
+        private static readonly bool[] SanitySegmentSpansJoint = { false, true, true };
+
         /// <summary>Indices of <see cref="SanityJoints"/> in the TARGET skeleton;
         /// <c>INVALID_JOINT_INDEX</c> for a joint this rig does not have (upper-body only).</summary>
         private int[] _sanityJointIndices;
@@ -295,6 +305,20 @@ namespace VortexArena.Core.Player
 
         /// <summary>World positions of <see cref="SanityJoints"/> on the last judged frame (jump test).</summary>
         private Vector3[] _lastSanityJointWorld;
+
+        /// <summary>Joints of the frame being judged; committed to <see cref="_lastSanityJointWorld"/>
+        /// only when the frame passes.</summary>
+        private Vector3[] _sanityJointWorldPending;
+
+        /// <inheritdoc cref="_sanityJointWorldPending"/>
+        private bool[] _sanityJointWorldPendingValid;
+
+        /// <summary>Is <see cref="_lastSanityJointWorld"/> a usable reference (seeded, not invalidated
+        /// by a calibration)?</summary>
+        private bool _hasSanityJointWorld;
+
+        /// <summary>Calibration generation <see cref="_lastSanityJointWorld"/> was taken under.</summary>
+        private int _sanityCalibrationGeneration;
 
         private float _lastSanityJointTime;
         private bool _jointSanityUsable;
@@ -1080,19 +1104,22 @@ namespace VortexArena.Core.Player
             }
 
             _lastSdkFrameTime = Time.time;
-            IsTPoseFallbackStreaming = false;
 
             if (!_poseSuspect)
             {
+                IsTPoseFallbackStreaming = false;
                 return true;
             }
 
+            // ⚠️ The flag clears only on a frame that is actually SENT: during recovery the fallback
+            // keeps streaming, so clearing it here would flip the status every frame.
             _saneStreak++;
             if (_saneStreak < RecoverStreakFrames)
             {
                 return false;
             }
 
+            IsTPoseFallbackStreaming = false;
             _poseSuspect = false;
             _poseSuspectWarned = false;
             _saneStreak = 0;
@@ -1215,7 +1242,8 @@ namespace VortexArena.Core.Player
                 }
 
                 float ratio = Vector3.Distance(from, to) / bind;
-                if (ratio < BoneLengthRatioMin || ratio > BoneLengthRatioMax)
+                bool tooShort = !SanitySegmentSpansJoint[i / 2] && ratio < BoneLengthRatioMin;
+                if (tooShort || ratio > BoneLengthRatioMax)
                 {
                     fault = $"'{SanityJoints[SanitySegments[i]]}→{SanityJoints[SanitySegments[i + 1]]}' " +
                             $"kemik uzunluğu bind pozunun {ratio:F2} katı";
@@ -1240,7 +1268,7 @@ namespace VortexArena.Core.Player
                     return false;
                 }
 
-                if (hasHips && ankle.y > hips.y)
+                if (hasHips && ankle.y > hips.y + FootAboveHipsMeters)
                 {
                     fault = $"'{SanityJoints[i]}' kalçanın üstünde";
                     return false;
@@ -1251,26 +1279,41 @@ namespace VortexArena.Core.Player
         }
 
         /// <summary>Per-joint jump since the last judged frame. ⚠️ A long gap only REFRESHES the
-        /// reference: real movement over that time would read as a jump.</summary>
+        /// reference: real movement over that time would read as a jump.
+        /// <para>⚠️ Calibration, floor lift and spawn move the whole rig legitimately, so the reference
+        /// is dropped with <see cref="ArenaCalibrator.CalibrationGeneration"/> (as in
+        /// <see cref="GuardRootJump"/>) — otherwise the move reads as a metres-wide joint jump.</para></summary>
         private bool JudgeJointJump(NativeArray<MSDKUtility.NativeTransform> pose, out string fault)
         {
             fault = null;
 
+            int generation = ArenaCalibrator.CalibrationGeneration;
+            if (generation != _sanityCalibrationGeneration)
+            {
+                _sanityCalibrationGeneration = generation;
+                _hasSanityJointWorld = false;
+            }
+
             float now = Time.time;
-            bool judge = _lastSanityJointWorld != null && now - _lastSanityJointTime <= JointJumpMaxGapSeconds;
+            bool judge = _hasSanityJointWorld && now - _lastSanityJointTime <= JointJumpMaxGapSeconds;
 
             if (_lastSanityJointWorld == null)
             {
                 _lastSanityJointWorld = new Vector3[SanityJoints.Length];
+                _sanityJointWorldPending = new Vector3[SanityJoints.Length];
+                _sanityJointWorldPendingValid = new bool[SanityJoints.Length];
             }
 
             string jumped = null;
             for (int i = 0; i < SanityJoints.Length; i++)
             {
-                if (!TryGetSanityJoint(pose, i, out Vector3 world))
+                _sanityJointWorldPendingValid[i] = TryGetSanityJoint(pose, i, out Vector3 world);
+                if (!_sanityJointWorldPendingValid[i])
                 {
                     continue;
                 }
+
+                _sanityJointWorldPending[i] = world;
 
                 if (judge && jumped == null &&
                     Vector3.Distance(world, _lastSanityJointWorld[i]) > JointJumpLimitMeters)
@@ -1278,19 +1321,27 @@ namespace VortexArena.Core.Player
                     jumped = $"'{SanityJoints[i]}' eklemi tek karede " +
                              $"{Vector3.Distance(world, _lastSanityJointWorld[i]):F1} m sıçradı";
                 }
+            }
 
-                _lastSanityJointWorld[i] = world;
+            // ⚠️ A rejected frame does NOT become the reference: its joints would make the next clean
+            // frame look like a jump back.
+            if (jumped != null)
+            {
+                fault = jumped;
+                return false;
+            }
+
+            for (int i = 0; i < SanityJoints.Length; i++)
+            {
+                if (_sanityJointWorldPendingValid[i])
+                {
+                    _lastSanityJointWorld[i] = _sanityJointWorldPending[i];
+                }
             }
 
             _lastSanityJointTime = now;
-
-            if (jumped == null)
-            {
-                return true;
-            }
-
-            fault = jumped;
-            return false;
+            _hasSanityJointWorld = true;
+            return true;
         }
 
         /// <summary>World position of a <see cref="SanityJoints"/> entry, false when this rig lacks it.</summary>

@@ -691,7 +691,9 @@ namespace VortexArena.Core.Combat
             // player correct feedback.
             // A dead player is given no weapon (WeaponGranter.CanHoldWeapon); same stability
             // argument — the alive flag does not flip under the player's thumb mid-press.
-            if (!CalibrationState.IsCalibrated || !ArenaCombat.IsAlive)
+            // A children's session takes no weapon either (WeaponGranter.IsKidsPlayground): the racks
+            // are swept anyway, so this only keeps the ray/reticle off one that survives the sweep.
+            if (!CalibrationState.IsCalibrated || !ArenaCombat.IsAlive || WeaponGranter.IsKidsPlayground)
             {
                 return false;
             }

@@ -730,51 +730,12 @@ namespace VortexArena.App.Admin
 
         /// <summary>Co-op customer counters, when the running mode publishes them (<c>h:</c>/<c>u:</c> in
         /// <c>modeState</c>): the operator must read the same numbers the players see on their HUD.</summary>
-        /// <remarks>⚠️ Keyed on the <c>modeState</c> TOKENS, never on <c>modeId</c> — same rule as
-        /// <see cref="RoundReviewWaiting"/>: the vocabulary belongs to the mode (§10.1), so a second
-        /// co-op mode publishing the same counters lights this line up for free.
-        /// <para>Neither key present = the line is not drawn at all; an unknown token is skipped rather
-        /// than treated as an error, so the mode can grow its state string without touching this.</para></remarks>
+        /// <remarks>Parsing lives in <see cref="AdminModeState"/> — the top band reads the same line, and
+        /// a second parser here would be a second set of numbers.
+        /// <para>Neither key present = the line is not drawn at all.</para></remarks>
         private void AppendCustomerCounts(string modeState)
         {
-            if (string.IsNullOrEmpty(modeState))
-            {
-                return;
-            }
-
-            int happy = 0;
-            int unhappy = 0;
-            bool any = false;
-
-            string[] tokens = modeState.Split(';');
-            for (int i = 0; i < tokens.Length; i++)
-            {
-                string token = tokens[i];
-                int sep = token.IndexOf(':');
-                if (sep <= 0 || sep == token.Length - 1)
-                {
-                    continue;
-                }
-
-                string key = token.Substring(0, sep).Trim();
-                if (!int.TryParse(token.Substring(sep + 1).Trim(), out int value) || value < 0)
-                {
-                    continue;
-                }
-
-                if (string.Equals(key, "h", StringComparison.Ordinal))
-                {
-                    happy = value;
-                    any = true;
-                }
-                else if (string.Equals(key, "u", StringComparison.Ordinal))
-                {
-                    unhappy = value;
-                    any = true;
-                }
-            }
-
-            if (!any)
+            if (!AdminModeState.TryCustomerCounts(modeState, out int happy, out int unhappy))
             {
                 return;
             }

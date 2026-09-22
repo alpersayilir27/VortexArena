@@ -179,6 +179,11 @@ public sealed class PlayerState
     /// <summary>Last accepted pose (arena space; read/write under PoseGate).</summary>
     public PoseUpdate LastPose { get; set; }
 
+    /// <summary>Head/hand poses of the last accepted pose packet, mirrored for readers outside
+    /// <see cref="PoseGate"/> (§10.10: where a dropped owner's object is parked). <c>null</c> = no pose
+    /// yet, or the session was reset.</summary>
+    public HandPoses? LastHands { get; set; }
+
     /// <summary>Sequence number of the last accepted pose (for u16-wrapping staleness checks).</summary>
     public ushort LastSeq { get; set; }
 

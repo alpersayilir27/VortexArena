@@ -246,6 +246,13 @@ namespace VortexArena.Protocol
         /// and an object released there would freeze in mid-air.</para></summary>
         public const float OBJECT_REST_SECONDS = 0.3f;
 
+        /// <summary>Height above the arena floor (y = 0, §3) at which the server parks an object whose
+        /// owner died or disconnected (§10.10).
+        /// <para>⚠️ Not physics and not a half-height: the server does not know the object's bounds, so
+        /// the clearance is a fixed margin that keeps the dropped object from being drawn sunk into the
+        /// floor.</para></summary>
+        public const float OBJECT_DROP_CLEARANCE = 0.05f;
+
         /// <summary>How long the client waits for an optimistic <c>object_grab</c> to be confirmed by an
         /// <c>object_state</c> naming it owner AND held (§10.10); after that the local grab is undone.
         /// <para>⚠️ A rejection is silent and travels on no other message — without this clock a refused

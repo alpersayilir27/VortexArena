@@ -334,14 +334,16 @@ public sealed class WorldObjectTable
         return true;
     }
 
-    /// <summary>Frees EVERY object held by this player, each at the pose the caller last saw (§6.12's
-    /// lock-free slot), and returns the affected entries so the caller can broadcast one
-    /// <c>object_state</c> per object.</summary>
+    /// <summary>Frees EVERY object held by this player at the resting pose the caller resolves, and
+    /// returns the affected entries so the caller can broadcast one <c>object_state</c> per object.</summary>
     /// <remarks>⚠️ Without this gate a dropped or dead owner locks the object PERMANENTLY: nobody can
-    /// take it and nobody can see it move until the round resets. <paramref name="lastKnownPose"/>
-    /// returning null leaves the stored pose alone — the object stays where the table last knew it,
-    /// rather than teleporting back to where it was picked up.</remarks>
-    public List<NetObjectEntry> ReleaseOwnedByLocked(int playerId, Func<int, PoseData?> lastKnownPose)
+    /// take it and nobody can see it move until the round resets. <paramref name="restPose"/> returning
+    /// null leaves the stored pose alone — the object stays where the table last knew it, rather than
+    /// teleporting back to where it was picked up.
+    /// <para>The pose is resolved by the CALLER (whole entry, not just the id): which hand held it and
+    /// whether the owner dropped or died decide where the object belongs (§10.10), and none of that is
+    /// this table's business.</para></remarks>
+    public List<NetObjectEntry> ReleaseOwnedByLocked(int playerId, Func<NetObjectEntry, PoseData?> restPose)
     {
         var released = new List<NetObjectEntry>();
         if (playerId == 0) return released;
@@ -350,7 +352,7 @@ public sealed class WorldObjectTable
         {
             if (entry.Owner != playerId) continue;
 
-            var pose = lastKnownPose(entry.NetId);
+            var pose = restPose(entry);
             if (pose.HasValue) WriteRestPoseLocked(entry, pose.Value);
             ClearOwnershipLocked(entry);
             released.Add(entry);

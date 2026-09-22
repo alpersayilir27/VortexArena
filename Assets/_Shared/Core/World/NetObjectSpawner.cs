@@ -13,7 +13,10 @@ namespace VortexArena.Core.World
     /// <para>Never placed in a scene (the <c>NetObjectSync</c> pattern): a dynamic object can arrive with
     /// the <c>world_state</c> of a late joiner, so it self-bootstraps and goes DontDestroyOnLoad.</para>
     /// <para>⚠️ Only what THIS bridge created is ever destroyed — a scene object is baked, not spawned,
-    /// and destroying it would leave a hole no reset restores.</para></summary>
+    /// and destroying it would leave a hole no reset restores.</para>
+    /// <para>Also the client's world reset: on <c>load_match</c>/<c>return_to_lobby</c> it destroys every
+    /// dynamic instance and puts the scene objects back to their authored state
+    /// (<see cref="HandleLoadMatch"/>).</para></summary>
     public class NetObjectSpawner : MonoBehaviour
     {
         /// <summary>Catalog asset name under <c>Assets/_Shared/Data/Resources/</c> — no scene references
@@ -24,6 +27,7 @@ namespace VortexArena.Core.World
 
         private readonly Dictionary<int, GameObject> _spawned = new Dictionary<int, GameObject>();
         private readonly List<int> _idScratch = new List<int>();
+        private readonly List<NetObject> _sceneScratch = new List<NetObject>();
 
         /// <summary>Kinds already reported as missing — the warning is worth one line per kind, but a
         /// dispenser spawning every few seconds would otherwise flood the console.</summary>
@@ -58,6 +62,8 @@ namespace VortexArena.Core.World
             // Persistent singleton: subscribe in Awake/OnDestroy, not OnEnable/OnDisable.
             NetObjectSync.SpawnRequested += HandleSpawnRequested;
             NetObjectSync.DespawnRequested += HandleDespawnRequested;
+            NetEvents.OnLoadMatch += HandleLoadMatch;
+            NetEvents.OnReturnToLobby += HandleReturnToLobby;
             NetEvents.OnDisconnected += HandleDisconnected;
             SceneManager.sceneLoaded += HandleSceneLoaded;
         }
@@ -71,6 +77,8 @@ namespace VortexArena.Core.World
 
             NetObjectSync.SpawnRequested -= HandleSpawnRequested;
             NetObjectSync.DespawnRequested -= HandleDespawnRequested;
+            NetEvents.OnLoadMatch -= HandleLoadMatch;
+            NetEvents.OnReturnToLobby -= HandleReturnToLobby;
             NetEvents.OnDisconnected -= HandleDisconnected;
             SceneManager.sceneLoaded -= HandleSceneLoaded;
 
@@ -142,6 +150,62 @@ namespace VortexArena.Core.World
         private void HandleDisconnected()
         {
             DestroyAll();
+        }
+
+        /// <summary>New staging (§10.10): the server rebuilt its table and RESTARTED the dynamic id pool,
+        /// so leftovers must go before the <c>world_state</c> that follows the message — otherwise the new
+        /// match's first dynamic object lands on the previous match's instance with the same netId and is
+        /// never created.</summary>
+        /// <remarks>⚠️ The hook is the MESSAGE, not the scene load: a restart on the same map keeps the
+        /// scene open (<c>SceneRouter</c> skips the reload) and nothing else would clear the world.</remarks>
+        private void HandleLoadMatch(LoadMatchMsg msg)
+        {
+            ResetWorld();
+        }
+
+        /// <inheritdoc cref="HandleLoadMatch"/>
+        private void HandleReturnToLobby(ReturnToLobbyMsg msg)
+        {
+            ResetWorld();
+        }
+
+        private void ResetWorld()
+        {
+            DestroyAll();
+            ResetSceneObjects();
+        }
+
+        /// <summary>Baked scene objects are NEVER destroyed (§10.10) — they are put back to their authored
+        /// state and pose instead.</summary>
+        /// <remarks>⚠️ Run AFTER <see cref="DestroyAll"/>: by then the registry holds scene objects only.</remarks>
+        private void ResetSceneObjects()
+        {
+            _sceneScratch.Clear();
+
+            foreach (NetObject netObject in NetObjectRegistry.All)
+            {
+                if (netObject != null)
+                {
+                    _sceneScratch.Add(netObject);
+                }
+            }
+
+            for (int i = 0; i < _sceneScratch.Count; i++)
+            {
+                NetObject netObject = _sceneScratch[i];
+                if (netObject == null)
+                {
+                    continue;
+                }
+
+                netObject.ResetToAuthoredState();
+
+                // The state reset only drops HasRestPose; seating the transform is the consumer side and
+                // NetObjectBody does nothing without a rest pose.
+                netObject.transform.SetPositionAndRotation(netObject.ScenePosition, netObject.SceneRotation);
+            }
+
+            _sceneScratch.Clear();
         }
 
         private GameObject ResolvePrefab(string kind)
@@ -217,10 +281,16 @@ namespace VortexArena.Core.World
         {
             foreach (KeyValuePair<int, GameObject> pair in _spawned)
             {
-                if (pair.Value != null)
+                if (pair.Value == null)
                 {
-                    Destroy(pair.Value);
+                    continue;
                 }
+
+                // Deactivate first: Destroy only runs at the end of the frame, while the new match's
+                // world_state can arrive in the SAME frame and would still find the dead instance in
+                // NetObjectRegistry. OnDisable unregisters it right here.
+                pair.Value.SetActive(false);
+                Destroy(pair.Value);
             }
 
             _spawned.Clear();

@@ -401,6 +401,9 @@ namespace VortexArena.Core.Combat
             // missed while the object is disabled (PlayerCombatState pattern).
             SceneManager.sceneLoaded += HandleSceneLoaded;
             ModeRuntime.Changed += HandleRulesChanged;
+            // The selection is a rule input too (IsKidsPlayground): without this the racks would stay
+            // takeable until the next load_match.
+            ModeSelection.Changed += HandleRulesChanged;
             NetEvents.OnCountdown += HandleCountdown;
             ApplyRules();
         }
@@ -414,6 +417,7 @@ namespace VortexArena.Core.Combat
 
             SceneManager.sceneLoaded -= HandleSceneLoaded;
             ModeRuntime.Changed -= HandleRulesChanged;
+            ModeSelection.Changed -= HandleRulesChanged;
             NetEvents.OnCountdown -= HandleCountdown;
 
             if (_aliveSubscribed && PlayerCombatState.Instance != null)
@@ -576,10 +580,22 @@ namespace VortexArena.Core.Combat
         /// <c>random</c> AND a match is set up (FFA). The free playground is excluded.</summary>
         private static bool ModeDistributesWeapons => IsRandomGrant && !IsFreePlayground;
 
-        /// <summary>Scene racks must not be takeable: either the mode hands weapons out, or the mode
-        /// has no weapons at all (<see cref="ModeRuntime.IsWeaponless"/>). Both answers are the same
-        /// sweep; only the reason differs.</summary>
-        private static bool HidesSceneWeapons => ModeDistributesWeapons || ModeRuntime.IsWeaponless;
+        /// <summary>A CHILDREN's session waiting in the lobby: the selected game family is Kids (§11)
+        /// while the lobby profile is active. No weapon is handed out and the scene racks are swept,
+        /// even in a military lobby whose own profile gives a random weapon on grip.
+        /// <para>⚠️ Scoped to the lobby profile on purpose: with a match SET UP the RUNNING rule
+        /// answers (a kids mode is weaponless anyway), and reading the selection there would empty the
+        /// hands of a running match the moment the operator picks the next round's game.</para>
+        /// <para>⚠️ The family comes from the selection, not from the SCENE: the venue may run
+        /// children's games in a military lobby, and the lobby profile the server picks follows the
+        /// scene (§10.7) — which is exactly the hole this closes.</para></summary>
+        internal static bool IsKidsPlayground => IsFreePlayground && ModeSelection.IsKidsGame;
+
+        /// <summary>Scene racks must not be takeable: the mode hands weapons out, the mode has no
+        /// weapons at all (<see cref="ModeRuntime.IsWeaponless"/>), or this is a children's session
+        /// (<see cref="IsKidsPlayground"/>). The same sweep; only the reason differs.</summary>
+        private static bool HidesSceneWeapons =>
+            ModeDistributesWeapons || ModeRuntime.IsWeaponless || IsKidsPlayground;
 
         /// <summary>May the player hold a weapon right now: must be CALIBRATED and ALIVE.
         /// <para>⚠️ Death is a GATE, not only the one-shot sweep in <see cref="HandleAliveChanged"/>:
@@ -589,6 +605,8 @@ namespace VortexArena.Core.Combat
         /// <para><b>The damage gate is elsewhere and unchanged</b> (<c>PlayerCombatState.CanFire</c>
         /// + the server dropping <c>hit_report</c> outside <c>playing</c>, §10.3) — this one is
         /// about what is IN the hand.</para>
+        /// <para>A CHILDREN's session (<see cref="IsKidsPlayground"/>) is closed here too: the gate is
+        /// the SELECTED game family, because the lobby scene may be a military one.</para>
         /// <para>Uncalibrated stays closed: such a player can fire in NO phase (§10.6,
         /// <c>PlayerCombatState.CanFire</c>) and cannot revive either, so the gun would never come
         /// alive in their hands. <see cref="ArenaCombat.IsAlive"/> answers TRUE with no combat state
@@ -599,7 +617,8 @@ namespace VortexArena.Core.Combat
         /// <para>Calibration is POLLED per frame rather than subscribed: this loop already runs
         /// every frame, so the weapon leaves the hand on the frame the state
         /// breaks.</para></summary>
-        private static bool CanHoldWeapon => CalibrationState.IsCalibrated && ArenaCombat.IsAlive;
+        private static bool CanHoldWeapon =>
+            CalibrationState.IsCalibrated && ArenaCombat.IsAlive && !IsKidsPlayground;
 
         private void HandleRulesChanged() => ApplyRules();
 
