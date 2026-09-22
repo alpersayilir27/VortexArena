@@ -197,9 +197,9 @@ namespace VortexArena.Core.Combat
         private static bool _deathLatchRight;
 
         /// <summary>Is this hand still inside the grip press that DEATH interrupted.
-        /// <para>Death empties the hands ONCE (<see cref="HandleAliveChanged"/>); the very next frame
-        /// would hand the weapon straight back, because grip is still down. The latch opens on
-        /// RELEASE, so the weapon returns with a new press and the player is never left waiting.</para>
+        /// <para>Kept even though <see cref="CanHoldWeapon"/> now blocks the dead: it also covers the
+        /// REVIVE frame — a grip held right through death would otherwise be handed a weapon the
+        /// instant the gate opens, with no press of its own. Opens on RELEASE.</para>
         /// </summary>
         private static bool IsGripHeldSinceDeath(OVRInput.Controller hand)
         {
@@ -581,26 +581,25 @@ namespace VortexArena.Core.Combat
         /// sweep; only the reason differs.</summary>
         private static bool HidesSceneWeapons => ModeDistributesWeapons || ModeRuntime.IsWeaponless;
 
-        /// <summary>May the player hold a weapon right now: must be CALIBRATED.
-        /// <para>⚠️ DEATH IS NOT A GATE HERE and is not added back. Death takes the weapon ONCE, on
-        /// the frame it happens (<see cref="HandleAliveChanged"/>), and the next grip press gives it
-        /// back — a dead player may hold a weapon and may take one from a frame. As a GATE it would
-        /// park a round-based mode's ghost empty-handed until the round CLOSES (no revive) — up to a
-        /// whole round — and cost a second walk to the rack every round.</para>
-        /// <para><b>Damage stays impossible and is not re-checked here.</b> The trigger is closed
-        /// by <c>PlayerCombatState.CanFire</c> (ALIVE + phase/<c>fireWhilePaused</c>), and even if
-        /// a round left the muzzle the server drops <c>hit_report</c> outside <c>playing</c>
-        /// (§10.3) — holding is a PRESENTATION state, the damage gate is elsewhere.</para>
+        /// <summary>May the player hold a weapon right now: must be CALIBRATED and ALIVE.
+        /// <para>⚠️ Death is a GATE, not only the one-shot sweep in <see cref="HandleAliveChanged"/>:
+        /// a dead player is given no weapon and gets none back by re-pressing grip. Accepted cost:
+        /// in a round-based mode without revive the ghost waits empty-handed until the round closes,
+        /// then walks to the rack again.</para>
+        /// <para><b>The damage gate is elsewhere and unchanged</b> (<c>PlayerCombatState.CanFire</c>
+        /// + the server dropping <c>hit_report</c> outside <c>playing</c>, §10.3) — this one is
+        /// about what is IN the hand.</para>
         /// <para>Uncalibrated stays closed: such a player can fire in NO phase (§10.6,
         /// <c>PlayerCombatState.CanFire</c>) and cannot revive either, so the gun would never come
-        /// alive in their hands.</para>
+        /// alive in their hands. <see cref="ArenaCombat.IsAlive"/> answers TRUE with no combat state
+        /// (lobby, weaponless mode) — absence must not close a hand that used to work.</para>
         /// <para>⚠️ BOTH delivery paths go through this single gate (random grant and frame clone)
         /// — closing one and leaving the other open would break the rule per mode. The third path,
         /// frame SELECTION, is closed separately in <see cref="WeaponFrame.Filter"/>.</para>
         /// <para>Calibration is POLLED per frame rather than subscribed: this loop already runs
         /// every frame, so the weapon leaves the hand on the frame the state
         /// breaks.</para></summary>
-        private static bool CanHoldWeapon => CalibrationState.IsCalibrated;
+        private static bool CanHoldWeapon => CalibrationState.IsCalibrated && ArenaCombat.IsAlive;
 
         private void HandleRulesChanged() => ApplyRules();
 
@@ -1305,14 +1304,10 @@ namespace VortexArena.Core.Combat
             _aliveSubscribed = true;
         }
 
-        /// <summary>Death empties the hands ONCE; a revived player returns with a FULL magazine.
-        /// <para><b>Death is a ONE-SHOT sweep, not a gate</b> (<see cref="CanHoldWeapon"/>): the
-        /// weapon leaves the hand at the moment of death — that emptied hand is what makes dying
-        /// readable in VR, where there is no third-person body to fall over — and comes back with the
-        /// NEXT grip press, dead or alive. The per-hand latch is what separates the two: without it
-        /// the next frame would hand the weapon straight back (grip is still down), with a permanent
-        /// gate a round-based mode's ghost would stand empty-handed for minutes and walk to the rack
-        /// again every round.</para>
+        /// <summary>Death empties the hands; a revived player returns with a FULL magazine.
+        /// <para>The sweep here only makes death READABLE on the frame it happens (in VR there is no
+        /// third-person body to fall over); what keeps the hands empty afterwards is the gate
+        /// (<see cref="CanHoldWeapon"/>). The weapon comes back with a grip press AFTER revive.</para>
         /// <para>The SELECTION survives (<see cref="_selected"/> untouched, the clone is stowed not
         /// destroyed): re-pressing grip brings the same weapon back, so no second walk to the frame.</para>
         /// <para>⚠️ <c>Weapon.HandleAliveChanged</c> is NOT enough for the refill: it requires

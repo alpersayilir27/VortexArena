@@ -150,6 +150,7 @@ namespace VortexArena.Core.Combat
 
             // The starting state is FULL, and the wrist item can only be born once the rig is there —
             // hence here and not in OnEnable (a spectator/late rig would leave the wrist empty).
+            // This poll is also what brings the item back on REVIVE (EnsureWristItem refuses while dead).
             if (_ready)
             {
                 EnsureWristItem();
@@ -164,10 +165,12 @@ namespace VortexArena.Core.Combat
         // ------------------------------------------------------------------ state
 
         /// <summary>Refill lands: the wrist fills again and the beep plays. Started by the BLAST
-        /// (<see cref="HandleTriggered"/>), never by the throw.</summary>
+        /// (<see cref="HandleTriggered"/>), never by the throw.
+        /// <para>⚠️ A pending refill does NOT land while dead — it would put a bomb on a ghost's
+        /// wrist. It waits and lands on the first frame after revive.</para></summary>
         private void TickRefill()
         {
-            if (_ready || _refillAt < 0f || Time.time < _refillAt)
+            if (_ready || _refillAt < 0f || Time.time < _refillAt || !ArenaCombat.IsAlive)
             {
                 return;
             }
@@ -189,21 +192,18 @@ namespace VortexArena.Core.Combat
 
             if (!ready)
             {
-                if (_wristItem != null)
-                {
-                    Destroy(_wristItem);
-                    _wristItem = null;
-                }
-
+                DestroyWristItem();
                 return;
             }
 
             EnsureWristItem();
         }
 
+        /// <summary>Creates the wrist instance. ⚠️ Refuses while DEAD — a ghost carries no item; the
+        /// <c>_ready</c> poll in <see cref="LateUpdate"/> creates it on revive instead.</summary>
         private void EnsureWristItem()
         {
-            if (_wristItem != null || throwable.Prefab == null)
+            if (_wristItem != null || throwable.Prefab == null || !ArenaCombat.IsAlive)
             {
                 return;
             }
@@ -212,6 +212,17 @@ namespace VortexArena.Core.Combat
             _wristItem.name = throwable.Prefab.name;
             _wristItem.transform.SetLocalPositionAndRotation(Vector3.zero, Quaternion.identity);
             Deactivate(_wristItem);
+        }
+
+        private void DestroyWristItem()
+        {
+            if (_wristItem == null)
+            {
+                return;
+            }
+
+            Destroy(_wristItem);
+            _wristItem = null;
         }
 
         /// <summary>Makes the item inert while it is CARRIED (on the wrist or in the hand): physics
@@ -439,12 +450,7 @@ namespace VortexArena.Core.Combat
         private void ClearForWeaponless()
         {
             HideIndicator();
-
-            if (_wristItem != null)
-            {
-                Destroy(_wristItem);
-                _wristItem = null;
-            }
+            DestroyWristItem();
 
             if (_heldItem == null)
             {
@@ -486,25 +492,33 @@ namespace VortexArena.Core.Combat
             _aliveSubscribed = true;
         }
 
-        /// <summary>Dying with the bomb in hand: it disappears <b>without going off</b> — no blast, no
-        /// event, no damage report (plan §3). A bomb that detonated on death would kill whoever just
-        /// won the duel, from a hand that never threw it.
-        /// <para>The holster fills immediately, which is what the player sees on respawn: an empty
-        /// wrist after a death they did not choose reads as a bug.</para></summary>
+        /// <summary>Death strips BOTH instances: the bomb in hand disappears <b>without going off</b>
+        /// (no blast, no event, no damage report — a bomb detonating on death would kill whoever just
+        /// won the duel) and the wrist item goes too, because a ghost carries nothing.
+        /// <para>⚠️ Runs even with an empty hand: that is the thrown-bomb case, where only the wrist
+        /// side has to be cleared and the pending refill held (<see cref="TickRefill"/>).</para>
+        /// <para><c>_ready</c> is kept TRUE for the hand case: the holster counts as full, so the
+        /// item is back on the wrist on revive — an empty wrist after a death the player did not
+        /// choose reads as a bug.</para></summary>
         private void HandleAliveChanged(bool alive)
         {
-            if (alive || _heldItem == null)
+            if (alive)
             {
                 return;
             }
 
-            Destroy(_heldItem);
-            _heldItem = null;
-            ClearHeldReport();
+            if (_heldItem != null)
+            {
+                Destroy(_heldItem);
+                _heldItem = null;
+                ClearHeldReport();
 
-            _refillAt = -1f;
-            SetReady(true);
-            ReleaseHandGate();
+                _refillAt = -1f;
+                _ready = true;
+                ReleaseHandGate();
+            }
+
+            DestroyWristItem();
         }
 
         // ------------------------------------------------------------------- socket

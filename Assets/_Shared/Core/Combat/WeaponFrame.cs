@@ -667,8 +667,8 @@ namespace VortexArena.Core.Combat
             }
         }
 
-        /// <summary>ISDK gate: may this interactor select the weapon right now — CALIBRATED and
-        /// within <see cref="maxGrabDistance"/>.
+        /// <summary>ISDK gate: may this interactor select the weapon right now — CALIBRATED, ALIVE
+        /// and within <see cref="maxGrabDistance"/>.
         /// <para>⚠️ <b>Only conditions that are STABLE across a grip press belong here</b>, and
         /// "does the player already hold a weapon" is NOT one of them — that rule lives in
         /// <c>WeaponGranter.SelectWeapon</c> and must stay there. A filter that flips with the grip
@@ -689,7 +689,9 @@ namespace VortexArena.Core.Combat
             // player's thumb — unlike "is a weapon in hand" (see the summary). Delivery is also
             // closed by WeaponGranter.CanHoldWeapon; this gate does not replace it, it gives the
             // player correct feedback.
-            if (!CalibrationState.IsCalibrated)
+            // A dead player is given no weapon (WeaponGranter.CanHoldWeapon); same stability
+            // argument — the alive flag does not flip under the player's thumb mid-press.
+            if (!CalibrationState.IsCalibrated || !ArenaCombat.IsAlive)
             {
                 return false;
             }
