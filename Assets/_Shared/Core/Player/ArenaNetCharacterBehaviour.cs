@@ -87,6 +87,10 @@ namespace VortexArena.Core.Player
         /// <summary>Gap between two grounding reports of ONE body (s); each body throttles its own.</summary>
         private const float GroundReportIntervalSeconds = 5f;
 
+        /// <summary>How much the grounding shift must move (m) before the SAME standing fault speaks
+        /// again — the time gap alone would relay one unchanged fault forever.</summary>
+        private const float GroundReportChangeMeters = 0.05f;
+
         /// <summary>Largest per-joint move accepted between two consecutive judged frames (m). ≈83 ms
         /// apart, so this is ~12 m/s — far above sprinting or a swung arm, well below a solver jump.</summary>
         private const float JointJumpLimitMeters = 1.0f;
@@ -208,6 +212,13 @@ namespace VortexArena.Core.Player
 
         /// <summary>Next unscaled time <see cref="ReportGrounding"/> may speak for THIS body.</summary>
         private float _nextGroundReportAt;
+
+        /// <summary>Is a grounding fault currently announced for THIS body? Cleared once the shift
+        /// falls back under the threshold, so a later fault reports again.</summary>
+        private bool _groundReported;
+
+        /// <summary>Shift value the last report carried (m); only valid while <see cref="_groundReported"/>.</summary>
+        private float _lastReportedWanted;
 
         /// <summary>Has the unusable-<c>JointPairs</c> error been logged (once per component)?</summary>
         private bool _wireJointsWarned;
@@ -818,11 +829,22 @@ namespace VortexArena.Core.Player
         /// body; a healthy solve needs centimetres, so any line here is already the fault.</remarks>
         private void ReportGrounding(float footY, float drawnFoot, float scale, float wanted, float applied)
         {
-            if (Mathf.Abs(wanted) < GroundReportThresholdMeters) return;
+            if (Mathf.Abs(wanted) < GroundReportThresholdMeters)
+            {
+                _groundReported = false; // healthy again: the next fault is news
+                return;
+            }
 
             float now = Time.unscaledTime;
             if (now < _nextGroundReportAt) return;
 
+            // Speak only for a NEW or CHANGED fault: an unchanged standing one is already on the
+            // server log and repeating it every 5 s buries everything else.
+            if (_groundReported &&
+                Mathf.Abs(wanted - _lastReportedWanted) < GroundReportChangeMeters) return;
+
+            _groundReported = true;
+            _lastReportedWanted = wanted;
             _nextGroundReportAt = now + GroundReportIntervalSeconds;
 
             string limit = Mathf.Approximately(wanted, applied) ? "" : " — SINIRA DAYANDI";

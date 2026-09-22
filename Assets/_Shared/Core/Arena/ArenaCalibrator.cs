@@ -598,8 +598,13 @@ namespace VortexArena.Core.Arena
             // height. These fields are context for that reading: `kaynak` says whether the capture
             // was manual or a restored anchor, `köken` must be Stage for the point value to mean
             // anything at all.
-            Debug.Log($"[Kalibre] zemin ölçümü: kaynak={source} nokta={LastFloorOffsetMeters:F2} m " +
-                      $"kafa={headTau} m sanalZemin={VirtualFloorY:F2} m köken={origin}{boundaryPart}");
+            // Relayed too: the headset log is unreadable at the venue, so this reading only exists
+            // for the operator on the SERVER console.
+            string floorLine =
+                $"[Kalibre] zemin ölçümü: kaynak={source} nokta={LastFloorOffsetMeters:F2} m " +
+                $"kafa={headTau} m sanalZemin={VirtualFloorY:F2} m köken={origin}{boundaryPart}";
+            Debug.Log(floorLine);
+            VortexArena.Net.ClientLogRelay.Report(floorLine);
 
             if (Mathf.Abs(LastFloorOffsetMeters) > ArenaProtocol.CALIB_FLOOR_WARN_METERS)
             {
@@ -765,10 +770,14 @@ namespace VortexArena.Core.Arena
             // "headset floor estimate stale" produce the same floorOffset, and only the player's
             // REAL eye height tells them apart. That comparison is the reader's, so the line asks
             // for it instead of announcing a cause.
-            Debug.Log($"[Kalibre] hizalama sonrası kafa yüksekliği {tallest:F2} m " +
-                      $"({HeadSettleSeconds:F0} sn içindeki en yüksek değer) — oyuncunun GERÇEK göz " +
-                      "yüksekliğiyle karşılaştır: eşitse hizalama doğru, belirgin düşükse hizalama " +
-                      "kaymıştır ve ayaklar zemine batar.");
+            // Relayed too: head height is not on the wire, so the server log is its only reader
+            // outside the headset.
+            string headLine = $"[Kalibre] hizalama sonrası kafa yüksekliği {tallest:F2} m " +
+                              $"({HeadSettleSeconds:F0} sn içindeki en yüksek değer) — oyuncunun " +
+                              "GERÇEK göz yüksekliğiyle karşılaştır: eşitse hizalama doğru, " +
+                              "belirgin düşükse hizalama kaymıştır ve ayaklar zemine batar.";
+            Debug.Log(headLine);
+            VortexArena.Net.ClientLogRelay.Report(headLine);
 
             if (tallest < HeadHeightImplausibleMeters)
             {

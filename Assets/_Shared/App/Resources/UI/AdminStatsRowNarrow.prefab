@@ -692,6 +692,14 @@ PrefabInstance:
       value: 18
       objectReference: {fileID: 0}
     - target: {fileID: 3881158785683427987, guid: ba444e7120ba0b648b0eaae171e0dedf, type: 3}
+      propertyPath: m_fontSizeMax
+      value: 18
+      objectReference: {fileID: 0}
+    - target: {fileID: 3881158785683427987, guid: ba444e7120ba0b648b0eaae171e0dedf, type: 3}
+      propertyPath: m_fontSizeMin
+      value: 13
+      objectReference: {fileID: 0}
+    - target: {fileID: 3881158785683427987, guid: ba444e7120ba0b648b0eaae171e0dedf, type: 3}
       propertyPath: m_fontSizeBase
       value: 18
       objectReference: {fileID: 0}

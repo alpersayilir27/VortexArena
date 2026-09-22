@@ -558,6 +558,13 @@ namespace VortexArena.App.Admin
                 view.outOfBoundsCount = info.outOfBoundsCount;
                 view.outOfBoundsSeconds = info.outOfBoundsSeconds;
 
+                // Announced BEFORE assignment: the comparison's only input is the view's previous
+                // value, which the assignment destroys.
+                if (view.IsPlayer)
+                {
+                    AnnounceCalibrationChange(view, info);
+                }
+
                 // §10.6 calibration state. The server always sends false for admin records, so it is
                 // pinned to true here to keep the admin out of "uncalibrated" (see NeedsCalibration).
                 view.calibrated = view.IsPlayer ? info.calibrated : true;
@@ -950,6 +957,34 @@ namespace VortexArena.App.Admin
                 Debug.Log(back);
             }
         }
+
+        /// <summary>Writes a player's calibration result to the admin console once per change (§10.6).
+        /// <para>⚠️ Only a CHANGE speaks — the roster refreshes constantly and logging every snapshot
+        /// would bury the line it is meant to be.</para>
+        /// <para>A freshly seen player that is already calibrated counts as a change (the view starts
+        /// uncalibrated), so an admin connecting mid-session still reads the current state once.</para>
+        /// </summary>
+        private static void AnnounceCalibrationChange(AdminPlayerView view, PlayerInfo info)
+        {
+            if (!info.calibrated)
+            {
+                return;
+            }
+
+            string source = info.calibrationSource ?? "";
+            bool changed = !view.calibrated ||
+                           source != view.calibrationSource ||
+                           Mathf.Abs(info.floorOffset - view.floorOffset) > CalibrationLogEpsilonMeters;
+            if (!changed)
+            {
+                return;
+            }
+
+            Debug.Log($"[Kalibre] {view.name}: kaynak={source} zemin={info.floorOffset:0.00} m");
+        }
+
+        /// <summary>Floor offset move (m) worth re-announcing; below it the value is the same reading.</summary>
+        private const float CalibrationLogEpsilonMeters = 0.005f;
 
         /// <summary>Rebuilds the team lists and the FFA decision.</summary>
         private void Rebuild()
