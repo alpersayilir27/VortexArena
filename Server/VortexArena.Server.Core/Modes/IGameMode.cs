@@ -52,6 +52,11 @@ public interface IGameMode
     /// <remarks>Modes with no round concept ignore it.</remarks>
     void OnRoundStart(MatchDirector director) { }
 
+    /// <summary>Called ONCE per match after entering Finished; the mode tidies its world objects.</summary>
+    /// <remarks>Finished gets no <see cref="OnTick"/>, so anything left standing here stays for the whole
+    /// result screen. Skipped if a new match or the lobby replaces this one first (the scene is rebuilt).</remarks>
+    void OnMatchEnd(MatchDirector director) { }
+
     /// <summary>true moves the phase to End (time up / score limit); the winner comes back in
     /// <see cref="MatchOutcome"/> per the mode's score channel
     /// (<see cref="ModeRules.Scoring"/>).</summary>
@@ -61,8 +66,9 @@ public interface IGameMode
     /// AddPlayerScore).</summary>
     void OnKill(MatchDirector director, int killerId, int victimId, string weaponId) { }
 
-    /// <summary>Called on the 10 Hz match tick, Live phase only; the MatchDirector runs the
-    /// clock.</summary>
+    /// <summary>Called on the 10 Hz match tick; the MatchDirector runs the clock.</summary>
+    /// <remarks>⚠️ Also called during the countdown and a mode pause (§10.1) — a mode that must act only
+    /// in Live checks <see cref="MatchDirector.CurrentPhase"/> itself.</remarks>
     void OnTick(MatchDirector director, float deltaSeconds) { }
 
     /// <summary>Called after every validated hit, kill or not — for damage based

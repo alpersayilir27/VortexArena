@@ -1611,10 +1611,11 @@ ile tanımlanır (§10.5, §10.7).
 - **Maç parametreleri admin'den gelebilir:** `start_match.roundSeconds`/`scoreLimit`/`countdownSeconds` doluysa (`> 0`) o maç bu değerlerle koşar; boş/`0` ise modun varsayılanı (`IGameMode.DefaultRoundSeconds`/`DefaultScoreLimit`) ya da protokol varsayılanı (`COUNTDOWN_SECONDS`) kullanılır. `scoreLimit` ayrıca `SCORE_LIMIT_UNLIMITED` (`-1`) olabilir: **sınırsız** maç — varsayılana DÜŞMEZ, hiçbir limit dalı çalışmaz (§5.2). Yani `ModeDefinition`/`IGameMode` üzerindeki sayılar **varsayılandır, kilit değil** — operatör maç süresini kısaltıp uzatabilir. Değer `load_match`/`match_state`/`countdown` üzerinden istemcilere zaten gidiyor, ek bir kanal doğmaz.
 - **`load_match` kişiselleştirilir:** her oyuncuya kendi `yourTeam`'i gider; **takımsız modda** (`rules.teamMode == "none"`, §10.5) takım boş gider. Yükleme kapısına girerken tüm `ready` bayrakları sıfırlanır. **Çevrimiçi adminlere de bir kopya gider** (`yourTeam:""`) — admin gözlemci aynı sahneyi yükler.
 - **`phaseReason:"loading"`:** istemci sahneyi yükleyince `set_ready{ready:true}` gönderir ("sahne yüklendi" anlamında). Tüm çevrimiçi **oyuncular** hazır olunca (veya `LOADING_TIMEOUT` dolunca) geri sayım başlar. Kapı yalnız `role=player` bağlantılarını sayar: admin sahneyi yüklese de `set_ready` göndermez, geri sayımı ne hızlandırır ne geciktirir.
-- **`phaseReason:"countdown"`:** saniyede bir `countdown{seconds}` (5→1); 0'da faz `playing`.
+- **`phaseReason:"countdown"`:** saniyede bir `countdown{seconds}` (5→1); 0'da faz `playing`. `IGameMode.OnTick` bu fazda da çağrılır (tur tabanlı mod geri sayımı iptal edebilmek için yoklar); saha nesnesi çıkaran bir mod bu tick'lerde kendi fazını kontrol eder (§10.5 `mole`).
 - **`playing`:** `match_state` 1 Hz; `timeRemaining` sunucuda azalır; `IGameMode.OnTick` çağrılır. **Hasar yalnız burada işlenir.**
 - **`finished`:** `match_end` yayınlanır ve **kazanan ekranı operatör bir şey seçene kadar durur.** Sayacı öldüren şey fazı değiştiren her komuttur: harita seçmek ya da harita seçicisindeki lobi satırı (sahneleme fazı `paused`/`lobby`'ye çeker, §10.7), `start_match`, `abort_match`/`return_to_lobby`. Operatör hiçbir şey yapmazsa `MATCH_END_SECONDS` sonra kendiliğinden `return_to_lobby` + faz `paused`/`lobby` gelir (skorlar/canlar sıfırlanır) — ama bu **emniyet subabıdır, akış değil**: tur/maç aralarını sahada hakem yönetir. `finished` iken operatör harita/mod seçebilir ve yeni maç başlatabilir.
-  ⚠️ **Sonucunu operatöre bırakan modda emniyet subabı KAPALIDIR** (`IGameMode.HoldsResultForOperator`; bugün yalnız `tournament`, §10.5): sayaç hiç işlemez, `finished` ekranı `return_to_lobby`/`abort_match`/`start_match` gelene kadar durur. Sebep, o modda sonuç tablosunun maçın ürünü olmasıdır — hakem takımlara skoru okurken ekranın altından lobiye kayması, tam da okunmak için üretilmiş veriyi siler. Diğer modlarda subap olduğu gibi kalır.
+  `finished`'a girilince (süre/skor limiti ya da `end_match`) mod **maç başına bir kez** `IGameMode.OnMatchEnd` alır: bu fazda `OnTick` çağrılmadığı için sahadaki nesnelerini (ayakta kalan hedef vb.) burada toplar. Kanca kilit DIŞINDA, bir sonraki maç tick'inde çağrılır (`OnMatchStart` ile aynı düzen); o tick'ten önce yeni `start_match` ya da lobiye dönüş gelirse çağrılmaz — sahne zaten yeniden kurulur.
+  ⚠️ **Sonucunu operatöre bırakan modda emniyet subabı KAPALIDIR** (`IGameMode.HoldsResultForOperator`, §10.5): sayaç hiç işlemez, `finished` ekranı `return_to_lobby`/`abort_match`/`start_match` gelene kadar durur. Sebep, o modda sonuç tablosunun maçın ürünü olmasıdır — hakem takımlara skoru okurken ekranın altından lobiye kayması, tam da okunmak için üretilmiş veriyi siler. Diğer modlarda subap olduğu gibi kalır.
 - **`abort_match`** her durumdan `paused`/`lobby`'ye düşürür (`return_to_lobby` yayınlanır); `return_to_lobby` doğrudan aynı işi yapar.
 - **Duraklatma (`phaseReason:"operator"` / `"mode"`):** `playing` iken duraklatılan maç `paused`'a geçer — süre durur, hasar kapanır, `modeState` **korunur** (mod kaldığı yerden sürer). Devam edilince `playing`'e döner. ⚠️ Operatörün duraklatması ile modun duraklatması aynı fazı üretir ama gerekçeleri ayrıdır: turnuva "herkes tabana dönsün" derken (`mode`) operatör de duraklatırsa (`operator`) HUD'un doğru mesajı gösterebilmesi için ikisi karışmamalıdır.
   - Operatörün kapısı `pause_match` / `resume_match`'tir (§5.2) ve **yalnız kendi duraklatmasını kaldırabilir** (`phaseReason == "operator"`). `mode` gerekçesini kaldırma yetkisi modundur; `loading`/`countdown` zaten kendi koşullarıyla biter.
@@ -2044,6 +2045,12 @@ olmalı, tanınmayan `modeId` reddedilir):
 > **Bitişi yalnız süredir** (`scoreLimit` limitsiz, §5.2): süre dolunca skoru yüksek takım kazanır,
 > eşitlik **berabere** biter.
 >
+> ⚠️ **Köstebek yalnız `playing`'de çıkar:** çekirdek modu geri sayımda da tick'ler (§10.1), ama bu mod o
+> tick'lerde hiçbir şey yapmaz — "başla"dan önce kalkan köstebek, sayaç sıfırlanmadan vurulabilir bir
+> hedef olurdu. **`finished`'a girilince** (`OnMatchEnd`, §10.1) her delik aşama `0`'a iner ve yükü
+> boşalır: bu fazda mod tick'lenmediği için ayakta kalan köstebek sonuç ekranı boyunca ayakta
+> kalırdı. `modeState` sayaçları korunur — sonuç tablosunu besler.
+>
 > **Skor iki kanala birden yazılır:** takım puanı `match_state.scoreRed`/`scoreBlue`'ya, aynı miktar
 > vuran oyuncunun katkısı olarak `PlayerInfo.score`'a (§10.2). ⚠️ **Takım skoru `0`'ın altına inmez,
 > oyuncu skoru iner** — eksi takım skoru çocuk kitlesine anlatılamaz, ama yanlış vuranın katkısı eksiye
@@ -2063,9 +2070,17 @@ olmalı, tanınmayan `modeId` reddedilir):
 > aynı deliğin iki köstebekle dolmasını sözleşme düzeyinde imkânsız kılar.
 >
 > **`whack` yükü `i:[n]`dir ve `n` bir NONCE'tur:** her çıkışta o deliğin sayacı artar. Köstebek
-> inmişken ya da yeni bir çıkış başlamışken ulaşan sallama sayaç tutmadığı için **sessizce** düşer —
+> tamamen inmişken ya da yeni bir çıkış başlamışken ulaşan sallama sayaç tutmadığı için **sessizce**
+> düşer —
 > ceza yazılmaz, istemciye red gönderilmez. ⚠️ "Geç kaldım mı" sorusunu **sunucu** cevaplar: istemcinin
 > kendi saatiyle ölçtüğü bir pencere iki başlıkta iki farklı cevap verirdi.
+>
+> ⚠️ **Vurulabilirlik `1` aşamasıyla BİTMEZ, kısa bir PAY vardır:** sunucu köstebeği süresi dolduğu
+> için indirdikten sonra da aynı delik aynı nonce ile **kısa bir süre** vuruşu kabul eder — o pay
+> istemcideki iniş animasyonunun görünür süresini karşılar, çünkü oyuncu gördüğü köstebeğe sallar ve
+> "gözümle vurdum, saymadı" çocuk oyununda açıklanamaz. Pay içinde gelen vuruş normal vuruşla
+> **birebir aynıdır**: aynı puan, aynı `2` aşaması, aynı `by`/`ok` yükü. Ezildiği için inen köstebek
+> ise **vurulamaz** (tek çıkış tek kez puanlanır) ve maç bitince pay silinir.
 >
 > **Aynı köstebeğe iki kişi vurursa ilk ulaşan kazanır;** ikincisi aynı nonce kapısına takılır, yani
 > tek çıkış tek kez puanlanır.
@@ -2084,8 +2099,9 @@ olmalı, tanınmayan `modeId` reddedilir):
 >
 > ⚠️ **Köstebeğin yükseliş/iniş hareketi telde YOKTUR:** `mole_hole` poz paketi göndermez/almaz,
 > `stage` dışında bir şey taşımaz. Yükseliş istemcide, ayakta kalma penceresinin **içinde** oynar ve
-> köstebek `1` boyunca vurulabilir — pencerenin dışına taşan bir animasyon, sunucunun indirdiği
-> köstebeğe hâlâ vurulabiliyormuş gibi gösterirdi. Sunucu köstebeğin nerede olduğunu bilmez, yalnız
+> köstebek `1` boyunca vurulabilir — pencerenin dışına taşan bir yükseliş, henüz görünmeyen köstebeği
+> vurulabilir gösterirdi. İNİŞ animasyonunu ise üstteki pay karşılar: süresi payı aşarsa sona kalan
+> kısmı vurulamaz görünür. Sunucu köstebeğin nerede olduğunu bilmez, yalnız
 > **hangi aşamada** olduğunu bilir (müşterinin yürüyüşüyle aynı kural).
 >
 > **Yoğunluk HARİTA verisidir, kod sabiti değil** (`maps.json → moleDensity`, §11): bir mekanın delik

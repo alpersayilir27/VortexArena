@@ -149,6 +149,16 @@ namespace VortexArena.Modes.Mole
 
         public bool IsUp => _net != null && _net.Stage == MoleKinds.StageUp;
 
+        /// <summary>A mole the player may still swing at: standing, or sinking after its own window ran
+        /// out. ⚠️ Must not outlast the server's own grace (§10.5) — a report past it is dropped.</summary>
+        public bool IsHittable => IsUp || (_descendUntil > 0f && Time.time < _descendUntil);
+
+        /// <summary>Grace window for the visible descent, in the same units as the server's.</summary>
+        private const float DescendGraceSeconds = 0.4f;
+
+        /// <summary>End of the descent grace; zero while none runs.</summary>
+        private float _descendUntil;
+
         private void Awake()
         {
             _net = GetComponent<NetObject>();
@@ -229,9 +239,16 @@ namespace VortexArena.Modes.Mole
             if (origin == NetStateOrigin.Snapshot)
             {
                 ApplyImmediate();
+                // A snapshot shows no descent, so it never opens the grace.
+                _descendUntil = 0f;
                 _lastStage = _net.Stage;
                 return;
             }
+
+            // Armed only by up → hidden; a squashed mole leaving the board is not hittable.
+            _descendUntil = _lastStage == MoleKinds.StageUp && _net.Stage == MoleKinds.StageHidden
+                ? Time.time + DescendGraceSeconds
+                : 0f;
 
             if (animator != null)
             {

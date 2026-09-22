@@ -37,6 +37,10 @@ public sealed class MoleMode : IGameMode
     /// <summary>How long the squashed mole stays visible before the hole empties.</summary>
     private const float SquashedSeconds = 0.9f;
 
+    /// <summary>Extra hittable time after the up-window expires (§10.5). ⚠️ Must cover the client's
+    /// visible descend: shorter leaves a mole the player can still see but not hit.</summary>
+    private const float DescendGraceSeconds = 0.4f;
+
     /// <summary>Moles standing at once BEFORE density: one per player, within these bounds. Tied to the
     /// roster because the field feels empty for a crowd and unfair for one child at the same fixed
     /// number.</summary>
@@ -73,6 +77,10 @@ public sealed class MoleMode : IGameMode
 
         /// <summary>Seconds spent in <see cref="Stage"/>.</summary>
         public float Timer;
+
+        /// <summary>Hidden, but lowered because its up-window expired — still hittable while
+        /// <see cref="Timer"/> is under the grace. ⚠️ NEVER set on squashed → hidden: one pop scores once.</summary>
+        public bool Descending;
     }
 
     private readonly List<int> _holes = new();
@@ -151,6 +159,33 @@ public sealed class MoleMode : IGameMode
                           $"yoğunluk ×{_density:0.##}; skor limiti yok, süre bitince yüksek skor kazanır.");
     }
 
+    /// <summary>Takes every mole down: Finished gets no ticks, so a standing one would stay up for the
+    /// whole result screen.</summary>
+    /// <remarks><c>_counts</c> is kept — <c>modeState</c> feeds the held result table.</remarks>
+    public void OnMatchEnd(MatchDirector director)
+    {
+        // Hook runs outside the lock; a new match/staging may have replaced this one meanwhile.
+        if (director.CurrentPhase != Phase.Finished) return;
+
+        _popTimer = 0f;
+        for (int i = 0; i < _holes.Count; i++)
+        {
+            int netId = _holes[i];
+            if (_state.TryGetValue(netId, out var hole))
+            {
+                hole.Stage = StageHidden;
+                hole.Timer = 0f;
+                // Finished gets no ticks: an armed grace would never expire on its own.
+                hole.Descending = false;
+            }
+
+            // Stage BEFORE payload here (reverse of a pop): clearing the payload first would repaint a
+            // still-standing mole with no colour.
+            director.SetObjectStage(netId, StageHidden);
+            director.SetObjectPayload(netId, "");
+        }
+    }
+
     /// <summary>Time is the ONLY end condition (§10.5); the leading team wins, a tie is a draw.</summary>
     public bool IsMatchOver(MatchDirector director, out MatchOutcome outcome)
     {
@@ -170,6 +205,10 @@ public sealed class MoleMode : IGameMode
 
     public void OnTick(MatchDirector director, float deltaSeconds)
     {
+        // The core ticks modes during the countdown too; a mole must not pop before "go", and _state
+        // still holds the previous match's holes until OnMatchStart.
+        if (director.CurrentPhase != Phase.Playing) return;
+
         TickHoles(director, deltaSeconds);
         TickPop(director, deltaSeconds);
     }
@@ -182,12 +221,23 @@ public sealed class MoleMode : IGameMode
         for (int i = 0; i < _holes.Count; i++)
         {
             int netId = _holes[i];
-            if (!_state.TryGetValue(netId, out var hole) || hole.Stage == StageHidden) continue;
+            if (!_state.TryGetValue(netId, out var hole)) continue;
+
+            if (hole.Stage == StageHidden)
+            {
+                // A hidden hole is only timed while the grace is armed; disarming ends it.
+                if (!hole.Descending) continue;
+                hole.Timer += deltaSeconds;
+                if (hole.Timer >= DescendGraceSeconds) hole.Descending = false;
+                continue;
+            }
 
             hole.Timer += deltaSeconds;
             float window = hole.Stage == StageUp ? MoleUpSeconds : SquashedSeconds;
             if (hole.Timer < window) continue;
 
+            // Grace arms ONLY on up → hidden; the nonce is untouched, so the swing in flight matches.
+            hole.Descending = hole.Stage == StageUp;
             hole.Stage = StageHidden;
             hole.Timer = 0f;
             director.SetObjectStage(netId, StageHidden);
@@ -222,6 +272,7 @@ public sealed class MoleMode : IGameMode
         state.Color = DrawColor();
         state.Stage = StageUp;
         state.Timer = 0f;
+        state.Descending = false;
 
         // ⚠️ Payload BEFORE stage: the client reads the payload on every state, and a stage arriving
         // first would announce a standing mole whose colour is still the previous pop's.
@@ -290,7 +341,9 @@ public sealed class MoleMode : IGameMode
     public bool OnObjectEvent(MatchDirector director, int playerId, int netId, string kind, ObjectEventMsg msg)
     {
         if (msg.name != EventWhack || kind != HoleKind) return false;
-        if (!_state.TryGetValue(netId, out var hole) || hole.Stage != StageUp) return true;
+        if (!_state.TryGetValue(netId, out var hole)) return true;
+        // Up, or the grace that covers the visible descend (§10.5).
+        if (hole.Stage != StageUp && !(hole.Stage == StageHidden && hole.Descending)) return true;
 
         // Stale swing: the mole went down, or a new pop already turned the counter over.
         int nonce = msg.i != null && msg.i.Length > 0 ? msg.i[0] : -1;
@@ -308,6 +361,7 @@ public sealed class MoleMode : IGameMode
 
         hole.Stage = StageSquashed;
         hole.Timer = 0f;
+        hole.Descending = false;
         director.SetObjectPayload(netId,
             $"n:{hole.Nonce};c:{hole.Color};by:{playerId};ok:{(correct ? 1 : 0)}");
         director.SetObjectStage(netId, StageSquashed);

@@ -21,8 +21,13 @@ mod sözleşmesinin tamamı (tür, olay, `stage`/`s`, nonce kapısı, skor kanal
 
 ## Playtest ayarları
 
-- [ ] `MinSwingSpeed` (dokunarak ezmeyi kapatan eşik) ve balyoz ucundaki vuruş küresinin yarıçapı —
-      küçük küre "ıskaladım" hissi, büyük küre "değmeden ezdim" hissi verir.
+- [ ] `minSwingSpeed` (1,5 m/s, dokunarak ezmeyi kapatan eşik) ve `speedWindowSeconds` (0,1 sn, tepe
+      hızın arandığı pencere) — pencere kısalırsa çarpmada yavaşlayan sallama düşer, uzarsa sallamadan
+      sonraki yavaş dokunuş da sayılır.
+- [ ] Balyoz ucundaki vuruş küresinin yarıçapı (~0,16) — küçük küre "ıskaladım" hissi, büyük küre
+      "değmeden ezdim" hissi verir.
+- [ ] Köstebeğin vurulma kapsülünün boyutu (pivotta, r 0,22 · yükseklik 0,54) — görünen kafa ve
+      gövdeyle örtüşüyor mu, komşu deliğe taşıyor mu.
 - [ ] Çıkış aralığı / ayakta kalma süresi / aynı anda ayakta köstebek tavanı (`MoleMode` sabitleri)
       ve köstebek klip hızları (`AC_Mole` durum `speed`'leri) — kalabalıkta yoğunluk ve çocuk için
       vurma rahatlığı.

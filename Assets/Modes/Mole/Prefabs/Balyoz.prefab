@@ -173,7 +173,7 @@ SphereCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
-  m_Radius: 0.12
+  m_Radius: 0.16
   m_Center: {x: 0, y: 0, z: 0}
 --- !u!1 &8463299211653643562
 GameObject:
@@ -225,6 +225,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: VortexArena.Modes.Mole::VortexArena.Modes.Mole.MoleHammer
   hitCollider: {fileID: 1766304652564042774}
   minSwingSpeed: 1.5
+  speedWindowSeconds: 0.1
 --- !u!1 &8671875114503305315
 GameObject:
   m_ObjectHideFlags: 0

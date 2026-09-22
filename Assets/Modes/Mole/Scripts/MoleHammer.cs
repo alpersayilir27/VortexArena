@@ -4,21 +4,14 @@ using VortexArena.Net;
 
 namespace VortexArena.Modes.Mole
 {
-    /// <summary>Sits on the local player's hammer: a fast enough swing whose HEAD COLLIDER touches a
-    /// standing mole raises <c>whack</c> (§10.5).
-    /// <para><b>What the developer sets up:</b> a trigger <see cref="SphereCollider"/> on the hammer
-    /// head and a collider on the mole. Nothing here measures the mole — "did the hammer touch it"
-    /// is answered by the two colliders, so a new mole model only needs its own collider and no code
-    /// or number changes.</para>
-    /// <para>⚠️ <b>Why a sweep and not <c>OnTriggerEnter</c>:</b> a swung hammer head moves metres per
-    /// frame while the head is centimetres wide — between two frames it jumps clean THROUGH the mole
-    /// and the trigger never fires. The symptom is "the hammer works sometimes". So each frame the
-    /// head's own collider is swept from where it was to where it is; the shape and size of the test
-    /// are still the collider's, only the moment of contact is recovered.</para>
-    /// <para>⚠️ Only the LOCAL hammer runs this: a remote player's copy is stripped of every
-    /// MonoBehaviour and collider when it is drawn from the <c>itemR</c>/<c>itemL</c> byte (§6.6). So
-    /// "who reports the hit" resolves to exactly one client and the same pop is never reported
-    /// twice.</para></summary>
+    /// <summary>Local hammer: head collider touching a standing mole during a fast swing raises <c>whack</c> (§10.5).
+    /// <para>Setup: trigger <see cref="SphereCollider"/> on the head, any collider on the mole — no
+    /// mole measurements in code. "Fast" = peak head speed within <c>speedWindowSeconds</c>, so a swing
+    /// that decelerates on impact still counts; a slow touch/push does not.</para>
+    /// <para>⚠️ Sweep, not <c>OnTriggerEnter</c>: the head jumps clean through the mole between frames
+    /// ("works sometimes"), so each frame the head sphere is swept from its previous position.</para>
+    /// <para>⚠️ Only the LOCAL hammer runs this: remote copies are stripped of behaviours/colliders
+    /// (§6.6), so exactly one client reports a pop.</para></summary>
     [DisallowMultipleComponent]
     public sealed class MoleHammer : MonoBehaviour
     {
@@ -26,22 +19,32 @@ namespace VortexArena.Modes.Mole
                  "yarıçapı ve konumu Inspector'dan görsel ayarlanır, kodda ölçü yoktur.")]
         [SerializeField] private SphereCollider hitCollider;
 
-        [Tooltip("Vuruş sayılması için gereken en düşük baş hızı (m/s). Dokunarak ezmeyi kapatır.")]
+        [Tooltip("Vuruş sayılması için gereken en düşük baş hızı (m/s) — Speed Window Seconds süresi içindeki " +
+                 "en yüksek hıza bakılır. Yavaş dokunma/itme vuruş sayılmaz.")]
         [SerializeField] private float minSwingSpeed = 1.5f;
 
-        /// <summary>Enough for the moles a single swing can reach; the buffer only has to hold the
-        /// contacts of ONE frame, not the scene.</summary>
-        private const int MaxContacts = 8;
+        [Tooltip("Vuruş hızı bu süre içindeki en yüksek baş hızıdır (sn). Çarpma anında yavaşlayan " +
+                 "salınım da sayılır.")]
+        [SerializeField] private float speedWindowSeconds = 0.1f;
+
+        /// <summary>Per-frame contact buffer; sized for scenery + own colliders so moles are not pushed out.</summary>
+        private const int MaxContacts = 32;
+
+        /// <summary>Covers the speed window at 120+ Hz.</summary>
+        private const int SpeedSamples = 32;
 
         private readonly RaycastHit[] _sweepHits = new RaycastHit[MaxContacts];
         private readonly Collider[] _overlaps = new Collider[MaxContacts];
 
+        private readonly float[] _speedValues = new float[SpeedSamples];
+        private readonly float[] _speedTimes = new float[SpeedSamples];
+        private int _speedHead;
+        private int _speedCount;
+
         private Vector3 _lastCenter;
         private bool _hasLastCenter;
 
-        /// <summary>Last pop this hammer already reported. ⚠️ Keyed by (hole, counter), not by time: one
-        /// swing spans several frames, and reporting it on each of them would send the same event five
-        /// times — every copy passing the server's gates until the first one closes them.</summary>
+        /// <summary>Last reported pop. ⚠️ Keyed by (hole, counter), not time: a swing spans several frames.</summary>
         private int _reportedNetId;
         private int _reportedNonce = -1;
 
@@ -60,14 +63,18 @@ namespace VortexArena.Modes.Mole
                 return;
             }
 
-            // A solid collider on a hand-held object pushes the player's own body around; the contact
-            // test does not need it to be solid.
+            // A solid hand-held collider pushes the player's own body around.
             if (!hitCollider.isTrigger)
             {
                 Debug.LogWarning($"[MoleHammer] '{hitCollider.name}' trigger değil — vuruş yine " +
                                  "çalışır ama balyoz sahneye fiziksel olarak çarpar.", this);
             }
         }
+
+        // Re-enable/re-grant may teleport the head; without a reset that jump reads as a huge speed.
+        private void OnEnable() => ResetTracking();
+
+        private void OnDisable() => ResetTracking();
 
         private void LateUpdate()
         {
@@ -84,18 +91,29 @@ namespace VortexArena.Modes.Mole
             _lastCenter = center;
 
             float deltaTime = Time.deltaTime;
-            if (deltaTime <= 0f || !CalibrationState.IsCalibrated)
+            if (deltaTime <= 0f)
             {
                 return;
             }
 
-            if (delta.magnitude / deltaTime < minSwingSpeed)
+            if (!CalibrationState.IsCalibrated)
             {
+                // Calibration moves the rig; re-seed so that jump is not read as a swing.
+                ResetTracking();
                 return;
             }
 
+            float now = Time.time;
+            RecordSpeed(now, delta.magnitude / deltaTime);
+
+            // Always tested: a decelerating impact frame must still find the contact.
             MoleHole target = FindContact(center, delta);
-            if (target == null || !target.IsUp || target.Nonce < 0)
+            if (target == null || !target.IsHittable || target.Nonce < 0)
+            {
+                return;
+            }
+
+            if (PeakSpeed(now) < minSwingSpeed)
             {
                 return;
             }
@@ -110,8 +128,40 @@ namespace VortexArena.Modes.Mole
             NetObjectSync.SendEvent(target.NetId, MoleKinds.EventWhack, new[] { target.Nonce });
         }
 
-        /// <summary>The mole the head touched this frame, or null. Overlap first (the head may already be
-        /// inside the mole), then the sweep across the distance travelled.</summary>
+        private void ResetTracking()
+        {
+            _hasLastCenter = false;
+            _speedHead = 0;
+            _speedCount = 0;
+        }
+
+        private void RecordSpeed(float time, float speed)
+        {
+            _speedValues[_speedHead] = speed;
+            _speedTimes[_speedHead] = time;
+            _speedHead = (_speedHead + 1) % SpeedSamples;
+            if (_speedCount < SpeedSamples)
+            {
+                _speedCount++;
+            }
+        }
+
+        /// <summary>Highest recorded speed within the window ending at <paramref name="now"/>.</summary>
+        private float PeakSpeed(float now)
+        {
+            float peak = 0f;
+            for (int i = 0; i < _speedCount; i++)
+            {
+                if (now - _speedTimes[i] <= speedWindowSeconds && _speedValues[i] > peak)
+                {
+                    peak = _speedValues[i];
+                }
+            }
+
+            return peak;
+        }
+
+        /// <summary>The mole the head touched this frame, or null. Overlap first (head may already be inside), then sweep.</summary>
         private MoleHole FindContact(Vector3 center, Vector3 delta)
         {
             float radius = WorldRadius();
@@ -148,8 +198,7 @@ namespace VortexArena.Modes.Mole
             return null;
         }
 
-        /// <summary>The hole a touched collider belongs to; null when it was scenery. Searched UPWARDS so
-        /// the mole's collider may sit anywhere under the hole (a real model brings its own hierarchy).</summary>
+        /// <summary>Hole owning a touched collider, or null. Searched upwards: a mole model brings its own hierarchy.</summary>
         private static MoleHole Resolve(Collider collider)
         {
             return collider != null ? collider.GetComponentInParent<MoleHole>() : null;

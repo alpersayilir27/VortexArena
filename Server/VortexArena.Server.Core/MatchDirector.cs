@@ -238,6 +238,10 @@ public sealed class MatchDirector
     /// entry — that is the difference from <see cref="_matchStartPending"/>.</summary>
     private bool _roundStartPending;
 
+    /// <summary>Entered Finished; IGameMode.OnMatchEnd to be called outside the lock. Cleared when a new
+    /// match or the lobby takes over first, so it never reaches the NEXT match's mode.</summary>
+    private bool _matchEndPending;
+
     /// <summary>Has this match entered Live at least once. Keeps <c>OnMatchStart</c> to once per match:
     /// a round-based mode re-enters Live every round, and announcing "match started" each time would make
     /// the mode reset its match state every round.</summary>
@@ -669,6 +673,7 @@ public sealed class MatchDirector
         var outbox = new List<Outgoing>();
         IGameMode? modeToStart;
         IGameMode? modeToRoundStart;
+        IGameMode? modeToEnd;
         IGameMode? modeToTick = null;
 
         lock (_gate)
@@ -715,8 +720,10 @@ public sealed class MatchDirector
 
             modeToStart = _matchStartPending ? _mode : null;
             modeToRoundStart = _roundStartPending ? _mode : null;
+            modeToEnd = _matchEndPending ? _mode : null;
             _matchStartPending = false;
             _roundStartPending = false;
+            _matchEndPending = false;
         }
 
         await FlushAsync(outbox);
@@ -728,6 +735,7 @@ public sealed class MatchDirector
         // _pendingOutbox and are dispatched after each hook group.
         modeToStart?.OnMatchStart(this);
         modeToRoundStart?.OnRoundStart(this);
+        modeToEnd?.OnMatchEnd(this);
 
         if (modeToTick == null)
         {
@@ -1265,6 +1273,7 @@ public sealed class MatchDirector
             _modeState = "";
             _matchStartPending = false;
             _roundStartPending = false;
+            _matchEndPending = false;
             _matchStarted = false;
             _startedWithPlayers = players.Count > 0;
 
@@ -1817,6 +1826,8 @@ public sealed class MatchDirector
             SetPhaseLocked(Phase.Paused, PauseReason.Lobby, DateTime.UtcNow);
 
             RebuildObjectsLocked(_sceneName); // §10.10: every staging resets
+            // The old mode's netIds may now name the new scene's objects.
+            _matchEndPending = false;
             QueueBroadcastLocked(outbox, JsonUtil.Serialize(new ReturnToLobbyMsg
             {
                 modeId = _modeId,
@@ -2525,6 +2536,8 @@ public sealed class MatchDirector
     private void EnterEndLocked(List<Outgoing> outbox, DateTime now, MatchOutcome outcome)
     {
         SetPhaseLocked(Phase.Finished, now);
+        // Both callers gate on an in-match phase, so this runs once per match.
+        _matchEndPending = _mode != null;
         Console.WriteLine($"[match] maç sonu — kazanan: {DescribeOutcomeLocked(outcome)} " +
                           $"(kırmızı {_scoreRed} : mavi {_scoreBlue})");
         QueueBroadcastLocked(outbox, JsonUtil.Serialize(BuildMatchStateLocked()));
@@ -2571,6 +2584,7 @@ public sealed class MatchDirector
         _countdownRemaining = 0;
         _matchStartPending = false;
         _roundStartPending = false;
+        _matchEndPending = false;
         _matchStarted = false;
         // The mode that would have consumed it is gone; carrying the press into the NEXT match would
         // skip that match's first hold.
