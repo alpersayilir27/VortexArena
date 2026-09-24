@@ -270,18 +270,34 @@ namespace VortexArena.Core.Combat
 
         private void Update()
         {
-            if (_weapon == null || _detached || !isRayVisible || !WeaponGranter.HandsFree)
+            if (_weapon == null || _detached || !isRayVisible)
             {
                 // Collect any live ray, otherwise it freezes on screen — the toggle may have been
-                // cleared at runtime (Editor tinkering), or a hand may have filled mid-hover, and a
-                // full hand must see no selection ray at all.
+                // cleared at runtime (Editor tinkering).
                 HideRay(_rayLeft);
                 HideRay(_rayRight);
                 return;
             }
 
-            TickRay(OVRInput.Controller.LTouch, ref _rayLeft);
-            TickRay(OVRInput.Controller.RTouch, ref _rayRight);
+            // Per hand: a hand that cannot take from the rack must see no selection ray, even while
+            // the other one still aims (a hand may also fill mid-hover).
+            if (!WeaponGranter.IsHandFreeForRack(OVRInput.Controller.LTouch))
+            {
+                HideRay(_rayLeft);
+            }
+            else
+            {
+                TickRay(OVRInput.Controller.LTouch, ref _rayLeft);
+            }
+
+            if (!WeaponGranter.IsHandFreeForRack(OVRInput.Controller.RTouch))
+            {
+                HideRay(_rayRight);
+            }
+            else
+            {
+                TickRay(OVRInput.Controller.RTouch, ref _rayRight);
+            }
         }
 
         /// <summary>Called by <see cref="WeaponGranter"/> while preparing a clone: hides the frame
