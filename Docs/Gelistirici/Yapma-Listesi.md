@@ -732,6 +732,12 @@ UI/TMP shader'ları üzerinden çizilir.
 
 Hasar sayıları istemcide yaşar; sunucuyu yeniden başlatmak yetmez.
 
+### ⛔ Anlık çalan kısa sesi `Preload Audio Data` kapalı bırakma
+
+`GameSoundBank`'a (ya da `PlayOneShot` ile anında çalan herhangi bir yere) giren kısa ses
+**`Preload Audio Data` açık, `ADPCM`, `Decompress On Load`** olur. Kapalıyken klip ilk çalınacağı
+anda yüklenir; Quest'te o ilk `PlayOneShot` sessizce düşer — editörde duyulur, gözlükte duyulmaz.
+
 ### ⛔ Oyuncu build'inde `PlayerSettings` geri almasını `EditorApplication.Exit`'ten SONRAYA bırakma
 
 Sürümlü oyuncu build'i `PlayerSettings`'i (bundle id, `bundleVersion`, `AndroidBundleVersionCode`,

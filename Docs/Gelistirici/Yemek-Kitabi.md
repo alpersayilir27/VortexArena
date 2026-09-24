@@ -1225,7 +1225,9 @@ Draw Instanced açık.
 
 Paket dekorunun `LODGroup`'u **en fazla 3 seviye (yer bitkisi 2)** taşır, ara seviyelerin objesi
 kapatılır, ağaç billboard'u düşer. Paket ağacının/çiminin LOD0'ı Quest için fazla detaylıdır —
-en yakın görünüm bir alt seviyedir, LOD0 objesi kapatılır. ⚠️ **Son seviyenin geçişi 0'dır — dekor uzakta kaybolmaz**:
+en yakın görünüm bir alt seviyedir, LOD0 objesi kapatılır; paket dekorunun tamamında da öyle.
+İstisna: arenaya 10 m'den yakın olup bir alt seviyesi LOD0'ın %25'inin altına düşen obje
+(yakında kutu gibi görünür) LOD0'da kalır. ⚠️ **Son seviyenin geçişi 0'dır — dekor uzakta kaybolmaz**:
 kaybolan dekor ufku boşaltır. `Fade Mode` = None (mobil asset'te LOD Cross Fade kapalı).
 Controller'sız `Animator` altındaki hareketsiz skinned hayvan, pozu bake edilmiş `MeshRenderer`'a
 çevrilir (skinning her karede boşuna ödenir); boş `Animator` silinir. Static dekor
@@ -1234,6 +1236,19 @@ mesh'e birleştirilir: LOD seviyeleri ve geçiş mesafeleri korunur, UV2 yeniden
 arena kutusunun `Art/`'ına yazılır; eski parçaların yalnız renderer'ı kapanır — collider'ları
 yerinde kalır. Saydam, `Animator`/script/`Rigidbody` taşıyan obje birleştirilmez. Birleştirmeden
 sonra bake yeniden alınır.
+
+Arenadan uzaktaki dekor ucuzlatılır, gizlenmez: `Scale In Lightmap` arenaya 10–30 m'de 0.5, 30 m
+ötesinde 0.25 (fon lightmap belleğini yutmasın). LOD'u hiç olmayan fon modeline (şehir
+blokları gibi) `MeshLodUtility.GenerateMeshLods` ile üretilen seviyeler ayrı mesh olarak
+`LODGroup`'a konur (orijinal · %62 · %16; geçiş 0.30 / 0.10 / 0). Oyun alanının hiçbir noktasından
+ekrana gelemeyen üst LOD seviyesi kapatılır — görüntü değişmez, sayaç düşer. Arena sınırına 5 m'den uzak dekorun collider'ı
+silinir — paketin konkav `MeshCollider`'ları yüklemede tek tek pişirilir; bedeli: mermi o dekora
+çarpmaz, iz bırakmaz. Occluder yalnız ardını gerçekten kapatan
+yapıdadır (bina, duvar, döşeme, tank, araç); iskele, çit, tel örgü, kolon ve eşyada kapalı —
+sonra occlusion bake alınır. Yalnız bu sahnede ve arenaya 10 m'den uzakta kullanılan paket
+dokusuna Android override `Max Size 1024` konur; başka oyun sahnesinin de kullandığı dokuya
+dokunulmaz. ⚠️ Sahnenin `.lighting` dosyası klasörde durup **sahneye bağlı olmayabilir** —
+bağlı değilse bake hiç alınmamıştır ve bütün static dekor her karede gerçek zamanlı gölge öder.
 
 ⚠️ **Aydınlatma kurulumu ana haritada bir kez, bake her mekan sahnesinde.** Ana harita
 (`Assets/Maps/<Harita>/`) mekan sahnelerinin kopyalandığı kaynaktır: `VA_LightProbes`, `.lighting`
