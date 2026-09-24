@@ -26,9 +26,10 @@ namespace VortexArena.Modes.Mole
     /// for them — it never moves, while the mole travels through the floor.</para>
     /// <para><b>Clip-driven mole:</b> when an <see cref="Animator"/> is present under the hole, the
     /// rise/idle/descend clips own the movement and this component only forwards the stage into the
-    /// <c>stage</c> int parameter — the pivot then never moves and the mole is never switched off, so
-    /// the model must bring its OWN hole to hide in. ⚠️ Both drivers at once put two writers on one
-    /// transform; that is why the lerp bails out completely instead of blending.</para>
+    /// <c>stage</c> int parameter — the pivot then never moves and the mole object is never switched
+    /// off, so the model must bring its OWN hole to hide in; only the <see cref="hideWhenDown"/>
+    /// renderers go off while it waits in the Hidden state. ⚠️ Both drivers at once put two writers on
+    /// one transform; that is why the lerp bails out completely instead of blending.</para>
     /// <para>⚠️ <b><c>Model</c>'s own transform must stay at zero</b> (position, rotation, scale 1): it is
     /// the swap point, not a placement. An offset there moves the mole away from its hole in EVERY
     /// arena at once, and the mole is below the floor while hidden — so the mistake shows up as holes
@@ -54,6 +55,11 @@ namespace VortexArena.Modes.Mole
                  "bileşen yalnız aşamayı animatöre bildirir; aşağıdaki hareket ayarları o durumda " +
                  "OKUNMAZ. Boşsa alt ağaçta aranır.")]
         [SerializeField] private Animator animator;
+
+        [Tooltip("Animatörlü köstebekte, köstebek delikte beklerken (Hidden) KAPATILAN görseller — " +
+                 "yalnız gövde. Delik/taş gibi hep görünen parçalar buraya KONMAZ. Boşsa elle " +
+                 "atanmış takım rengi görselleri kullanılır.")]
+        [SerializeField] private Renderer[] hideWhenDown;
 
         [Tooltip("Köstebeğin delikten yükseldiği mesafe (m). Animatör varsa kullanılmaz.")]
         [SerializeField] private float riseHeight = 0.4f;
@@ -129,6 +135,9 @@ namespace VortexArena.Modes.Mole
         /// is still sinking, and un-squashing on that stage change would pop it back to full size.</summary>
         private bool _squashed;
 
+        /// <summary>Are the <see cref="hideWhenDown"/> renderers currently switched off?</summary>
+        private bool _bodyHidden;
+
         /// <summary>Pop counter from the payload; the value a <c>whack</c> must carry back.</summary>
         public int Nonce { get; private set; } = -1;
 
@@ -167,6 +176,13 @@ namespace VortexArena.Modes.Mole
             {
                 Transform found = transform.Find("Mole");
                 mole = found != null ? found : transform;
+            }
+
+            // Only a hand-picked list is the body; the fallback below also holds the hole itself.
+            if ((hideWhenDown == null || hideWhenDown.Length == 0) &&
+                teamRenderers != null && teamRenderers.Length > 0)
+            {
+                hideWhenDown = teamRenderers;
             }
 
             // A swapped-in model loses the hand-picked list; painting everything is a better default
@@ -360,12 +376,41 @@ namespace VortexArena.Modes.Mole
             // writers on one transform, seen as a mole that jitters or never reaches the top.
             if (animator != null)
             {
+                UpdateBodyVisibility();
                 return;
             }
 
             float target = _net.Stage == MoleKinds.StageHidden ? 0f : 1f;
             _height = Mathf.MoveTowards(_height, target, Time.deltaTime / Mathf.Max(0.01f, riseSeconds));
             ApplyPose();
+        }
+
+        /// <summary>Clip path: a waiting mole is still skinned every frame below the floor — switched off
+        /// only once the Hidden state is reached, so the descent stays visible.</summary>
+        private void UpdateBodyVisibility()
+        {
+            if (hideWhenDown == null || hideWhenDown.Length == 0 || !animator.isActiveAndEnabled)
+            {
+                return;
+            }
+
+            // Stage checked first: a new pop turns the body back on in the same frame.
+            bool down = _net.Stage == MoleKinds.StageHidden &&
+                        !animator.IsInTransition(0) &&
+                        animator.GetCurrentAnimatorStateInfo(0).shortNameHash == HiddenState;
+            if (down == _bodyHidden)
+            {
+                return;
+            }
+
+            _bodyHidden = down;
+            for (int i = 0; i < hideWhenDown.Length; i++)
+            {
+                if (hideWhenDown[i] != null)
+                {
+                    hideWhenDown[i].enabled = !down;
+                }
+            }
         }
 
         /// <summary>⚠️ The mole is switched OFF while down instead of just being lowered: the free-roam

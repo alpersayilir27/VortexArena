@@ -1218,7 +1218,22 @@ Bütçesini Ölç` koşulur: tenant'ın sahneleri yan yana, eşiği aşan hücre
 işaretlenir (yapraklı vegetasyon/çimde Occluder kapalı; `Animator`/`Rigidbody` altındaki obje
 işaretsiz), bake **ondan sonra** alınır — işaretsiz objeye bake uygulanmaz
 ([Yapma Listesi](Yapma-Listesi.md)). Hazır environment paketleri **çok parçalı terrain**le gelir;
-Quest'te terrain batch'lenmez — tek terrain'e indirilir ya da mesh'e çevrilir.
+Quest'te terrain batch'lenmez — tek terrain'e indirilir ya da mesh'e çevrilir. Paylaşılan
+`TerrainData`'ya dokunulmaz: sahneye özel kopyası arena kutusunun `Art/`'ına alınır, sonra
+düşürülür. Oyuncunun gitmediği fon terrain'inde Pixel Error yüksek, Basemap Distance düşük,
+Draw Instanced açık.
+
+Paket dekorunun `LODGroup`'u **en fazla 3 seviye (yer bitkisi 2)** taşır, ara seviyelerin objesi
+kapatılır, ağaç billboard'u düşer. Paket ağacının/çiminin LOD0'ı Quest için fazla detaylıdır —
+en yakın görünüm bir alt seviyedir, LOD0 objesi kapatılır. ⚠️ **Son seviyenin geçişi 0'dır — dekor uzakta kaybolmaz**:
+kaybolan dekor ufku boşaltır. `Fade Mode` = None (mobil asset'te LOD Cross Fade kapalı).
+Controller'sız `Animator` altındaki hareketsiz skinned hayvan, pozu bake edilmiş `MeshRenderer`'a
+çevrilir (skinning her karede boşuna ödenir); boş `Animator` silinir. Static dekor
+(duvar, çit, yer bitkisi, çok parçalı eşya) bölge bölge (6–12 m hücre) materyal başına tek
+mesh'e birleştirilir: LOD seviyeleri ve geçiş mesafeleri korunur, UV2 yeniden üretilir, mesh
+arena kutusunun `Art/`'ına yazılır; eski parçaların yalnız renderer'ı kapanır — collider'ları
+yerinde kalır. Saydam, `Animator`/script/`Rigidbody` taşıyan obje birleştirilmez. Birleştirmeden
+sonra bake yeniden alınır.
 
 ⚠️ **Aydınlatma kurulumu ana haritada bir kez, bake her mekan sahnesinde.** Ana harita
 (`Assets/Maps/<Harita>/`) mekan sahnelerinin kopyalandığı kaynaktır: `VA_LightProbes`, `.lighting`
