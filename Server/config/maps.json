@@ -49,9 +49,11 @@
         { "sceneId": 31, "kind": "board" },
         { "sceneId": 32, "kind": "board" },
         { "sceneId": 33, "kind": "knife" },
-        { "sceneId": 34, "kind": "knife" },
         { "sceneId": 35, "kind": "spatula" },
-        { "sceneId": 36, "kind": "spatula" }
+        { "sceneId": 36, "kind": "spatula" },
+        { "sceneId": 37, "kind": "knife" },
+        { "sceneId": 38, "kind": "knife" },
+        { "sceneId": 39, "kind": "knife" }
       ]
     },
     {
