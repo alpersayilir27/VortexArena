@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using VortexArena.Core.Combat;
 
 namespace VortexArena.Core.Player
 {
@@ -154,17 +155,36 @@ namespace VortexArena.Core.Player
         /// </summary>
         private static readonly List<Object> rayVisualRequesters = new List<Object>(2);
 
+        /// <summary>One distance-grab <c>Visuals</c> node (tube + reticle) plus the hand it belongs to:
+        /// suppression is PER HAND, so a node with an unresolved hand cannot be judged.</summary>
+        private class GrabVisualNode
+        {
+            public GameObject Visual;
+            public OVRInput.Controller Hand;
+            public bool HiddenHere;
+        }
+
         /// <summary>
         /// The distance-grab interactors' <c>Visuals</c> nodes (tube + reticle). Separate from
         /// <see cref="rayVisuals"/>: that one answers "is a world UI being pointed at", this one
         /// answers "may the player take what they are aiming at".
         /// </summary>
-        private readonly List<GameObject> grabVisuals = new List<GameObject>(8);
+        private readonly List<GrabVisualNode> grabVisuals = new List<GrabVisualNode>(8);
 
-        /// <summary>Who wants the distance-grab visuals SILENCED right now; empty = ISDK draws them
-        /// normally. Held as objects for the same reason as <see cref="rayVisualRequesters"/> — a
-        /// destroyed requester drops out by itself instead of leaving the reticle hidden forever.</summary>
-        private static readonly List<Object> grabVisualSuppressors = new List<Object>(2);
+        /// <summary>One requester's PER-HAND suppression wish.</summary>
+        private struct GrabVisualSuppressor
+        {
+            public Object Requester;
+            public bool Left;
+            public bool Right;
+        }
+
+        /// <summary>Who wants the distance-grab visuals SILENCED right now, per hand; empty = ISDK
+        /// draws them normally. Held as objects for the same reason as
+        /// <see cref="rayVisualRequesters"/> — a destroyed requester drops out by itself instead of
+        /// leaving the reticle hidden forever.</summary>
+        private static readonly List<GrabVisualSuppressor> grabVisualSuppressors =
+            new List<GrabVisualSuppressor>(2);
 
         /// <summary>Already logged ones: hiding is REPEATED every frame but the log is printed once.</summary>
         private readonly HashSet<GameObject> logged = new HashSet<GameObject>();
@@ -173,9 +193,6 @@ namespace VortexArena.Core.Player
 
         /// <summary>Were the ray visuals last hidden by THIS component — what the one-shot show undoes.</summary>
         private bool rayVisualsHiddenHere;
-
-        /// <summary>Same for the distance-grab visuals.</summary>
-        private bool grabVisualsHiddenHere;
 
         /// <summary>The "player's hand not found" error, once per session.</summary>
         private static bool erroredNoDrivenHandVisual;
@@ -230,8 +247,9 @@ namespace VortexArena.Core.Player
         }
 
         /// <summary>
-        /// Silences the DISTANCE-GRAB visuals (tube + reticle) for one requester — idempotent, so it may
-        /// be called every frame. It applies to every rig in the scene, no reference is needed.
+        /// Silences the DISTANCE-GRAB visuals (tube + reticle) for one requester, <b>per hand</b> —
+        /// idempotent, so it may be called every frame. It applies to every rig in the scene, no
+        /// reference is needed.
         /// <para>⚠️ <b>This is the ONLY sanctioned way to take that aim feedback away.</b> The tempting
         /// alternative — filtering the target out of the interactor's candidate list — also removes the
         /// reticle, but it makes ISDK swallow the grip press: with an empty candidate list the interactor
@@ -241,7 +259,7 @@ namespace VortexArena.Core.Player
         /// <para>The request must be dropped when the reason ends AND when the requester is destroyed,
         /// or the player keeps aiming at racks with no reticle.</para>
         /// </summary>
-        public static void SetGrabVisualsSuppressed(Object requester, bool suppressed)
+        public static void SetGrabVisualsSuppressed(Object requester, bool suppressLeft, bool suppressRight)
         {
             if (requester == null)
             {
@@ -250,32 +268,56 @@ namespace VortexArena.Core.Player
 
             for (int i = grabVisualSuppressors.Count - 1; i >= 0; i--)
             {
-                Object existing = grabVisualSuppressors[i];
+                Object existing = grabVisualSuppressors[i].Requester;
                 if (existing == null || existing == requester)
                 {
                     grabVisualSuppressors.RemoveAt(i);
                 }
             }
 
-            if (suppressed)
+            if (suppressLeft || suppressRight)
             {
-                grabVisualSuppressors.Add(requester);
+                grabVisualSuppressors.Add(new GrabVisualSuppressor
+                {
+                    Requester = requester,
+                    Left = suppressLeft,
+                    Right = suppressRight,
+                });
             }
         }
 
-        /// <summary>Does anyone want the grab visuals silenced — destroyed requesters are pruned and do
-        /// not count.</summary>
-        private static bool GrabVisualsSuppressed()
+        /// <summary>Both hands at once — see the per-hand overload.</summary>
+        public static void SetGrabVisualsSuppressed(Object requester, bool suppressed)
         {
+            SetGrabVisualsSuppressed(requester, suppressed, suppressed);
+        }
+
+        /// <summary>Does anyone want THIS hand's grab visuals silenced — destroyed requesters are pruned
+        /// and do not count. An unresolved hand (<c>None</c>) is answered conservatively: any suppressed
+        /// hand silences it, since a visual that cannot be attributed must not leak the other hand's
+        /// reticle.</summary>
+        private static bool GrabVisualsSuppressed(OVRInput.Controller hand)
+        {
+            bool suppressed = false;
+
             for (int i = grabVisualSuppressors.Count - 1; i >= 0; i--)
             {
-                if (grabVisualSuppressors[i] == null)
+                GrabVisualSuppressor entry = grabVisualSuppressors[i];
+                if (entry.Requester == null)
                 {
                     grabVisualSuppressors.RemoveAt(i);
+                    continue;
+                }
+
+                if (hand == OVRInput.Controller.LTouch ? entry.Left
+                  : hand == OVRInput.Controller.RTouch ? entry.Right
+                  : entry.Left || entry.Right)
+                {
+                    suppressed = true;
                 }
             }
 
-            return grabVisualSuppressors.Count > 0;
+            return suppressed;
         }
 
         private void LateUpdate()
@@ -302,7 +344,6 @@ namespace VortexArena.Core.Player
                 rayVisuals.Clear();
                 grabVisuals.Clear();
                 rayVisualsHiddenHere = false;
-                grabVisualsHiddenHere = false;
                 rescanTimer = float.NegativeInfinity; // new rig: scan immediately
             }
 
@@ -343,34 +384,35 @@ namespace VortexArena.Core.Player
             // ⚠️ AFTER the unconditional pass above: the distance-grab ghost hand lives under this same
             // Visuals node and is force-hidden there every frame, so re-showing the node never brings it
             // back.
-            ApplyGrabVisuals(!GrabVisualsSuppressed());
+            ApplyGrabVisuals();
         }
 
-        /// <summary>Applies the suppression state to the distance-grab visuals — same one-shot-show
-        /// discipline as <see cref="ApplyRayVisuals"/>: hidden every frame while suppressed (Meta
-        /// re-enables them on controller put-down/pick-up), undone ONCE when the suppression lifts, so
-        /// ISDK keeps owning its own hover/no-target states.</summary>
-        private void ApplyGrabVisuals(bool visible)
+        /// <summary>Applies the PER-HAND suppression state to the distance-grab visuals — same
+        /// one-shot-show discipline as <see cref="ApplyRayVisuals"/>, per node: hidden every frame while
+        /// its hand is suppressed (Meta re-enables them on controller put-down/pick-up), undone ONCE when
+        /// the suppression lifts, so ISDK keeps owning its own hover/no-target states.</summary>
+        private void ApplyGrabVisuals()
         {
-            if (visible && !grabVisualsHiddenHere)
-            {
-                return; // nothing was hidden here — the state belongs to ISDK
-            }
-
-            grabVisualsHiddenHere = !visible;
-
             for (int i = grabVisuals.Count - 1; i >= 0; i--)
             {
-                GameObject visual = grabVisuals[i];
-                if (visual == null)
+                GrabVisualNode node = grabVisuals[i];
+                if (node.Visual == null)
                 {
                     grabVisuals.RemoveAt(i);
                     continue;
                 }
 
-                if (visual.activeSelf != visible)
+                bool visible = !GrabVisualsSuppressed(node.Hand);
+                if (visible && !node.HiddenHere)
                 {
-                    visual.SetActive(visible);
+                    continue; // nothing was hidden here — the state belongs to ISDK
+                }
+
+                node.HiddenHere = !visible;
+
+                if (node.Visual.activeSelf != visible)
+                {
+                    node.Visual.SetActive(visible);
                 }
             }
         }
@@ -447,9 +489,23 @@ namespace VortexArena.Core.Player
                     // by its own HandVisual entry, and adding the interactor to `targets` would
                     // disable distance grabbing outright.
                     Transform grabNode = mb.transform.Find(RayVisualsNodeName);
-                    if (grabNode != null && !grabVisuals.Contains(grabNode.gameObject))
+                    if (grabNode != null)
                     {
-                        grabVisuals.Add(grabNode.gameObject);
+                        // Suppression is per hand, so each node carries its own. The ISDK decorator
+                        // mapping may only appear later — an unresolved hand is retried on every rescan.
+                        GrabVisualNode known = FindGrabVisual(grabNode.gameObject);
+                        if (known == null)
+                        {
+                            grabVisuals.Add(new GrabVisualNode
+                            {
+                                Visual = grabNode.gameObject,
+                                Hand = WeaponGranter.ResolveControllerFromGameObject(mb.gameObject),
+                            });
+                        }
+                        else if (known.Hand == OVRInput.Controller.None)
+                        {
+                            known.Hand = WeaponGranter.ResolveControllerFromGameObject(mb.gameObject);
+                        }
                     }
 
                     continue;
@@ -502,6 +558,19 @@ namespace VortexArena.Core.Player
             {
                 WarnNoRayVisuals();
             }
+        }
+
+        private GrabVisualNode FindGrabVisual(GameObject visual)
+        {
+            for (int i = 0; i < grabVisuals.Count; i++)
+            {
+                if (grabVisuals[i].Visual == visual)
+                {
+                    return grabVisuals[i];
+                }
+            }
+
+            return null;
         }
 
         /// <summary>Is this hand visual the hand the player sees — a <b>full name</b> match (rationale in

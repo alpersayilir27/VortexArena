@@ -132,19 +132,30 @@ namespace VortexArena.Core.Combat
         /// <summary>Weapon in the RIGHT hand right now — see <see cref="LeftHandWeapon"/>.</summary>
         public static Weapon RightHandWeapon => HeldWeaponIn(OVRInput.Controller.RTouch);
 
-        /// <summary>Are BOTH hands empty RIGHT NOW — live, unlatched. This is what the player SEES:
-        /// <see cref="WeaponFrame"/>'s aim ray and the distance-grab reticle
-        /// (<see cref="ControllerModelHider.SetGrabVisualsSuppressed"/>). Permission to actually take
-        /// a weapon is <see cref="CanSelectWith"/> — do not confuse the two.
-        /// <para>⚠️ A hand holding a THROWABLE counts as full even though no <see cref="Weapon"/>
-        /// lives in it (<see cref="IsThrowableHeld"/>): the bomb is not in <see cref="Weapon.Active"/>,
-        /// so a scan-only answer would draw the rack's aim ray out of a full hand.</para></summary>
-        public static bool HandsFree =>
-            LeftHandWeapon == null && RightHandWeapon == null &&
-            !_throwableLeft && !_throwableRight;
+        /// <summary>Is there NO weapon in either hand right now — throwables ignored on purpose, a
+        /// carried bomb does not close the other hand.</summary>
+        private static bool NoWeaponHeld => LeftHandWeapon == null && RightHandWeapon == null;
 
-        /// <summary>May THIS hand take a weapon from a frame: were both hands empty at the moment
-        /// this hand's grip press BEGAN.
+        /// <summary>May THIS hand see the rack's aim feedback — live, unlatched. VISUALS only
+        /// (<see cref="WeaponFrame"/>'s aim ray + the distance-grab reticle via
+        /// <c>ControllerModelHider.SetGrabVisualsSuppressed</c>); permission to actually take
+        /// a weapon is <see cref="CanSelectWith"/> — do not confuse the two.
+        /// <para>⚠️ The throwable must be tested explicitly: the bomb is not in
+        /// <see cref="Weapon.Active"/>, so a weapon-scan-only answer would draw the reticle out of the
+        /// hand carrying it.</para>
+        /// <para>An unresolved hand (<c>None</c>) counts as both hands.</para></summary>
+        public static bool IsHandFreeForRack(OVRInput.Controller hand)
+        {
+            if (hand == OVRInput.Controller.LTouch || hand == OVRInput.Controller.RTouch)
+            {
+                return NoWeaponHeld && !IsThrowableHeld(hand);
+            }
+
+            return NoWeaponHeld && !_throwableLeft && !_throwableRight;
+        }
+
+        /// <summary>May THIS hand take a weapon from a frame: was there NO weapon in either hand at
+        /// the moment this hand's grip press BEGAN.
         /// <para>⚠️ <b>Latched for the whole press; never re-closed inside it.</b> One press does two
         /// things — it selects at the frame AND it summons the held clone — and the summon lands on
         /// the press's FIRST frame. A live "are the hands empty" test would therefore close the gate
@@ -161,9 +172,10 @@ namespace VortexArena.Core.Combat
         /// Hide the VISUALS instead; the candidate list stays whole.</para>
         /// <para>An unresolved hand (Editor session, no controller) passes while EITHER latch is
         /// open: failing closed would make the rack untestable in the Editor.</para>
-        /// <para>⚠️ A hand holding a THROWABLE is closed outright, latch or not: the rack must not put
-        /// a weapon into the hand carrying the bomb. The latch cannot express it — the press that TAKES
-        /// the bomb starts from empty hands, so it would leave the gate open for that whole press.</para>
+        /// <para>⚠️ A throwable in the OTHER hand does NOT close the latch: the free hand may pick from
+        /// a rack while the bomb is carried. The hand holding the throwable is closed outright, latch or
+        /// not — the latch cannot express it, because the press that TAKES the bomb starts with no weapon
+        /// in either hand and would leave the gate open for that whole press.</para>
         /// </summary>
         public static bool CanSelectWith(OVRInput.Controller hand)
         {
@@ -195,6 +207,11 @@ namespace VortexArena.Core.Combat
         // Per-hand DEATH latch; same reason for being static, reset in Awake.
         private static bool _deathLatchLeft;
         private static bool _deathLatchRight;
+
+        // Per-hand "this hand's grip has been held since the OTHER hand took a throwable" latch; a
+        // parked two-handed clone must not migrate into such a grip (see TickTwoHandSummon).
+        private static bool _gripHeldThroughParkLeft;
+        private static bool _gripHeldThroughParkRight;
 
         /// <summary>Is this hand still inside the grip press that DEATH interrupted.
         /// <para>Kept even though <see cref="CanHoldWeapon"/> now blocks the dead: it also covers the
@@ -230,6 +247,29 @@ namespace VortexArena.Core.Combat
             {
                 _throwableRight = held;
             }
+            else
+            {
+                return;
+            }
+
+            if (!held)
+            {
+                return;
+            }
+
+            // Remember whether the OTHER hand was ALREADY gripping when the bomb was taken: only a
+            // fresh press may receive a clone parked by this stow (see TickTwoHandSummon).
+            OVRInput.Controller opposite = Opposite(hand);
+            bool oppositeGripping =
+                OVRInput.Get(OVRInput.Axis1D.PrimaryHandTrigger, opposite) >= GripThreshold;
+            if (opposite == OVRInput.Controller.LTouch)
+            {
+                _gripHeldThroughParkLeft = oppositeGripping;
+            }
+            else
+            {
+                _gripHeldThroughParkRight = oppositeGripping;
+            }
         }
 
         /// <summary><b>Parks the weapon in this hand TEMPORARILY</b> — it does not fall, is not
@@ -241,7 +281,8 @@ namespace VortexArena.Core.Combat
         /// <c>Destroy</c>, which would hand back a different random weapon.</para>
         /// <para>A two-handed weapon's front-grip link breaks by itself: the stowed weapon is no longer
         /// held, and the hand taking the bomb is closed to the front grip
-        /// (<see cref="IsThrowableHeld"/>). Re-taking it is the player's job after the throw.</para>
+        /// (<see cref="IsThrowableHeld"/>). Re-taking it is the player's job after the throw — or, for a
+        /// two-handed one, a FRESH press of the free hand (<see cref="TickTwoHandSummon"/>).</para>
         /// <para>Empty hand = no-op; a second call is harmless.</para></summary>
         /// <returns><c>true</c> if something was actually parked.</returns>
         public static bool StowHeld(OVRInput.Controller hand)
@@ -396,6 +437,8 @@ namespace VortexArena.Core.Combat
             _throwableRight = false;
             _deathLatchLeft = false;
             _deathLatchRight = false;
+            _gripHeldThroughParkLeft = false;
+            _gripHeldThroughParkRight = false;
 
             // Persistent singleton: subscribe in Awake/OnDestroy so rule/scene events are not
             // missed while the object is disabled (PlayerCombatState pattern).
@@ -436,6 +479,8 @@ namespace VortexArena.Core.Combat
             _throwableRight = false;
             _deathLatchLeft = false;
             _deathLatchRight = false;
+            _gripHeldThroughParkLeft = false;
+            _gripHeldThroughParkRight = false;
 
             Instance = null;
         }
@@ -461,7 +506,9 @@ namespace VortexArena.Core.Combat
             // are the only aim feedback in the arena (every frame ships with isRayVisible off).
             // ⚠️ Driven by the LIVE state, not by the latch: this is pure visuals with no ISDK side
             // effect, and the latch deliberately stays open across a press that fills the hand.
-            ControllerModelHider.SetGrabVisualsSuppressed(this, !HandsFree);
+            ControllerModelHider.SetGrabVisualsSuppressed(this,
+                !IsHandFreeForRack(OVRInput.Controller.LTouch),
+                !IsHandFreeForRack(OVRInput.Controller.RTouch));
 
             // ⚠️ Weaponless mode (§10.5 weaponSource:"none") closes BOTH delivery paths at once,
             // above them: neither a grant nor a frame clone may reach a hand. The sweep is repeated
@@ -524,23 +571,23 @@ namespace VortexArena.Core.Combat
         {
             // Read ONCE for both hands: TickHandGate may not observe the left hand's summon while
             // deciding the right hand's press — both are judged by the same pre-summon snapshot.
-            bool handsFree = HandsFree;
+            bool noWeaponHeld = NoWeaponHeld;
 
             TickHandGate(OVRInput.Controller.LTouch, ref _gripWasHeldLeft, ref _canSelectLeft,
-                ref _deathLatchLeft, handsFree);
+                ref _deathLatchLeft, ref _gripHeldThroughParkLeft, noWeaponHeld);
             TickHandGate(OVRInput.Controller.RTouch, ref _gripWasHeldRight, ref _canSelectRight,
-                ref _deathLatchRight, handsFree);
+                ref _deathLatchRight, ref _gripHeldThroughParkRight, noWeaponHeld);
         }
 
         /// <summary>One hand's latch: it follows the hands while the grip is up, freezes on the press
         /// EDGE, and is left alone for the rest of the press.
-        /// <para>This is what blocks the SECOND weapon: a hand whose press begins while the other
-        /// hand already holds something starts shut and stays shut. A hand that starts from empty
-        /// hands keeps its permission even after this very press summons the previously selected
-        /// clone into it — that clone is the press's own doing, not a second weapon
-        /// (see <see cref="CanSelectWith"/>).</para></summary>
+        /// <para>This is what blocks the SECOND weapon: a hand whose press begins while there is
+        /// already a weapon in either hand starts shut and stays shut. A hand whose press begins with
+        /// no weapon in either hand keeps its permission even after this very press summons the
+        /// previously selected clone into it — that clone is the press's own doing, not a second
+        /// weapon (see <see cref="CanSelectWith"/>).</para></summary>
         private static void TickHandGate(OVRInput.Controller hand, ref bool gripWasHeld,
-            ref bool canSelect, ref bool deathLatch, bool handsFree)
+            ref bool canSelect, ref bool deathLatch, ref bool gripHeldThroughPark, bool noWeaponHeld)
         {
             bool gripHeld = OVRInput.Get(OVRInput.Axis1D.PrimaryHandTrigger, hand) >= GripThreshold;
 
@@ -550,11 +597,12 @@ namespace VortexArena.Core.Combat
             if (!gripHeld)
             {
                 deathLatch = false;
+                gripHeldThroughPark = false;
             }
 
             if (!gripHeld || !gripWasHeld)
             {
-                canSelect = handsFree;
+                canSelect = noWeaponHeld;
             }
 
             gripWasHeld = gripHeld;
@@ -938,7 +986,7 @@ namespace VortexArena.Core.Combat
         /// kept, otherwise ammo would silently refill every time the player aimed at the frame. A
         /// different weapon destroys the old clone; the new one is born FULL on the next
         /// grip.</para>
-        /// <para>⚠️ The SELECTING hand must have begun its grip press with both hands empty
+        /// <para>⚠️ The SELECTING hand must have begun its grip press with no weapon in either hand
         /// (<see cref="CanSelectWith"/>): with a weapon already in hand the free hand may not pick a
         /// second one. <b>This is the ONLY place that rule is enforced</b>, and deliberately so —
         /// rejecting here costs nothing, because ISDK has already delivered its select and consumed
@@ -1073,11 +1121,14 @@ namespace VortexArena.Core.Combat
         /// front-grip candidate.</summary>
         private void TickTwoHandSummon(bool leftHeld, bool rightHeld)
         {
-            // ⚠️ A parked clone does NOT migrate to the free hand: it was stowed to come back to the
-            // hand it left (StowHeld). Without this the rifle would hop into the other hand the moment
-            // the player grabs the bomb and stay there after the throw.
-            if ((IsThrowableHeld(OVRInput.Controller.LTouch) && _summonedLeft != null) ||
-                (IsThrowableHeld(OVRInput.Controller.RTouch) && _summonedRight != null))
+            // ⚠️ A parked clone must not migrate into a grip that was ALREADY held when the bomb was
+            // taken (front grip): the rifle would hop hands the instant the bomb is grabbed and stay
+            // there after the throw. A FRESH press of the free hand does take it — same instance, same
+            // magazine, through the hand-swap below.
+            if ((IsThrowableHeld(OVRInput.Controller.LTouch) && _summonedLeft != null &&
+                 _gripHeldThroughParkRight) ||
+                (IsThrowableHeld(OVRInput.Controller.RTouch) && _summonedRight != null &&
+                 _gripHeldThroughParkLeft))
             {
                 StowAllSummoned();
                 return;
