@@ -261,7 +261,8 @@ namespace VortexArena.Core.Audio
         /// NOW.</para></summary>
         private static bool IsInstant(GameSoundId id)
         {
-            return id == GameSoundId.CountdownTick || id == GameSoundId.AdminViolation;
+            return id == GameSoundId.CountdownTick || id == GameSoundId.AdminViolation ||
+                   id == GameSoundId.LocalDeathDrum;
         }
 
         /// <summary>Hands the announcement to the channel: plays immediately when free, otherwise
@@ -358,6 +359,8 @@ namespace VortexArena.Core.Audio
 
             if (msg.victimId == local)
             {
+                // Drum is an instant layer under the line; the line itself queues as before.
+                Play(GameSoundId.LocalDeathDrum);
                 Play(GameSoundId.LocalDeath);
                 return;
             }

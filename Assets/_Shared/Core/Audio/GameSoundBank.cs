@@ -23,6 +23,9 @@ namespace VortexArena.Core.Audio
         [SerializeField] private AudioClip teammateEliminated;
         [Tooltip("Yerel oyuncu öldü — birden çok klip yazmak varyasyon üretir, biri rastgele seçilir.")]
         [SerializeField] private AudioClip[] localDeathClips = Array.Empty<AudioClip>();
+        [Tooltip("Yerel oyuncu öldü — ölüm anında derin davul vuruşu. Ölüm repliğine EK çalar, " +
+                 "onun yerine değil; kuyruğa girmez, repliği geciktirmez.")]
+        [SerializeField] private AudioClip localDeathDrum;
         [Tooltip("Yerel oyuncu canlandı.")]
         [SerializeField] private AudioClip localRespawn;
 
@@ -82,6 +85,7 @@ namespace VortexArena.Core.Audio
                 case GameSoundId.EnemyEliminated: return enemyEliminated;
                 case GameSoundId.TeammateEliminated: return teammateEliminated;
                 case GameSoundId.LocalDeath: return PickLocalDeath();
+                case GameSoundId.LocalDeathDrum: return localDeathDrum;
                 case GameSoundId.LocalRespawn: return localRespawn;
                 case GameSoundId.MatchStart: return matchStart;
                 case GameSoundId.TeamRedWon: return teamRedWon;

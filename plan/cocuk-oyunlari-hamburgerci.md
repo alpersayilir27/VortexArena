@@ -30,10 +30,6 @@ slotlarının hacimleri ve müşteri yolu ona bağlı. Her banko slotunda bir se
       `CargoAnchor`'ı bıçağın, servis tahtasınınki yüzeyin ölçüsüne göre yazıldı; model değişince
       ikisi de yeniden konumlanır. `slotHeight` katman kalınlığına, `spillAngle` istenen dökülme
       hissine göre ayarlanır. ⚠️ Ankor yanlış yerdeyse yük görsel olarak modele gömülür — hata vermez.
-- [ ] **Sesler** — alanlar prefabda hazır, klip bekliyor (boş alan sessizdir): servis tahtasının red
-      sesi (`BurgerServingBoard.rejectSound`) · müşteri geldi/mutlu/mutsuz (`BurgerCustomer`
-      `arriveSound`/`happySound`/`unhappySound`) · köfte cızırtısı ve pişti vuruşu (`BurgerPatty`
-      `sizzleSource` loop'lu `AudioSource` + `cookedClip`) · dağıtıcı `takeSound` · bıçak `cutSound`.
 - [ ] **Balon ölçüsü gerçek modele göre:** `NO_customer/Bubble/Panel/Dilimler` dilim kökü ve
       `BurgerOrderBubble.sliceSize` (canvas birimi, 0.001 ölçek) metin alanıyla birlikte modelin
       başına göre yeniden konumlanır; dilim renkleri (`sliceColors`) malzeme modellerinin renkleriyle

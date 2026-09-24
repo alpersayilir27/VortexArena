@@ -2404,7 +2404,7 @@ klip uzunluğundan ölçülür: aynı kaynakta anlık işaretler de çalıyor, `
 ve her bip sıradaki repliği geciktirirdi. ⚠️ **Kuyrukta bayatlayan duyuru hiç çalmaz** (birkaç
 saniyelik ömür) ve kuyruğun bir tavanı vardır (taşarsa **yeni gelen** düşer, sıradaki değil) — geç
 çalan duyuru yanlış duyurudur. ⚠️ **İstisna anlık işaretlerdir** (geri sayım bip'i, admin ihlal
-uyarısı): anlamları zamanlamalarında olduğu için kuyruğa hiç girmez, bekleyeni de geciktirmezler.
+uyarısı, ölüm davulu): anlamları zamanlamalarında olduğu için kuyruğa hiç girmez, bekleyeni de geciktirmezler.
 `ModeAudioRegistry`'nin `Countdown` tetikleyicisi de bu kuyruğun dışındadır (an sesidir, bankanın
 bip'iyle aynı sınıf).
 Ölçüt "kısa mı" değil **"geç çalarsa yalan olur mu"**dur; `GameSoundId`'ye eklenen yeni bir ses
@@ -2446,6 +2446,9 @@ ve ilk mesajda hiç çalmaz: koşan bir maça sonradan bağlanan başlık "maç 
 aynıdır (tek klip yazmak da geçerli, o zaman eleme yapılmaz). Diğer alanlar tek kliptir; ölüm
 oyuncunun en sık duyduğu duyuru olduğu için varyasyon orada gerekir. Sonucu: `Clip(LocalDeath)`
 her çağrıda başka bir klip döndürür, çağıran onu **önbelleklemez**.
+⚠️ **Ölüm davulu (`LocalDeathDrum`, `localDeathDrum`) ölüm repliğine EKTİR, yerine değil:** her
+ölümde repliğin yanında çalar ve **anlık işarettir** — kuyruğa girmez, repliği geciktirmez. Duyuru
+olsaydı replik davul bitene kadar bekler ve ardındaki tur sonu duyurusunu da kaydırırdı.
 ⚠️ **Öldürme duyurusu kurbanın takımına göre ikiye ayrılır** (`EnemyEliminated` ·
 `TeammateEliminated`): bir öldürmede ikisinden yalnız biri çalar. Kurbanın takımı `kill_event`'ten
 DEĞİL roster'dan (`lobby_state`) okunur — takım zaten orada geliyor, mesaja alan eklemek ikinci bir
@@ -2922,7 +2925,7 @@ admin exe'si → **Sunucuyu Başlat** → **Yönetimi Başlat**. Sunucu `--venue
 | **Yeni mod** | Unity: `Assets/Modes/<Ad>/Scripts/VortexArena.Modes.<Ad>.asmdef` (refs: Core, Net, Protocol) + Sunucu: `Modes/<Ad>Mode.cs : IGameMode` → `MatchDirector` ctor'unda `Register(new <Ad>Mode())` + protokol dokümanına `modId` |
 | **Yeni lobi** | Lobi de bir arena kutusudur (`Venues/<İşletme>/Scenes/<LobiSahnesi>/`) ve kurulumu arenayla aynı altı adımdır; üç farkı vardır: `MapDefinition.supportedModeIds` **yalnız** `["lobby"]` (⚠️ boş bırakılırsa "kısıtsız" sayılır ve sahne her modda oynanır), sahnede `BaseZone` ve `VA_ModeHud` YOK (`Template Temellerini Yükle` penceresinde o kutular kapatılır), silah kaynağı `random` — sahneden silah alınmaz, grip'e basınca elde belirir (§3.8.1). **Her mekanın kendi lobisi olur** ve mekanın boyut dosyasını arenalarla **paylaşır** (fiziksel oda aynı; ikinci ölçü dosyası açılmaz). `Configure All Build Elements` yeter: sunucu seçilen mekanın lobi haritasını kendi bulur — `server.json → lobbyScene` yalnız mekanda birden çok lobi varsa doldurulur |
 | **Ortam sesi (ambiyans)** | Haritanın `MapDefinition`'ındaki `ambienceClip` + `ambienceVolume` alanlarına bir klip sürüklemekle biter — `SceneAmbience` gerisini yapar (§4). ⚠️ Sahneye ses objesi konmaz, klip ikinci bir yere yazılmaz; klipler `Assets/Audio/Ambience/` altında ve **`Streaming`** import'ludur. Haritadan bağımsız duyurular `GameSoundBank`'e, moda/haritaya göre değişenler `ModeAudioRegistry`'ye girer (§4) |
-| **Harita müziği** | Aynı `MapDefinition`'daki **ayrı** alan çiftidir (`musicClip` + `musicVolume`); boş bırakılırsa müzik yoktur. ⚠️ **Ambiyansın yerine geçmez, ÜSTÜNE çalar** — iki katman da aynı ortak faza oturur, yani müziği eklemek ambiyans klibini kaldırmayı gerektirmez. İçe aktarma ve klasör kuralı ambiyansla aynıdır (**`Streaming`**) |
+| **Harita müziği** | Aynı `MapDefinition`'daki **ayrı** alan çiftidir (`musicClip` + `musicVolume`); boş bırakılırsa müzik yoktur. ⚠️ **Ambiyansın yerine geçmez, ÜSTÜNE çalar** — iki katman da aynı ortak faza oturur, yani müziği eklemek ambiyans klibini kaldırmayı gerektirmez. İçe aktarma kuralı ambiyansla aynıdır (**`Streaming`**); klipler `Assets/Audio/Music/` altındadır |
 | **Kar/hava efekti (başka arenaya)** | Karlı bir arena kutusunun `Prefabs/FX_SnowStorm.prefab`'ını sahneye **oynanan alanın ortasına** bırak (`ArenaBoundary` orijindeyse (0,0,0); bir bölgeye taşınmışsa o bölgenin ortası). Kendine yeter: `Snow_C_NearField` üstündeki `WeatherVolumeFollow` hedefi boşsa `Camera.main`'i bulur. Arena 12×12 değilse `Snow_A/B/E` shape scale'lerini **arena boyutu + ~3 m pay** ile ölçekle — geniş kutu parçacık bütçesini görünmeyen alana harcar (Tuzaklar: emisyon kutusu / katman kalibrasyonu) |
 | **Hazır bir sahneyi arenaya çevirmek** | Aşağıdaki adımlar — araçları kullanmadan, elle |
 

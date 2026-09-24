@@ -39,5 +39,11 @@ namespace VortexArena.Core.Audio
         /// <para>⚠️ Replaces <see cref="EnemyEliminated"/>, never in addition: one kill event plays
         /// exactly one of the two.</para></summary>
         TeammateEliminated = 9,
+
+        /// <summary>Deep drum hit on the local player's death — plays IN ADDITION to
+        /// <see cref="LocalDeath"/>, never instead of it.
+        /// <para>⚠️ Instant cue: it marks the moment of death and stays off the announcement queue,
+        /// so the death line keeps its current timing.</para></summary>
+        LocalDeathDrum = 10,
     }
 }
