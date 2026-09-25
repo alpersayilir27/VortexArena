@@ -1119,7 +1119,7 @@ hareketi yapar, hiçbir şey olmaz. Kural: her görünmez hacim, ait olduğu gö
 | Görünen | Ona kilitli görünmez parça |
 |---|---|
 | Izgara/ocak gövdesi | pişirme hacmi (`BurgerGrill`) |
-| Banko | slot hacimleri + müşterinin duracağı nokta. ⚠️ Servis tahtası sabittir ve yuvasına **konumuyla** bağlanır (slot numarasıyla değil): tahta ile slot hacmi aynı prefabta, tahta hacmin içinde durur — ayrı düşerse mod sessizce hiç servis yapmaz |
+| Banko | slot hacimleri + müşterinin duracağı nokta. ⚠️ Servis tahtası sabittir ve yuvasına **konumuyla** bağlanır (slot numarasıyla değil): tahta ile slot hacmi aynı prefabta, tahta hacmin içinde durur — ayrı düşerse mod sessizce hiç servis yapmaz. Tahta başka tezgâha alınacaksa **yuva objesi** (`CounterSlot_N`) da taşınır: müşteri noktası onun çocuğudur, tek başına taşınırsa müşteri doğru yerde bekler ama tahta hacmin dışında kalır |
 | Kapı | müşteri yolunun waypoint'leri |
 | Malzeme rafı | dağıtıcıların kavrama soketleri |
 
@@ -1137,7 +1137,21 @@ kalır — belirti "obje iki kez kayıtlı"dır.
 soketlerin yerden yüksekliği (hedef kitle çocuksa özellikle), müşteri yolunun uzunluğu ve bankonun
 oyun alanına sığıp sığmadığı her mekanda yeniden kontrol edilir.
 
-**6. İstasyonu koymak haritayı oynanabilir yapmaz.** Sahne adı katalog anahtarıdır; haritanın
+**6. ⚠️ Eşya bırakılan yüzeyin collider'ı görünen yüzeye oturur.** Mekanın kendi mobilyası
+(environment paketinin masası/tezgâhı) kullanılıyorsa kutu **ölçüyle** kurulur: üstü çalışma
+yüzeyinde, mesh sınırında değil. Arka pervaz sınırı şişirir → bırakılan eşya havada durur; kutu
+yüzeyin altında kalırsa ince eşya (bıçak, spatula) masaya gömülür. `MeshCollider` + Convex
+kullanılmaz: L masada hull iç köşeyi doldurur, pervazı yüzeye eğim olarak yayar. Kalıp: gövde kutusu
+(L masada kol başına bir) mobilyanın `Obstacle` layer'ında; pervaz kutuları `Default` layer'daki
+bir çocuk objede — engel aday sınırını ([14](#14-yeni-arena-eklemek) 5. adım) boşa doldurmasın.
+
+**7. ⚠️ Kabuğun zemin collider'ı kalın bir levhadır.** Üst yüzü `y=0`'da, kalınlığı ~0,5 m, izdüşümü
+duvarların birkaç metre dışına taşar. Sıfır kalınlıklı (düz plane) zemin ya da yalnız oda kadar
+kutu, fırlatılan ince malzemeyi (domates dilimi ~1,4 cm) bir fizik adımında içinden geçirir; düşen
+eşya dinlenmeye hiç varamaz ve kaybolur. Eşya prefablarının `Rigidbody`'si
+`ContinuousSpeculative` kalır — `Discrete` ince eşyada aynı delinmeyi masada da yapar.
+
+**8. İstasyonu koymak haritayı oynanabilir yapmaz.** Sahne adı katalog anahtarıdır; haritanın
 `MapDefinition`'ı ve `gameType`'ı olmadan maç başlamaz → [13.1](#131-çocuk-oyunu-eklemek-silahsız-kooperatif) ·
 [14](#14-yeni-arena-eklemek).
 
@@ -1196,14 +1210,23 @@ değeri sahne objesinde durduğu için arena başına elle yapılır ve **atlan�
   çit, cam kenar), köşe dolgusu ve kutunun dışında kalan her şey — kalibrasyonu kaymış oyuncu
   kenarda durduk yere ölmesin, `ObstacleVolumes` aday sınırı boşa dolmasın. Aynı ad ailesi
   (`ArenaBoundry*` gibi) iki türü de kapsayabilir: **ada değil konuma** bakılır. Küçük prop
-  (mikrodalga, el aleti) da girmez — kafa sığmaz, aday sınırını yer.
+  (mikrodalga, el aleti) da girmez — kafa sığmaz, aday sınırını yer. Layer bir prop'a çocuklarıyla
+  birlikte verildiyse içindeki parçalar (vitrindeki şişeler) `Default`'a geri alınır: gövdenin
+  içinde kaldıkları için ihlale bir şey katmazlar, oyuncunun çevresindeki 8 aday yerini doldururlar.
 - **Collider konveks olmalı:** Box/Sphere/Capsule ya da `MeshCollider` + Convex. Environment
   paketleri **konkav** `MeshCollider` ile gelir: layer vermek işe yaramaz (çalışma anında elenir +
   hata), convex işaretlemek ise içbükey mesh'te hull'ü çukura doldurur ve oyuncu **boşlukta** ceza
-  alır. Doğru hamle mesh'in yerel sınırlarına oturan kaba bir **Box/Capsule** koymaktır.
-- **Dekor haritalı arenada** (collider'sız tek mesh harita) görünmez sınır kutuları hem yüzey
-  etiketi hem layer taşır — yenisini eklerken ikisi de kopyalanır
-  ([Sistem Özeti, `SurfaceTag`](../Sistem-Ozeti.md)).
+  alır. Doğru hamle mesh'in yerel sınırlarına oturan kaba bir **Box/Capsule** koymaktır. Convex
+  `MeshCollider` 255 üçgeni aşarsa Unity **kısmi hull** kullanır ve her sahne yüklemesinde uyarı
+  basar (gözlük günlüğü saniyelik sınırda kısılır, gerçek satırlar kaybolur) — yine Box. İnce panel
+  (çit, ızgara) kutusu en az ~0,3 m kalınlık alır: kafa ince kutudan tek karede geçip ihlale
+  yakalanmaz.
+- **Yüzey (çarpma efekti) ataması elle yapılır:** `Tools > VortexArena > Arena > Yüzey Atama`
+  seçili objenin materyallerini, hangi yüzeye düştüğünü ve nedenini gösterir; materyali yüzeye
+  bağlar ya da objeye etiket koyar. ⚠️ Eşleme **göz kararıyla toplu** yapılmaz: aynı atlas dokusunu
+  paylaşan tahta ve metal objeler tek materyalde birleşebilir — objeyi oyunda görerek ata.
+- **Dekor haritalı arenada** (collider'sız tek mesh harita) görünmez sınır kutusu etiket aldıysa
+  yenisini eklerken etiket de kopyalanır ([Sistem Özeti, `SurfaceTag`](../Sistem-Ozeti.md)).
 - **Environment paketinin prop'ları materyale çözülmüyorsa** (collider ile renderer ayrı objelerde)
   etiket prop başına değil **grup köküne** konur — etiket collider'dan yukarı arandığı için tek
   bileşen yüzlerce collider'ı kapsar; oyun alanı içindeki prop'lar ise materyal eşlemesiyle

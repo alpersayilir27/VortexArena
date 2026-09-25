@@ -229,14 +229,21 @@ namespace VortexArena.Net
             }
         }
 
-        /// <summary>On disconnect: drops every ring — a new session restarts the pose stream and a stale
-        /// sample would draw the object where it was before the drop.</summary>
-        private void HandleDisconnected()
+        /// <summary>Drops every ring. Called on a world reset (§10.10 staging) as well as on disconnect:
+        /// an entry stays usable for <see cref="STALE_TIMEOUT_MS"/>, so the previous match's last flight
+        /// pose would pull the object straight off the authored pose it was just seated on.</summary>
+        public void Clear()
         {
             lock (_gate)
             {
                 _entries.Clear();
             }
+        }
+
+        /// <inheritdoc cref="Clear"/>
+        private void HandleDisconnected()
+        {
+            Clear();
         }
 
         // ------------------------------------------------------------- conversions

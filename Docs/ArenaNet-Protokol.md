@@ -33,6 +33,8 @@ Tümü paylaşılan `ArenaProtocol` statik sınıfında tanımlanır (`Assets/_S
 | `OBJECT_REST_SPEED` | `0.05` m/s | Bırakılan objenin **durdu** sayılma hız eşiği (§10.10). Altına inip `OBJECT_REST_SECONDS` boyunca kalırsa sahip `object_rest{pos,rot}` yollar ve sahiplik biter |
 | `OBJECT_REST_SECONDS` | `0.3` | Durma eşiğinin altında kesintisiz geçirilmesi gereken süre. ⚠️ Tek karelik bir "durdum" yeterli değildir: sekmenin tepe noktasında hız anlık sıfırlanır, orada bırakılan obje havada donardı |
 | `OBJECT_DROP_CLEARANCE` | `0.05` m | Sahibi ölünce/kopunca zemine indirilen objenin arena zemininden (y = 0, §3) yüksekliği (§10.10). Sunucu objenin yarı yüksekliğini bilmez — obje türüne göre bir miktar batar ya da havada durur; bu pay "zemine gömülü görünmesin" içindir, fizik değildir |
+| `OBJECT_KILL_Y` | `-0.5` m | Arena zemininin (y = 0, §3) bu kadar altına inen obje **kaybolmuş** sayılır (§10.10): onu bu yükseklikte gören SAHİP objeyi ev pozuna koyar, hızını sıfırlar ve o pozla `object_rest` yollar. ⚠️ Düşen obje kendiliğinden hiç durmaz — hızı `OBJECT_REST_SPEED`'in altına inmez, yani `object_rest` hiç gitmez; zeminden kaçan malzeme bu kapı olmadan sahipli ve erişilmez kalır. Sunucuda karşılığı yoktur: sunucu metre bilmez |
+| `OBJECT_OWNER_SILENCE_MS` | `1000` | Sahibin poz kanalı (`0x01`) bu süredir susmuşsa sunucu onu **obje sahipliği için kopmuş** sayar ve tuttuğu/uçurduğu objeleri zemine indirir (§10.10). Poz kanalı 20 Hz akar, yani eşik 20 paketlik kayba dayanır; istemcilerin kendi bayatlık pencereleriyle (uzak obje akışı ve uzak poz gövdesi, 1 sn) **aynı** tutulur — sunucu objeyi indirmeden önce obje başkalarının ekranında bırakıldığı noktaya geri sıçramaz |
 | `OBJECT_GRAB_CONFIRM_SECONDS` | `1.0` | İyimser kavramanın (`object_grab`) kendisini sahip + `Held` gösteren bir `object_state` ile onaylanması için istemcinin beklediği süre (§10.10). Dolunca yerel kavrama geri alınır: sessiz red (elde olan obje, eski sunucu) başka hiçbir mesajla gelmez; süre olmasaydı el, objeyi hiç tutmadığı hâlde dolu kalırdı |
 | `OBJECT_MAX_ENTRIES_PER_PACKET` | `16` | Tek `0x05` datagramının obje bölümüne yazılan en fazla girdi (§6.8). 8 + 16×34 + 16×12 = 744 B bütçeye sığar ama olay bölümü aynı bütçeyi paylaşır — gerçek kapı yine boyut kapısıdır (`COMBINED_MAX_BYTES`); bu sayı `objectCount`'un `u8` olmasının tavanı ve bir emniyettir |
 | `PLAYER_NUMBER_MIN` / `PLAYER_NUMBER_MAX` | `1` / `99` | Forma numarası aralığı (§2). `0` = atanmamış ve aralığın dışındadır. Numara **tüm kayıtlı cihazlar** arasında benzersizdir |
@@ -81,7 +83,7 @@ Tümü paylaşılan `ArenaProtocol` statik sınıfında tanımlanır (`Assets/_S
   - `left` — süre doldu, oyuncu oyundan çıkarıldı. Kayıt **yalnız koşan maçın katılımcısıysa** durur (§10.2: adı ve sayaçları maç sonuna kadar tabloda kalsın), aksi hâlde tümüyle silinir ve `playerId` havuza döner.
   Süresiz duran bir "çevrimdışı" satır bilerek yok: roster canlı bağlantıları, maç defteri ise katılımcıları gösterir — ikisi ayrı sorudur.
 - **Admin kayıtları kalıcı DEĞİLDİR:** admin bağlantısı koptuğunda (veya `HEARTBEAT_TIMEOUT` dolduğunda) kaydı registry'den **tümüyle silinir** ve `playerId`'si havuza döner; adı `devices.json`'a **yazılmaz**. ⚠️ Admin `reconnecting` durumuna **hiç girmez**: `deviceId`'si oturumluktur, yani geri gelen admin yeni bir kimlikle gelir ve eski satır asla o bağlantıyla eşleşemezdi — "yeniden bağlanıyor" demek yalan olurdu. Böylece admin'i her açıp kapatma roster'da hayalet satır bırakmaz.
-- **Yeniden bağlanma kimliği KORUR.** Aynı `deviceId` hangi durumdan dönerse dönsün (`reconnecting` ya da `left`) mevcut kayda oturur: `playerId`, ad, forma numarası, takım ve `kills`/`deaths`/`score` olduğu gibi kalır — oyuncu kaldığı yerden devam eder, ikinci bir satır açılmaz.
+- **Yeniden bağlanma kimliği KORUR.** Aynı `deviceId` hangi durumdan dönerse dönsün (`reconnecting` ya da `left`) mevcut kayda oturur: `playerId`, ad, forma numarası, takım ve `kills`/`deaths`/`score` olduğu gibi kalır — oyuncu kaldığı yerden devam eder, ikinci bir satır açılmaz. ⚠️ **Takım olduğu gibi demek boş takım da olduğu gibi demektir:** takımsız modda boş takım (`""`) boş kalır, "atanmamış" sayılıp takıma konmaz — konsaydı dönen oyuncu takımsız maçın ortasında kırmızı gövdeye geçerdi. Aynı sebeple **takımsız bir maç kuruluyken katılan ya da dönen oyuncuya takım atanmaz** (`team:""`).
 - **Admin sayısı sınırsız ve hepsi eş yetkilidir.** Birincil/ikincil admin kavramı yoktur: `role=="admin"` olan her bağlantı §5.2'deki tüm komutları gönderebilir, son gelen komut uygulanır. Operatörlerin birbirini ezmemesi için ortak seçim `admin_state` ile senkronlanır (§5.3) ve her komut `admin_state.notice` ile diğerlerine duyurulur.
 - `playerId` = sunucunun `welcome`'da atadığı **1..`PLAYER_ID_MAX`** arası küçük tamsayı (UDP paketlerinde 1 bayt). Admin'e de atanır (poz göndermez). Havuz dolarsa `kicked{reason:"Sunucu dolu"}` ile reddedilir — bu bir ürün kotası değil, `u8` tel formatının tavanıdır.
 - **Ad ve numara = CİHAZ kimliğidir, oturum kimliği değil.** İkisi de oyuncunun ilk bağlantısında otomatik atanır ve `devices.json`'a `deviceId` başına kalıcı yazılır; admin `set_identity` ile ikisini de değiştirebilir (§5.1). Roster'da `name` + `number` olarak taşınır (§5.3).
@@ -1176,8 +1178,15 @@ gelir. Bölünmeden gönderilse boy iki kez ölçeklenir: kısa oyuncu daha kıs
 için ayak yüksekliği alıcıda bind oranlarından çıkar; tek çare **kalçayı ötelemektir**. Alıcı önce
 rotasyonları, sonra kalçayı yazar, ardından en alçak bacak ekleminin çizilen yüksekliğini ölçüp farkı
 (`footY − çizilen`, kök ölçeğine bölünerek, ±0.5 m kırpılarak) kalçanın y'sine ekler. Sıra
-bağlayıcıdır: ayak konumunu rotasyonlar belirler. T-poz yedeğinde `footY = 0`'dır — bind ayakları
-tanım gereği zemindedir.
+bağlayıcıdır: ayak konumunu rotasyonlar belirler. T-poz yedeğinde `footY = 0`'dır.
+
+⚠️ **`footY` alıcıda zemine kırpılır — yalnız yukarı.** Hedef, `footY` ile *oyuncunun kendi katının
+zemini + taban payı × ölçek* değerlerinden büyüğüdür. Taban payı, alıcı modelin bind pozunda en alçak
+bacak ekleminin mesh tabanından yüksekliğidir (`ArenaNetCharacterBehaviour.SoleClearanceMeters`).
+Sebep: `footY` bir **eklemin** yüksekliğidir, tabanın değil. Derin çömelmede gönderenin ayak
+parmağı eklemi kendi zeminine iner ve telden aynen kopyalanırsa mesh tabanı taban payı kadar yere
+gömülür. Kırpma yalnız yukarı çalıştığı için zıplayan oyuncunun ayağı etkilenmez; model değişirse
+pay yeniden ölçülür.
 
 ⚠️ **Alıcı her kareyi doğrular.** Blob uzunluğu `BLOB_BYTES`'a eşit değilse, `fmt` farklıysa ya da
 `jointCount` yerel listeyle uyuşmuyorsa karenin **tamamı — kök dahil —** atılır ve oyuncu başına bir
@@ -1606,7 +1615,7 @@ turnuva gibi kendi ara durumu olan her yeni mod da çekirdek enum'unu büyütmek
 modlar çekirdeğe dokunamaz. Bunun yerine lobi `modeId:"lobby"` + `rules.fireWhilePaused:true`
 ile tanımlanır (§10.5, §10.7).
 
-- **`start_match` doğrulaması** (sırayla): `modeId` sunucudaki `IGameMode` kayıtlarında var; `sceneName` boş değil; **`sceneName` `config/maps.json` harita tablosunda var ve o harita `modeId`'yi destekliyor** (harita girdisindeki `modes` boşsa kısıt yok; **tablo boşsa — maps.json yoksa — bu adım tümüyle atlanır**); **modun oyun tipi haritanın oyun tipiyle aynı** (`IGameMode.GameType` ↔ harita girdisindeki `gameType`, §11; iki taraftan biri boşsa `"quickbattle"` sayılır — eski export sessizce Hızlı Savaş'a düşer); `sceneName` tüm çevrimiçi oyuncuların `hello.scenes` listesinde var. Geçmezse komut reddedilir ve konsola sebep yazılır (durum değişmez). İki oyuncu+ varken takımlar dengelenir (boş takım kalmaz); tek oyuncuyla ve **hiç oyuncu yokken** başlatmaya izin verilir (konsolda uyarı) — ikincisi admin gözlemcinin haritayı boş arenada açması için vardır.
+- **`start_match` doğrulaması** (sırayla): `modeId` sunucudaki `IGameMode` kayıtlarında var; `sceneName` boş değil; **`sceneName` `config/maps.json` harita tablosunda var ve o harita `modeId`'yi destekliyor** (harita girdisindeki `modes` boşsa kısıt yok; **tablo boşsa — maps.json yoksa — bu adım tümüyle atlanır**); **modun oyun tipi haritanın oyun tipiyle aynı** (`IGameMode.GameType` ↔ harita girdisindeki `gameType`, §11; iki taraftan biri boşsa `"quickbattle"` sayılır — eski export sessizce Hızlı Savaş'a düşer); `sceneName` tüm çevrimiçi oyuncuların `hello.scenes` listesinde var. Geçmezse komut reddedilir ve konsola sebep yazılır (durum değişmez). Takımlı modda takımı olmayan (`team:""`, ör. takımsız maçtan dönen) her oyuncu **oyuncu sayısından bağımsız** küçük takıma yazılır — tek oyuncu da, yoksa takımsız kalan tek oyuncu takımlı maçı beyaz etiketle ve takım kartı olmadan oynar; iki oyuncu+ varken ayrıca takımlar dengelenir (boş takım kalmaz). Tek oyuncuyla ve **hiç oyuncu yokken** başlatmaya izin verilir (konsolda uyarı) — ikincisi admin gözlemcinin haritayı boş arenada açması için vardır.
   ⚠️ **`lobby` bir `IGameMode` DEĞİLDİR** → `start_match{"lobby"}` "bilinmeyen mod" diye reddedilir. Yani **lobi türü seçiliyken maç başlatılamaz** (§10.7); bunun için ayrı bir kural yazılmaz, kayıtlı olmaması yeterlidir.
 - **Oyuncusuz maç (yalnız admin):** `load_match` yalnız adminlere gider, yükleme kapısında beklenecek `set_ready` olmadığı için doğrudan geri sayıma geçilir ve maç normal işler (skor 0, süre akar). Ayrım şu: **oyuncularla başlamış** bir maçta yükleme sırasında son oyuncu da düşerse sunucu maçı bırakıp açık sahneye döner; oyuncusuz **başlatılmış** maçta dönmez — çıkış operatörün `abort_match`/`return_to_lobby` komutudur.
 - **Mod/harita/parametre seçimi sunucuda yaşar (çoklu admin):** admin arayüzündeki seçiciler yerel bir değişkeni değil, `set_selection` ile sunucudaki ortak seçimi değiştirir; sunucu `admin_state` ile hepsine geri yayar. `start_match` kendi `modeId`/`sceneName`'i ile gelmeye devam eder (protokol yüzeyi genişledi ama kırılmadı) ama sunucu onu aynı zamanda ortak seçime yazar — böylece maç başladığında tüm admin panelleri aynı değeri gösterir. Seçim yalnız bir niyet beyanıdır: doğrulama `start_match` anında yapılır.
@@ -1885,7 +1894,7 @@ yollar. Amaç tek: **istemci modun ne olduğunu TAHMİN ETMESİN.** Kural telden
 
 | Alan | Değerler | Varsayılan | Anlamı |
 |---|---|---|---|
-| `teamMode` | `"two"` \| `"none"` | `"two"` | `"two"`: kırmızı/mavi, sunucu takımları dengeler, slot takım içi. `"none"`: takım yok (`team:""`), slot tek havuzdan |
+| `teamMode` | `"two"` \| `"none"` | `"two"` | `"two"`: kırmızı/mavi, sunucu takımları dengeler, slot takım içi. `"none"`: takım yok (`team:""`), slot tek havuzdan; maç kuruluyken katılan/dönen oyuncu da `""` alır |
 | `scoring` | `"team"` \| `"player"` \| `"shared"` | `"team"` | Skor kime yazılır: `match_state.scoreRed/scoreBlue` mi, `lobby_state → PlayerInfo.score` mü (§10.2), yoksa **ikisi birden** mi. `"shared"` = kooperatif: herkesin katkısı `PlayerInfo.score`'a, ortak toplam `scoreRed`'e yazılır ve `scoreBlue` **daima 0**'dır (takım yok, ikinci kanal ortak toplamın karşısına konacak bir şey taşımaz). Kazanan yoktur — bak aşağıdaki kazanan kuralı |
 | `friendlyFire` | `true` \| `false` | `false` | `false` = takım arkadaşı vurulamaz (§10.3, dost ateşi kapısı). Boş takım asla takım arkadaşı sayılmaz. ⚠️ **Bir mod kuralı DEĞİL, operatör anahtarıdır** — aşağı bak |
 | `reviveAnchor` | `"base"` \| `"standstill"` \| `"none"` | `"base"` | Canlanma şartı (§10.4/2). `"none"` = tur içinde canlanma yok; `revive_request` reddedilir ve kuralı delen bir operatör komutu YOKTUR — ölü oyuncuyu yalnız yeni tur canlandırır |
@@ -1945,7 +1954,9 @@ olmalı, tanınmayan `modeId` reddedilir):
 >
 > **`modeState` biçimi:** `h:<mutlu>;u:<mutsuz>` (`"h:3;u:1"`). Çekirdek yorumlamaz (§10.1); oyuncu
 > HUD'ı ve admin sahne üstü HUD'ı aynı dizeyi okur. ⚠️ Bilinmeyen anahtar **atlanır**, hata değildir —
-> alan sonradan yeni sayaç kazanabilsin diye.
+> alan sonradan yeni sayaç kazanabilsin diye. ⚠️ Dize `start_match`'ten (yükleme fazı) itibaren
+> **sıfır durumunu taşır** (`h:0;u:0`) — sayaç geri sayım boyunca da ekranda durur, ilk müşteriyi
+> beklemez.
 >
 > **Tür ve olay tablosu** (`kinds[]`, §11; `<malzeme>` = `bun_whole` · `patty` · `cheese` · `bacon` ·
 > `lettuce` · `onion` · `pickle` · `tomato` · `sauce`):
@@ -2083,7 +2094,9 @@ olmalı, tanınmayan `modeId` reddedilir):
 > istemcideki iniş animasyonunun görünür süresini karşılar, çünkü oyuncu gördüğü köstebeğe sallar ve
 > "gözümle vurdum, saymadı" çocuk oyununda açıklanamaz. Pay içinde gelen vuruş normal vuruşla
 > **birebir aynıdır**: aynı puan, aynı `2` aşaması, aynı `by`/`ok` yükü. Ezildiği için inen köstebek
-> ise **vurulamaz** (tek çıkış tek kez puanlanır) ve maç bitince pay silinir.
+> ise **vurulamaz** (tek çıkış tek kez puanlanır) ve maç bitince pay silinir. ⚠️ **Payı süren delik
+> yeni çıkış için SEÇİLMEZ:** seçilseydi yeni nonce paydaki geç sallamayı sessizce düşürür, yükseliş
+> de iniş animasyonunun ortasından başlardı.
 >
 > **Aynı köstebeğe iki kişi vurursa ilk ulaşan kazanır;** ikincisi aynı nonce kapısına takılır, yani
 > tek çıkış tek kez puanlanır.
@@ -2418,7 +2431,7 @@ hasar veremeden.
 | Silah nereden gelir? | **Mod dağıtır** (`weaponSource:"random"`): grip'e basılı tutulan elde loadout'tan rastgele bir silah durur, bırakınca yok olur. Loadout'u istemci `modeId:"lobby"` ile kendi katalogundan çözer. Lobi bilinçli olarak `"weaponcanvas"` değil `"random"` taşır: iki lobi sahnesine elle silah yerleştirme işi doğmasın diye. ⚠️ **Açık sahne `gameType:"kids"` ise ya da seçili mod çocuk ailesindense silah hiç gelmez** — sahneleme bölümüne bak |
 | Taban şeritleri görünür mü? | **Seçili mod belirler** (`selection_state.teamMode`, §5.3): takımlı mod seçiliyken (`tdm`/`tournament`) kırmızı/mavi şeritler durur, takımsız mod seçiliyken (`ffa`) gizlenir. Kapı **silah kaynağı DEĞİLDİR** — aktif kural hâlâ lobi profilidir, değişen yalnız sunumdur. Sunucu bu mesajı hiç yollamamışsa istemci aktif kuralın `teamMode`'una düşer |
 | Canlanma / skor / süre? | Yok. Herkes canlı (`hp=PLAYER_MAX_HP`), sayaçlar 0 (§5.3) |
-| Takım? | Vardır ve **yalnız admin atar** (`set_team`, §5.2) — her fazda, sunucuya bağlı herkes için. Oyuncu kendi takımını seçemez; bunun için protokol mesajı YOKTUR ve eklenmeyecektir |
+| Takım? | Vardır ve **yalnız admin atar** (`set_team`, §5.2) — her fazda, sunucuya bağlı herkes için. Oyuncu kendi takımını seçemez; bunun için protokol mesajı YOKTUR ve eklenmeyecektir. Tek istisna sunucunun kendisidir: `set_selection` **takımlı** bir moda geçtiği anda takımı olmayan (`team:""`) her bağlı oyuncu küçük takıma yazılır — takımsız maçtan dönen oyuncu lobide takımsız (beyaz etiket, takım kartı yok) kalmasın. Takımı olanlara dokunulmaz, dengeleme `start_match`'te yapılır (§10.1) |
 | Maç başlatılabilir mi? | **Hayır.** `lobby` kayıtlı bir `IGameMode` olmadığı için `start_match` reddedilir (§10.1) |
 
 **Lobi türünün iki kilidi birbirini tamamlar:**
@@ -2887,6 +2900,17 @@ zorunludur: sıfırlama, o mesajın ardından gelen `world_state` uygulanmadan �
 kimlik havuzu her sahnelemede baştan başlar** — kalan bir obje yeni maçın aynı `netId`'li objesini
 "zaten var" gösterir ve yenisi hiç doğmaz.
 
+⚠️ **Bilinmeyen dinamik `netId` yalnız `object_spawn` ya da `world_state` ile doğar.** Bilinmeyen
+kimlikle gelen **canlı** bir `object_state` düşürülür, obje yaratılmaz: sunucu tabloyu yeniden
+kurarken yola çıkmış bir `object_state` sahnelemeden SONRA varabilir ve onu doğuş saymak, sunucunun
+tablosunda hiç olmayan — dolayısıyla hiç `object_despawn` edilmeyecek — bir hayalet obje bırakır.
+Doğuşun kaynağı ya açık mesaj ya anlık görüntüdür, canlı durum güncellemesi değil.
+
+⚠️ **Sıfırlama uzak poz akışını da düşürür** (§6.12): istemci sahnelemede biriken obje poz
+halkalarını temizler ve **sahipsiz** (`owner == 0`) objeye gelen akışı hiç uygulamaz — akış yalnız
+BAŞKA bir istemcinin sahiplendiği obje içindir. İkisi olmadan önceki maçın son uçuş pozu, bake'li
+pozuna yeni oturtulmuş objeyi akış bayatlayana kadar geri çeker.
+
 **Geç katılan** `welcome`'dan hemen sonra yalnız kendisine `world_state` alır; sahne henüz yüklü
 değilse istemci mesajı tamponlar (§5.3).
 
@@ -2916,16 +2940,27 @@ objeyi ilk isteyen alır).
    ⚠️ **Taşınan bir şeyin üstünde durmak "durdu" DEĞİLDİR:** sahip, temas ettiği zemin tutulan bir
    ağ nesnesiyken `object_rest` yollamaz. Yollasaydı sunucu objeyi o pozda dondururdu ve altındaki
    tabak çekilince obje havada asılı kalırdı — hız eşiği bu durumu tek başına ayırt edemez.
-4. **Sahip koparsa sunucu serbest bırakır.** Oyuncu **öldüğünde** ya da **bağlantısı koptuğunda**
+4. **Sahip koparsa sunucu serbest bırakır.** Oyuncu **öldüğünde**, **bağlantısı koptuğunda**
    (`connection` `connected` olmaktan çıktığı an — `reconnecting` de dahil; kaydı silinen kick de
-   aynı) tuttuğu her obje sahipsiz kalır ve pozu **zemine indirilir**: son bilinen pozun (obje elde
+   aynı) **ya da sahibin poz kanalı `OBJECT_OWNER_SILENCE_MS` boyunca sustuğunda** (uyuyan/
+   duraklatılmış gözlük, giden Wi-Fi: heartbeat dolana kadar `connection` 10–20 sn `connected`
+   kalır) tuttuğu her obje sahipsiz kalır ve pozu **zemine indirilir**: son bilinen pozun (obje elde
    tutulurken sunucunun aldığı son obje pozu yoktur, o yüzden önce **sahibin o objeyi tutan elinin**
    son pozu kullanılır) tam altında, `y = OBJECT_DROP_CLEARANCE`. ⚠️ Sahipsiz obje kinematiktir:
    el hizasında bırakılsa herkesin ekranında havada asılı kalırdı. ⚠️ Bekleme `left`'e (`RECONNECT_GRACE`) uzatılmaz:
    obje o süre boyunca herkesin ekranında havada asılı kalır ve oyun malzemesi sahada eksilir.
-   ⚠️ Yeniden bağlanan oyuncu objeyi **geri almaz** — sahiplik bitmiştir, isteyen `object_grab`
-   ile alır. ⚠️ Bu kapı olmadan bir oyuncunun kopması objeyi **kalıcı olarak kilitler** — kimse
+   ⚠️ Kapı yalnız `connection`'a bakarsa obje o 10–20 sn boyunca donmuş elde ya da bırakıldığı
+   noktada havada asılı kalır — bu yüzden poz sessizliği de sorulur.
+   ⚠️ Yeniden bağlanan ya da uyanan oyuncu objeyi **geri almaz** — sahiplik bitmiştir, isteyen
+   `object_grab` ile alır. ⚠️ Bu kapı olmadan bir oyuncunun kopması objeyi **kalıcı olarak kilitler** — kimse
    alamaz, kimse göremez, tur sıfırlamasına kadar oyun malzemesi eksilir.
+
+⚠️ **Zeminin altına düşen objeyi SAHİBİ geri koyar.** Objesini `OBJECT_KILL_Y`'nin (§1) altında gören
+sahip onu **ev pozuna** oturtur, hızını sıfırlar ve o pozla `object_rest` yollar. Ev pozu: sunucunun
+bildiği dinlenme pozu, yoksa objenin **doğduğu** poz (sahne objesinde bake'li poz, dinamik objede
+doğuş pozu). Sunucuda yedek kapı yoktur — sunucu metre bilmez, objenin nereye düştüğünü göremez.
+⚠️ Düşen obje kendiliğinden **hiç durmaz**: hızı `OBJECT_REST_SPEED`'in altına inmediği için
+`object_rest` hiç gitmez, sahiplik hiç bitmez ve zeminden kaçan malzeme maç boyunca sahada eksilir.
 
 ⚠️ **Teklik ayrı bir kilit DEĞİLDİR, sahipliğin kendisidir.** "Aynı anda tek kişi tutsun" diye ikinci
 bir mekanizma yazılmaz; tek örnek vardır, sahibi bir kişidir. Silahlar bu yolu **kullanmaz** — onlar

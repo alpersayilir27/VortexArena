@@ -35,6 +35,13 @@ namespace VortexArena.Core.Audio
         /// countdown.</para>
         /// <para>Clips must be shorter than a second: this is a cue whose meaning is its timing, it
         /// plays instantly and never queues.</para></summary>
-        Countdown = 4
+        Countdown = 4,
+
+        /// <summary>The match ended (<c>match_end</c>) — the mode's own closing line, played instead of
+        /// the shared win/draw announcement.
+        /// <para>⚠️ Its reason is the co-op mode: with shared scoring there is no winner and no draw
+        /// either, so the shared bank's "berabere" would be a lie on every single match. Without a rule
+        /// such a mode ends SILENTLY rather than falling back to the bank.</para></summary>
+        MatchEnd = 5
     }
 }

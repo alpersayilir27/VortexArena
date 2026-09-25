@@ -662,16 +662,11 @@ namespace VortexArena.App.Admin
         private ModeDefinition SelectedMode =>
             _modeIndex >= 0 && _modeIndex < _modes.Count ? _modes[_modeIndex] : null;
 
-        /// <summary>Mode selected (<c>onValueChanged</c>).
-        /// <para>⚠️ The dropdown is closed FIRST: a map preview loads right after
-        /// (<see cref="PreviewSelectedMap"/>) and an open list would hang on screen across the scene
-        /// change.</para>
-        /// <para>If the selection is refused (match running, stale index) <see cref="Apply"/> pulls
-        /// the cursor back — the dropdown already moved its own value.</para></summary>
-        /// <summary>Game type selected (§11) — rebuilds both lists below it. Nothing is sent: the
-        /// game type is a local filter, and the operator's next mode/map touch publishes as usual.
-        /// <para>Passes the same gate as mode/map (<see cref="GuardSelectionChange"/>): the rebuilt
-        /// lists would move the selection, which is a scene command while a match is set up.</para></summary>
+        /// <summary>Game type selected (§11) — rebuilds both lists and publishes like a mode change.
+        /// <para>⚠️ The game type itself is not on the wire, but its first mode/map ARE: publishing
+        /// loads that arena for everyone, and a local-only change would snap back on the next
+        /// <c>admin_state</c> (the shared mode still belongs to the old type).</para>
+        /// <para>Passes the same gate as mode/map (<see cref="GuardSelectionChange"/>).</para></summary>
         private void SelectGameType(int index)
         {
             HideDropdown(_gameTypeDropdown);
@@ -686,10 +681,17 @@ namespace VortexArena.App.Admin
             _gameType = _gameTypes[index];
             RefreshModeList(); // both lists are filtered by game type; mode first, the map list follows it
             RefreshMapList();
+            _lobbyOpen = false;
             ResetMatchParametersToModeDefaults();
-            Apply();
+            PublishSelection(mapChanged: true);
         }
 
+        /// <summary>Mode selected (<c>onValueChanged</c>).
+        /// <para>⚠️ The dropdown is closed FIRST: a map preview loads right after
+        /// (<see cref="PreviewSelectedMap"/>) and an open list would hang on screen across the scene
+        /// change.</para>
+        /// <para>If the selection is refused (match running, stale index) <see cref="Apply"/> pulls
+        /// the cursor back — the dropdown already moved its own value.</para></summary>
         private void SelectMode(int index)
         {
             HideDropdown(_modeDropdown);

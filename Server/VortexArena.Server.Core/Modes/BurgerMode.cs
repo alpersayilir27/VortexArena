@@ -124,6 +124,9 @@ public sealed class BurgerMode : IGameMode
     /// early with no winner to declare.</summary>
     public int DefaultScoreLimit => ArenaProtocol.SCORE_LIMIT_UNLIMITED;
 
+    /// <summary>The counter is on the HUD from staging on, showing zeroes rather than nothing.</summary>
+    public string InitialModeState => FormatModeState(0, 0);
+
     public void OnMatchStart(MatchDirector director)
     {
         _happy = 0;
@@ -148,6 +151,11 @@ public sealed class BurgerMode : IGameMode
 
     public void OnTick(MatchDirector director, float deltaSeconds)
     {
+        // The core ticks modes during the countdown too; no customer may arrive before "go", and
+        // _customers/_cooking/_ingredients still hold the previous match's ids until OnMatchStart — ids
+        // the new match's object table has already handed out again.
+        if (director.CurrentPhase != Phase.Playing) return;
+
         TickSpawn(director, deltaSeconds);
         TickCustomers(director, deltaSeconds);
         TickGrill(director, deltaSeconds);
@@ -467,7 +475,11 @@ public sealed class BurgerMode : IGameMode
         _customers.Remove(netId);
     }
 
-    private void PushModeState(MatchDirector director) => director.SetModeState($"h:{_happy};u:{_unhappy}");
+    private void PushModeState(MatchDirector director) => director.SetModeState(FormatModeState(_happy, _unhappy));
+
+    /// <summary>The single writer of the <c>h:…;u:…</c> shape (§10.5) — the staging state and the live one
+    /// must never drift into two literals.</summary>
+    private static string FormatModeState(int happy, int unhappy) => $"h:{happy};u:{unhappy}";
 
     /// <summary>One customer at the counter.</summary>
     private sealed class Customer

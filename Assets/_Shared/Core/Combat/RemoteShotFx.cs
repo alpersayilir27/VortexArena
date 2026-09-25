@@ -2,6 +2,7 @@
 // Random → name clash. System.Environment is called fully qualified.
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.VFX;
 using VortexArena.Core.Arena;
 using VortexArena.Core.Audio;
 using VortexArena.Core.Player;
@@ -21,6 +22,9 @@ namespace VortexArena.Core.Combat
     /// hand pose — more faithful to the shooter, worse to the eye. CONSISTENCY BEATS FIDELITY. So
     /// the origin is resolved locally: held item visual (<c>RemoteAvatar.GetHeldItemVisual</c>) →
     /// its <c>Muzzle</c> child → hand pose → head pose.</para>
+    /// <para>The flash is the HELD weapon's own <c>VisualEffect</c> graph (the same "OnFire" event the
+    /// owner sends through <see cref="WeaponMuzzleVfx"/>); the pooled legacy particle is only the
+    /// fallback for items without a graph, so remote and local muzzles never look different.</para>
     /// <para>Never placed in a scene: self-bootstraps and goes DontDestroyOnLoad. FX nodes are
     /// created lazily in an 8-slot round-robin pool (<c>WeaponCatalog.RemoteShotFxPrefab</c>, else
     /// a plain AudioSource fallback); the tracer pool lives in <see cref="ShotTracer"/>. The admin
@@ -55,6 +59,11 @@ namespace VortexArena.Core.Combat
 
         /// <summary>Name of the muzzle child in the item prefab (WeaponKitBuilder creates it).</summary>
         private const string MuzzleChildName = "Muzzle";
+
+        /// <summary>Spawn event of the muzzle graph — the SAME name <see cref="WeaponMuzzleVfx"/>
+        /// sends locally, so remote and local flash are one effect. Id resolved once: SendEvent(string)
+        /// hashes per call.</summary>
+        private static readonly int MuzzleFireEventId = Shader.PropertyToID("OnFire");
 
         private const float AvatarScanIntervalSeconds = 0.5f;
 
@@ -107,6 +116,12 @@ namespace VortexArena.Core.Combat
             // (Muzzle=null), otherwise every shot would rescan the hierarchy for nothing.
             public Transform MuzzleSourceL;
             public Transform MuzzleSourceR;
+
+            // The held weapon's own muzzle graph, cached under the SAME key as the muzzle.
+            // RemoteAvatar.SterilizeVisual strips MonoBehaviours but VisualEffect is not one, so the
+            // remote gun can flash with the exact effect its owner sees. A miss is cached as null.
+            public VisualEffect MuzzleVfxL;
+            public VisualEffect MuzzleVfxR;
 
             /// <summary>Has the "item has no Muzzle" warning been logged once for this player.</summary>
             public bool MuzzleWarned;
@@ -343,13 +358,22 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
+            // The muzzle cache is filled by TryResolveOrigin above. A destroyed/unequipped item
+            // nulls this reference, so the pooled particle takes over by itself.
+            VisualEffect muzzleVfx = evt.rightHand ? fx.MuzzleVfxR : fx.MuzzleVfxL;
+            if (muzzleVfx != null)
+            {
+                muzzleVfx.SendEvent(MuzzleFireEventId);
+            }
+
             WeaponCatalog catalog = WeaponCatalog.Load();
             FxNode node = TakeNode(catalog);
             if (node != null && node.Root != null)
             {
                 node.Root.SetPositionAndRotation(origin, Quaternion.LookRotation(worldDir));
 
-                if (node.Particles != null)
+                // Fallback only: the weapon's own graph already flashed, a second puff would double it.
+                if (muzzleVfx == null && node.Particles != null)
                 {
                     node.Particles.Emit(ParticlesPerShot);
                 }
@@ -623,15 +647,20 @@ namespace VortexArena.Core.Combat
 
             Transform found = FindMuzzle(itemVisual);
 
+            // Hierarchy walk runs once per item change, never per shot.
+            VisualEffect vfx = (found != null ? found : itemVisual).GetComponentInChildren<VisualEffect>(true);
+
             if (evt.rightHand)
             {
                 fx.MuzzleSourceR = itemVisual;
                 fx.MuzzleR = found;
+                fx.MuzzleVfxR = vfx;
             }
             else
             {
                 fx.MuzzleSourceL = itemVisual;
                 fx.MuzzleL = found;
+                fx.MuzzleVfxL = vfx;
             }
 
             if (found == null && !fx.MuzzleWarned)
@@ -704,6 +733,8 @@ namespace VortexArena.Core.Combat
                     target.MuzzleR = null;
                     target.MuzzleSourceL = null;
                     target.MuzzleSourceR = null;
+                    target.MuzzleVfxL = null;
+                    target.MuzzleVfxR = null;
                 }
             }
 

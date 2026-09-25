@@ -168,7 +168,7 @@
       "sceneName": "Mole_Outdoor14x16",
       "venue": "Outdoor14x16",
       "gameType": "kids",
-      "moleDensity": 1.5,
+      "moleDensity": 2.5,
       "modes": ["mole"],
       "objects": [
         { "sceneId": 1, "kind": "mole_hole" },
@@ -197,7 +197,7 @@
       "sceneName": "Mole_VortexAntep",
       "venue": "VortexAntep",
       "gameType": "kids",
-      "moleDensity": 1.5,
+      "moleDensity": 2.5,
       "modes": ["mole"],
       "objects": [
         { "sceneId": 1, "kind": "mole_hole" },

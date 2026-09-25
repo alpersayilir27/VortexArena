@@ -2,24 +2,21 @@
 title: Yüzey çarpma efektleri
 ---
 
-# Yüzey çarpma efektleri — kalan iş: ses
+# Yüzey çarpma efektleri — kalan iş: harita atamaları
 
 Mermi neye çarptıysa **o yüzeyin** parçacığı ve sesi çıkar. Kod yerinde: yüzey kimliği
 `SurfaceDefinition` + `SurfaceLibrary` + `SurfaceTag`'te, oynatma havuzlu `SurfaceImpactFx`'te, tek
-kapı `ArenaCombat.ReportImpact`. Silahın kendi çarpma prefabı kalktı (`Weapon.hitEffectPrefab`
-alanı silindi); uzak atışta çarpma noktası ışınla yerel çözülür, **protokole ekleme YOK**.
+kapı `ArenaCombat.ReportImpact`. Silahın kendi çarpma prefabı yoktur; uzak atışta çarpma noktası ışınla yerel çözülür, **protokole ekleme YOK**.
 Sözleşmenin anlatımı `Docs/Sistem-Ozeti.md` §4.
 
 ## Kalan içerik işi
 
-- [ ] Çarpma sesleri: `default` dahil hiçbir tanımın `impactClips` listesi dolu değil ve repoda
-      çarpma klibi yok. Yüzey başına 2-3 kısa klip (~0.3 sn) → `Assets/Audio/World/Impacts/`.
-      Seviye ve perde bandı tanımın içinde ayarlı, klip bağlamak yeter.
 - [ ] `toprak` tanımının materyal listesi boş — bugünkü arenalarda toprak materyali yok. Toprak
       yüzeyli arena gelince listeye eklenir.
-- [ ] Göz kararı eşlemeler, oyunda bakılıp doğrulanır: `M_BreakableCover` + `M_TargetBoard` →
-      `tahta` (ikisi de aynı `Textures1` atlasını kullanıyor); üs kulübesi prefabı
-      (`Base_Hut_Roof`, dokusuz düz materyaller) kökündeki `SurfaceTag` → `tahta`.
+- [ ] Materyal ve etiket eşlemeleri **elle** yapılır — `Tools > VortexArena > Arena > Yüzey Atama`
+      penceresi seçili objenin hangi yüzeye çözüldüğünü (ve neden) gösterir, etiketi ve materyal
+      bağını oradan kurar. Göz kararı toplu eşleme yapılmaz: yanlış bağ ancak o duvara sıkılınca
+      görülür.
 - [ ] Arena kenar camı (`M_VortexGlassWall_*`) `default`a düşüyor. Cam efekti/sesi istenirse yeni
       bir tanım + prefab gerekir; materyalleri listeye bağlamak yeter.
 

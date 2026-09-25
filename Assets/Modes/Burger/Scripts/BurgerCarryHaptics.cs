@@ -4,7 +4,7 @@ using VortexArena.Net;
 
 namespace VortexArena.Modes.Burger
 {
-    /// <summary>Faint periodic buzz in the hand holding an ingredient — the ONLY sign that something
+    /// <summary>Faint heartbeat in the hand holding an ingredient — the ONLY sign that something
     /// weightless is still in the palm. Stops by itself the moment the hand lets go.
     /// <para>Self-bootstrapping persistent singleton: NO scene or prefab setup, so a new Burger arena
     /// cannot forget it. It is inert outside the mode — with no ingredient held by the local player
@@ -23,16 +23,23 @@ namespace VortexArena.Modes.Burger
 
         private const float Amplitude = 0.18f;
 
-        /// <summary>Pulse rate (Hz) and the share of each period the motor is on. A continuous buzz
-        /// stops being felt after a few seconds; a short tick keeps reading as "still holding it".</summary>
-        private const float PulseHz = 5f;
+        /// <summary>Heartbeat: a double tick every period, the first on the grab itself. A steady buzz
+        /// annoys within seconds; a rare beat still reads as "still holding it".</summary>
+        private const float HeartbeatPeriodSeconds = 1.6f;
 
-        private const float DutyCycle = 0.2f;
+        private const float BeatSeconds = 0.07f;
+
+        /// <summary>Start of the second tick after the first (the "dub" of lub-dub).</summary>
+        private const float SecondBeatOffsetSeconds = 0.2f;
 
         private static BurgerCarryHaptics _instance;
 
         private bool _left;
         private bool _right;
+
+        // When each hand started carrying — the beat phase is per hand, so a grab beats at once.
+        private float _leftSince;
+        private float _rightSince;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
@@ -90,23 +97,33 @@ namespace VortexArena.Modes.Burger
                 }
             }
 
-            float amplitude = Mathf.Repeat(Time.unscaledTime * PulseHz, 1f) < DutyCycle
-                ? Amplitude
-                : 0f;
+            float now = Time.unscaledTime;
+            Drive(SourceLeft, false, left, ref _left, ref _leftSince, now);
+            Drive(SourceRight, true, right, ref _right, ref _rightSince, now);
+        }
 
-            Drive(SourceLeft, false, left, ref _left, amplitude);
-            Drive(SourceRight, true, right, ref _right, amplitude);
+        private static float BeatAmplitude(float sinceStart)
+        {
+            float phase = Mathf.Repeat(sinceStart, HeartbeatPeriodSeconds);
+            bool onBeat = phase < BeatSeconds ||
+                          (phase >= SecondBeatOffsetSeconds && phase < SecondBeatOffsetSeconds + BeatSeconds);
+            return onBeat ? Amplitude : 0f;
         }
 
         /// <summary>Reports while carrying, and writes one explicit 0 when the hand empties — the
         /// heartbeat would time it out anyway, but a quarter second of buzz after the drop reads as a
         /// stuck controller.</summary>
         private static void Drive(string source, bool right, bool carrying, ref bool wasCarrying,
-            float amplitude)
+            ref float since, float now)
         {
             if (carrying)
             {
-                ControllerHaptics.ReportHand(source, right, amplitude);
+                if (!wasCarrying)
+                {
+                    since = now;
+                }
+
+                ControllerHaptics.ReportHand(source, right, BeatAmplitude(now - since));
             }
             else if (wasCarrying)
             {
@@ -118,8 +135,9 @@ namespace VortexArena.Modes.Burger
 
         private void Silence()
         {
-            Drive(SourceLeft, false, false, ref _left, 0f);
-            Drive(SourceRight, true, false, ref _right, 0f);
+            float now = Time.unscaledTime;
+            Drive(SourceLeft, false, false, ref _left, ref _leftSince, now);
+            Drive(SourceRight, true, false, ref _right, ref _rightSince, now);
         }
     }
 }

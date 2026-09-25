@@ -257,7 +257,9 @@ public sealed class MoleMode : IGameMode
         _candidates.Clear();
         for (int i = 0; i < _holes.Count; i++)
         {
-            if (_state.TryGetValue(_holes[i], out var hole) && hole.Stage == StageHidden)
+            // ⚠️ Holes still in the descend grace are skipped: a new nonce would silently drop the
+            // late swing at the old mole, and the rise would start mid-descent.
+            if (_state.TryGetValue(_holes[i], out var hole) && hole.Stage == StageHidden && !hole.Descending)
             {
                 _candidates.Add(_holes[i]);
             }

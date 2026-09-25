@@ -42,6 +42,11 @@ public interface IGameMode
     /// <c>return_to_lobby</c> / <c>abort_match</c> / a new <c>start_match</c>.</remarks>
     bool HoldsResultForOperator => false;
 
+    /// <summary>What <c>modeState</c> reads from <c>start_match</c> on, before the mode has run (§10.1).</summary>
+    /// <remarks>Staging clears <c>modeState</c>, and <see cref="OnMatchStart"/> only lands when the
+    /// countdown ends — a mode whose counter is on the HUD would show nothing until then.</remarks>
+    string InitialModeState => "";
+
     /// <summary>Called ONCE per match, on the first transition to Live.</summary>
     /// <remarks>⚠️ In a round based mode (<c>tournament</c>) later Live entries do NOT retrigger it —
     /// "match started" and "round started" are separate events (see <see cref="OnRoundStart"/>).</remarks>

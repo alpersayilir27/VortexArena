@@ -75,8 +75,59 @@ namespace VortexArena.Core.World
                 return;
             }
 
+            if (TryRecoverFallen())
+            {
+                return;
+            }
+
             StreamPose(dt);
             TrackRest(speed, dt);
+        }
+
+        /// <summary>Puts an object that slipped below <c>OBJECT_KILL_Y</c> back on its home pose and rests
+        /// it there (§10.10).</summary>
+        /// <remarks>⚠️ Without this the object is lost for the match: a falling body never drops under
+        /// <see cref="ArenaProtocol.OBJECT_REST_SPEED"/>, so <c>object_rest</c> never goes out and
+        /// ownership never ends. Only the OWNER runs it — everyone else is kinematic and would fight the
+        /// owner's stream.</remarks>
+        private bool TryRecoverFallen()
+        {
+            if (_restSent ||
+                ArenaSpace.WorldToArena(transform.position).y > ArenaProtocol.OBJECT_KILL_Y)
+            {
+                return false;
+            }
+
+            Pose worldHome = HomeWorldPose();
+
+            if (_body != null && !_body.isKinematic)
+            {
+                _body.linearVelocity = Vector3.zero;
+                _body.angularVelocity = Vector3.zero;
+            }
+
+            transform.SetPositionAndRotation(worldHome.position, worldHome.rotation);
+            _lastPosition = worldHome.position;
+            _stillSeconds = 0f;
+            _restSent = true;
+
+            Pose arenaPose = ArenaSpace.WorldToArena(worldHome);
+            NetObjectSync.SendRest(_net.NetId, arenaPose.position, arenaPose.rotation);
+            RestSent?.Invoke(_net);
+            return true;
+        }
+
+        /// <summary>Where the object belongs: the server's resting pose when it has one, otherwise the pose
+        /// it was BORN with — the authored scene pose for a baked object, the spawn pose for a dynamic
+        /// one.</summary>
+        private Pose HomeWorldPose()
+        {
+            if (_net.HasRestPose)
+            {
+                return ArenaSpace.ArenaToWorld(new Pose(_net.RestPosition, _net.RestRotation));
+            }
+
+            return new Pose(_net.ScenePosition, _net.SceneRotation);
         }
 
         /// <summary>Rigidbody speed while physics runs here; otherwise the transform delta — an object

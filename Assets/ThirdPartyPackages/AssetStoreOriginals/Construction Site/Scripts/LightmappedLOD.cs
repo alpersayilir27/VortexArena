@@ -55,7 +55,9 @@ public class LightmappedLOD : MonoBehaviour {
         var renderers = lods[currentRendererLodIndex].renderers;
         for (int i = 0; i < renderers.Length; i++)
         {
-            if (renderers[i] != null)
+            // Static-batched UVs already carry the lightmap; the write is ignored and warns every
+            // Awake, flooding the headset log relay.
+            if (renderers[i] != null && !(Application.isPlaying && renderers[i].isPartOfStaticBatch))
             {
                 try
                 {

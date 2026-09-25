@@ -661,6 +661,19 @@ namespace VortexArena.Core.Audio
 
             _lastPhase = ArenaProtocol.PHASE_FINISHED;
 
+            // The mode's own closing line wins over the shared result announcement so they do not overlap.
+            if (PlayModeEvent(ModeAudioEvent.MatchEnd))
+            {
+                return;
+            }
+
+            // ⚠️ Shared scoring (co-op) has no winner AND no draw: every match would end on "berabere".
+            // Silence is the correct default here — the mode may add its own line through the registry.
+            if (ModeRuntime.Scoring == ModeScoreKind.PlayerAndShared)
+            {
+                return;
+            }
+
             // ⚠️ The result announcement belongs to the match, not to a player, so it does not vary
             // by listener and needs no local player id: it plays on the admin spectator too.
             if (!string.IsNullOrEmpty(msg.winnerTeam))

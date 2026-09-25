@@ -572,6 +572,17 @@ public sealed class MatchDirector
         if (running) _registry.SetMatchParticipant(player.PlayerId, true);
     }
 
+    /// <summary>Is a TEAMLESS match currently SET UP (§10.5)? "Set up" = a mode is selected — loading,
+    /// countdown, playing, paused and the finished screen all count; the plain lobby (no mode) does
+    /// not.</summary>
+    /// <remarks>Asked on the <c>hello</c> path: in a teamless match an empty team must stay empty, and a
+    /// joiner/returner must not be put into a team (§2). ⚠️ <c>finished</c> counts on purpose — a returner
+    /// must not turn red on the result screen either.</remarks>
+    public bool IsTeamlessMatchSetUp()
+    {
+        lock (_gate) return _mode != null && _rules.Teams == TeamMode.None;
+    }
+
     /// <summary>welcome.match snapshot — used by the late-join sync (§5.3).</summary>
     public MatchInfo CurrentMatchInfo()
     {
@@ -1221,11 +1232,12 @@ public sealed class MatchDirector
             Console.WriteLine("[match] uyarı: tek oyuncuyla maç başlatılıyor (yalnız test amaçlı).");
 
         // Team setup comes from the mode's shape (§10.5). Both are called OUTSIDE the lock since
-        // registry.SetTeam raises events. Balancing only makes sense with 2+ players.
+        // registry.SetTeam raises events. ⚠️ Called even for a single player: a player coming back from
+        // a teamless match must still get a team, only the half-move needs 2+.
         var rules = mode.Rules;
         if (rules.Teams == TeamMode.None)
             ClearTeams(players);
-        else if (players.Count > 1)
+        else
             BalanceTeams(players);
 
         // Lobby ready flags are cleared BEFORE entering Loading: there the same flag means "scene
@@ -1270,7 +1282,9 @@ public sealed class MatchDirector
             _scoreRed = 0;
             _scoreBlue = 0;
             _timeRemaining = _roundSeconds;
-            _modeState = "";
+            // The mode's zero state, not empty: its counter is on the HUD from the loading screen on,
+            // while OnMatchStart only lands when the countdown ends (§10.1).
+            _modeState = mode.InitialModeState ?? "";
             _matchStartPending = false;
             _roundStartPending = false;
             _matchEndPending = false;
@@ -1333,8 +1347,9 @@ public sealed class MatchDirector
 
         // Team split is counted from the REAL state after BalanceTeams/ClearTeams (the players list holds
         // PlayerState references and SetTeam updates them in place).
+        var redCount = players.Count(p => p.Team == "red");
         var blueCount = players.Count(p => p.Team == "blue");
-        var teamInfo = teamless ? "takımsız" : $"kırmızı {players.Count - blueCount} / mavi {blueCount}";
+        var teamInfo = teamless ? "takımsız" : $"kırmızı {redCount} / mavi {blueCount}";
         // Friendly fire is logged on purpose: the switch lives for the whole session and can change
         // mid-match, so this line is the only later record of which match ran under which rule.
         Console.WriteLine($"[match] start_match: mod '{mode.ModeId}', sahne '{sceneName}', " +
@@ -2271,31 +2286,44 @@ public sealed class MatchDirector
         float.IsFinite(pose.px) && float.IsFinite(pose.py) && float.IsFinite(pose.pz);
 
     /// <summary>Sweep for owners whose hand is no longer in the arena (§10.10): a record that is not
-    /// <c>connected</c> any more (<c>reconnecting</c> counts) or was removed entirely (kick). The object
-    /// is dropped to the floor, free for anyone.</summary>
+    /// <c>connected</c> any more (<c>reconnecting</c> counts), was removed entirely (kick), or whose pose
+    /// channel has been silent for <c>OBJECT_OWNER_SILENCE_MS</c>. The object is dropped to the floor,
+    /// free for anyone.</summary>
     /// <remarks>⚠️ A sweep and not an event hook because the two ways out differ: the drop is raised by
     /// the registry, but a KICKED player's record is gone, so no event could name the owner any more —
     /// and the object would stay locked until the round reset. Death is handled at its own single writer
     /// (<see cref="KillPlayerLocked"/>), so it never reaches this sweep.
+    /// <para>⚠️ Pose silence is asked BESIDE <c>connection</c>: the heartbeat keeps a sleeping or
+    /// network-less headset <c>connected</c> for 10-20 s, and until then the object hangs in a frozen hand
+    /// — or, if it was released just before, at its release point on every other screen.</para>
     /// <para>⚠️ The gate is the DROP, not <c>left</c>: waiting out RECONNECT_GRACE leaves the object
-    /// hanging in mid-air on every screen for the whole grace and takes it out of play. A returning
-    /// player does not get it back — ownership is over.</para></remarks>
+    /// hanging in mid-air on every screen for the whole grace and takes it out of play. A returning or
+    /// waking player does not get it back — ownership is over.</para></remarks>
     private void TickObjectOwnersLocked(List<Outgoing> outbox)
     {
         if (_objectOwners.IsEmpty) return;
 
+        var now = DateTime.UtcNow;
         List<int>? lost = null;
         foreach (var pair in _objectOwners)
         {
             var playerId = pair.Value.PlayerId;
-            var gone = !_registry.TryGetByPlayerId(playerId, out var owner)
-                       || owner.Connection != PlayerConnection.Connected;
+            var known = _registry.TryGetByPlayerId(playerId, out var owner);
+            // LastPoseAt is written lock-free from the recv thread, like every other freshness gate here.
+            var silentMs = known ? (now - owner.LastPoseAt).TotalMilliseconds : 0d;
+            var silent = known && owner.Connection == PlayerConnection.Connected
+                               && silentMs >= ArenaProtocol.OBJECT_OWNER_SILENCE_MS;
+            var gone = !known || owner.Connection != PlayerConnection.Connected || silent;
             if (!gone) continue;
-            (lost ??= new List<int>()).Add(playerId);
+            lost ??= new List<int>();
+            if (lost.Contains(playerId)) continue; // one line per owner, not per object
+            if (silent)
+                Console.WriteLine($"[world] oyuncu {playerId}: {silentMs:F0} ms poz yok — tuttuğu objeler zemine indirildi.");
+            lost.Add(playerId);
         }
         if (lost == null) return;
 
-        foreach (var playerId in lost.Distinct()) ReleaseObjectsOfLocked(outbox, playerId, dropToGround: true);
+        foreach (var playerId in lost) ReleaseObjectsOfLocked(outbox, playerId, dropToGround: true);
     }
 
     /// <summary>May this player stream the object's pose (§6.12)? Owner, and the object is NOT in a hand
@@ -2776,15 +2804,9 @@ public sealed class MatchDirector
     {
         var red = players.Where(p => p.Team == "red").ToList();
         var blue = players.Where(p => p.Team == "blue").ToList();
+        AssignTeamless(players, red, blue);
 
-        foreach (var player in players.Where(p => p.Team != "red" && p.Team != "blue").ToList())
-        {
-            var team = red.Count <= blue.Count ? "red" : "blue";
-            _registry.SetTeam(player.PlayerId, team);
-            (team == "red" ? red : blue).Add(player);
-        }
-
-        if (red.Count != 0 && blue.Count != 0) return;
+        if (players.Count < 2 || (red.Count != 0 && blue.Count != 0)) return;
 
         var full = red.Count == 0 ? blue : red;
         var emptyTeam = red.Count == 0 ? "red" : "blue";
@@ -2796,6 +2818,39 @@ public sealed class MatchDirector
             _registry.SetTeam(player.PlayerId, emptyTeam);
         }
         Console.WriteLine($"[match] takım dengeleme: {moveCount} oyuncu '{emptyTeam}' takımına taşındı.");
+    }
+
+    /// <summary><c>set_selection</c> switched to a team mode (§10.7): puts every teamless connected player
+    /// on the smaller side. Players who already have a team are untouched — balancing is
+    /// <c>start_match</c>'s job. Called ONLY outside the lock, since registry.SetTeam raises events.</summary>
+    public void AssignTeamlessForMode(string modeId)
+    {
+        if (TeamModeOf(modeId) == TeamMode.None) return;
+
+        var players = _registry.Snapshot()
+            .Where(p => p.IsConnected && p.Role == "player")
+            .OrderBy(p => p.PlayerId)
+            .ToList();
+        var red = players.Where(p => p.Team == "red").ToList();
+        var blue = players.Where(p => p.Team == "blue").ToList();
+        var assigned = AssignTeamless(players, red, blue);
+        if (assigned > 0)
+            Console.WriteLine($"[match] takımlı mod seçildi: {assigned} takımsız oyuncu takıma yazıldı.");
+    }
+
+    /// <summary>Puts each teamless player on the smaller side; returns how many were assigned.</summary>
+    private int AssignTeamless(List<PlayerState> players, List<PlayerState> red, List<PlayerState> blue)
+    {
+        var assigned = 0;
+        foreach (var player in players.Where(p => p.Team != "red" && p.Team != "blue").ToList())
+        {
+            var team = red.Count <= blue.Count ? "red" : "blue";
+            _registry.SetTeam(player.PlayerId, team);
+            (team == "red" ? red : blue).Add(player);
+            assigned++;
+        }
+
+        return assigned;
     }
 
     /// <summary>Teamless mode (§10.5 <c>teamMode:"none"</c>): clears teams assigned in the lobby, nobody

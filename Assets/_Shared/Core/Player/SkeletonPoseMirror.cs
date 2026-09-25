@@ -156,9 +156,12 @@ namespace VortexArena.Core.Player
             // ⚠️ Hips are the exception: they are the skeleton root and their position belongs to
             // the POSE (crouch, step). Transferred RELATIVE to each bind — copying the raw position
             // would turn the two models' different hip heights into a direct offset.
+            // ⚠️ The delta is divided by heightCalibration: the target root already carries it, so an
+            // undivided crouch would drop the hips further than the legs reach and sink the feet.
             if (sourceHips != null && targetHips != null)
             {
-                targetHips.localPosition = sourceHips.localPosition - sourceHipsBind + targetHipsBind;
+                targetHips.localPosition =
+                    (sourceHips.localPosition - sourceHipsBind) / heightCalibration + targetHipsBind;
             }
         }
     }

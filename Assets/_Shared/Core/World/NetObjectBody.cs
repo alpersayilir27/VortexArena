@@ -90,8 +90,16 @@ namespace VortexArena.Core.World
         }
 
         /// <summary>The owner's live pose (§6.12), arena → world. False when no stream is running.</summary>
+        /// <remarks>⚠️ An UNOWNED object never follows the stream: poses only exist for an object ANOTHER
+        /// client owns and flies. Without this gate a ring left over from the previous match (it stays
+        /// usable for about a second) drags the object off the pose the world reset just seated it on.</remarks>
         private bool TryApplyStreamedPose()
         {
+            if (_net.Owner <= 0)
+            {
+                return false;
+            }
+
             ArenaClient client = ArenaClient.Instance;
             RemoteObjectRegistry remotes = client != null ? client.RemoteObjects : null;
             if (remotes == null || !remotes.IsStreaming(_net.NetId))

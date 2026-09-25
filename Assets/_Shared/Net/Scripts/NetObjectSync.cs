@@ -307,9 +307,13 @@ namespace VortexArena.Net
             }
         }
 
-        /// <summary>Applies one entry. An unknown DYNAMIC id is a spawn (a late joiner gets the objects
-        /// that were born before them in <c>world_state</c> too); an unknown SCENE id means the export
+        /// <summary>Applies one entry. An unknown DYNAMIC id in a SNAPSHOT is a spawn (a late joiner gets
+        /// the objects born before them in <c>world_state</c> too); an unknown SCENE id means the export
         /// and the scene have drifted apart and gets one log line.</summary>
+        /// <remarks>⚠️ A LIVE <c>object_state</c> for an unknown dynamic id is dropped, never spawned
+        /// (§10.10): one sent before the server rebuilt its table can land after <c>load_match</c>, and
+        /// spawning from it leaves a ghost the server has no row for — so no <c>object_despawn</c> ever
+        /// removes it.</remarks>
         private void Apply(ObjectStateMsg msg, NetStateOrigin origin)
         {
             if (msg == null)
@@ -321,7 +325,11 @@ namespace VortexArena.Net
             {
                 if (msg.netId >= ArenaProtocol.NET_ID_DYNAMIC_MIN && msg.netId <= ArenaProtocol.NET_ID_DYNAMIC_MAX)
                 {
-                    RequestSpawn(msg);
+                    if (origin == NetStateOrigin.Snapshot)
+                    {
+                        RequestSpawn(msg);
+                    }
+
                     return;
                 }
 

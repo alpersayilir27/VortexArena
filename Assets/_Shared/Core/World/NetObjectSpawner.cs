@@ -173,6 +173,20 @@ namespace VortexArena.Core.World
         {
             DestroyAll();
             ResetSceneObjects();
+            ClearRemoteStreams();
+        }
+
+        /// <summary>Drops the buffered remote object poses (§10.10): a ring stays usable for about a
+        /// second, so the previous match's last flight pose would pull a scene object straight off the
+        /// authored pose <see cref="ResetSceneObjects"/> just seated it on.</summary>
+        private static void ClearRemoteStreams()
+        {
+            ArenaClient client = ArenaClient.Instance;
+            RemoteObjectRegistry remotes = client != null ? client.RemoteObjects : null;
+            if (remotes != null)
+            {
+                remotes.Clear();
+            }
         }
 
         /// <summary>Baked scene objects are NEVER destroyed (§10.10) — they are put back to their authored

@@ -85,9 +85,13 @@ namespace VortexArena.Core.Player
         /// thrown off the floor instead of placed on it.</summary>
         private const float FootGroundLimitMeters = 0.5f;
 
-        /// <summary>Grounding shift worth reporting (m) — well above the centimetres a healthy solve needs,
-        /// so a silent log means the feet are on the floor.</summary>
-        private const float GroundReportThresholdMeters = 0.08f;
+        /// <summary>Lowest leg joint's height above the mesh sole in the remote model's bind pose (m, at
+        /// scale 1). ⚠️ Model-specific: re-measure (ToeBase y − skinned mesh min y) when the model changes.</summary>
+        private const float SoleClearanceMeters = 0.02f;
+
+        /// <summary>Grounding shift worth reporting (m). ⚠️ A healthy crouch or a child's proportions
+        /// already need ~0.1 m; a lower bar logs every crouch and buries the real faults.</summary>
+        private const float GroundReportThresholdMeters = 0.15f;
 
         /// <summary>Gap between two grounding reports of ONE body (s); each body throttles its own.</summary>
         private const float GroundReportIntervalSeconds = 5f;
@@ -762,9 +766,9 @@ namespace VortexArena.Core.Player
 
             // One sampling time for root and bones, so both land on the same two frames.
             int renderTick = RemoteSkeletonRegistry.RenderTickMs;
-            if (ApplyArenaRoot(renderTick))
+            if (ApplyArenaRoot(renderTick, out float floorWorldY))
             {
-                ApplyInterpolatedBones(renderTick);
+                ApplyInterpolatedBones(renderTick, floorWorldY);
             }
         }
 
@@ -777,9 +781,9 @@ namespace VortexArena.Core.Player
         /// <c>_characterRoot.position</c> stops being a world point and drifts with distance from the
         /// origin. See Docs/Sistem-Ozeti.md §7.</para>
         /// </remarks>
-        private bool ApplyArenaRoot(int renderTick)
+        private bool ApplyArenaRoot(int renderTick, out float floorWorldY)
         {
-            if (!TryGetEffectiveRoot(renderTick, out Pose world, out bool fromSkeleton))
+            if (!TryGetEffectiveRoot(renderTick, out Pose world, out bool fromSkeleton, out floorWorldY))
             {
                 // Neither channel has anything at all — hide by ZERO SCALE rather than draw the bind
                 // pose wherever the root happens to sit.
@@ -807,7 +811,7 @@ namespace VortexArena.Core.Player
         /// 8 B root yaw in <see cref="ApplyArenaRoot"/>.</para>
         /// <para>⚠️ ORDER MATTERS: rotations first (they decide where the feet end up), hips shift after.</para>
         /// </remarks>
-        private void ApplyInterpolatedBones(int renderTick)
+        private void ApplyInterpolatedBones(int renderTick, float floorWorldY)
         {
             RemoteSkeletonRegistry skeletons = RemoteSkeletonRegistry.Instance;
             if (skeletons == null || !TryResolveWireJoints() ||
@@ -838,8 +842,13 @@ namespace VortexArena.Core.Player
                 return;
             }
 
+            // ⚠️ footY is a JOINT height: in a deep crouch the sender's toe joint reaches its floor and
+            // the sole would sink by its thickness. Raise-only, so a jump is untouched.
+            float floorFoot = floorWorldY - _characterRoot.position.y + SoleClearanceMeters * scale;
+            float target = Mathf.Max(footY, floorFoot);
+
             // ⚠️ Clamped: a garbage footY must not launch the body instead of grounding it.
-            float wanted = (footY - drawnFoot) / scale;
+            float wanted = (target - drawnFoot) / scale;
             float applied = Mathf.Clamp(wanted, -FootGroundLimitMeters, FootGroundLimitMeters);
             hips.y += applied;
             _wireHips.localPosition = hips;
@@ -850,7 +859,7 @@ namespace VortexArena.Core.Player
         /// <summary>Names a grounding that is not doing its job; silent while the feet are on the floor.</summary>
         /// <remarks>⚠️ The fault is invisible on the headset: sunken feet, a saturated clamp and a wrong body
         /// scale all look alike, and the hips stop answering a crouch once the clamp binds. Throttled per
-        /// body; a healthy solve needs centimetres, so any line here is already the fault.</remarks>
+        /// body; below the threshold the shift is normal crouch/proportion work, not a fault.</remarks>
         private void ReportGrounding(float footY, float drawnFoot, float scale, float wanted, float applied)
         {
             if (Mathf.Abs(wanted) < GroundReportThresholdMeters)
@@ -919,10 +928,12 @@ namespace VortexArena.Core.Player
         /// stale lean offset and body yaw forever; a dead stream drops to the head-derived root — same
         /// formula as the sender's T-pose path (floor projection, YAW only), or the body would jump
         /// the moment a real stream returns.</para></summary>
-        private bool TryGetEffectiveRoot(int renderTick, out Pose world, out bool fromSkeleton)
+        private bool TryGetEffectiveRoot(int renderTick, out Pose world, out bool fromSkeleton,
+            out float floorWorldY)
         {
             world = default;
             fromSkeleton = false;
+            floorWorldY = 0f;
 
             RemotePlayerRegistry poses = RemotePlayerRegistry.Instance;
             if (poses == null || !poses.GetInterpolatedPose(PlayerId, out Pose head, out _, out _))
@@ -943,6 +954,7 @@ namespace VortexArena.Core.Player
             }
 
             var headFloor = new Vector3(head.position.x, floorY, head.position.z);
+            floorWorldY = ArenaSpace.ArenaToWorld(headFloor).y;
 
             RemoteSkeletonRegistry skeletons = RemoteSkeletonRegistry.Instance;
             int ageMs = skeletons != null ? skeletons.GetRootAgeMs(PlayerId) : -1;
@@ -983,7 +995,7 @@ namespace VortexArena.Core.Player
         {
             float scale = BodyScale;
             if (scale <= 0f || Mathf.Approximately(scale, 1f) ||
-                !TryGetEffectiveRoot(RemoteSkeletonRegistry.RenderTickMs, out Pose root, out _))
+                !TryGetEffectiveRoot(RemoteSkeletonRegistry.RenderTickMs, out Pose root, out _, out _))
             {
                 return worldPoint;
             }
@@ -1290,8 +1302,11 @@ namespace VortexArena.Core.Player
             int generation = ArenaCalibrator.CalibrationGeneration;
             if (generation != _sanityCalibrationGeneration)
             {
+                // ⚠️ This frame is NOT stored as the reference: the rig may have moved after the
+                // retargeter read its matrix, so these joints can still sit at the old rig pose.
                 _sanityCalibrationGeneration = generation;
                 _hasSanityJointWorld = false;
+                return true;
             }
 
             float now = Time.time;
@@ -1655,9 +1670,14 @@ namespace VortexArena.Core.Player
             int generation = ArenaCalibrator.CalibrationGeneration;
             if (generation != _rootCalibrationGeneration)
             {
+                // ⚠️ Passed through but NOT stored: this send may still carry the pre-move root
+                // (see JudgeJointJump), and as the reference it would flag the next send as a jump.
                 _rootCalibrationGeneration = generation;
                 _hasLastSentRoot = false;
                 _heldRootSends = 0;
+                _rootHoldWarned = false;
+                _hasHeldRootFrame = false;
+                return candidate;
             }
 
             bool armed = !ControllerTracking.IsValid(false) || !ControllerTracking.IsValid(true);

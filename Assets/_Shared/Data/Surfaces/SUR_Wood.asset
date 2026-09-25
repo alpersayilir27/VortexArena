@@ -22,18 +22,5 @@ MonoBehaviour:
   pitchRange: {x: 0.93, y: 1.09}
   lifetimeSeconds: 1.5
   materials:
-  - {fileID: 5728333065791411216, guid: 2ce806e04ef4e9a4bb74e1ba5feef8d6, type: 3}
-  - {fileID: 2100000, guid: 4e91cac9bdabb634ab82aed680fad887, type: 2}
-  - {fileID: 2100000, guid: 04d07ce6a3444fa468bd98c3ef5f58fa, type: 2}
-  - {fileID: 2100000, guid: 782ed8f4dc0ddb34ca81f98bb8695333, type: 2}
-  - {fileID: -5013175232074453574, guid: d7b10c5ef94e0f741ae00fd40bb4e211, type: 3}
-  - {fileID: 8620923138727469126, guid: 713ec0e85913c654eaa7a914d04624ce, type: 3}
-  - {fileID: 8620923138727469126, guid: 15062f10d1f82c14eb245af24bd5262e, type: 3}
-  - {fileID: 2100000, guid: 637686214afc23248914b3d6e3c6f2a7, type: 2}
   - {fileID: 2100000, guid: 45245895fc814d245ba692903fa98395, type: 2}
   - {fileID: 2100000, guid: 8463f0317ce46fe499709edc5acc3776, type: 2}
-  - {fileID: 2100000, guid: b1b058546e1b22f418fb187242e01444, type: 2}
-  - {fileID: 2100000, guid: 9c0fd3854e487604c846edc766c8999b, type: 2}
-  - {fileID: 268946619369758932, guid: 00c11df898d150445adf0c91e60d8317, type: 3}
-  - {fileID: 268946619369758932, guid: 14c3c7b7faa383748bddc35fd001ed08, type: 3}
-  - {fileID: 268946619369758932, guid: d0531b7ac3e4d7d41ac369a0433a1adc, type: 3}

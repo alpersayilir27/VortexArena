@@ -253,6 +253,20 @@ namespace VortexArena.Protocol
         /// floor.</para></summary>
         public const float OBJECT_DROP_CLEARANCE = 0.05f;
 
+        /// <summary>Arena-space height (§3) below which a fallen object counts as lost (§10.10): the
+        /// OWNER puts it back to its home pose, zeroes its velocity and sends <c>object_rest</c> there.
+        /// <para>⚠️ A falling object never comes to rest on its own — its speed stays above
+        /// <see cref="OBJECT_REST_SPEED"/>, so <c>object_rest</c> never goes out, ownership never ends and
+        /// whatever slipped through the floor is gone for the rest of the match.</para></summary>
+        public const float OBJECT_KILL_Y = -0.5f;
+
+        /// <summary>Pose silence (channel <c>0x01</c>) after which the server treats an object owner as
+        /// gone and grounds its objects (§10.10).
+        /// <para>⚠️ Asked in addition to <c>connection</c>: the heartbeat keeps a sleeping or network-less
+        /// headset <c>connected</c> for 10-20 s, and meanwhile the object hangs in a frozen hand or at its
+        /// release point. Matches the clients' own staleness windows (1 s), so nothing snaps back first.</para></summary>
+        public const int OBJECT_OWNER_SILENCE_MS = 1000;
+
         /// <summary>How long the client waits for an optimistic <c>object_grab</c> to be confirmed by an
         /// <c>object_state</c> naming it owner AND held (§10.10); after that the local grab is undone.
         /// <para>⚠️ A rejection is silent and travels on no other message — without this clock a refused

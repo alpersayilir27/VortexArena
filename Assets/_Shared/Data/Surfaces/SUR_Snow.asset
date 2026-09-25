@@ -24,12 +24,7 @@ MonoBehaviour:
   materials:
   - {fileID: 2100000, guid: 3e875836e642d9a448ebe7e94183b266, type: 2}
   - {fileID: 2100000, guid: 5d58792e7a7d927458f6a5db6a905443, type: 2}
-  - {fileID: 2100000, guid: b532123d7dda62541914160fcb147631, type: 2}
   - {fileID: 2100000, guid: 15f4f0add389cda48a82074c89d07f24, type: 2}
-  - {fileID: 2100000, guid: 7e547d01ca322384fac63aec33df0eb4, type: 2}
   - {fileID: 2100000, guid: 27182a4af46bb084888588735abcb68a, type: 2}
-  - {fileID: 2100000, guid: 8919dde18f7ef674188c72eda7ba5b79, type: 2}
   - {fileID: 2100000, guid: cd731d351437ce54dac143777b7aee46, type: 2}
   - {fileID: 2100000, guid: edeb10c4a826b9542bfe8f2c1fff388c, type: 2}
-  - {fileID: 2100000, guid: 177061ad578ba254bb4192b166dbfb28, type: 2}
-  - {fileID: 2100000, guid: 0060a88cd6252a146aeb6a9652d03869, type: 2}

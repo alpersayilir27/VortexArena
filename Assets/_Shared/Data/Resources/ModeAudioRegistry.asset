@@ -55,3 +55,10 @@ MonoBehaviour:
     - {fileID: 8300000, guid: 42e5e234f46f5a54ca04ec728c82f4b6, type: 3}
     volume: 1
     warningSeconds: 5
+  - modeId: burger
+    sceneName: 
+    gameType: 0
+    trigger: 5
+    clips: []
+    volume: 1
+    warningSeconds: 0

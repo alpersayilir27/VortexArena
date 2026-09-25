@@ -11,7 +11,11 @@ namespace VortexArena.Modes.Mole
     /// <para>⚠️ Sweep, not <c>OnTriggerEnter</c>: the head jumps clean through the mole between frames
     /// ("works sometimes"), so each frame the head sphere is swept from its previous position.</para>
     /// <para>⚠️ Only the LOCAL hammer runs this: remote copies are stripped of behaviours/colliders
-    /// (§6.6), so exactly one client reports a pop.</para></summary>
+    /// (§6.6), so exactly one client reports a pop.</para>
+    /// <para>⚠️ The mole capsule is static and covers the whole standing envelope, so a resting head is
+    /// already "in contact" the moment a mole pops. A pop whose FIRST contact is slow is latched as
+    /// embedded: until the head leaves it (radius + <c>embeddedExitMargin</c>) it only counts on an
+    /// <c>embeddedSwingSpeed</c> swing, so a wiggle or tracking jitter inside the capsule is no hit.</para></summary>
     [DisallowMultipleComponent]
     public sealed class MoleHammer : MonoBehaviour
     {
@@ -26,6 +30,16 @@ namespace VortexArena.Modes.Mole
         [Tooltip("Vuruş hızı bu süre içindeki en yüksek baş hızıdır (sn). Çarpma anında yavaşlayan " +
                  "salınım da sayılır.")]
         [SerializeField] private float speedWindowSeconds = 0.1f;
+
+        [Tooltip("Köstebek balyozun içine doğru çıktıysa ya da balyoz yavaşça bastırıldıysa, balyoz dışarı " +
+                 "çıkmadan vuruş ancak bu hızda sert bir salınımla sayılır (m/s). İçerideki küçük kıpırdama " +
+                 "vuruş sayılmaz.")]
+        [SerializeField] private float embeddedSwingSpeed = 3f;
+
+        [Tooltip("İçine gömülmüş balyozun köstebeği terk etmiş sayılması için vuruş küresinin köstebekten " +
+                 "bu kadar uzaklaşması gerekir (m). Sınırda titreyen balyoz her girişte yeniden vuruş " +
+                 "denemesi saymasın diye.")]
+        [SerializeField] private float embeddedExitMargin = 0.05f;
 
         /// <summary>Per-frame contact buffer; sized for scenery + own colliders so moles are not pushed out.</summary>
         private const int MaxContacts = 32;
@@ -48,6 +62,10 @@ namespace VortexArena.Modes.Mole
         private int _reportedNetId;
         private int _reportedNonce = -1;
 
+        /// <summary>Pop whose first contact was too slow; counts only on a hard swing until the head leaves it.</summary>
+        private MoleHole _embeddedHole;
+        private int _embeddedNonce = -1;
+
         private void Awake()
         {
             if (hitCollider == null)
@@ -68,6 +86,12 @@ namespace VortexArena.Modes.Mole
             {
                 Debug.LogWarning($"[MoleHammer] '{hitCollider.name}' trigger değil — vuruş yine " +
                                  "çalışır ama balyoz sahneye fiziksel olarak çarpar.", this);
+            }
+
+            if (embeddedSwingSpeed < minSwingSpeed)
+            {
+                Debug.LogWarning($"[MoleHammer] '{name}' üzerinde Embedded Swing Speed, Min Swing Speed'in " +
+                                 "altında — gömülü balyozun eşiği normal vuruştan kolay olur.", this);
             }
         }
 
@@ -110,11 +134,21 @@ namespace VortexArena.Modes.Mole
             MoleHole target = FindContact(center, delta);
             if (target == null || !target.IsHittable || target.Nonce < 0)
             {
+                UpdateEmbeddedExit(center);
                 return;
             }
 
-            if (PeakSpeed(now) < minSwingSpeed)
+            bool embedded = target == _embeddedHole && target.Nonce == _embeddedNonce;
+            float required = embedded ? embeddedSwingSpeed : minSwingSpeed;
+            if (PeakSpeed(now) < required)
             {
+                if (!embedded)
+                {
+                    // First contact of this pop was slow: the mole rose into a resting head, or a slow press.
+                    _embeddedHole = target;
+                    _embeddedNonce = target.Nonce;
+                }
+
                 return;
             }
 
@@ -123,6 +157,8 @@ namespace VortexArena.Modes.Mole
                 return;
             }
 
+            _embeddedHole = null;
+            _embeddedNonce = -1;
             _reportedNetId = target.NetId;
             _reportedNonce = target.Nonce;
             NetObjectSync.SendEvent(target.NetId, MoleKinds.EventWhack, new[] { target.Nonce });
@@ -133,6 +169,38 @@ namespace VortexArena.Modes.Mole
             _hasLastCenter = false;
             _speedHead = 0;
             _speedCount = 0;
+            _embeddedHole = null;
+            _embeddedNonce = -1;
+        }
+
+        /// <summary>Clears the embedded latch once that pop ended or the head is clearly out of it.</summary>
+        private void UpdateEmbeddedExit(Vector3 center)
+        {
+            if (_embeddedHole == null)
+            {
+                return;
+            }
+
+            if (!_embeddedHole.IsHittable || _embeddedHole.Nonce != _embeddedNonce)
+            {
+                _embeddedHole = null;
+                _embeddedNonce = -1;
+                return;
+            }
+
+            // Hysteresis: a wider sphere than the hit one, so jitter on the boundary does not re-arm.
+            int count = Physics.OverlapSphereNonAlloc(center, WorldRadius() + embeddedExitMargin, _overlaps,
+                ~0, QueryTriggerInteraction.Collide);
+            for (int i = 0; i < count; i++)
+            {
+                if (Resolve(_overlaps[i]) == _embeddedHole)
+                {
+                    return;
+                }
+            }
+
+            _embeddedHole = null;
+            _embeddedNonce = -1;
         }
 
         private void RecordSpeed(float time, float speed)

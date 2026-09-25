@@ -97,7 +97,9 @@ public sealed class LobbyService
         if (hello.protocolVersion != ArenaProtocol.PROTOCOL_VERSION)
             Console.WriteLine($"[Lobby] protokol sürüm uyumsuzluğu: istemci {hello.protocolVersion}, sunucu {ArenaProtocol.PROTOCOL_VERSION} — devam ediliyor.");
 
-        if (!_registry.TryRegisterHello(hello, connection, out var state, out var kind))
+        // Asked before the registry lock: the director has its own lock and must not be called inside it.
+        var teamlessMatch = _director.IsTeamlessMatchSetUp();
+        if (!_registry.TryRegisterHello(hello, connection, teamlessMatch, out var state, out var kind))
         {
             Console.WriteLine($"[Lobby] playerId havuzu tükendi ({ArenaProtocol.PLAYER_ID_MAX}) — {hello.deviceName} reddedildi.");
             await SendSafeAsync(connection, JsonUtil.Serialize(new KickedMsg { reason = "Sunucu dolu" }), "(dolu)");
@@ -659,8 +661,19 @@ public sealed class LobbyService
         // Base strips depend on the selected mode's team mode (§10.7) — announced to everyone when
         // the MODE changes. Map/duration/limit changes do not produce this broadcast.
         bool modeChanged;
-        lock (_selectionGate) modeChanged = _selectedModeId != previousModeId;
-        if (modeChanged) await BroadcastSelectionStateAsync();
+        string selectedModeId;
+        lock (_selectionGate)
+        {
+            modeChanged = _selectedModeId != previousModeId;
+            selectedModeId = _selectedModeId;
+        }
+
+        if (modeChanged)
+        {
+            // ⚠️ Players back from a teamless match would otherwise stay white in the lobby (§10.7).
+            _director.AssignTeamlessForMode(selectedModeId);
+            await BroadcastSelectionStateAsync();
+        }
 
         // On rejection a broadcast goes out even when nothing changed: the sending panel may have
         // advanced its control optimistically and the server's value must pull it back (single truth

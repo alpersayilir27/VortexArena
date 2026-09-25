@@ -723,6 +723,13 @@ Windows dosya kilidi yüzünden taşıma yarıda kalır ve geride yetim `.meta`'
 bırakır. Taşıma editör kapalıyken `git mv` ile yapılır; tek kod ayağı `WeaponKitBuilder.PackRoot`
 sabitidir (tek satır) — o güncellenmezse silah kiti kaynaklarını bulamaz ama hata da vermez.
 
+### ⚠️ Yamalı satıcı betiğini paketi yeniden içe aktararak EZME
+
+Construction Site paketinin `LightmappedLOD.cs`'i static batch'e giren renderer'ları atlayacak
+şekilde yamalıdır: yamasız hâli her sahne yüklemesinde LOD başına uyarı basar ve gözlük günlüğü
+saniyelik sınırda kısılıp gerçek satırlar kaybolur. Paket yeniden içe aktarılırsa betik değişikliği
+geri alınır — içe aktarma penceresinde o dosyanın işaretini kaldır.
+
 ### ⚠️ `Shader.Find` build'de `null` dönebilir
 
 Hiçbir materyalin referanslamadığı shader strip edilir. Runtime'da üretilen görseller bu yüzden
