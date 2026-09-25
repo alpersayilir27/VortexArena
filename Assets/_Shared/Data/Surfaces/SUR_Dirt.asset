@@ -21,4 +21,5 @@ MonoBehaviour:
   volume: 0.8
   pitchRange: {x: 0.94, y: 1.06}
   lifetimeSeconds: 1.5
-  materials: []
+  materials:
+  - {fileID: 2100000, guid: e309fee46e70baf4c898e5ea5329e449, type: 2}

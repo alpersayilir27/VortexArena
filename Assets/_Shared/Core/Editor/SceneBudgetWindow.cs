@@ -156,7 +156,7 @@ namespace VortexArena.Core.Editor
             Head("Sahne", NameWidth);
             Head("Üçgen (LOD0)", NumWidth);
             Head("Vertex", NumWidth);
-            Head("Renderer", RendererWidth);
+            Head("Renderer (LOD0)", RendererWidth);
             Head("Static", NumWidth);
             Head("Skinned", NumWidth);
             Head("Materyal", NumWidth);
@@ -186,8 +186,8 @@ namespace VortexArena.Core.Editor
 
             Cell(Num(b.TrisEffective), NumWidth, b.TrisEffective > TrisWarn);
             Cell(Num(b.VertsEffective), NumWidth, false);
-            Cell($"{Num(b.MeshRenderersActive)}/{Num(b.MeshRenderersTotal)}", RendererWidth,
-                b.MeshRenderersActive > RenderersWarn);
+            Cell($"{Num(b.MeshRenderersEffective)}/{Num(b.MeshRenderersTotal)}", RendererWidth,
+                b.MeshRenderersEffective > RenderersWarn);
             Cell(Num(b.StaticFlagged), NumWidth, b.MissingStaticFlags);
             Cell($"{Num(b.SkinnedActive)} · {Num(b.SkinnedTris)}", NumWidth, false);
             Cell(Num(b.UniqueMaterials), NumWidth, false);
@@ -212,6 +212,7 @@ namespace VortexArena.Core.Editor
             {
                 EditorGUILayout.LabelField(
                     $"Tüm LOD'lar dahil üçgen: {Num(b.TrisAllLods)}" +
+                    $" · renderer: {Num(b.MeshRenderersActive)}" +
                     (b.Terrains > 0
                         ? $" · terrain yükseklik üçgeni (yaklaşık): {Num(b.TerrainHeightTrisApprox)}"
                         : string.Empty));
@@ -425,6 +426,8 @@ namespace VortexArena.Core.Editor
                         continue;
                     }
 
+                    // Only one LOD level draws at a time: renderers count like triangles, LOD0 only.
+                    budget.MeshRenderersEffective++;
                     budget.TrisEffective += tris;
                     budget.VertsEffective += mesh != null ? mesh.vertexCount : 0;
                     if (mesh != null && tris > 0)
@@ -563,7 +566,7 @@ namespace VortexArena.Core.Editor
         private void LogMarkdown()
         {
             var text = new StringBuilder();
-            text.AppendLine("| Sahne | Üçgen (LOD0) | Vertex | Renderer | Static | Skinned | " +
+            text.AppendLine("| Sahne | Üçgen (LOD0) | Vertex | Renderer (LOD0) | Static | Skinned | " +
                             "Materyal | Terrain | Particle | Işık RT/Mix/Gölge | Uyarı |");
             text.AppendLine("|---|---|---|---|---|---|---|---|---|---|---|");
 
@@ -577,7 +580,7 @@ namespace VortexArena.Core.Editor
                 }
 
                 text.AppendLine($"| {b.Name} | {Num(b.TrisEffective)} | {Num(b.VertsEffective)} | " +
-                                $"{Num(b.MeshRenderersActive)}/{Num(b.MeshRenderersTotal)} | " +
+                                $"{Num(b.MeshRenderersEffective)}/{Num(b.MeshRenderersTotal)} | " +
                                 $"{Num(b.StaticFlagged)} | {Num(b.SkinnedActive)} · " +
                                 $"{Num(b.SkinnedTris)} | {Num(b.UniqueMaterials)} | " +
                                 $"{Num(b.Terrains)} | {Num(b.ParticleSystems)} | " +
@@ -626,6 +629,7 @@ namespace VortexArena.Core.Editor
             public long TrisEffective;
             public long VertsEffective;
             public long TrisAllLods;
+            public int MeshRenderersEffective;
             public int MeshRenderersActive;
             public int MeshRenderersTotal;
             public int StaticFlagged;
@@ -651,7 +655,7 @@ namespace VortexArena.Core.Editor
                     parts.Add("1M+ üçgen");
                 }
 
-                if (MeshRenderersActive > RenderersWarn)
+                if (MeshRenderersEffective > RenderersWarn)
                 {
                     parts.Add("1500+ renderer");
                 }

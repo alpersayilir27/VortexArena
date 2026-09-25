@@ -1237,7 +1237,7 @@ değeri sahne objesinde durduğu için arena başına elle yapılır ve **atlan�
 
 **5. adımın bütçe kuralı.** Environment yerleştikten sonra `Tools > VortexArena > Arena > Sahne
 Bütçesini Ölç` koşulur: tenant'ın sahneleri yan yana, eşiği aşan hücre kırmızı (1M+ LOD0 üçgen ·
-1500+ aktif renderer · birden çok terrain · static flag'siz dekor). Hareketsiz dekor **Static**
+1500+ LOD0 renderer · birden çok terrain · static flag'siz dekor). Hareketsiz dekor **Static**
 işaretlenir (yapraklı vegetasyon/çimde Occluder kapalı; `Animator`/`Rigidbody` altındaki obje
 işaretsiz), bake **ondan sonra** alınır — işaretsiz objeye bake uygulanmaz
 ([Yapma Listesi](Yapma-Listesi.md)). Hazır environment paketleri **çok parçalı terrain**le gelir;
