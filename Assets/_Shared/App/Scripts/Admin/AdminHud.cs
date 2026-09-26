@@ -4,6 +4,7 @@ using System.Text;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+using VortexArena.Core;
 using VortexArena.Net;
 using VortexArena.Protocol;
 
@@ -247,10 +248,14 @@ namespace VortexArena.App.Admin
         private void RefreshTopBar(AdminRoster roster)
         {
             bool ffa = roster.IsFfa;
+            // Co-op is teamless, so the team slots would both go blank — but it does have ONE score
+            // the operator is watching. It takes the left slot; the right one stays empty because
+            // there is no opponent to put there.
+            bool sharedScore = ModeRuntime.IsCoop;
 
             if (scoreRedText != null)
             {
-                scoreRedText.text = ffa ? "" : roster.ScoreRed.ToString();
+                scoreRedText.text = ffa && !sharedScore ? "" : roster.ScoreRed.ToString();
             }
 
             if (scoreBlueText != null)

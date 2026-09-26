@@ -27,8 +27,10 @@ namespace VortexArena.Core.Combat
         private const float MinTracerMeters = 0.5f;
 
         /// <summary>Streak flight speed. NOT a bullet speed: in a ≤20 m arena 20 m ≈ 0.17 s, fast
-        /// but still trackable by the eye.</summary>
-        private const float TracerSpeedMetersPerSecond = 120f;
+        /// but still trackable by the eye.
+        /// <para>Public because <see cref="NearMissWhizFx"/> delays its whiz by this same speed — a
+        /// private copy of the number would drift and desync sound from streak.</para></summary>
+        public const float TracerSpeedMetersPerSecond = 120f;
 
         /// <summary>Streak length (head to tail). A full-length static line reads as a laser
         /// beam.</summary>
@@ -149,6 +151,9 @@ namespace VortexArena.Core.Combat
 
         private readonly TracerNode[] _pool = new TracerNode[PoolSize];
         private int _nextNode;
+
+        /// <summary>Single-endpoint buffer for <see cref="Warmup"/> — Play only takes an array.</summary>
+        private readonly Vector3[] _warmupPoints = new Vector3[1];
 
         private Material _material;
         private bool _warnedNoShader;
@@ -276,6 +281,16 @@ namespace VortexArena.Core.Combat
             }
 
             return drawn;
+        }
+
+        /// <summary>Draws one short trail (plus its smoke puff) so the line material, the
+        /// <c>Shader.Find</c> lookups and the smoke system are built behind the loading cover instead
+        /// of on the first shot. ⚠️ The line must be longer than <see cref="MinTracerMeters"/> or
+        /// nothing is drawn and nothing warms up.</summary>
+        public void Warmup(Vector3 from, Vector3 to, float visibleSeconds)
+        {
+            _warmupPoints[0] = to;
+            Play(from, _warmupPoints, 1, Color.white, 0.02f, Mathf.Max(0.02f, visibleSeconds));
         }
 
         /// <summary>Flies live streaks along their path, then fades them (alpha down, width

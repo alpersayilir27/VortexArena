@@ -649,8 +649,10 @@ tabanda **değildir** (aşağıdaki nota bak).
 > bırakmak yeterlidir. Şerit süresini kendi tutar (prefab alanı, bugün 3 sn) — modun kapatması gerekmez.
 
 > **Maç sonu ekranı (KAZANDIN/KAYBETTİN + skor tablosu) moda ait DEĞİLDİR** ve yeni mod için
-> yapılacak hiçbir iş yoktur: `MatchResultOverlay` mod-agnostiktir, maç bitince HUD'ı kendisi
-> gizler. `WinnerLine`/`EndScoreLine` yine de yazılır — onlar HUD'ın kendi satırlarıdır (ekran
+> yapılacak hiçbir iş yoktur: `MatchResultOverlay` mod ADINI bilmez, maç bitince HUD'ı kendisi
+> gizler. Ekranın dalları (kazanansız kooperatif kartı, gizlenen K/D kolonları) **modun
+> kurallarından** türer (`ModeRuntime.IsCoop` · `HidesCombatStats`) — modun kuralı doğruysa ekranı
+> da doğrudur. `WinnerLine`/`EndScoreLine` yine de yazılır — onlar HUD'ın kendi satırlarıdır (ekran
 > kapandığında görünen değerler).
 
 > ⚠️ Yaşam döngüsü metotlarını override edersen `base.` çağır.

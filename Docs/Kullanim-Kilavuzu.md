@@ -798,6 +798,11 @@ başlamadan önce de **kimsenin eline silah gelmez**; yan tuş (grip) yalnız e�
 ekranı sen kapatana kadar durur** (çocuklar ortak puanı ve sıralamayı birlikte okusun diye; alt
 ortadaki **BİTİR** ya da lobiye alma kapatır). Puan limiti yoktur; süre Tercihler'den ayarlanır.
 
+Sonuç ekranı bu ailede savaş modlarındakinden farklıdır: gözlükte **KAZANDIN/KAYBETTİN yazmaz** —
+vardiyanın bittiğini söyler, ekip toplamını, mutlu/mutsuz müşteri sayısını ve çocuğun kendi
+katkısını gösterir. Tabloda öldürme/ölüm kolonları yoktur; sıralama katkıya göredir. Aynı sayılar
+senin panelinde de aynı şekilde yazar — çocuğun okuduğu rakam ile senin okuduğun rakam tektir.
+
 Akış: kapıdan **müşteri** gelir, bankonun önünde durur, başının üstündeki balonda sipariş yazar
 ve **resimli** görünür (alttan üste dilimler, okuma bilmeyen çocuk için). Çocuklar dağıtıcılardan
 malzeme alır (yan tuş), bütün ekmeği tahtada bıçakla keser, köfteyi ızgarada pişirir (**renk
@@ -830,7 +835,9 @@ mutsuz gider, **puan düşmez**. Vardiya ilerledikçe müşteriler daha sık gel
 - **Hiç müşteri gelmiyor:** maç başlamamıştır (BAŞLAT'a bas) ya da harita çocuk haritası değildir.
 
 > Aynı ailenin diğer oyunu **Köstebek Ezme** de silahsız ve ölümsüzdür; farkı iki takım ve takım
-> puanı olmasıdır (kazanan vardır). Çocuk haritalarında ayrıca kalibrasyon ve alan kuralları
+> puanı olmasıdır (kazanan vardır, sonuç ekranı KAZANDIN/KAYBETTİN yazar). Orada da tabloda
+> öldürme/ölüm kolonu yoktur: takım satırı oyuncu sayısı + takım puanı gösterir. Çocuk
+> haritalarında ayrıca kalibrasyon ve alan kuralları
 > savaş modlarıyla aynıdır (Bölüm 4).
 
 ### Ölü kalan oyuncu

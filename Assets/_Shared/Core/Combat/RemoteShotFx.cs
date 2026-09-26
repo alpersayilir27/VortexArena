@@ -161,6 +161,11 @@ namespace VortexArena.Core.Combat
         private readonly HashSet<byte> _warnedItemIds = new HashSet<byte>();
         private bool _warnedNoPrefab;
 
+        /// <summary>Puff emitted by <see cref="Warmup"/>, cleared again from Update.</summary>
+        private ParticleSystem _warmupParticles;
+
+        private float _warmupClearAt;
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
         {
@@ -211,9 +216,58 @@ namespace VortexArena.Core.Combat
             _pending.Clear();
         }
 
+        /// <summary>Builds every pooled FX node and draws ONE of them, SILENT, so the first remote
+        /// shot pays neither the catalog load nor the Instantiate/shader warm-up. Runs on the admin
+        /// too — the spectator view is nothing but remote shots.</summary>
+        public void Warmup(Vector3 position, Vector3 direction, float visibleSeconds)
+        {
+            WeaponCatalog catalog = WeaponCatalog.Load();
+
+            // Touched here so the first incoming shot does not pay the Resources.Load.
+            NetItemCatalog.Load();
+
+            // Silent: builds the whiz AudioSource pool only.
+            NearMissWhizFx.Shared.Warmup();
+
+            FxNode first = null;
+
+            // A full lap of the ring: every node is instantiated and _nextNode lands back on 0.
+            for (int i = 0; i < PoolSize; i++)
+            {
+                FxNode node = TakeNode(catalog);
+                if (first == null)
+                {
+                    first = node;
+                }
+            }
+
+            if (first == null || first.Root == null)
+            {
+                return;
+            }
+
+            if (direction.sqrMagnitude < 1e-6f)
+            {
+                direction = Vector3.forward;
+            }
+
+            first.Root.SetPositionAndRotation(position, Quaternion.LookRotation(direction));
+
+            if (first.Particles != null)
+            {
+                first.Particles.Emit(ParticlesPerShot);
+                _warmupParticles = first.Particles;
+                _warmupClearAt = Time.unscaledTime + Mathf.Max(0.02f, visibleSeconds);
+            }
+
+            // No sound on purpose: the player is still behind the loading cover.
+        }
+
         /// <summary>Plays due shot events, preserving order and compacting in one pass.</summary>
         private void Update()
         {
+            ClearWarmupParticles();
+
             int count = _pending.Count;
             if (count == 0)
             {
@@ -385,6 +439,12 @@ namespace VortexArena.Core.Combat
 
             DrawTracer(fx, item, origin, worldDir, evt.magnitude);
             PlayRemoteImpact(origin, worldDir, evt.magnitude);
+
+            // ⚠️ ONE report per shot, from the CENTRE ray, deliberately outside DrawTracer: the
+            // tracer is drawn every Nth round, but "a round went past my ear" must be heard on
+            // every round — and a pellet spread must not whiz nine times on one trigger pull.
+            NearMissWhizFx.Shared.Report(origin, origin + worldDir * evt.magnitude);
+
             PrunePlayers(now);
         }
 
@@ -854,6 +914,19 @@ namespace VortexArena.Core.Combat
 
             node.Source.pitch = def.FirePitchBase + Random.Range(-def.FirePitchJitter, def.FirePitchJitter);
             node.Source.PlayOneShot(clip, volume);
+        }
+
+        /// <summary>Wipes the warmup puff once the cover has done its job — leftovers must not be
+        /// there when the fade lifts.</summary>
+        private void ClearWarmupParticles()
+        {
+            if (_warmupParticles == null || Time.unscaledTime < _warmupClearAt)
+            {
+                return;
+            }
+
+            _warmupParticles.Clear(true);
+            _warmupParticles = null;
         }
 
         private FxNode TakeNode(WeaponCatalog catalog)

@@ -24,6 +24,11 @@ namespace VortexArena.Modes.Burger
         public const string Sauce = "sauce";
 
         public const string Board = "board";
+
+        /// <summary>The carried board a burger is built on. ⚠️ NOT an ingredient — it never enters a
+        /// recipe, it only brings one to the serving board.</summary>
+        public const string CuttingBoard = "cutting_board";
+
         public const string Knife = "knife";
         public const string Spatula = "spatula";
         public const string Customer = "customer";

@@ -69,6 +69,20 @@ namespace VortexArena.Core.Combat
         /// writers on one transform is a visible jitter, not a compile error.</para></summary>
         public Transform CarryAnchor { get; set; }
 
+        /// <summary>THIS headset just took the object into a hand (<c>true</c> = right). Raised at the
+        /// grab, not at the server's answer — a component that must claim something along with the object
+        /// cannot wait a round trip.</summary>
+        public event System.Action<bool> GrabbedLocally;
+
+        /// <summary>THIS headset just let the object go. <c>true</c> = a real release went on the wire;
+        /// <c>false</c> = the optimistic grab was UNDONE (it is someone else's now), so nothing may be
+        /// published for it.</summary>
+        public event System.Action<bool> ReleasedLocally;
+
+        /// <summary>Optional corrector for the published release pose (see
+        /// <see cref="IReleasePoseOverride"/>); usually a component on this same object.</summary>
+        public IReleasePoseOverride ReleaseOverride { get; set; }
+
         /// <summary>The controller holding it LOCALLY; <c>None</c> = we are not holding it (someone else
         /// may be).</summary>
         private OVRInput.Controller _localHand = OVRInput.Controller.None;
@@ -328,6 +342,7 @@ namespace VortexArena.Core.Combat
             Buzz(rightHand, GrabHapticAmplitude, GrabHapticSeconds);
 
             NetObjectSync.SendGrab(_net.NetId, rightHand);
+            GrabbedLocally?.Invoke(rightHand);
             return true;
         }
 
@@ -386,6 +401,7 @@ namespace VortexArena.Core.Combat
 
             if (!send)
             {
+                ReleasedLocally?.Invoke(false);
                 return;
             }
 
@@ -394,10 +410,15 @@ namespace VortexArena.Core.Combat
             if (item != null && item.ReleaseMode == ItemReleaseMode.Return)
             {
                 ApplyReturn();
-                return;
+            }
+            else
+            {
+                ApplyPhysicsRelease(hand);
             }
 
-            ApplyPhysicsRelease(hand);
+            // After the release is on the wire: a listener that hands cargo over reads the object's final
+            // pose, and until ApplyPhysicsRelease ran that pose can still move (see ReleaseOverride).
+            ReleasedLocally?.Invoke(true);
         }
 
         /// <summary>Release axis <c>Return</c>: the object goes back to its socket, and THAT pose is what
@@ -428,17 +449,32 @@ namespace VortexArena.Core.Combat
         /// NOT be simulated on both headsets: that is one knife in two places.</para></summary>
         private void ApplyPhysicsRelease(OVRInput.Controller hand)
         {
+            transform.GetPositionAndRotation(out Vector3 position, out Quaternion rotation);
+            var pose = new Pose(position, rotation);
+
+            // A component on this object may put it down somewhere else (IReleasePoseOverride); the
+            // object is MOVED there first, because the published pose must be the one it is actually on.
+            bool placed = ReleaseOverride != null && ReleaseOverride.TryOverrideReleasePose(ref pose);
+            if (placed)
+            {
+                transform.SetPositionAndRotation(pose.position, pose.rotation);
+            }
+
             if (_body != null)
             {
                 // Set here rather than left to NetObjectBody: the "held" flag has not fallen yet, so
                 // NetObjectBody still skips this object and the throw would start a frame late.
                 RigidbodyDrive.SetKinematic(_body, false);
-                _body.linearVelocity = ResolveReleaseVelocity(hand);
+                _body.linearVelocity = placed ? Vector3.zero : ResolveReleaseVelocity(hand);
+
+                if (placed)
+                {
+                    _body.angularVelocity = Vector3.zero;
+                }
             }
 
-            transform.GetPositionAndRotation(out Vector3 position, out Quaternion rotation);
             NetObjectSync.SendRelease(_net.NetId,
-                ArenaSpace.WorldToArena(position), ArenaSpace.WorldToArena(rotation));
+                ArenaSpace.WorldToArena(pose.position), ArenaSpace.WorldToArena(pose.rotation));
         }
 
         /// <summary>Release velocity of the controller, in WORLD space.
@@ -536,6 +572,10 @@ namespace VortexArena.Core.Combat
             // only confirmation the player gets — the dispenser has no socket sphere of its own to hide
             // and nothing else answers the press.
             Buzz(rightHand, GrabHapticAmplitude, GrabHapticSeconds);
+
+            // Same signal as a pressed grab: listeners care about "it is in OUR hand now", not about who
+            // decided it.
+            GrabbedLocally?.Invoke(rightHand);
         }
 
         // ------------------------------------------------------------------- per frame

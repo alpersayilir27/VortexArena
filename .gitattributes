@@ -25,6 +25,12 @@
 *.inputactions          unity-json
 *.shadergraph           unity-json
 *.shadersubgraph        unity-json
+# Tool/agent-written text (baked *_objects.json, Docs, configs) is LF; pinning it stops
+# core.autocrlf=true from warning "LF will be replaced by CRLF" on every add.
+# text=auto keeps binary-detected files (sample .json) untouched.
+*.json                  text=auto eol=lf
+*.md                    text=auto eol=lf
+*.toml                  text=auto eol=lf
 # Unity UI Toolkit files
 *.tss                   text diff=css linguist-language=css
 *.uss                   text diff=css linguist-language=css

@@ -1,5 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
+using VortexArena.Core.Arena;
+using VortexArena.Core.Combat;
 using VortexArena.Core.Player;
 using VortexArena.Core.World;
 using VortexArena.Net;
@@ -15,6 +17,8 @@ namespace VortexArena.Modes.Burger
     /// where the scene put it. That position is the ONLY thing tying it to a slot, because
     /// <see cref="ResolveSlot"/> searches by VOLUME: a board authored outside every slot's collider takes
     /// ingredients happily and then never serves — every blocked serve says why in the log.</para>
+    /// <para>A stack built on a cutting board arrives through <see cref="AcceptTransferredStack"/> and is
+    /// treated exactly like layers placed by hand — serving happens only from THIS board.</para>
     /// <para><b>Placing the TOP BUN is the serve gesture</b> — it closes the burger, and the stack must be
     /// closed for the report to go out.</para>
     /// <para>⚠️ Only the client that brought the ingredient to rest reports
@@ -25,10 +29,14 @@ namespace VortexArena.Modes.Burger
     /// <c>rejected</c> event to listen for.</para></summary>
     [RequireComponent(typeof(NetObject))]
     [DisallowMultipleComponent]
-    public sealed class BurgerServingBoard : MonoBehaviour
+    public sealed class BurgerServingBoard : MonoBehaviour, INetRestPoseAdjuster
     {
         [Tooltip("Tahtanın üstündeki malzemeleri toplayan hacim (tetik collider).")]
         [SerializeField] private Collider stackTrigger;
+
+        [Tooltip("Yığının dizildiği nokta: alt ekmek burada oturur, üstü buranın +Y ekseninde yükselir. " +
+                 "Boşsa yığın hacminin taban ortası kullanılır.")]
+        [SerializeField] private Transform stackAnchor;
 
         [Tooltip("Yanlış servis sesi. Atanmazsa yalnız log yazılır.")]
         [SerializeField] private AudioSource rejectSound;
@@ -128,16 +136,37 @@ namespace VortexArena.Modes.Burger
 
         private readonly List<int> _stale = new List<int>();
 
+        /// <summary>Poses of a transferred stack — reused so a hand-over allocates nothing.</summary>
+        private readonly List<Pose> _transferred = new List<Pose>();
+
+        /// <summary>The straight column shared with the cutting board.</summary>
+        private BurgerStackColumn _column;
+
         private float _nextSeatPoll;
 
         /// <summary>Has the first stack poll run — see <see cref="TickSeatFeedback"/>.</summary>
         private bool _seatPrimed;
 
-        private static readonly Collider[] Overlap = new Collider[64];
+        /// <summary>Every enabled serving board, so a carried board can find the one it is held over
+        /// without a scene scan per frame.</summary>
+        private static readonly List<BurgerServingBoard> Boards = new List<BurgerServingBoard>();
+
+        public static IReadOnlyList<BurgerServingBoard> All => Boards;
+
+        /// <summary>How high above the stack volume still counts as "over the board" (m).</summary>
+        private const float OverHeight = 0.5f;
+
+        /// <summary>Gap left between the board and whatever is put down beside it (m).</summary>
+        private const float SideMargin = 0.05f;
+
+        /// <summary>How long a transferred layer keeps its pin while the wire still calls it held — one
+        /// round trip plus slack (see <see cref="AcceptTransferredStack"/>).</summary>
+        private const float TransferPinSeconds = 1.5f;
 
         private void Awake()
         {
             _net = GetComponent<NetObject>();
+            _column = new BurgerStackColumn(stackTrigger, stackAnchor, transform);
 
             if (stackTrigger == null)
             {
@@ -149,21 +178,25 @@ namespace VortexArena.Modes.Burger
         private void OnEnable()
         {
             _net.EventReceived += HandleEventReceived;
+            Boards.Add(this);
         }
 
         private void OnDisable()
         {
             _net.EventReceived -= HandleEventReceived;
+            Boards.Remove(this);
 
             foreach (KeyValuePair<NetObject, NetObjectPoseSender> entry in _watched)
             {
                 if (entry.Value != null)
                 {
                     entry.Value.RestSent -= HandleIngredientRest;
+                    entry.Value.RemoveRestAdjuster(this);
                 }
             }
 
             _watched.Clear();
+            _column.Clear();
             _seated.Clear();
             _localRested.Clear();
             RestorePops();
@@ -191,6 +224,7 @@ namespace VortexArena.Modes.Burger
             if (sender != null)
             {
                 sender.RestSent += HandleIngredientRest;
+                sender.AddRestAdjuster(this);
             }
         }
 
@@ -204,10 +238,12 @@ namespace VortexArena.Modes.Burger
 
             _watched.Remove(ingredient);
             _localRested.Remove(ingredient.NetId);
+            _column.RemovePin(ingredient);
 
             if (sender != null)
             {
                 sender.RestSent -= HandleIngredientRest;
+                sender.RemoveRestAdjuster(this);
             }
         }
 
@@ -242,6 +278,131 @@ namespace VortexArena.Modes.Burger
                    BurgerKinds.IsIngredient(net.Kind.Kind)
                 ? net
                 : null;
+        }
+
+        // ------------------------------------------------------------------- the column
+
+        /// <summary>Snaps a layer WE brought to rest onto the board's column
+        /// (<see cref="BurgerStackColumn"/>). Only layers the board is watching are answered for: the
+        /// column itself has no idea which board a passing ingredient belongs to.</summary>
+        public bool TryAdjustRestPose(NetObject net, ref Pose worldPose)
+        {
+            if (net == null || net.Kind == null || !BurgerKinds.IsIngredient(net.Kind.Kind) ||
+                !_watched.ContainsKey(net))
+            {
+                return false;
+            }
+
+            return _column.TryAdjustRestPose(net, ref worldPose);
+        }
+
+        private void LateUpdate()
+        {
+            _column.TickPins();
+        }
+
+        // ------------------------------------------------------------------- hand-over
+
+        /// <summary>Is the point over this board's stack volume — the test a carried board uses to decide
+        /// where its stack goes.</summary>
+        public bool IsOver(Vector3 worldPoint)
+        {
+            return _column != null && _column.IsOver(worldPoint, OverHeight);
+        }
+
+        /// <summary>A free spot next to the board, at the height of the board's own surface: whatever
+        /// poured its stack here must not be put down ON the burger.</summary>
+        /// <param name="fromPosition">Where the mover is now — it stays on the side it came from.</param>
+        /// <param name="moverRadius">Half footprint of the mover (m).</param>
+        public bool TryResolveSideSpot(Vector3 fromPosition, float moverRadius, out Pose worldPose)
+        {
+            worldPose = default;
+
+            if (_column == null || !_column.HasVolume)
+            {
+                return false;
+            }
+
+            Bounds volume = _column.Volume;
+            Vector3 right = transform.right;
+            float side = Vector3.Dot(fromPosition - volume.center, right) >= 0f ? 1f : -1f;
+            float distance = Mathf.Max(volume.extents.x, volume.extents.z) + moverRadius + SideMargin;
+
+            Vector3 position = volume.center + right * (side * distance);
+
+            // Y is the SURFACE, not a pivot: the caller knows where its own bottom is.
+            position.y = volume.min.y;
+            worldPose = new Pose(position, transform.rotation);
+            return true;
+        }
+
+        /// <summary>Takes a whole stack over from a carried board, bottom to top, onto this board's
+        /// column.
+        /// <para>⚠️ <c>object_release</c> + <c>object_rest</c> are sent for every layer although they are
+        /// still in the carrier's hand: the pair is what ends ownership and freezes the pose, and the
+        /// server accepts it from the owner while the object is held. The layers keep a PIN through the
+        /// round trip, otherwise gravity walks them off the poses we just published.</para>
+        /// <para>Layers owned by someone else are skipped — publishing for them would fight the real
+        /// owner.</para></summary>
+        public void AcceptTransferredStack(IReadOnlyList<NetObject> layersBottomToTop)
+        {
+            if (_column == null || !_column.HasVolume || layersBottomToTop == null ||
+                layersBottomToTop.Count == 0)
+            {
+                return;
+            }
+
+            if (!_column.TryComputeColumnPoses(layersBottomToTop, _transferred))
+            {
+                return;
+            }
+
+            for (int i = 0; i < layersBottomToTop.Count; i++)
+            {
+                NetObject layer = layersBottomToTop[i];
+                if (layer == null || layer.NetId <= 0 || !layer.IsMine)
+                {
+                    continue;
+                }
+
+                // The carrier's anchor goes first: while it is set the layer's own bridge writes nothing
+                // and the carrier would keep dragging the layer off the column.
+                var bridge = layer.GetComponent<NetObjectGrabBridge>();
+                if (bridge != null)
+                {
+                    bridge.CarryAnchor = null;
+                }
+
+                Pose pose = _transferred[i];
+
+                var body = layer.GetComponent<Rigidbody>();
+                if (body != null && !body.isKinematic)
+                {
+                    body.linearVelocity = Vector3.zero;
+                    body.angularVelocity = Vector3.zero;
+                }
+
+                layer.transform.SetPositionAndRotation(pose.position, pose.rotation);
+
+                Pose arena = ArenaSpace.WorldToArena(pose);
+                NetObjectSync.SendRelease(layer.NetId, arena.position, arena.rotation);
+                NetObjectSync.SendRest(layer.NetId, arena.position, arena.rotation);
+
+                _column.Pin(layer, pose, TransferPinSeconds);
+            }
+
+            // The stack is read back with an overlap query; bounds only follow the transform after a sync.
+            Physics.SyncTransforms();
+
+            // Same path a hand placement takes: the top bun closes the burger and that IS the serve.
+            for (int i = 0; i < layersBottomToTop.Count; i++)
+            {
+                NetObject layer = layersBottomToTop[i];
+                if (layer != null && layer.IsMine)
+                {
+                    HandleIngredientRest(layer);
+                }
+            }
         }
 
         // ------------------------------------------------------------------- serving
@@ -573,34 +734,13 @@ namespace VortexArena.Modes.Burger
             return null;
         }
 
-        /// <summary>Ingredients inside the stack volume, sorted by world Y — bottom to top is the recipe
-        /// order the server compares against (§10.5).</summary>
+        /// <summary>The stack as it reads for a serve: ingredients standing in the volume, bottom to top
+        /// — the recipe order the server compares against (§10.5).</summary>
+        /// <remarks>⚠️ Cargo HOVERING over the board is not part of it: a cutting board held above with a
+        /// burger on it is inside the volume too, and counting it would serve someone else's stack.</remarks>
         private void CollectStack()
         {
-            _stack.Clear();
-
-            Bounds bounds = stackTrigger.bounds;
-            int count = Physics.OverlapBoxNonAlloc(bounds.center, bounds.extents, Overlap,
-                Quaternion.identity, ~0, QueryTriggerInteraction.Collide);
-
-            for (int i = 0; i < count; i++)
-            {
-                NetObject net = Overlap[i] != null ? Overlap[i].GetComponentInParent<NetObject>() : null;
-                if (net == null || net.NetId <= 0 || net.Kind == null ||
-                    !BurgerKinds.IsIngredient(net.Kind.Kind) || _stack.Contains(net))
-                {
-                    continue;
-                }
-
-                _stack.Add(net);
-            }
-
-            _stack.Sort(CompareByHeight);
-        }
-
-        private static int CompareByHeight(NetObject a, NetObject b)
-        {
-            return a.transform.position.y.CompareTo(b.transform.position.y);
+            _column.Collect(_stack, false);
         }
 
         // ------------------------------------------------------------------- rejection

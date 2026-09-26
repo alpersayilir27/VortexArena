@@ -2820,17 +2820,27 @@ public sealed class MatchDirector
         Console.WriteLine($"[match] takım dengeleme: {moveCount} oyuncu '{emptyTeam}' takımına taşındı.");
     }
 
-    /// <summary><c>set_selection</c> switched to a team mode (§10.7): puts every teamless connected player
-    /// on the smaller side. Players who already have a team are untouched — balancing is
-    /// <c>start_match</c>'s job. Called ONLY outside the lock, since registry.SetTeam raises events.</summary>
-    public void AssignTeamlessForMode(string modeId)
+    /// <summary><c>set_selection</c> changed the mode (§10.7): applies the selected mode's team mode to
+    /// every connected player — teamed mode fills the teamless into the smaller side (players who
+    /// already have a team are untouched, balancing is <c>start_match</c>'s job), teamless mode clears
+    /// every team. Called ONLY outside the lock, since registry.SetTeam raises events.</summary>
+    public void ApplyTeamsForSelectedMode(string modeId)
     {
-        if (TeamModeOf(modeId) == TeamMode.None) return;
+        // ⚠️ An unregistered/empty id falls back to the lobby profile (teamless) in TeamModeOf — acting
+        // on it would silently wipe hand-assigned teams.
+        if (string.IsNullOrEmpty(modeId) || !_modes.ContainsKey(modeId)) return;
 
         var players = _registry.Snapshot()
             .Where(p => p.IsConnected && p.Role == "player")
             .OrderBy(p => p.PlayerId)
             .ToList();
+
+        if (TeamModeOf(modeId) == TeamMode.None)
+        {
+            ClearTeams(players);
+            return;
+        }
+
         var red = players.Where(p => p.Team == "red").ToList();
         var blue = players.Where(p => p.Team == "blue").ToList();
         var assigned = AssignTeamless(players, red, blue);

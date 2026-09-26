@@ -44,6 +44,12 @@ namespace VortexArena.Core.Combat
 
             /// <summary><c>Time.unscaledTime</c> at which the flash reaches zero.</summary>
             public float FlashUntil;
+
+            /// <summary>Scale to put back when a warmup shrank this node — see
+            /// <see cref="BlastFxPool.Warmup"/>.</summary>
+            public Vector3 ScaleBeforeWarmup;
+
+            public bool ScaleOverridden;
         }
 
         /// <summary>Round-robin ring for one explosion prefab.</summary>
@@ -97,6 +103,7 @@ namespace VortexArena.Core.Combat
 
             node.Root.position = position;
             node.Root.rotation = Quaternion.identity;
+            RestoreScale(node);
 
             node.Root.gameObject.SetActive(true);
             node.Active = true;
@@ -107,9 +114,12 @@ namespace VortexArena.Core.Combat
             StartFlash(node);
         }
 
-        /// <summary>Builds pool nodes ahead of time. The <c>Instantiate</c> plus material/shader
-        /// warm-up otherwise lands on the first blast; called at fuse start it is paid while the fuse
-        /// burns instead of at the explosion.</summary>
+        /// <summary>Builds pool nodes ahead of time — <c>Instantiate</c> ONLY.
+        /// <para>⚠️ The instance is never drawn here, so shader/PSO compilation is NOT paid: that
+        /// part only happens when the effect actually renders, which is what
+        /// <see cref="Warmup"/> does behind the loading cover (<c>CombatFxWarmup</c>). Do not
+        /// "fix" this by rendering here — at fuse start the node would flash in the player's
+        /// face.</para></summary>
         public void Prewarm(GameObject explosionPrefab, int count)
         {
             if (explosionPrefab == null)
@@ -133,6 +143,61 @@ namespace VortexArena.Core.Combat
             }
 
             // Next is left alone: prewarming must not shift where the next blast lands in the ring.
+        }
+
+        /// <summary>Draws one pooled node of this prefab for a moment, SILENT and shrunk, so the
+        /// shader/particle/light cost is paid behind the loading cover instead of on the first real
+        /// blast. Caller must keep the view covered for <paramref name="visibleSeconds"/>.</summary>
+        /// <param name="scale">Uniform shrink so the fireball cannot reach past the cover; ≤0 keeps
+        /// the authored size.</param>
+        public void Warmup(GameObject explosionPrefab, Vector3 position, float visibleSeconds, float scale)
+        {
+            if (explosionPrefab == null)
+            {
+                return;
+            }
+
+            Node node = TakeNode(explosionPrefab);
+            if (node == null || node.Root == null)
+            {
+                return;
+            }
+
+            node.Root.position = position;
+            node.Root.rotation = Quaternion.identity;
+            ApplyWarmupScale(node, scale);
+
+            node.Root.gameObject.SetActive(true);
+            node.Active = true;
+            node.HideAt = Time.unscaledTime + Mathf.Max(0.02f, visibleSeconds);
+
+            RestartParticles(node);
+
+            // No sound on purpose: the player is still behind the loading cover.
+            StartFlash(node);
+        }
+
+        private static void ApplyWarmupScale(Node node, float scale)
+        {
+            if (scale <= 0f || node.ScaleOverridden)
+            {
+                return;
+            }
+
+            node.ScaleBeforeWarmup = node.Root.localScale;
+            node.ScaleOverridden = true;
+            node.Root.localScale = node.ScaleBeforeWarmup * scale;
+        }
+
+        private static void RestoreScale(Node node)
+        {
+            if (!node.ScaleOverridden)
+            {
+                return;
+            }
+
+            node.ScaleOverridden = false;
+            node.Root.localScale = node.ScaleBeforeWarmup;
         }
 
         /// <summary>Fades flashes and hides expired nodes; pool instances are never destroyed.</summary>
@@ -172,6 +237,7 @@ namespace VortexArena.Core.Combat
 
                     if (now >= node.HideAt)
                     {
+                        RestoreScale(node);
                         node.Root.gameObject.SetActive(false);
                         node.Active = false;
                     }

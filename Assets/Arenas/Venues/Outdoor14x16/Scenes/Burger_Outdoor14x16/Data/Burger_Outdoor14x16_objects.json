@@ -13,6 +13,8 @@
     { "sceneId": 11, "kind": "board" },
     { "sceneId": 12, "kind": "board" },
     { "sceneId": 13, "kind": "knife" },
-    { "sceneId": 14, "kind": "spatula" }
+    { "sceneId": 14, "kind": "spatula" },
+    { "sceneId": 15, "kind": "cutting_board" },
+    { "sceneId": 16, "kind": "cutting_board" }
   ]
 }

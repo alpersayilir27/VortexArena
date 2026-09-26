@@ -1,6 +1,7 @@
 using System.Collections;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using VortexArena.Core.Combat;
 using VortexArena.Net;
 using VortexArena.Protocol;
 
@@ -288,6 +289,10 @@ namespace VortexArena.App
         /// </para>
         /// <para>The headset fade to black runs BEFORE the load and delays it by at most 0.3 s
         /// (<see cref="SceneTransitionFade"/>); the fade in comes from <c>sceneLoaded</c>.</para>
+        /// <para>⚠️ The combat FX warmup (<see cref="CombatFxWarmup"/>) runs AFTER activation but
+        /// BEFORE <see cref="FinishLoad"/>, and pushes the fade in back by
+        /// <c>CombatFxWarmup.CoverSeconds</c>: the effects are drawn for real, so they must stay
+        /// behind the cover.</para>
         /// <para>
         /// ⚠️ <b>Async loading is SLOWER than sync with default settings</b>, purely because of
         /// <see cref="Application.backgroundLoadingPriority"/>: Unity gives integration only a small
@@ -325,6 +330,16 @@ namespace VortexArena.App
             }
 
             LoadingOverlay.SetProgress(1f);
+
+            // Combat FX warmup while the cover is STILL UP: the effects are drawn once so the first
+            // bullet/grenade does not hitch. Arena scenes only — the lobby has no combat — and only
+            // until it has run once (rationale in CombatFxWarmup).
+            if (!CombatFxWarmup.Completed && sceneName == LastMatchScene)
+            {
+                SceneTransitionFade.HoldBlack(CombatFxWarmup.CoverSeconds);
+                yield return CombatFxWarmup.Run();
+            }
+
             FinishLoad();
         }
 

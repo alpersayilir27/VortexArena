@@ -725,8 +725,9 @@ sabitidir (tek satır) — o güncellenmezse silah kiti kaynaklarını bulamaz a
 
 ### ⚠️ Yamalı satıcı betiğini paketi yeniden içe aktararak EZME
 
-Construction Site paketinin `LightmappedLOD.cs`'i static batch'e giren renderer'ları atlayacak
-şekilde yamalıdır: yamasız hâli her sahne yüklemesinde LOD başına uyarı basar ve gözlük günlüğü
+Construction Site paketinin `LightmappedLOD.cs`'i static batch'e giren ve **kapalı** renderer'ları
+(optimizasyonla `LODGroup`'tan çıkarılmış LOD seviyeleri) atlayacak şekilde yamalıdır: yamasız
+hâli her sahne yüklemesinde LOD başına uyarı/log basar ve gözlük günlüğü
 saniyelik sınırda kısılıp gerçek satırlar kaybolur. Paket yeniden içe aktarılırsa betik değişikliği
 geri alınır — içe aktarma penceresinde o dosyanın işaretini kaldır.
 

@@ -96,6 +96,11 @@ hiç doğrulama tetiklemez, o ana kadar biriktirir. Doküman güncellemesi de ay
 - ⚠️ **Test maddeleri Notion'a yazılır, sohbete değil.** İş bitince Notion `Todo` veritabanına
   (`collection://014feff7-dd05-8339-8a3e-87437fdc8ff6`) bir kart açılır (Durum *Yapılacak*).
   Sohbete yalnız kartın bağlantısı düşer.
+- ⚠️ **Sonucu kesin olan basit iş için kart AÇILMAZ** (bir ayarı kapatmak, sesi tek kaynağından
+  susturmak gibi): testçi dakikalarca maç oynatıp "çalmadı"yı doğrulamak zorunda kalır. Kart, ajanın
+  kendisinin teyit edemeyeceği davranış için açılır. Editörde tetiklenmeden görülebilen sonuç
+  (sahneyi additive açınca `[ExecuteInEditMode]` logu, asset alanı, prefab/sahne verisi) ajan
+  tarafından MCP ile okunarak doğrulanır, karta yazılmaz.
 - ⚠️ **Kart yalnız TEST EDİLECEK ŞEYİ yazar — birkaç satırı geçmez.** Testçi kartı açtığında neye
   bakacağını tek okumada anlar; fazlası kafasını karıştırır ve kart okunmaz olur. Ölçü: *"Tüm
   sahnelere tepeden 10 derece eğimle güneş verildi o test edilecek"* kadarı yeterlidir. Gerçekten

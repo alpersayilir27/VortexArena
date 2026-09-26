@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: SUR_Default
   m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.SurfaceDefinition
   surfaceId: default
-  impactPrefab: {fileID: 7889201435730507071, guid: 192901f7cf7b43246bbe48fd22c3ccbe, type: 3}
+  impactPrefab: {fileID: 7617761527915030599, guid: 45673dbe0b1bcd3468b806ac2b60d946, type: 3}
   impactClips:
   - {fileID: 8300000, guid: 768694466a00aac47b4f1e0883a16250, type: 3}
   - {fileID: 8300000, guid: 757a0b1ae0ccb95498fbf9180302a9c6, type: 3}
