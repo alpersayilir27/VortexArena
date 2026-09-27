@@ -326,8 +326,9 @@ Pratik sonucu: **yeni bir hasar kaynağı eklemek sıfır sunucu işidir.** Bomb
 için bir `hit_report` (mesafeye göre düşen hasarı istemci hesaplar); yay çekiş gücü, düşme/tuzak
 hasarı da aynı şekilde `damage` alanına yazılır. **Bölge çarpanı bugün uygulanır:** her isabet
 kutusu bir `HitZone` taşır (`RemoteHitBox.Zone`) ve `Weapon`, hasarı
-`WeaponDefinition.GetZoneMultiplier(...)` ile çarpıp öyle bildirir — CS2 modeli: kafa 4×, karın
-(karın + leğen) 1.25×, bacak 0.75×, gövde ve **kollar** 1×. `weaponId` yalnız kill feed
+`WeaponDefinition.GetZoneMultiplier(...)` ile çarpıp öyle bildirir — kafa çarpanı silah başınadır
+(`headshotMultiplier`), göğüs, **kollar** ve karın (karın + leğen) gövde sayılır (1×), yalnız bacak
+ayrıdır (0.75×). `weaponId` yalnız kill feed
 etiketidir, doğrulanmaz.
 ⚠️ **`HitZone` serialize ediliyor: yeni değer SONA eklenir** (Unity sayısal indeks saklıyor,
 başa/ortaya ekleme prefabdaki kutuların bölgesini kaydırır) ve **`Body` sıfırdadır** — atanmamış
@@ -1634,6 +1635,10 @@ silahta tetikler bağımsız; şarjör+yedek şarjör durumu taşır, boş şarj
 kalır ve oyuncu merminin bittiğini elden bırakıp yeniden çekene kadar öğrenemezdi; yineleme kanalı
 boğmamak için hız sınırlıdır, yeni basış sınırı beklemez), reload **bel-altı jestiyle** başlar; `reserveMode=DiscardMagazine`'de erken
 reload'da şarjörde kalan mermi **yanar** (ürün kuralı; `PoolRounds` = CS2 havuzu SO'dan seçilebilir);
+**seri atışlı silahta** (`burstCount > 1`) her tetik çekişi TEK seri atar — basılı tutmak sonraki
+seriyi başlatmaz, tetik bırakılıp yeniden çekilir; seri İÇİ aralık `60/fireRateRpm`, iki seri arası en
+az `burstCooldown`; başlamış seri tetik bırakılsa da tamamlanır, ama ateş kapısı kapanırsa (reload,
+boş şarjör, silah engeli, `ArenaCombat.CanFire`) kalan mermiler iptal edilir;
 spread atış sürdükçe açılır (bloom) ve boşta toparlar; **saçmalıda tek tetik çekişi
 `WeaponDefinition.PelletCount` kadar ışın atar** — hasar saçma başınadır, isabet eden her saçma
 kendi bölge çarpanıyla ayrı bir `hit_report` üretir (protokol §10.3 bunu bekliyor: atış hızı
@@ -1670,7 +1675,8 @@ değil "gösterge yanlış yerde" olarak görünürdü. Aynı kapı uzak
 avatarda da vardır (`RemoteAvatar` boş eli köke yapıştırmaz); çare stüdyoda ön kabza ellerini
 yazmaktır, koda dokunulmaz.
 Uzak avatarda çizilmez: `RemoteAvatar.SterilizeVisual` kopyadaki MonoBehaviour'ları yok ediyor) +
-`WeaponDefinition` (SO — hasar/HS çarpanı/RPM/şarjör/reload/spread/recoil/**tek el cezası
+`WeaponDefinition` (SO — hasar/HS çarpanı/RPM/**seri (`burstCount` — 1 = tam otomatik, >1 = seri
+başına mermi; `burstCooldown` = seriler arası en kısa bekleme, sonraki seri yeni tetik çekişi ister, `burstCount` 1 iken okunmaz)**/şarjör/reload/spread/recoil/**tek el cezası
 (`oneHandSpreadMultiplier` · `oneHandRecoilMultiplier` · `oneHandRecoveryPenalty` — ölçü iki elli
 tutuşa GÖREDİR, 1 = ceza yok; spread/recoil alanları ham değerdir ve sahadaki karşılıkları her
 zaman kavrayış çarpanıyla çarpımdır)**/**haptik (atış başına titreşim şiddeti + süresi, ayrıca
@@ -1678,7 +1684,19 @@ boş tetik için AYRI bir şiddet/süre çifti — atış darbesi zaten zayıf o
 ipucu atıştan ayırt edilebilir kalsın diye oranla türetilmez; bir çiftin biri 0 = o ipucunun
 haptiği yok)**/ses profili + verilen
 **tek denge kaynağı**, sunucuya export edilmez; elin silaha göre duruşu denge alanlarının yanında
-DEĞİL, tabandaki `ItemDefinition`'ın kavrama kayıtlarındadır — stüdyoda yazılır) + `WeaponAudio` (Meta XR spatializer'lı namlu AudioSource:
+DEĞİL, tabandaki `ItemDefinition`'ın kavrama kayıtlarındadır — stüdyoda yazılır.
+**Denge kaynağı:** sayılar Inspector'da değil `WeaponKitBuilder` tablosunda yaşar (her senkron
+koşusunda WD asset'lerinin üstüne yazılır) ve silah başına **şarjör · kafa/gövde öldürme atışı ·
+şarjörü basılı tetikte boşaltma süresi** referans tablosundan çevrilir. Çevrim: can 100 olduğu için
+gövde N atış → hasar `100/N`'in hemen üstü (3→34, 4→26, 5→21, 6→17); kafa 1 atış → çarpan 4
+(varsayılan), kafa 2 atış → hasar×çarpan 50–99 arasında; `fireRateRpm` = `(şarjör−1)·60 / boşaltma
+süresi`; seri atışlı silahta boşaltma süresi en hızlı tetik çekişiyle ulaşılan alt sınırdır ve seri
+İÇİ rpm ile `burstCooldown`'un birlikte tutturulmasıyla sağlanır; saçmalıda temas mesafesinde tüm
+saçmalar ≥ 100 olmalıdır (tek atış gövde ölümü). Tablonun "gövdesi" göğüs + kollar + karındır
+(karın çarpanı 1); tablonun dışında kalan tek bölge bacaktır (0.75×).
+⚠️ Reload tablodan GELMEZ: şarjörlü silahta `reloadTime` reload SESİNİN uzunluğudur (Tuzaklar
+"Tetiği açan şey SES DEĞİL, `reloadTime`'dır"), fişek fişek dolan pompalıda (`perShellReloadAudio`)
+serbest bir denge değeridir ve referans tablonun boşaltma süresine eşitlenir) + `WeaponAudio` (Meta XR spatializer'lı namlu AudioSource:
 ateş/şarjör çıkar-tak/kuru tetik/alma) + `WeaponAnimator` (Animator'sız kod-güdümlü parça
 animasyonu: atışta bolt tepmesi, reload'da `*_Mag` child'ı çıkar-takılır; şarjör seslerini de bu
 zaman çizgisi çalar — görüntü/ses tek kaynaktan. **Animasyonun süresi sesten gelir:** şarjör
@@ -2544,8 +2562,10 @@ bankayı ezer**, yoksa iki duyuru üst üste binerdi.
 Oyun tipi (aile) **katalogdan** çözülür, telden gelmez: önce açık sahnenin `MapDefinition`'ı (aynı
 mekândaki lobi de o aileden sayılır), harita bulunamazsa aktif modun `ModeDefinition`'ı, ikisi de
 yoksa Hızlı Savaş. Sunum kararıdır, otoritesi yoktur. ⚠️ **Çocuk Oyunları'na ortak duyuru klipleri
-("hadi hadi") uymaz:** ailenin sesi `gameType = Çocuk Oyunları` olan tek bir satırla verilir —
-mod başına satır yazılmaz, aileye eklenen yeni çocuk oyunu sesi kendiliğinden alır.
+("hadi hadi") uymaz:** her çocuk oyununun **kendi konuşmacısı** vardır, sesi o modun `modeId`'sine
+daraltılmış satırlarla verilir (maç başı, son saniyeler uyarısı, maç sonu) — aile satırı
+(`gameType = Çocuk Oyunları`) iki ayrı sesi aynı maçta karıştırırdı. Satırı yazılmamış an ortak
+(her mod) satıra ya da bankaya düşer, yani o agresif klibi çalar.
 
 Tetikleyiciler ve nereden sürüldükleri:
 
@@ -2556,7 +2576,8 @@ Tetikleyiciler ve nereden sürüldükleri:
 | `MatchEndWarning` | Maçın bitmesine `warningSeconds` kaldı; tur kuralı eşleşmezse **devralır** | `match_state.timeRemaining` |
 | `RoundEnd` | Tur bitti ve **arkasından yenisi geliyor**: mod duraklatma istedi — turnuvada turlar arası toplanmanın başlangıcı | `match_state.phase` + `phaseReason` |
 | `Countdown` | Geri sayımın her saniyesi (`seconds > 0`); klip **RASTGELE DEĞİL saniyeye göre** — liste indeksi 0 = 1 sn kala, 1 = 2 sn kala. Listede karşılığı olmayan saniye sessizdir, bankanın tick'ine **DÜŞÜLMEZ** (kural o geri sayımı sahiplenmiştir). Klip anlık çalar, duyuru kuyruğuna girmez → 1 saniyeden kısa olmalı | `countdown` |
-| `MatchEnd` | Maç bitti — modun kendi kapanış cümlesi. Kural eşleşirse ortak bankanın kazanan/berabere duyurusunun **yerine** çalar | `match_end` |
+| `MatchEnd` | Maç bitti — modun sonuçtan bağımsız kapanış cümlesi. Kural eşleşirse ortak bankanın kazanan/berabere duyurusunun **yerine** çalar | `match_end` |
+| `TeamRedWon` · `TeamBlueWon` · `MatchDraw` | Maç bitti, sonuç bu — modun kendi sesiyle kazanan/berabere cümlesi, bankadaki aynı adlı klibin **yerine** çalar. Sıra: sonuç satırı → `MatchEnd` satırı → banka; **yalnız biri** çalar. Co-op ve bireysel skorlu (ffa) modda hiç tetiklenmez | `match_end.winnerTeam` / `winnerPlayerId` |
 
 ⚠️ **Ortak skorlu (co-op) modda maç sonu duyurusu bankaya DÜŞMEZ:** `scoring = shared` modunda
 kazanan da beraberlik de yoktur (`Docs/ArenaNet-Protokol.md` §10.5), yani bankanın "berabere"
@@ -2967,7 +2988,7 @@ admin exe'si → **Sunucuyu Başlat** → **Yönetimi Başlat**. Sunucu `--venue
 | İstek | Yol |
 |---|---|
 | **Yeni arena** | Altı adım, tek düğmeli sihirbaz YOK: boş sahne → arena kutusuna kaydet (`Venues/<İşletme>/Scenes/<SahneAdı>/<SahneAdı>.unity` — klasör adı = sahne adı) → `Template Temellerini Yükle` (altyapı prefab örnekleri + boyut dosyası bağlama) → `JSON'dan DimensionMesh Üret` (mekanın ölçü maketi + kalibrasyon işaretçileri — `ArenaBoundary`'nin altına, yerel sıfırda kurulur; sırası serbest ama **atlanamaz**) → ölçü tutmuyorsa köşeleri ProBuilder ile düzeltip `DimensionMesh'i JSON'a Çevir` → environment sanatı (zemini **dünya y=0**'a, arenayı dünya orijinine kur) + bake → **`Configure All Build Elements`** (MapDefinition + katalog + mod listeleri + Build Settings + `maps.json`, tek geçişte). ⚠️ **Ölçekleme yoktur**; maket duvar üretmez — arenanın duvarları environment sanatına aittir ve fiziksel sınırla çakışmalıdır |
-| **Yeni silah** | `WeaponKitBuilder` tablosuna satır ekle (istatistik + ses profili + pack modeli = köken kaydı) → `Tools > VortexArena > Build > Configure All Build Elements` → **Hepsini Çalıştır** (silah kiti her koşuda çalışır) → `WD_*.asset` üretir, **mevcut** `WPN_*.prefab`'ı yerinde günceller (ses + namlu alevi/dumanı + kovan kiti dahil), `WeaponCatalog`'u tazeler → **kavramayı yaz** (`Kavrama Pozu Stüdyosu`, prefab kipinde; yazılmadan el idle'da kalır ve silah tanımın ham ölçüsüyle durur) → gerekiyorsa sahneye yerleştir. ⚠️ **`ModeDefinition.loadout`'a elle dokunulmaz:** aynı eşitleme rastgele silah veren modların (`weaponSource:"random"`) havuzunu `WeaponCatalog`'a göre yazar, yani yeni silah havuza **kendiliğinden** girer; elle kırpılan liste bir sonraki koşuda geri dolar. `weaponcanvas` modlarında `loadout` hiç okunmaz. **Export GEREKMEZ** (sunucuda silah tablosu yok). ⚠️ Araç **mevcut prefabların `Muzzle`/`Model` yerleşimine DOKUNMAZ**, yalnız definition bağlarını + ses/VFX/kovan kitini tazeler — VR'da elle ayarlanmış tutuş/namlu konumu tekrar çalıştırmakla bozulmaz. Paylaşılan şablon yoktur: sıfırdan farklı gövde için mevcut bir `WPN_*` prefabını kopyalayıp `Model` altındaki pack prefabını ve `definition`'ı değiştir, sonra eşitlemeyi bir kez daha çalıştır. ⚠️ **Ses klipleri tablodan GELMEZ, araç onlara hiç dokunmaz:** beş klip alanının (`fireClips` · `magOutClip` · `magInClip` · `dryFireClip` · `pickupClip`) tek kaynağı `WD_*.asset` Inspector'ıdır, klipler elle sürüklenir — tabloya taşımanın bedeli "yalnız boşsa yaz" kuralı olurdu ve bunu bilmeyen değişikliğini inmedi sanardı. Bunun karşılığında yeni silah **sessiz doğar**; koşu sonundaki rapor sessiz silahları listeler. Tablodaki alanlar (hasar/rpm/menzil/saçılım/kimlik + ses pitch/volume) ise her koşuda ezilir. ⚠️ **Tek el cezası (`oneHand*`) tabloda YOKTUR ve araç ona hiç dokunmaz** — haptik alanlarıyla aynı gerekçe: silahın tek elde nasıl davrandığı gözlük takıp bulunur, tek evi `WD_*.asset` Inspector'ıdır. Yeni silah sınıf varsayılanıyla doğar.<br>**Tablo satırını yazarken:** ⚠️ bir satırın `PackPrefab`'ı ve `NetItemId`'si o satırdan **AYRILMAZ** — pack modelleri jenerik adlıdır ve hangisinin hangi gerçek silah olduğu gözle eşlenmiştir; kimliği taşımak istiyorsan satırın geri kalanını taşı. **Saçmalı silah** = satıra `Pellets` yaz (`Damage` saçma başınadır, her saçma ayrı `hit_report` üretir; menzil kimliğini `Range` değil `BaseSpread` taşır ve satıra ayrıca **düşük bir `Headshot`** yazılır — Tuzaklar: "saçmalının mesafe kimliği"). `KickBack`/`RecoverSpeed` sütunları boş bırakılırsa tablo geneli sabit kullanılır; **ağır silahta toparlanma yavaşlatılır** (gerekçe → Tuzaklar: "pompalının ağırlık hissi"). Tek tek fişek dolduran silahta `ReserveMode = "PoolRounds"` (erken reload'da namludaki fişek yanmasın) + Inspector'da `perShellReloadAudio`. `SpareMags` boş bırakılırsa varsayılan kullanılır. **Yeni kalibre** = `WeaponKitBuilder.CasingFamilies` sözlüğüne bir satır (kovan prefabı ilk koşuda pack'teki mermi modelinden üretilir); ⚠️ aile **görsel** bir ayrımdır, denge kolu değil.<br>**Klip yerleşimi:** silaha özgü klipler `Assets/Audio/Weapons/<Ad>/SFX_<Ad>_*`, birden çok silahın paylaştığı klip `Assets/Audio/Weapons/Shared/SFX_Shared_*`; moda/haritaya bağlı duyuru klipleri `Assets/Audio/Announce/`, ortam klipleri `Assets/Audio/Ambience/` |
+| **Yeni silah** | `WeaponKitBuilder` tablosuna satır ekle (istatistik + ses profili + pack modeli = köken kaydı) → `Tools > VortexArena > Build > Configure All Build Elements` → **Hepsini Çalıştır** (silah kiti her koşuda çalışır) → `WD_*.asset` üretir, **mevcut** `WPN_*.prefab`'ı yerinde günceller (ses + namlu alevi/dumanı + kovan kiti dahil), `WeaponCatalog`'u tazeler → **kavramayı yaz** (`Kavrama Pozu Stüdyosu`, prefab kipinde; yazılmadan el idle'da kalır ve silah tanımın ham ölçüsüyle durur) → gerekiyorsa sahneye yerleştir. ⚠️ **`ModeDefinition.loadout`'a elle dokunulmaz:** aynı eşitleme rastgele silah veren modların (`weaponSource:"random"`) havuzunu `WeaponCatalog`'a göre yazar, yani yeni silah havuza **kendiliğinden** girer; elle kırpılan liste bir sonraki koşuda geri dolar. `weaponcanvas` modlarında `loadout` hiç okunmaz. **Export GEREKMEZ** (sunucuda silah tablosu yok). ⚠️ Araç **mevcut prefabların `Muzzle`/`Model` yerleşimine DOKUNMAZ**, yalnız definition bağlarını + ses/VFX/kovan kitini tazeler — VR'da elle ayarlanmış tutuş/namlu konumu tekrar çalıştırmakla bozulmaz. Paylaşılan şablon yoktur: sıfırdan farklı gövde için mevcut bir `WPN_*` prefabını kopyalayıp `Model` altındaki pack prefabını ve `definition`'ı değiştir, sonra eşitlemeyi bir kez daha çalıştır. ⚠️ **Ses klipleri tablodan GELMEZ, araç onlara hiç dokunmaz:** beş klip alanının (`fireClips` · `magOutClip` · `magInClip` · `dryFireClip` · `pickupClip`) tek kaynağı `WD_*.asset` Inspector'ıdır, klipler elle sürüklenir — tabloya taşımanın bedeli "yalnız boşsa yaz" kuralı olurdu ve bunu bilmeyen değişikliğini inmedi sanardı. Bunun karşılığında yeni silah **sessiz doğar**; koşu sonundaki rapor sessiz silahları listeler. Tablodaki alanlar (hasar/rpm/menzil/saçılım/kimlik + ses pitch/volume) ise her koşuda ezilir. ⚠️ **Tek el cezası (`oneHand*`) tabloda YOKTUR ve araç ona hiç dokunmaz** — haptik alanlarıyla aynı gerekçe: silahın tek elde nasıl davrandığı gözlük takıp bulunur, tek evi `WD_*.asset` Inspector'ıdır. Yeni silah sınıf varsayılanıyla doğar.<br>**Tablo satırını yazarken:** ⚠️ bir satırın `PackPrefab`'ı ve `NetItemId`'si o satırdan **AYRILMAZ** — pack modelleri jenerik adlıdır ve hangisinin hangi gerçek silah olduğu gözle eşlenmiştir; kimliği taşımak istiyorsan satırın geri kalanını taşı. **Saçmalı silah** = satıra `Pellets` yaz (`Damage` saçma başınadır, her saçma ayrı `hit_report` üretir; menzil kimliğini `Range` değil `BaseSpread` taşır ve satıra ayrıca **düşük bir `Headshot`** yazılır — Tuzaklar: "saçmalının mesafe kimliği"). **Seri atışlı silah** = satıra `Burst` (seri başına mermi; **0 ya da 1 = tam otomatik**) + `BurstCooldown` (serinin son mermisinden sonrakinin ilkine kadar en kısa bekleme; her tetik çekişi tek seri atar) yaz — `Rpm` o satırda seri İÇİ hız anlamına gelir. `KickBack`/`RecoverSpeed` sütunları boş bırakılırsa tablo geneli sabit kullanılır; **ağır silahta toparlanma yavaşlatılır** (gerekçe → Tuzaklar: "pompalının ağırlık hissi"). Tek tek fişek dolduran silahta `ReserveMode = "PoolRounds"` (erken reload'da namludaki fişek yanmasın) + Inspector'da `perShellReloadAudio`. `SpareMags` boş bırakılırsa varsayılan kullanılır. **Yeni kalibre** = `WeaponKitBuilder.CasingFamilies` sözlüğüne bir satır (kovan prefabı ilk koşuda pack'teki mermi modelinden üretilir); ⚠️ aile **görsel** bir ayrımdır, denge kolu değil.<br>**Klip yerleşimi:** silaha özgü klipler `Assets/Audio/Weapons/<Ad>/SFX_<Ad>_*`, birden çok silahın paylaştığı klip `Assets/Audio/Weapons/Shared/SFX_Shared_*`; moda/haritaya bağlı duyuru klipleri `Assets/Audio/Announce/`, ortam klipleri `Assets/Audio/Ambience/` |
 | **Yeni mod** | Unity: `Assets/Modes/<Ad>/Scripts/VortexArena.Modes.<Ad>.asmdef` (refs: Core, Net, Protocol) + Sunucu: `Modes/<Ad>Mode.cs : IGameMode` → `MatchDirector` ctor'unda `Register(new <Ad>Mode())` + protokol dokümanına `modId` |
 | **Yeni lobi** | Lobi de bir arena kutusudur (`Venues/<İşletme>/Scenes/<LobiSahnesi>/`) ve kurulumu arenayla aynı altı adımdır; üç farkı vardır: `MapDefinition.supportedModeIds` **yalnız** `["lobby"]` (⚠️ boş bırakılırsa "kısıtsız" sayılır ve sahne her modda oynanır), sahnede `BaseZone` ve `VA_ModeHud` YOK (`Template Temellerini Yükle` penceresinde o kutular kapatılır), silah kaynağı `random` — sahneden silah alınmaz, grip'e basınca elde belirir (§3.8.1). **Her mekanın kendi lobisi olur** ve mekanın boyut dosyasını arenalarla **paylaşır** (fiziksel oda aynı; ikinci ölçü dosyası açılmaz). `Configure All Build Elements` yeter: sunucu seçilen mekanın lobi haritasını kendi bulur — `server.json → lobbyScene` yalnız mekanda birden çok lobi varsa doldurulur |
 | **Ortam sesi (ambiyans)** | Haritanın `MapDefinition`'ındaki `ambienceClip` + `ambienceVolume` alanlarına bir klip sürüklemekle biter — `SceneAmbience` gerisini yapar (§4). ⚠️ Sahneye ses objesi konmaz, klip ikinci bir yere yazılmaz; klipler `Assets/Audio/Ambience/` altında ve **`Streaming`** import'ludur. Haritadan bağımsız duyurular `GameSoundBank`'e, moda/haritaya göre değişenler `ModeAudioRegistry`'ye girer (§4) |
@@ -4662,8 +4683,8 @@ konsoluna tek satır sebep yazar.
     metre ötede hasar tam, bir metre sonra sıfırdır. Ayarlanacak kol `baseSpreadDegrees`'tir.
     ⚠️ **Pompalının AĞIRLIK hissini `kickDegrees` değil `recoilRecoverSpeed` taşır.** Geri tepme
     hissi açının büyüklüğü değil, namlunun **oturma süresidir**: paylaşılan 10°/sn toparlanmada bir
-    pompalının tepmesi ~0.15 sn'de sıfırlanır, yani atışlar arası 0.88 sn olan bir pompalıda oyuncu
-    daha görmeden biter ve silah, atış başına daha AZ tepen ama seri boyunca kalkık duran bir
+    pompalının tepmesi ~0.15 sn'de sıfırlanır, yani atışlar arası boşluğu (`60/rpm`) bunun kat kat
+    üstünde olan bir pompalıda oyuncu daha görmeden biter ve silah, atış başına daha AZ tepen ama seri boyunca kalkık duran bir
     tüfekten hafif hissedilir. Kolu büyütmek çare değildir — koni büyür, his değişmez. Ayarlanacak
     yer toparlanmadır ve tek sınırı vardır: **atışlar arası boşluktan (60/rpm) kısa kalmalı**, yoksa
     seri ateş tavana tırmanır ve nişan geri gelmez.
@@ -4680,8 +4701,8 @@ konsoluna tek satır sebep yazar.
     olur. ⚠️ Bunun çaresi CS'in mesafe eğrisini eklemek DEĞİLDİR (o eğri ~9.5 m'de bir işler,
     arenanın en uzun hattı ~17 m — yani hasarı ancak yarıya indirir ve asıl sorun olan temas
     mesafesine hiç dokunmaz); ayarlanacak kollar **taban hasar** ve **koni açısıdır**.
-    ⚠️ İkinci kalem bölge çarpanıdır: çarpan **saçma başına** uygulanır, yani 4× kafa çarpanı 26
-    hasarlı tek bir saçmayı anında öldürücü yapar ve 9 saçmalık bir konide kaza kurşunu da bu
+    ⚠️ İkinci kalem bölge çarpanıdır: çarpan **saçma başına** uygulanır, yani varsayılan 4× kafa
+    çarpanı TEK bir saçmayı anında öldürücü yapar ve dokuz saçmalık bir konide kaza kurşunu da bu
     hakkı kazanır. CS'te bunu kask yumuşatıyor, burada zırh yok — bu yüzden saçmalıların kafa
     çarpanı satır bazında düşürülür (`WeaponSpec.Headshot`).
 153. **Aynı hedefe giden saçmalar tek `hit_report`'a TOPLANMAZ.** Her saçma kendi bölge çarpanını

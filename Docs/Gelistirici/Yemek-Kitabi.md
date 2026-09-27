@@ -438,7 +438,8 @@ Okunabilir alanlar: `ModeId`, `Teams`, `Scoring`, `FriendlyFire`, `Revive`, `Wea
 1. Prefabı `Assets/_Shared/Arsenal/Prefabs/` altına koy.
 2. `WeaponDefinition` SO'sunu `Assets/_Shared/Arsenal/Data/` altına oluştur
    (*Create → VortexArena → Weapon Definition*): `weaponId`, hasar, atış hızı, menzil, saçılım,
-   şarjör, haptik (`hapticAmplitude` 0-1 + `hapticDuration` sn — atış başına kumanda titreşimi;
+   şarjör, seri atış (`burstCount` 1 = tam otomatik, >1 = seri başına mermi + `burstCooldown`
+   seriler arası bekleme), haptik (`hapticAmplitude` 0-1 + `hapticDuration` sn — atış başına kumanda titreşimi;
    `dryFireHapticAmplitude` + `dryFireHapticDuration` — boş şarjörde tetiğe basınca; her çiftte
    ikisinden biri 0 ise o ipucunun haptiği yoktur), `prefab`.
 3. **Tek el cezası** (*Tek El Cezası* başlığı): `oneHandSpreadMultiplier` ·
@@ -480,7 +481,7 @@ Okunabilir alanlar: `ModeId`, `Teams`, `Scoring`, `FriendlyFire`, `Revive`, `Wea
 > Silah kiti koşusu (`Configure All Build Elements`) klibe dokunmaz — yalnız ateş sesi atanmamış
 > silahları koşu sonunda listeler.
 > ⚠️ Ateş klipleri `PlayOneShot` ile çalınır, yani **üst üste biner**: aranan dosya her zaman
-> **tek atış**tır, tarama/loop kaydı saniyede 12 kez çalınıp çorbaya döner. Kuyruğu kısa tut —
+> **tek atış**tır, tarama/loop kaydı atış hızı kadar sık çalınıp çorbaya döner. Kuyruğu kısa tut —
 > `pitch` AudioSource'un özelliği olduğu için her yeni atış hâlâ çalan kuyrukları da yeniden
 > perdeler.
 > Aynı şey diğer alanlar için geçerli DEĞİLDİR: hasar/rpm/menzil/saçılım her koşuda tablodan ezilir.
@@ -1091,10 +1092,12 @@ durduğunu sahnedeki yol/slot bileşenleri söyler. ⚠️ Böyle bir objeye `Ne
 `NetObjectPoseSender` **eklenmez** — objeyi hem yoldan hem ağdan süren iki yazar, iki başlıkta iki
 yer demektir.
 
-**6. Ses.** `ModeAudioRegistry`'de ailenin duyuruları (maç başı, geri sayım) oyun tipi filtresi
-`Çocuk Oyunları` olan satırlarla verilir — mod başına satır yazılmaz, aileye eklenen yeni çocuk
-oyunu sesleri kendiliğinden alır. Tek bir moda ayrı klip istiyorsan (ör. daha yumuşak bir maç başı)
-satırı moda daralt. ⚠️ Ortak "hadi hadi" duyuru kliplerini çocuk ailesine bağlama.
+**6. Ses.** Her çocuk oyununun kendi konuşmacısı vardır: `ModeAudioRegistry`'de modun `modeId`'sine
+daraltılmış satırlar yazılır — `RoundStart` (maç başı), `MatchEndWarning` (son saniyeler) ve maç
+sonu: takımlı modda `TeamRedWon` · `TeamBlueWon` · `MatchDraw`, co-op modda tek `MatchEnd`. Klipler
+modun `Audio/` klasöründe `VO_<Mod>_*` adıyla durur. ⚠️ Satırı yazılmayan an ortak Hızlı Savaş
+klibine ("hadi hadi", agresif kazanan anonsu) düşer; co-op modda maç sonu satırı yoksa maç sessiz
+biter.
 
 ⚠️ **Bir olayı KİM bildirir?** `policy:"anyone"` olan bir olayı herkes gönderebilir, ama aynı
 gerçeği N istemcinin bildirmesi sunucuda aynı sayacı N kez başlatır. Seçici sahnede aranır ve tek

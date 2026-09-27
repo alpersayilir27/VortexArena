@@ -19,6 +19,7 @@ MonoBehaviour:
   grabPath: 0
   instancing: 0
   releaseMode: 0
+  hideGrabIndicator: 0
   primaryGripRight:
     authored: 1
     position: {x: 0, y: -0.0237, z: 0.0192}
@@ -180,14 +181,17 @@ MonoBehaviour:
   tracerWidth: 0.005
   tracerLifetime: 0.05
   tracerEveryNthRound: 1
+  teamTintChildren: []
   weaponId: xm1014
-  damage: 10
+  damage: 17
   headshotMultiplier: 2
-  stomachMultiplier: 1.25
+  stomachMultiplier: 1
   legMultiplier: 0.75
-  fireRateRpm: 171
+  fireRateRpm: 168
   range: 26
   pelletCount: 6
+  burstCount: 1
+  burstCooldown: 0
   baseSpreadDegrees: 10
   bloomPerShotDegrees: 0.6
   maxBloomDegrees: 1.5
@@ -202,10 +206,10 @@ MonoBehaviour:
   hapticDuration: 0.05
   dryFireHapticAmplitude: 0.45
   dryFireHapticDuration: 0.06
-  magazineSize: 7
+  magazineSize: 15
   spareMagazines: 4
   reserveMode: 1
-  reloadTime: 4.5
+  reloadTime: 5
   fireClips:
   - {fileID: 8300000, guid: 0af15c3c2ee299d41a4cf26f1c68ac06, type: 3}
   magOutClip: {fileID: 8300000, guid: 1db2fd87a2fc82e4c8307d6c62c04462, type: 3}

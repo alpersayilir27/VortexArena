@@ -731,7 +731,9 @@ reddeder, VS Code bunu yanıltıcı biçimde "önce Pull yap" diye gösterir. Ye
 eklemeden önce uzantıyı `.gitattributes`'a `lfs` olarak ekle; push'lanmamış commit'te kaldıysa
 `git lfs migrate import --include="*.<uzantı>" --include-ref=refs/heads/<dal> --exclude-ref=refs/remotes/origin/<dal>`.
 Bu komut aynı commit'i gösteren **başka yerel dalları da** yeniden yazar — yedek dal açacaksan
-commit hash'ini ayrıca not al.
+commit hash'ini ayrıca not al. ⚠️ Ardından **`git lfs checkout`** çalıştır: migrate o uzantının
+diskteki dosyalarını ~130 baytlık LFS işaretçi metnine çevirir; `git status` temiz görünür ama
+Unity bunları import edemez ve sahnede hata vermeden "Missing Prefab with guid" gösterir.
 
 ### ⚠️ Yamalı satıcı betiğini paketi yeniden içe aktararak EZME
 

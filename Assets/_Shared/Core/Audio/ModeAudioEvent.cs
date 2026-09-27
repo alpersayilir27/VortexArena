@@ -38,10 +38,23 @@ namespace VortexArena.Core.Audio
         Countdown = 4,
 
         /// <summary>The match ended (<c>match_end</c>) — the mode's own closing line, played instead of
-        /// the shared win/draw announcement.
+        /// the shared win/draw announcement. A result trigger below matching the same match wins
+        /// over it.
         /// <para>⚠️ Its reason is the co-op mode: with shared scoring there is no winner and no draw
         /// either, so the shared bank's "berabere" would be a lie on every single match. Without a rule
         /// such a mode ends SILENTLY rather than falling back to the bank.</para></summary>
-        MatchEnd = 5
+        MatchEnd = 5,
+
+        /// <summary>Match ended, RED team won — the mode's own line in place of the shared
+        /// <see cref="GameSoundId.TeamRedWon"/>. Never fires in a co-op mode.</summary>
+        TeamRedWon = 6,
+
+        /// <summary>Match ended, BLUE team won — in place of the shared
+        /// <see cref="GameSoundId.TeamBlueWon"/>.</summary>
+        TeamBlueWon = 7,
+
+        /// <summary>Match ended in a draw — in place of the shared
+        /// <see cref="GameSoundId.MatchDraw"/>.</summary>
+        MatchDraw = 8
     }
 }

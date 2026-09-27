@@ -277,6 +277,10 @@ namespace VortexArena.Core.Combat
 
         private InputAction attackAction;
         private float nextFireTime;
+        // Rounds still owed by the running burst; 0 = none.
+        private int burstShotsLeft;
+        // One burst per pull: set when a burst starts, cleared on trigger release.
+        private bool burstAwaitsRelease;
         private float nextBlockedCueTime;
         private float nextDryCueTime;
         private float nextReloadRejectTime;
@@ -391,6 +395,8 @@ namespace VortexArena.Core.Combat
             GrantKind = WeaponGrantKind.None;
             _grantedSecondaryHand = OVRInput.Controller.None;
             triggerHeld = false;
+            burstShotsLeft = 0;
+            burstAwaitsRelease = false;
             HideIndicator();
             if (wasHeld)
                 HeldChanged?.Invoke(false);
@@ -428,9 +434,15 @@ namespace VortexArena.Core.Combat
                 FinishReload();
 
             if (muzzle != null && IsHeld)
+            {
                 TickTrigger();
+            }
             else
+            {
                 triggerHeld = false;
+                burstShotsLeft = 0;
+                burstAwaitsRelease = false;
+            }
 
             currentBloom = Mathf.MoveTowards(currentBloom, 0f,
                 (definition != null ? definition.BloomRecoveryPerSecond : 0f) * Time.deltaTime);
@@ -581,10 +593,16 @@ namespace VortexArena.Core.Combat
             // phases the trigger does nothing at all (not even a dry-fire sound).
             bool combatAllows = ArenaCombat.CanFire;
 
-            // §10.9 shoot-through-cover gate. ⚠️ Polled ONLY while the trigger is pressed: the
+            if (!pressed) burstAwaitsRelease = false;
+
+            // A started burst finishes after release, so the gates below must still be polled;
+            // holding past a burst does not start the next one.
+            bool wantsFire = burstShotsLeft > 0 || (pressed && !burstAwaitsRelease);
+
+            // §10.9 shoot-through-cover gate. ⚠️ Polled ONLY while fire is wanted: the
             // answer is needed at fire time, and three physics queries per frame per idle weapon
             // would be paid for nothing.
-            IsWeaponBlocked = pressed && muzzle != null &&
+            IsWeaponBlocked = wantsFire && muzzle != null &&
                               ArenaCombat.IsWeaponBlocked(modelPivot, ResolveBodyBounds(),
                                   muzzle.position, muzzle.forward);
 
@@ -597,7 +615,10 @@ namespace VortexArena.Core.Combat
             bool canFire = !IsReloading && CurrentAmmo > 0 && combatAllows && definition != null &&
                            !IsWeaponBlocked;
 
-            if (pressed && canFire && Time.time >= nextFireTime)
+            // Gate closed mid-burst: the remaining rounds are cancelled, not queued.
+            if (burstShotsLeft > 0 && !canFire) burstShotsLeft = 0;
+
+            if (wantsFire && canFire && Time.time >= nextFireTime)
             {
                 Fire();
             }
@@ -744,7 +765,21 @@ namespace VortexArena.Core.Combat
 
         protected virtual void Fire()
         {
-            nextFireTime = Time.time + definition.SecondsPerShot;
+            if (definition.BurstCount > 1)
+            {
+                if (burstShotsLeft <= 0)
+                {
+                    burstShotsLeft = definition.BurstCount;
+                    burstAwaitsRelease = true;
+                }
+
+                burstShotsLeft--;
+                nextFireTime = Time.time + (burstShotsLeft > 0 ? definition.SecondsPerShot : definition.BurstCooldown);
+            }
+            else
+            {
+                nextFireTime = Time.time + definition.SecondsPerShot;
+            }
 
             // Spread uses the PRE-shot bloom; bloom grows with the shot. The grip scale is read HERE
             // and never cached: releasing the front grip must widen the very next shot.
@@ -903,6 +938,8 @@ namespace VortexArena.Core.Combat
             GrantedHand = hand;
             GrantKind = kind;
             triggerHeld = false;
+            burstShotsLeft = 0;
+            burstAwaitsRelease = false;
 
             // The second hand does not carry into a new hold: the weapon may have swapped hands
             // and the granter re-resolves the front grip next frame.
@@ -938,6 +975,8 @@ namespace VortexArena.Core.Combat
             GrantKind = WeaponGrantKind.None;
             _grantedSecondaryHand = OVRInput.Controller.None;
             triggerHeld = false;
+            burstShotsLeft = 0;
+            burstAwaitsRelease = false;
 
             if (wasHeld && !IsHeld)
                 HeldChanged?.Invoke(false);
@@ -1012,6 +1051,7 @@ namespace VortexArena.Core.Combat
             // Pool mode keeps the rounds in the magazine (CS2 rule) and deducts on completion.
 
             IsReloading = true;
+            burstShotsLeft = 0;
             reloadEndTime = Time.time + definition.ReloadTime;
             ReloadStarted?.Invoke(definition.ReloadTime);
             AmmoChanged?.Invoke();
@@ -1086,6 +1126,7 @@ namespace VortexArena.Core.Combat
 
             CurrentAmmo = definition.MagazineSize;
             reserveRounds = IsDisposableGrant ? 0 : definition.SpareMagazines * definition.MagazineSize;
+            burstShotsLeft = 0;
             AmmoChanged?.Invoke();
         }
 
@@ -1141,7 +1182,11 @@ namespace VortexArena.Core.Combat
                 // Main hand changed (or the weapon was released): reset the trigger so the new
                 // main hand's held trigger reads as a fresh press next frame.
                 if (i == 0)
+                {
                     triggerHeld = false;
+                    burstShotsLeft = 0;
+                    burstAwaitsRelease = false;
+                }
 
                 if (heldPoints.Count == 0)
                 {

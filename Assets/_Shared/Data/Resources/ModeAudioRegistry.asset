@@ -52,13 +52,62 @@ MonoBehaviour:
     gameType: 0
     trigger: 0
     clips:
-    - {fileID: 8300000, guid: 42e5e234f46f5a54ca04ec728c82f4b6, type: 3}
+    - {fileID: 8300000, guid: 1d3e1c2ced9dfc6469381fb0699e909d, type: 3}
     volume: 1
     warningSeconds: 5
   - modeId: burger
     sceneName: 
     gameType: 0
     trigger: 5
-    clips: []
+    clips:
+    - {fileID: 8300000, guid: 7b811cb62c094124db0a91664c374576, type: 3}
     volume: 1
     warningSeconds: 0
+  - modeId: mole
+    sceneName: 
+    gameType: 0
+    trigger: 2
+    clips:
+    - {fileID: 8300000, guid: cdaf60ba8a20d16439c9bad79833456d, type: 3}
+    volume: 1
+    warningSeconds: 5
+  - modeId: mole
+    sceneName: 
+    gameType: 0
+    trigger: 6
+    clips:
+    - {fileID: 8300000, guid: aee18361a7fe21240b9b060576ac327a, type: 3}
+    volume: 1
+    warningSeconds: 5
+  - modeId: mole
+    sceneName: 
+    gameType: 0
+    trigger: 7
+    clips:
+    - {fileID: 8300000, guid: 7211eb600baeaaa4c8bbdbaf26e917b4, type: 3}
+    volume: 1
+    warningSeconds: 5
+  - modeId: mole
+    sceneName: 
+    gameType: 0
+    trigger: 8
+    clips:
+    - {fileID: 8300000, guid: 16d743b95e884904aa8112ffefec4ce9, type: 3}
+    volume: 1
+    warningSeconds: 5
+  - modeId: burger
+    sceneName: 
+    gameType: 0
+    trigger: 0
+    clips:
+    - {fileID: 8300000, guid: 8759a02aa4e685545b29fc96004f0311, type: 3}
+    volume: 1
+    warningSeconds: 5
+  - modeId: burger
+    sceneName: 
+    gameType: 0
+    trigger: 2
+    clips:
+    - {fileID: 8300000, guid: 2566cfdc5849f6648989ac570b23e675, type: 3}
+    volume: 1
+    warningSeconds: 5

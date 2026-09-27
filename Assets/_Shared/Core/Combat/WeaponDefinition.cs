@@ -33,17 +33,26 @@ namespace VortexArena.Core.Combat
         [SerializeField] private float damage = 25f;
         [Tooltip("Kafa vuruşunda hasar çarpanı (RemoteHitBox.Zone — istemcide uygulanır).")]
         [SerializeField] private float headshotMultiplier = 4f;
-        [Tooltip("Karın/leğen vuruşunda hasar çarpanı (CS2: 1.25).")]
-        [SerializeField] private float stomachMultiplier = 1.25f;
+        [Tooltip("Karın/leğen vuruşunda hasar çarpanı. 1 = gövde sayılır.")]
+        [SerializeField] private float stomachMultiplier = 1f;
         [Tooltip("Bacak vuruşunda hasar çarpanı (CS2: 0.75). Kollar GÖVDE sayılır, çarpanı 1'dir.")]
         [SerializeField] private float legMultiplier = 0.75f;
-        [Tooltip("Dakikadaki atış sayısı.")]
+        [Tooltip("Dakikadaki atış sayısı (seri silahta seri İÇİ hız).")]
         [SerializeField] private float fireRateRpm = 700f;
         [Tooltip("Hitscan menzili (metre).")]
         [SerializeField] private float range = 60f;
         [Tooltip("Tek tetik çekişinde atılan ışın sayısı. 1 = normal silah, >1 = saçmalı " +
                  "(her saçma AYRI hasar taşır ve ayrı hit_report üretir).")]
         [SerializeField] private int pelletCount = 1;
+
+        [Header("Seri Atış")]
+        [Min(1)]
+        [Tooltip("Tetik başına atılan seri. 1 = tam otomatik (seri yok), 3 = 3'lü seri — sonraki seri için tetik bırakılıp " +
+                 "yeniden çekilir. Seri içi aralık fireRateRpm'den gelir.")]
+        [SerializeField] private int burstCount = 1;
+        [Min(0f)]
+        [Tooltip("Serinin son mermisinden bir sonraki seriye kadar EN KISA bekleme (saniye). burstCount 1 iken okunmaz.")]
+        [SerializeField] private float burstCooldown = 0.4f;
 
         [Header("Saçılım (bloom)")]
         [Tooltip("HAM taban saçılım yarı açısı (derece) — sahadaki koni DEĞİL: kavrayış çarpanıyla " +
@@ -150,6 +159,12 @@ namespace VortexArena.Core.Combat
 
         /// <summary>Rounds per minute.</summary>
         public float FireRateRpm => fireRateRpm;
+
+        /// <summary>Rounds per burst; 1 = full auto.</summary>
+        public int BurstCount => Mathf.Max(1, burstCount);
+
+        /// <summary>Gap to the next burst's first round (seconds); never below SecondsPerShot.</summary>
+        public float BurstCooldown => Mathf.Max(SecondsPerShot, burstCooldown);
 
         /// <summary>Hitscan range (metres).</summary>
         public float Range => range;

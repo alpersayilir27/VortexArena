@@ -2,7 +2,7 @@ namespace VortexArena.Core.Combat
 {
     /// <summary>
     /// A hitbox's body zone — the single source of the damage multiplier.
-    /// <para>Model is CS2: head 4×, chest and ARMS 1×, stomach/pelvis 1.25×, leg 0.75×. The numeric
+    /// <para>Head is per weapon; chest, ARMS and stomach/pelvis are body (1×); leg 0.75×. The numeric
     /// values live in <see cref="WeaponDefinition.GetZoneMultiplier"/>, not here — balance numbers
     /// change per weapon, the zone list does not.</para>
     /// <para>⚠️ Serialized enum: new values are appended at the END. Unity stores a numeric index;
@@ -15,10 +15,10 @@ namespace VortexArena.Core.Combat
         /// <summary>Chest and arms — multiplier 1× (reference damage).</summary>
         Body,
 
-        /// <summary>Head — multiplier <c>WeaponDefinition.HeadshotMultiplier</c> (CS2: 4×).</summary>
+        /// <summary>Head — multiplier <c>WeaponDefinition.HeadshotMultiplier</c> (per weapon).</summary>
         Head,
 
-        /// <summary>Stomach/pelvis — multiplier <c>WeaponDefinition.StomachMultiplier</c> (CS2: 1.25×).</summary>
+        /// <summary>Stomach/pelvis — multiplier <c>WeaponDefinition.StomachMultiplier</c> (1×, counts as body).</summary>
         Stomach,
 
         /// <summary>Legs — multiplier <c>WeaponDefinition.LegMultiplier</c> (CS2: 0.75×).</summary>

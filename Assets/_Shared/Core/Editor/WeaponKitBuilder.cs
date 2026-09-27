@@ -130,16 +130,17 @@ namespace VortexArena.Core.Editor
 
         // Numbers shared by all weapons (table-header defaults).
         //
-        // ⚠️ The headshot multiplier is OVERRIDABLE per row (`WeaponSpec.Headshot`) and is overridden
-        // for shotguns: the multiplier applies PER PELLET, so 4× would make a single 26-damage pellet
+        // ⚠️ The headshot multiplier is OVERRIDABLE per row (`WeaponSpec.Headshot`): 4× means one
+        // headshot always kills, so rows that want a TWO-hit headshot lower it. Shotguns must lower
+        // it for a second reason — the multiplier applies PER PELLET, so 4× would make a single pellet
         // instantly lethal — including a stray one from 8 m in a 9-pellet cone. CS softens this with
         // helmets; there is NO armour here.
         private const float DefaultHeadshotMultiplier = 4f;
 
-        // Zone multipliers (CS2 model): arms count as BODY, so 1× needs no separate constant.
+        // Zone multipliers: arms AND stomach count as BODY (1×); only the leg is set apart.
         // ⚠️ This table is the single source of the balance numbers — a value edited in a
         // WD_*.asset Inspector is WRITTEN BACK on the next run.
-        private const float StomachMultiplier = 1.25f;
+        private const float StomachMultiplier = 1f;
         private const float LegMultiplier = 0.75f;
         // Shared recoil defaults — a row may override either (KickBack / RecoverSpeed columns).
         private const float KickBackMeters = 0.02f;
@@ -179,8 +180,9 @@ namespace VortexArena.Core.Editor
             /// damage comes from how many pellets connect.
             public int Damage;
 
-            /// Headshot multiplier. <b>0 = default</b> (<see cref="DefaultHeadshotMultiplier"/>).
-            /// Filled only for shotguns — rationale next to that constant.
+            /// Headshot multiplier. <b>0 = default</b> (<see cref="DefaultHeadshotMultiplier"/>, 4 →
+            /// a headshot always kills in one hit). Rows that want a TWO-hit headshot set it
+            /// explicitly; shotguns set it for the per-pellet reason stated next to that constant.
             public float Headshot;
 
             public int Rpm;
@@ -190,6 +192,13 @@ namespace VortexArena.Core.Editor
             /// Rays per trigger pull. <b>0 or 1 = normal weapon</b>; filled only for shotguns
             /// (XM1014 6, Nova 9).
             public int Pellets;
+
+            /// Rounds per burst. <b>0 or 1 = full auto</b>; in-burst cadence is <see cref="Rpm"/>.
+            public int Burst;
+
+            /// Minimum pause from a burst's last round to the next burst (seconds) — a new burst also
+            /// needs a fresh trigger pull; read only when <see cref="Burst"/> &gt; 1.
+            public float BurstCooldown;
 
             /// Spare magazines. <b>0 = default</b> (<see cref="DefaultSpareMagazines"/>). CS2's
             /// reserve ammo divided by magazine size (P90 100/50 = 2).
@@ -249,8 +258,10 @@ namespace VortexArena.Core.Editor
         // weapon was matched BY EYE. Changing a row's PackPrefab means "change this weapon's model";
         // to move stats, move the rest of the row, not PackPrefab/NetItemId.
         //
-        // Balance source: weapons with a CS:GO/CS2 counterpart (AK-47, M4A4/M4A1, FAMAS) come
-        // straight from there; the rest (SCAR-L, G36C) from PUBG + real-world data.
+        // Balance source: a reference shots-to-kill table — per weapon magazine size, head/body shots
+        // to kill and the time to empty the magazine on a held trigger. The conversion rules (HP 100
+        // → damage, rpm, burst, shotgun pellets) live in Docs/Sistem-Ozeti.md §4 under
+        // WeaponDefinition.
         //
         // ⚠️ `Reload` is the length of the weapon's reload SOUND, so the trigger reopens
         // (`Weapon.reloadEndTime`) exactly when audio and magazine animation end. Change the clip and
@@ -258,12 +269,13 @@ namespace VortexArena.Core.Editor
         // shoot". For weapons with no reload sound of their own it is a pure balance value.
         private static readonly WeaponSpec[] Specs =
         {
-            // AR_M — CS:GO M4A4 body: balanced, medium recoil, the baseline 5.56.
+            // AR_M — M4A4: the BASELINE 5.56 every other rifle is read against — four body hits or
+            // two headshots, balanced recoil, nothing extreme in any column.
             new WeaponSpec
             {
                 Name = "M4A4", PackPrefab = "AR_M", WeaponId = "m4a4", DisplayName = "M4A4",
                 NetItemId = 1, HoldMode = "TwoHand",
-                Damage = 33, Rpm = 666, Magazine = 30, Reload = 2.19f,
+                Damage = 26, Headshot = 2f, Rpm = 360, Magazine = 25, Reload = 2.19f,
                 Range = 40f, BaseSpread = 0.50f, BloomPerShot = 0.26f,
                 MaxBloom = 2.2f, BloomRecovery = 4.5f, Kick = 2.0f, PitchBase = 1.00f, Volume = 1.0f,
                 FlashColorMin = new Color(1f, 0.92f, 0.72f), FlashColorMax = new Color(1f, 0.65f, 0.32f),
@@ -271,13 +283,14 @@ namespace VortexArena.Core.Editor
                 SmokeSizeMin = 0.035f, SmokeSizeMax = 0.06f, SmokeLifetime = 1.0f, SmokeAlpha = 0.25f,
                 CasingFamily = "556x45",
             },
-            // AR_B — CS:GO AK-47: highest single body hit, headshot king, harshest recoil. Being
-            // 7.62x39 it also has its own casing family.
+            // AR_B — AK-47: three body hits or ONE headshot — the only non-shotgun with a one-hit
+            // headshot — paid for with the slowest rate and the harshest recoil. Being 7.62x39 it
+            // also has its own casing family.
             new WeaponSpec
             {
                 Name = "AK47", PackPrefab = "AR_B", WeaponId = "ak47", DisplayName = "AK-47",
                 NetItemId = 2, HoldMode = "TwoHand",
-                Damage = 36, Rpm = 600, Magazine = 30, Reload = 2.43f,
+                Damage = 34, Rpm = 249, Magazine = 30, Reload = 2.43f,
                 Range = 45f, BaseSpread = 0.60f, BloomPerShot = 0.32f,
                 MaxBloom = 2.6f, BloomRecovery = 4.0f, Kick = 2.6f, PitchBase = 1.00f, Volume = 1.0f,
                 FlashColorMin = new Color(1f, 0.55f, 0.15f), FlashColorMax = new Color(1f, 0.22f, 0.05f),
@@ -285,14 +298,15 @@ namespace VortexArena.Core.Editor
                 SmokeSizeMin = 0.05f, SmokeSizeMax = 0.09f, SmokeLifetime = 1.4f, SmokeAlpha = 0.35f,
                 CasingFamily = "762x39",
             },
-            // AR_C — PUBG SCAR-L: the easiest 5.56 to control (lowest recoil, slowest bloom growth,
-            // fastest recovery) at the cost of the lowest DPS.
+            // AR_C — SCAR-L: the ONLY burst weapon (one 3-round burst per trigger pull) and the easiest 5.56
+            // to control — lowest recoil, slowest bloom growth, fastest recovery.
             // ⚠️ NO suppressor — the muted sound/flash values of the old M4A1-S row are gone by choice.
             new WeaponSpec
             {
                 Name = "SCARL", PackPrefab = "AR_C", WeaponId = "scarl", DisplayName = "SCAR-L",
                 NetItemId = 3, HoldMode = "TwoHand",
-                Damage = 32, Rpm = 625, Magazine = 30, Reload = 2.06f,
+                Damage = 21, Headshot = 2.5f, Rpm = 900, Magazine = 30, Reload = 2.06f,
+                Burst = 3, BurstCooldown = 0.41f,
                 Range = 38f, BaseSpread = 0.45f, BloomPerShot = 0.20f,
                 MaxBloom = 1.8f, BloomRecovery = 5.0f, Kick = 1.6f, PitchBase = 1.00f, Volume = 1.0f,
                 FlashColorMin = new Color(1f, 0.85f, 0.55f), FlashColorMax = new Color(1f, 0.55f, 0.22f),
@@ -300,13 +314,13 @@ namespace VortexArena.Core.Editor
                 SmokeSizeMin = 0.035f, SmokeSizeMax = 0.06f, SmokeLifetime = 1.0f, SmokeAlpha = 0.28f,
                 CasingFamily = "556x45",
             },
-            // AR_D — PUBG G36C: highest fire rate (750 rpm), lowest per-bullet damage, shortest
-            // range. A close-quarters suppression weapon.
+            // AR_D — G36C: one of the two fastest-firing rifles with a small magazine; its identity is
+            // carried by spread and range — a close-quarters suppression weapon.
             new WeaponSpec
             {
                 Name = "G36C", PackPrefab = "AR_D", WeaponId = "g36c", DisplayName = "G36C",
                 NetItemId = 4, HoldMode = "TwoHand",
-                Damage = 29, Rpm = 750, Magazine = 30, Reload = 2.43f,
+                Damage = 26, Headshot = 2f, Rpm = 456, Magazine = 20, Reload = 2.43f,
                 Range = 28f, BaseSpread = 0.70f, BloomPerShot = 0.30f,
                 MaxBloom = 2.6f, BloomRecovery = 4.2f, Kick = 1.9f, PitchBase = 1.00f, Volume = 0.95f,
                 FlashColorMin = new Color(1f, 0.80f, 0.45f), FlashColorMax = new Color(1f, 0.45f, 0.15f),
@@ -314,14 +328,14 @@ namespace VortexArena.Core.Editor
                 SmokeSizeMin = 0.04f, SmokeSizeMax = 0.07f, SmokeLifetime = 1.1f, SmokeAlpha = 0.30f,
                 CasingFamily = "556x45",
             },
-            // AR_E — CS:GO FAMAS: values verified against CS:GO (30 dmg / 666 rpm / 25 mag / 3.30 s).
-            // ⚠️ The 25-round magazine is deliberate (that is CS:GO's), which is why it differs from
-            // the others' 30. Burst mode is not modelled.
+            // AR_E — FAMAS: G36C's twin in numbers — fastest-firing rifle class with a small magazine,
+            // separated from it by spread and range.
+            // ⚠️ FULL AUTO despite the real weapon's burst selector: the burst weapon here is SCAR-L.
             new WeaponSpec
             {
                 Name = "FAMAS", PackPrefab = "AR_E", WeaponId = "famas", DisplayName = "FAMAS",
                 NetItemId = 5, HoldMode = "TwoHand",
-                Damage = 30, Rpm = 666, Magazine = 25, Reload = 2.38f,
+                Damage = 26, Headshot = 2f, Rpm = 456, Magazine = 20, Reload = 2.38f,
                 Range = 32f, BaseSpread = 0.65f, BloomPerShot = 0.28f,
                 MaxBloom = 2.4f, BloomRecovery = 4.2f, Kick = 1.9f, PitchBase = 1.03f, Volume = 1.0f,
                 FlashColorMin = new Color(1f, 0.88f, 0.58f), FlashColorMax = new Color(1f, 0.52f, 0.18f),
@@ -329,14 +343,14 @@ namespace VortexArena.Core.Editor
                 SmokeSizeMin = 0.035f, SmokeSizeMax = 0.06f, SmokeLifetime = 1.0f, SmokeAlpha = 0.28f,
                 CasingFamily = "556x45",
             },
-            // AR_A_1 — M4A1: the "marksman" M4A4. Tightest base spread and longest range, paid for
+            // AR_A_1 — M4A1: the "marksman" M4. Tightest base spread and longest range, paid for
             // with the fastest-degrading sustained fire (highest bloom, slowest recovery): rewards
             // aimed single shots, punishes spraying. Shares M4A4's reload clip at a lower pitch.
             new WeaponSpec
             {
                 Name = "M4A1", PackPrefab = "AR_A_1", WeaponId = "m4a1", DisplayName = "M4A1",
                 NetItemId = 6, HoldMode = "TwoHand",
-                Damage = 31, Rpm = 700, Magazine = 30, Reload = 2.19f,
+                Damage = 26, Headshot = 2f, Rpm = 420, Magazine = 22, Reload = 2.19f,
                 Range = 50f, BaseSpread = 0.35f, BloomPerShot = 0.34f,
                 MaxBloom = 2.8f, BloomRecovery = 3.8f, Kick = 2.3f, PitchBase = 0.93f, Volume = 1.0f,
                 FlashColorMin = new Color(1f, 0.90f, 0.74f), FlashColorMax = new Color(0.95f, 0.60f, 0.28f),
@@ -344,15 +358,14 @@ namespace VortexArena.Core.Editor
                 SmokeSizeMin = 0.032f, SmokeSizeMax = 0.055f, SmokeLifetime = 0.95f, SmokeAlpha = 0.26f,
                 CasingFamily = "556x45",
             },
-            // AR_O — CS2 AUG: values match CS2 (28 dmg / 666 rpm / 30 mag / 3.80 s / 0.98 range
-            // modifier → AK's range class). Its bullpup+scope identity lives in the spread: tighter
-            // base than SCAR-L, among the slowest bloom growth and low recoil — paid for with the
-            // lowest 5.56 DPS and the longest reload.
+            // AR_O — AUG: three body hits or two headshots with the biggest rifle magazine. Its
+            // bullpup+scope identity lives in the spread: tighter base than SCAR-L, among the slowest
+            // bloom growth and low recoil.
             new WeaponSpec
             {
                 Name = "AUG", PackPrefab = "AR_O", WeaponId = "aug", DisplayName = "AUG",
                 NetItemId = 7, HoldMode = "TwoHand",
-                Damage = 28, Rpm = 666, Magazine = 30, Reload = 2.19f,
+                Damage = 34, Headshot = 2f, Rpm = 585, Magazine = 40, Reload = 2.19f,
                 Range = 46f, BaseSpread = 0.42f, BloomPerShot = 0.22f,
                 MaxBloom = 2.0f, BloomRecovery = 4.8f, Kick = 1.7f, PitchBase = 0.98f, Volume = 1.0f,
                 FlashColorMin = new Color(1f, 0.87f, 0.60f), FlashColorMax = new Color(1f, 0.58f, 0.24f),
@@ -360,14 +373,13 @@ namespace VortexArena.Core.Editor
                 SmokeSizeMin = 0.034f, SmokeSizeMax = 0.058f, SmokeLifetime = 1.0f, SmokeAlpha = 0.27f,
                 CasingFamily = "556x45",
             },
-            // AR_L — CS2 Galil AR: 30 dmg / 666 rpm / 35 mag / 3.00 s / 0.98 range modifier. The
-            // "cheap AK": AK's range class with a weaker single hit, but faster and with the longest
-            // burst thanks to 35 rounds. Paid for with the widest base spread among the 5.56s.
+            // AR_L — Galil AR: the AK's twin — three body hits at the same slow rate, but a TWO-hit
+            // headshot, plus the widest base spread among the rifles.
             new WeaponSpec
             {
                 Name = "GALIL", PackPrefab = "AR_L", WeaponId = "galilar", DisplayName = "Galil AR",
                 NetItemId = 8, HoldMode = "TwoHand",
-                Damage = 30, Rpm = 666, Magazine = 35, Reload = 2.25f, SpareMags = 2,
+                Damage = 34, Headshot = 2f, Rpm = 268, Magazine = 30, Reload = 2.25f, SpareMags = 2,
                 Range = 44f, BaseSpread = 0.62f, BloomPerShot = 0.34f,
                 MaxBloom = 2.8f, BloomRecovery = 3.8f, Kick = 2.5f, PitchBase = 1.02f, Volume = 1.0f,
                 FlashColorMin = new Color(1f, 0.78f, 0.42f), FlashColorMax = new Color(1f, 0.42f, 0.12f),
@@ -375,13 +387,13 @@ namespace VortexArena.Core.Editor
                 SmokeSizeMin = 0.042f, SmokeSizeMax = 0.072f, SmokeLifetime = 1.2f, SmokeAlpha = 0.32f,
                 CasingFamily = "556x45",
             },
-            // SMG_O — CS2 P90: 26 dmg / 857 rpm / 50 mag / 3.40 s / 0.84 range modifier. 50 rounds +
-            // the lowest recoil = a spray weapon; paid for in range and per-bullet damage.
+            // SMG_O — P90: light carbine (six body hits or two headshots). The spray weapon of the
+            // pair — big magazine and the lowest recoil in the game; paid for in range.
             new WeaponSpec
             {
                 Name = "P90", PackPrefab = "SMG_O", WeaponId = "p90", DisplayName = "P90",
                 NetItemId = 9, HoldMode = "TwoHand",
-                Damage = 26, Rpm = 857, Magazine = 50, Reload = 2.80f, SpareMags = 2,
+                Damage = 17, Headshot = 3f, Rpm = 585, Magazine = 40, Reload = 2.80f, SpareMags = 2,
                 Range = 24f, BaseSpread = 0.85f, BloomPerShot = 0.24f,
                 MaxBloom = 2.6f, BloomRecovery = 5.5f, Kick = 1.2f, PitchBase = 1.00f, Volume = 0.92f,
                 FlashColorMin = new Color(1f, 0.90f, 0.68f), FlashColorMax = new Color(1f, 0.62f, 0.28f),
@@ -389,13 +401,13 @@ namespace VortexArena.Core.Editor
                 SmokeSizeMin = 0.028f, SmokeSizeMax = 0.048f, SmokeLifetime = 0.85f, SmokeAlpha = 0.22f,
                 CasingFamily = "9x19",
             },
-            // SMG_M — CS2 MP9: 26 dmg / 857 rpm / 30 mag / 2.10 s / 0.75 range modifier. The fastest
-            // reload and shortest range in the game: an angle-holding, frequently reloading weapon.
+            // SMG_M — MP9: the other light carbine (six body hits or two headshots). Shortest range
+            // and fastest reload in the game: an angle-holding, frequently reloading weapon.
             new WeaponSpec
             {
                 Name = "MP9", PackPrefab = "SMG_M", WeaponId = "mp9", DisplayName = "MP9",
                 NetItemId = 10, HoldMode = "TwoHand",
-                Damage = 26, Rpm = 857, Magazine = 30, Reload = 2.14f, SpareMags = 4,
+                Damage = 17, Headshot = 3f, Rpm = 570, Magazine = 20, Reload = 2.14f, SpareMags = 4,
                 Range = 18f, BaseSpread = 0.90f, BloomPerShot = 0.26f,
                 MaxBloom = 2.8f, BloomRecovery = 5.8f, Kick = 1.1f, PitchBase = 1.00f, Volume = 0.90f,
                 FlashColorMin = new Color(1f, 0.92f, 0.72f), FlashColorMax = new Color(1f, 0.66f, 0.32f),
@@ -403,14 +415,13 @@ namespace VortexArena.Core.Editor
                 SmokeSizeMin = 0.026f, SmokeSizeMax = 0.045f, SmokeLifetime = 0.8f, SmokeAlpha = 0.20f,
                 CasingFamily = "9x19",
             },
-            // SMG_L — CS2 UMP-45: 35 dmg / 666 rpm / 25 mag / 3.50 s / 0.82 range modifier. Hardest
-            // hitting SMG (higher per-bullet damage than some rifles) but the slowest; 25 rounds
-            // forgive nothing.
+            // SMG_L — UMP-45: the heavy SMG sitting between the light carbines and the rifles — five
+            // body hits or two headshots, slower than the carbines and with SMG range.
             new WeaponSpec
             {
                 Name = "UMP45", PackPrefab = "SMG_L", WeaponId = "ump45", DisplayName = "UMP-45",
                 NetItemId = 11, HoldMode = "TwoHand",
-                Damage = 35, Rpm = 666, Magazine = 25, Reload = 2.14f, SpareMags = 4,
+                Damage = 21, Headshot = 2.5f, Rpm = 480, Magazine = 25, Reload = 2.14f, SpareMags = 4,
                 Range = 22f, BaseSpread = 0.75f, BloomPerShot = 0.30f,
                 MaxBloom = 2.6f, BloomRecovery = 4.6f, Kick = 1.9f, PitchBase = 1.00f, Volume = 0.96f,
                 FlashColorMin = new Color(1f, 0.72f, 0.34f), FlashColorMax = new Color(1f, 0.38f, 0.10f),
@@ -418,18 +429,18 @@ namespace VortexArena.Core.Editor
                 SmokeSizeMin = 0.032f, SmokeSizeMax = 0.055f, SmokeLifetime = 1.0f, SmokeAlpha = 0.26f,
                 CasingFamily = "9x19",
             },
-            // ShotGun_C — CS2 XM1014 body: 171 rpm / 7 shells. Semi-auto: faster and more forgiving
-            // than the Nova, weaker per shot.
-            // ⚠️ CS reloads shell by shell; here the TOTAL time for a full magazine is written (per
-            // shell loading is not modelled) — hence `PoolRounds`, so an early reload does not burn
-            // the chambered shell.
-            // ⚠️ Damage and spread DEVIATE from CS (CS: 20 dmg, ~5° cone, 0.70 range modifier)
-            // because of arena scale — the rationale is stated once, on the NOVA row below.
+            // ShotGun_C — XM1014: the fast shotgun — semi-auto and forgiving, but a one-shot body kill
+            // needs ALL SIX pellets to connect, so it only kills outright at contact range.
+            // ⚠️ Shell-by-shell loading is not modelled in this number: the TOTAL time for a full
+            // magazine is written — hence `PoolRounds`, so an early reload does not burn the chambered
+            // shell.
+            // ⚠️ Damage and spread are tuned for ARENA SCALE, not copied from any reference shooter —
+            // the rationale is stated once, on the NOVA row below.
             new WeaponSpec
             {
                 Name = "XM1014", PackPrefab = "ShotGun_C", WeaponId = "xm1014", DisplayName = "XM1014",
                 NetItemId = 12, HoldMode = "TwoHand",
-                Damage = 10, Headshot = 2f, Rpm = 171, Magazine = 7, Reload = 4.50f, Pellets = 6,
+                Damage = 17, Headshot = 2f, Rpm = 168, Magazine = 15, Reload = 5.00f, Pellets = 6,
                 SpareMags = 4, ReserveMode = "PoolRounds",
                 Range = 26f, BaseSpread = 10.0f, BloomPerShot = 0.60f,
                 MaxBloom = 1.5f, BloomRecovery = 2.5f, Kick = 7.0f, KickBack = 0.06f, RecoverSpeed = 8.0f,
@@ -439,8 +450,8 @@ namespace VortexArena.Core.Editor
                 SmokeSizeMin = 0.075f, SmokeSizeMax = 0.125f, SmokeLifetime = 1.7f, SmokeAlpha = 0.42f,
                 CasingFamily = "12gauge",
             },
-            // ShotGun_B — CS2 Nova body: 68 rpm / 8 shells. Pump action: a one-shot kill at contact
-            // range, but a miss leaves a very long gap.
+            // ShotGun_B — Nova: pump action — a one-shot kill at contact range, but a miss leaves a
+            // very long gap before the next shell.
             //
             // ⚠️ SHOTGUN BALANCE DELIBERATELY DEVIATES FROM CS (CS Nova: 26 dmg, ~6° cone, 0.70 range
             // modifier; here 13 dmg, 12° cone, no distance curve). The reason is ARENA SCALE, and
@@ -460,7 +471,7 @@ namespace VortexArena.Core.Editor
             {
                 Name = "NOVA", PackPrefab = "ShotGun_B", WeaponId = "nova", DisplayName = "Nova",
                 NetItemId = 13, HoldMode = "TwoHand",
-                Damage = 13, Headshot = 2f, Rpm = 68, Magazine = 8, Reload = 5.00f, Pellets = 9,
+                Damage = 13, Headshot = 2f, Rpm = 84, Magazine = 8, Reload = 5.00f, Pellets = 9,
                 SpareMags = 4, ReserveMode = "PoolRounds",
                 Range = 25f, BaseSpread = 12.0f, BloomPerShot = 0.60f,
                 MaxBloom = 1.5f, BloomRecovery = 2.5f, Kick = 9.0f, KickBack = 0.07f, RecoverSpeed = 7.0f,
@@ -649,6 +660,8 @@ namespace VortexArena.Core.Editor
             SetNumber(so, "fireRateRpm", spec.Rpm, ctx);
             SetNumber(so, "range", spec.Range, ctx);
             SetNumber(so, "pelletCount", spec.Pellets > 0 ? spec.Pellets : 1, ctx);
+            SetNumber(so, "burstCount", spec.Burst > 1 ? spec.Burst : 1, ctx);
+            SetNumber(so, "burstCooldown", spec.Burst > 1 ? spec.BurstCooldown : 0f, ctx);
             SetNumber(so, "baseSpreadDegrees", spec.BaseSpread, ctx);
             SetNumber(so, "bloomPerShotDegrees", spec.BloomPerShot, ctx);
             SetNumber(so, "maxBloomDegrees", spec.MaxBloom, ctx);

@@ -681,43 +681,63 @@ namespace VortexArena.Core.Audio
 
             _lastPhase = ArenaProtocol.PHASE_FINISHED;
 
-            // The mode's own closing line wins over the shared result announcement so they do not overlap.
-            if (PlayModeEvent(ModeAudioEvent.MatchEnd))
-            {
-                return;
-            }
-
             // ⚠️ Shared scoring (co-op) has no winner AND no draw: every match would end on "berabere".
-            // Silence is the correct default here — the mode may add its own line through the registry.
+            // Only the mode's own closing line may play; without one the match ends silently.
             if (ModeRuntime.Scoring == ModeScoreKind.PlayerAndShared)
             {
+                PlayModeEvent(ModeAudioEvent.MatchEnd);
                 return;
             }
 
             // ⚠️ The result announcement belongs to the match, not to a player, so it does not vary
             // by listener and needs no local player id: it plays on the admin spectator too.
+            if (!TryResolveResult(msg, out ModeAudioEvent resultEvent, out GameSoundId bankId))
+            {
+                // Individually scored mode (ffa) or unknown team: no result line applies, the result
+                // is read from the end-of-match screen.
+                PlayModeEvent(ModeAudioEvent.MatchEnd);
+                return;
+            }
+
+            // Exactly one line, most specific first: the mode's line for this result, its
+            // result-agnostic closing line, then the shared bank — two would overlap.
+            if (PlayModeEvent(resultEvent) || PlayModeEvent(ModeAudioEvent.MatchEnd))
+            {
+                return;
+            }
+
+            Play(bankId);
+        }
+
+        /// <summary>Maps the match result to its mode trigger and shared bank clip.</summary>
+        /// <remarks><c>false</c> for a PLAYER winner (ffa) or an unknown team: no team/draw line
+        /// applies there.</remarks>
+        private static bool TryResolveResult(MatchEndMsg msg, out ModeAudioEvent resultEvent,
+            out GameSoundId bankId)
+        {
+            resultEvent = ModeAudioEvent.MatchDraw;
+            bankId = GameSoundId.MatchDraw;
+
             if (!string.IsNullOrEmpty(msg.winnerTeam))
             {
                 if (string.Equals(msg.winnerTeam, "red", StringComparison.OrdinalIgnoreCase))
                 {
-                    Play(GameSoundId.TeamRedWon);
+                    resultEvent = ModeAudioEvent.TeamRedWon;
+                    bankId = GameSoundId.TeamRedWon;
+                    return true;
                 }
-                else if (string.Equals(msg.winnerTeam, "blue", StringComparison.OrdinalIgnoreCase))
+
+                if (string.Equals(msg.winnerTeam, "blue", StringComparison.OrdinalIgnoreCase))
                 {
-                    Play(GameSoundId.TeamBlueWon);
+                    resultEvent = ModeAudioEvent.TeamBlueWon;
+                    bankId = GameSoundId.TeamBlueWon;
+                    return true;
                 }
 
-                return;
+                return false;
             }
 
-            if (msg.winnerPlayerId > 0)
-            {
-                // Individually scored mode (ffa): the winner is a PLAYER, no team announcement
-                // applies — that mode's result is read from the end-of-match screen.
-                return;
-            }
-
-            Play(GameSoundId.MatchDraw);
+            return msg.winnerPlayerId <= 0;
         }
 
         private void HandleCountdown(CountdownMsg msg)

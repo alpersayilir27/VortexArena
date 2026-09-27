@@ -19,6 +19,7 @@ MonoBehaviour:
   grabPath: 0
   instancing: 0
   releaseMode: 0
+  hideGrabIndicator: 0
   primaryGripRight:
     authored: 1
     position: {x: 0, y: -0.0114, z: 0}
@@ -180,14 +181,17 @@ MonoBehaviour:
   tracerWidth: 0.005
   tracerLifetime: 0.05
   tracerEveryNthRound: 1
+  teamTintChildren: []
   weaponId: nova
   damage: 13
   headshotMultiplier: 2
-  stomachMultiplier: 1.25
+  stomachMultiplier: 1
   legMultiplier: 0.75
-  fireRateRpm: 68
+  fireRateRpm: 84
   range: 25
   pelletCount: 9
+  burstCount: 1
+  burstCooldown: 0
   baseSpreadDegrees: 12
   bloomPerShotDegrees: 0.6
   maxBloomDegrees: 1.5

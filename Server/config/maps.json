@@ -20,7 +20,9 @@
         { "sceneId": 11, "kind": "board" },
         { "sceneId": 12, "kind": "board" },
         { "sceneId": 13, "kind": "knife" },
-        { "sceneId": 14, "kind": "spatula" }
+        { "sceneId": 14, "kind": "spatula" },
+        { "sceneId": 15, "kind": "cutting_board" },
+        { "sceneId": 16, "kind": "cutting_board" }
       ]
     },
     {
@@ -53,7 +55,13 @@
         { "sceneId": 36, "kind": "spatula" },
         { "sceneId": 37, "kind": "knife" },
         { "sceneId": 38, "kind": "knife" },
-        { "sceneId": 39, "kind": "knife" }
+        { "sceneId": 39, "kind": "knife" },
+        { "sceneId": 40, "kind": "cutting_board" },
+        { "sceneId": 41, "kind": "cutting_board" },
+        { "sceneId": 42, "kind": "cutting_board" },
+        { "sceneId": 43, "kind": "cutting_board" },
+        { "sceneId": 44, "kind": "cutting_board" },
+        { "sceneId": 45, "kind": "cutting_board" }
       ]
     },
     {
@@ -248,6 +256,7 @@
       ] },
     { "kind": "cheese", "maxHp": 0, "grab": "anyone", "events": [] },
     { "kind": "customer", "maxHp": 0, "grab": "none", "events": [] },
+    { "kind": "cutting_board", "maxHp": 0, "grab": "anyone", "events": [] },
     { "kind": "dispenser_bacon", "maxHp": 0, "grab": "none", "events": [
         { "name": "take", "policy": "anyone", "phaseGate": "playing" }
       ] },

@@ -28,3 +28,9 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 5eca3b2d226a8e6429680e472ae49813, type: 2}
   remoteShotFxPrefab: {fileID: 6439128782644113794, guid: f04edde40b30f634e8e36f02340ebcbc, type: 3}
   secondaryGripIndicatorPrefab: {fileID: 7854560880376907916, guid: c8100365a9515e243868583b240b9804, type: 3}
+  nearMissClips:
+  - {fileID: 8300000, guid: a1b87d66560445338f89d9f97ba47833, type: 3}
+  - {fileID: 8300000, guid: 3d68d192237d4ccbbfaf5d6f45a9fb2d, type: 3}
+  - {fileID: 8300000, guid: afe04091d94b469aa26478969a74cfa5, type: 3}
+  - {fileID: 8300000, guid: 567550c647ea48e58ae7025ca0ea8dcc, type: 3}
+  nearMissVolume: 0.8

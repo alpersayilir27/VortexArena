@@ -33,7 +33,7 @@ namespace VortexArena.Core.Player
         // this component and PICK its zone. The default is Body, so a forgotten head box silently deals
         // 1× instead of 4× — in the field that reads as "I hit the head but they did not die" and is
         // expensive to diagnose.
-        [Tooltip("Vuruş bölgesi — hasar çarpanının kaynağı (kafa 4×, karın 1.25×, bacak 0.75×).")]
+        [Tooltip("Vuruş bölgesi — hasar çarpanının kaynağı (kafa silaha göre, karın gövde sayılır, bacak 0.75×).")]
         [SerializeField] private HitZone zone = HitZone.Body;
 
         /// <summary>The avatar this hitbox belongs to.</summary>
