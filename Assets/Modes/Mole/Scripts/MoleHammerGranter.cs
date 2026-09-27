@@ -21,7 +21,7 @@ namespace VortexArena.Modes.Mole
         [Tooltip("Balyoz eşya tanımı — uzak elde bu tanımın netItemId'si çizilir.")]
         [SerializeField] private PropDefinition hammerDefinition;
 
-        [Tooltip("Ele verilecek balyoz prefabı (kökü kabza ucu olmalı).")]
+        [Tooltip("Ele verilecek balyoz prefabı — eldeki yeri tanımın kavrama kaydından gelir.")]
         [SerializeField] private GameObject hammerPrefab;
 
         [Tooltip("Kırmızı takımın balyoz rengi.")]
@@ -100,8 +100,15 @@ namespace VortexArena.Modes.Mole
             }
 
             GameObject instance = Instantiate(hammerPrefab, anchor);
-            instance.transform.localPosition = Vector3.zero;
-            instance.transform.localRotation = Quaternion.identity;
+
+            // ⚠️ Same solver as every other holder: the hand is drawn from the grip record, so a
+            // zero offset here would shift hand and hammer together off the real controller.
+            if (WeaponGranter.TryResolvePalm(hand, out Pose palm))
+            {
+                ItemGripSolver.Solve(hammerDefinition, rightHand, !rightHand, palm, false, Vector3.zero,
+                    0f, out Vector3 position, out Quaternion rotation);
+                instance.transform.SetPositionAndRotation(position, rotation);
+            }
 
             if (!HeldItems.Report(this, rightHand, hammerDefinition, instance.transform,
                     GripSocketKind.Primary, hand))

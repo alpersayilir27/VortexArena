@@ -609,6 +609,14 @@ Ağ nesnesi ele **kanonik kavrama poziyle** bağlanır ve duruş telde gitmez: i
 Serbest kavrama (elin objeye değdiği yerden tutmak) her istemcide farklı bir ofset demektir ve obje
 uzak başlıkta elin yanında durur. Kavrama stüdyoda yazılır, çalışma anında ölçülmez.
 
+### ⛔ Eşyayı ele sıfır ofsetle takma
+
+Eşyayı ele koyan her kod (yeni bir granter, moda özel bir "ele ver" bileşeni) duruşu
+`ItemGripSolver.Solve` ile kurar; el anchor'ına `localPosition = zero` ile takmak kaydı yok sayar.
+El ise kaydı her zaman okur (`HandGripPoser`): el ile eşya birbirine göre doğru görünür ama ikisi
+birlikte gerçek kumandadan kayar, bilek dönünce eşya görünmeyen kumandanın etrafında yay çizer.
+Uzak uç ortak çözücüyü kullandığı için diğer oyuncular doğru görür — hata yalnız tutanın gözündedir.
+
 ### ⛔ Mesafeli kavrama bileşenini "nasılsa filtreliyorum" diye prefabda bırakma
 
 Alma yolu `ProximitySocket` / `WristHolster` / `None` olan bir eşyanın prefabında
