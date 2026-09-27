@@ -723,6 +723,16 @@ Windows dosya kilidi yüzünden taşıma yarıda kalır ve geride yetim `.meta`'
 bırakır. Taşıma editör kapalıyken `git mv` ile yapılır; tek kod ayağı `WeaponKitBuilder.PackRoot`
 sabitidir (tek satır) — o güncellenmezse silah kiti kaynaklarını bulamaz ama hata da vermez.
 
+### ⛔ `.gitattributes`'ta LFS satırı olmayan uzantıda büyük binary commit'leme
+
+Model/doku/ses `.gitattributes`'taki uzantı listesiyle LFS'e gider; listede olmayan uzantı
+(`.gltf`, `.bin`, yeni bir format) normal blob olarak commit'lenir. GitHub 100 MB'ı aşan blob'u
+reddeder, VS Code bunu yanıltıcı biçimde "önce Pull yap" diye gösterir. Yeni formatta paket
+eklemeden önce uzantıyı `.gitattributes`'a `lfs` olarak ekle; push'lanmamış commit'te kaldıysa
+`git lfs migrate import --include="*.<uzantı>" --include-ref=refs/heads/<dal> --exclude-ref=refs/remotes/origin/<dal>`.
+Bu komut aynı commit'i gösteren **başka yerel dalları da** yeniden yazar — yedek dal açacaksan
+commit hash'ini ayrıca not al.
+
 ### ⚠️ Yamalı satıcı betiğini paketi yeniden içe aktararak EZME
 
 Construction Site paketinin `LightmappedLOD.cs`'i static batch'e giren renderer'ları atlayacak
