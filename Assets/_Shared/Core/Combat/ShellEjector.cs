@@ -28,6 +28,10 @@ namespace VortexArena.Core.Combat
 
         private Weapon weapon;
 
+        /// <summary>Casing this weapon throws — read off the PREFAB by the load-time warmup, so the
+        /// first ejection does not pay the Instantiate.</summary>
+        public GameObject CasingPrefab => casingPrefab;
+
         private void Awake()
         {
             weapon = GetComponent<Weapon>();

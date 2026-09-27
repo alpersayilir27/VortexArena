@@ -4,6 +4,7 @@ using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.InputSystem;
 using UnityEngine.UI;
+using VortexArena.Core;
 using VortexArena.Protocol;
 
 namespace VortexArena.App.Admin
@@ -302,6 +303,14 @@ namespace VortexArena.App.Admin
             button.onClick.AddListener(action);
         }
 
+        private static void SetCellActive(Component cell, bool active)
+        {
+            if (cell != null && cell.gameObject.activeSelf != active)
+            {
+                cell.gameObject.SetActive(active);
+            }
+        }
+
         /// <summary>Binds the row to a player (called on every refresh).</summary>
         public void Bind(AdminPlayerView view, bool selected)
         {
@@ -364,6 +373,14 @@ namespace VortexArena.App.Admin
             {
                 idText.text = $"#{view.playerId}";
             }
+
+            // No weapon or no opponent → the three cells can only print zeros; they are hidden rather
+            // than zeroed so the row does not teach the operator to ignore numbers.
+            // ⚠️ Written on every Bind, not only switched off: rows are pooled and survive the match.
+            bool combat = !ModeRuntime.HidesCombatStats;
+            SetCellActive(killsText, combat);
+            SetCellActive(deathsText, combat);
+            SetCellActive(kdText, combat);
 
             if (killsText != null)
             {

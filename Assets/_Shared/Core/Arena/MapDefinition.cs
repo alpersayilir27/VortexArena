@@ -42,6 +42,11 @@ namespace VortexArena.Core.Arena
         [Tooltip("Müzik klibinin çalma seviyesi.")]
         [SerializeField] private float musicVolume = 0.5f;
 
+        [Header("Anons")]
+        [Tooltip("Süre bitmeden son saniyelerde çalan uyarı sesi. Kapalı = bu haritada hiç çalmaz.")]
+        // Default on: existing assets keep the warning WITHOUT being touched.
+        [SerializeField] private bool timeWarningSound = true;
+
         /// <summary>Scene name in the build list (the catalog key).</summary>
         public string SceneName => sceneName;
 
@@ -71,6 +76,9 @@ namespace VortexArena.Core.Arena
 
         /// <summary>Music level (0..1).</summary>
         public float MusicVolume => musicVolume;
+
+        /// <summary>Whether the round/match end time warning plays on this map.</summary>
+        public bool TimeWarningSound => timeWarningSound;
 
         /// <summary>Can the given mode be played on this map. An empty/missing list counts as no
         /// restriction, so a field forgotten on a new map does not hide the mode.</summary>

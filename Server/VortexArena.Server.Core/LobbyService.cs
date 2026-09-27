@@ -670,8 +670,9 @@ public sealed class LobbyService
 
         if (modeChanged)
         {
-            // ⚠️ Players back from a teamless match would otherwise stay white in the lobby (§10.7).
-            _director.AssignTeamlessForMode(selectedModeId);
+            // ⚠️ Lobby labels/cards must match the selected mode right away (§10.7): teamed mode fills
+            // the teamless, teamless mode clears every team.
+            _director.ApplyTeamsForSelectedMode(selectedModeId);
             await BroadcastSelectionStateAsync();
         }
 

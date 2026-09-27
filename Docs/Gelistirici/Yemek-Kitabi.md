@@ -414,7 +414,7 @@ ModeRuntime.Changed += KurallarDegisti;      // maç yüklenince tetiklenir
 ```
 
 Okunabilir alanlar: `ModeId`, `Teams`, `Scoring`, `FriendlyFire`, `Revive`, `Weapons`,
-`RespawnDelay`, `FireWhilePaused`, `IsTeamless`, `IsWeaponless`.
+`RespawnDelay`, `FireWhilePaused`, `IsTeamless`, `IsWeaponless`, `IsCoop`, `HidesCombatStats`.
 
 > **Neden tek okuma noktası:** canlanma, skor satırı, silah kaynağı ve admin arayüzü aynı bilgiyi
 > ister. Dördü ayrı ayrı `load_match` dinlerse dördü ayrı ayrı bayatlar.
@@ -1118,8 +1118,10 @@ hareketi yapar, hiçbir şey olmaz. Kural: her görünmez hacim, ait olduğu gö
 
 | Görünen | Ona kilitli görünmez parça |
 |---|---|
-| Izgara/ocak gövdesi | pişirme hacmi (`BurgerGrill`) |
+| Izgara/ocak gövdesi | pişirme hacmi (`BurgerGrill`) + gövdedeki katı kutunun objesinde `CounterSurface` |
+| Mutfak masası/tezgâh | katı kutu(lar) + **aynı objede** `CounterSurface`: yoksa tablanın altına bırakılan eşya boşlukta asılı kalır, tezgâha çıkmaz |
 | Banko | slot hacimleri + müşterinin duracağı nokta. ⚠️ Servis tahtası sabittir ve yuvasına **konumuyla** bağlanır (slot numarasıyla değil): tahta ile slot hacmi aynı prefabta, tahta hacmin içinde durur — ayrı düşerse mod sessizce hiç servis yapmaz. Tahta başka tezgâha alınacaksa **yuva objesi** (`CounterSlot_N`) da taşınır: müşteri noktası onun çocuğudur, tek başına taşınırsa müşteri doğru yerde bekler ama tahta hacmin dışında kalır |
+| Kesme tahtası | yığın hacmi (`Stack`, tetik) + kargo çapası (`CargoAnchor`) + `GripSocket`. ⚠️ **Bu tahta ağ nesnesidir ve taşınır** (`cutting_board`, kavrama: herkes; `BurgerCuttingBoard`): sabit bir yuvası yoktur, üstüne kurulan yığın servis tahtasına **boşaltılarak** servis edilir. Üç çocuk da prefabın içinde durur — hacim ayrı düşerse tahta kaldırılınca yığın yerinde kalır, kargo çapası eksikse taşınan katmanlar tahtaya değil avuca yazılır |
 | Kapı | müşteri yolunun waypoint'leri |
 | Malzeme rafı | dağıtıcıların kavrama soketleri |
 
@@ -1257,7 +1259,9 @@ Controller'sız `Animator` altındaki hareketsiz skinned hayvan, pozu bake edilm
 (duvar, çit, yer bitkisi, çok parçalı eşya) bölge bölge (6–12 m hücre) materyal başına tek
 mesh'e birleştirilir: LOD seviyeleri ve geçiş mesafeleri korunur, UV2 yeniden üretilir, mesh
 arena kutusunun `Art/`'ına yazılır; eski parçaların yalnız renderer'ı kapanır — collider'ları
-yerinde kalır. Saydam, `Animator`/script/`Rigidbody` taşıyan obje birleştirilmez. Birleştirmeden
+yerinde kalır. ⚠️ Yazılan mesh'te **Read/Write kapalıdır** (`m_IsReadable: 0`): açık kalırsa her
+mesh'in ikinci kopyası CPU belleğinde durur ve yükleme bu kopyayı da taşır; birleştirilmiş mesh
+hiçbir `MeshCollider`'da kullanılmaz, oyun kodu da mesh verisi okumaz. Saydam, `Animator`/script/`Rigidbody` taşıyan obje birleştirilmez. Birleştirmeden
 sonra bake yeniden alınır.
 
 Arenadan uzaktaki dekor ucuzlatılır, gizlenmez: `Scale In Lightmap` arenaya 10–30 m'de 0.5, 30 m

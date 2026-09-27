@@ -40,6 +40,12 @@ namespace VortexArena.Core.Combat
             /// <summary><c>Time.unscaledTime</c> at which the node is hidden — unscaled so a paused
             /// match does not freeze an impact on the wall.</summary>
             public float HideAt;
+
+            /// <summary>Scale to put back when a warmup shrank this node — see
+            /// <see cref="SurfaceImpactFx.Warmup"/>.</summary>
+            public Vector3 ScaleBeforeWarmup;
+
+            public bool ScaleOverridden;
         }
 
         /// <summary>Round-robin ring for one surface.</summary>
@@ -95,6 +101,7 @@ namespace VortexArena.Core.Combat
             node.Root.SetPositionAndRotation(
                 hit.point + hit.normal * SurfaceLiftMeters,
                 Quaternion.LookRotation(hit.normal));
+            RestoreScale(node);
 
             node.Root.gameObject.SetActive(true);
             node.Active = true;
@@ -102,6 +109,85 @@ namespace VortexArena.Core.Combat
 
             RestartParticles(node);
             PlaySound(node, surface);
+        }
+
+        /// <summary>Draws ONE impact per surface in the library for a moment, SILENT and shrunk, so
+        /// the first real hit does not pay library load + Instantiate + shader warm-up. Caller must
+        /// keep the view covered for <paramref name="visibleSeconds"/>.</summary>
+        /// <param name="normal">Surface normal the effects face; pointing it at the camera is what
+        /// makes the spray actually render.</param>
+        /// <param name="scale">Uniform shrink so the spray stays inside the cover; ≤0 keeps the
+        /// authored size.</param>
+        public void Warmup(Vector3 position, Vector3 normal, float visibleSeconds, float scale)
+        {
+            SurfaceLibrary library = EnsureLibrary();
+            if (library == null)
+            {
+                return;
+            }
+
+            WarmupSurface(library.DefaultSurface, position, normal, visibleSeconds, scale);
+
+            SurfaceDefinition[] definitions = library.Definitions;
+            if (definitions == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < definitions.Length; i++)
+            {
+                WarmupSurface(definitions[i], position, normal, visibleSeconds, scale);
+            }
+        }
+
+        private void WarmupSurface(SurfaceDefinition surface, Vector3 position, Vector3 normal,
+            float visibleSeconds, float scale)
+        {
+            if (surface == null)
+            {
+                return;
+            }
+
+            Node node = TakeNode(surface);
+            if (node == null || node.Root == null)
+            {
+                return;
+            }
+
+            node.Root.SetPositionAndRotation(
+                position + normal * SurfaceLiftMeters,
+                Quaternion.LookRotation(normal));
+            ApplyWarmupScale(node, scale);
+
+            node.Root.gameObject.SetActive(true);
+            node.Active = true;
+            node.HideAt = Time.unscaledTime + Mathf.Max(0.02f, visibleSeconds);
+
+            // No sound on purpose: the player is still behind the loading cover.
+            RestartParticles(node);
+        }
+
+        private static void ApplyWarmupScale(Node node, float scale)
+        {
+            if (scale <= 0f || node.ScaleOverridden)
+            {
+                return;
+            }
+
+            node.ScaleBeforeWarmup = node.Root.localScale;
+            node.ScaleOverridden = true;
+            node.Root.localScale = node.ScaleBeforeWarmup * scale;
+        }
+
+        private static void RestoreScale(Node node)
+        {
+            if (!node.ScaleOverridden)
+            {
+                return;
+            }
+
+            node.ScaleOverridden = false;
+            node.Root.localScale = node.ScaleBeforeWarmup;
         }
 
         /// <summary>Hides expired nodes; pool instances are never destroyed.</summary>
@@ -128,6 +214,7 @@ namespace VortexArena.Core.Combat
 
                     if (now >= node.HideAt)
                     {
+                        RestoreScale(node);
                         node.Root.gameObject.SetActive(false);
                         node.Active = false;
                     }
@@ -137,13 +224,19 @@ namespace VortexArena.Core.Combat
 
         private SurfaceDefinition Resolve(Collider collider)
         {
+            SurfaceLibrary library = EnsureLibrary();
+            return library != null ? library.Resolve(collider) : null;
+        }
+
+        private SurfaceLibrary EnsureLibrary()
+        {
             if (!_libraryResolved)
             {
                 _libraryResolved = true;
                 _library = SurfaceLibrary.Load();
             }
 
-            return _library != null ? _library.Resolve(collider) : null;
+            return _library;
         }
 
         // ---------------------------------------------------------------------- pool

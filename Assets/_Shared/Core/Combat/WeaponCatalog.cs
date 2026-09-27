@@ -28,6 +28,11 @@ namespace VortexArena.Core.Combat
                  "kabul hacmi). Tüm silahlar aynı sanatı paylaşır. Boşsa soket çizilmez, kavrama yine çalışır. " +
                  "Silah kiti koşusu (Configure All Build Elements) varsayılan küreyi üretip yalnız alan BOŞSA bağlar.")]
         [SerializeField] private GameObject secondaryGripIndicatorPrefab;
+        [Tooltip("Yakından geçen düşman mermisinin vızıltı sesleri. Boşsa hiç çalmaz.")]
+        [SerializeField] private AudioClip[] nearMissClips = Array.Empty<AudioClip>();
+        [Range(0f, 1f)]
+        [Tooltip("Vızıltı sesinin seviyesi (geçiş mesafesine göre ayrıca kısılır).")]
+        [SerializeField] private float nearMissVolume = 0.8f;
 
         /// <summary>Weapon definitions in the catalog.</summary>
         public WeaponDefinition[] Definitions => definitions;
@@ -43,6 +48,12 @@ namespace VortexArena.Core.Combat
         /// <c>2 × secondaryGripRadius</c> — the drawn sphere IS the acceptance volume.</para>
         /// </summary>
         public GameObject SecondaryGripIndicatorPrefab => secondaryGripIndicatorPrefab;
+
+        /// <summary>Near-miss whiz clips (<see cref="NearMissWhizFx"/>); empty = feature off.</summary>
+        public AudioClip[] NearMissClips => nearMissClips;
+
+        /// <summary>Near-miss whiz level (0-1).</summary>
+        public float NearMissVolume => nearMissVolume;
 
         /// <summary>Finds a definition by weaponId (case-insensitive); null when missing/empty.</summary>
         public WeaponDefinition FindByWeaponId(string id)

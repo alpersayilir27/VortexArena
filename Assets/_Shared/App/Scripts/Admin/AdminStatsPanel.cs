@@ -4,6 +4,7 @@ using System.Text;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+using VortexArena.Core;
 using VortexArena.Net;
 using VortexArena.Protocol;
 
@@ -120,6 +121,9 @@ namespace VortexArena.App.Admin
         [Tooltip("Sol sütunun adı — takımsız oyuncu varsa sayısını da yazar.")]
         [SerializeField] private TextMeshProUGUI _redHeaderLabel;
         [SerializeField] private TextMeshProUGUI _blueHeaderLabel;
+        [Tooltip("Başlık şeritlerindeki K · D · K/D hücreleri (ikonlar dahil). Silah ve rakip " +
+                 "olmayan modlarda gizlenir; bağlanmazsa satır hücreleri yine de gizlenir.")]
+        [SerializeField] private GameObject[] _killDeathHeaderCells;
 
         [Header("Toplu eylemler")]
         [SerializeField] private Button _calibrateAllButton;
@@ -403,6 +407,8 @@ namespace VortexArena.App.Admin
         /// left column they were just placed in.</summary>
         private void RefreshColumnHeaders(AdminRoster roster, bool split)
         {
+            RefreshKillDeathHeaders();
+
             if (!split)
             {
                 return;
@@ -419,6 +425,28 @@ namespace VortexArena.App.Admin
             {
                 _blueHeaderLabel.text = "MAVİ";
                 _blueHeaderLabel.color = UiKit.TeamBlue;
+            }
+        }
+
+        /// <summary>Drops the K · D · K/D headers where the counters cannot mean anything (co-op,
+        /// weaponless). ⚠️ Visibility is written on EVERY refresh, never only switched off: the panel
+        /// survives the match, so a header hidden by a kids' mode would stay hidden for the next
+        /// shooter match.</summary>
+        private void RefreshKillDeathHeaders()
+        {
+            if (_killDeathHeaderCells == null)
+            {
+                return;
+            }
+
+            bool visible = !ModeRuntime.HidesCombatStats;
+            for (int i = 0; i < _killDeathHeaderCells.Length; i++)
+            {
+                GameObject cell = _killDeathHeaderCells[i];
+                if (cell != null && cell.activeSelf != visible)
+                {
+                    cell.SetActive(visible);
+                }
             }
         }
 
@@ -513,6 +541,18 @@ namespace VortexArena.App.Admin
 
         private void RefreshSummary(AdminRoster roster)
         {
+            // ⚠️ BEFORE the FFA branch: co-op is teamless too, but it has no leader — everyone feeds
+            // one total, so a "LİDER" line would invent a contest the mode does not have.
+            if (ModeRuntime.IsCoop)
+            {
+                _headline.text = $"EKİP TOPLAMI {roster.ScoreRed}";
+                _teamSummary.text = AdminModeState.TryCustomerCounts(roster.ModeState,
+                    out int happy, out int unhappy)
+                    ? $"{roster.Players.Count} oyuncu · Mutlu {happy} · Mutsuz {unhappy}"
+                    : $"{roster.Players.Count} oyuncu";
+                return;
+            }
+
             if (roster.IsFfa)
             {
                 // No teams → the leader is the only meaningful headline; with no score yet nothing
@@ -527,10 +567,21 @@ namespace VortexArena.App.Admin
 
             _headline.text = $"KIRMIZI {roster.ScoreRed} — {roster.ScoreBlue} MAVİ";
 
+            _sb.Clear();
+
+            if (ModeRuntime.IsWeaponless)
+            {
+                // Weaponless team mode: nobody shoots and nobody dies, so kill/death/alive totals
+                // would be three zeros the operator has to learn to ignore.
+                _sb.AppendLine($"KIRMIZI: {roster.Red.Count} oyuncu · {roster.ScoreRed} puan");
+                _sb.Append($"MAVİ: {roster.Blue.Count} oyuncu · {roster.ScoreBlue} puan");
+                _teamSummary.text = _sb.ToString();
+                return;
+            }
+
             roster.TeamTotals("red", out int redKills, out int redDeaths, out int redAlive);
             roster.TeamTotals("blue", out int blueKills, out int blueDeaths, out int blueAlive);
 
-            _sb.Clear();
             _sb.AppendLine($"KIRMIZI: {roster.Red.Count} oyuncu · {redAlive} canlı · {redKills} öldürme · {redDeaths} ölüm");
             _sb.Append($"MAVİ: {roster.Blue.Count} oyuncu · {blueAlive} canlı · {blueKills} öldürme · {blueDeaths} ölüm");
             _teamSummary.text = _sb.ToString();

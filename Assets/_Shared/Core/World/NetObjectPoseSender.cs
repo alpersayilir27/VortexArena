@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using VortexArena.Core.Arena;
 using VortexArena.Core.Combat;
@@ -30,6 +31,10 @@ namespace VortexArena.Core.World
         private NetObject _net;
         private Rigidbody _body;
 
+        /// <summary>Who may correct the resting pose before it is published. Kept generic on purpose —
+        /// this component knows nothing about the things that place objects (stacks, sockets, modes).</summary>
+        private readonly List<INetRestPoseAdjuster> _restAdjusters = new List<INetRestPoseAdjuster>();
+
         /// <summary>How long a "standing on something that can still move" contact keeps counting after
         /// the physics callback that saw it. ⚠️ Not a per-frame flag: physics does not step every frame,
         /// so a flag cleared each Update would read "stable ground" on the frames in between.</summary>
@@ -58,6 +63,21 @@ namespace VortexArena.Core.World
         {
             ResetFlight();
             _lastPosition = transform.position;
+        }
+
+        /// <summary>Registers a corrector for the resting pose (see <see cref="INetRestPoseAdjuster"/>).
+        /// The registrant unregisters itself in <c>OnDisable</c>.</summary>
+        public void AddRestAdjuster(INetRestPoseAdjuster adjuster)
+        {
+            if (adjuster != null && !_restAdjusters.Contains(adjuster))
+            {
+                _restAdjusters.Add(adjuster);
+            }
+        }
+
+        public void RemoveRestAdjuster(INetRestPoseAdjuster adjuster)
+        {
+            _restAdjusters.Remove(adjuster);
         }
 
         private void Update()
@@ -184,9 +204,45 @@ namespace VortexArena.Core.World
 
             _restSent = true;
 
-            Pose arenaPose = ArenaSpace.WorldToArena(CurrentWorldPose());
+            Pose worldPose = CurrentWorldPose();
+            if (TryAdjustRest(ref worldPose))
+            {
+                Seat(worldPose);
+            }
+
+            Pose arenaPose = ArenaSpace.WorldToArena(worldPose);
             NetObjectSync.SendRest(_net.NetId, arenaPose.position, arenaPose.rotation);
             RestSent?.Invoke(_net);
+        }
+
+        /// <summary>First adjuster that answers wins — two correctors on one object mean two placements,
+        /// and the second would only undo the first.</summary>
+        private bool TryAdjustRest(ref Pose worldPose)
+        {
+            for (int i = 0; i < _restAdjusters.Count; i++)
+            {
+                if (_restAdjusters[i] != null && _restAdjusters[i].TryAdjustRestPose(_net, ref worldPose))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>Puts the object on the corrected pose locally too: the owner is the only headset
+        /// still running physics on it, so without this it stays where physics left it until the server
+        /// answers — the placement would visibly snap twice.</summary>
+        private void Seat(Pose worldPose)
+        {
+            if (_body != null && !_body.isKinematic)
+            {
+                _body.linearVelocity = Vector3.zero;
+                _body.angularVelocity = Vector3.zero;
+            }
+
+            transform.SetPositionAndRotation(worldPose.position, worldPose.rotation);
+            _lastPosition = worldPose.position;
         }
 
         /// <remarks>Contacts arrive only while the body is dynamic, which is exactly the flight window

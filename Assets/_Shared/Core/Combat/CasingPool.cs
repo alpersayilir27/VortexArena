@@ -187,6 +187,56 @@ namespace VortexArena.Core.Combat
             }
         }
 
+        /// <summary>Shows one pooled casing for a moment, motionless and collider-less, so the first
+        /// ejection does not pay the <c>Instantiate</c> plus material warm-up. Caller must keep the
+        /// view covered for <paramref name="visibleSeconds"/>.</summary>
+        public void Warmup(GameObject casingPrefab, Vector3 position, float visibleSeconds)
+        {
+            if (casingPrefab == null)
+            {
+                return;
+            }
+
+            if (!_pools.TryGetValue(casingPrefab, out PrefabPool pool))
+            {
+                pool = new PrefabPool();
+                _pools.Add(casingPrefab, pool);
+                _all.Add(pool);
+            }
+
+            // Slot 0 on purpose: NextIndex is left alone so the first real ejection keeps its place
+            // in the ring.
+            if (pool.Items[0] == null)
+            {
+                GameObject go = Instantiate(casingPrefab, transform);
+                pool.Items[0] = go.transform;
+                pool.Bodies[0] = go.GetComponent<Rigidbody>();
+                pool.Colliders[0] = go.GetComponentsInChildren<Collider>(true);
+
+                if (pool.Bodies[0] != null)
+                {
+                    pool.Bodies[0].maxDepenetrationVelocity = MaxDepenetrationSpeed;
+                }
+            }
+
+            float visible = Mathf.Max(0.02f, visibleSeconds);
+
+            // Colliders stay off for the WHOLE warmup: a casing dropped in front of the camera must
+            // not touch the arena (contact sounds, pushed props) while the cover is up.
+            SetCollidersEnabled(pool.Colliders[0], false);
+            pool.EnableColliderAt[0] = Time.time + visible + ColliderOffSeconds;
+
+            pool.Items[0].SetPositionAndRotation(position, Quaternion.identity);
+            pool.Items[0].gameObject.SetActive(true);
+            pool.ExpireAt[0] = Time.time + visible;
+
+            if (pool.Bodies[0] != null)
+            {
+                pool.Bodies[0].linearVelocity = Vector3.zero;
+                pool.Bodies[0].angularVelocity = Vector3.zero;
+            }
+        }
+
         private void Update()
         {
             float now = Time.time;

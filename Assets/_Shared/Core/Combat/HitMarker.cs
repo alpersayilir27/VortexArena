@@ -167,7 +167,20 @@ namespace VortexArena.Core.Combat
         /// is reserved, since the camera is not yet at its final pose for this frame.</para>
         /// </summary>
         /// <returns>Whether the marker was actually queued (<c>false</c> if no node could be built).</returns>
-        public bool Play(Vector3 worldPoint)
+        public bool Play(Vector3 worldPoint) => Begin(worldPoint, 0f);
+
+        /// <summary>Draws one marker in front of the eye so the style load, the prefab
+        /// <c>Instantiate</c> and the <c>Shader.Find</c> material are paid behind the loading cover
+        /// instead of on the first hit. ⚠️ Not a hit: nothing is reported, so the "only
+        /// <see cref="ArenaCombat.ReportHit"/> shows a marker" rule stands.</summary>
+        public void Warmup(Vector3 worldPoint, float visibleSeconds)
+        {
+            Begin(worldPoint, Mathf.Max(0.02f, visibleSeconds));
+        }
+
+        /// <param name="visibleSeconds">Warmup only: the marker is born already aged, so it expires
+        /// within the cover instead of living the style's full lifetime. 0 = a real hit.</param>
+        private bool Begin(Vector3 worldPoint, float visibleSeconds)
         {
             MarkerNode node = TakeNode();
             if (node == null)
@@ -176,7 +189,9 @@ namespace VortexArena.Core.Combat
             }
 
             node.Anchor = worldPoint;
-            node.StartAt = Time.unscaledTime;
+            node.StartAt = visibleSeconds > 0f
+                ? Time.unscaledTime - Mathf.Max(0f, Style.LifetimeSeconds - visibleSeconds)
+                : Time.unscaledTime;
             node.Active = true;
 
             // On the prefab path particles are restarted: a pooled instance may still carry the

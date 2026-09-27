@@ -569,6 +569,13 @@ namespace VortexArena.Core.Audio
                 return;
             }
 
+            // The map may switch the warning off entirely (theme mismatch), overriding any rule.
+            MapDefinition map = ActiveMap(SceneManager.GetActiveScene().name);
+            if (map != null && !map.TimeWarningSound)
+            {
+                return;
+            }
+
             if (!TryResolveWarning(out ModeAudioRegistry.Rule rule))
             {
                 return;
@@ -617,25 +624,38 @@ namespace VortexArena.Core.Audio
         /// only, no server authority is involved.</para></remarks>
         private static GameType ActiveGameType(string sceneName)
         {
+            GameCatalog catalog = Catalog();
+            if (catalog == null)
+            {
+                return GameType.QuickBattle;
+            }
+
+            MapDefinition map = catalog.FindMap(sceneName);
+            if (map != null)
+            {
+                return map.GameType;
+            }
+
+            ModeDefinition mode = catalog.FindMode(ModeRuntime.ModeId);
+            return mode != null ? mode.GameType : GameType.QuickBattle;
+        }
+
+        /// <summary>Catalog map of the given scene; null without a catalog or entry.</summary>
+        private static MapDefinition ActiveMap(string sceneName)
+        {
+            GameCatalog catalog = Catalog();
+            return catalog != null ? catalog.FindMap(sceneName) : null;
+        }
+
+        private static GameCatalog Catalog()
+        {
             if (!_catalogLoaded)
             {
                 _catalogLoaded = true;
                 _catalog = Resources.Load<GameCatalog>(CatalogResourceName);
             }
 
-            if (_catalog == null)
-            {
-                return GameType.QuickBattle;
-            }
-
-            MapDefinition map = _catalog.FindMap(sceneName);
-            if (map != null)
-            {
-                return map.GameType;
-            }
-
-            ModeDefinition mode = _catalog.FindMode(ModeRuntime.ModeId);
-            return mode != null ? mode.GameType : GameType.QuickBattle;
+            return _catalog;
         }
 
         /// <summary>Hands one of the rule's clips to the announcement channel; <c>false</c> when

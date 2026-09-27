@@ -22,6 +22,14 @@ namespace VortexArena.Modes.Burger
         /// <summary>Patties whose counter WE started — only those may be stopped by us.</summary>
         private readonly HashSet<int> _startedByMe = new HashSet<int>();
 
+        /// <summary>Stop reports waiting out <see cref="ExitGraceSeconds"/>, keyed by netId.</summary>
+        private readonly Dictionary<int, float> _pendingStop = new Dictionary<int, float>();
+
+        /// <summary>⚠️ A resting patty turning kinematic makes PhysX re-filter the pair: exit + enter
+        /// in the same step. Stopping on that exit silenced the grill for good, so an exit only
+        /// counts if the patty stays out this long.</summary>
+        private const float ExitGraceSeconds = 0.25f;
+
         private void OnTriggerEnter(Collider other)
         {
             NetObject patty = ResolvePatty(other);
@@ -29,6 +37,9 @@ namespace VortexArena.Modes.Burger
             {
                 return;
             }
+
+            // Back inside before the grace ran out: the counter never stopped.
+            _pendingStop.Remove(patty.NetId);
 
             var sender = patty.GetComponent<NetObjectPoseSender>();
             _inside.Add(patty, sender);
@@ -54,9 +65,42 @@ namespace VortexArena.Modes.Burger
                 sender.RestSent -= HandleRestSent;
             }
 
-            if (_startedByMe.Remove(patty.NetId))
+            if (_startedByMe.Contains(patty.NetId))
             {
-                NetObjectSync.SendEvent(patty.NetId, BurgerKinds.EventGrill, new[] { 0 });
+                _pendingStop[patty.NetId] = Time.time + ExitGraceSeconds;
+            }
+        }
+
+        private void Update()
+        {
+            if (_pendingStop.Count == 0)
+            {
+                return;
+            }
+
+            float now = Time.time;
+            List<int> due = null;
+            foreach (KeyValuePair<int, float> entry in _pendingStop)
+            {
+                if (now >= entry.Value)
+                {
+                    (due ??= new List<int>()).Add(entry.Key);
+                }
+            }
+
+            if (due == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < due.Count; i++)
+            {
+                int netId = due[i];
+                _pendingStop.Remove(netId);
+                if (_startedByMe.Remove(netId))
+                {
+                    NetObjectSync.SendEvent(netId, BurgerKinds.EventGrill, new[] { 0 });
+                }
             }
         }
 
@@ -89,6 +133,7 @@ namespace VortexArena.Modes.Burger
 
             _inside.Clear();
             _startedByMe.Clear();
+            _pendingStop.Clear();
         }
 
         private static NetObject ResolvePatty(Collider other)

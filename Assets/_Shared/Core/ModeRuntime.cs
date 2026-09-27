@@ -70,6 +70,15 @@ namespace VortexArena.Core
         /// mode" — read from the RULE, never from <c>modeId</c>.</summary>
         public static bool IsWeaponless => Weapons == ModeWeaponSource.None;
 
+        /// <summary>Co-op shortcut: every player feeds ONE shared total (§10.5
+        /// <c>scoring:"shared"</c>). There is no opponent, so a winner/loser reading is meaningless.</summary>
+        public static bool IsCoop => Scoring == ModeScoreKind.PlayerAndShared;
+
+        /// <summary>Whether kill/death counters mean anything in this mode. Co-op has no opponent and a
+        /// weaponless mode cannot produce a kill, so both screens (player result, admin stats) would
+        /// print columns of zeros. Read from the RULE, never from <c>modeId</c>.</summary>
+        public static bool HidesCombatStats => IsCoop || IsWeaponless;
+
         /// <summary>
         /// Applies the rule shape coming from the server. If <paramref name="info"/> is <c>null</c>
         /// (a server that does not carry rules), the catalog takes over — see <see cref="ApplyFromCatalog"/>.

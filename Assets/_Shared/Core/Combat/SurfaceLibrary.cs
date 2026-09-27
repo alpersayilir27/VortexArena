@@ -39,6 +39,10 @@ namespace VortexArena.Core.Combat
 
         public SurfaceDefinition DefaultSurface => defaultSurface;
 
+        /// <summary>Every surface in the library — read by the load-time warmup, which must render
+        /// one impact per surface.</summary>
+        public SurfaceDefinition[] Definitions => definitions;
+
         /// <summary>Loads the library from Resources; the result is cached once. A missing asset logs
         /// a SINGLE warning and returns null — callers must tolerate null.</summary>
         public static SurfaceLibrary Load()

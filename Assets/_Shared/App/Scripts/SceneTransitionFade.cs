@@ -49,6 +49,10 @@ namespace VortexArena.App
         /// <summary>Unscaled time the black hold ends at — see <see cref="BlackHoldSeconds"/>.</summary>
         private float _holdUntil;
 
+        /// <summary>Unscaled time an EXTRA hold requested by the loader ends at — see
+        /// <see cref="HoldBlack"/>.</summary>
+        private float _extraHoldUntil;
+
         /// <summary>Warned once per session — a missing layer would otherwise spam every scene.</summary>
         private bool _warnedMissingQuad;
 
@@ -110,6 +114,22 @@ namespace VortexArena.App
             }
 
             yield return _instance.FadeOutRoutine();
+        }
+
+        /// <summary>Keeps the black up for <paramref name="seconds"/> beyond the normal hold, so work
+        /// done right after activation (FX warmup) is not seen.
+        /// <para>⚠️ A SEPARATE floor, not a write to <see cref="_holdUntil"/>: that one is set in the
+        /// first Update after activation, whose order against the loader coroutine is not fixed —
+        /// sharing the field would let one erase the other.</para></summary>
+        public static void HoldBlack(float seconds)
+        {
+            if (_instance == null || seconds <= 0f)
+            {
+                return;
+            }
+
+            _instance._extraHoldUntil =
+                Mathf.Max(_instance._extraHoldUntil, Time.unscaledTime + seconds);
         }
 
         private IEnumerator FadeOutRoutine()
@@ -215,9 +235,9 @@ namespace VortexArena.App
                 return;
             }
 
-            if (Time.unscaledTime < _holdUntil)
+            if (Time.unscaledTime < _holdUntil || Time.unscaledTime < _extraHoldUntil)
             {
-                return; // see BlackHoldSeconds
+                return; // see BlackHoldSeconds / HoldBlack
             }
 
             // unscaledDeltaTime: a presentation layer must not depend on timeScale. Clamped so a

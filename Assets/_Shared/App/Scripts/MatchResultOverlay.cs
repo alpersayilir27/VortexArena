@@ -34,7 +34,8 @@ namespace VortexArena.App
     /// <para>
     /// <b>Mode agnostic.</b> The winner arrives on <c>match_end</c>'s two channels (team or player,
     /// §5.3) and table ordering is split by <see cref="ModeRuntime.IsTeamless"/> — no
-    /// <c>if (modeId == "…")</c> chain here; a new mode gets this screen for free.
+    /// <c>if (modeId == "…")</c> chain here; a new mode gets this screen for free. The kids' modes drop the combat columns the
+    /// same way, off <see cref="ModeRuntime.HidesCombatStats"/>.
     /// </para>
     /// <para>
     /// Self-bootstrapping persistent singleton (<c>WeaponGranter</c> pattern): NOT placed in scenes,
@@ -99,11 +100,24 @@ namespace VortexArena.App
         [Tooltip("Tablo kolonları — ColumnOrder ile AYNI SIRADA ve aynı sayıda olmalı.")]
         [SerializeField] private TextMeshProUGUI[] boardColumns = new TextMeshProUGUI[ColumnOrder.Length];
 
+        [Tooltip("Kolon kökleri (başlık + değerler) — ColumnOrder sırasında. Bağlanmazsa kolon " +
+                 "gizlenirken yalnız değer metni kapanır.")]
+        [SerializeField] private GameObject[] boardColumnRoots = new GameObject[ColumnOrder.Length];
+
+        [Tooltip("Kolon başlık metinleri — ColumnOrder sırasında. Bağlanmazsa başlık yeniden " +
+                 "adlandırılamaz (K/D başlıkları ikon olduğu için boş bırakılabilir).")]
+        [SerializeField] private TextMeshProUGUI[] boardColumnHeaders = new TextMeshProUGUI[ColumnOrder.Length];
+
         private readonly List<PlayerInfo> _ranked = new List<PlayerInfo>();
         private readonly StringBuilder _sb = new StringBuilder();
 
         private PlayerInfo[] _roster = Array.Empty<PlayerInfo>();
         private MatchEndMsg _lastEnd;
+
+        /// <summary>Last <c>modeState</c> line (§10.1) — the co-op customer counters live there and the
+        /// server keeps publishing it through the <c>finished</c> phase.</summary>
+        private string _modeState = "";
+
         private Stage _stage = Stage.Hidden;
         private float _scoreboardAt;
 
@@ -203,9 +217,22 @@ namespace VortexArena.App
         /// started, operator paused, or returned to lobby (§10.1).</summary>
         private void HandleMatchState(MatchStateMsg msg)
         {
-            if (msg != null && msg.phase != ArenaProtocol.PHASE_FINISHED)
+            if (msg == null)
+            {
+                return;
+            }
+
+            if (msg.phase != ArenaProtocol.PHASE_FINISHED)
             {
                 HideAll();
+            }
+
+            // AFTER HideAll: the line must survive into the result screen, and HideAll clears it.
+            _modeState = msg.modeState ?? "";
+
+            if (_stage == Stage.Scoreboard)
+            {
+                RefreshScoreboard();
             }
         }
 
@@ -245,17 +272,33 @@ namespace VortexArena.App
             SetPanel(resultPanel, true);
             SetPanel(scoreboardPanel, false);
 
-            bool draw;
-            bool won = Won(msg, out draw);
-
-            if (resultTitleText != null)
+            if (ModeRuntime.IsCoop)
             {
-                resultTitleText.text = draw ? "BERABERE" : won ? "KAZANDIN" : "KAYBETTİN";
-                resultTitleText.color = draw ? UiKit.Title : won ? UiKit.Good : UiKit.Bad;
-            }
+                // ⚠️ Co-op has no opponent: the server ends it with no winner, which the generic
+                // branch would read as "BERABERE" — a draw against nobody. The shift simply ends.
+                if (resultTitleText != null)
+                {
+                    resultTitleText.text = "VARDİYA BİTTİ";
+                    resultTitleText.color = UiKit.Title;
+                }
 
-            SetText(resultWinnerText, WinnerLine(msg));
-            SetText(resultScoreText, ScoreLine(msg));
+                SetText(resultWinnerText, $"EKİP TOPLAMI {msg.scoreRed}");
+                SetText(resultScoreText, CoopResultLines());
+            }
+            else
+            {
+                bool draw;
+                bool won = Won(msg, out draw);
+
+                if (resultTitleText != null)
+                {
+                    resultTitleText.text = draw ? "BERABERE" : won ? "KAZANDIN" : "KAYBETTİN";
+                    resultTitleText.color = draw ? UiKit.Title : won ? UiKit.Good : UiKit.Bad;
+                }
+
+                SetText(resultWinnerText, WinnerLine(msg));
+                SetText(resultScoreText, ScoreLine(msg));
+            }
 
             _stage = Stage.Result;
             _scoreboardAt = Time.unscaledTime + Mathf.Max(0f, resultSeconds);
@@ -279,6 +322,7 @@ namespace VortexArena.App
 
             _stage = Stage.Hidden;
             _lastEnd = null;
+            _modeState = "";
             GameplayHudGate.SetHidden(false);
         }
 
@@ -295,6 +339,7 @@ namespace VortexArena.App
         private void RefreshScoreboard()
         {
             RankPlayers();
+            RefreshColumnLayout();
             RefreshHeadline();
             RefreshTeamSummary();
             RefreshMatchSummary();
@@ -329,12 +374,106 @@ namespace VortexArena.App
                 _ranked.Add(info);
             }
 
-            if (!ModeRuntime.IsTeamless)
+            if (!ModeRuntime.IsTeamless && ModeRuntime.IsWeaponless)
+            {
+                // Weaponless team mode: teams stay grouped, but inside a team score is the only
+                // ranking left — there are no kills to read the row order from.
+                _ranked.Sort(CompareByTeamThenScore);
+                return;
+            }
+
+            // Co-op has no teams to hold a row in place either: the list IS the contribution ranking.
+            if (!ModeRuntime.IsTeamless && !ModeRuntime.IsCoop)
             {
                 return;
             }
 
             _ranked.Sort(CompareByScoreDescending);
+        }
+
+        /// <summary>
+        /// Which columns this mode's table carries. Kill/death columns are dropped where they can only
+        /// print zeros (co-op, weaponless), and co-op's score column is the shared total's
+        /// contribution, so it is renamed.
+        /// <para>⚠️ Visibility is restored on every refresh, never only switched off: the overlay is a
+        /// persistent singleton, so a column hidden by the kids' mode would stay hidden for the next
+        /// shooter match.</para>
+        /// </summary>
+        private void RefreshColumnLayout()
+        {
+            bool coop = ModeRuntime.IsCoop;
+            bool hideCombat = ModeRuntime.HidesCombatStats;
+
+            for (int c = 0; c < ColumnOrder.Length; c++)
+            {
+                bool visible = true;
+                if (c == 1)
+                {
+                    visible = !coop;
+                }
+                else if (c >= 3)
+                {
+                    visible = !hideCombat;
+                }
+
+                SetColumnVisible(c, visible);
+            }
+
+            SetColumnHeader(2, coop ? "KATKI" : ColumnOrder[2]);
+        }
+
+        private void SetColumnVisible(int column, bool visible)
+        {
+            GameObject root = boardColumnRoots != null && column < boardColumnRoots.Length
+                ? boardColumnRoots[column]
+                : null;
+
+            if (root != null)
+            {
+                SetPanel(root, visible);
+                return;
+            }
+
+            // No column root wired: hide what we can reach — the values and, if it is a text header,
+            // the header. An icon header left over is a cosmetic leftover, not a wrong number.
+            if (boardColumns != null && column < boardColumns.Length && boardColumns[column] != null)
+            {
+                SetPanel(boardColumns[column].gameObject, visible);
+            }
+
+            TextMeshProUGUI header = HeaderOf(column);
+            if (header != null)
+            {
+                SetPanel(header.gameObject, visible);
+            }
+        }
+
+        private void SetColumnHeader(int column, string label)
+        {
+            TextMeshProUGUI header = HeaderOf(column);
+            if (header != null && header.text != label)
+            {
+                header.text = label;
+            }
+        }
+
+        private TextMeshProUGUI HeaderOf(int column)
+        {
+            return boardColumnHeaders != null && column < boardColumnHeaders.Length
+                ? boardColumnHeaders[column]
+                : null;
+        }
+
+        private static int CompareByTeamThenScore(PlayerInfo a, PlayerInfo b)
+        {
+            int byTeam = TeamOrder(a.team).CompareTo(TeamOrder(b.team));
+            return byTeam != 0 ? byTeam : CompareByScoreDescending(a, b);
+        }
+
+        /// <summary>Red · blue · unassigned — the same left-to-right order the whole UI uses.</summary>
+        private static int TeamOrder(string team)
+        {
+            return team == "red" ? 0 : team == "blue" ? 1 : 2;
         }
 
         private static int CompareByScoreDescending(PlayerInfo a, PlayerInfo b)
@@ -430,6 +569,13 @@ namespace VortexArena.App
 
         private string SummaryScoreLine()
         {
+            // ⚠️ BEFORE the teamless branch: co-op is teamless too, but it has no leader — the shared
+            // total is the only score, and a "LİDER" line would turn a co-op shift into a contest.
+            if (ModeRuntime.IsCoop)
+            {
+                return _lastEnd != null ? $"EKİP SKORU {_lastEnd.scoreRed}" : "EKİP SKORU";
+            }
+
             if (ModeRuntime.IsTeamless)
             {
                 // No teams → the only meaningful headline is the leader. With no score yet
@@ -451,6 +597,17 @@ namespace VortexArena.App
                 return;
             }
 
+            if (ModeRuntime.IsCoop)
+            {
+                // Neither "canlı" nor kills belong here: nobody dies and nobody shoots in a co-op
+                // shift — the customers are the only thing that happened.
+                string customers = CustomerLine();
+                boardTeamSummaryText.text = customers.Length > 0
+                    ? $"{_ranked.Count} oyuncu · {customers}"
+                    : $"{_ranked.Count} oyuncu";
+                return;
+            }
+
             if (ModeRuntime.IsTeamless)
             {
                 boardTeamSummaryText.text = $"{_ranked.Count} oyuncu · {AliveCount(null)} canlı";
@@ -461,6 +618,19 @@ namespace VortexArena.App
             TeamTotals("blue", out int blueCount, out int blueAlive, out int blueKills, out int blueDeaths);
 
             _sb.Clear();
+
+            if (ModeRuntime.IsWeaponless)
+            {
+                // Weaponless team mode: the team line is players + team points; "canlı"/kill totals
+                // would be three zeros the players have to learn to ignore.
+                int redScore = _lastEnd != null ? _lastEnd.scoreRed : 0;
+                int blueScore = _lastEnd != null ? _lastEnd.scoreBlue : 0;
+                _sb.AppendLine($"KIRMIZI: {redCount} oyuncu · {redScore} puan");
+                _sb.Append($"MAVİ: {blueCount} oyuncu · {blueScore} puan");
+                boardTeamSummaryText.text = _sb.ToString();
+                return;
+            }
+
             _sb.AppendLine($"KIRMIZI: {redCount} oyuncu · {redAlive} canlı · {redKills} öldürme · {redDeaths} ölüm");
             _sb.Append($"MAVİ: {blueCount} oyuncu · {blueAlive} canlı · {blueKills} öldürme · {blueDeaths} ölüm");
             boardTeamSummaryText.text = _sb.ToString();
@@ -484,7 +654,11 @@ namespace VortexArena.App
             PlayerInfo self = FindSelf();
             _sb.Append(self == null
                 ? ""
-                : $"SEN: {self.kills} öldürme · {self.deaths} ölüm · K/D {CellText(self, 5)}");
+                : ModeRuntime.IsCoop
+                    ? $"SEN: {self.score} katkı"
+                    : ModeRuntime.IsWeaponless
+                        ? $"SEN: {self.score} puan"
+                        : $"SEN: {self.kills} öldürme · {self.deaths} ölüm · K/D {CellText(self, 5)}");
 
             boardMatchSummaryText.text = _sb.ToString();
         }
@@ -571,19 +745,10 @@ namespace VortexArena.App
 
         /// <summary>Result card's score line: team score in team-scored modes, the player's own
         /// score in player-scored ones (<c>scoreRed</c>/<c>scoreBlue</c> are always 0 there,
-        /// §10.2), own + shared total in co-op.</summary>
+        /// §10.2). ⚠️ Co-op never reaches here — it has its own card
+        /// (<see cref="CoopResultLines"/>), because the team line would read "KIRMIZI n — 0 MAVİ".</summary>
         private string ScoreLine(MatchEndMsg msg)
         {
-            // ⚠️ BEFORE the team branch: co-op also carries a scoreRed, but scoreBlue is always 0
-            // there (§10.5), so the team line would read "KIRMIZI n — 0 MAVİ".
-            if (ModeRuntime.Scoring == ModeScoreKind.PlayerAndShared)
-            {
-                PlayerInfo shared = FindSelf();
-                return shared != null
-                    ? $"SEN {shared.score} · TOPLAM {msg.scoreRed}"
-                    : $"TOPLAM {msg.scoreRed}";
-            }
-
             if (ModeRuntime.Scoring != ModeScoreKind.Player)
             {
                 return $"KIRMIZI {msg.scoreRed} — {msg.scoreBlue} MAVİ";
@@ -591,6 +756,38 @@ namespace VortexArena.App
 
             PlayerInfo self = FindSelf();
             return self != null ? $"SENİN SKORUN {self.score}" : "";
+        }
+
+        /// <summary>Co-op result card body: customer counters (when the mode publishes them) + the
+        /// player's own contribution. Same wording as the in-match HUD — the numbers must not be
+        /// renamed between the match and its result screen.</summary>
+        private string CoopResultLines()
+        {
+            _sb.Clear();
+
+            string customers = CustomerLine();
+            if (customers.Length > 0)
+            {
+                _sb.AppendLine(customers);
+            }
+
+            PlayerInfo self = FindSelf();
+            if (self != null)
+            {
+                _sb.Append($"Senin katkın {self.score}");
+            }
+
+            return _sb.ToString();
+        }
+
+        /// <summary>"Mutlu h · Mutsuz u", or empty when the running mode publishes no counters.
+        /// ⚠️ Parsing is NOT duplicated here: <see cref="Admin.AdminModeState"/> is the single parser,
+        /// so the operator and the player can never read two different numbers.</summary>
+        private string CustomerLine()
+        {
+            return Admin.AdminModeState.TryCustomerCounts(_modeState, out int happy, out int unhappy)
+                ? $"Mutlu {happy} · Mutsuz {unhappy}"
+                : "";
         }
 
         private PlayerInfo FindSelf()

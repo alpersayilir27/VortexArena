@@ -28,6 +28,13 @@ namespace VortexArena.Core.Combat
         private int fireEventId;
         private bool subscribed;
 
+        /// <summary>Graph that flashes. ⚠️ Falls back to <c>GetComponent</c> because the load-time
+        /// warmup reads this off the PREFAB, where Awake has never run and the field may be empty.</summary>
+        public VisualEffect Effect => effect != null ? effect : GetComponent<VisualEffect>();
+
+        /// <summary>Spawn event the graph listens to (read by the load-time warmup).</summary>
+        public string FireEventName => fireEventName;
+
         private void Awake()
         {
             if (effect == null)

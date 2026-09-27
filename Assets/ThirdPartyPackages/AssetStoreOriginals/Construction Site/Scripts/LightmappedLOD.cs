@@ -29,7 +29,9 @@ public class LightmappedLOD : MonoBehaviour {
 
     void RendererInfoTransfer()
     {
-        if (GetComponentInParent<LODGroup>() == null || currentRenderer == null)
+        // A disabled renderer is a LOD level dropped from the group on purpose; it never draws, so
+        // there is no lightmap to transfer and no reason to log "lod index not found".
+        if (GetComponentInParent<LODGroup>() == null || currentRenderer == null || !currentRenderer.enabled)
             return;
         
         //Gather LODs
