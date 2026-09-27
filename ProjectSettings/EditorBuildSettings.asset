@@ -62,6 +62,9 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Arenas/Venues/VortexAntep/Scenes/Lobby_VortexAntep/Lobby_VortexAntep.unity
     guid: 8bb0a3d2e8d593f479210fa2e6174e73
+  - enabled: 1
+    path: Assets/Arenas/Venues/Outdoor9x8/Scenes/Lobby_Outdoor9x8/Lobby_Outdoor9x8.unity
+    guid: ac2bebbb139b75a4d83deeed6ba2727c
   m_configObjects:
     com.unity.dt.app-ui: {fileID: 11400000, guid: 1b1c20d82303e4b5781c3ef50ac1449f, type: 2}
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}

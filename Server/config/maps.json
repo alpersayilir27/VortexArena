@@ -135,6 +135,18 @@
       ]
     },
     {
+      "sceneName": "Lobby_Outdoor9x8",
+      "venue": "Outdoor9x8",
+      "gameType": "quickbattle",
+      "moleDensity": 1.5,
+      "modes": ["lobby"],
+      "objects": [
+        { "sceneId": 1, "kind": "target_board" },
+        { "sceneId": 2, "kind": "breakable_cover" },
+        { "sceneId": 3, "kind": "breakable_cover" }
+      ]
+    },
+    {
       "sceneName": "Lobby_VortexAntep",
       "venue": "VortexAntep",
       "gameType": "quickbattle",
