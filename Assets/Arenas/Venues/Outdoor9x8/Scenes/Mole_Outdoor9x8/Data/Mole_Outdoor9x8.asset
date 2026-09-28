@@ -1,0 +1,25 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1426f3e989e9dc8438a88550f4934cea, type: 3}
+  m_Name: Mole_Outdoor9x8
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Arena.MapDefinition
+  sceneName: Mole_Outdoor9x8
+  displayName: "K\xF6stebek Tarlas\u0131"
+  gameType: 1
+  supportedModeIds:
+  - mole
+  moleDensity: 2.5
+  ambienceClip: {fileID: 0}
+  ambienceVolume: 0.175
+  musicClip: {fileID: 8300000, guid: 35b2007bc1e731848a65d0e57541bde0, type: 3}
+  musicVolume: 0.5
+  timeWarningSound: 0

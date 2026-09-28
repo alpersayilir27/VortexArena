@@ -862,6 +862,11 @@ export'u koştur.
 | Örnekleme (`Instancing`) | `WorldSingle` | Tek örnek vardır, sahiplik devredilir |
 | Bırakma (`ReleaseMode`) | `Physics` ya da `Return` | Serbest düşsün mü, yerine mi otursun |
 
+⚠️ **Her tutulan prefabın KENDİ tanımı olur; iki prefab tek tanımı paylaşmaz.** Kavrama pozu
+tanımın üstünde yaşar ve stüdyo yalnız tanımın `Prefab` alanındaki prefabı tanır: paylaşılan
+tanımda öteki prefablar stüdyoda "tanım bulunamadı" der, yazılan tek poz da hepsine uygulanır.
+Benzer bir objeden başlarken tanımı Unity içinde kopyala (yeni GUID) ve `Prefab` alanını değiştir.
+
 ⚠️ **Alma yolu `DistanceGrab` DEĞİLSE prefabda mesafeli kavrama bileşeni BULUNMAMALIDIR**
 (`DistanceGrabInteractable` / `DistanceHandGrabInteractable`): "aday listesini kapatmak" yetmez, boş
 listeyle bile interactor hover'a girer ve kavrama basışını sessizce yer — belirti "kavrama tuşu bazen

@@ -151,7 +151,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 282118fc5511ce24fb04be717b99f470, type: 3}
   m_Name: 
   m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.NetObjectGrabBridge
-  item: {fileID: 11400000, guid: 1a422b76e00dc5849b5649f531374416, type: 2}
+  item: {fileID: 11400000, guid: fda71a71ef1495e48957415096f47213, type: 2}
   socket: {fileID: 9135949069700721082}
 --- !u!1 &4363057991771378502
 GameObject:

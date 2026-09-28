@@ -200,7 +200,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 282118fc5511ce24fb04be717b99f470, type: 3}
   m_Name: 
   m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.NetObjectGrabBridge
-  item: {fileID: 11400000, guid: 1a422b76e00dc5849b5649f531374416, type: 2}
+  item: {fileID: 11400000, guid: 8607a362c39b2ca48b3d6997baf34006, type: 2}
   socket: {fileID: 1888938833537490235}
 --- !u!1001 &7175909163004972156
 PrefabInstance:

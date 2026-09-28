@@ -94,7 +94,7 @@ MonoBehaviour:
     - joint: HandPinky2
       rotation: {x: 0.464413, y: -0.097719304, z: 0.038948853, w: 0.87934893}
     - joint: HandPinky3
-      rotation: {x: 0.20329337, y: -0.057710394, z: -0.012861756, w: 0.977331}
+      rotation: {x: 0.20329338, y: -0.057710394, z: -0.012861757, w: 0.977331}
     wristAuthored: 1
     wristPosition: {x: -0.1428, y: -0.139, z: 0.1008}
     wristRotation: {x: 0.7071068, y: -0.0000004068854, z: 0.70710677, w: -0.0000003869233}
