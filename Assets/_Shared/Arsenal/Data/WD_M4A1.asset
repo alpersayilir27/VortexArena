@@ -187,7 +187,7 @@ MonoBehaviour:
   headshotMultiplier: 2
   stomachMultiplier: 1
   legMultiplier: 0.75
-  fireRateRpm: 420
+  fireRateRpm: 480
   range: 50
   pelletCount: 1
   burstCount: 1

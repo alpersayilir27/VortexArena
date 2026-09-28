@@ -33,6 +33,8 @@ namespace VortexArena.Core
 
         [Header("Varsayılan kurallar (otorite sunucudadır)")]
         [SerializeField] private int roundSeconds = 300;
+        [Tooltip("Varsayılan skor limiti; -1 = sınırsız. 0 = modun skor limiti YOK (sunucudaki mod " +
+                 "limiti okumaz, yalnız süre biter) — admin'de satır kilitlenir, limit gönderilmez.")]
         [SerializeField] private int scoreLimit = 30;
 
         [Header("Mod şekli — YALNIZ ÖNİZLEME (§10.5; otorite sunucudadır)")]
@@ -57,6 +59,9 @@ namespace VortexArena.Core
         [SerializeField] private WeaponDefinition[] loadout = Array.Empty<WeaponDefinition>();
         [Tooltip("Mod HUD prefabı (Modes/<Mod>/UI/); maç sahnesine App tarafından eklenir.")]
         [SerializeField] private GameObject hudPrefab;
+        [Tooltip("Moda özel maç sonu ekranı — MatchResultOverlay.prefab'ın VARYANTI olmalı " +
+                 "(Modes/<Mod>/UI/). Boşsa genel ekran çizilir.")]
+        [SerializeField] private GameObject resultScreenPrefab;
 
         /// <summary>Protocol key ("tdm").</summary>
         public string ModeId => modeId;
@@ -82,6 +87,10 @@ namespace VortexArena.Core
 
         /// <summary>Default score limit.</summary>
         public int ScoreLimit => scoreLimit;
+
+        /// <summary>Does the server's mode read a score limit at all? <c>scoreLimit == 0</c> = time-only
+        /// mode; the admin locks the limit row instead of offering a knob that does nothing.</summary>
+        public bool HasScoreLimit => scoreLimit != 0;
 
         // ---- Mode shape (§10.5) — PREVIEW/EDITOR ONLY ----
         // In a serverless editor session (the dev window's synthetic match) ModeRuntime reads these;
@@ -115,5 +124,10 @@ namespace VortexArena.Core
 
         /// <summary>Mode HUD prefab (may be unassigned).</summary>
         public GameObject HudPrefab => hudPrefab;
+
+        /// <summary>Mode's own match-end screen, a <c>MatchResultOverlay</c> variant; null = generic
+        /// screen. A <c>GameObject</c> for the same reason as <see cref="HudPrefab"/>: the overlay
+        /// type lives in App, which Core does not reference.</summary>
+        public GameObject ResultScreenPrefab => resultScreenPrefab;
     }
 }

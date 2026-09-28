@@ -8,9 +8,10 @@ using VortexArena.Protocol;
 namespace VortexArena.Core.Audio
 {
     /// <summary>The map's two looping layers (ambience + music): they start as soon as the scene
-    /// loads, loop and never stop until the map changes — match start, match end and returning to
-    /// the lobby do not touch them. The clips come from the scene's
-    /// <see cref="MapDefinition.AmbienceClip"/> and <see cref="MapDefinition.MusicClip"/>.</summary>
+    /// loads, loop and never stop until the map changes — match start and returning to the lobby do
+    /// not touch them; the <c>finished</c> phase only lowers the music (<see cref="FinishedMusicFactor"/>).
+    /// The clips come from the scene's <see cref="MapDefinition.AmbienceClip"/> and
+    /// <see cref="MapDefinition.MusicClip"/>.</summary>
     /// <remarks>
     /// Self-bootstrapping persistent singleton; NO component is placed in the scene
     /// (<c>WeaponGranter</c> pattern): a manual setup step per arena would silently leave a scene
@@ -57,6 +58,10 @@ namespace VortexArena.Core.Audio
         /// correcting on every check would produce an audible jump.</summary>
         private const float MaxDriftSeconds = 0.35f;
 
+        /// <summary>Music level in the <c>finished</c> phase: lowered, not stopped, so the result
+        /// announcement is heard and the scene does not fall silent. Ambience is not lowered.</summary>
+        private const float FinishedMusicFactor = 0.3f;
+
         public static SceneAmbience Instance { get; private set; }
 
         /// <summary>One looping layer: the crossfade pair, its clip level and its mix channel.</summary>
@@ -81,6 +86,9 @@ namespace VortexArena.Core.Audio
         /// <summary>LOCAL equivalent of the moment the scene was staged: <c>realtime - sceneElapsed</c>.</summary>
         private float _epochRealtime;
         private bool _hasEpoch;
+
+        /// <summary>Last <c>match_state</c> phase was <c>finished</c> — music is lowered.</summary>
+        private bool _matchFinished;
 
         /// <summary>The ambience clip currently playing; null when silent.</summary>
         public AudioClip CurrentClip => _ambience.Active != null ? _ambience.Active.clip : null;
@@ -122,6 +130,7 @@ namespace VortexArena.Core.Audio
             NetEvents.OnConnected += HandleConnected;
             NetEvents.OnLoadMatch += HandleLoadMatch;
             NetEvents.OnReturnToLobby += HandleReturnToLobby;
+            NetEvents.OnMatchState += HandleMatchState;
             AudioSettings.OnAudioConfigurationChanged += HandleAudioConfigurationChanged;
 
             ApplyScene(SceneManager.GetActiveScene().name);
@@ -138,6 +147,7 @@ namespace VortexArena.Core.Audio
             NetEvents.OnConnected -= HandleConnected;
             NetEvents.OnLoadMatch -= HandleLoadMatch;
             NetEvents.OnReturnToLobby -= HandleReturnToLobby;
+            NetEvents.OnMatchState -= HandleMatchState;
             AudioSettings.OnAudioConfigurationChanged -= HandleAudioConfigurationChanged;
 
             Instance = null;
@@ -179,17 +189,19 @@ namespace VortexArena.Core.Audio
             // screen, pause).
             float step = Time.unscaledDeltaTime / CrossfadeSeconds;
 
-            UpdateLayer(_ambience, step);
-            UpdateLayer(_music, step);
+            UpdateLayer(_ambience, step, 1f);
+            UpdateLayer(_music, step, _matchFinished ? FinishedMusicFactor : 1f);
 
             CorrectDrift(_ambience);
             CorrectDrift(_music);
         }
 
-        private static void UpdateLayer(Layer layer, float step)
+        /// <summary><paramref name="duck"/> only ever lowers (≤ 1): <c>AudioMix</c> stays the single
+        /// volume gate.</summary>
+        private static void UpdateLayer(Layer layer, float step, float duck)
         {
             float target = layer.Active != null && layer.Active.clip != null
-                ? layer.ClipVolume * AudioMix.Of(layer.Channel)
+                ? layer.ClipVolume * AudioMix.Of(layer.Channel) * duck
                 : 0f;
 
             if (layer.Active != null)
@@ -283,6 +295,7 @@ namespace VortexArena.Core.Audio
 
         private void HandleLoadMatch(LoadMatchMsg msg)
         {
+            _matchFinished = false;
             if (msg != null)
             {
                 SetEpoch(msg.sceneName, msg.sceneElapsed);
@@ -291,9 +304,20 @@ namespace VortexArena.Core.Audio
 
         private void HandleReturnToLobby(ReturnToLobbyMsg msg)
         {
+            _matchFinished = false;
             if (msg != null)
             {
                 SetEpoch(msg.sceneName, msg.sceneElapsed);
+            }
+        }
+
+        /// <summary>The phase is the only signal: every <c>match_state</c> re-derives it, so a late
+        /// joiner into a finished match hears the lowered level too.</summary>
+        private void HandleMatchState(MatchStateMsg msg)
+        {
+            if (msg != null)
+            {
+                _matchFinished = string.Equals(msg.phase, ArenaProtocol.PHASE_FINISHED, StringComparison.Ordinal);
             }
         }
 

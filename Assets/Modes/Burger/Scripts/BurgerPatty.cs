@@ -1,16 +1,16 @@
 using UnityEngine;
+using UnityEngine.Serialization;
 using VortexArena.Net;
-using VortexArena.Protocol;
 
 namespace VortexArena.Modes.Burger
 {
     /// <summary>Draws the patty's doneness: <c>stage</c> is the SERVER's counter (§10.5), this only
-    /// colours it and runs the sizzle.
+    /// colours it and marks the moment it turns cooked (ding + puff).
     /// <para>⚠️ Without this the only sign of a raw or burnt patty is a silent rejection at the counter —
     /// the server refuses anything that is not <see cref="BurgerKinds.PattyCooked"/> and says nothing
     /// about why.</para>
-    /// <para>The <c>grill</c> event is relayed to EVERYONE (<c>i:[1]</c> on, <c>i:[0]</c> off), so the
-    /// sizzle is heard by every headset, not just the one that put the patty down.</para></summary>
+    /// <para>⚠️ The sizzle is NOT here: it belongs to <see cref="BurgerGrill"/>. On the patty it kept
+    /// sizzling wherever the patty went once an "off" report was lost.</para></summary>
     [RequireComponent(typeof(NetObject))]
     [DisallowMultipleComponent]
     public sealed class BurgerPatty : MonoBehaviour
@@ -27,11 +27,15 @@ namespace VortexArena.Modes.Burger
         [Tooltip("Yanmış köfte rengi.")]
         [SerializeField] private Color burntColor = new Color(0.10f, 0.08f, 0.07f);
 
-        [Tooltip("Izgaradaki cızırtı (loop olmalı). Atanmazsa sessizdir.")]
-        [SerializeField] private AudioSource sizzleSource;
+        [Tooltip("Pişti sesinin çaldığı kaynak (köftenin üstünde, 3D). Boşsa sesi noktada çalar.")]
+        [FormerlySerializedAs("sizzleSource")]
+        [SerializeField] private AudioSource audioSource;
 
         [Tooltip("Köfte piştiğinde çalan tek vuruş. Atanmazsa sessizdir.")]
         [SerializeField] private AudioClip cookedClip;
+
+        [Tooltip("Köfte piştiği an oynayan küçük efekt. Boşsa çocuklardaki ParticleSystem aranır.")]
+        [SerializeField] private ParticleSystem cookedFx;
 
         // URP Lit uses _BaseColor; _Color is written too so an unlit/legacy material still reacts.
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
@@ -51,12 +55,16 @@ namespace VortexArena.Modes.Burger
             {
                 renderers = GetComponentsInChildren<Renderer>(true);
             }
+
+            if (cookedFx == null)
+            {
+                cookedFx = GetComponentInChildren<ParticleSystem>(true);
+            }
         }
 
         private void OnEnable()
         {
             _net.StateChanged += HandleStateChanged;
-            _net.EventReceived += HandleEventReceived;
 
             // A late joiner gets the doneness with the spawn state, not with an event.
             ApplyStage(_net.Stage);
@@ -65,7 +73,6 @@ namespace VortexArena.Modes.Burger
         private void OnDisable()
         {
             _net.StateChanged -= HandleStateChanged;
-            _net.EventReceived -= HandleEventReceived;
         }
 
         private void HandleStateChanged(NetObject net, NetStateOrigin origin) => ApplyStage(net.Stage);
@@ -115,41 +122,23 @@ namespace VortexArena.Modes.Burger
 
         private void PlayCooked()
         {
+            if (cookedFx != null)
+            {
+                cookedFx.Play(true);
+            }
+
             if (cookedClip == null)
             {
                 return;
             }
 
-            if (sizzleSource != null)
+            if (audioSource != null)
             {
-                sizzleSource.PlayOneShot(cookedClip);
+                audioSource.PlayOneShot(cookedClip);
                 return;
             }
 
             AudioSource.PlayClipAtPoint(cookedClip, transform.position);
-        }
-
-        /// <summary>⚠️ Burning does NOT stop the sizzle: a burnt patty can still be sitting on the grill,
-        /// and only leaving it (<c>i:[0]</c>) means it came off.</summary>
-        private void HandleEventReceived(ObjectEventMsg msg)
-        {
-            if (msg == null || msg.name != BurgerKinds.EventGrill || sizzleSource == null ||
-                msg.i == null || msg.i.Length == 0)
-            {
-                return;
-            }
-
-            if (msg.i[0] == 1)
-            {
-                if (!sizzleSource.isPlaying)
-                {
-                    sizzleSource.Play();
-                }
-            }
-            else
-            {
-                sizzleSource.Stop();
-            }
         }
     }
 }

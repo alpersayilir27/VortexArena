@@ -81,8 +81,12 @@ public sealed class BurgerMode : IGameMode
     /// <summary>Customer netId → its slot, order and countdown.</summary>
     private readonly Dictionary<int, Customer> _customers = new();
 
-    /// <summary>Patty netId → seconds spent on the grill.</summary>
+    /// <summary>Patty netId → seconds spent on the grill. Kept when the patty leaves the grill: it
+    /// stays at its doneness and resumes if put back (§10.5).</summary>
     private readonly Dictionary<int, float> _cooking = new();
+
+    /// <summary>Patties lying on the grill right now — the only ones whose counter runs.</summary>
+    private readonly HashSet<int> _onGrill = new();
 
     /// <summary>Spawned ingredient netIds, OLDEST FIRST — the cleanup order.</summary>
     private readonly List<int> _ingredients = new();
@@ -133,6 +137,7 @@ public sealed class BurgerMode : IGameMode
         _unhappy = 0;
         _customers.Clear();
         _cooking.Clear();
+        _onGrill.Clear();
         _ingredients.Clear();
         Array.Clear(_slotTaken, 0, _slotTaken.Length);
         _spawnTimer = _settings.customerIntervalStart;
@@ -242,18 +247,27 @@ public sealed class BurgerMode : IGameMode
 
     private void TickGrill(MatchDirector director, float deltaSeconds)
     {
-        if (_cooking.Count == 0) return;
+        if (_onGrill.Count == 0) return;
 
-        foreach (var netId in new List<int>(_cooking.Keys))
+        foreach (var netId in new List<int>(_onGrill))
         {
-            if (!director.TryReadObject(netId, out _, out _, out _, out _, out _, out _))
+            if (!director.TryReadObject(netId, out _, out _, out var owner, out _, out _, out _))
             {
                 // Eaten, served or reset away: nothing left to cook.
+                _onGrill.Remove(netId);
                 _cooking.Remove(netId);
                 continue;
             }
 
-            var cooked = _cooking[netId] + deltaSeconds;
+            // In a hand = off the grill, even if the "off" report was lost on the way.
+            if (owner != 0)
+            {
+                _onGrill.Remove(netId);
+                continue;
+            }
+
+            _cooking.TryGetValue(netId, out var progress);
+            var cooked = progress + deltaSeconds;
             _cooking[netId] = cooked;
             if (cooked >= _settings.burnSeconds) director.SetObjectStage(netId, PattyBurnt);
             else if (cooked >= _settings.cookSeconds) director.SetObjectStage(netId, PattyCooked);
@@ -347,20 +361,31 @@ public sealed class BurgerMode : IGameMode
             var netId = _ingredients[victim];
             director.DespawnObject(netId);
             _cooking.Remove(netId);
+            _onGrill.Remove(netId);
             _ingredients.RemoveAt(victim);
         }
     }
 
-    /// <summary>Patty on/off the grill; <c>i[0]</c> 1 = on, 0 = off.</summary>
-    /// <remarks>Returns false ON PURPOSE: the sizzle is cosmetic and belongs to everyone, while the
-    /// doneness change already publishes its own <c>object_state</c>.</remarks>
+    /// <summary>Patty on/off the grill; <c>i[0]</c> 1 = on, 0 = off. Progress survives "off".</summary>
+    /// <remarks>⚠️ "Off" skips the free-object check: the grab that lifted the patty arrives BEFORE the
+    /// grill's exit report, so gating it on <c>owner == 0</c> dropped every stop and the patty burnt in
+    /// the bun (§10.5). "On" is idempotent — the client re-sends it on every rest.
+    /// <para>Returns false: the event is relayed, the doneness change publishes its own
+    /// <c>object_state</c>.</para></remarks>
     private bool HandleGrill(MatchDirector director, int netId, ObjectEventMsg msg)
     {
         if (!director.TryReadObject(netId, out _, out _, out var owner, out _, out _, out _)) return false;
-        if (owner != 0) return false;
 
-        if (msg.i != null && msg.i.Length > 0 && msg.i[0] == 1) _cooking.TryAdd(netId, 0f);
-        else _cooking.Remove(netId);
+        var on = msg.i != null && msg.i.Length > 0 && msg.i[0] == 1;
+        if (!on)
+        {
+            _onGrill.Remove(netId);
+            return false;
+        }
+
+        if (owner != 0) return false; // a patty in a hand is not lying on the grill
+        _onGrill.Add(netId);
+        _cooking.TryAdd(netId, 0f);
         return false;
     }
 
@@ -400,6 +425,7 @@ public sealed class BurgerMode : IGameMode
         {
             director.DespawnObject(msg.i[index]);
             _cooking.Remove(msg.i[index]);
+            _onGrill.Remove(msg.i[index]);
             _ingredients.Remove(msg.i[index]);
         }
         return true;

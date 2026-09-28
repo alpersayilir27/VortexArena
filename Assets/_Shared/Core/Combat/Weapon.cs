@@ -763,6 +763,15 @@ namespace VortexArena.Core.Combat
             return bodyBounds;
         }
 
+        /// <summary>Held-trigger cadence runs from the previous due time, not from this frame —
+        /// otherwise every shot slips to the next frame and the gun fires slower than its rpm. A shot
+        /// more than one interval late (fresh pull) restarts from now, so no burst of catch-up.</summary>
+        private float NextDueTime(float interval)
+        {
+            float late = Time.time - nextFireTime;
+            return late >= 0f && late < interval ? nextFireTime + interval : Time.time + interval;
+        }
+
         protected virtual void Fire()
         {
             if (definition.BurstCount > 1)
@@ -774,11 +783,11 @@ namespace VortexArena.Core.Combat
                 }
 
                 burstShotsLeft--;
-                nextFireTime = Time.time + (burstShotsLeft > 0 ? definition.SecondsPerShot : definition.BurstCooldown);
+                nextFireTime = NextDueTime(burstShotsLeft > 0 ? definition.SecondsPerShot : definition.BurstCooldown);
             }
             else
             {
-                nextFireTime = Time.time + definition.SecondsPerShot;
+                nextFireTime = NextDueTime(definition.SecondsPerShot);
             }
 
             // Spread uses the PRE-shot bloom; bloom grows with the shot. The grip scale is read HERE

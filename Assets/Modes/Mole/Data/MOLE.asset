@@ -27,3 +27,4 @@ MonoBehaviour:
   maps: []
   loadout: []
   hudPrefab: {fileID: 3415840267267884003, guid: d022c71c306f17d439e6b09101396d3e, type: 3}
+  resultScreenPrefab: {fileID: 1078136280443289545, guid: 333ccde037cbe7e489a26d78a90310c1, type: 3}

@@ -12,6 +12,9 @@ namespace VortexArena.Core.Combat
     /// collider — the explicit override; (2) the renderer's <c>sharedMaterial</c> in the map;
     /// (3) <see cref="DefaultSurface"/>. ⚠️ The third tier is not optional: a surface nobody mapped
     /// producing NOTHING reads as "the effect is broken", while a generic puff reads as scenery.</para>
+    /// <para>⚠️ A tag counts only if its surface is IN <c>definitions</c>: the list is the single
+    /// switch for which surfaces exist (and the only ones the load-time warmup renders), so emptying
+    /// it down to the default silences every stray tag at once.</para>
     /// <para>⚠️ Identity comes from the MATERIAL, not a tag or a layer. A tag is one flat name per
     /// object and cannot describe a wall built from two materials; layers are the physics filter and
     /// there are only 32 of them. A material is already authored per look and one entry here covers
@@ -33,9 +36,12 @@ namespace VortexArena.Core.Combat
                  "yüzeyde hiçbir şey çıkmaması 'efekt bozuk' diye okunur.")]
         [SerializeField] private SurfaceDefinition defaultSurface;
 
-        /// <summary>Material → definition, built on the first query. Rebuilding it per shot would
+        /// <summary>Material → definition, built on the first query (with <see cref="_known"/>). Rebuilding it per shot would
         /// walk every definition's material list ten times a second.</summary>
         private Dictionary<Material, SurfaceDefinition> _byMaterial;
+
+        /// <summary>Surfaces in <c>definitions</c>; built with <see cref="_byMaterial"/>.</summary>
+        private HashSet<SurfaceDefinition> _known;
 
         public SurfaceDefinition DefaultSurface => defaultSurface;
 
@@ -80,15 +86,16 @@ namespace VortexArena.Core.Combat
 
             // Tier 1 — explicit override, searched upwards: the collider may sit on a child of the
             // object carrying the tag.
+            Dictionary<Material, SurfaceDefinition> map = Map;
             SurfaceTag tag = collider.GetComponentInParent<SurfaceTag>();
-            if (tag != null && tag.Surface != null)
+            if (tag != null && tag.Surface != null && _known.Contains(tag.Surface))
             {
                 return tag.Surface;
             }
 
             // Tier 2 — the material asset.
             Material material = FindMaterial(collider);
-            if (material != null && Map.TryGetValue(material, out SurfaceDefinition mapped))
+            if (material != null && map.TryGetValue(material, out SurfaceDefinition mapped))
             {
                 return mapped;
             }
@@ -106,6 +113,7 @@ namespace VortexArena.Core.Combat
                 }
 
                 _byMaterial = new Dictionary<Material, SurfaceDefinition>();
+                _known = new HashSet<SurfaceDefinition>();
                 for (int i = 0; i < definitions.Length; i++)
                 {
                     SurfaceDefinition definition = definitions[i];
@@ -113,6 +121,8 @@ namespace VortexArena.Core.Combat
                     {
                         continue;
                     }
+
+                    _known.Add(definition);
 
                     Material[] materials = definition.Materials;
                     if (materials == null)

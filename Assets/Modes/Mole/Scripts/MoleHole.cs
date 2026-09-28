@@ -111,6 +111,11 @@ namespace VortexArena.Modes.Mole
         [Tooltip("Köstebek deliğe inerken (ezilmeden de iner: süresi dolarsa).")]
         [SerializeField] private AudioClip descendClip;
 
+        [Tooltip("Çıkma/inme seslerinin seviyesi (0-1). Vuruş sesleri etkilenmez — onlar " +
+                 "çocuğun asıl geri bildirimi, çıkma/inme ise sürekli tekrarlayan arka plan.")]
+        [Range(0f, 1f)]
+        [SerializeField] private float moveVolume = 0.7f;
+
         private NetObject _net;
 
         /// <summary>Animator contract: the stage goes in as an int, the clips do the moving.</summary>
@@ -310,7 +315,7 @@ namespace VortexArena.Modes.Mole
             {
                 // PlayOneShot: the squash lands while the rise may still be sounding, and cutting the
                 // rise off would swallow the hit's own feedback.
-                audioSource.PlayOneShot(clip);
+                audioSource.PlayOneShot(clip, to == MoleKinds.StageSquashed ? 1f : moveVolume);
             }
         }
 

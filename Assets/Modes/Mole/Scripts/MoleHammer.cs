@@ -1,5 +1,6 @@
 using UnityEngine;
 using VortexArena.Core.Arena;
+using VortexArena.Core.Player;
 using VortexArena.Net;
 
 namespace VortexArena.Modes.Mole
@@ -15,7 +16,9 @@ namespace VortexArena.Modes.Mole
     /// <para>⚠️ The mole capsule is static and covers the whole standing envelope, so a resting head is
     /// already "in contact" the moment a mole pops. A pop whose FIRST contact is slow is latched as
     /// embedded: until the head leaves it (radius + <c>embeddedExitMargin</c>) it only counts on an
-    /// <c>embeddedSwingSpeed</c> swing, so a wiggle or tracking jitter inside the capsule is no hit.</para></summary>
+    /// <c>embeddedSwingSpeed</c> swing, so a wiggle or tracking jitter inside the capsule is no hit.</para>
+    /// <para>Every reported whack buzzes the holding hand once — right or wrong colour alike; the
+    /// server's verdict arrives later and is shown by the mole, not the controller.</para></summary>
     [DisallowMultipleComponent]
     public sealed class MoleHammer : MonoBehaviour
     {
@@ -41,8 +44,24 @@ namespace VortexArena.Modes.Mole
                  "denemesi saymasın diye.")]
         [SerializeField] private float embeddedExitMargin = 0.05f;
 
+        [Tooltip("Vuruşta elin titreşim gücü (0-1).")]
+        [Range(0f, 1f)]
+        [SerializeField] private float hitHapticAmplitude = 0.8f;
+
+        [Tooltip("Vuruş titreşiminin süresi (sn) — tek kısa darbe.")]
+        [SerializeField] private float hitHapticSeconds = 0.1f;
+
         /// <summary>Per-frame contact buffer; sized for scenery + own colliders so moles are not pushed out.</summary>
         private const int MaxContacts = 32;
+
+        private const string HapticSourceLeft = "mole_hit_left";
+        private const string HapticSourceRight = "mole_hit_right";
+
+        /// <summary>Set by <see cref="MoleHammerGranter"/>; one hammer per hand.</summary>
+        private bool _rightHand;
+
+        /// <summary>End of the running hit buzz (unscaled time); zero while none runs.</summary>
+        private float _hapticUntil;
 
         /// <summary>Covers the speed window at 120+ Hz.</summary>
         private const int SpeedSamples = 32;
@@ -95,13 +114,26 @@ namespace VortexArena.Modes.Mole
             }
         }
 
+        /// <summary>Which controller buzzes on a hit.</summary>
+        public void SetHand(bool rightHand)
+        {
+            _rightHand = rightHand;
+        }
+
         // Re-enable/re-grant may teleport the head; without a reset that jump reads as a huge speed.
         private void OnEnable() => ResetTracking();
 
-        private void OnDisable() => ResetTracking();
+        private void OnDisable()
+        {
+            ResetTracking();
+            StopHaptic();
+        }
 
         private void LateUpdate()
         {
+            // Before any early return: the buzz must end on time even on frames that skip hit testing.
+            DriveHaptic();
+
             Vector3 center = hitCollider.transform.TransformPoint(hitCollider.center);
 
             if (!_hasLastCenter)
@@ -162,7 +194,40 @@ namespace VortexArena.Modes.Mole
             _reportedNetId = target.NetId;
             _reportedNonce = target.Nonce;
             NetObjectSync.SendEvent(target.NetId, MoleKinds.EventWhack, new[] { target.Nonce });
+            _hapticUntil = Time.unscaledTime + hitHapticSeconds;
+            DriveHaptic();
         }
+
+        /// <summary>Per-frame heartbeat to <see cref="ControllerHaptics"/> while the buzz runs, one
+        /// explicit 0 when it ends (the arbiter's timeout would leave a quarter second of tail).</summary>
+        private void DriveHaptic()
+        {
+            if (_hapticUntil <= 0f)
+            {
+                return;
+            }
+
+            if (Time.unscaledTime < _hapticUntil)
+            {
+                ControllerHaptics.ReportHand(HapticSource, _rightHand, hitHapticAmplitude);
+                return;
+            }
+
+            StopHaptic();
+        }
+
+        private void StopHaptic()
+        {
+            if (_hapticUntil <= 0f)
+            {
+                return;
+            }
+
+            _hapticUntil = 0f;
+            ControllerHaptics.ReportHand(HapticSource, _rightHand, 0f);
+        }
+
+        private string HapticSource => _rightHand ? HapticSourceRight : HapticSourceLeft;
 
         private void ResetTracking()
         {

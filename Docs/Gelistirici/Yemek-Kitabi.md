@@ -25,6 +25,7 @@ Her reçetenin altında *neden böyle* kutusu var — orayı okumazsan çalış�
 | Kendi mod HUD'ını yazmak | [12](#12-kendi-hudını-yazmak) |
 | Yeni mod eklemek | [13](#13-yeni-mod-eklemek) |
 | Çocuk oyunu eklemek (silahsız, kooperatif) | [13.1](#131-çocuk-oyunu-eklemek-silahsız-kooperatif) |
+| Moda özel maç sonu ekranı (tema) | [13.2](#132-moda-özel-maç-sonu-ekranı) |
 | Yeni arena eklemek | [14](#14-yeni-arena-eklemek) |
 | Hazır bir environment'ın içinde arena bölgesi kurmak | [14.1](#141-hazır-bir-environmentın-içinde-arena-bölgesi-kurmak) |
 | Gözlüksüz test (dev penceresi) | [15](#15-gözlüksüz-test-dev-penceresi) |
@@ -1028,7 +1029,12 @@ public sealed class BenimModum : IGameMode
 
 **Unity** — `Assets/Modes/<Ad>/`:
 `Scripts/VortexArena.Modes.<Ad>.asmdef` (refs: Core, Net, Protocol) + `ModeHudBase` alt sınıfı +
-`UI/<Ad>Hud.prefab` + `Data/<Ad>.asset` (`ModeDefinition`).
+`UI/<Ad>Hud.prefab` + `Data/<Ad>.asset` (`ModeDefinition`). İsteğe bağlı: kendi temalı maç sonu
+ekranı → [13.2](#132-moda-özel-maç-sonu-ekranı) (boş bırakılırsa genel ekran çizilir).
+
+> ⚠️ **Mod skor limiti okumuyorsa** (bitişi yalnız süre) `ModeDefinition.scoreLimit`'i **`0`**
+> bırak: admin'deki skor limiti satırı kilitlenir. Sayı yazarsan operatöre hiçbir şey yapmayan bir
+> düğme sunulur. `-1` "sınırsız"dır, "limit yok" değil — satır açık kalır.
 
 **Katalog:** `_Shared/Data/Resources/GameCatalog.asset` → `modes[]`'e ekle, oynanacak
 `MapDefinition`'ların `supportedModeIds`'ine yeni `modeId`'yi yaz, sonra
@@ -1126,7 +1132,7 @@ hareketi yapar, hiçbir şey olmaz. Kural: her görünmez hacim, ait olduğu gö
 
 | Görünen | Ona kilitli görünmez parça |
 |---|---|
-| Izgara/ocak gövdesi | pişirme hacmi (`BurgerGrill`) + gövdedeki katı kutunun objesinde `CounterSurface` |
+| Izgara/ocak gövdesi | pişirme hacmi (`BurgerGrill`; aynı objede loop cızırtı `AudioSource`'u, çocukta duman `ParticleSystem`'i — ikisi de `playOnAwake` kapalı, bileşen açar) + gövdedeki katı kutunun objesinde `CounterSurface` |
 | Mutfak masası/tezgâh | katı kutu(lar) + **aynı objede** `CounterSurface`: yoksa tablanın altına bırakılan eşya boşlukta asılı kalır, tezgâha çıkmaz |
 | Banko | slot hacimleri + müşterinin duracağı nokta. ⚠️ Servis tahtası sabittir ve yuvasına **konumuyla** bağlanır (slot numarasıyla değil): tahta ile slot hacmi aynı prefabta, tahta hacmin içinde durur — ayrı düşerse mod sessizce hiç servis yapmaz. Tahta başka tezgâha alınacaksa **yuva objesi** (`CounterSlot_N`) da taşınır: müşteri noktası onun çocuğudur, tek başına taşınırsa müşteri doğru yerde bekler ama tahta hacmin dışında kalır |
 | Kesme tahtası | yığın hacmi (`Stack`, tetik) + kargo çapası (`CargoAnchor`) + `GripSocket`. ⚠️ **Bu tahta ağ nesnesidir ve taşınır** (`cutting_board`, kavrama: herkes; `BurgerCuttingBoard`): sabit bir yuvası yoktur, üstüne kurulan yığın servis tahtasına **boşaltılarak** servis edilir. Üç çocuk da prefabın içinde durur — hacim ayrı düşerse tahta kaldırılınca yığın yerinde kalır, kargo çapası eksikse taşınan katmanlar tahtaya değil avuca yazılır |
@@ -1164,6 +1170,46 @@ eşya dinlenmeye hiç varamaz ve kaybolur. Eşya prefablarının `Rigidbody`'si
 **8. İstasyonu koymak haritayı oynanabilir yapmaz.** Sahne adı katalog anahtarıdır; haritanın
 `MapDefinition`'ı ve `gameType`'ı olmadan maç başlamaz → [13.1](#131-çocuk-oyunu-eklemek-silahsız-kooperatif) ·
 [14](#14-yeni-arena-eklemek).
+
+---
+
+## 13.2 Moda özel maç sonu ekranı
+
+Maç sonu ekranının **mantığı** ortaktır (kazanan, sıralama, hangi kolonun çizileceği modun
+kuralından gelir); **görünümü** moda özel olabilir. Kod işi yoktur — iş prefab ve bir asset alanıdır.
+Örnek: `Assets/Modes/Mole/UI/MoleResultOverlay.prefab` · `Assets/Modes/Burger/UI/BurgerResultOverlay.prefab`.
+
+**1. VARYANT oluştur, kopya değil.** `Assets/_Shared/App/Resources/UI/MatchResultOverlay.prefab` →
+sağ tık → *Create > Prefab Variant* → `Assets/Modes/<Ad>/UI/<Ad>ResultOverlay.prefab`.
+⚠️ Kopya (Ctrl+D) alan bağlarını dondurur: tabana sonradan eklenen kolon/alan kopyaya inmez ve
+**hata vermeden** çizilmez.
+
+**2. Varyantta serbest olanlar:** iki kartın zemin sprite'ı (`ResultPanel/Card` ·
+`ScoreboardPanel/StatsPanel` `Image`'ı), yazı rengi/punto/materyal, konumlar, prefabta sabit duran
+başlık metinleri (`Fill/Title` · `Header0` · `Header1`) ve süs objeleri (yeni `Image` çocukları —
+`Raycast Target` kapalı). Kartın arkasında görünecek süs `ResultPanel`/`ScoreboardPanel`'in altında
+hiyerarşide karttan **önce** (ilk kardeş), yazının arkasında kalacak süs kartın altında `Fill`'den
+**önce** durur; diğerleri sona eklenir ve her şeyin üstünde çizilir.
+
+**3. Kelimeler ve sonuç renkleri kökteki `MatchResultOverlay` bileşeninin alanlarıdır**
+(`wonTitle` · `lostTitle` · `drawTitle` · `coopTitle` · `scoreHeader` · `coopScoreHeader` ·
+`wonColor` · `lostColor` · `drawColor` · `coopColor`) — varyantta ezilir. `TitleText`'e ve
+`Header2`'ye prefabta yazılan metin yer tutucudur, her maç sonunda kod yazar.
+
+**4. Dokunulmayanlar:** kökteki `MatchResultOverlay` bileşeni ve alan bağları; kök ölçü ve ölçek
+(HUD'la karışmasın diye büyük tutulur, gerekçesi `Arayuz-Tasarimi.md`); kartın **1265×705** oranı
+(kart sanatı bu orana göre çizilir, oran bozulursa gerilir). Öge silinmez, kapatılır (bağlı alan
+sessizce boşalır). Yazı kenarlığı için paylaşılan TMP materyali düzenlenmez — kopyası
+`Modes/<Ad>/UI/Fonts/` altına alınır.
+
+**5. Kuralın hep gizlediği kolonlar** (silahsız modda `Header3..5`/`Column3..5`, ko-opta ayrıca
+`Header1`/`Column1`) varyantta kapalı bırakılabilir — yalnız tasarım kolaylığıdır, açıp kapatmayı
+kod yapar. Kalan kolonları boşalan genişliğe yaymak serbesttir.
+
+**6. Bağla:** `Data/<Ad>.asset` → **`resultScreenPrefab`** alanına varyantı sürükle. Boş = genel ekran.
+
+**Test:** dev penceresinde bu modda bir maç bitir → sonuç kartı ve tablo temalı gelmeli; ardından
+başka bir modda maç bitir → genel ekran geri gelmeli (tekil moda göre kendini yeniden örnekler).
 
 ---
 
@@ -1231,16 +1277,11 @@ değeri sahne objesinde durduğu için arena başına elle yapılır ve **atlan�
   basar (gözlük günlüğü saniyelik sınırda kısılır, gerçek satırlar kaybolur) — yine Box. İnce panel
   (çit, ızgara) kutusu en az ~0,3 m kalınlık alır: kafa ince kutudan tek karede geçip ihlale
   yakalanmaz.
-- **Yüzey (çarpma efekti) ataması elle yapılır:** `Tools > VortexArena > Arena > Yüzey Atama`
-  seçili objenin materyallerini, hangi yüzeye düştüğünü ve nedenini gösterir; materyali yüzeye
-  bağlar ya da objeye etiket koyar. ⚠️ Eşleme **göz kararıyla toplu** yapılmaz: aynı atlas dokusunu
-  paylaşan tahta ve metal objeler tek materyalde birleşebilir — objeyi oyunda görerek ata.
-- **Dekor haritalı arenada** (collider'sız tek mesh harita) görünmez sınır kutusu etiket aldıysa
-  yenisini eklerken etiket de kopyalanır ([Sistem Özeti, `SurfaceTag`](../Sistem-Ozeti.md)).
-- **Environment paketinin prop'ları materyale çözülmüyorsa** (collider ile renderer ayrı objelerde)
-  etiket prop başına değil **grup köküne** konur — etiket collider'dan yukarı arandığı için tek
-  bileşen yüzlerce collider'ı kapsar; oyun alanı içindeki prop'lar ise materyal eşlemesiyle
-  çözülmeye devam eder.
+- **Yüzey (çarpma efekti) ataması YAPILMAZ:** her isabet aynı `default` efektini oynatır;
+  `SurfaceLibrary.definitions` yalnız `default`'u taşıdıkça `SurfaceTag` ve materyal eşlemesi
+  etkisizdir ([Sistem Özeti, `SurfaceLibrary`](../Sistem-Ozeti.md)). Yüzeye göre efekt yeniden
+  istenirse önce listeye tanım eklenir; `Tools > VortexArena > Arena > Yüzey Atama` ancak ondan
+  sonra anlam taşır.
 - Sonunda `Tools > VortexArena > Arena > Engel Hacimlerini Denetle` koşulur: konveks olmayan,
   şişkin ve trigger collider'lar düzeltilene kadar o objeler yanlış ceza üretir. Rapor tüm açık
   sahneleri kapsar, hiçbir şeyi düzeltmez.

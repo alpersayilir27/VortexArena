@@ -22,4 +22,4 @@ MonoBehaviour:
   ambienceVolume: 0.2
   musicClip: {fileID: 8300000, guid: 35b2007bc1e731848a65d0e57541bde0, type: 3}
   musicVolume: 0.5
-  timeWarningSound: 0
+  timeWarningSound: 1

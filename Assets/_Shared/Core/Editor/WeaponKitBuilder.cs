@@ -262,6 +262,8 @@ namespace VortexArena.Core.Editor
         // to kill and the time to empty the magazine on a held trigger. The conversion rules (HP 100
         // → damage, rpm, burst, shotgun pellets) live in Docs/Sistem-Ozeti.md §4 under
         // WeaponDefinition.
+        // ⚠️ Rows marked "Rpm hand-tuned" do NOT follow that conversion: the reference rate read as
+        // broken next to the realistic models. Re-deriving from the table must skip them.
         //
         // ⚠️ `Reload` is the length of the weapon's reload SOUND, so the trigger reopens
         // (`Weapon.reloadEndTime`) exactly when audio and magazine animation end. Change the clip and
@@ -270,12 +272,12 @@ namespace VortexArena.Core.Editor
         private static readonly WeaponSpec[] Specs =
         {
             // AR_M — M4A4: the BASELINE 5.56 every other rifle is read against — four body hits or
-            // two headshots, balanced recoil, nothing extreme in any column.
+            // two headshots, balanced recoil, nothing extreme in any column. Rpm hand-tuned.
             new WeaponSpec
             {
                 Name = "M4A4", PackPrefab = "AR_M", WeaponId = "m4a4", DisplayName = "M4A4",
                 NetItemId = 1, HoldMode = "TwoHand",
-                Damage = 26, Headshot = 2f, Rpm = 360, Magazine = 25, Reload = 2.19f,
+                Damage = 26, Headshot = 2f, Rpm = 420, Magazine = 25, Reload = 2.19f,
                 Range = 40f, BaseSpread = 0.50f, BloomPerShot = 0.26f,
                 MaxBloom = 2.2f, BloomRecovery = 4.5f, Kick = 2.0f, PitchBase = 1.00f, Volume = 1.0f,
                 FlashColorMin = new Color(1f, 0.92f, 0.72f), FlashColorMax = new Color(1f, 0.65f, 0.32f),
@@ -285,12 +287,12 @@ namespace VortexArena.Core.Editor
             },
             // AR_B — AK-47: three body hits or ONE headshot — the only non-shotgun with a one-hit
             // headshot — paid for with the slowest rate and the harshest recoil. Being 7.62x39 it
-            // also has its own casing family.
+            // also has its own casing family. Rpm hand-tuned.
             new WeaponSpec
             {
                 Name = "AK47", PackPrefab = "AR_B", WeaponId = "ak47", DisplayName = "AK-47",
                 NetItemId = 2, HoldMode = "TwoHand",
-                Damage = 34, Rpm = 249, Magazine = 30, Reload = 2.43f,
+                Damage = 34, Rpm = 400, Magazine = 30, Reload = 2.43f,
                 Range = 45f, BaseSpread = 0.60f, BloomPerShot = 0.32f,
                 MaxBloom = 2.6f, BloomRecovery = 4.0f, Kick = 2.6f, PitchBase = 1.00f, Volume = 1.0f,
                 FlashColorMin = new Color(1f, 0.55f, 0.15f), FlashColorMax = new Color(1f, 0.22f, 0.05f),
@@ -346,11 +348,12 @@ namespace VortexArena.Core.Editor
             // AR_A_1 — M4A1: the "marksman" M4. Tightest base spread and longest range, paid for
             // with the fastest-degrading sustained fire (highest bloom, slowest recovery): rewards
             // aimed single shots, punishes spraying. Shares M4A4's reload clip at a lower pitch.
+            // Rpm hand-tuned.
             new WeaponSpec
             {
                 Name = "M4A1", PackPrefab = "AR_A_1", WeaponId = "m4a1", DisplayName = "M4A1",
                 NetItemId = 6, HoldMode = "TwoHand",
-                Damage = 26, Headshot = 2f, Rpm = 420, Magazine = 22, Reload = 2.19f,
+                Damage = 26, Headshot = 2f, Rpm = 480, Magazine = 22, Reload = 2.19f,
                 Range = 50f, BaseSpread = 0.35f, BloomPerShot = 0.34f,
                 MaxBloom = 2.8f, BloomRecovery = 3.8f, Kick = 2.3f, PitchBase = 0.93f, Volume = 1.0f,
                 FlashColorMin = new Color(1f, 0.90f, 0.74f), FlashColorMax = new Color(0.95f, 0.60f, 0.28f),
@@ -374,12 +377,12 @@ namespace VortexArena.Core.Editor
                 CasingFamily = "556x45",
             },
             // AR_L — Galil AR: the AK's twin — three body hits at the same slow rate, but a TWO-hit
-            // headshot, plus the widest base spread among the rifles.
+            // headshot, plus the widest base spread among the rifles. Rpm hand-tuned.
             new WeaponSpec
             {
                 Name = "GALIL", PackPrefab = "AR_L", WeaponId = "galilar", DisplayName = "Galil AR",
                 NetItemId = 8, HoldMode = "TwoHand",
-                Damage = 34, Headshot = 2f, Rpm = 268, Magazine = 30, Reload = 2.25f, SpareMags = 2,
+                Damage = 34, Headshot = 2f, Rpm = 400, Magazine = 30, Reload = 2.25f, SpareMags = 2,
                 Range = 44f, BaseSpread = 0.62f, BloomPerShot = 0.34f,
                 MaxBloom = 2.8f, BloomRecovery = 3.8f, Kick = 2.5f, PitchBase = 1.02f, Volume = 1.0f,
                 FlashColorMin = new Color(1f, 0.78f, 0.42f), FlashColorMax = new Color(1f, 0.42f, 0.12f),

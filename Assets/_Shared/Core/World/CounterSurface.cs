@@ -4,8 +4,8 @@ using VortexArena.Net;
 
 namespace VortexArena.Core.World
 {
-    /// <summary>Counter or grill body: an object coming to rest INSIDE it (under the top, in a shelf
-    /// gap) is lifted onto the top surface before its rest pose is published.</summary>
+    /// <summary>Counter or grill body: an object let go or coming to rest INSIDE it (under the top, in a
+    /// shelf gap) is lifted onto the top surface before its pose is published.</summary>
     /// <remarks>
     /// ⚠️ The solid <see cref="BoxCollider"/>s on THIS GameObject are the counter; the component adds a
     /// matching trigger per box at runtime so the trigger messages land here. Put it on the object that
@@ -26,6 +26,8 @@ namespace VortexArena.Core.World
         private const float Clearance = 0.002f;
 
         private static readonly List<Collider> Parts = new List<Collider>();
+
+        private static readonly List<CounterSurface> Active = new List<CounterSurface>();
 
         private readonly List<BoxCollider> _bodies = new List<BoxCollider>();
 
@@ -61,8 +63,30 @@ namespace VortexArena.Core.World
             }
         }
 
+        private void OnEnable()
+        {
+            Active.Add(this);
+        }
+
+        /// <summary>Lifts an object let go INSIDE any counter onto its top. ⚠️ Asked before the body turns
+        /// dynamic: set free inside the solid box, PhysX depenetration throws it out sideways.</summary>
+        public static bool TryLiftOut(NetObject net, ref Pose worldPose)
+        {
+            for (int i = 0; i < Active.Count; i++)
+            {
+                if (Active[i].TryAdjustRestPose(net, ref worldPose))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         private void OnDisable()
         {
+            Active.Remove(this);
+
             foreach (NetObject net in _inside.Keys)
             {
                 var sender = net != null ? net.GetComponent<NetObjectPoseSender>() : null;

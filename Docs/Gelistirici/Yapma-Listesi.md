@@ -305,6 +305,14 @@ yanlış oyuncuya komut gönderir.
 
 → ayrıntı ve düzenleme kuralları: **[Arayüz Tasarımı](Arayuz-Tasarimi.md)**
 
+### ⛔ Moda özel maç sonu ekranını `MatchResultOverlay.prefab`'ın KOPYASI olarak yapma
+
+Moda özel görünüm, tabanın **varyantı** olur (`ModeDefinition.resultScreenPrefab`'a bağlanır).
+Kopya, alan bağlarını o anki hâliyle dondurur: tabana sonradan eklenen bir kolon ya da alan kopyaya
+inmez ve o modda **hata vermeden** çizilmez. Aynı sebeple varyantın kökündeki `MatchResultOverlay`
+bileşeni kaldırılmaz, `modeId`'ye bakan bir görünüm dalı da kodda açılmaz — görünüm veridir.
+→ reçete: **[Yemek Kitabı 13.2](Yemek-Kitabi.md#132-moda-özel-maç-sonu-ekranı)**
+
 ### ⛔ `BaseZone`'u gizlemek için yalnız bileşeni kapatma
 
 Bileşeni kapatmak görsel taban şeridini ekranda bırakır. Gizlemen gerekiyorsa **bileşeni** kapat
@@ -502,6 +510,23 @@ yapılır, boru hattında değil. ⚠️ `Particles/Lit` de kaçınılır: sayda
 Quest'te pahalıdır ve iki platformun ek-ışık bütçesi farklı olduğu için görünüm ayrışır.
 
 Kurulu örnek: `_Shared/FX/Materials/M_Blast*` (patlama efektinin platform-bağımsız materyal takımı).
+
+### ⛔ Havuzlanan efekt prefabında `Stop Action`'ı `Destroy` yapma
+
+`_Shared/FX/` altındaki efektler (`SurfaceImpactFx`, `BlastFxPool`) **bir kez üretilip yeniden
+oynatılır**. `Stop Action = Destroy` olan parçacık sistemi ilk oynatmanın sonunda kendi objesini
+siler: kökteyse havuz her seferinde yeni kopya kurar (havuzun ve ısıtmanın bütün anlamı gider,
+patlamada takılma döner), çocuktaysa o parça **oturum boyunca bir daha görünmez** — "efektin bir
+kısmı nadiren çıkıyor" diye okunur. **Hata satırı yoktur.** Hepsi `None` kalır; gizleme havuzun
+işidir.
+
+### ⛔ İstasyonun loop sesini/efektini taşınan nesneye koyma
+
+Izgara cızırtısı gibi "istasyon çalışıyor" sesi **istasyonun kendisinde** durur ve yerel durumdan
+sürülür (`BurgerGrill`). Taşınan nesneye (köfte) konup ağ olayıyla açılıp kapanırsa tek bir
+"kapat" kaybı sesi nesneye yapıştırır: nesne tahtaya, tabağa, vardiya sonrasına kadar cızırdamaya
+devam eder. **Hata satırı yoktur.** Nesnenin üstünde yalnız tek seferlik geri bildirim (pişti
+sesi, parıltı) durur.
 
 ### ⛔ `.glb` modelini GLB'nin kendi materyaliyle build sahnesine koyma
 

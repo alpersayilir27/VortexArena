@@ -15,8 +15,9 @@ namespace VortexArena.Core.Combat
         /// ~0.06 s apart, and a thick wall of whizzes is noise, not information.</summary>
         private const int PoolSize = 4;
 
-        /// <summary>How close the round has to pass the head (m) to be heard.</summary>
-        private const float NearMissRadiusMeters = 1.5f;
+        /// <summary>How close the round has to pass the head (m) to be heard. Tight on purpose: a
+        /// whiz from a round a metre overhead reads as a false alarm.</summary>
+        private const float NearMissRadiusMeters = 0.25f;
 
         /// <summary>If the shot ENDS this close to the head (m) the round hit us (or the wall behind
         /// our ear): the hit/damage feedback already covers that, a whiz would double it.</summary>

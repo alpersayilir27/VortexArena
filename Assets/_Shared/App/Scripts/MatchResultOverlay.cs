@@ -38,6 +38,11 @@ namespace VortexArena.App
     /// same way, off <see cref="ModeRuntime.HidesCombatStats"/>.
     /// </para>
     /// <para>
+    /// <b>Per-mode look:</b> <c>ModeDefinition.ResultScreenPrefab</c> may point at a VARIANT of this
+    /// prefab; at match end the singleton swaps itself for it (<see cref="SwapTo"/>). The variant
+    /// overrides only art and wording — bindings are inherited, so behaviour stays identical.
+    /// </para>
+    /// <para>
     /// Self-bootstrapping persistent singleton (<c>WeaponGranter</c> pattern): NOT placed in scenes,
     /// else every new arena would gain a manual setup step. Visuals live entirely in the prefab
     /// (<c>Resources/UI/MatchResultOverlay</c>) — this class only writes data.
@@ -108,6 +113,21 @@ namespace VortexArena.App
                  "adlandırılamaz (K/D başlıkları ikon olduğu için boş bırakılabilir).")]
         [SerializeField] private TextMeshProUGUI[] boardColumnHeaders = new TextMeshProUGUI[ColumnOrder.Length];
 
+        [Header("Kelimeler ve renkler (mod varyantı ezer)")]
+        [SerializeField] private string wonTitle = "KAZANDIN";
+        [SerializeField] private string lostTitle = "KAYBETTİN";
+        [SerializeField] private string drawTitle = "BERABERE";
+        [Tooltip("Ko-op sonuç başlığı — rakip yok, kazandın/kaybettin okunmaz.")]
+        [SerializeField] private string coopTitle = "OYUN BİTTİ";
+        [Tooltip("Skor kolonunun başlığı.")]
+        [SerializeField] private string scoreHeader = "SKOR";
+        [Tooltip("Ko-op'ta skor kolonunun başlığı (ortak toplama katkı).")]
+        [SerializeField] private string coopScoreHeader = "KATKI";
+        [SerializeField] private Color wonColor = UiKit.Good;
+        [SerializeField] private Color lostColor = UiKit.Bad;
+        [SerializeField] private Color drawColor = UiKit.Title;
+        [SerializeField] private Color coopColor = UiKit.Title;
+
         private readonly List<PlayerInfo> _ranked = new List<PlayerInfo>();
         private readonly StringBuilder _sb = new StringBuilder();
 
@@ -121,6 +141,10 @@ namespace VortexArena.App
         private Stage _stage = Stage.Hidden;
         private float _scoreboardAt;
 
+        /// <summary>Prefab this instance was spawned from; compared against the running mode's screen
+        /// at match end.</summary>
+        private MatchResultOverlay _source;
+
         /// <summary>Installs the singleton. ⚠️ <b>Unconditional</b> — "is it needed this session"
         /// is <see cref="AppSingletons"/>'s call (rationale lives there).</summary>
         internal static void Install()
@@ -130,7 +154,7 @@ namespace VortexArena.App
                 return;
             }
 
-            var prefab = Resources.Load<MatchResultOverlay>(ResourcePath);
+            MatchResultOverlay prefab = LoadGeneric();
             if (prefab == null)
             {
                 Debug.LogError($"[MatchResultOverlay] '{ResourcePath}' prefabı bulunamadı — maç " +
@@ -138,10 +162,63 @@ namespace VortexArena.App
                 return;
             }
 
+            Spawn(prefab);
+        }
+
+        private static MatchResultOverlay LoadGeneric()
+        {
+            return Resources.Load<MatchResultOverlay>(ResourcePath);
+        }
+
+        private static MatchResultOverlay Spawn(MatchResultOverlay prefab)
+        {
             MatchResultOverlay overlay = Instantiate(prefab);
             overlay.name = "[MatchResultOverlay]";
+            overlay._source = prefab;
             DontDestroyOnLoad(overlay.gameObject);
             _instance = overlay;
+            return overlay;
+        }
+
+        /// <summary>The running mode's own screen (<c>ModeDefinition.ResultScreenPrefab</c>), else the
+        /// generic one. Resolved at match end, when the mode is certain.</summary>
+        private static MatchResultOverlay ScreenForRunningMode()
+        {
+            GameCatalog catalog = Admin.AdminContent.Catalog;
+            ModeDefinition mode = catalog != null ? catalog.FindMode(ModeRuntime.ModeId) : null;
+            GameObject custom = mode != null ? mode.ResultScreenPrefab : null;
+            if (custom == null)
+            {
+                return LoadGeneric();
+            }
+
+            MatchResultOverlay screen = custom.GetComponent<MatchResultOverlay>();
+            if (screen == null)
+            {
+                Debug.LogError($"[MatchResultOverlay] '{mode.ModeId}' modunun maç sonu ekranında " +
+                               "MatchResultOverlay bileşeni yok — genel ekran çiziliyor.");
+                return LoadGeneric();
+            }
+
+            return screen;
+        }
+
+        /// <summary>Replaces this instance with one spawned from <paramref name="prefab"/>. Roster and
+        /// modeState are carried over: both arrive only on change, so the new instance would not hear
+        /// them again before its screen opens.</summary>
+        private MatchResultOverlay SwapTo(MatchResultOverlay prefab)
+        {
+            // Frees the slot so the new instance's Awake keeps itself instead of self-destructing.
+            _instance = null;
+            MatchResultOverlay next = Spawn(prefab);
+            next._roster = _roster;
+            next._modeState = _modeState;
+
+            // Deactivate first: OnDisable unsubscribes now, not at end of frame, so this instance
+            // cannot act on a later event (e.g. HideAll releasing the HUD gate) before it is gone.
+            gameObject.SetActive(false);
+            Destroy(gameObject);
+            return next;
         }
 
         private void Awake()
@@ -206,6 +283,13 @@ namespace VortexArena.App
         {
             if (msg == null || AppSession.Role != AppSession.RolePlayer)
             {
+                return;
+            }
+
+            MatchResultOverlay screen = ScreenForRunningMode();
+            if (screen != null && screen != _source)
+            {
+                SwapTo(screen).HandleMatchEnd(msg);
                 return;
             }
 
@@ -278,8 +362,8 @@ namespace VortexArena.App
                 // branch would read as "BERABERE" — a draw against nobody. The shift simply ends.
                 if (resultTitleText != null)
                 {
-                    resultTitleText.text = "VARDİYA BİTTİ";
-                    resultTitleText.color = UiKit.Title;
+                    resultTitleText.text = coopTitle;
+                    resultTitleText.color = coopColor;
                 }
 
                 SetText(resultWinnerText, $"EKİP TOPLAMI {msg.scoreRed}");
@@ -292,8 +376,8 @@ namespace VortexArena.App
 
                 if (resultTitleText != null)
                 {
-                    resultTitleText.text = draw ? "BERABERE" : won ? "KAZANDIN" : "KAYBETTİN";
-                    resultTitleText.color = draw ? UiKit.Title : won ? UiKit.Good : UiKit.Bad;
+                    resultTitleText.text = draw ? drawTitle : won ? wonTitle : lostTitle;
+                    resultTitleText.color = draw ? drawColor : won ? wonColor : lostColor;
                 }
 
                 SetText(resultWinnerText, WinnerLine(msg));
@@ -419,7 +503,7 @@ namespace VortexArena.App
                 SetColumnVisible(c, visible);
             }
 
-            SetColumnHeader(2, coop ? "KATKI" : ColumnOrder[2]);
+            SetColumnHeader(2, coop ? coopScoreHeader : scoreHeader);
         }
 
         private void SetColumnVisible(int column, bool visible)
@@ -645,7 +729,7 @@ namespace VortexArena.App
                 return;
             }
 
-            string mode = string.IsNullOrEmpty(ModeRuntime.ModeId) ? "-" : ModeRuntime.ModeId;
+            string mode = Admin.AdminContent.ModeDisplayName(ModeRuntime.ModeId);
             string map = SceneManager.GetActiveScene().name;
 
             _sb.Clear();

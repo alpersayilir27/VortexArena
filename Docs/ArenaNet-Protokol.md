@@ -1974,8 +1974,16 @@ olmalı, tanınmayan `modeId` reddedilir):
 >
 > Olayların yükü: `take` → `i:[el]` (`0` sol, `1` sağ), sonucu **sahibi isteyen olan** yeni bir
 > malzeme objesidir. `cut` → yükü yok; sunucu bütünü despawn edip aynı pozda iki yarım doğurur.
-> `grill` → `i:[1]` sayaç başlat / `i:[0]` durdur. `serve` → `i:[müşteri netId, malzeme netId'leri
-> **alttan üste**]`.
+> `grill` → `i:[1]` ızgarada (sayaç işler) / `i:[0]` ızgaradan çıktı (sayaç durur). `serve` →
+> `i:[müşteri netId, malzeme netId'leri **alttan üste**]`.
+>
+> **Pişme ilerlemesi köfte başınadır ve ızgaradan çıkınca SİLİNMEZ:** sayaç yalnız köfte ızgaradayken
+> **ve serbestken** işler; çıkınca köfte o anki aşamasında kalır, geri konunca kaldığı yerden devam
+> eder. ⚠️ **`i:[0]` serbestlik şartı ARAMAZ:** köfteyi alan elin `object_grab`'ı ızgaranın "çıktı"
+> bildiriminden önce varır — şart aransa durdurma sessizce atılır ve sayaç ekmeğin üstünde de işleyip
+> köfteyi yakardı. Aynı sebeple sunucu **elde tutulan köfteyi pişirmez** (kaybolan bir `i:[0]`'ın
+> güvencesi). `i:[1]` ise idempotenttir ve köfte ızgarada her dinlenişinde yeniden gönderilir: elde
+> tutulup geri konan köfte, arada `i:[0]` gitmemiş olsa da yeniden ızgaraya yazılır.
 >
 > **Servis jesti ÜST EKMEĞİ koymaktır.** `serve` iki anda denenir — bankodaki bir tahtaya üst ekmek
 > konduğunda, ya da bitmiş bir tahta slota bırakıldığında — ve ikisinde de yığının **en üstü**
@@ -2026,7 +2034,8 @@ olmalı, tanınmayan `modeId` reddedilir):
 > ⚠️ **Üçünün de `policy`'si `anyone`, çünkü olayı gönderen objenin sahibi DEĞİLDİR:** ekmek tahtada,
 > köfte ızgarada, tahta bankoda **serbest** durur (`owner == 0`) — bıçağı/spatulayı tutan başka bir
 > objedir. `owner` politikası bu üç olayı hiç geçirmezdi. Yerine mod tarafında **objenin serbest
-> olması** aranır; birinin elindeki ekmek kesilmez.
+> olması** aranır; birinin elindeki ekmek kesilmez. Tek istisna `grill` `i:[0]`'dır (yukarıda:
+> "çıktı" bildirimi köfte zaten eldeyken varır).
 >
 > **Malzeme temizliği sayıyla yapılır, süreyle değil:** her `take` bir obje doğurur ve yalnız doğru
 > servis onları siler, yani yere düşenler birikir. Mod canlı malzeme sayısına bir tavan koyar; taşınca

@@ -662,6 +662,9 @@ namespace VortexArena.App.Admin
         private ModeDefinition SelectedMode =>
             _modeIndex >= 0 && _modeIndex < _modes.Count ? _modes[_modeIndex] : null;
 
+        /// <summary>Unknown mode (no catalog) keeps the row open — the server decides.</summary>
+        private bool SelectedModeHasScoreLimit => SelectedMode == null || SelectedMode.HasScoreLimit;
+
         /// <summary>Game type selected (§11) — rebuilds both lists and publishes like a mode change.
         /// <para>⚠️ The game type itself is not on the wire, but its first mode/map ARE: publishing
         /// loads that arena for everyone, and a local-only change would snap back on the next
@@ -720,7 +723,10 @@ namespace VortexArena.App.Admin
         {
             ModeDefinition mode = SelectedMode;
             _roundSeconds = mode != null && mode.RoundSeconds > 0 ? mode.RoundSeconds : 0;
-            _scoreLimit = mode != null ? Mathf.Clamp(mode.ScoreLimit, ScoreLimitMin, ScoreLimitMax) : 0;
+            // No-limit mode → 0 ("mode default"): the server's own default applies.
+            _scoreLimit = mode == null || !mode.HasScoreLimit ? 0
+                : mode.ScoreLimit < 0 ? ScoreLimitUnlimited
+                : Mathf.Clamp(mode.ScoreLimit, ScoreLimitMin, ScoreLimitMax);
             // ⚠️ Countdown has no ModeDefinition field and gets none: it is a match parameter, not
             // mode shape (§5.2). 0 = protocol default.
             _countdownSeconds = 0;
@@ -774,6 +780,11 @@ namespace VortexArena.App.Admin
         /// straight to <c>ScoreLimitMin</c>.</summary>
         private void StepScoreLimit(int direction)
         {
+            if (!SelectedModeHasScoreLimit)
+            {
+                return;
+            }
+
             // The unlimited rung is NOT part of the number axis (−1 in arithmetic would produce
             // 0/−2), so entering and leaving it are separate branches.
             if (_scoreLimit < 0)
@@ -1001,7 +1012,9 @@ namespace VortexArena.App.Admin
             // ⚠️ The limit gate is "!= 0", not "> 0": a negative value from the server means
             // UNLIMITED, not "unset" (§5.2), and a positivity gate would swallow another operator's
             // unlimited choice.
-            if (AdminSelection.ScoreLimit != 0 && AdminSelection.ScoreLimit != _scoreLimit)
+            // A no-limit mode ignores it: the server keeps the previous mode's limit in its selection.
+            if (SelectedModeHasScoreLimit &&
+                AdminSelection.ScoreLimit != 0 && AdminSelection.ScoreLimit != _scoreLimit)
             {
                 _scoreLimit = AdminSelection.ScoreLimit < 0
                     ? ScoreLimitUnlimited
@@ -1540,8 +1553,13 @@ namespace VortexArena.App.Admin
             _durationValue.text = _roundSeconds > 0
                 ? AdminCommands.FormatDuration(_roundSeconds)
                 : "mod varsayılanı";
-            // Three states: number · unlimited · mode default (0 = UI knows no value).
-            _scoreLimitValue.text = AdminCommands.FormatScoreLimit(_scoreLimit);
+            // Three states: number · unlimited · mode default (0 = UI knows no value); a no-limit
+            // mode shows none of them and locks the stepper.
+            bool hasLimit = SelectedModeHasScoreLimit;
+            _scoreLimitValue.text = hasLimit ? AdminCommands.FormatScoreLimit(_scoreLimit) : "yok (süreli mod)";
+            _scoreLimitValue.color = hasLimit ? UiKit.Title : UiKit.Faint;
+            SetInteractable(_scoreLimitPrev, hasLimit);
+            SetInteractable(_scoreLimitNext, hasLimit);
 
             // An unbound field draws nothing; the rest of the panel keeps working.
             if (_countdownValue != null)

@@ -100,6 +100,11 @@ namespace VortexArena.Modes.Mole
             }
 
             GameObject instance = Instantiate(hammerPrefab, anchor);
+            MoleHammer hammer = instance.GetComponentInChildren<MoleHammer>(true);
+            if (hammer != null)
+            {
+                hammer.SetHand(rightHand);
+            }
 
             // ⚠️ Same solver as every other holder: the hand is drawn from the grip record, so a
             // zero offset here would shift hand and hammer together off the real controller.

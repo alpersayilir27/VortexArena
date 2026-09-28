@@ -1,6 +1,7 @@
 using UnityEngine;
 using VortexArena.Core.Arena;
 using VortexArena.Core.Player;
+using VortexArena.Core.World;
 using VortexArena.Net;
 using VortexArena.Protocol;
 
@@ -455,6 +456,9 @@ namespace VortexArena.Core.Combat
             // A component on this object may put it down somewhere else (IReleasePoseOverride); the
             // object is MOVED there first, because the published pose must be the one it is actually on.
             bool placed = ReleaseOverride != null && ReleaseOverride.TryOverrideReleasePose(ref pose);
+
+            // Let go INSIDE a counter: set free in the solid box, depenetration throws it out sideways.
+            placed = placed || CounterSurface.TryLiftOut(_net, ref pose);
             if (placed)
             {
                 transform.SetPositionAndRotation(pose.position, pose.rotation);
