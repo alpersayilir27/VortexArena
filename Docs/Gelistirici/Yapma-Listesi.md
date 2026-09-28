@@ -503,6 +503,29 @@ Quest'te pahalıdır ve iki platformun ek-ışık bütçesi farklı olduğu içi
 
 Kurulu örnek: `_Shared/FX/Materials/M_Blast*` (patlama efektinin platform-bağımsız materyal takımı).
 
+### ⛔ `.glb` modelini GLB'nin kendi materyaliyle build sahnesine koyma
+
+glTFast (`GltfImporter`) gömülü dokuları **sıkıştırmasız ARGB32** alt-asset olarak üretir: doku
+import ayarı (ASTC, max size) uygulanamaz, importer materyal remap'i desteklemez ve her `.glb` aynı
+dokunun kendi kopyasını taşır. 2048'lik tek doku build'de ~21 MB tutar; birkaç düzine GLB'li sahne
+Gradle'ın 4 GB arşiv sınırını aşar (`bundleReleaseLocalLintAar` → *"Archive's size exceeds the
+limit of 4GByte"*). zip64 açmak çözüm değildir, APK 4 GB'ı taşıyamaz.
+
+Mesh GLB'den kullanılır, **materyal kullanılmaz**:
+
+- Dokular `_Extracted/Textures/` klasörüne yazılır: piksel içeriğine göre tekil, alfasız doku JPG,
+  alfalı doku PNG. `_Extracted/` klasörü `ThirdPartyPackages/<paket>/` kökünde, onun dışındaki
+  GLB'de GLB'nin kendi klasöründe durur. Aynı GLB'yi kullanan sahneler aynı kopyaları paylaşır.
+- Dokular kaynakla aynı sRGB/linear ayarıyla, Android override'ı ile import edilir: renk
+  `ASTC_6x6`, linear (normal, metallic-roughness) `ASTC_5x5`, en fazla 2048.
+- Materyal kopyaları `_Extracted/Materials/<glb>/` altına kaydedilir.
+- Sahnedeki renderer'lar bu kopyalara bağlanır. Bağlama prefab instance override'ıdır, `.glb`'ye
+  dokunulmaz.
+
+Kontrol: sahnedeki bileşenlerin serialize referanslarında yolu `.glb` ile biten `Material` ya da
+`Texture2D` kalmamalı. `EditorUtility.CollectDependencies` prefab kaynağını da izleyip GLB'nin
+tamamını saydığı için bu kontrolde yanıltır.
+
 ### ⛔ Arena dekorunu static flag'siz bırakma
 
 Hareketsiz environment objesi (duvar, taş, ağaç, prop) **Static** işaretlenmeden sahnede kalmaz:
