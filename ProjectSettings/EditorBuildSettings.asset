@@ -69,7 +69,7 @@ EditorBuildSettings:
     path: Assets/Arenas/Venues/Outdoor9x8/Scenes/Construction_Outdoor9x8/Construction_Outdoor9x8.unity
     guid: 1b90d0fa909333046b94dce916e0b140
   - enabled: 1
-    path: Assets/Arenas/Venues/Outdoor9x8/Scenes/Japan_Outdoor9x8/Japan_Outdoor9x8.unity
+    path: Assets/Arenas/Venues/Outdoor9x8/Scenes/Japan_Outdoor9x8/Japan_Outdoor9x81.unity
     guid: ec24cf311875ff74c90e06929a3c790c
   - enabled: 1
     path: Assets/Arenas/Venues/Outdoor9x8/Scenes/Mole_Outdoor9x8/Mole_Outdoor9x8.unity
