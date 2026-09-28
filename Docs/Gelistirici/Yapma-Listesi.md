@@ -735,13 +735,23 @@ commit hash'ini ayrıca not al. ⚠️ Ardından **`git lfs checkout`** çalış
 diskteki dosyalarını ~130 baytlık LFS işaretçi metnine çevirir; `git status` temiz görünür ama
 Unity bunları import edemez ve sahnede hata vermeden "Missing Prefab with guid" gösterir.
 
-### ⚠️ Yamalı satıcı betiğini paketi yeniden içe aktararak EZME
+### ⚠️ Yamalı satıcı dosyasını paketi yeniden içe aktararak EZME
 
-Construction Site paketinin `LightmappedLOD.cs`'i static batch'e giren ve **kapalı** renderer'ları
-(optimizasyonla `LODGroup`'tan çıkarılmış LOD seviyeleri) atlayacak şekilde yamalıdır: yamasız
-hâli her sahne yüklemesinde LOD başına uyarı/log basar ve gözlük günlüğü
-saniyelik sınırda kısılıp gerçek satırlar kaybolur. Paket yeniden içe aktarılırsa betik değişikliği
-geri alınır — içe aktarma penceresinde o dosyanın işaretini kaldır.
+Paket yeniden içe aktarılırsa yama geri alınır — içe aktarma penceresinde o dosyanın işaretini
+kaldır. Yamalı dosyalar:
+
+- **Construction Site `LightmappedLOD.cs`** — static batch'e giren ve **kapalı** renderer'ları
+  (optimizasyonla `LODGroup`'tan çıkarılmış LOD seviyeleri) atlar: yamasız hâli her sahne
+  yüklemesinde LOD başına uyarı/log basar ve gözlük günlüğü saniyelik sınırda kısılıp gerçek
+  satırlar kaybolur.
+- **Toon Series `Shared/Shaders/CustomToon*.shader`** (satırlar `VortexArena patch` yorumuyla
+  işaretli) — Forward geçişi toon rengini URP aydınlatmasından **ikinci kez geçirmeden** yazar ve
+  toon terimindeki ana ışık shadowmask'ı okur. Yamasız hâlde güneşe dönük olmayan her dikey yüz
+  (ev cephesi, ağaç gövdesi) yalnız dolaylı ışıkla kalıp kararır; yalnız dolaylı ışığı kaldırmak
+  bunu çözmez. ⚠️ Bu shader'lar **Amplify Shader Editor** çıktısıdır: grafiği ASE'de açıp
+  kaydetmek dosyayı yeniden üretir ve yamayı **sessizce** siler — değişiklik elle yapılır.
+  Toon teriminde güneşin **Intensity**'si normalize edilir, parlaklığı değiştirmez; sahneyi
+  aydınlatan kol ortam/dolaylı ışık ve bake'tir.
 
 ### ⚠️ `Shader.Find` build'de `null` dönebilir
 

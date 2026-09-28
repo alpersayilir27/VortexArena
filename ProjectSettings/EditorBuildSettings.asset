@@ -74,6 +74,9 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Arenas/Venues/Outdoor9x8/Scenes/Mole_Outdoor9x8/Mole_Outdoor9x8.unity
     guid: e40839f3c138663469ef1b3c55a6d25a
+  - enabled: 1
+    path: Assets/Arenas/Venues/Outdoor9x8/Scenes/Burger_Outdoor9x8/Burger_Outdoor9x8.unity
+    guid: 76a9ed0beb0451646bfac15dafc9717b
   m_configObjects:
     com.unity.dt.app-ui: {fileID: 11400000, guid: 1b1c20d82303e4b5781c3ef50ac1449f, type: 2}
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}

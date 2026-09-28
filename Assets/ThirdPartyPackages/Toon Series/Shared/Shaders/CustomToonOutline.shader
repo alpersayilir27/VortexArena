@@ -1039,7 +1039,7 @@ Shader "Toon/CustomToonOutline"
 				float2 uv_TextureSample = input.ase_texcoord7.zw * _TextureSample_ST.xy + _TextureSample_ST.zw;
 				float4 tex2DNode85 = tex2D( _TextureSample, uv_TextureSample );
 				float ase_lightAtten = 0;
-				Light ase_mainLight = GetMainLight( ShadowCoord );
+				Light ase_mainLight = GetMainLight( ShadowCoord, PositionWS, ShadowMask360_g2 ); // VortexArena patch: include baked shadowmask
 				ase_lightAtten = ase_mainLight.distanceAttenuation * ase_mainLight.shadowAttenuation;
 				float ase_lightIntensity = max( max( _MainLightColor.r, _MainLightColor.g ), _MainLightColor.b ) + 1e-7;
 				float4 ase_lightColor = float4( _MainLightColor.rgb / ase_lightIntensity, ase_lightIntensity );
@@ -1188,7 +1188,8 @@ Shader "Toon/CustomToonOutline"
 				#endif
 
 				#ifdef ASE_LIGHTING_SIMPLE
-					half4 color = UniversalFragmentBlinnPhong( inputData, surfaceData);
+					// VortexArena patch: BaseColor is already toon-lit; relighting it blackens faces turned from the sun.
+					half4 color = half4( surfaceData.albedo, surfaceData.alpha );
 				#else
 					half4 color = UniversalFragmentPBR( inputData, surfaceData);
 				#endif
@@ -2311,7 +2312,7 @@ Shader "Toon/CustomToonOutline"
 				float2 uv_TextureSample = input.ase_texcoord4.zw * _TextureSample_ST.xy + _TextureSample_ST.zw;
 				float4 tex2DNode85 = tex2D( _TextureSample, uv_TextureSample );
 				float ase_lightAtten = 0;
-				Light ase_mainLight = GetMainLight( ShadowCoord );
+				Light ase_mainLight = GetMainLight( ShadowCoord, PositionWS, ShadowMask360_g2 ); // VortexArena patch: include baked shadowmask
 				ase_lightAtten = ase_mainLight.distanceAttenuation * ase_mainLight.shadowAttenuation;
 				float ase_lightIntensity = max( max( _MainLightColor.r, _MainLightColor.g ), _MainLightColor.b ) + 1e-7;
 				float4 ase_lightColor = float4( _MainLightColor.rgb / ase_lightIntensity, ase_lightIntensity );
@@ -2735,7 +2736,7 @@ Shader "Toon/CustomToonOutline"
 				float2 uv_TextureSample = input.ase_texcoord2.zw * _TextureSample_ST.xy + _TextureSample_ST.zw;
 				float4 tex2DNode85 = tex2D( _TextureSample, uv_TextureSample );
 				float ase_lightAtten = 0;
-				Light ase_mainLight = GetMainLight( ShadowCoord );
+				Light ase_mainLight = GetMainLight( ShadowCoord, PositionWS, ShadowMask360_g2 ); // VortexArena patch: include baked shadowmask
 				ase_lightAtten = ase_mainLight.distanceAttenuation * ase_mainLight.shadowAttenuation;
 				float ase_lightIntensity = max( max( _MainLightColor.r, _MainLightColor.g ), _MainLightColor.b ) + 1e-7;
 				float4 ase_lightColor = float4( _MainLightColor.rgb / ase_lightIntensity, ase_lightIntensity );
@@ -3634,7 +3635,7 @@ Shader "Toon/CustomToonOutline"
 				float2 uv_TextureSample = input.ase_texcoord7.zw * _TextureSample_ST.xy + _TextureSample_ST.zw;
 				float4 tex2DNode85 = tex2D( _TextureSample, uv_TextureSample );
 				float ase_lightAtten = 0;
-				Light ase_mainLight = GetMainLight( ShadowCoord );
+				Light ase_mainLight = GetMainLight( ShadowCoord, PositionWS, ShadowMask360_g2 ); // VortexArena patch: include baked shadowmask
 				ase_lightAtten = ase_mainLight.distanceAttenuation * ase_mainLight.shadowAttenuation;
 				float ase_lightIntensity = max( max( _MainLightColor.r, _MainLightColor.g ), _MainLightColor.b ) + 1e-7;
 				float4 ase_lightColor = float4( _MainLightColor.rgb / ase_lightIntensity, ase_lightIntensity );
