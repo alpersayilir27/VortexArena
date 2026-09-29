@@ -116,6 +116,9 @@ sahne hata vermez, yalnızca **tamamen düz** görünür — arena sanatı ne ka
   **farklı olabilir** ve bake'i `.lighting` kazanır — Lighting penceresinde gördüğün çözünürlükle
   bake'in kullandığı çözünürlük tutmayabilir. Kopyalanan sahnede önce `.lighting` kendi klasörüne
   alınır, sonra bir kez kendi başına bake edilir.
+  ⚠️ Kopyalanan `.lighting` dosyasının **iç adı** (`m_Name`) kaynak sahnenin adıyla kalır ve Lighting
+  penceresi dosya adını değil bu adı gösterir: doğru dosya bağlıyken bile "başka sahnenin ayarı
+  bağlı" görünür ve alan değiştirilemiyormuş gibi davranır. İç ad dosya adıyla eşitlenir.
 - ⚠️ **Bake edilmiş sahnede `LightProbeGroup` yoksa** dinamik objeler baked ışıkların hiçbirini
   almaz; yalnız ambient + Mixed directional ile aydınlanır ve ortamdan kopuk görünürler.
 - ⚠️ **Lightmap sahnenin kendisine aittir, kopyayla taşınmaz.** Ana haritayı bake etmek ondan

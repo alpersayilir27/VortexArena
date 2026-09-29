@@ -546,6 +546,10 @@ Mesh GLB'den kullanılır, **materyal kullanılmaz**:
 - Materyal kopyaları `_Extracted/Materials/<glb>/` altına kaydedilir.
 - Sahnedeki renderer'lar bu kopyalara bağlanır. Bağlama prefab instance override'ıdır, `.glb`'ye
   dokunulmaz.
+- Bake'e giren GLB/FBX'te lightmap UV'si üretilir (GLB: `Generate Secondary UV Set`, FBX:
+  `Generate Lightmap UVs`). UV2 yoksa bake doku UV'sine yazılır; üst üste binen UV bölgeleri
+  çatıda/cephede koyu leke olarak çıkar, hata vermez. Başka sahnenin de kullandığı modelin UV'si
+  değiştirilmez (o sahnenin bake'i geçersizleşir) — o renderer `Receive GI = Light Probes` alır.
 
 Kontrol: sahnedeki bileşenlerin serialize referanslarında yolu `.glb` ile biten `Material` ya da
 `Texture2D` kalmamalı. `EditorUtility.CollectDependencies` prefab kaynağını da izleyip GLB'nin
@@ -558,7 +562,9 @@ işaretsiz obje static batching'e girmez (her biri ayrı draw call), occlusion'a
 almaz — sahne klasöründe lightmap dosyası dursa bile bake **hiçbir renderer'a uygulanmaz**. Hata
 vermez; sahne yalnız Quest'te kasar. Yapraklı vegetasyon ve çimde **Occluder kapalı** kalır
 (yaprak örtmez, Umbra bake'i şişer); `Animator`/`Rigidbody` altındaki obje **işaretlenmez** — static
-batching transform'u dondurur, obje görünürde kımıldamaz. Kontrol:
+batching transform'u dondurur, obje görünürde kımıldamaz. Static'e çekilen obje lightmap'e girer:
+mesh'inde lightmap UV'si (UV2) yoksa bake sonrası siyah leke çıkar — önce UV2 üretilir, üretilemiyorsa
+obje ya işaretsiz kalır ya da `Receive GI = Light Probes` alır. Kontrol:
 `Tools > VortexArena > Arena > Sahne Bütçesini Ölç` → "static flag yok" uyarısı.
 Gerekçe → Sistem Özeti, Tuzaklar ("Arena dekoru static flag'siz bırakılmaz").
 
