@@ -10140,6 +10140,7 @@ MonoBehaviour:
   - {fileID: 2020765502155689689}
   teamMaterial: {fileID: 2100000, guid: 3801f4107cad0f34199e1a23164ead51, type: 2}
   animator: {fileID: 0}
+  hideWhenDown: []
   riseHeight: 0.55
   riseSeconds: 0.25
   squashScale: 0.3
@@ -10152,9 +10153,10 @@ MonoBehaviour:
   wrongFx: {fileID: 3624729647660324950}
   audioSource: {fileID: 3968065875789118229}
   riseClip: {fileID: 8300000, guid: d5bbacb512040d14db97bc5088880bca, type: 3}
-  correctClip: {fileID: 8300000, guid: 5650e36befd568646aa86cf71e26b0ca, type: 3}
-  wrongClip: {fileID: 8300000, guid: 49ebadcc93a75394fb01b38619521525, type: 3}
+  correctClip: {fileID: 8300000, guid: a7962289a9c6bcf44b3455a7d5abee79, type: 3}
+  wrongClip: {fileID: 8300000, guid: 237d34508096f67409fe9d9a69e2f6d9, type: 3}
   descendClip: {fileID: 8300000, guid: 70b4be446bf210045b570c7074860d9f, type: 3}
+  moveVolume: 0.7
 --- !u!82 &3968065875789118229
 AudioSource:
   m_ObjectHideFlags: 0

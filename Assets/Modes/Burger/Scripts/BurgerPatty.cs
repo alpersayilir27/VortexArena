@@ -5,7 +5,7 @@ using VortexArena.Net;
 namespace VortexArena.Modes.Burger
 {
     /// <summary>Draws the patty's doneness: <c>stage</c> is the SERVER's counter (§10.5), this only
-    /// colours it and marks the moment it turns cooked (ding + puff).
+    /// colours it and marks the moment it turns cooked (ding + puff) or burnt (own sound).
     /// <para>⚠️ Without this the only sign of a raw or burnt patty is a silent rejection at the counter —
     /// the server refuses anything that is not <see cref="BurgerKinds.PattyCooked"/> and says nothing
     /// about why.</para>
@@ -34,8 +34,15 @@ namespace VortexArena.Modes.Burger
         [Tooltip("Köfte piştiğinde çalan tek vuruş. Atanmazsa sessizdir.")]
         [SerializeField] private AudioClip cookedClip;
 
+        [Tooltip("Köfte yandığında çalan tek vuruş — pişti sesinden ayırt edilebilir olmalı. Atanmazsa sessizdir.")]
+        [SerializeField] private AudioClip burntClip;
+
         [Tooltip("Köfte piştiği an oynayan küçük efekt. Boşsa çocuklardaki ParticleSystem aranır.")]
         [SerializeField] private ParticleSystem cookedFx;
+
+        // No child fallback: a second ParticleSystem would make cookedFx's lookup ambiguous.
+        [Tooltip("Köfte yandığı an oynayan kara duman. Atanmazsa efektsizdir (çocuklarda aranmaz).")]
+        [SerializeField] private ParticleSystem burntFx;
 
         // URP Lit uses _BaseColor; _Color is written too so an unlit/legacy material still reacts.
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
@@ -86,9 +93,23 @@ namespace VortexArena.Modes.Burger
             Paint(stage);
 
             // Only a real transition rings: the first apply is a late joiner's snapshot, not a bake.
-            if (changed && wasKnown && stage == BurgerKinds.PattyCooked)
+            if (!changed || !wasKnown)
+            {
+                return;
+            }
+
+            if (stage == BurgerKinds.PattyCooked)
             {
                 PlayCooked();
+            }
+            else if (stage == BurgerKinds.PattyBurnt)
+            {
+                if (burntFx != null)
+                {
+                    burntFx.Play(true);
+                }
+
+                PlayClip(burntClip);
             }
         }
 
@@ -127,18 +148,23 @@ namespace VortexArena.Modes.Burger
                 cookedFx.Play(true);
             }
 
-            if (cookedClip == null)
+            PlayClip(cookedClip);
+        }
+
+        private void PlayClip(AudioClip clip)
+        {
+            if (clip == null)
             {
                 return;
             }
 
             if (audioSource != null)
             {
-                audioSource.PlayOneShot(cookedClip);
+                audioSource.PlayOneShot(clip);
                 return;
             }
 
-            AudioSource.PlayClipAtPoint(cookedClip, transform.position);
+            AudioSource.PlayClipAtPoint(clip, transform.position);
         }
     }
 }

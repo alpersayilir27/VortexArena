@@ -68,6 +68,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 76ba323ccb010e042af6b7bed878b7fb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: VortexArena.Modes.Burger::VortexArena.Modes.Burger.BurgerGrill
+  sizzleSource: {fileID: 0}
+  smoke: {fileID: 0}
+  fadeSeconds: 1.5
 --- !u!82 &5783590908318654025
 AudioSource:
   m_ObjectHideFlags: 0
@@ -79,7 +82,7 @@ AudioSource:
   serializedVersion: 4
   OutputAudioMixerGroup: {fileID: 0}
   m_audioClip: {fileID: 0}
-  m_Resource: {fileID: 8300000, guid: c15ac16834f3d314982fff58593d7b7d, type: 3}
+  m_Resource: {fileID: 8300000, guid: 29564e4ba1625ff409099493bb889f09, type: 3}
   m_PlayOnAwake: 0
   m_Volume: 1
   m_Pitch: 1
