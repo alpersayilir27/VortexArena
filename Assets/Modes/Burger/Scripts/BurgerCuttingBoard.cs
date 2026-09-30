@@ -16,6 +16,11 @@ namespace VortexArena.Modes.Burger
     /// <para><b>The hand-over is the gesture:</b> letting go over a <see cref="BurgerServingBoard"/>
     /// pours the stack onto that board IN ORDER and puts this board down beside it. Serving still
     /// happens only from the serving board.</para>
+    /// <para><b>A layer dropped on the board while it is HELD joins the cargo</b> the same way one laid
+    /// on the resting board joins the column — a held board is not stable ground, so a layer left to
+    /// physics has nothing to come to rest on.</para>
+    /// <para><b>The board carries a burger, never a tool:</b> while it is held, non-ingredients stop
+    /// colliding with it and drop away (<see cref="TickToolPassthrough"/>).</para>
     /// <para>⚠️ Cargo is claimed at the LOCAL grab, not after the server confirms: the board is already
     /// moving in the hand and a layer claimed one round trip later would be lifted out of thin air.
     /// A refused claim is silent (§10.10) — the only sign is that the owner never becomes us, so every
@@ -51,6 +56,26 @@ namespace VortexArena.Modes.Burger
         /// <summary>Fallback half footprint (m) when the board has no solid collider to measure.</summary>
         private const float FallbackRadius = 0.15f;
 
+        /// <summary>Ranking penalty (m) on the board's OWN grip socket: the board and the layers standing
+        /// on it are centimetres apart, and a hand reaching into the stack means the layer, not the
+        /// plate under it. Only the arbiter's ordering sees it — the accept radius is untouched.</summary>
+        private const float BoardGrabRankBias = 0.05f;
+
+        /// <summary>Margin (m) around the board's solid box while looking for tools to fall through it.
+        /// Contacts that already exist raise no <c>OnCollisionEnter</c>, so the pass is a proximity scan
+        /// rather than an event.</summary>
+        private const float ToolScanMargin = 0.04f;
+
+        /// <summary>Distance (m) from the top of the cargo column in which a layer landing on the held
+        /// board joins it. ⚠️ Without a band the whole stack volume claims: carrying the board through
+        /// the grill would sweep up every patty under it.</summary>
+        private const float ClaimBandMetres = 0.10f;
+
+        /// <summary>Layer spacing (m) used when the cargo is DERIVED on a headset that is not the
+        /// holder's. The per-layer offsets the holder measured are not on the wire, so every other client
+        /// re-stacks at a fixed pitch — same set, same order, one fact behind it.</summary>
+        private const float MirrorLayerHeight = 0.03f;
+
         private NetObject _net;
         private NetObjectGrabBridge _bridge;
         private NetObjectPoseSender _sender;
@@ -77,12 +102,37 @@ namespace VortexArena.Modes.Burger
         /// <summary>Scratch for the pickup query — reused so a grab allocates nothing.</summary>
         private readonly List<NetObject> _free = new List<NetObject>();
 
+        /// <summary>Solid (non-trigger) colliders of the board: the surface a tool would ride on.</summary>
+        private readonly List<Collider> _solids = new List<Collider>();
+
+        /// <summary>Tools whose collision with the board is switched OFF right now, with the colliders
+        /// the pairs were made from — kept so exactly those pairs can be switched back on.</summary>
+        private readonly Dictionary<NetObject, List<Collider>> _passthrough =
+            new Dictionary<NetObject, List<Collider>>();
+
+        private readonly List<NetObject> _restored = new List<NetObject>();
+
+        /// <summary>Cargo derived on a headset that is not the holder's.</summary>
+        private readonly List<NetObject> _mirror = new List<NetObject>();
+
+        private static readonly Collider[] Overlap = new Collider[64];
+
         private void Awake()
         {
             _net = GetComponent<NetObject>();
             _bridge = GetComponent<NetObjectGrabBridge>();
             _sender = GetComponent<NetObjectPoseSender>();
             _column = new BurgerStackColumn(stackTrigger, stackAnchor, transform);
+
+            CollectSolids();
+
+            // Set in code, not on the prefab: the bias is a rule of THIS board (its socket must lose to
+            // the layers standing on it), not a knob someone should retune per instance.
+            var boardSocket = GetComponentInChildren<GripSocket>(true);
+            if (boardSocket != null)
+            {
+                boardSocket.RankBiasMeters = BoardGrabRankBias;
+            }
 
             if (cargoAnchor == null)
             {
@@ -148,6 +198,7 @@ namespace VortexArena.Modes.Burger
 
             _watched.Clear();
             _column.Clear();
+            RestoreAllPassthrough();
         }
 
         private void LateUpdate()
@@ -157,7 +208,20 @@ namespace VortexArena.Modes.Burger
                 return;
             }
 
+            TickToolPassthrough();
+
+            // A board in SOMEBODY ELSE'S hand: the cargo is derived here, it is never claimed or placed
+            // from this headset (see MirrorCargo).
+            if (_net.IsHeld && !_net.IsMine)
+            {
+                MirrorCargo();
+                SeatCargo();
+                _column.TickPins();
+                return;
+            }
+
             PruneCargo();
+            ClaimOverBoard();
             SeatCargo();
             _column.TickPins();
         }
@@ -243,17 +307,122 @@ namespace VortexArena.Modes.Burger
                     continue;
                 }
 
-                // Optimistic, like every other grab (§10.10): the anchor goes on BEFORE the answer, or
-                // the layer's own bridge would seat it in the palm for a frame and fight for the hand the
-                // board is already in.
-                _cargo.Add(layer);
-                _cargoLocal.Add(ToLocal(layer.transform));
-                _cargoBridges.Add(Anchor(layer));
-                _claimed[layer.NetId] = Time.time + ClaimAnswerSeconds;
-                _column.RemovePin(layer);
-
-                NetObjectSync.SendGrab(layer.NetId, rightHand);
+                AddCargo(layer, ToLocal(layer.transform), rightHand);
             }
+        }
+
+        /// <summary>Takes a layer onto the cargo and asks for it.
+        /// <para>⚠️ Optimistic, like every other grab (§10.10): the anchor goes on BEFORE the answer, or
+        /// the layer's own bridge would seat it in the palm for a frame and fight for the hand the board
+        /// is already in.</para></summary>
+        private void AddCargo(NetObject layer, Pose local, bool rightHand)
+        {
+            _cargo.Add(layer);
+            _cargoLocal.Add(local);
+            _cargoBridges.Add(Anchor(layer));
+            _claimed[layer.NetId] = Time.time + ClaimAnswerSeconds;
+            _column.RemovePin(layer);
+
+            NetObjectSync.SendGrab(layer.NetId, rightHand);
+        }
+
+        // ------------------------------------------------------------------- claiming mid-carry
+
+        /// <summary>A layer dropped onto the board WHILE IT IS HELD joins the cargo, the same way one
+        /// laid on the resting board joins the column. Without it the layer has nothing to rest on (a
+        /// held board is not stable ground, <c>NetObjectPoseSender</c>) and slides off the moving
+        /// plate.</summary>
+        /// <remarks>⚠️ Only the holder claims — everyone else derives the same set (<see cref="MirrorCargo"/>).</remarks>
+        private void ClaimOverBoard()
+        {
+            // ⚠️ The LOCAL hold is part of the gate: the wire still calls the board held for a round trip
+            // after it is let go, and a stack just poured onto the serving board sits in this volume —
+            // it would be claimed straight back out of the burger.
+            if (!_net.IsHeld || !_net.IsMine || !HeldItems.Holds(transform) || _watched.Count == 0)
+            {
+                return;
+            }
+
+            bool rightHand = _net.HeldByRightHand;
+
+            foreach (KeyValuePair<NetObject, NetObjectPoseSender> entry in _watched)
+            {
+                NetObject layer = entry.Key;
+                if (!CanJoinCargo(layer))
+                {
+                    continue;
+                }
+
+                AddCargo(layer, SnapOnTop(layer), rightHand);
+            }
+        }
+
+        /// <summary>Free enough to be taken onto the moving board: in nobody's hand, on no other carrier,
+        /// and either resting unowned or in OUR OWN flight (a layer somebody else is flying is theirs
+        /// until it lands).</summary>
+        private bool CanJoinCargo(NetObject layer)
+        {
+            if (layer == null || layer == _net || layer.NetId <= 0 || layer.IsHeld ||
+                _cargo.Contains(layer) || _claimed.ContainsKey(layer.NetId) ||
+                BurgerStackColumn.IsCarried(layer))
+            {
+                return false;
+            }
+
+            if (layer.Owner != 0 && !layer.IsMine)
+            {
+                return false;
+            }
+
+            float top = CargoTopY();
+            float height = BurgerStackColumn.TryBounds(layer, out Bounds bounds)
+                ? bounds.min.y
+                : layer.transform.position.y;
+
+            return Mathf.Abs(height - top) <= ClaimBandMetres;
+        }
+
+        /// <summary>Top of the cargo column in world Y; the cargo anchor itself when nothing rides
+        /// yet.</summary>
+        private float CargoTopY()
+        {
+            float top = cargoAnchor.position.y;
+
+            for (int i = 0; i < _cargo.Count; i++)
+            {
+                if (_cargo[i] != null && BurgerStackColumn.TryBounds(_cargo[i], out Bounds bounds) &&
+                    bounds.max.y > top)
+                {
+                    top = bounds.max.y;
+                }
+            }
+
+            return top;
+        }
+
+        /// <summary>Stands a newly claimed layer upright on top of the column and returns its pose in
+        /// BOARD space — the offset <see cref="SeatCargo"/> writes from then on.</summary>
+        private Pose SnapOnTop(NetObject layer)
+        {
+            cargoAnchor.GetPositionAndRotation(out Vector3 anchorPosition, out Quaternion anchorRotation);
+            Quaternion rotation = BurgerStackColumn.Upright(anchorRotation, layer.transform.rotation);
+            float top = CargoTopY();
+
+            // Measured AT the target rotation: thickness along the column is a property of how the layer
+            // ends up lying, and the physics bounds only follow the transform after a sync.
+            layer.transform.rotation = rotation;
+            Physics.SyncTransforms();
+
+            Vector3 position = layer.transform.position;
+            if (BurgerStackColumn.TryBounds(layer, out Bounds bounds))
+            {
+                position += new Vector3(anchorPosition.x - bounds.center.x,
+                    top - bounds.min.y,
+                    anchorPosition.z - bounds.center.z);
+            }
+
+            layer.transform.SetPositionAndRotation(position, rotation);
+            return ToLocal(layer.transform);
         }
 
         /// <summary>Drops cargo the server did not give us — a refusal is silent, so the deadline is the
@@ -324,6 +493,270 @@ namespace VortexArena.Modes.Burger
                 Pose local = _cargoLocal[i];
                 layer.transform.SetPositionAndRotation(origin + rotation * local.position,
                     rotation * local.rotation);
+            }
+        }
+
+        // ------------------------------------------------------------------- cargo on other headsets
+
+        /// <summary>Cargo of a board held by SOMEBODY ELSE: nothing on the wire says which layers ride
+        /// it, so the same fact the spatula uses is derived here — held by the board's owner, in the
+        /// board's hand.
+        /// <para>⚠️ Without this every headset but the holder's seats those layers in the remote
+        /// player's PALM (their own grab bridge does it), i.e. the burger floats beside the board.</para>
+        /// <para>The per-layer offsets the holder measured are not on the wire, so the derived column is
+        /// re-stacked at a fixed pitch — same set, same order, one fact behind it.</para></summary>
+        private void MirrorCargo()
+        {
+            _mirror.Clear();
+
+            foreach (NetObject candidate in NetObjectRegistry.All)
+            {
+                if (Rides(candidate))
+                {
+                    _mirror.Add(candidate);
+                }
+            }
+
+            _mirror.Sort(CompareByRestHeight);
+
+            // Handed back BEFORE the set is rebuilt: a layer that stopped riding would hang wherever
+            // this board last left it, with nothing writing its pose.
+            for (int i = 0; i < _cargoBridges.Count; i++)
+            {
+                if (_cargoBridges[i] != null)
+                {
+                    _cargoBridges[i].CarryAnchor = null;
+                }
+            }
+
+            _cargo.Clear();
+            _cargoLocal.Clear();
+            _cargoBridges.Clear();
+
+            Quaternion inverse = Quaternion.Inverse(transform.rotation);
+            cargoAnchor.GetPositionAndRotation(out Vector3 anchorPosition, out Quaternion anchorRotation);
+            Vector3 up = cargoAnchor.up;
+
+            for (int i = 0; i < _mirror.Count; i++)
+            {
+                Vector3 world = anchorPosition + up * (i * MirrorLayerHeight);
+
+                _cargo.Add(_mirror[i]);
+                _cargoLocal.Add(new Pose(inverse * (world - transform.position), inverse * anchorRotation));
+                _cargoBridges.Add(Anchor(_mirror[i]));
+            }
+        }
+
+        /// <summary>Held by the board's owner, in the board's hand — the one fact the wire carries.</summary>
+        private bool Rides(NetObject candidate)
+        {
+            return candidate != null && candidate != _net && candidate.NetId > 0 &&
+                   candidate.Kind != null && BurgerKinds.IsIngredient(candidate.Kind.Kind) &&
+                   candidate.IsHeld && candidate.Owner == _net.Owner &&
+                   candidate.HeldByRightHand == _net.HeldByRightHand;
+        }
+
+        /// <summary>Bottom to top by the pose the server last published. ⚠️ The LIVE height cannot be
+        /// used: seated cargo already sits where this board put it, so the comparison would only
+        /// reproduce the previous frame's order and never correct it.</summary>
+        private static int CompareByRestHeight(NetObject a, NetObject b)
+        {
+            float ay = ArenaSpace.ArenaToWorld(a.RestPosition).y;
+            float by = ArenaSpace.ArenaToWorld(b.RestPosition).y;
+            return ay.CompareTo(by);
+        }
+
+        // ------------------------------------------------------------------- tools fall through
+
+        /// <summary>The board carries a burger, never a tool: while it is HELD the knife, the spatula and
+        /// the whole bun lying on it stop colliding with it and drop away.
+        /// <para>⚠️ A contact that already exists raises no <c>OnCollisionEnter</c>, so this is a
+        /// proximity scan, not an event — a tool put down on the board before the pickup would otherwise
+        /// ride it up.</para></summary>
+        private void TickToolPassthrough()
+        {
+            if (_solids.Count == 0)
+            {
+                return;
+            }
+
+            // A board in a LOCAL hand counts as held too: the Held bit has not come back yet, and one
+            // round trip of contact is enough to flick the knife off the table.
+            if (_net.IsHeld || HeldItems.Holds(transform))
+            {
+                HideFromTools();
+                return;
+            }
+
+            RestoreSeparatedTools();
+        }
+
+        private void HideFromTools()
+        {
+            for (int s = 0; s < _solids.Count; s++)
+            {
+                Collider solid = _solids[s];
+                if (solid == null || !solid.enabled)
+                {
+                    continue;
+                }
+
+                Bounds bounds = solid.bounds;
+                int count = Physics.OverlapBoxNonAlloc(bounds.center,
+                    bounds.extents + Vector3.one * ToolScanMargin, Overlap, Quaternion.identity, ~0,
+                    QueryTriggerInteraction.Ignore);
+
+                for (int i = 0; i < count; i++)
+                {
+                    NetObject tool = Overlap[i] != null
+                        ? Overlap[i].GetComponentInParent<NetObject>()
+                        : null;
+
+                    if (IsTool(tool) && !_passthrough.ContainsKey(tool))
+                    {
+                        IgnoreTool(tool);
+                    }
+                }
+            }
+        }
+
+        /// <summary>A grabbable net object that is not an ingredient. ⚠️ The grab bridge is part of the
+        /// filter: fixed furniture is a net object too, and nothing is gained by letting the board sink
+        /// through the counter it is lifted off.</summary>
+        private bool IsTool(NetObject candidate)
+        {
+            return candidate != null && candidate != _net && candidate.NetId > 0 &&
+                   candidate.Kind != null && !BurgerKinds.IsIngredient(candidate.Kind.Kind) &&
+                   candidate.GetComponent<NetObjectGrabBridge>() != null;
+        }
+
+        private void IgnoreTool(NetObject tool)
+        {
+            var parts = new List<Collider>();
+            tool.GetComponentsInChildren(parts);
+
+            for (int i = parts.Count - 1; i >= 0; i--)
+            {
+                Collider part = parts[i];
+                if (part == null || part.isTrigger || !part.enabled)
+                {
+                    parts.RemoveAt(i);
+                    continue;
+                }
+
+                for (int s = 0; s < _solids.Count; s++)
+                {
+                    if (_solids[s] != null && _solids[s].enabled)
+                    {
+                        Physics.IgnoreCollision(_solids[s], part, true);
+                    }
+                }
+            }
+
+            _passthrough[tool] = parts;
+        }
+
+        /// <summary>Gives a tool its collisions back — but only once it is CLEAR of the board:
+        /// re-enabling a pair that is interpenetrating fires the tool across the room.</summary>
+        private void RestoreSeparatedTools()
+        {
+            if (_passthrough.Count == 0)
+            {
+                return;
+            }
+
+            _restored.Clear();
+
+            foreach (KeyValuePair<NetObject, List<Collider>> entry in _passthrough)
+            {
+                if (entry.Key != null && StillOverlaps(entry.Value))
+                {
+                    continue;
+                }
+
+                RestoreTool(entry.Value);
+                _restored.Add(entry.Key);
+            }
+
+            for (int i = 0; i < _restored.Count; i++)
+            {
+                _passthrough.Remove(_restored[i]);
+            }
+        }
+
+        private bool StillOverlaps(List<Collider> parts)
+        {
+            for (int i = 0; i < parts.Count; i++)
+            {
+                Collider part = parts[i];
+                if (part == null || !part.enabled)
+                {
+                    continue;
+                }
+
+                for (int s = 0; s < _solids.Count; s++)
+                {
+                    Collider solid = _solids[s];
+                    if (solid == null || !solid.enabled)
+                    {
+                        continue;
+                    }
+
+                    if (Physics.ComputePenetration(solid, solid.transform.position,
+                            solid.transform.rotation, part, part.transform.position,
+                            part.transform.rotation, out Vector3 _, out float _))
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        private void RestoreTool(List<Collider> parts)
+        {
+            for (int i = 0; i < parts.Count; i++)
+            {
+                Collider part = parts[i];
+                if (part == null || !part.enabled)
+                {
+                    continue;
+                }
+
+                for (int s = 0; s < _solids.Count; s++)
+                {
+                    if (_solids[s] != null && _solids[s].enabled)
+                    {
+                        Physics.IgnoreCollision(_solids[s], part, false);
+                    }
+                }
+            }
+        }
+
+        /// <summary>⚠️ An ignored pair outlives this component: the flag lives in the physics scene, not
+        /// here, so a board disabled mid-carry would leave the tool falling through it for good.</summary>
+        private void RestoreAllPassthrough()
+        {
+            foreach (KeyValuePair<NetObject, List<Collider>> entry in _passthrough)
+            {
+                RestoreTool(entry.Value);
+            }
+
+            _passthrough.Clear();
+        }
+
+        private void CollectSolids()
+        {
+            _solids.Clear();
+            GetComponentsInChildren(true, _solids);
+
+            for (int i = _solids.Count - 1; i >= 0; i--)
+            {
+                if (_solids[i] == null || _solids[i].isTrigger)
+                {
+                    _solids.RemoveAt(i);
+                }
             }
         }
 

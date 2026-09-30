@@ -233,6 +233,19 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
+            if (!socket.TryMeasure(hand, out float distance))
+            {
+                return;
+            }
+
+            // Highlight lane: offered with no press at all, so the sphere the player sees is picked by
+            // the same ranking that will answer the press. A hand already holding a world object is left
+            // out — it cannot press again without letting go first, so a highlight there would lie.
+            if (HandCanTake(rightHand))
+            {
+                GrabArbiter.SubmitPreview(this, rightHand, RankDistance(distance));
+            }
+
             // ⚠️ At REST the EDGE is required, tracked per hand across every frame, not only while the
             // hand is inside the socket: sampled on entry, a hand already squeezing the grip would grab
             // the moment it drifts into the volume, without the player pressing anything.
@@ -249,12 +262,22 @@ namespace VortexArena.Core.Combat
             // ⚠️ NOT Grab() from here. This socket sees only itself, and where sockets overlap every
             // bridge would answer the same press — one palm, several objects. The offer is ranked by
             // distance and the nearest is called back this frame (GrabArbiter).
-            if (!socket.TryMeasure(hand, out float distance))
-            {
-                return;
-            }
+            GrabArbiter.Submit(this, rightHand, RankDistance(distance));
+        }
 
-            GrabArbiter.Submit(this, rightHand, distance);
+        /// <summary>Ranking key for the arbiter: the socket's bias re-orders overlapping candidates and
+        /// never touches the accept radius the take gate uses.</summary>
+        private float RankDistance(float distance)
+        {
+            return distance + socket.RankBiasMeters;
+        }
+
+        /// <summary>Could this hand answer a grab press at all — a hand holding a WORLD object cannot
+        /// (it has to let go first), a hand holding a weapon can (the grab stows it).</summary>
+        private static bool HandCanTake(bool rightHand)
+        {
+            HeldItems.Slot slot = rightHand ? HeldItems.RightHand : HeldItems.LeftHand;
+            return slot.Definition == null || !slot.Definition.IsWorldSingle;
         }
 
         /// <summary>The arbiter's callback: this bridge won that hand this frame.</summary>
@@ -594,8 +617,12 @@ namespace VortexArena.Core.Combat
             // ⚠️ The definition's indicator flag is ANDed into "is it available", never into the socket's
             // radius: the accept volume and the take gate stay exactly as they were, so hiding the
             // sphere cannot make an item harder to pick up.
-            socket.Tick(IsTakeable && item.ShowGrabIndicator && !_net.IsHeld &&
-                        _localHand == OVRInput.Controller.None && CalibrationState.IsCalibrated);
+            bool available = IsTakeable && !_net.IsHeld &&
+                             _localHand == OVRInput.Controller.None && CalibrationState.IsCalibrated;
+
+            // The hand's preview winner is shown even on a definition that hides the sphere: it is the
+            // only feedback for "this is what you would take". Local presentation, nothing on the wire.
+            socket.Tick(available && (item.ShowGrabIndicator || GrabArbiter.IsPreviewWinner(this)));
         }
 
         /// <summary>Does the definition actually route this object through a socket. The grab path is the

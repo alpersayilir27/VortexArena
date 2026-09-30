@@ -1969,6 +1969,7 @@ olmalı, tanınmayan `modeId` reddedilir):
 > | `bun_bottom` · `bun_top` · `cheese` · `bacon` · `lettuce` · `onion` · `pickle` · `tomato` · `sauce` | `anyone` | — | — | — |
 > | `patty` | `anyone` | `grill` (`anyone`) | `0` çiğ · `1` pişmiş · `2` yanmış | — |
 > | `board` | `none` | `serve` (`anyone`) | — | — |
+> | `cutting_board` | `anyone` | — | — | — |
 > | `knife` · `spatula` | `anyone` | — | — | — |
 > | `customer` | `none` | — | `0` geliyor · `1` bekliyor · `2` mutlu · `3` mutsuz | `slot:<n>;r:<tarif>` |
 >
@@ -2012,6 +2013,24 @@ olmalı, tanınmayan `modeId` reddedilir):
 > anlarında alınır: sonrası taşıyıcı dinlenme pozundan uzaklaşmıştır ve ofset havada oturturdu. Başka
 > bir taşıyıcının üstünde giden taşıyıcı (tahtadaki spatula) **uyur**: talep etmez, oturtmaz — aynı
 > elin yükünü iki taşıyıcı yazsa tek transforma iki yazıcı düşerdi.
+>
+> ⚠️ **Kesme tahtası (`cutting_board`) gevşek şeride sahip DEĞİLDİR — alet taşımaz.** Tahta tutulurken
+> malzeme olmayan tutulabilir nesneler (bıçak, spatula, bütün ekmek) tahtanın katı collider'ıyla
+> **çarpışmaz**: üstündeki alet düşer ve sıradan biçimde dinlenir. Çarpışma, tahta bırakıldıktan
+> **ve** çift ayrıldıktan sonra geri açılır — iç içeyken açmak aleti fırlatır. Tamamı istemci
+> tarafıdır; telin karşılığı yoktur.
+>
+> **Tutulan tahtanın üstüne konan malzeme yığına katılır.** Tutulan tahta dinlenilecek zemin değildir
+> (aşağıdaki "taşınan nesnenin üstünde duran dinlenmez" kuralı), yani kendi haline bırakılan malzeme
+> hareket eden tahtadan kayardı. Bu yüzden tahtayı **tutan** istemci, yığın hacmindeki dinlenmiş
+> sahipsiz ya da **kendi** uçuşundaki malzemeyi sıradan bir `object_grab` ile ister (uçuştaki nesnenin
+> kavranması kabul edilir, §10.10) ve yığının tepesine dik oturtur; talep yine yalnız tepedeki temas
+> bandında yapılır. Başkasının uçurduğu malzeme istenmez — o iniş anına kadar onundur.
+>
+> Tahtanın yükü de aynı üçlüden (`owner` + `held` + `heldRight`) **her istemcide** türetilir;
+> tutmayan başlıkta sütun sabit bir katman aralığıyla yeniden dizilir, çünkü tutanın ölçtüğü katman
+> ofsetleri telde yoktur. Türetme olmadan yük, tutanın dışındaki her başlıkta malzemenin kendi
+> kavrama köprüsü tarafından **avuca** oturtulur — hamburger tahtanın yanında havada durur.
 >
 > **Yığın sırası DİNLENME pozunun yüksekliğinden okunur, geliş sırasından değil.** ⚠️ Geliş sırası
 > maçın ortasında bağlanan başlıkta yoktur (`world_state` sırasızdır) — o başlıkta yığın karışır, ve

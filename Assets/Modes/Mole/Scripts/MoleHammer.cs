@@ -46,10 +46,10 @@ namespace VortexArena.Modes.Mole
 
         [Tooltip("Vuruşta elin titreşim gücü (0-1).")]
         [Range(0f, 1f)]
-        [SerializeField] private float hitHapticAmplitude = 0.8f;
+        [SerializeField] private float hitHapticAmplitude = 1f;
 
         [Tooltip("Vuruş titreşiminin süresi (sn) — tek kısa darbe.")]
-        [SerializeField] private float hitHapticSeconds = 0.1f;
+        [SerializeField] private float hitHapticSeconds = 0.2f;
 
         /// <summary>Per-frame contact buffer; sized for scenery + own colliders so moles are not pushed out.</summary>
         private const int MaxContacts = 32;

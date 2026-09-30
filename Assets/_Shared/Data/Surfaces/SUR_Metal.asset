@@ -14,10 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.SurfaceDefinition
   surfaceId: metal
   impactPrefab: {fileID: 371613135301754936, guid: a85b785059162f247a31d154e8f64f0b, type: 3}
-  impactClips:
-  - {fileID: 8300000, guid: 2ffd2cf5597dfb44493ea64f976e7b0e, type: 3}
-  - {fileID: 8300000, guid: a0f33ddfa773ce64e964248e24ee0382, type: 3}
-  - {fileID: 8300000, guid: 6d35ff63f1e990742ba36dee0871b631, type: 3}
+  impactClips: []
   volume: 0.8
   pitchRange: {x: 0.9, y: 1.14}
   lifetimeSeconds: 1.5

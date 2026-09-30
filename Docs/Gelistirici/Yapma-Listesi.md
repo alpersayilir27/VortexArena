@@ -657,6 +657,15 @@ birkaç obje, telde birkaç mesaj, tek ele birkaç yazar. Belirti sessizdir, hat
 hakemin çağırdığı `CommitGrab` yapar. Bilerek çoklu kavrayan bir yol (taşıyıcının kargo hacmi)
 hakemden geçmez, ama o istisna **basış yolu değildir**.
 
+### ⛔ Kapatılan çarpışmayı iki collider iç içeyken geri açma
+
+`Physics.IgnoreCollision(a, b, false)` çift **üst üsteyken** çağrılırsa fizik o kareyi bir
+iç-içe-geçme olarak çözer ve nesneyi odanın öbür ucuna fırlatır — belirti "eşya kendiliğinden
+uçtu"dur, hata verilmez. Kapatılan çarpışma ancak çift **ayrıldıktan** sonra geri açılır
+(`Physics.ComputePenetration` ile sınanır). Aynı sebeple kapatılan çift bileşenin ömrüne
+bırakılmaz: bayrak fizik sahnesinde yaşar, `OnDisable`'da geri açılmazsa o eşya maç boyunca
+birbirinden geçer.
+
 ### ⛔ Tutulabilir bir türün prefabında kavrama pozunu serbest bırakma
 
 Ağ nesnesi ele **kanonik kavrama poziyle** bağlanır ve duruş telde gitmez: iki uç aynı kaydı okur.

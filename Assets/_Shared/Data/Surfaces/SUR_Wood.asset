@@ -14,10 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.SurfaceDefinition
   surfaceId: tahta
   impactPrefab: {fileID: 1427231263944376690, guid: 6fa32a3d4c5c9c94caf8d08556aa7aa0, type: 3}
-  impactClips:
-  - {fileID: 8300000, guid: 33afc6fcfa811474b959efa68a1d4e47, type: 3}
-  - {fileID: 8300000, guid: 9b84cbfc312ea844687ae010a1669c58, type: 3}
-  - {fileID: 8300000, guid: d02a033247d5ca046bb0b8bf0924598c, type: 3}
+  impactClips: []
   volume: 0.8
   pitchRange: {x: 0.93, y: 1.09}
   lifetimeSeconds: 1.5

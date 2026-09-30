@@ -41,6 +41,7 @@ Oyuncu HUD'ları ayrı yerdedir (mod kutularında):
 | `Assets/Modes/FreeForAll/UI/FfaHud.prefab` | FFA oyuncu HUD'ı |
 | `Assets/Modes/Tournament/UI/TournamentHud.prefab` | Turnuva oyuncu HUD'ı |
 | `Assets/Modes/Mole/UI/MoleHud.prefab` | Köstebek oyuncu HUD'ı — aşağıdaki istisna |
+| `Assets/Modes/Burger/UI/BurgerHud.prefab` | Hamburgerci oyuncu HUD'ı — aşağıdaki istisna |
 
 ⚠️ **`MoleHud` şeridi başka dizer:** bu modda can yoktur, bu yüzden iç içe `HealthHud` örneğinde
 `Backdrop` **kapatılmıştır** (silinmez) ve `RoundScore` örnekte x 0 · y 0'a alınmıştır — yani kapalı
@@ -50,6 +51,13 @@ durduğu için yalnız biri ezilseydi Mole'da panel durum satırının üstüne 
 yaslı) ve `BlueHits` (x +330, sola yaslı); 260×72, 44 punto kalın, `HealthBar.mat`. Renk metnin
 kendisinde (rich text: `D` yeşil, `Y` kırmızı) — metin rengi beyaz kalır. `MoleHud` kökünün ölçeği
 de diğer HUD'lar gibi **0,0005**'tir; şerit bu ölçeği bekler. `DeathHud` bu HUD'da yoktur.
+
+⚠️ **`BurgerHud` da aynı şeridi can olmadan kullanır, ama takımsızdır:** `Backdrop` kapalı, `RoundScore`
+de **kapalı** — `TeamScorePanel` takımsız modda kendi `Panel`'ini gizler, skor oradan çizilemez. Yerine
+örneğe eklenmiş **`Score`** kutusu (620×90, x 0 · y 0 — kapalı barın yerinde; `Clock/Panel`'in kopyası)
+→ `Value` (50 punto) `scoreText`'e bağlıdır ve `BurgerClientController` oraya "SEN x · TOPLAM y" yazar.
+`Status` örnekte −100'dedir (skor kutusunun altı). Görüş alanında yalnız saat, skor ve durum satırı
+vardır: `phaseText` ile müşteri sayacı (`customerCountsText`) bilerek **bağlanmamıştır**.
 
 Üçünün de içi **bilerek boştur**: taşıdıkları tek şey nested prefab örnekleridir — `HealthHud`
 (kafaya kilitli şerit: can barı + maç saati + durum satırı + tur/skor paneli + tur sonucu) ve

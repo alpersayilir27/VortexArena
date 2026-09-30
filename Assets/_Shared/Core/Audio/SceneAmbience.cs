@@ -60,7 +60,7 @@ namespace VortexArena.Core.Audio
 
         /// <summary>Music level in the <c>finished</c> phase: lowered, not stopped, so the result
         /// announcement is heard and the scene does not fall silent. Ambience is not lowered.</summary>
-        private const float FinishedMusicFactor = 0.3f;
+        private const float FinishedMusicFactor = 0.15f;
 
         public static SceneAmbience Instance { get; private set; }
 

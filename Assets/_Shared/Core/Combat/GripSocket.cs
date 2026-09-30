@@ -85,6 +85,12 @@ namespace VortexArena.Core.Combat
         /// socket behaves exactly as at rest.</summary>
         public bool CatchMode { get; set; }
 
+        /// <summary>Penalty (m) added to this socket's measured distance in the arbiter's RANKING only —
+        /// the tie-breaker between overlapping sockets (the board under the layer the player reached for).
+        /// <para>⚠️ Never part of <see cref="EffectiveRadius"/>: a bias that narrowed the accept volume
+        /// would read as "I am inside the sphere but it will not take".</para></summary>
+        public float RankBiasMeters { get; set; }
+
         /// <summary>Radius the take gate AND the indicator use right now — one number in both modes, so
         /// "inside but it will not take" cannot happen in either.</summary>
         public float EffectiveRadius => CatchMode ? Mathf.Max(AcceptRadius, CatchRadius) : AcceptRadius;

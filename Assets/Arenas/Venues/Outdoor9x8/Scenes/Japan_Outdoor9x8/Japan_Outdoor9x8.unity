@@ -3402,7 +3402,7 @@ PrefabInstance:
     - target: {fileID: 4803082647678035667, guid: 0dd3636037d9d5a449056a8dddf23037, type: 3}
       propertyPath: dimensionsJson
       value: 
-      objectReference: {fileID: 4900000, guid: e3544e398a164c34689c069062e7db7d, type: 3}
+      objectReference: {fileID: 4900000, guid: 35751414b82b3e940a192526ef1ddf96, type: 3}
     - target: {fileID: 6538303354718323150, guid: 0dd3636037d9d5a449056a8dddf23037, type: 3}
       propertyPath: m_Name
       value: VA_ArenaBoundary
