@@ -1974,7 +1974,7 @@ kuralın söyleyeceği bir şey yoktur (telde yine `false` gider).
 > | `dispenser_<malzeme>` | `none` | `take` (`anyone`) | — | — |
 > | `bun_whole` | `anyone` | `cut` (`anyone`) | — | — |
 > | `bun_bottom` · `bun_top` · `cheese` · `bacon` · `lettuce` · `onion` · `pickle` · `tomato` · `sauce` | `anyone` | — | — | — |
-> | `patty` | `anyone` | `grill` (`anyone`) | `0` çiğ · `1` pişmiş · `2` yanmış | — |
+> | `patty` | `anyone` | `grill` (`anyone`) | `0` çiğ · `1` pişmiş · `2` yanmış | `p:<ms>;c:<ms>;b:<ms>` |
 > | `board` | `none` | `serve` (`anyone`) | — | — |
 > | `cutting_board` | `anyone` | — | — | — |
 > | `knife` · `spatula` | `anyone` | — | — | — |
@@ -1992,6 +1992,19 @@ kuralın söyleyeceği bir şey yoktur (telde yine `false` gider).
 > köfteyi yakardı. Aynı sebeple sunucu **elde tutulan köfteyi pişirmez** (kaybolan bir `i:[0]`'ın
 > güvencesi). `i:[1]` ise idempotenttir ve köfte ızgarada her dinlenişinde yeniden gönderilir: elde
 > tutulup geri konan köfte, arada `i:[0]` gitmemiş olsa da yeniden ızgaraya yazılır.
+>
+> **Pişme göstergesi (termometre) köftenin `s` alanından çizilir:** `p` = ızgarada geçen süre,
+> `c` = pişme eşiği, `b` = yanma eşiği (`server.json → burger.cookSeconds/burnSeconds`); üçü de **tam
+> sayı milisaniyedir**. Boş `s` = hiç ızgara görmemiş köfte. Sunucu alanı her tick'te DEĞİL, yalnız
+> sayacın **başladığı** (köfte ızgaraya gerçekten yazıldığında), **durduğu** (`i:[0]` ya da elde
+> tutulduğu için ızgaradan düşürüldüğünde) ve `stage` değiştiği anda yazar; aradaki süreyi istemci,
+> köfte kendi ızgara hacminde serbest yatarken kendisi sayar.
+> - ⚠️ **`stage` yine tek otoritedir:** istemcinin tahmini `0`'da pişme eşiğini, `1`'de yanma eşiğini
+>   geçemez, `2`'de gösterge doludur — gecikmeden birikecek sapma her aşama geçişinde sıfırlanır.
+> - ⚠️ **Tekrarlanan `i:[1]` alanı yeniden yazmaz:** köfte ızgarada her dinlenişte yazılsaydı sabit
+>   duran köfte için `object_state` yağardı.
+> - Ondalık değil milisaniye: sunucu Türkçe yerel ayarda ondalığı virgülle yazar, istemci ayrıştıramaz.
+> - Bu anahtarlar `PROTOCOL_VERSION`'ı artırmaz: eski istemci tanımadığı anahtarı okumaz.
 >
 > **Servis jesti ÜST EKMEĞİ koymaktır.** `serve` iki anda denenir — bankodaki bir tahtaya üst ekmek
 > konduğunda, ya da bitmiş bir tahta slota bırakıldığında — ve ikisinde de yığının **en üstü**

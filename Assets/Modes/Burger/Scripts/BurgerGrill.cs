@@ -50,6 +50,30 @@ namespace VortexArena.Modes.Burger
         /// counts if the patty stays out this long.</summary>
         private const float ExitGraceSeconds = 0.25f;
 
+        /// <summary>Enabled grills, so <see cref="IsCooking"/> can answer without a scene search.</summary>
+        private static readonly List<BurgerGrill> Active = new List<BurgerGrill>();
+
+        /// <summary>Is this patty counting up right now? LOCAL guess for the thermometer's between-update
+        /// ticking — it does NOT replace the server's counter, <c>stage</c> stays the authority.</summary>
+        public static bool IsCooking(NetObject patty)
+        {
+            if (patty == null)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < Active.Count; i++)
+            {
+                BurgerGrill grill = Active[i];
+                if (grill != null && grill._phasePlaying && grill._inside.ContainsKey(patty) && !patty.IsHeld)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         private void Awake()
         {
             if (sizzleSource == null)
@@ -72,6 +96,7 @@ namespace VortexArena.Modes.Burger
 
         private void OnEnable()
         {
+            Active.Add(this);
             NetEvents.OnMatchState += HandleMatchState;
             NetEvents.OnMatchEnd += HandleMatchEnd;
         }
@@ -267,6 +292,7 @@ namespace VortexArena.Modes.Burger
 
         private void OnDisable()
         {
+            Active.Remove(this);
             NetEvents.OnMatchState -= HandleMatchState;
             NetEvents.OnMatchEnd -= HandleMatchEnd;
 

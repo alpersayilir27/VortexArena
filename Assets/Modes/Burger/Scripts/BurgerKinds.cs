@@ -74,6 +74,15 @@ namespace VortexArena.Modes.Burger
         public const string PayloadSlot = "slot";
         public const string PayloadRecipe = "r";
 
+        /// <summary>Patty time on the grill, integer ms (§10.5). Empty payload = never grilled.</summary>
+        public const string PayloadCookProgress = "p";
+
+        /// <summary>Cooked threshold, integer ms (§10.5).</summary>
+        public const string PayloadCookMs = "c";
+
+        /// <summary>Burnt threshold, integer ms (§10.5).</summary>
+        public const string PayloadBurnMs = "b";
+
         /// <summary>Can this kind appear in a recipe? ⚠️ <see cref="BunWhole"/> is NOT one — it is cut
         /// into two halves before it can be stacked.</summary>
         public static bool IsIngredient(string kind)

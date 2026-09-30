@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Serialization;
 using VortexArena.Net;
@@ -60,13 +61,31 @@ namespace VortexArena.Modes.Burger
 
             if (renderers == null || renderers.Length == 0)
             {
-                renderers = GetComponentsInChildren<Renderer>(true);
+                renderers = CollectPaintableRenderers();
             }
 
             if (cookedFx == null)
             {
                 cookedFx = GetComponentInChildren<ParticleSystem>(true);
             }
+        }
+
+        /// <summary>⚠️ Skips the thermometer's gauge: its renderer is a child too, and the doneness colour
+        /// written into _BaseColor would paint the whole dial meat-coloured.</summary>
+        private Renderer[] CollectPaintableRenderers()
+        {
+            Renderer[] all = GetComponentsInChildren<Renderer>(true);
+            var kept = new List<Renderer>(all.Length);
+            for (int i = 0; i < all.Length; i++)
+            {
+                Renderer target = all[i];
+                if (target != null && target.GetComponentInParent<BurgerPattyThermometer>(true) == null)
+                {
+                    kept.Add(target);
+                }
+            }
+
+            return kept.ToArray();
         }
 
         private void OnEnable()

@@ -266,15 +266,30 @@ public sealed class BurgerMode : IGameMode
             if (owner != 0)
             {
                 _onGrill.Remove(netId);
+                PublishCookProgress(director, netId);
                 continue;
             }
 
             _cooking.TryGetValue(netId, out var progress);
             var cooked = progress + deltaSeconds;
             _cooking[netId] = cooked;
-            if (cooked >= _settings.burnSeconds) director.SetObjectStage(netId, PattyBurnt);
-            else if (cooked >= _settings.cookSeconds) director.SetObjectStage(netId, PattyCooked);
+            var changed = false;
+            if (cooked >= _settings.burnSeconds) changed = director.SetObjectStage(netId, PattyBurnt);
+            else if (cooked >= _settings.cookSeconds) changed = director.SetObjectStage(netId, PattyCooked);
+            if (changed) PublishCookProgress(director, netId);
         }
+    }
+
+    /// <summary>Writes the thermometer snapshot into the patty's <c>s</c> (§10.5): progress and both
+    /// thresholds in integer ms. Only on start/stop/stage change — clients extrapolate in between.</summary>
+    /// <remarks>Integer ms, not a float: the server's Turkish locale would write a decimal comma.</remarks>
+    private void PublishCookProgress(MatchDirector director, int netId)
+    {
+        _cooking.TryGetValue(netId, out var progress);
+        var progressMs = (int)MathF.Round(progress * 1000f);
+        var cookMs = (int)MathF.Round(_settings.cookSeconds * 1000f);
+        var burnMs = (int)MathF.Round(_settings.burnSeconds * 1000f);
+        director.SetObjectPayload(netId, $"p:{progressMs};c:{cookMs};b:{burnMs}");
     }
 
     public bool OnObjectEvent(MatchDirector director, int playerId, int netId, string kind, ObjectEventMsg msg)
@@ -382,13 +397,15 @@ public sealed class BurgerMode : IGameMode
         var on = msg.i != null && msg.i.Length > 0 && msg.i[0] == 1;
         if (!on)
         {
-            _onGrill.Remove(netId);
+            if (_onGrill.Remove(netId)) PublishCookProgress(director, netId);
             return false;
         }
 
         if (owner != 0) return false; // a patty in a hand is not lying on the grill
-        _onGrill.Add(netId);
+        // Only a real start publishes: "on" repeats on every rest and would flood object_state.
+        if (!_onGrill.Add(netId)) return false;
         _cooking.TryAdd(netId, 0f);
+        PublishCookProgress(director, netId);
         return false;
     }
 
