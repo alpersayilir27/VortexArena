@@ -62,8 +62,34 @@ namespace VortexArena.Core
         /// </summary>
         public static bool FireWhilePaused { get; private set; }
 
+        /// <summary>
+        /// §10.5 <c>allies</c> — MEANINGFUL ONLY with <c>teamMode:"none"</c>: <c>true</c> = the
+        /// teamless players form ONE shared side (co-op), <c>false</c> = everyone is alone (FFA).
+        /// Ignored in a two-team mode, where team equality already answers the question.
+        /// <para>⚠️ Read through <see cref="IsAlly"/>, not directly: a bare <c>Allies</c> check
+        /// would answer "ally" in a two-team mode too.</para>
+        /// </summary>
+        public static bool Allies { get; private set; }
+
         /// <summary>Teamless-mode shortcut — so callers do not repeat the enum comparison.</summary>
         public static bool IsTeamless => Teams == ModeTeamMode.None;
+
+        /// <summary>One shared side: a teamless mode whose players are all allies (§10.5
+        /// <c>allies</c>). The single answer to "is there a teammate at all in this mode".</summary>
+        public static bool AlliesAll => IsTeamless && Allies;
+
+        /// <summary>
+        /// Is <paramref name="other"/> an ally of <paramref name="local"/>? THE single "is this my
+        /// teammate" answer on the client (name label, kill announcement).
+        /// <para>Teamless: the <see cref="Allies"/> rule decides and the teams are not even looked at
+        /// — the server CLEARS them there, so both sides are <see cref="Team.Neutral"/>. With teams:
+        /// equality, and an unknown (<see cref="Team.Neutral"/>) local team is never an ally —
+        /// treating "unknown" as friendly is exactly the leaking case.</para>
+        /// </summary>
+        public static bool IsAlly(Team local, Team other)
+        {
+            return IsTeamless ? Allies : local != Team.Neutral && local == other;
+        }
 
         /// <summary>Weaponless-mode shortcut (§10.5 <c>weaponSource:"none"</c>): no grant runs, scene
         /// racks stay hidden and the trigger is shut. The single answer to "is there a weapon in this
@@ -98,7 +124,8 @@ namespace VortexArena.Core
                 ParseRevive(info.reviveAnchor),
                 ParseWeapons(info.weaponSource),
                 info.respawnDelay,
-                info.fireWhilePaused);
+                info.fireWhilePaused,
+                info.allies);
         }
 
         /// <summary>
@@ -126,21 +153,28 @@ namespace VortexArena.Core
             // possible. Authority is still on the server (rules.fireWhilePaused); this is only the
             // fallback for a wire without rules.
             Set(modeId, mode.TeamMode, mode.Scoring, mode.FriendlyFire,
-                mode.Revive, mode.Weapons, mode.RespawnDelay, mode.IsLobbyProfile);
+                mode.Revive, mode.Weapons, mode.RespawnDelay, mode.IsLobbyProfile, mode.Allies);
+        }
+
+        /// <summary>Catalog definition of the CURRENT mode; null when the mode is unknown.</summary>
+        public static ModeDefinition FindDefinition()
+        {
+            return FindCatalogMode(ModeId);
         }
 
         /// <summary>Returns to the default (team-based TDM) — on returning to the open scene and on disconnect.</summary>
         public static void Reset(string modeId = "")
         {
             Set(modeId, ModeTeamMode.TwoTeams, ModeScoreKind.Team, false,
-                ModeReviveAnchor.OwnBase, ModeWeaponSource.WeaponCanvas, ArenaProtocol.RESPAWN_DELAY, false);
+                ModeReviveAnchor.OwnBase, ModeWeaponSource.WeaponCanvas, ArenaProtocol.RESPAWN_DELAY,
+                false, false);
         }
 
         // ---------------------------------------------------------------- internals
 
         private static void Set(string modeId, ModeTeamMode teams, ModeScoreKind scoring,
             bool friendlyFire, ModeReviveAnchor revive, ModeWeaponSource weapons, float respawnDelay,
-            bool fireWhilePaused)
+            bool fireWhilePaused, bool allies)
         {
             string id = modeId ?? "";
             // 0 is preserved (instant revive); only a meaningless negative is clamped.
@@ -148,7 +182,7 @@ namespace VortexArena.Core
 
             bool changed = id != ModeId || teams != Teams || scoring != Scoring ||
                            friendlyFire != FriendlyFire || revive != Revive || weapons != Weapons ||
-                           fireWhilePaused != FireWhilePaused ||
+                           fireWhilePaused != FireWhilePaused || allies != Allies ||
                            !Mathf.Approximately(delay, RespawnDelay);
 
             ModeId = id;
@@ -159,6 +193,7 @@ namespace VortexArena.Core
             Weapons = weapons;
             RespawnDelay = delay;
             FireWhilePaused = fireWhilePaused;
+            Allies = allies;
 
             if (changed)
             {

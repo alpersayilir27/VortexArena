@@ -24,6 +24,7 @@ MonoBehaviour:
   revive: 2
   weapons: 2
   respawnDelay: 0
+  allies: 1
   maps: []
   loadout: []
   hudPrefab: {fileID: 3415840267267884003, guid: e9a3c27e2c57eeb48b044d2b4936ae57, type: 3}

@@ -33,8 +33,9 @@ namespace VortexArena.Core.Editor
         /// <summary>FBX of the character the pose is read from — the hips BIND pose comes from
         /// here.</summary>
         /// <remarks>⚠️ This is the character's OWN model; if it changes, the team body is driven
-        /// with the wrong bind reference (body drifts vertically, no error logged).</remarks>
-        private const string CharacterModelPath = "Assets/ThirdPartyPackages/MixamoCharacters/Ch15_nonPBR.fbx";
+        /// with the wrong bind reference (body drifts vertically, no error logged). Shared with
+        /// <see cref="ModeBodyBuilder"/> — a second copy would silently drift apart.</remarks>
+        internal const string CharacterModelPath = "Assets/ThirdPartyPackages/MixamoCharacters/Ch15_nonPBR.fbx";
 
         private const string TeamRootName = "RedTeamBody";
         private const string TeamBodyName = "Ch18_nonPBR";

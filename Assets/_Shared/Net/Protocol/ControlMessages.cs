@@ -375,6 +375,10 @@ namespace VortexArena.Protocol
         /// <summary>"two" (red/blue) | "none" (teamless).</summary>
         public string teamMode = "two";
 
+        /// <summary>Teamless one-team co-op: every player is everyone's teammate (§10.5). Ignored when
+        /// teamMode is "two"; false = FFA.</summary>
+        public bool allies;
+
         /// <summary>"team" (match_state.scoreRed/scoreBlue) | "player" (PlayerInfo.score).</summary>
         public string scoring = "team";
 

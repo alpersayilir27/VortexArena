@@ -575,7 +575,8 @@ public sealed class MatchDirector
     /// <summary>Is a TEAMLESS match currently SET UP (§10.5)? "Set up" = a mode is selected — loading,
     /// countdown, playing, paused and the finished screen all count; the plain lobby (no mode) does
     /// not.</summary>
-    /// <remarks>Asked on the <c>hello</c> path: in a teamless match an empty team must stay empty, and a
+    /// <remarks>Asked on the <c>hello</c> path (via <c>LobbyService.IsTeamlessSetUpOrSelected</c>, which
+    /// also covers the merely SELECTED mode): in a teamless match an empty team must stay empty, and a
     /// joiner/returner must not be put into a team (§2). ⚠️ <c>finished</c> counts on purpose — a returner
     /// must not turn red on the result screen either.</remarks>
     public bool IsTeamlessMatchSetUp()
@@ -1932,8 +1933,8 @@ public sealed class MatchDirector
                 RejectHit(shooter, msg.targetPlayerId, "hedef doğma koruması altında");
                 return;
             }
-            // §10.3 gate 5. TWO separate tests on purpose: an empty team is never a teammate, so in a
-            // team-less mode a self-hit would slip past the teammate test — and then score.
+            // §10.3 gate 5. TWO separate tests on purpose: the teammate test never matches the same
+            // player, so without its own test a self-hit would slip through the gate — and then score.
             selfHit = target.PlayerId == shooter.PlayerId;
             teamKill = AreTeammates(shooter, target);
             if (!_rules.FriendlyFire && (selfHit || teamKill))
@@ -1987,7 +1988,7 @@ public sealed class MatchDirector
         // The kill feed line still runs; the Counter-Strike penalty (kills −1, score −1) is already
         // written by KillPlayerLocked as a counter correction.
         // Blowing yourself up scores nothing either, and for the same reason — plus it is a SEPARATE
-        // test: with no teams, `teamKill` is false for a suicide (§10.2).
+        // test: `teamKill` is never true for a suicide, not even in a one-team mode (§10.2).
         if (!teamKill && !selfHit) mode?.OnKill(this, shooter.PlayerId, target.PlayerId, weaponId);
         var scorelessNote = selfHit ? " (KENDİNİ — skor yazılmadı)"
             : teamKill ? " (TAKIMDAŞ — öldürene −1, takım skoru yazılmadı)" : "";
@@ -2762,11 +2763,17 @@ public sealed class MatchDirector
         player.OutOfBoundsTally.Reset();
     }
 
-    /// <summary>The ONLY place the friendly-fire decision is made. An empty team is never a teammate: in
-    /// teamless modes everyone's team is <c>""</c>, so a plain <c>a.Team == b.Team</c> would reject ALL
-    /// hits via "" == "" (§10.3/4).</summary>
-    private static bool AreTeammates(PlayerState a, PlayerState b) =>
-        !string.IsNullOrEmpty(a.Team) && a.Team == b.Team;
+    /// <summary>The ONLY place the friendly-fire decision is made (§10.3/4): two DIFFERENT players are
+    /// teammates in a teamless one-team mode (<c>rules.allies</c>) or with equal NON-EMPTY teams.</summary>
+    /// <remarks>An empty team is never a teammate by itself: in teamless modes everyone's team is
+    /// <c>""</c>, so a plain <c>a.Team == b.Team</c> would reject ALL hits via "" == "". Self-hit is a
+    /// SEPARATE test at the call site — the identity check here keeps <c>allies</c> from turning a suicide
+    /// into a teamkill.
+    /// <para>Reads <c>_rules</c>, so it must be called under <c>_gate</c>.</para></remarks>
+    private bool AreTeammates(PlayerState a, PlayerState b) =>
+        a.PlayerId != b.PlayerId
+        && ((_rules.Teams == TeamMode.None && _rules.Allies)
+            || (!string.IsNullOrEmpty(a.Team) && a.Team == b.Team));
 
     /// <summary>The ONLY writer of spawn protection (§10.4); called only by
     /// <see cref="RevivePlayerLocked"/>, so protection is the answer to a DEATH — match/round start grants

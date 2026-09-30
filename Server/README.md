@@ -388,9 +388,9 @@ aynı ortak kanaldan (`set_selection` → `admin_state`) gider, böylece iki ope
 | `modeId` | Sınıf | Şekli (`Rules`) | Varsayılan süre / limit |
 |---|---|---|---|
 | `tdm` | `Modes/TdmMode.cs` | Tümüyle varsayılan (`ModeRules.TeamDefault`): iki takım, takım skoru, kendi tabanında canlanma, sahnede duran silah, 5 sn gecikme | 300 sn / 30 |
-| `ffa` | `Modes/FfaMode.cs` | Takımsız · bireysel skor · sabit durarak canlanma · silahı mod dağıtır · gecikme 0 | 300 sn / 20 |
+| `ffa` | `Modes/FfaMode.cs` | Takımsız, **herkes tek** (`Allies = false`) · bireysel skor · sabit durarak canlanma · silahı mod dağıtır · gecikme 0 | 300 sn / 20 |
 | `tournament` | `Modes/TournamentMode.cs` | TDM varsayılanından tek farkı: **canlanma yok** (`Revive = None`, gecikme 0). Tur tabanlı takım elemesi | 120 sn (**turun** süresi) / 4 tur (operatör **sınırsız** da seçebilir) |
-| `burger` | `Modes/BurgerMode.cs` | **Oyun tipi `kids`** · silah yok (`Weapons = None`, dolayısıyla hasar yok) · takımsız · canlanma yok (gecikme 0) · ortak skor (`PlayerAndShared`) · denge `server.json → burger` | 600 sn / **sınırsız** (limit yok) |
+| `burger` | `Modes/BurgerMode.cs` | **Oyun tipi `kids`** · silah yok (`Weapons = None`, dolayısıyla hasar yok) · takımsız ama **tek ekip** (`Allies = true`: kırmızı/mavi yok, herkes birbirinin takım arkadaşı) · canlanma yok (gecikme 0) · ortak skor (`PlayerAndShared`) · denge `server.json → burger` | 600 sn / **sınırsız** (limit yok) |
 | `mole` | `Modes/MoleMode.cs` | **Oyun tipi `kids`** · silah yok (`Weapons = None`, dolayısıyla hasar yok) · **iki takım + takım skoru** · canlanma yok (gecikme 0) · köstebek yoğunluğu harita başına (`maps.json → moleDensity`; yazılmamışsa modun varsayılanı) | 300 sn / **sınırsız** (limit yok) |
 
 > `ffa` skoru `AddPlayerScore(killerId, 1)` ile yazar ve kazananı `TryGetLeader` ile bulur;

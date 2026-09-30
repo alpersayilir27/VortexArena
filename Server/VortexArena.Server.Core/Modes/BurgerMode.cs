@@ -115,6 +115,9 @@ public sealed class BurgerMode : IGameMode
     public ModeRules Rules => new()
     {
         Teams = TeamMode.None,
+        // Co-op: no red/blue, but everyone is an ally — friendly fire and the teamkill penalty treat the
+        // whole shift as one team (§10.5).
+        Allies = true,
         Scoring = ScoreKind.PlayerAndShared,
         Revive = ReviveAnchor.None,
         Weapons = WeaponSource.None,

@@ -94,14 +94,15 @@ namespace VortexArena.Modes.Burger
             }
 
             ParseCounts(msg.modeState, out int happy, out int unhappy);
-            SetText(customerCountsText, $"Mutlu {happy} · Mutsuz {unhappy}");
+            SetText(customerCountsText, $"Mutlu müşteri {happy} · Mutsuz müşteri {unhappy}");
         }
 
         // ---------------------------------------------------------------- internals
 
+        /// <summary>Two lines on purpose: one line does not fit the HUD's Score box at 50 pt.</summary>
         private string BuildScoreLine()
         {
-            return $"SEN {_selfScore} · TOPLAM {_sharedTotal}";
+            return $"SKOR: {_selfScore}\nEKİP SKORU: {_sharedTotal}";
         }
 
         /// <summary><c>"h:3;u:1"</c> → 3 / 1.</summary>

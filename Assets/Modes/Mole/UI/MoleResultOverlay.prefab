@@ -941,6 +941,10 @@ PrefabInstance:
       propertyPath: m_sharedMaterial
       value: 
       objectReference: {fileID: 2100000, guid: f4657f827e8096342987d7c2f9bda145, type: 2}
+    - target: {fileID: 601310498211610209, guid: 5a0966b4072b39b4b87cc716630f4a2e, type: 3}
+      propertyPath: m_fontColor32.rgba
+      value: 4283294207
+      objectReference: {fileID: 0}
     - target: {fileID: 685748808041535915, guid: 5a0966b4072b39b4b87cc716630f4a2e, type: 3}
       propertyPath: m_text
       value: "K\xD6STEBEK TARLASI"
@@ -969,6 +973,10 @@ PrefabInstance:
       propertyPath: m_sharedMaterial
       value: 
       objectReference: {fileID: 2100000, guid: 37b458410597e45469fce2b2591ec769, type: 2}
+    - target: {fileID: 685748808041535915, guid: 5a0966b4072b39b4b87cc716630f4a2e, type: 3}
+      propertyPath: m_fontColor32.rgba
+      value: 4293392639
+      objectReference: {fileID: 0}
     - target: {fileID: 841177173488856078, guid: 5a0966b4072b39b4b87cc716630f4a2e, type: 3}
       propertyPath: m_fontStyle
       value: 1
@@ -1173,6 +1181,10 @@ PrefabInstance:
       propertyPath: m_sharedMaterial
       value: 
       objectReference: {fileID: 2100000, guid: f4657f827e8096342987d7c2f9bda145, type: 2}
+    - target: {fileID: 3306071692294018455, guid: 5a0966b4072b39b4b87cc716630f4a2e, type: 3}
+      propertyPath: m_fontColor32.rgba
+      value: 4293392639
+      objectReference: {fileID: 0}
     - target: {fileID: 4039197599769771028, guid: 5a0966b4072b39b4b87cc716630f4a2e, type: 3}
       propertyPath: wonTitle
       value: KAZANDINIZ!
@@ -1183,7 +1195,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4039197599769771028, guid: 5a0966b4072b39b4b87cc716630f4a2e, type: 3}
       propertyPath: lostTitle
-      value: "\u0130Y\u0130 OYUNDU!"
+      value: "KAYBETT\u0130N\u0130Z!"
       objectReference: {fileID: 0}
     - target: {fileID: 4039197599769771028, guid: 5a0966b4072b39b4b87cc716630f4a2e, type: 3}
       propertyPath: wonColor.b
@@ -1236,6 +1248,10 @@ PrefabInstance:
     - target: {fileID: 4307414619766683149, guid: 5a0966b4072b39b4b87cc716630f4a2e, type: 3}
       propertyPath: m_IsActive
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4500622062746811008, guid: 5a0966b4072b39b4b87cc716630f4a2e, type: 3}
+      propertyPath: m_IsActive
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 4684515244768712994, guid: 5a0966b4072b39b4b87cc716630f4a2e, type: 3}
       propertyPath: m_fontStyle
@@ -1297,6 +1313,10 @@ PrefabInstance:
       propertyPath: m_sharedMaterial
       value: 
       objectReference: {fileID: 2100000, guid: f4657f827e8096342987d7c2f9bda145, type: 2}
+    - target: {fileID: 5441551907581088884, guid: 5a0966b4072b39b4b87cc716630f4a2e, type: 3}
+      propertyPath: m_fontColor32.rgba
+      value: 4283294207
+      objectReference: {fileID: 0}
     - target: {fileID: 5783266978777122466, guid: 5a0966b4072b39b4b87cc716630f4a2e, type: 3}
       propertyPath: m_fontSize
       value: 28
@@ -1341,6 +1361,10 @@ PrefabInstance:
       propertyPath: m_Color.r
       value: 0.35
       objectReference: {fileID: 0}
+    - target: {fileID: 6398603631671018719, guid: 5a0966b4072b39b4b87cc716630f4a2e, type: 3}
+      propertyPath: m_PresetInfoIsWorld
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 6412060639228722009, guid: 5a0966b4072b39b4b87cc716630f4a2e, type: 3}
       propertyPath: m_SizeDelta.x
       value: -120
@@ -1348,6 +1372,10 @@ PrefabInstance:
     - target: {fileID: 6412060639228722009, guid: 5a0966b4072b39b4b87cc716630f4a2e, type: 3}
       propertyPath: m_SizeDelta.y
       value: 5
+      objectReference: {fileID: 0}
+    - target: {fileID: 6424786452558501794, guid: 5a0966b4072b39b4b87cc716630f4a2e, type: 3}
+      propertyPath: m_IsActive
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 6683590872288223422, guid: 5a0966b4072b39b4b87cc716630f4a2e, type: 3}
       propertyPath: m_fontStyle
@@ -1397,6 +1425,10 @@ PrefabInstance:
       propertyPath: m_sharedMaterial
       value: 
       objectReference: {fileID: 2100000, guid: 37b458410597e45469fce2b2591ec769, type: 2}
+    - target: {fileID: 7595941171886345726, guid: 5a0966b4072b39b4b87cc716630f4a2e, type: 3}
+      propertyPath: m_fontColor32.rgba
+      value: 4283294207
+      objectReference: {fileID: 0}
     - target: {fileID: 7855536002908668526, guid: 5a0966b4072b39b4b87cc716630f4a2e, type: 3}
       propertyPath: m_text
       value: "EN \u0130Y\u0130 \xC7\u0130FT\xC7\u0130LER"
@@ -1425,6 +1457,10 @@ PrefabInstance:
       propertyPath: m_sharedMaterial
       value: 
       objectReference: {fileID: 2100000, guid: 37b458410597e45469fce2b2591ec769, type: 2}
+    - target: {fileID: 7855536002908668526, guid: 5a0966b4072b39b4b87cc716630f4a2e, type: 3}
+      propertyPath: m_fontColor32.rgba
+      value: 4293392639
+      objectReference: {fileID: 0}
     - target: {fileID: 7873300400288150562, guid: 5a0966b4072b39b4b87cc716630f4a2e, type: 3}
       propertyPath: m_IsActive
       value: 0
@@ -1469,6 +1505,10 @@ PrefabInstance:
       propertyPath: m_sharedMaterial
       value: 
       objectReference: {fileID: 2100000, guid: f4657f827e8096342987d7c2f9bda145, type: 2}
+    - target: {fileID: 8255587305282210832, guid: 5a0966b4072b39b4b87cc716630f4a2e, type: 3}
+      propertyPath: m_fontColor32.rgba
+      value: 4283294207
+      objectReference: {fileID: 0}
     - target: {fileID: 8289159501052650264, guid: 5a0966b4072b39b4b87cc716630f4a2e, type: 3}
       propertyPath: m_fontSize
       value: 28
@@ -1533,6 +1573,10 @@ PrefabInstance:
       propertyPath: m_sharedMaterial
       value: 
       objectReference: {fileID: 2100000, guid: f4657f827e8096342987d7c2f9bda145, type: 2}
+    - target: {fileID: 9057783275134861605, guid: 5a0966b4072b39b4b87cc716630f4a2e, type: 3}
+      propertyPath: m_fontColor32.rgba
+      value: 4290308607
+      objectReference: {fileID: 0}
     - target: {fileID: 9173324803966517682, guid: 5a0966b4072b39b4b87cc716630f4a2e, type: 3}
       propertyPath: m_fontStyle
       value: 1

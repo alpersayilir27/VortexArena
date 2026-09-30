@@ -127,6 +127,10 @@ namespace VortexArena.App
         [SerializeField] private Color lostColor = UiKit.Bad;
         [SerializeField] private Color drawColor = UiKit.Title;
         [SerializeField] private Color coopColor = UiKit.Title;
+        [Tooltip("Kırmızı takım adının yazı rengi (sonuç kartı + skor tablosu).")]
+        [SerializeField] private Color redTeamColor = UiKit.TeamRed;
+        [Tooltip("Mavi takım adının yazı rengi (sonuç kartı + skor tablosu).")]
+        [SerializeField] private Color blueTeamColor = UiKit.TeamBlue;
 
         private readonly List<PlayerInfo> _ranked = new List<PlayerInfo>();
         private readonly StringBuilder _sb = new StringBuilder();
@@ -366,7 +370,7 @@ namespace VortexArena.App
                     resultTitleText.color = coopColor;
                 }
 
-                SetText(resultWinnerText, $"EKİP TOPLAMI {msg.scoreRed}");
+                SetText(resultWinnerText, $"EKİP SKORU {msg.scoreRed}");
                 SetText(resultScoreText, CoopResultLines());
             }
             else
@@ -601,7 +605,7 @@ namespace VortexArena.App
         /// helper: this class reads <c>PlayerInfo</c> (wire DTO) while the admin row reads
         /// <c>AdminPlayerView</c> (client mirror); a shared signature would cut one of them off from
         /// its natural source.</summary>
-        private static string CellText(PlayerInfo info, int column)
+        private string CellText(PlayerInfo info, int column)
         {
             string text = RawCellText(info, column);
             if (info.connection != ArenaProtocol.CONNECTION_LEFT)
@@ -616,14 +620,16 @@ namespace VortexArena.App
                 : $"<alpha=#66>{text}<alpha=#FF>";
         }
 
-        private static string RawCellText(PlayerInfo info, int column)
+        private string RawCellText(PlayerInfo info, int column)
         {
             switch (column)
             {
                 // Rich text is ON for the columns (departed-row alpha tags) → a name must never open
                 // a tag; '<' becomes a look-alike instead of being parsed.
-                case 0: return $"{info.name?.Replace('<', '‹')} #{info.playerId}";
-                case 1: return info.team == "red" ? "kırmızı" : info.team == "blue" ? "mavi" : "-";
+                case 0: return $"{SafeName(info.name)} #{info.playerId}";
+                // ⚠️ Column is NoWrap: a wrapped cell would desync the \n-joined rows.
+                case 1: return info.team == "red" ? $"{Paint("Kırmızı", redTeamColor)} Takım"
+                             : info.team == "blue" ? $"{Paint("Mavi", blueTeamColor)} Takım" : "-";
                 case 2: return info.score.ToString();
                 case 3: return info.kills.ToString();
                 case 4: return info.deaths.ToString();
@@ -665,13 +671,11 @@ namespace VortexArena.App
                 // No teams → the only meaningful headline is the leader. With no score yet
                 // (match never started) we invent nothing.
                 return _ranked.Count > 0 && _ranked[0].score > 0
-                    ? $"LİDER: {_ranked[0].name} {_ranked[0].score}"
+                    ? $"LİDER: {SafeName(_ranked[0].name)} {_ranked[0].score}"
                     : "HERKES TEK";
             }
 
-            return _lastEnd != null
-                ? $"KIRMIZI {_lastEnd.scoreRed} — {_lastEnd.scoreBlue} MAVİ"
-                : "";
+            return _lastEnd != null ? TeamScoreLine(_lastEnd) : "";
         }
 
         private void RefreshTeamSummary()
@@ -709,14 +713,14 @@ namespace VortexArena.App
                 // would be three zeros the players have to learn to ignore.
                 int redScore = _lastEnd != null ? _lastEnd.scoreRed : 0;
                 int blueScore = _lastEnd != null ? _lastEnd.scoreBlue : 0;
-                _sb.AppendLine($"KIRMIZI: {redCount} oyuncu · {redScore} puan");
-                _sb.Append($"MAVİ: {blueCount} oyuncu · {blueScore} puan");
+                _sb.AppendLine($"{RedTeam}: {redCount} oyuncu · TAKIM SKORU: {redScore}");
+                _sb.Append($"{BlueTeam}: {blueCount} oyuncu · TAKIM SKORU: {blueScore}");
                 boardTeamSummaryText.text = _sb.ToString();
                 return;
             }
 
-            _sb.AppendLine($"KIRMIZI: {redCount} oyuncu · {redAlive} canlı · {redKills} öldürme · {redDeaths} ölüm");
-            _sb.Append($"MAVİ: {blueCount} oyuncu · {blueAlive} canlı · {blueKills} öldürme · {blueDeaths} ölüm");
+            _sb.AppendLine($"{RedTeam}: {redCount} oyuncu · {redAlive} canlı · {redKills} öldürme · {redDeaths} ölüm");
+            _sb.Append($"{BlueTeam}: {blueCount} oyuncu · {blueAlive} canlı · {blueKills} öldürme · {blueDeaths} ölüm");
             boardTeamSummaryText.text = _sb.ToString();
         }
 
@@ -739,9 +743,9 @@ namespace VortexArena.App
             _sb.Append(self == null
                 ? ""
                 : ModeRuntime.IsCoop
-                    ? $"SEN: {self.score} katkı"
+                    ? $"SKOR: {self.score}"
                     : ModeRuntime.IsWeaponless
-                        ? $"SEN: {self.score} puan"
+                        ? $"BİREYSEL SKOR: {self.score}"
                         : $"SEN: {self.kills} öldürme · {self.deaths} ölüm · K/D {CellText(self, 5)}");
 
             boardMatchSummaryText.text = _sb.ToString();
@@ -816,12 +820,12 @@ namespace VortexArena.App
         {
             if (msg.winnerTeam == "red")
             {
-                return "KIRMIZI KAZANDI";
+                return $"{RedTeam} KAZANDI";
             }
 
             if (msg.winnerTeam == "blue")
             {
-                return "MAVİ KAZANDI";
+                return $"{BlueTeam} KAZANDI";
             }
 
             return msg.winnerPlayerId > 0 ? $"{NameOf(msg.winnerPlayerId)} KAZANDI" : "";
@@ -830,17 +834,31 @@ namespace VortexArena.App
         /// <summary>Result card's score line: team score in team-scored modes, the player's own
         /// score in player-scored ones (<c>scoreRed</c>/<c>scoreBlue</c> are always 0 there,
         /// §10.2). ⚠️ Co-op never reaches here — it has its own card
-        /// (<see cref="CoopResultLines"/>), because the team line would read "KIRMIZI n — 0 MAVİ".</summary>
+        /// (<see cref="CoopResultLines"/>), because the team line would read "KIRMIZI TAKIM n — 0 MAVİ TAKIM".</summary>
         private string ScoreLine(MatchEndMsg msg)
         {
             if (ModeRuntime.Scoring != ModeScoreKind.Player)
             {
-                return $"KIRMIZI {msg.scoreRed} — {msg.scoreBlue} MAVİ";
+                return TeamScoreLine(msg);
             }
 
             PlayerInfo self = FindSelf();
             return self != null ? $"SENİN SKORUN {self.score}" : "";
         }
+
+        private string TeamScoreLine(MatchEndMsg msg) => $"{RedTeam} {msg.scoreRed} — {msg.scoreBlue} {BlueTeam}";
+
+        // Only the colour word is painted; "TAKIM" keeps the text's own colour.
+        private string RedTeam => $"{Paint("KIRMIZI", redTeamColor)} TAKIM";
+        private string BlueTeam => $"{Paint("MAVİ", blueTeamColor)} TAKIM";
+
+        /// <summary>Rich text is on for the texts carrying team colours → a player name must never
+        /// open a tag; '&lt;' becomes a look-alike instead of being parsed.</summary>
+        private static string SafeName(string name) => name?.Replace('<', '‹');
+
+        /// <summary>Team-coloured span; the prefab enables rich text on the texts that carry it.</summary>
+        private static string Paint(string text, Color color) =>
+            $"<color=#{ColorUtility.ToHtmlStringRGB(color)}>{text}</color>";
 
         /// <summary>Co-op result card body: customer counters (when the mode publishes them) + the
         /// player's own contribution. Same wording as the in-match HUD — the numbers must not be
@@ -858,19 +876,19 @@ namespace VortexArena.App
             PlayerInfo self = FindSelf();
             if (self != null)
             {
-                _sb.Append($"Senin katkın {self.score}");
+                _sb.Append($"Skor: {self.score}");
             }
 
             return _sb.ToString();
         }
 
-        /// <summary>"Mutlu h · Mutsuz u", or empty when the running mode publishes no counters.
+        /// <summary>"Mutlu müşteri h · Mutsuz müşteri u", or empty when the running mode publishes no counters.
         /// ⚠️ Parsing is NOT duplicated here: <see cref="Admin.AdminModeState"/> is the single parser,
         /// so the operator and the player can never read two different numbers.</summary>
         private string CustomerLine()
         {
             return Admin.AdminModeState.TryCustomerCounts(_modeState, out int happy, out int unhappy)
-                ? $"Mutlu {happy} · Mutsuz {unhappy}"
+                ? $"Mutlu müşteri {happy} · Mutsuz müşteri {unhappy}"
                 : "";
         }
 
@@ -901,7 +919,7 @@ namespace VortexArena.App
                 if (_roster[i] != null && _roster[i].playerId == playerId &&
                     !string.IsNullOrEmpty(_roster[i].name))
                 {
-                    return _roster[i].name;
+                    return SafeName(_roster[i].name);
                 }
             }
 

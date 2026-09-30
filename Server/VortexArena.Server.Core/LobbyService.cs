@@ -98,8 +98,8 @@ public sealed class LobbyService
             Console.WriteLine($"[Lobby] protokol sürüm uyumsuzluğu: istemci {hello.protocolVersion}, sunucu {ArenaProtocol.PROTOCOL_VERSION} — devam ediliyor.");
 
         // Asked before the registry lock: the director has its own lock and must not be called inside it.
-        var teamlessMatch = _director.IsTeamlessMatchSetUp();
-        if (!_registry.TryRegisterHello(hello, connection, teamlessMatch, out var state, out var kind))
+        var teamless = IsTeamlessSetUpOrSelected();
+        if (!_registry.TryRegisterHello(hello, connection, teamless, out var state, out var kind))
         {
             Console.WriteLine($"[Lobby] playerId havuzu tükendi ({ArenaProtocol.PLAYER_ID_MAX}) — {hello.deviceName} reddedildi.");
             await SendSafeAsync(connection, JsonUtil.Serialize(new KickedMsg { reason = "Sunucu dolu" }), "(dolu)");
@@ -231,9 +231,34 @@ public sealed class LobbyService
             Console.WriteLine($"[Lobby] set_team: {target.Name} admin — takım atanmaz.");
             return;
         }
+        // §5.2: in a teamless mode there is no team to assign — an assignment would show the player as
+        // red/blue in a mode that knows no teams. The SELECTED mode counts too: the next set_selection
+        // would wipe it anyway (§10.7).
+        if (IsTeamlessSetUpOrSelected())
+        {
+            Console.WriteLine("[Lobby] set_team: takımsız mod — takım atanmaz.");
+            return;
+        }
         _registry.SetTeam(msg.playerId, msg.team);
         if (connection.IsAdmin)
             _ = BroadcastAdminStateAsync(Notice(connection, $"{target.Name} -> {msg.team}"));
+    }
+
+    /// <summary>Is the lobby teamless right now — either the SET UP match (§10.5) or the SELECTED mode
+    /// (§5.3 <c>selection_state.teamMode</c>)? Gates hello team assignment (§2) and <c>set_team</c>
+    /// (§5.2).</summary>
+    /// <remarks>The selection counts because <c>set_selection</c> already applies the selected mode's team
+    /// mode to everyone (§10.7): without it a joiner would get red/blue and turn white a moment later.
+    /// <para>⚠️ The director is asked OUTSIDE <c>_selectionGate</c> and outside the registry lock — it
+    /// keeps its own lock and nesting the two would be a deadlock path.</para></remarks>
+    private bool IsTeamlessSetUpOrSelected()
+    {
+        if (_director.IsTeamlessMatchSetUp()) return true;
+
+        string modeId;
+        lock (_selectionGate) modeId = _selectedModeId;
+        // An empty selection is NOT teamless: with nothing picked today's behaviour (teamed) stands.
+        return modeId.Length > 0 && _director.TeamModeOf(modeId) == Modes.TeamMode.None;
     }
 
     public async Task HandleKickAsync(ClientConnection connection, KickMsg msg)

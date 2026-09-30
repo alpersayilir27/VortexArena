@@ -26,9 +26,9 @@ namespace VortexArena.Modes.Mole
         [SerializeField] private TeamScorePanel scorePanel;
 
         [Header("Köstebek Ezme — vuruş sayaçları")]
-        [Tooltip("Kırmızı skorun yanındaki D/Y yuvası; oyuncu kırmızıysa yazılır.")]
+        [Tooltip("Kırmızı skorun yanındaki Doğru/Yanlış yuvası; oyuncu kırmızıysa yazılır.")]
         [SerializeField] private TMP_Text redSideHitsText;
-        [Tooltip("Mavi skorun yanındaki D/Y yuvası; oyuncu maviyse yazılır.")]
+        [Tooltip("Mavi skorun yanındaki Doğru/Yanlış yuvası; oyuncu maviyse yazılır.")]
         [SerializeField] private TMP_Text blueSideHitsText;
 
         private int _correct;
@@ -71,10 +71,10 @@ namespace VortexArena.Modes.Mole
         {
             if (msg.winnerTeam == "red")
             {
-                return "KIRMIZI KAZANDI";
+                return "KIRMIZI TAKIM KAZANDI";
             }
 
-            return msg.winnerTeam == "blue" ? "MAVİ KAZANDI" : "BERABERE";
+            return msg.winnerTeam == "blue" ? "MAVİ TAKIM KAZANDI" : "BERABERE";
         }
 
         /// <summary>Feeds the score panel and the player's own counters.</summary>
@@ -91,13 +91,13 @@ namespace VortexArena.Modes.Mole
 
         // ---------------------------------------------------------------- internals
 
-        private static string TeamScore(int scoreRed, int scoreBlue) => $"KIRMIZI {scoreRed} — {scoreBlue} MAVİ";
+        private static string TeamScore(int scoreRed, int scoreBlue) => $"KIRMIZI TAKIM {scoreRed} — {scoreBlue} MAVİ TAKIM";
 
         /// <summary>Counters go on the local team's side only; Neutral (not yet assigned) draws neither.</summary>
         private void DrawCounts()
         {
             Team team = ArenaCombat.LocalTeam;
-            string counts = $"<color={CorrectColor}>D {_correct}</color>  <color={WrongColor}>Y {_wrong}</color>";
+            string counts = $"<color={CorrectColor}>Doğru {_correct}</color>  <color={WrongColor}>Yanlış {_wrong}</color>";
 
             SetText(redSideHitsText, team == Team.Red ? counts : "");
             SetText(blueSideHitsText, team == Team.Blue ? counts : "");

@@ -298,6 +298,12 @@ namespace VortexArena.App.Admin
             SetInteractable(teamButton, !view.HasLeft);
             SetInteractable(kickButton, !view.HasLeft);
 
+            // TAKIM is HIDDEN in a teamless mode (§10.5 teamMode:"none"), not just dimmed: the server
+            // rejects set_team there, so a visible button would read as "pressed it, nothing happened".
+            // ⚠️ Same source as the column layout (AdminRoster.IsFfa) — a second rule here would
+            // disagree with the panel on the lobby/running-match boundary.
+            SetShown(teamButton, !(AdminRoster.Instance != null && AdminRoster.Instance.IsFfa));
+
             RefreshKickButton();
             RefreshCalibrationButton();
         }
@@ -306,6 +312,16 @@ namespace VortexArena.App.Admin
         private static bool IsTeamPlayer(string team)
         {
             return team == "red" || team == "blue";
+        }
+
+        /// <summary>Shows/hides a button. Row children sit on fixed anchors (no layout group), so a
+        /// hidden button leaves its slot empty instead of reflowing the others.</summary>
+        private static void SetShown(Button button, bool value)
+        {
+            if (button != null && button.gameObject.activeSelf != value)
+            {
+                button.gameObject.SetActive(value);
+            }
         }
 
         private static void SetInteractable(Button button, bool value)

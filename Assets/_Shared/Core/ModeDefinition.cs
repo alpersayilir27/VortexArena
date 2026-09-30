@@ -51,6 +51,10 @@ namespace VortexArena.Core
         [Tooltip("Ölüm → en erken canlanma süresi (sn). 0 GEÇERLİDİR = anında canlanma; " +
                  "varsayılan protokoldeki RESPAWN_DELAY'dir.")]
         [SerializeField] private float respawnDelay = ArenaProtocol.RESPAWN_DELAY;
+        [Tooltip("YALNIZ takım kipi 'None' iken anlamlıdır: açıksa takımsız oyuncular TEK ortak " +
+                 "taraftır (ortak oyun), kapalıysa herkes tek başınadır (FFA). Gerçek maçta " +
+                 "load_match.rules.allies kazanır.")]
+        [SerializeField] private bool allies;
 
         [Header("İçerik")]
         [Tooltip("Bu modun oynanabildiği haritalar; boş bırakılırsa katalogdaki tüm uyumlu haritalar.")]
@@ -62,6 +66,15 @@ namespace VortexArena.Core
         [Tooltip("Moda özel maç sonu ekranı — MatchResultOverlay.prefab'ın VARYANTI olmalı " +
                  "(Modes/<Mod>/UI/). Boşsa genel ekran çizilir.")]
         [SerializeField] private GameObject resultScreenPrefab;
+
+        [Header("Oyuncu gövdesi (opsiyonel)")]
+        [Tooltip("Mavi takım ve takımsız oyuncunun gövdesi; boşsa varsayılan gövde (Ch15) çizilir. " +
+                 "Kök SkeletonPoseMirror taşıyan, Tools > VortexArena > Avatars > Mod Gövdesi Kur " +
+                 "(seçili FBX) ile kurulmuş prefab olmalı.")]
+        [SerializeField] private GameObject bodyPrefab;
+        [Tooltip("Kırmızı takımın gövdesi; boşsa varsayılan kırmızı gövde (Ch18) çizilir. " +
+                 "⚠️ İki takımın gövdesi belirgin biçimde farklı model olmalı — takım modelden okunur.")]
+        [SerializeField] private GameObject redBodyPrefab;
 
         /// <summary>Protocol key ("tdm").</summary>
         public string ModeId => modeId;
@@ -106,6 +119,9 @@ namespace VortexArena.Core
         /// <summary>Preview: whether friendly fire is on.</summary>
         public bool FriendlyFire => friendlyFire;
 
+        /// <summary>Preview: are the teamless players one shared side (§10.5 <c>allies</c>)?</summary>
+        public bool Allies => allies;
+
         /// <summary>Preview: revive condition.</summary>
         public ModeReviveAnchor Revive => revive;
 
@@ -129,5 +145,12 @@ namespace VortexArena.Core
         /// screen. A <c>GameObject</c> for the same reason as <see cref="HudPrefab"/>: the overlay
         /// type lives in App, which Core does not reference.</summary>
         public GameObject ResultScreenPrefab => resultScreenPrefab;
+
+        /// <summary>Body of the blue/teamless player; null = default body. A <c>GameObject</c> for the
+        /// same reason as <see cref="HudPrefab"/>.</summary>
+        public GameObject BodyPrefab => bodyPrefab;
+
+        /// <summary>Body of the red team; null = default red body (rationale in <see cref="BodyPrefab"/>).</summary>
+        public GameObject RedBodyPrefab => redBodyPrefab;
     }
 }

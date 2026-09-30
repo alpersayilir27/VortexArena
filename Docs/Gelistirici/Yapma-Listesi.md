@@ -476,6 +476,32 @@ yazar). Listeye konan nesne uzak gövdede **hiç görünmez**, hata da vermez. `
 avatar prefabında da listeyi boş ister, doluysa Hazırlık satırı ✗ olur. Gerekçe: `Docs/Sistem-Ozeti.md`
 §7 "`_objectsToHideUntilValid` uzak gövdede nesneyi kalıcı gizler".
 
+### ⛔ Moda özel gövdeye Mixamo dışı bir rig'le riglenmiş FBX koyma
+
+`SkeletonPoseMirror` kemikleri **ADLA** eşler; paketin kendi rig'i (3ds Max Biped tarzı adlar) hiçbir
+kemiği tutturmaz, gövde T-pozda kalır. Ayna bunu bir hata satırıyla bildirip kendini kapatır, yani
+belirtisi sahada "oyuncu kıpırdamıyor"dur. Model **Mixamo auto-rigger**'dan geçmek zorundadır
+(`mixamorig:*`); hazırlığı `Docs/Gelistirici/Yemek-Kitabi.md`'de.
+
+### ⛔ Mod gövdesini kendi vuruş kutuları olmadan bırakma
+
+Kutular gövdenin **kendi** iskeletindedir ve yalnız çizilen gövdeninkiler açıktır: kutusuz bir mod
+gövdesi çizildiği anda oyuncu **vurulamaz** olur ve hiçbir yerde hata çıkmaz. Kutular gövde prefabına
+elle konur, bölgeleri açıkça seçilir ve o modelin kendi oranlarına göre ölçülür.
+
+### ⛔ İki takıma aynı (ya da ayırt edilemeyecek kadar benzer) mod gövdesi verme
+
+Takım kimliği karakter mesh'ine yazılmaz kuralının istisnası **modelin kendisidir**: renk dost/düşman
+bilgisini taşımıyor, iki takımı ayıran tek şey `bodyPrefab` ile `redBodyPrefab`'ın farklı olması.
+Benzer iki model, oyuncunun kime ateş ettiğini maçın ortasında belirsizleştirir.
+
+### ⛔ Mod gövdesinden üçüncü parti paketin içindeki materyale/dokuya referans verme
+
+`Assets/ThirdPartyPackages/` altındaki bir paket kaldırılabilir ya da yeniden içe aktarılıp üzerine
+yazılabilir; referans koptuğunda gövde mor çizilir, ayar ezildiğinde sessizce değişir. Kullanılan
+materyal ve doku modun kendi klasörüne **kopyalanır** (Android doku override'ı da orada verilir),
+paketin gitmesi gövdeyi bozmaz.
+
 ### ⛔ `.meta` dosyası kopyalayarak asmdef/asset üretme
 
 GUID çakışır ve Unity referansları rastgele koparır. JSON'u kopyala, `.meta`'yı Unity üretsin.

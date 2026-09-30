@@ -25,6 +25,9 @@ namespace VortexArena.Core.Player
     /// <para><b>Held items</b> (§6.6): <c>itemL</c>/<c>itemR</c> are resolved via
     /// <see cref="NetItemCatalog"/> and driven from that hand's pose; instances are rebuilt only on
     /// CHANGE. The instance is a visual, not a working weapon (<see cref="SterilizeVisual"/>).</para>
+    /// <para>The drawn body is the default character mesh, the prefab RED team body, or — when the mode
+    /// defines one (<c>ModeDefinition.BodyPrefab</c>) — a body built at runtime; ONE at a time, all
+    /// driven from the same live skeleton by <see cref="SkeletonPoseMirror"/>.</para>
     /// </summary>
     public class RemoteAvatar : MonoBehaviour
     {
@@ -302,7 +305,6 @@ namespace VortexArena.Core.Player
         // LAST sub-mesh only, leaving half a two-sub-mesh body unshielded) and a material SWAP is not
         // an option either — a protected player must stay visible.
         private Renderer[] _bodyShieldShells;
-        private Renderer[] _redShieldShells;
 
         /// <summary>Name of the shell object — sits alone under the body in the hierarchy.</summary>
         private const string ShieldShellName = "ShieldShell";
@@ -342,7 +344,6 @@ namespace VortexArena.Core.Player
         // the same mesh shifted onto the VIEWER's floor — physically the two share that floor, so the
         // silhouette is a collision cue. Shells are never hittable and cast no shadow.
         private Renderer[] _bodySilhouetteShells;
-        private Renderer[] _redSilhouetteShells;
 
         /// <summary>Name of the silhouette shell object.</summary>
         private const string SilhouetteShellName = "FloorSilhouette";
@@ -369,62 +370,84 @@ namespace VortexArena.Core.Player
         /// <summary>Missing silhouette setup warns once per instance.</summary>
         private bool _silhouetteSetupWarned;
 
-        // ── Team body ───────────────────────────────────────────────────────────────────
-        /// <summary>Renderers of the red team body; null when <see cref="redBodyRoot"/> is empty.</summary>
-        private Renderer[] _redBodyRenderers;
+        // ── Alternate bodies ────────────────────────────────────────────────────────────
+        /// <summary>A body drawn INSTEAD of the default one: the prefab red team body, or a mode body
+        /// built at runtime from <see cref="ModeDefinition.BodyPrefab"/>. Everything the draw path
+        /// touches is bundled, so switching body is one reference swap.</summary>
+        private sealed class AltBody
+        {
+            /// <summary>Container root; for the red body this is <c>redBodyRoot</c>.</summary>
+            public GameObject Root;
 
-        /// <summary>Bridge driving the red body from the live skeleton; toggled with the body.</summary>
-        private SkeletonPoseMirror _redBodyDriver;
+            /// <summary>Mode prefab this body was built from; null for the prefab red body.</summary>
+            public GameObject SourcePrefab;
 
-        /// <summary>Is this player on the RED team — selects both the drawn body and the hit box set.</summary>
-        private bool _useRedBody;
+            public Renderer[] Renderers;
 
-        // Each body's OWN boxes (collected once in Awake) — rationale in CacheHitColliders.
+            /// <summary>Bridge driving this body from the live skeleton; toggled with the body.</summary>
+            public SkeletonPoseMirror Driver;
+
+            public Collider[] HitColliders;
+
+            // ⚠️ The material swap applies to the DRAWN body, so each body needs its own
+            // original/ghost arrays — one shared set would write to the wrong renderer after a switch.
+            public Material[][] Originals;
+            public Material[][] Ghosts;
+
+            public Renderer[] ShieldShells;
+            public Renderer[] SilhouetteShells;
+        }
+
+        /// <summary>Red team body from the prefab; null when <see cref="redBodyRoot"/> is empty.</summary>
+        private AltBody _redAlt;
+
+        /// <summary>The current mode's own body, built on demand; null in a mode with no body prefab.</summary>
+        private AltBody _modeAlt;
+
+        /// <summary>Selected alternate body; null = the default body is drawn.</summary>
+        private AltBody _alt;
+
+        /// <summary>Is an alternate body actually drawn — false when the selected one has no renderer.</summary>
+        private bool _useAlt;
+
+        // Catalog lookup cached on the mode id: SetInfo runs on every lobby_state.
+        private string _bodyModeId;
+        private ModeDefinition _bodyMode;
+        private bool _bodyModeResolved;
+
+        /// <summary>Missing source for a mode body warns once per instance.</summary>
+        private bool _modeBodySourceWarned;
+
+        // Default body's own boxes (collected once in Awake) — rationale in CacheHitColliders.
         private Collider[] _defaultHitColliders;
-        private Collider[] _redHitColliders;
 
         [Tooltip("Eli boş oyuncunun parmak duruşu (§6.9 — telde gitmez, burada çizilir). " +
                  "Tümü 0 = yazılmamış → gevşek dinlenme duruşu kullanılır.")]
         [SerializeField] private HandPoseProfile idleHandPose;
 
 
-        // ⚠️ The material swap applies to the ACTIVE body, so each body needs its own original/ghost
-        // arrays — one shared set would write to the wrong renderer after a team change.
-        private Material[][] _redOriginalMaterials;
-        private Material[][] _redGhostMaterials;
+        /// <summary>The alternate body actually DRAWN right now; null = the default body.</summary>
+        private AltBody DrawnAlt => _useAlt && _alt != null ? _alt : null;
 
         /// <summary>Renderers of the body being drawn — ghost/visibility always apply to this.</summary>
-        private Renderer[] ActiveBodyRenderers =>
-            _useRedBody && _redBodyRenderers != null && _redBodyRenderers.Length > 0
-                ? _redBodyRenderers
-                : bodyRenderers;
+        private Renderer[] ActiveBodyRenderers => DrawnAlt != null ? _alt.Renderers : bodyRenderers;
 
         /// <summary>ORIGINAL material arrays of the drawn body (same order as <see cref="ActiveBodyRenderers"/>).</summary>
         private Material[][] ActiveOriginalMaterials =>
-            _useRedBody && _redBodyRenderers != null && _redBodyRenderers.Length > 0
-                ? _redOriginalMaterials
-                : _bodyOriginalMaterials;
+            DrawnAlt != null ? _alt.Originals : _bodyOriginalMaterials;
 
         /// <summary>Ghost material arrays of the drawn body.</summary>
-        private Material[][] ActiveGhostMaterials =>
-            _useRedBody && _redBodyRenderers != null && _redBodyRenderers.Length > 0
-                ? _redGhostMaterials
-                : _bodyGhostMaterials;
+        private Material[][] ActiveGhostMaterials => DrawnAlt != null ? _alt.Ghosts : _bodyGhostMaterials;
 
         /// <summary>Shield shells of the drawn body. ⚠️ Shells are per body (different meshes and bones)
         /// but the MATERIAL is shared: the shield says "cannot be touched right now", not which team —
         /// a team-coloured shield would blend into the team-coloured ghost.</summary>
-        private Renderer[] ActiveShieldShells =>
-            _useRedBody && _redBodyRenderers != null && _redBodyRenderers.Length > 0
-                ? _redShieldShells
-                : _bodyShieldShells;
+        private Renderer[] ActiveShieldShells => DrawnAlt != null ? _alt.ShieldShells : _bodyShieldShells;
 
         /// <summary>Floor silhouette shells of the drawn body (same order as
         /// <see cref="ActiveBodyRenderers"/> — the shift is written against each source's bounds).</summary>
         private Renderer[] ActiveSilhouetteShells =>
-            _useRedBody && _redBodyRenderers != null && _redBodyRenderers.Length > 0
-                ? _redSilhouetteShells
-                : _bodySilhouetteShells;
+            DrawnAlt != null ? _alt.SilhouetteShells : _bodySilhouetteShells;
 
         /// <summary>Draw state of the body. Ghost and shield use different mechanisms but there is ONE
         /// state, not two flags: two flags would leave the override order to the caller and the body
@@ -451,8 +474,8 @@ namespace VortexArena.Core.Player
             CacheHitColliders();
 
             // ⚠️ Built HERE, not in the prefab: finger axes must be measured in the BIND POSE and Awake
-            // is the only safe moment before the retargeter first writes to the skeleton. The red body
-            // needs no setup — SkeletonPoseMirror copies localRotations, so fingers carry over.
+            // is the only safe moment before the retargeter first writes to the skeleton. An alternate
+            // body needs no setup — SkeletonPoseMirror copies localRotations, so fingers carry over.
             if (character != null)
             {
                 gameObject.AddComponent<RemoteHandPoser>().Bind(this, character.transform);
@@ -465,73 +488,86 @@ namespace VortexArena.Core.Player
 
             _itemCatalog = NetItemCatalog.Load();
 
-            // ⚠️ Order matters: ghost arrays are built for BOTH bodies, so the red body's renderers must
-            // already be collected.
-            CacheRedBody();
-            CacheGhostMaterials();
+            CacheDefaultBody();
 
-            // ⚠️ Shells come AFTER CacheRedBody: _redBodyRenderers is collected with
-            // GetComponentsInChildren, and a leaked shell would get the body's enable/ghost swap too.
-            CacheShieldShells();
-            CacheSilhouetteShells();
+            // The prefab red body is just the first alternate body; a mode body is built on demand.
+            _redAlt = BuildAltBody(redBodyRoot);
         }
 
-        /// <summary>Collects the red team body ONCE and spawns it DISABLED (the team arrives with the
-        /// first <see cref="SetInfo"/>). ⚠️ Scope is under <see cref="redBodyRoot"/> so the two bodies
-        /// stay separate; with the field empty nothing happens.</summary>
-        private void CacheRedBody()
+        private void OnEnable()
         {
-            if (redBodyRoot == null)
+            ModeRuntime.Changed += OnModeChanged;
+        }
+
+        private void OnDisable()
+        {
+            ModeRuntime.Changed -= OnModeChanged;
+        }
+
+        /// <summary>The mode can change under a LIVE avatar (a <c>load_match</c> arriving while the
+        /// lobby already stands in the arena scene, or a <c>rules_update</c>), so the drawn body has to
+        /// follow without the avatar being recreated.</summary>
+        private void OnModeChanged()
+        {
+            SelectBody();
+            ApplyBodyVisual();
+            RefreshSilhouette();
+        }
+
+        /// <summary>Builds the DEFAULT body's caches ONCE: ghost swap arrays, shield shells, silhouette
+        /// shells.
+        /// <para>⚠️ The ghost is a material swap on the drawn body's OWN mesh, so with no pose transfer
+        /// it cannot structurally drift. <c>sharedMaterials</c> returns a NEW array per call, so it is
+        /// read once and stored (needed anyway to swap back); originals are stored unconditionally so a
+        /// prefab without a ghost material never ends up material-less.</para>
+        /// <para>⚠️ A shield shell is not a breach of the "do not bind a second model to the character's
+        /// skeleton" ban — that ban is about ANOTHER FBX's mesh (different proportions → deformed body).
+        /// With no material bound no shell is built and protection still works on the server.</para>
+        /// <para>⚠️ Silhouette padding is 0 here — the shift is only known at draw time and is written
+        /// into <c>localBounds</c> per frame in <see cref="RefreshSilhouette"/>.</para></summary>
+        private void CacheDefaultBody()
+        {
+            _bodyOriginalMaterials = CaptureOriginalMaterials(bodyRenderers);
+            _bodyGhostMaterials = BuildSwapMaterials(_bodyOriginalMaterials, ghostMaterial);
+
+            _bodyShieldShells = BuildShells(bodyRenderers, shieldMaterial, ShieldShellName, ShieldBoundsPadding);
+            _bodySilhouetteShells = BuildShells(bodyRenderers, ghostMaterial, SilhouetteShellName, 0f);
+        }
+
+        /// <summary>Bundles one alternate body under <paramref name="root"/> and leaves it DISABLED (the
+        /// team/mode arrives with the first <see cref="SetInfo"/>). Null root = no body.</summary>
+        /// <remarks>⚠️ Renderers are collected FIRST and the shells built after: shells are children of
+        /// the body's renderers, so one caught by <c>GetComponentsInChildren</c> would get the body's
+        /// enable/ghost swap too. ⚠️ Ghost arrays are built for EVERY body: going ghost is
+        /// team-independent, so a player who dies on this body must have their swap array ready.</remarks>
+        private AltBody BuildAltBody(GameObject root)
+        {
+            if (root == null)
             {
-                return;
+                return null;
             }
 
-            _redBodyRenderers = redBodyRoot.GetComponentsInChildren<Renderer>(true);
-            SetRenderersEnabled(_redBodyRenderers, false);
+            var alt = new AltBody { Root = root };
+
+            alt.Renderers = root.GetComponentsInChildren<Renderer>(true);
+            SetRenderersEnabled(alt.Renderers, false);
 
             // Driving the pose of an invisible body is wasted work — the driver toggles with the body.
-            _redBodyDriver = redBodyRoot.GetComponentInChildren<SkeletonPoseMirror>(true);
-            if (_redBodyDriver != null)
+            alt.Driver = root.GetComponentInChildren<SkeletonPoseMirror>(true);
+            if (alt.Driver != null)
             {
-                _redBodyDriver.enabled = false;
+                alt.Driver.enabled = false;
             }
-        }
 
-        /// <summary>Builds the ghost swap arrays ONCE: the ghost is a material swap on the drawn body's
-        /// OWN mesh, so with no pose transfer it cannot structurally drift.
-        /// <para>⚠️ <c>sharedMaterials</c> returns a NEW array per call, so it is read once and stored
-        /// (needed anyway to swap back). ⚠️ Originals are stored unconditionally so a prefab without a
-        /// ghost material never ends up material-less.</para></summary>
-        private void CacheGhostMaterials()
-        {
-            // ⚠️ Built for BOTH bodies: going ghost is team-independent, so a player who dies while on
-            // the team body must have their swap array ready.
-            _bodyOriginalMaterials = CaptureOriginalMaterials(bodyRenderers);
-            _redOriginalMaterials = CaptureOriginalMaterials(_redBodyRenderers);
+            alt.HitColliders = CollectHitColliders(root.transform);
 
-            _bodyGhostMaterials = BuildSwapMaterials(_bodyOriginalMaterials, ghostMaterial);
-            _redGhostMaterials = BuildSwapMaterials(_redOriginalMaterials, ghostMaterial);
-        }
+            alt.Originals = CaptureOriginalMaterials(alt.Renderers);
+            alt.Ghosts = BuildSwapMaterials(alt.Originals, ghostMaterial);
 
-        /// <summary>Builds the shield shells ONCE: a disabled second renderer under every body renderer,
-        /// drawing the same mesh with the same bones.
-        /// <para>⚠️ Not a breach of the "do not bind a second model to the character's skeleton" ban —
-        /// that ban is about ANOTHER FBX's mesh (different proportions → deformed body). With no
-        /// material bound no shell is built and protection still works on the server.</para></summary>
-        private void CacheShieldShells()
-        {
-            _bodyShieldShells = BuildShells(bodyRenderers, shieldMaterial, ShieldShellName, ShieldBoundsPadding);
-            _redShieldShells = BuildShells(_redBodyRenderers, shieldMaterial, ShieldShellName, ShieldBoundsPadding);
-        }
+            alt.ShieldShells = BuildShells(alt.Renderers, shieldMaterial, ShieldShellName, ShieldBoundsPadding);
+            alt.SilhouetteShells = BuildShells(alt.Renderers, ghostMaterial, SilhouetteShellName, 0f);
 
-        /// <summary>Builds the floor silhouette shells ONCE, for BOTH bodies, with the ghost material: a
-        /// player on another floor is ALSO drawn projected onto the viewer's floor, as a collision cue.
-        /// <para>⚠️ Padding is 0 here — the shift is only known at draw time and is written into
-        /// <c>localBounds</c> per frame in <see cref="RefreshSilhouette"/>.</para></summary>
-        private void CacheSilhouetteShells()
-        {
-            _bodySilhouetteShells = BuildShells(bodyRenderers, ghostMaterial, SilhouetteShellName, 0f);
-            _redSilhouetteShells = BuildShells(_redBodyRenderers, ghostMaterial, SilhouetteShellName, 0f);
+            return alt;
         }
 
         /// <summary>Stores a body's original material arrays (the single source for undoing the swap).</summary>
@@ -736,7 +772,7 @@ namespace VortexArena.Core.Player
             _labelColor = team == "red" ? TeamRedColor
                 : team == "blue" ? TeamBlueColor : NameLabelNeutralColor;
 
-            ApplyRedBody(team == "red");
+            SelectBody();
 
             ApplyLabelText();
             RefreshLabelVisibility();
@@ -751,34 +787,186 @@ namespace VortexArena.Core.Player
             TintHeldItem(_itemInstanceR, _itemDefR);
         }
 
-        /// <summary>Picks the body to draw by team; only ONE is drawn at a time.
-        /// <para>⚠️ Switching bodies needs the same cleanup as leaving ghost state: the passive body is
-        /// never touched again, so a ghost material or property block left on it FREEZES there and comes
-        /// back on the player's next death. With no team body set up nothing happens.</para></summary>
-        private void ApplyRedBody(bool useRed)
+        /// <summary>Picks the body to draw from the team AND the mode's optional body prefabs; only ONE
+        /// body is drawn at a time. With no mode prefab this is exactly the old team rule (red team →
+        /// red body), and with no red body set up nothing happens at all.</summary>
+        private void SelectBody()
         {
-            if (_redBodyRenderers == null || _redBodyRenderers.Length == 0)
+            ModeDefinition mode = ResolveBodyMode();
+            GameObject prefab = mode == null ? null : _team == Team.Red ? mode.RedBodyPrefab : mode.BodyPrefab;
+
+            if (_modeAlt != null && _modeAlt.SourcePrefab != prefab)
+            {
+                // ⚠️ Left BEFORE it is destroyed: a body destroyed while drawn leaves the avatar with no
+                // renderer set at all until the next visual refresh.
+                if (_modeAlt == _alt)
+                {
+                    SwitchAlt(null);
+                }
+
+                Destroy(_modeAlt.Root);
+                _modeAlt = null;
+            }
+
+            AltBody wanted = prefab != null ? GetOrBuildModeAlt(prefab) : null;
+            if (wanted == null)
+            {
+                // No mode body (or it could not be built) → the default team rule.
+                wanted = _team == Team.Red ? _redAlt : null;
+            }
+
+            SwitchAlt(wanted);
+        }
+
+        /// <summary>Catalog definition of the current mode, cached on the mode id: <see cref="SetInfo"/>
+        /// runs on every <c>lobby_state</c> and the lookup loads a Resource.</summary>
+        private ModeDefinition ResolveBodyMode()
+        {
+            string modeId = ModeRuntime.ModeId ?? "";
+            if (_bodyModeResolved && _bodyModeId == modeId)
+            {
+                return _bodyMode;
+            }
+
+            _bodyModeId = modeId;
+            _bodyMode = ModeRuntime.FindDefinition();
+            _bodyModeResolved = true;
+            return _bodyMode;
+        }
+
+        /// <summary>Switches the drawn body to <paramref name="wanted"/> (null = the default body).
+        /// <para>⚠️ Switching bodies needs the same cleanup as leaving ghost state: the body being left
+        /// is never touched again, so a ghost material or property block left on it FREEZES there and
+        /// comes back on the player's next death.</para></summary>
+        private void SwitchAlt(AltBody wanted)
+        {
+            bool useAlt = wanted != null && wanted.Renderers != null && wanted.Renderers.Length > 0;
+            if (wanted == _alt && useAlt == _useAlt)
             {
                 return;
             }
 
-            if (_useRedBody == useRed)
+            Renderer[] leaving = ActiveBodyRenderers;
+            ClearPropertyBlocks(leaving);
+            WriteMaterials(leaving, ActiveOriginalMaterials);
+
+            AltBody previous = _alt;
+            if (previous != null && previous != wanted)
             {
-                return;
+                // ⚠️ Only a runtime mode body's root is switched off here; the prefab red body's root
+                // follows _visible and belongs to SetVisible.
+                DeactivateAlt(previous, previous == _modeAlt);
             }
 
-            _useRedBody = useRed;
+            _alt = wanted;
+            _useAlt = useAlt;
 
-            Renderer[] passive = useRed ? bodyRenderers : _redBodyRenderers;
-            ClearPropertyBlocks(passive);
-            WriteMaterials(passive, useRed ? _bodyOriginalMaterials : _redOriginalMaterials);
+            if (_alt != null && _alt == _modeAlt && _alt.Root != null)
+            {
+                _alt.Root.SetActive(_visible);
+            }
 
             // Re-apply the visual state from scratch on the NEW active body (untouched until now).
             _bodyVisualKnown = false;
 
-            // ⚠️ The hit box set must change WITH the body: boxes hang off bones and the two models have
+            // ⚠️ The hit box set must change WITH the body: boxes hang off bones and the models have
             // different proportions, so otherwise the player keeps the old body's hit volume.
             RefreshColliders();
+            RefreshAltDrivers();
+        }
+
+        /// <summary>Turns off everything an alternate body draws — it is not touched again while
+        /// passive, so anything left enabled keeps drawing through the switch.</summary>
+        private void DeactivateAlt(AltBody alt, bool hideRoot)
+        {
+            if (alt == null)
+            {
+                return;
+            }
+
+            SetRenderersEnabled(alt.Renderers, false);
+            SetRenderersEnabled(alt.ShieldShells, false);
+            SetRenderersEnabled(alt.SilhouetteShells, false);
+            SetCollidersEnabled(alt.HitColliders, false);
+
+            if (alt.Driver != null)
+            {
+                alt.Driver.enabled = false;
+            }
+
+            if (hideRoot && alt.Root != null)
+            {
+                alt.Root.SetActive(false);
+            }
+        }
+
+        /// <summary>Builds the mode's own body once per prefab, as a SIBLING of the character, driven
+        /// from the live skeleton. Null = it could not be built and the caller falls back.</summary>
+        /// <remarks>⚠️ A sibling, not a child: retarget output is in world space and a non-identity
+        /// parent transform would be applied twice (same rule as the prefab team body).
+        /// ⚠️ The container is born INACTIVE and stays so until selected, so the mirror's <c>Awake</c>
+        /// (and the hit boxes', which find this avatar through their parents) runs AFTER
+        /// <c>BindSource</c>.</remarks>
+        private AltBody GetOrBuildModeAlt(GameObject prefab)
+        {
+            if (_modeAlt != null && _modeAlt.SourcePrefab == prefab)
+            {
+                return _modeAlt;
+            }
+
+            if (character == null)
+            {
+                WarnMissingModeBodySource();
+                return null;
+            }
+
+            // Sibling of the character; falls back to this avatar's root so the container can never end
+            // up parentless in the scene.
+            Transform parent = character.transform.parent != null ? character.transform.parent : transform;
+
+            var container = new GameObject("ModeBody");
+            container.SetActive(false);
+            container.transform.SetParent(parent, false);
+            container.transform.localPosition = Vector3.zero;
+            container.transform.localRotation = Quaternion.identity;
+            container.transform.localScale = Vector3.one;
+
+            Instantiate(prefab, container.transform, false);
+
+            SkeletonPoseMirror mirror = container.GetComponentInChildren<SkeletonPoseMirror>(true);
+            if (mirror == null)
+            {
+                Debug.LogError($"[RemoteAvatar] Oyuncu {PlayerId}: mod gövdesi prefabında " +
+                               "SkeletonPoseMirror yok — 'Mod Gövdesi Kur' aracıyla kurulmalı. " +
+                               "Varsayılan gövde çiziliyor.", this);
+                Destroy(container);
+                return null;
+            }
+
+            mirror.BindSource(character.transform);
+
+            _modeAlt = BuildAltBody(container);
+            if (_modeAlt != null)
+            {
+                _modeAlt.SourcePrefab = prefab;
+            }
+
+            return _modeAlt;
+        }
+
+        /// <summary>Mode body wanted but there is no source skeleton — ERROR once per instance: the mode
+        /// is silently drawn with the wrong body otherwise.</summary>
+        private void WarnMissingModeBodySource()
+        {
+            if (_modeBodySourceWarned)
+            {
+                return;
+            }
+
+            _modeBodySourceWarned = true;
+            Debug.LogError($"[RemoteAvatar] Oyuncu {PlayerId}: mod gövdesi kurulamadı — RemoteAvatar " +
+                           "prefabında 'character' bağlı değil, sürülecek kaynak iskelet yok. " +
+                           "Varsayılan gövde çiziliyor.", this);
         }
 
         /// <summary>Applies calibration state (§10.6; from <c>lobby_state</c>). An uncalibrated avatar
@@ -847,10 +1035,10 @@ namespace VortexArena.Core.Player
         }
 
         /// <summary>
-        /// <b>Who sees the name label:</b> only the local player's TEAMMATES, in every mode/map/phase.
-        /// Three gates: teamless mode (<see cref="ModeRuntime.IsTeamless"/>) draws nobody's; a
-        /// <see cref="Team.Neutral"/> local team draws nothing either (showing labels while "unknown" is
-        /// exactly the leaking case); otherwise team equality is required. The only exception is the
+        /// <b>Who sees the name label:</b> only the local player's ALLIES, in every mode/map/phase —
+        /// the single gate is <see cref="ModeRuntime.IsAlly"/>: with teams, equality (an "unknown"
+        /// local team draws nothing, that is exactly the leaking case); teamless, the <c>allies</c>
+        /// rule (one shared side = everyone's label, FFA = nobody's). The only exception is the
         /// observer (<see cref="SpectatorMode"/>).
         /// <para>⚠️ The gate is asked <b>at draw time</b>, not via an event subscription: the local team
         /// can change mid-match and the mode changes with <c>load_match</c> — one missed event would
@@ -862,13 +1050,7 @@ namespace VortexArena.Core.Player
                 return true;
             }
 
-            if (ModeRuntime.IsTeamless)
-            {
-                return false;
-            }
-
-            Team local = ArenaCombat.LocalTeam;
-            return local != Team.Neutral && _team == local;
+            return ModeRuntime.IsAlly(ArenaCombat.LocalTeam, _team);
         }
 
         /// <summary>Refreshes whether the label draws (visibility + opponent gate).</summary>
@@ -1032,38 +1214,62 @@ namespace VortexArena.Core.Player
             WriteBaseColor(GhostTargets, color);
         }
 
-        /// <summary>Puts both bodies' renderers into the right state. ⚠️ The active body stays ENABLED in
-        /// ghost state (the ghost is a material swap on that mesh) and the passive one is ALWAYS
+        /// <summary>Puts every body's renderers into the right state. ⚠️ The drawn body stays ENABLED in
+        /// ghost state (the ghost is a material swap on that mesh) and EVERY other body is ALWAYS
         /// disabled (two bodies draw as interpenetrating characters).</summary>
         private void SyncBodyRendererEnable()
         {
-            Renderer[] active = ActiveBodyRenderers;
-            SetRenderersEnabled(active, true);
+            AltBody drawn = DrawnAlt;
+            SetRenderersEnabled(ActiveBodyRenderers, true);
 
-            Renderer[] passive = ReferenceEquals(active, bodyRenderers) ? _redBodyRenderers : bodyRenderers;
-            SetRenderersEnabled(passive, false);
+            if (drawn != null)
+            {
+                SetRenderersEnabled(bodyRenderers, false);
+            }
+
+            if (_redAlt != null && _redAlt != drawn)
+            {
+                SetRenderersEnabled(_redAlt.Renderers, false);
+            }
+
+            if (_modeAlt != null && _modeAlt != drawn)
+            {
+                SetRenderersEnabled(_modeAlt.Renderers, false);
+            }
 
             SyncShieldShells();
 
             // ⚠️ Re-applied here too: a body switch selects NEW shells that have never had _FloorShift
             // written, so they would draw at the material's default (unshifted, over the real body).
             RefreshSilhouette();
-            RefreshRedBodyDriver();
+            RefreshAltDrivers();
         }
 
-        /// <summary>Enables/disables the shield shells by body state (§10.4). The passive body's shells
+        /// <summary>Enables/disables the shield shells by body state (§10.4). Every undrawn body's shells
         /// are ALWAYS off. Shells live under the body, so a hidden avatar needs no extra handling.</summary>
         private void SyncShieldShells()
         {
-            Renderer[] active = ActiveShieldShells;
-            SetRenderersEnabled(active, _bodyVisual == BodyVisual.Shield);
+            AltBody drawn = DrawnAlt;
+            SetRenderersEnabled(ActiveShieldShells, _bodyVisual == BodyVisual.Shield);
 
-            // ⚠️ The written value is FORGOTTEN: a team change swaps the shells, and the new ones would
+            // ⚠️ The written value is FORGOTTEN: a body change swaps the shells, and the new ones would
             // never have had _Fade written (drawing with the material's default).
             _shieldFadeWritten = -1f;
 
-            Renderer[] passive = ReferenceEquals(active, _bodyShieldShells) ? _redShieldShells : _bodyShieldShells;
-            SetRenderersEnabled(passive, false);
+            if (drawn != null)
+            {
+                SetRenderersEnabled(_bodyShieldShells, false);
+            }
+
+            if (_redAlt != null && _redAlt != drawn)
+            {
+                SetRenderersEnabled(_redAlt.ShieldShells, false);
+            }
+
+            if (_modeAlt != null && _modeAlt != drawn)
+            {
+                SetRenderersEnabled(_modeAlt.ShieldShells, false);
+            }
         }
 
         /// <summary>Reads this player's floor and the viewer's; refreshes label + silhouette on change.
@@ -1098,14 +1304,25 @@ namespace VortexArena.Core.Player
         /// silhouette's position is true.</para></summary>
         private void RefreshSilhouette()
         {
+            AltBody drawn = DrawnAlt;
             Renderer[] shells = ActiveSilhouetteShells;
 
-            // The passive body's shells are ALWAYS off — a team change would otherwise leave a second
+            // Every undrawn body's shells are ALWAYS off — a body change would otherwise leave a second
             // silhouette hanging on the undrawn body.
-            Renderer[] passive = ReferenceEquals(shells, _bodySilhouetteShells)
-                ? _redSilhouetteShells
-                : _bodySilhouetteShells;
-            SetRenderersEnabled(passive, false);
+            if (drawn != null)
+            {
+                SetRenderersEnabled(_bodySilhouetteShells, false);
+            }
+
+            if (_redAlt != null && _redAlt != drawn)
+            {
+                SetRenderersEnabled(_redAlt.SilhouetteShells, false);
+            }
+
+            if (_modeAlt != null && _modeAlt != drawn)
+            {
+                SetRenderersEnabled(_modeAlt.SilhouetteShells, false);
+            }
 
             bool draw = _visible && _otherFloor && FloorState.ViewerHasFloor;
             if (draw && (shells == null || shells.Length == 0))
@@ -1175,15 +1392,22 @@ namespace VortexArena.Core.Player
                 "gövdenin 'bodyRenderers' listesi dolu olmalı. Çarpışma uyarısı görünmüyor.", this);
         }
 
-        /// <summary>Toggles the red body bridge: driven only while that body is ACTIVE and the avatar is
-        /// VISIBLE. ⚠️ <see cref="SetVisible"/> must call this separately — on a live avatar a visibility
-        /// change does not change the ghost state, so <see cref="ApplyBodyVisual"/> returns early and the
-        /// body would freeze in T-pose when it returns.</summary>
-        private void RefreshRedBodyDriver()
+        /// <summary>Toggles the alternate bodies' bridges: only the DRAWN body is driven, and only while
+        /// the avatar is VISIBLE. ⚠️ <see cref="SetVisible"/> must call this separately — on a live
+        /// avatar a visibility change does not change the ghost state, so <see cref="ApplyBodyVisual"/>
+        /// returns early and the body would freeze in T-pose when it returns.</summary>
+        private void RefreshAltDrivers()
         {
-            if (_redBodyDriver != null)
+            AltBody drawn = DrawnAlt;
+
+            if (_redAlt != null && _redAlt.Driver != null)
             {
-                _redBodyDriver.enabled = _visible && _useRedBody;
+                _redAlt.Driver.enabled = _visible && _redAlt == drawn;
+            }
+
+            if (_modeAlt != null && _modeAlt.Driver != null)
+            {
+                _modeAlt.Driver.enabled = _visible && _modeAlt == drawn;
             }
         }
 
@@ -1194,10 +1418,19 @@ namespace VortexArena.Core.Player
         /// renderer returns to the SRP Batcher (a renderer with a property block stays outside it).</summary>
         private void ClearGhostColor()
         {
-            // Both bodies are cleared: removal is cheap and a block left on the passive body would
+            // EVERY body is cleared: removal is cheap and a block left on an undrawn body would
             // silently return later.
             ClearPropertyBlocks(bodyRenderers);
-            ClearPropertyBlocks(_redBodyRenderers);
+
+            if (_redAlt != null)
+            {
+                ClearPropertyBlocks(_redAlt.Renderers);
+            }
+
+            if (_modeAlt != null)
+            {
+                ClearPropertyBlocks(_modeAlt.Renderers);
+            }
         }
 
         /// <summary>Switches the ACTIVE body's mesh to the requested look's materials, falling back to
@@ -1260,8 +1493,9 @@ namespace VortexArena.Core.Player
             Debug.LogWarning(
                 $"[RemoteAvatar] Oyuncu {PlayerId}: doğma koruması kalkanı çizilemiyor — çizilen " +
                 "gövde için kalkan kabuğu kurulamadı. RemoteAvatar prefabında 'shieldMaterial' " +
-                "bağlanmalı ve o gövdenin 'bodyRenderers' (kırmızıda 'redBodyRoot') listesi dolu " +
-                "olmalı. Koruma işliyor, yalnız görsel çizilmiyor.", this);
+                "bağlanmalı ve çizilen gövdenin renderer'ları dolu olmalı ('bodyRenderers', kırmızıda " +
+                "'redBodyRoot', modda mod gövdesi prefabı). Koruma işliyor, yalnız görsel " +
+                "çizilmiyor.", this);
         }
 
         private void WriteBaseColor(Renderer[] targets, in Color color)
@@ -1322,9 +1556,10 @@ namespace VortexArena.Core.Player
             }
         }
 
-        /// <summary>Collects each body's OWN hit boxes once (colliders with the
-        /// <see cref="RemoteHitBox"/> marker).
-        /// <para>⚠️ <b>Two bodies, TWO SEPARATE sets, deliberately:</b> boxes hang off bones whose
+        /// <summary>Collects the DEFAULT body's hit boxes once (colliders with the
+        /// <see cref="RemoteHitBox"/> marker); every alternate body gets its own set in
+        /// <see cref="BuildAltBody"/>.
+        /// <para>⚠️ <b>One SEPARATE set per body, deliberately:</b> boxes hang off bones whose
         /// proportions differ per model, so a shared set would drift the hit volume from the drawn body.
         /// The set changes with the drawn body. With no character bound (legacy path) the whole avatar is
         /// scanned.</para></summary>
@@ -1332,9 +1567,6 @@ namespace VortexArena.Core.Player
         {
             Transform defaultRoot = character != null ? character.transform : transform;
             _defaultHitColliders = CollectHitColliders(defaultRoot);
-            _redHitColliders = redBodyRoot != null
-                ? CollectHitColliders(redBodyRoot.transform)
-                : System.Array.Empty<Collider>();
         }
 
         private static Collider[] CollectHitColliders(Transform root)
@@ -1354,10 +1586,11 @@ namespace VortexArena.Core.Player
             return found.ToArray();
         }
 
-        /// <summary>Hit boxes of the drawn body; the other body's are always disabled.</summary>
+        /// <summary>Hit boxes of the drawn body; every other body's are always disabled. A body with no
+        /// box of its own falls back to the default set rather than becoming unhittable.</summary>
         private Collider[] ActiveHitColliders =>
-            _useRedBody && _redHitColliders != null && _redHitColliders.Length > 0
-                ? _redHitColliders
+            DrawnAlt != null && _alt.HitColliders != null && _alt.HitColliders.Length > 0
+                ? _alt.HitColliders
                 : _defaultHitColliders;
 
         /// <summary>A dead/hidden/uncalibrated avatar cannot be shot: hit boxes are disabled.
@@ -1369,9 +1602,21 @@ namespace VortexArena.Core.Player
 
             Collider[] active = ActiveHitColliders;
             SetCollidersEnabled(active, enable);
-            SetCollidersEnabled(ReferenceEquals(active, _defaultHitColliders)
-                ? _redHitColliders
-                : _defaultHitColliders, false);
+
+            if (!ReferenceEquals(active, _defaultHitColliders))
+            {
+                SetCollidersEnabled(_defaultHitColliders, false);
+            }
+
+            if (_redAlt != null && !ReferenceEquals(active, _redAlt.HitColliders))
+            {
+                SetCollidersEnabled(_redAlt.HitColliders, false);
+            }
+
+            if (_modeAlt != null && !ReferenceEquals(active, _modeAlt.HitColliders))
+            {
+                SetCollidersEnabled(_modeAlt.HitColliders, false);
+            }
         }
 
         private static void SetCollidersEnabled(Collider[] targets, bool enabled)
@@ -2317,12 +2562,19 @@ namespace VortexArena.Core.Player
 
             if (redBodyRoot != null)
             {
-                // ⚠️ The red body is a SIBLING of visualRoot, which does not disable it — it would hang
-                // in mid-air before the first pose.
+                // ⚠️ An alternate body is a SIBLING of visualRoot, which does not disable it — it would
+                // hang in mid-air before the first pose.
                 redBodyRoot.SetActive(visible);
             }
 
-            RefreshRedBodyDriver();
+            if (_modeAlt != null && _modeAlt.Root != null)
+            {
+                // The mode body's root is ALSO the "is it selected" switch, so it only follows
+                // visibility while it is the drawn one.
+                _modeAlt.Root.SetActive(visible && _alt == _modeAlt);
+            }
+
+            RefreshAltDrivers();
 
             RefreshLabelVisibility();
 

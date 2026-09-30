@@ -381,19 +381,14 @@ namespace VortexArena.Core.Audio
         /// teammate damage, so such a <c>kill_event</c> never exists. Gating on
         /// <see cref="ModeRuntime.FriendlyFire"/> would flip the announcement to the wrong side on
         /// any skew between the operator switch and the event's arrival.
-        /// <para>⚠️ When unknown it says "enemy" (teamless mode, local team still
-        /// <see cref="Team.Neutral"/>, victim missing from the roster): announcing a friendly fire
-        /// that did not happen misleads more than staying silent on a real kill.</para>
+        /// <para>⚠️ When unknown it says "enemy" (local team still <see cref="Team.Neutral"/>, victim
+        /// missing from the roster): announcing a friendly fire that did not happen misleads more than
+        /// staying silent on a real kill. In a teamless mode the <c>allies</c> rule answers instead —
+        /// one shared side means the victim IS a teammate (<see cref="ModeRuntime.IsAlly"/>).</para>
         /// </remarks>
         private bool IsTeammate(int victimId)
         {
-            if (ModeRuntime.IsTeamless)
-            {
-                return false;
-            }
-
-            Team local = ArenaCombat.LocalTeam;
-            return local != Team.Neutral && RosterTeam(victimId) == local;
+            return ModeRuntime.IsAlly(ArenaCombat.LocalTeam, RosterTeam(victimId));
         }
 
         /// <summary>Team of a roster player; <see cref="Team.Neutral"/> when absent.</summary>

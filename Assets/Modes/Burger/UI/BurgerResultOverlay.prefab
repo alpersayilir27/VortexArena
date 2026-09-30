@@ -641,6 +641,10 @@ PrefabInstance:
       propertyPath: m_fontSizeBase
       value: 28
       objectReference: {fileID: 0}
+    - target: {fileID: 601310498211610209, guid: 5a0966b4072b39b4b87cc716630f4a2e, type: 3}
+      propertyPath: m_fontColor32.rgba
+      value: 4280956376
+      objectReference: {fileID: 0}
     - target: {fileID: 685748808041535915, guid: 5a0966b4072b39b4b87cc716630f4a2e, type: 3}
       propertyPath: m_text
       value: "HAMBURGERC\u0130"
@@ -669,6 +673,10 @@ PrefabInstance:
       propertyPath: m_sharedMaterial
       value: 
       objectReference: {fileID: 2100000, guid: f756a85a5c2e4ad4ebae077ab8e3d5a4, type: 2}
+    - target: {fileID: 685748808041535915, guid: 5a0966b4072b39b4b87cc716630f4a2e, type: 3}
+      propertyPath: m_fontColor32.rgba
+      value: 4294508031
+      objectReference: {fileID: 0}
     - target: {fileID: 841177173488856078, guid: 5a0966b4072b39b4b87cc716630f4a2e, type: 3}
       propertyPath: m_fontColor.b
       value: 0.06666667
@@ -773,6 +781,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: BurgerResultOverlay
       objectReference: {fileID: 0}
+    - target: {fileID: 2488338122132002829, guid: 5a0966b4072b39b4b87cc716630f4a2e, type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 2810126018416208106, guid: 5a0966b4072b39b4b87cc716630f4a2e, type: 3}
       propertyPath: m_fontColor.b
       value: 0.06666667
@@ -857,6 +869,10 @@ PrefabInstance:
       propertyPath: m_fontColor.r
       value: 0.2901961
       objectReference: {fileID: 0}
+    - target: {fileID: 3306071692294018455, guid: 5a0966b4072b39b4b87cc716630f4a2e, type: 3}
+      propertyPath: m_fontColor32.rgba
+      value: 4279313738
+      objectReference: {fileID: 0}
     - target: {fileID: 4039197599769771028, guid: 5a0966b4072b39b4b87cc716630f4a2e, type: 3}
       propertyPath: coopTitle
       value: "VARD\u0130YA B\u0130TT\u0130!"
@@ -884,6 +900,10 @@ PrefabInstance:
     - target: {fileID: 4307414619766683149, guid: 5a0966b4072b39b4b87cc716630f4a2e, type: 3}
       propertyPath: m_IsActive
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4500622062746811008, guid: 5a0966b4072b39b4b87cc716630f4a2e, type: 3}
+      propertyPath: m_IsActive
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 4684515244768712994, guid: 5a0966b4072b39b4b87cc716630f4a2e, type: 3}
       propertyPath: m_fontColor.b
@@ -932,6 +952,10 @@ PrefabInstance:
     - target: {fileID: 5441551907581088884, guid: 5a0966b4072b39b4b87cc716630f4a2e, type: 3}
       propertyPath: m_fontSizeBase
       value: 28
+      objectReference: {fileID: 0}
+    - target: {fileID: 5441551907581088884, guid: 5a0966b4072b39b4b87cc716630f4a2e, type: 3}
+      propertyPath: m_fontColor32.rgba
+      value: 4280956376
       objectReference: {fileID: 0}
     - target: {fileID: 5783266978777122466, guid: 5a0966b4072b39b4b87cc716630f4a2e, type: 3}
       propertyPath: m_fontSize
@@ -989,6 +1013,10 @@ PrefabInstance:
       propertyPath: m_Color.r
       value: 0.72156864
       objectReference: {fileID: 0}
+    - target: {fileID: 6398603631671018719, guid: 5a0966b4072b39b4b87cc716630f4a2e, type: 3}
+      propertyPath: m_PresetInfoIsWorld
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 6412060639228722009, guid: 5a0966b4072b39b4b87cc716630f4a2e, type: 3}
       propertyPath: m_SizeDelta.x
       value: -120
@@ -1000,6 +1028,10 @@ PrefabInstance:
     - target: {fileID: 6412060639228722009, guid: 5a0966b4072b39b4b87cc716630f4a2e, type: 3}
       propertyPath: m_AnchoredPosition.y
       value: -272
+      objectReference: {fileID: 0}
+    - target: {fileID: 6424786452558501794, guid: 5a0966b4072b39b4b87cc716630f4a2e, type: 3}
+      propertyPath: m_IsActive
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 6661972510597548847, guid: 5a0966b4072b39b4b87cc716630f4a2e, type: 3}
       propertyPath: m_AnchoredPosition.y
@@ -1057,6 +1089,10 @@ PrefabInstance:
       propertyPath: m_sharedMaterial
       value: 
       objectReference: {fileID: 2100000, guid: f756a85a5c2e4ad4ebae077ab8e3d5a4, type: 2}
+    - target: {fileID: 7595941171886345726, guid: 5a0966b4072b39b4b87cc716630f4a2e, type: 3}
+      propertyPath: m_fontColor32.rgba
+      value: 4280956376
+      objectReference: {fileID: 0}
     - target: {fileID: 7855536002908668526, guid: 5a0966b4072b39b4b87cc716630f4a2e, type: 3}
       propertyPath: m_text
       value: "G\xDCN\xDCN HESABI"
@@ -1085,6 +1121,10 @@ PrefabInstance:
       propertyPath: m_sharedMaterial
       value: 
       objectReference: {fileID: 2100000, guid: f756a85a5c2e4ad4ebae077ab8e3d5a4, type: 2}
+    - target: {fileID: 7855536002908668526, guid: 5a0966b4072b39b4b87cc716630f4a2e, type: 3}
+      propertyPath: m_fontColor32.rgba
+      value: 4294508031
+      objectReference: {fileID: 0}
     - target: {fileID: 7873300400288150562, guid: 5a0966b4072b39b4b87cc716630f4a2e, type: 3}
       propertyPath: m_IsActive
       value: 0
@@ -1212,6 +1252,10 @@ PrefabInstance:
     - target: {fileID: 9057783275134861605, guid: 5a0966b4072b39b4b87cc716630f4a2e, type: 3}
       propertyPath: m_fontSizeBase
       value: 48
+      objectReference: {fileID: 0}
+    - target: {fileID: 9057783275134861605, guid: 5a0966b4072b39b4b87cc716630f4a2e, type: 3}
+      propertyPath: m_fontColor32.rgba
+      value: 4281619066
       objectReference: {fileID: 0}
     - target: {fileID: 9173324803966517682, guid: 5a0966b4072b39b4b87cc716630f4a2e, type: 3}
       propertyPath: m_fontColor.b

@@ -118,7 +118,7 @@ MonoBehaviour:
   m_ActiveFontFeatures: 6e72656b
   m_enableExtraPadding: 0
   checkPaddingRequired: 0
-  m_isRichText: 0
+  m_isRichText: 1
   m_EmojiFallbackSupport: 1
   m_parseCtrlCharacters: 1
   m_isOrthographic: 1
@@ -941,6 +941,16 @@ MonoBehaviour:
   - {fileID: 8289159501052650264}
   - {fileID: 5783266978777122466}
   - {fileID: 3104505495018946754}
+  wonTitle: KAZANDIN
+  lostTitle: "KAYBETT\u0130N"
+  drawTitle: BERABERE
+  coopTitle: "OYUN B\u0130TT\u0130"
+  scoreHeader: SKOR
+  coopScoreHeader: KATKI
+  wonColor: {r: 0.22352941, g: 0.8509804, b: 0.5411765, a: 1}
+  lostColor: {r: 0.8980392, g: 0.28235295, b: 0.3019608, a: 1}
+  drawColor: {r: 0.9607843, g: 0.96862745, b: 0.98039216, a: 1}
+  coopColor: {r: 0.9607843, g: 0.96862745, b: 0.98039216, a: 1}
 --- !u!1 &2689947847233893572
 GameObject:
   m_ObjectHideFlags: 0
@@ -1271,7 +1281,7 @@ MonoBehaviour:
   m_ActiveFontFeatures: 6e72656b
   m_enableExtraPadding: 0
   checkPaddingRequired: 0
-  m_isRichText: 0
+  m_isRichText: 1
   m_EmojiFallbackSupport: 1
   m_parseCtrlCharacters: 1
   m_isOrthographic: 1
@@ -1408,7 +1418,7 @@ MonoBehaviour:
   m_ActiveFontFeatures: 6e72656b
   m_enableExtraPadding: 0
   checkPaddingRequired: 0
-  m_isRichText: 0
+  m_isRichText: 1
   m_EmojiFallbackSupport: 1
   m_parseCtrlCharacters: 1
   m_isOrthographic: 1
@@ -3219,7 +3229,7 @@ MonoBehaviour:
   m_ActiveFontFeatures: 6e72656b
   m_enableExtraPadding: 0
   checkPaddingRequired: 0
-  m_isRichText: 0
+  m_isRichText: 1
   m_EmojiFallbackSupport: 1
   m_parseCtrlCharacters: 1
   m_isOrthographic: 1

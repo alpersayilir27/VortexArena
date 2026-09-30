@@ -67,9 +67,54 @@ namespace VortexArena.Core.Player
 
         private bool _ready;
 
+        /// <summary>Has <c>Awake</c> run? <see cref="BindSource"/> only re-runs the setup after it.</summary>
+        private bool _awoken;
+
         private void Awake()
         {
+            _awoken = true;
             _ready = TrySetup();
+        }
+
+        /// <summary>Binds the source skeleton at runtime, for a mirror that arrives inside an
+        /// instantiated prefab (the source is unknown at author time).</summary>
+        /// <remarks>⚠️ <b>Call it BEFORE the object is first activated</b> (spawn the instance under an
+        /// INACTIVE parent): otherwise <c>Awake</c> has already run its setup against an empty source
+        /// and logged an error. Returns false when the hips could not be matched — the pose still
+        /// transfers, but the hips (crouch, step) do not.</remarks>
+        public bool BindSource(Transform source)
+        {
+            sourceRoot = source;
+            sourceHips = null;
+
+            if (source != null && targetHips != null)
+            {
+                Transform[] bones = source.GetComponentsInChildren<Transform>(true);
+                for (int i = 0; i < bones.Length; i++)
+                {
+                    if (bones[i].name == targetHips.name)
+                    {
+                        sourceHips = bones[i];
+                        break;
+                    }
+                }
+            }
+
+            // Already awake = the prefab was activated before binding; rebuild the mapping in place.
+            // ⚠️ enabled is NOT touched here — RemoteAvatar owns it (it toggles with the drawn body).
+            if (_awoken)
+            {
+                _ready = TrySetup();
+            }
+
+            if (sourceHips == null)
+            {
+                Debug.LogError("[SkeletonPoseMirror] Kaynak iskelette kalça kemiği bulunamadı — " +
+                               "gövde çizilir ama kalça (çömelme, adım) aktarılmaz.", this);
+                return false;
+            }
+
+            return true;
         }
 
         /// <summary>

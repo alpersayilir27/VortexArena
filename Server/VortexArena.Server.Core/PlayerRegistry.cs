@@ -130,11 +130,12 @@ public sealed class PlayerRegistry : IDisposable
     /// it is pulled to Connected and <b>name/number/team/kills/deaths/score/MatchParticipant are
     /// PRESERVED</b>: that is the "resume where you left off, in your old row" rule (§2) — resetting
     /// would make a mid-match returner look like a second identity. An EMPTY team is preserved too when
-    /// <paramref name="teamlessMatch"/> is set: there "empty" is the team, not "unassigned", and filling
+    /// <paramref name="teamless"/> is set: there "empty" is the team, not "unassigned", and filling
     /// it would flip a returner to the red body mid-match.</para></summary>
-    /// <param name="teamlessMatch">Is a teamless match set up right now (<c>MatchDirector.IsTeamlessMatchSetUp</c>)?
-    /// ⚠️ Resolved by the caller OUTSIDE this lock — the director has its own lock.</param>
-    public bool TryRegisterHello(HelloMsg hello, ClientConnection connection, bool teamlessMatch, out PlayerState state, out PlayerChangeKind kind)
+    /// <param name="teamless">Is the lobby teamless right now — the set up match OR the selected mode
+    /// (<c>LobbyService.IsTeamlessSetUpOrSelected</c>)? ⚠️ Resolved by the caller OUTSIDE this lock — the
+    /// director has its own lock.</param>
+    public bool TryRegisterHello(HelloMsg hello, ClientConnection connection, bool teamless, out PlayerState state, out PlayerChangeKind kind)
     {
         ClientConnection? stale = null;
         lock (_gate)
@@ -163,7 +164,7 @@ public sealed class PlayerRegistry : IDisposable
             state.Role = hello.role == "admin" ? "admin" : "player";
             ResolveIdentityLocked(state, hello.deviceName);
             state.Team = state.Role != "player" ? "" // admins do not play
-                : teamlessMatch ? ""
+                : teamless ? ""
                 : string.IsNullOrEmpty(state.Team) ? SmallerTeamLocked() : state.Team;
             state.Scene = hello.currentScene ?? "";
             state.Scenes = hello.scenes != null ? new List<string>(hello.scenes) : new List<string>();

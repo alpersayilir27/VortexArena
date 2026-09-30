@@ -67,10 +67,16 @@ public sealed record ModeRules
 {
     public TeamMode Teams { get; init; } = TeamMode.TwoTeams;
 
+    /// <summary>Teamless co-op: one shared team — every player counts as everyone's teammate
+    /// (§10.5).</summary>
+    /// <remarks>Only meaningful with <see cref="TeamMode.None"/>; with two teams the team string decides
+    /// and this is ignored. <c>false</c> = FFA, so existing teamless modes are unaffected.</remarks>
+    public bool Allies { get; init; }
+
     public ScoreKind Scoring { get; init; } = ScoreKind.Team;
 
-    /// <summary>false = teammates cannot hit each other (§10.3/4); an empty team is never a
-    /// teammate.</summary>
+    /// <summary>false = teammates cannot hit each other (§10.3/4); an empty team is never a teammate
+    /// unless <see cref="Allies"/> is set.</summary>
     /// <remarks>⚠️ Modes do NOT write this (§5.2) — the operator's <c>set_friendly_fire</c> switch
     /// decides it and <c>MatchDirector.ApplyRulesLocked</c> stamps every rule shape. It sits here only
     /// because it is carried on the wire (<c>ModeRulesInfo.friendlyFire</c> = the value in effect); a
@@ -129,6 +135,7 @@ public sealed record ModeRules
     public ModeRulesInfo ToInfo() => new()
     {
         teamMode = Teams == TeamMode.None ? "none" : "two",
+        allies = Allies,
         scoring = Scoring switch
         {
             ScoreKind.Player => "player",

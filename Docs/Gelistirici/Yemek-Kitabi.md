@@ -26,6 +26,7 @@ Her reçetenin altında *neden böyle* kutusu var — orayı okumazsan çalış�
 | Yeni mod eklemek | [13](#13-yeni-mod-eklemek) |
 | Çocuk oyunu eklemek (silahsız, kooperatif) | [13.1](#131-çocuk-oyunu-eklemek-silahsız-kooperatif) |
 | Moda özel maç sonu ekranı (tema) | [13.2](#132-moda-özel-maç-sonu-ekranı) |
+| Moda özel oyuncu gövdesi (karakter modeli) | [13.3](#133-moda-özel-oyuncu-gövdesi) |
 | Yeni arena eklemek | [14](#14-yeni-arena-eklemek) |
 | Hazır bir environment'ın içinde arena bölgesi kurmak | [14.1](#141-hazır-bir-environmentın-içinde-arena-bölgesi-kurmak) |
 | Gözlüksüz test (dev penceresi) | [15](#15-gözlüksüz-test-dev-penceresi) |
@@ -179,7 +180,8 @@ değiştirmez; kutudan ya da kafadan ölçen bir düşüm ayağının dibindeki 
 > `ReportAreaSelfHit` **dost ateşi anahtarını kendisi okur**: kapalıyken hiç rapor yollamaz (sunucu
 > zaten reddederdi, boş rapor konsolu kirletir). Aynı kapı takımsız modda da geçerlidir — "kendi
 > bombamın hasarını alır mıyım" sorusunun cevabı her modda operatörün anahtarıdır (`Protokol` §10.3
-> 5. kapı).
+> 5. kapı). ⚠️ **Alan hasarında müttefik ayıklamayı sen yazma:** tek ekip modunda (`Allies`, aşağı
+> bak) takımdaşı vurup vurmayacağına sunucunun tek dost ateşi kapısı karar verir.
 
 > ⚠️ **Atıcının ölmesi patlamayı iptal ETMEZ.** Elden çıkmış hasar kaynağı sahibi öldükten sonra da
 > raporlanır ve skoru normal yazılır — sunucudaki kapı bir **pencere**dir (`Protokol` §10.3 2. kapı).
@@ -414,8 +416,14 @@ float gecikme = ModeRuntime.RespawnDelay;    // 0 GEÇERLİDİR (anında canlanm
 ModeRuntime.Changed += KurallarDegisti;      // maç yüklenince tetiklenir
 ```
 
-Okunabilir alanlar: `ModeId`, `Teams`, `Scoring`, `FriendlyFire`, `Revive`, `Weapons`,
+Okunabilir alanlar: `ModeId`, `Teams`, `Allies`, `Scoring`, `FriendlyFire`, `Revive`, `Weapons`,
 `RespawnDelay`, `FireWhilePaused`, `IsTeamless`, `IsWeaponless`, `IsCoop`, `HidesCombatStats`.
+
+> ⚠️ **"Bu oyuncu takım arkadaşım mı" sorusunu takım karşılaştırarak yazma** —
+> `ModeRuntime.IsAlly(yerelTakım, ötekininTakımı)` çağır (herkesi kapsayan soru için `AlliesAll`).
+> Takımsız modda takım `""`dır ve cevabı `Allies`
+> kuralı verir (`false` = herkes tek, `true` = herkes aynı ekip); elle yazılan her karşılaştırma
+> iki moddan birinde yanlış cevap verir.
 
 > **Neden tek okuma noktası:** canlanma, skor satırı, silah kaynağı ve admin arayüzü aynı bilgiyi
 > ister. Dördü ayrı ayrı `load_match` dinlerse dördü ayrı ayrı bayatlar.
@@ -1011,7 +1019,8 @@ ve oyuncunun asıl beklediği şeyi örter.
 public sealed class BenimModum : IGameMode
 {
     public string ModeId => "benim";
-    public ModeRules Rules => new() { Teams = TeamMode.None, Scoring = ScoreKind.Player };
+    public ModeRules Rules => new() { Teams = TeamMode.None, Allies = false,   // herkes tek
+                                      Scoring = ScoreKind.Player };
     public int DefaultRoundSeconds => 300;
     public int DefaultScoreLimit => 20;
 
@@ -1026,6 +1035,18 @@ public sealed class BenimModum : IGameMode
 }
 ```
 + `MatchDirector.RegisterModes()` içine `Register(new BenimModum());`
+
+> ⚠️ **`Teams = None` seçtiysen bir karar daha vermek zorundasın: `Allies`.** `false` (varsayılan) =
+> **herkes tek** — kimse kimsenin takımdaşı değil, ad etiketi çizilmez, dost ateşi anahtarı o modu
+> etkilemez. `true` = **tek ekip** — herkes aynı takımdadır: ad etiketleri görünür, dost ateşi
+> kapalıyken birbirlerini vuramazlar, açıkken vurabilirler ve takımdaş öldürme cezası işler. Sunum
+> iki değerde de takımsız kalır (nötr gri avatar, kırmızı/mavi skor paneli yok, admin tek kolon).
+> `Teams = TwoTeams`'te alan yok sayılır.
+>
+> Değer **iki yere** yazılır: sunucudaki modun `Rules`'ü (otorite) **ve** Unity'deki
+> `ModeDefinition` asset'i (editör/katalog önizlemesi). Yalnız birini yazarsan sunucusuz önizleme
+> ile sahadaki maç ayrışır — telde sunucu kazanır, yani yanlış olan editörde saklı kalır.
+> Alanın tel karşılığı: `Docs/ArenaNet-Protokol.md` mod kuralları bölümü.
 
 **Unity** — `Assets/Modes/<Ad>/`:
 `Scripts/VortexArena.Modes.<Ad>.asmdef` (refs: Core, Net, Protocol) + `ModeHudBase` alt sınıfı +
@@ -1068,7 +1089,9 @@ haritanın `MapDefinition`'ında da `gameType = Kids`. ⚠️ Üçü tutmazsa `s
 reddedilir — sahadaki belirti "maç başlamıyor"dur, sebep yalnız sunucu konsolundadır.
 
 **2. Kural şekli.** `Weapons = None` (hasarı kapatan şey budur, ayrı bir anahtar yoktur — atılabilir
-eşya da atılamaz), `Teams = None`, `Revive = None`, `RespawnDelay = 0`. Kooperatif skor için
+eşya da atılamaz), `Teams = None` + **`Allies = true`** (kooperatifte herkes aynı ekiptir: ad
+etiketleri görünür, dost ateşi kapalıyken kimse kimseyi vuramaz), `Revive = None`,
+`RespawnDelay = 0`. Kooperatif skor için
 `Scoring = ScoreKind.PlayerAndShared` ve yazan yol `director.AddSharedScore(playerId, puan)`:
 bireysel katkı ve ortak toplam **tek çağrıdan** gider, `scoreBlue` `0` kalır ve **kazanan yoktur**
 (`IsMatchOver` her zaman `MatchOutcome.Draw` döndürür). Sonuç tablosu grubun birlikte okuduğu şey
@@ -1076,6 +1099,7 @@ olduğu için `HoldsResultForOperator => true`.
 
 > **Yarışmalı varyant.** Ailenin değişmezi yalnız ilk üçüdür — `Weapons = None` (hasarı kapatan
 > şey), `Revive = None`, `HoldsResultForOperator => true`. **Skor kanalı ve takım kipi serbesttir:**
+> herkesin tek başına yarıştığı bir çocuk oyunu `Teams = None` + `Allies = false` alır;
 > kırmızı–mavi yarışan bir çocuk oyunu `Teams = TwoTeams` + `Scoring = Team` alır, kazananı olur ve
 > `IsMatchOver` süre dolunca önde olan takımı döndürür (örnek: `mole`). ⚠️ **Takımlı olmak taban
 > gerektirmez:** taban `Revive = OwnBase`'in aracıydı ve burada canlanma yoktur — haritaya BaseZone
@@ -1210,6 +1234,62 @@ kod yapar. Kalan kolonları boşalan genişliğe yaymak serbesttir.
 
 **Test:** dev penceresinde bu modda bir maç bitir → sonuç kartı ve tablo temalı gelmeli; ardından
 başka bir modda maç bitir → genel ekran geri gelmeli (tekil moda göre kendini yeniden örnekler).
+
+---
+
+## 13.3 Moda özel oyuncu gövdesi
+
+Bir mod oyuncuları kendi karakter modelleriyle çizdirebilir (çocuk oyununda çizgi film gövdesi
+gibi). Kod işi yoktur: iş bir FBX, bir araç koşusu, elle konan vuruş kutuları ve iki asset alanıdır.
+Örnek yerleşim: `Assets/Modes/<Ad>/Avatars/`.
+**Adım atlamanın bedeli:** yanlış riglenmiş FBX hata vermeden T-pozda donar, kutusuz gövde
+**vurulamaz** oyuncu üretir, paket içinden referans verilen materyal paket silinince mor kalır.
+
+**1. Mixamo'ya gidecek mesh'i hazırla.** Auto-rigger'a giden dosya **iskeletsiz, tek parça, T-pozda**
+olmalıdır. ⚠️ Yüklenen dosya kendi iskeletini taşırsa Mixamo ya *"unable to map your existing
+skeleton"* der ya da sessizce **orijinal rig'i** geri verir — ikisinde de kemik adları `mixamorig:*`
+olmaz. Blender modeli içe alamıyorsa mesh **Unity'de pişirilir**: prefab bellekte açılır, kollar
+T-poza çevrilir, `SkinnedMeshRenderer.BakeMesh` ile yalnız o an aktif kıyafet parçaları alınır ve
+OBJ olarak dışa aktarılır — Mixamo OBJ'yi kabul eder.
+
+**2. Auto-rigger ayarları:** iskelet LOD **`Standard Skeleton (65)`** (parmak rigi parmak başına
+4 kemik ister), indirme **`FBX for Unity`** + **T-pose**.
+
+**3. FBX'i `Assets/Modes/<Ad>/Avatars/` altına koy** ve import ayarlarına bak:
+- ⚠️ **Ölçek:** Mixamo'nun çıktısı cm/m karışıklığıyla 100 kat küçük gelebilir — kalça kemiği
+  ~0.7 m yerine ~0.007 m'deyse *Scale Factor* 100 yapılır. Küçük modelle kurulan araç devasa bir
+  kalibrasyon çarpanı yazar ve vuruş kutuları santimetre ölçeğinde kalır.
+- *Import Animation* kapalı, *Material Creation Mode* `None` (materyaller 5. adımda atanır).
+- ⚠️ **Alt-mesh kaybı:** Mixamo her parçanın alt-mesh'lerini TEK yüzeye indirir (kafadaki göz,
+  ten, kaş, diş tek materyal olur ve gözler ten dokusuyla boyanır). Parça başına birden çok
+  materyal gerekiyorsa her üçgen, rig'e giden pişmiş orijinaldeki en yakın üçgenin alt-mesh'ine
+  atanarak yeniden bölünür ve mesh `Avatars/Meshes/` altına asset olarak kaydedilir; prefabın
+  renderer'ı bu mesh'i kullanır.
+
+**4. Aracı çalıştır:** `Tools > VortexArena > Avatars > Mod Gövdesi Kur (seçili FBX)`. Aynı klasörde
+`<FBX adı>_Body.prefab` üretilir/güncellenir (kökte `SkeletonPoseMirror`, altında FBX'in prefab
+örneği). Prefab zaten varsa **yalnız ayna alanları** tazelenir — elle konan kutular ve materyal
+atamaları korunur, yani araç modeli her güncellediğinde tekrar koşulabilir.
+
+**5. Materyalleri ve dokuları modun klasörüne KOPYALA** (`Assets/Modes/<Ad>/Avatars/` altına) ve
+prefabın renderer'ında alt-mesh başına ata. Dokulara Android override'ı uygula. ⚠️ Üçüncü parti
+paketin içindeki dosyaya referans bırakma: paket silinince gövde mor kalır.
+
+**6. Vuruş kutularını ELLE yerleştir** — varsayılan gövdelerdeki ile aynı kural: her kutuda
+`RemoteHitBox` ve bölgesi **açıkça seçilmiş** olur; varsayılan gövdenin kemiklerinin aynısına 16 kutu
+(kafa küresi, göğüs/karın/leğen, üst kol/ön kol, el, uyluk, baldır, ayak). Ölçüler **bu modelin
+kendi oranlarına** göre verilir, varsayılan gövdeden kopyalanmaz.
+
+**7. Bağla:** `Assets/Modes/<Ad>/Data/<AD>.asset` → **`bodyPrefab`** (mavi takım + takımsız oyuncu) ve
+**`redBodyPrefab`** (kırmızı takım). Boş alan o slotu varsayılan gövdede bırakır. ⚠️ Takımlı bir modda
+iki alan **gözle ayırt edilen iki ayrı model** olmalıdır — takım rengi gövdeye yazılmaz, dost/düşman
+ayrımının taşıyıcısı modelin kendisidir.
+
+**Test (gözlükle, iki oyuncu):** maç başlayınca iki oyuncu da modun gövdeleriyle çizilmeli,
+takımlarına göre farklı modelde olmalı; çömelip zıplarken poz karakteri takip etmeli ve kafa
+oyuncunun gerçek kafasının olduğu yerde durmalı; her bölgeden isabet almalı; maç bitip lobiye
+dönünce gövdeler varsayılana geri dönmeli, lobide **arenadan çıkmadan** başka bir mod başlatılınca
+gövde o modunkine geçmeli.
 
 ---
 

@@ -115,6 +115,11 @@ PlayerInfo      { int playerId; string name; string role; string team; bool read
                   float battery; string scene; int kills; int deaths; float hp; bool alive; int score; }
 ```
 
+`ModeRulesInfo` maçın kural şeklini taşır (`teamMode` · `allies` · `scoring` · `friendlyFire` ·
+`reviveAnchor` · `weaponSource` · `respawnDelay` · `fireWhilePaused`); okuma noktası `ModeRuntime`,
+alanların tam semantiği ArenaNet-Protokol.md mod kuralları bölümündedir. ⚠️ `allies` yalnız
+`teamMode:"none"`da okunur.
+
 Tam protokol → [ArenaNet Protokolü](../ArenaNet-Protokol.md).
 
 ---
@@ -153,6 +158,9 @@ Kalıcı tekil, kendini önyükler (`Instance`). Sahneye koyma.
 | ✅ `ModeId` | `string` | `"tdm"`, `"ffa"`, … |
 | ✅ `Teams` | `ModeTeamMode` | `TwoTeams` \| `None` |
 | ✅ `IsTeamless` | `bool` | `Teams == None` kısayolu |
+| ✅ `Allies` | `bool` | **Yalnız takımsız modda okunur:** `false` = herkes tek (FFA), `true` = herkes AYNI ekip (kooperatif). `TwoTeams`'te yok sayılır. Sunum değişmez (nötr avatar, takım skor paneli yok) — değiştirdiği şey müttefiklik ilişkisidir. ⚠️ Doğrudan sorma, `IsAlly`/`AlliesAll` üzerinden oku |
+| ✅ `IsAlly(Team local, Team other)` | `bool` | "Bu oyuncu benim tarafımda mı" sorusunun **tek** cevabı: takımsızda `Allies`, takımlıda `local != Neutral && local == other`. ⚠️ Ad etiketi ve öldürme duyurusu gibi tüketiciler takımı kendileri KARŞILAŞTIRMAZ — boş takım iki modda iki farklı cevap verir |
+| ✅ `AlliesAll` | `bool` | `IsTeamless && Allies` kısayolu — "bu modda herkes aynı ekipte mi" |
 | ✅ `Scoring` | `ModeScoreKind` | `Team` \| `Player` |
 | ✅ `FriendlyFire` | `bool` | ⚠️ Modun değil **operatörün** anahtarı: maç ORTASINDA değişebilir (`rules_update`), `Changed`'i dinle |
 | ✅ `Revive` | `ModeReviveAnchor` | `OwnBase` \| `StandStill` |
@@ -160,6 +168,7 @@ Kalıcı tekil, kendini önyükler (`Instance`). Sahneye koyma.
 | ✅ `FireWhilePaused` | `bool` | Maç kurulmamışken ateş serbest mi (lobi profili). `RandomGrant` ile **birlikte** okunur: `random` + `FireWhilePaused` = serbest alan, yalnız `random` = mod silah dağıtıyor |
 | ✅ `RespawnDelay` | `float` | ⚠️ **`0` geçerlidir** (anında canlanma) |
 | ✅ `Changed` | olay | Kurallar değişti |
+| ✅ `FindDefinition()` | `ModeDefinition` | Aktif modun katalog tanımı (`GameCatalog.FindMode(ModeId)`); bilinmeyen modda `null`. Kural değil **içerik** (HUD, mod gövdesi) sormak içindir — kural alanları yine yukarıdakilerden okunur |
 | ⛔ `Apply` / `ApplyFromCatalog` / `Reset` | | Besleme sistemin işi |
 
 > ⚠️ **`if (modeId == "…")` zinciri yazma.** Yeni mod eklemek senin kodunu değiştirmemeli.

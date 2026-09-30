@@ -83,7 +83,7 @@ Tümü paylaşılan `ArenaProtocol` statik sınıfında tanımlanır (`Assets/_S
   - `left` — süre doldu, oyuncu oyundan çıkarıldı. Kayıt **yalnız koşan maçın katılımcısıysa** durur (§10.2: adı ve sayaçları maç sonuna kadar tabloda kalsın), aksi hâlde tümüyle silinir ve `playerId` havuza döner.
   Süresiz duran bir "çevrimdışı" satır bilerek yok: roster canlı bağlantıları, maç defteri ise katılımcıları gösterir — ikisi ayrı sorudur.
 - **Admin kayıtları kalıcı DEĞİLDİR:** admin bağlantısı koptuğunda (veya `HEARTBEAT_TIMEOUT` dolduğunda) kaydı registry'den **tümüyle silinir** ve `playerId`'si havuza döner; adı `devices.json`'a **yazılmaz**. ⚠️ Admin `reconnecting` durumuna **hiç girmez**: `deviceId`'si oturumluktur, yani geri gelen admin yeni bir kimlikle gelir ve eski satır asla o bağlantıyla eşleşemezdi — "yeniden bağlanıyor" demek yalan olurdu. Böylece admin'i her açıp kapatma roster'da hayalet satır bırakmaz.
-- **Yeniden bağlanma kimliği KORUR.** Aynı `deviceId` hangi durumdan dönerse dönsün (`reconnecting` ya da `left`) mevcut kayda oturur: `playerId`, ad, forma numarası, takım ve `kills`/`deaths`/`score` olduğu gibi kalır — oyuncu kaldığı yerden devam eder, ikinci bir satır açılmaz. ⚠️ **Takım olduğu gibi demek boş takım da olduğu gibi demektir:** takımsız modda boş takım (`""`) boş kalır, "atanmamış" sayılıp takıma konmaz — konsaydı dönen oyuncu takımsız maçın ortasında kırmızı gövdeye geçerdi. Aynı sebeple **takımsız bir maç kuruluyken katılan ya da dönen oyuncuya takım atanmaz** (`team:""`).
+- **Yeniden bağlanma kimliği KORUR.** Aynı `deviceId` hangi durumdan dönerse dönsün (`reconnecting` ya da `left`) mevcut kayda oturur: `playerId`, ad, forma numarası, takım ve `kills`/`deaths`/`score` olduğu gibi kalır — oyuncu kaldığı yerden devam eder, ikinci bir satır açılmaz. ⚠️ **Takım olduğu gibi demek boş takım da olduğu gibi demektir:** takımsız modda boş takım (`""`) boş kalır, "atanmamış" sayılıp takıma konmaz — konsaydı dönen oyuncu takımsız maçın ortasında kırmızı gövdeye geçerdi. Aynı sebeple **takımsız bir maç kuruluyken katılan ya da dönen oyuncuya takım atanmaz** (`team:""`). ⚠️ **Kapı yalnız koşan maç değil, lobide SEÇİLİ mod da olabilir:** takımsız bir mod seçiliyken (`selection_state.teamMode == "none"`, §5.3 — FFA ve tek ekip dahil) katılan oyuncuya da takım verilmez. Verilseydi oyuncu kırmızı/mavi girip maç başlarken sessizce beyaza dönerdi; seçili modun takım kipini bağlı herkese uygulayan kuralın (§10.7) katılma anındaki karşılığıdır.
 - **Admin sayısı sınırsız ve hepsi eş yetkilidir.** Birincil/ikincil admin kavramı yoktur: `role=="admin"` olan her bağlantı §5.2'deki tüm komutları gönderebilir, son gelen komut uygulanır. Operatörlerin birbirini ezmemesi için ortak seçim `admin_state` ile senkronlanır (§5.3) ve her komut `admin_state.notice` ile diğerlerine duyurulur.
 - `playerId` = sunucunun `welcome`'da atadığı **1..`PLAYER_ID_MAX`** arası küçük tamsayı (UDP paketlerinde 1 bayt). Admin'e de atanır (poz göndermez). Havuz dolarsa `kicked{reason:"Sunucu dolu"}` ile reddedilir — bu bir ürün kotası değil, `u8` tel formatının tavanıdır.
 - **Ad ve numara = CİHAZ kimliğidir, oturum kimliği değil.** İkisi de oyuncunun ilk bağlantısında otomatik atanır ve `devices.json`'a `deviceId` başına kalıcı yazılır; admin `set_identity` ile ikisini de değiştirebilir (§5.1). Roster'da `name` + `number` olarak taşınır (§5.3).
@@ -361,7 +361,7 @@ dosyasına yazar (`Server/README.md`), başka hiçbir şey okumaz:
 - **`pause_match`** `{ "type":"pause_match" }` — koşan maçı dondurur: `playing` → `paused` + `phaseReason:"operator"` (§10.1). Süre durur, hasar kapanır, skorlar ve `modeState` **korunur**. **Yalnız `playing` iken iş yapar**; başka fazda loglanıp yok sayılır (duraklı bir maçı duraklatmanın anlamı yok).
 - **`resume_match`** `{ "type":"resume_match" }` — `paused`/`operator`'dan `playing`'e döner; süre kaldığı yerden akar, canlar/skorlar sıfırlanmaz. ⚠️ **Yalnız operatörün duraklattığı maç sürdürülebilir:** `phaseReason` `loading`/`countdown`/`mode`/`lobby` iken reddedilir. Sebep: o duraklamaların sahibi operatör değildir — modun istediği duraklamayı (`mode`) operatörün kaldırması modun ara durumunu bozar, geri sayımı elle bitirmek de yükleme kapısını atlar. Her duraklamayı kendi sahibi kaldırır.
 - **`mode_continue`** `{ "type":"mode_continue" }` — modun **park ettiği** akışa operatörün "devam" onayı. ⚠️ **`resume_match`'in işini YAPMAZ:** fazı kendisi değiştirmez, yalnız bekleyen bir bayrak bırakır; bayrağı modun kendi tiki okur ve akışı o sürdürür — yani duraklamayı yine **sahibi** kaldırır (§10.1) ve "her duraklamayı kendi sahibi kaldırır" kuralı delinmez. **Yalnız `paused` + `phaseReason:"mode"` iken kabul edilir**, başka fazda loglanıp yok sayılır. Bugünkü tek tüketicisi `tournament`'ın **tur incelemesi**dir (§10.5): tur biter, sonucu `modeState`'te asılı kalır ve akış bu komut gelene kadar toplanmaya geçmez. Bayrak **tüketilir** (okundu = silindi): operatörün basışı tek bir olaydır, ayakta kalan bir bayrak bir sonraki incelemeyi de atlardı. ⚠️ **`PROTOCOL_VERSION` bu mesaj için ARTMAZ** — `end_match` ile aynı gerekçe: yalnız admin→sunucu yönünde yeni bir tip, oyuncu istemcisi onu ne gönderir ne okur, tanımayan eski sunucu bilinmeyen tipi loglayıp yok sayar ve admin ile sunucu aynı depodan birlikte dağıtılır.
-- **`set_team`** `{ "type":"set_team", "playerId":5, "team":"blue" }` (`"red"|"blue"`) — hedef oyuncunun takımı. **Faz kapısı YOKTUR:** operatör `playing` dahil her fazda, sunucuya bağlı herkesin takımını değiştirebilir; değişiklik `lobby_state` ile yayılır ve istemcide anında geçerlidir (taban bölgesi, arayüz renkleri). Hedef admin ise reddedilir. ⚠️ Atama **kalıcı değildir**: lobide takımsız bir mod seçilmesi her takımı temizler, takımlı bir mod seçilmesi takımsız kalanları doldurur (§10.7) — elle atama mod seçiminden sonra yapılır. Oyuncudan gelen `set_team` loglanıp yok sayılır — **oyuncu kendi takımını seçemez, bunun için protokol mesajı YOKTUR ve eklenmeyecektir.**
+- **`set_team`** `{ "type":"set_team", "playerId":5, "team":"blue" }` (`"red"|"blue"`) — hedef oyuncunun takımı. **Faz kapısı YOKTUR:** operatör `playing` dahil her fazda, sunucuya bağlı herkesin takımını değiştirebilir; değişiklik `lobby_state` ile yayılır ve istemcide anında geçerlidir (taban bölgesi, arayüz renkleri). Hedef admin ise reddedilir. ⚠️ **Takımsız modda `set_team` reddedilir:** koşan maç takımsızsa ya da lobide takımsız bir mod seçiliyse (FFA ve tek ekip dahil) komut loglanıp yok sayılır — orada takım yoktur, atama yapılsaydı oyuncu mod hiç takım tanımazken kırmızı/mavi görünürdü. ⚠️ Atama **kalıcı değildir**: lobide takımsız bir mod seçilmesi her takımı temizler, takımlı bir mod seçilmesi takımsız kalanları doldurur (§10.7) — elle atama mod seçiminden sonra yapılır. Oyuncudan gelen `set_team` loglanıp yok sayılır — **oyuncu kendi takımını seçemez, bunun için protokol mesajı YOKTUR ve eklenmeyecektir.**
 - **`set_friendly_fire`** `{ "type":"set_friendly_fire", "enabled":true }` — dost ateşi anahtarı (§10.5). **Faz kapısı YOKTUR:** operatör `playing` dahil her fazda basabilir ve etkisi anlıktır — gerekçe `set_team` ile aynıdır: operatör sahadaki durumu maçı iptal etmeden düzeltebilmeli. Değer sunucuda yaşar (açılışta `false`), yürürlükteki kural şekline damgalanır ve koşan maçta `rules_update` ile herkese yayılır (§5.3). Maç başlangıcı, harita sahneleme ve lobiye dönüş anahtarı **sıfırlamaz** (süre/limit seçimiyle aynı sözleşme); sıfırlayan tek şey sunucunun yeniden başlatılmasıdır. Oyuncudan gelirse loglanıp yok sayılır.
   ⚠️ **Neden `set_selection` alanı değil:** o mesaj "boş/`0` = dokunulmadı" sözleşmesiyle çalışır ve bir `bool` "dokunulmadı"yı ifade edemez. Aynı sebeple seçim kilidine (§10.7 "ne zaman serbest") de takılmaz — bu bir sonraki maçın seçimi değil, o anın durumudur.
 - **`set_calibration_mode`** `{ "type":"set_calibration_mode", "mode":"two_anchor" }` — oyuncu
@@ -441,7 +441,7 @@ Sunucu, `role != "admin"` bağlantıdan gelen admin komutunu loglayıp yok sayar
   "match": { "phase":"paused", "phaseReason":"lobby", "modeId":"lobby", "modeState":"",
              "sceneName":"<Lobi>", "sceneElapsed":137.4,
              "timeRemaining":0, "scoreRed":0, "scoreBlue":0,
-             "rules": { "teamMode":"two", "scoring":"team", "friendlyFire":false,
+             "rules": { "teamMode":"two", "allies":false, "scoring":"team", "friendlyFire":false,
                         "reviveAnchor":"base", "weaponSource":"weaponcanvas", "respawnDelay":5.0,
                         "fireWhilePaused":true } } }
 ```
@@ -693,7 +693,7 @@ yeniden yüklemeyi dener** ve sonucu bildirir (§10.6): başarıda normal bir
 **`rules_update`** — **HERKESE** (oyuncular dahil); koşan maçın **kural şekli değişti**:
 ```json
 { "type":"rules_update", "modeId":"tdm",
-  "rules": { "teamMode":"two", "scoring":"team", "friendlyFire":true,
+  "rules": { "teamMode":"two", "allies":false, "scoring":"team", "friendlyFire":true,
              "reviveAnchor":"base", "weaponSource":"weaponcanvas", "respawnDelay":5.0,
              "fireWhilePaused":false } }
 ```
@@ -1702,7 +1702,7 @@ paused/loading → paused/countdown → playing                     ◄── TU
 
 Oyuncu başına: `hp` (0..`PLAYER_MAX_HP`), `alive`, `team`, `kills`, `deaths`, `score`, ölüm zamanı, `floor` (kat defteri — sunucu otoritesi değil, istemcinin bildirdiği kayıt; §10.6 "Kat modeli"). `playing`'e girerken herkes `hp=PLAYER_MAX_HP`, `alive=1`. Snapshot'taki `SnapshotEntry.flags` bit0 (`FLAG_ALIVE`) bu `alive` alanından beslenir — maç dışında (`paused`/`lobby`) herkes canlı sayılır.
 
-⚠️ **Takımdaş öldürme Counter-Strike kuralıyla işler; KENDİNİ öldürme skor YAZMAZ.** Dost ateşi açıkken (§5.2) takım arkadaşını ya da kendini öldüren vuruşta `IGameMode.OnKill` **hiç çağrılmaz** — ödül skorunun tek yazarı orası olduğu için ne takım skoru ne bireysel ödül işler. **Takımdaş öldürmede öldürene `kills` −1 ve `score` −1 yazılır** (ikisi de eksiye düşebilir — CS'te K sütununun düşmesi), ölene `deaths` +1; takım skoru değişmez. Ceza `KillPlayerLocked`'ta, sayaçların yanında yazılır: bir sayaç düzeltmesidir, ödül değil, o yüzden `OnKill`'in dışındadır. `kill_event` (kill feed) normal gider. Kendine vuruşun farkı: `deaths` artar ama **`kills` ARTMAZ ve ceza da YOKTUR** (öldüren ile ölen aynı kayıt — kendini öldürene öldürme yazmak K/D'yi şişirir); `kill_event.killerId == victimId` gider ve kill feed "kendini öldürdü" satırını ondan çizer. Kapı modun içinde değil çağrı yerindedir, böylece her yeni mod ona kendiliğinden uyar. ⚠️ İki durum **ayrı** kontrol edilir: boş takım takımdaş sayılmadığı için takımsız modda (`teamMode:"none"`) kendini öldürme "takımdaş" testinden geçemez — geçseydi FFA'da kendini havaya uçuran oyuncu kendine puan yazardı.
+⚠️ **Takımdaş öldürme Counter-Strike kuralıyla işler; KENDİNİ öldürme skor YAZMAZ.** Dost ateşi açıkken (§5.2) takım arkadaşını ya da kendini öldüren vuruşta `IGameMode.OnKill` **hiç çağrılmaz** — ödül skorunun tek yazarı orası olduğu için ne takım skoru ne bireysel ödül işler. **Takımdaş öldürmede öldürene `kills` −1 ve `score` −1 yazılır** (ikisi de eksiye düşebilir — CS'te K sütununun düşmesi), ölene `deaths` +1; takım skoru değişmez. Ceza `KillPlayerLocked`'ta, sayaçların yanında yazılır: bir sayaç düzeltmesidir, ödül değil, o yüzden `OnKill`'in dışındadır. `kill_event` (kill feed) normal gider. Kendine vuruşun farkı: `deaths` artar ama **`kills` ARTMAZ ve ceza da YOKTUR** (öldüren ile ölen aynı kayıt — kendini öldürene öldürme yazmak K/D'yi şişirir); `kill_event.killerId == victimId` gider ve kill feed "kendini öldürdü" satırını ondan çizer. Kapı modun içinde değil çağrı yerindedir, böylece her yeni mod ona kendiliğinden uyar. ⚠️ İki durum **ayrı** kontrol edilir: takımdaş testi iki *farklı* oyuncuya bakar, yani kendini öldürme ondan hiçbir kuralda geçemez (takımsız modda da, `allies:true` tek ekipte de) — geçseydi FFA'da kendini havaya uçuran oyuncu kendine puan yazardı. ⚠️ **Tek ekipte** (`allies:true`, §10.5) müttefikler takım arkadaşı sayıldığı için bu ceza onlara da işler: dost ateşi açıkken müttefikini öldüren `kills` −1 / `score` −1 alır.
 
 `score` = **bireysel maç skoru**. Yazarı yalnız `IGameMode`'dur (`MatchDirector`'ın skor defteri üzerinden); `kills` ile aynı şey DEĞİLDİR — bir mod öldürme başına 1, bir başkası objektif başına 5 yazabilir, Silah Yarışı'nda aynı alan "seviye" anlamına gelir. Maç kurulurken ve açık sahneye dönerken 0'lanır.
 
@@ -1751,7 +1751,7 @@ kontrolleridir — kaldırılırlarsa çift ölüm / maç dışı hasar gibi hat
 2. Atıcı çevrimiçi + `role=player` + **`calibrated`** mi, ve **ölüm sonrası penceresinin içinde** mi? (§10.6: kalibresiz oyuncu ateş edemez.) ⚠️ Atıcının `alive` olması **şart değildir**: elden çıkmış bir hasar kaynağı (havadaki bomba, yanan bir alan) sahibi öldükten sonra da etki eder ve hasarı **normal sayılır** — skor ve kill dahil. Ölçüt ölüm anından itibaren `PosthumousDamageSeconds`'tır (**sunucu sabiti, telde yoktur**; fitil + uçuş süresini bol karşılar). Pencere dışındaki rapor "atıcı ölü" diye düşer — kapının var olma sebebi budur: yeniden bağlanıp kendini hâlâ canlı sanan bir istemci kimseye hasar veremez. ⚠️ Süreli etkiler (alan hasarı havuzu) pencereden uzun yaşayamaz: son tikleri sessizce reddedilir, ikisi birlikte ayarlanır.
 3. Hedef var, çevrimiçi, `alive` + **`calibrated`** mi? (aynı karede gelen iki ölümcül vuruş çift `kill_event` yazmasın; kalibresiz oyuncu hasar YEMEZ — §10.6)
 4. Hedef **doğma koruması altında değil** mi? (§10.4: canlanan oyuncu `SpawnProtectionSeconds` boyunca hasar almaz. ⚠️ Kapı **sunucudadır** — istemci korumayı yalnız çizer, atış kararını ona dayandırmaz: atıcının ekranında kalkan bir kare geç sönse bile vuruş burada düşer)
-5. Hedef, **atıcının kendisi ya da takım arkadaşı** ise `rules.friendlyFire` açık mı? Kural: `rules.friendlyFire == false` iken *kendine vuruş* ve *takım arkadaşı* vuruşu reddedilir, ve **boş takım asla takım arkadaşı sayılmaz** — takımsız modda (§10.5 `teamMode:"none"`) herkesin takımı `""` olduğu için `"" == ""` karşılaştırması tüm vuruşları reddederdi. `friendlyFire == true` ise bu adım hiç uygulanmaz. ⚠️ **Bu kapının değerini mod değil OPERATÖR belirler** (`set_friendly_fire`, §5.2) ve maç ortasında değişebilir — kapı her `hit_report`'ta yürürlükteki değeri okur. ⚠️ **Kendine vuruş takımdan bağımsızdır:** takımsız modda (`teamMode:"none"`) takımdaş yoktur ama "kendi bombamın hasarını alır mıyım" sorusunun cevabı yine **aynı anahtardır** — orada da okunur. Geçen bir takımdaş **ya da kendine** vuruşu öldürücü olursa skor yazılmaz (§10.2).
+5. Hedef, **atıcının kendisi ya da takım arkadaşı** ise `rules.friendlyFire` açık mı? Kural: `rules.friendlyFire == false` iken *kendine vuruş* ve *takım arkadaşı* vuruşu reddedilir, ve **boş takım asla takım arkadaşı sayılmaz** — takımsız modda (§10.5 `teamMode:"none"`) herkesin takımı `""` olduğu için `"" == ""` karşılaştırması tüm vuruşları reddederdi. **Takım arkadaşlığının tam tanımı** (sunucuda tek yerde, `MatchDirector.AreTeammates`): iki *farklı* oyuncu, ya takımsız modda `rules.allies` açıkken (tek ekip, §10.5), ya da takımları **boş olmayıp aynıyken** takım arkadaşıdır. `friendlyFire == true` ise bu adım hiç uygulanmaz. ⚠️ **Bu kapının değerini mod değil OPERATÖR belirler** (`set_friendly_fire`, §5.2) ve maç ortasında değişebilir — kapı her `hit_report`'ta yürürlükteki değeri okur. ⚠️ **Kendine vuruş takımdan bağımsızdır:** takımsız modda (`teamMode:"none"`) takımdaş yoktur ama "kendi bombamın hasarını alır mıyım" sorusunun cevabı yine **aynı anahtardır** — orada da okunur. Geçen bir takımdaş **ya da kendine** vuruşu öldürücü olursa skor yazılmaz (§10.2).
 6. `damage` sonlu ve pozitif bir sayı mı? (NaN/∞ canı kalıcı bozar; sayı denetimi, hile denetimi değil)
 
 Geçerse: `hp -= damage` (istemcinin bildirdiği değer) → `health_update{playerId, hp, attackerId}`
@@ -1887,7 +1887,7 @@ yollar. Amaç tek: **istemci modun ne olduğunu TAHMİN ETMESİN.** Kural telden
 `if (modeId == "ffa")` zinciri hiç doğmaz — yeni mod eklemek istemci kodunu değiştirmez.
 
 ```json
-"rules": { "teamMode":"two", "scoring":"team", "friendlyFire":false,
+"rules": { "teamMode":"two", "allies":false, "scoring":"team", "friendlyFire":false,
            "reviveAnchor":"base", "weaponSource":"weaponcanvas", "respawnDelay":5.0,
            "fireWhilePaused":false }
 ```
@@ -1895,8 +1895,9 @@ yollar. Amaç tek: **istemci modun ne olduğunu TAHMİN ETMESİN.** Kural telden
 | Alan | Değerler | Varsayılan | Anlamı |
 |---|---|---|---|
 | `teamMode` | `"two"` \| `"none"` | `"two"` | `"two"`: kırmızı/mavi, sunucu takımları dengeler, slot takım içi. `"none"`: takım yok (`team:""`), slot tek havuzdan; maç kuruluyken katılan/dönen oyuncu da `""` alır |
+| `allies` | `true` \| `false` | `false` | **Takımsız modda** (`teamMode:"none"`) herkes birbirinin takım arkadaşı mı? `true` = **tek ekip** ("herkes aynı ekip"): takım alanı boş kalır ama dost ateşi kapısı (§10.3) ve takımdaş öldürme cezası (§10.2) her oyuncu çiftine takım arkadaşı gibi bakar — kooperatif modun karşılığı. `false` = herkes tek (FFA). `teamMode:"two"` iken **yok sayılır** (takımı takım alanı belirler). ⚠️ Operatör anahtarı değil, **mod kuralıdır** |
 | `scoring` | `"team"` \| `"player"` \| `"shared"` | `"team"` | Skor kime yazılır: `match_state.scoreRed/scoreBlue` mi, `lobby_state → PlayerInfo.score` mü (§10.2), yoksa **ikisi birden** mi. `"shared"` = kooperatif: herkesin katkısı `PlayerInfo.score`'a, ortak toplam `scoreRed`'e yazılır ve `scoreBlue` **daima 0**'dır (takım yok, ikinci kanal ortak toplamın karşısına konacak bir şey taşımaz). Kazanan yoktur — bak aşağıdaki kazanan kuralı |
-| `friendlyFire` | `true` \| `false` | `false` | `false` = takım arkadaşı vurulamaz (§10.3, dost ateşi kapısı). Boş takım asla takım arkadaşı sayılmaz. ⚠️ **Bir mod kuralı DEĞİL, operatör anahtarıdır** — aşağı bak |
+| `friendlyFire` | `true` \| `false` | `false` | `false` = takım arkadaşı vurulamaz (§10.3, dost ateşi kapısı). Boş takım asla takım arkadaşı sayılmaz — **tek istisna `allies:true`**: orada her oyuncu diğerinin takım arkadaşı sayılır. ⚠️ **Bir mod kuralı DEĞİL, operatör anahtarıdır** — aşağı bak |
 | `reviveAnchor` | `"base"` \| `"standstill"` \| `"none"` | `"base"` | Canlanma şartı (§10.4/2). `"none"` = tur içinde canlanma yok; `revive_request` reddedilir ve kuralı delen bir operatör komutu YOKTUR — ölü oyuncuyu yalnız yeni tur canlandırır |
 | `weaponSource` | `"weaponcanvas"` \| `"random"` \| `"none"` | `"weaponcanvas"` | Silah nereden gelir: `"weaponcanvas"` = sahnedeki **çerçeveler** (silah çerçeveden ayrılmaz ve tükenmez; seçilen silah grip'e basılınca oyuncunun eline **klonlanır**), `"random"` = modun dağıtımı, `"none"` = **silah yok** (çerçeve gizlenir, hiçbir grant koşmaz, tetik sessizdir — **atılabilir eşya dahil**: o da aynı ateş kapısını okur, yani "ateşlenecek hiçbir şey yok" demektir). **Tümüyle istemci sunumu** — sunucuda karşılığı yok (§10.3: silah tablosu yoktur) |
 | `respawnDelay` | saniye | `RESPAWN_DELAY` (5) | `respawn.delaySeconds` ve sunucudaki `revive_request` gecikme eşiği. **`0` geçerli bir değerdir** (anında canlanma) ve varsayılana çekilmez — alan hiç gönderilmezse DTO'nun kendi başlangıcı geçerli olduğu için "yazılmadı" ile "sıfır yazıldı" karışmaz |
@@ -1918,7 +1919,9 @@ yollar. Amaç tek: **istemci modun ne olduğunu TAHMİN ETMESİN.** Kural telden
   alır. Anahtarı maç başlangıcı, harita sahneleme ve lobiye dönüş **sıfırlamaz**.
 - **Bilinmeyen/boş değer varsayılana düşer.** Değerler bilerek string: eski istemci yeni sunucudan
   tanımadığı bir `teamMode` görürse takımlı TDM gibi davranır, bağlantı kopmaz. Bu yüzden yeni bir
-  kural değeri eklemek `PROTOCOL_VERSION`'ı **artırmaz**.
+  kural değeri eklemek `PROTOCOL_VERSION`'ı **artırmaz**. Aynısı yeni bir **alan** için de geçerlidir:
+  `allies`'i tanımayan eski istemci onu yok sayar ve bugünkü davranışında kalır — dost ateşi kapısının
+  tek yargıcı sunucu olduğu için kararda sapma doğmaz.
 - **Kazanan ifadesi `scoring`'e bağlıdır:** `"team"` → `match_end.winnerTeam`, `"player"` →
   `match_end.winnerPlayerId`, `"shared"` → **ikisi de boş** (kooperatif oyunda kazanan yoktur;
   sonuç ortak toplam + sıralamadır). ⚠️ İki kanalın da boş olması **beraberlik DEĞİLDİR** —
@@ -1935,17 +1938,21 @@ yollar. Amaç tek: **istemci modun ne olduğunu TAHMİN ETMESİN.** Kural telden
 **Kayıtlı modlar** (sunucuda `MatchDirector.RegisterModes()`; `start_match.modeId` bunlardan biri
 olmalı, tanınmayan `modeId` reddedilir):
 
-| `modId` | Ad | `teamMode` | `scoring` | `reviveAnchor` | `weaponSource` | `respawnDelay` | `fireWhilePaused` | Varsayılan süre / limit |
-|---|---|---|---|---|---|---|---|---|
-| `tdm` | Takım Ölüm Maçı | `two` | `team` | `base` | `weaponcanvas` | `5` | `false` | 300 sn / 30 |
-| `ffa` | Herkes Tek | `none` | `player` | `standstill` | `random` | `0` | `false` | 300 sn / 20 |
-| `tournament` | Turnuva | `two` | `team` | **`none`** | `weaponcanvas` | `0` | `false` | 120 sn / 4 tur |
-| `burger` | Hamburgerci | `none` | `shared` | `none` | **`none`** | `0` | `false` | 600 sn / limitsiz |
-| `mole` | Köstebek Ezme | `two` | `team` | **`none`** | **`none`** | `0` | `false` | 300 sn / limitsiz |
+| `modId` | Ad | `teamMode` | `allies` | `scoring` | `reviveAnchor` | `weaponSource` | `respawnDelay` | `fireWhilePaused` | Varsayılan süre / limit |
+|---|---|---|---|---|---|---|---|---|---|
+| `tdm` | Takım Ölüm Maçı | `two` | — | `team` | `base` | `weaponcanvas` | `5` | `false` | 300 sn / 30 |
+| `ffa` | Herkes Tek | `none` | `false` | `player` | `standstill` | `random` | `0` | `false` | 300 sn / 20 |
+| `tournament` | Turnuva | `two` | — | `team` | **`none`** | `weaponcanvas` | `0` | `false` | 120 sn / 4 tur |
+| `burger` | Hamburgerci | `none` | **`true`** | `shared` | `none` | **`none`** | `0` | `false` | 600 sn / limitsiz |
+| `mole` | Köstebek Ezme | `two` | — | `team` | **`none`** | **`none`** | `0` | `false` | 300 sn / limitsiz |
+
+`allies` sütunundaki `—` = **yok sayılır**: takımlı modda takım arkadaşlığını takım alanı belirler,
+kuralın söyleyeceği bir şey yoktur (telde yine `false` gider).
 
 > **`burger` — Çocuk Oyunları ailesinin ilk turu.** Tablodaki tek **`gameType:"kids"`** modudur, yani
 > yalnız `gameType` alanı `kids` olan haritalarda başlatılabilir (§10.1 üçüncü kapı, §11). Silah yok
-> (dolayısıyla hasar da yok — atılabilir eşya dahil), takım yok, canlanma yok; bitişi **yalnız
+> (dolayısıyla hasar da yok — atılabilir eşya dahil), **tek ekip** (`teamMode:"none"` + `allies:true`:
+> kırmızı/mavi yok ama herkes birbirinin takım arkadaşı, §10.5), canlanma yok; bitişi **yalnız
 > süredir** ve **kazananı yoktur** (`shared` skorda iki kazanan alanı da boş kalır). Sonuç ekranı
 > operatör kapatana kadar durur.
 >
@@ -2203,8 +2210,10 @@ olmalı, tanınmayan `modeId` reddedilir):
 > `ffa` satırı kuralların somut örneğidir: **takım yok** (`team:""` gelir, `winnerPlayerId`
 > dolar), ölünce 5 sn'lik gecikme yerine **sabit durma** şartı işler (`REVIVE_HOLD_SECONDS` = 5 sn,
 > `REVIVE_HOLD_RADIUS` = 1 m) ve silah sahnedeki çerçevelerden değil **istemcinin dağıtımından** gelir.
-> Dost ateşi anahtarı FFA'yı **hiç etkilemez** — boş takım asla takım arkadaşı sayılmadığı için
-> (§10.3, dost ateşi kapısı) kapı zaten hiç kapanmaz; bu yüzden FFA o alana değer yazmaz.
+> Dost ateşi anahtarı FFA'yı **hiç etkilemez** — FFA `allies` yazmaz (`false` kalır) ve `allies:false`
+> takımsız modda hiçbir oyuncu çifti takım arkadaşı sayılmaz, yani kapı (§10.3) hiç kapanmaz; bu yüzden
+> FFA dost ateşi alanına da değer yazmaz. ⚠️ Bu **FFA'ya özgü değil `allies:false`'a özgüdür**:
+> `allies:true` olan takımsız bir modda aynı anahtar kapanır.
 > **`weaponSource` sunucuyu hiç ilgilendirmez** (§10.3: silah tablosu yok) — telde yalnız
 > istemciye "silahı nasıl vereceksin" diye taşınır.
 
@@ -2460,7 +2469,7 @@ hasar veremeden.
 | Silah nereden gelir? | **Mod dağıtır** (`weaponSource:"random"`): grip'e basılı tutulan elde loadout'tan rastgele bir silah durur, bırakınca yok olur. Loadout'u istemci `modeId:"lobby"` ile kendi katalogundan çözer. Lobi bilinçli olarak `"weaponcanvas"` değil `"random"` taşır: iki lobi sahnesine elle silah yerleştirme işi doğmasın diye. ⚠️ **Açık sahne `gameType:"kids"` ise ya da seçili mod çocuk ailesindense silah hiç gelmez** — sahneleme bölümüne bak |
 | Taban şeritleri görünür mü? | **Seçili mod belirler** (`selection_state.teamMode`, §5.3): takımlı mod seçiliyken (`tdm`/`tournament`) kırmızı/mavi şeritler durur, takımsız mod seçiliyken (`ffa`) gizlenir. Kapı **silah kaynağı DEĞİLDİR** — aktif kural hâlâ lobi profilidir, değişen yalnız sunumdur. Sunucu bu mesajı hiç yollamamışsa istemci aktif kuralın `teamMode`'una düşer |
 | Canlanma / skor / süre? | Yok. Herkes canlı (`hp=PLAYER_MAX_HP`), sayaçlar 0 (§5.3) |
-| Takım? | Vardır ve **yalnız admin atar** (`set_team`, §5.2) — her fazda, sunucuya bağlı herkes için. Oyuncu kendi takımını seçemez; bunun için protokol mesajı YOKTUR ve eklenmeyecektir. Tek istisna sunucunun kendisidir: `set_selection` modu değiştirdiği anda **seçili modun takım kipi herkese uygulanır** — takımlı bir moda geçilince takımı olmayan (`team:""`) her bağlı oyuncu küçük takıma yazılır (takımı olanlara dokunulmaz, dengeleme `start_match`'te yapılır, §10.1), takımsız bir moda geçilince her bağlı oyuncunun takımı temizlenir (`team:""`). İki yön de aynı gerekçeyle simetriktir: lobideki etiket ve takım kartı seçili modun gerçeğini göstersin — takımsız maçtan dönen oyuncu beyaz kalmasın, takımsız mod seçiliyken de kimse kırmızı/mavi görünmesin. ⚠️ Bunun sonucu: admin'in `set_team` ile elle verdiği takım, takımsız bir mod seçilince silinir — elle takım ataması mod seçiminden **sonra** yapılır. Tanınmayan ya da boş `modeId` hiçbir takıma dokunmaz |
+| Takım? | Vardır ve **yalnız admin atar** (`set_team`, §5.2) — her fazda, sunucuya bağlı herkes için; **takımsız mod koşuyorsa ya da seçiliyse komut reddedilir**. Oyuncu kendi takımını seçemez; bunun için protokol mesajı YOKTUR ve eklenmeyecektir. Tek istisna sunucunun kendisidir: `set_selection` modu değiştirdiği anda **seçili modun takım kipi herkese uygulanır** — takımlı bir moda geçilince takımı olmayan (`team:""`) her bağlı oyuncu küçük takıma yazılır (takımı olanlara dokunulmaz, dengeleme `start_match`'te yapılır, §10.1), takımsız bir moda geçilince her bağlı oyuncunun takımı temizlenir (`team:""`). İki yön de aynı gerekçeyle simetriktir: lobideki etiket ve takım kartı seçili modun gerçeğini göstersin — takımsız maçtan dönen oyuncu beyaz kalmasın, takımsız mod seçiliyken de kimse kırmızı/mavi görünmesin. ⚠️ Bunun sonucu: admin'in `set_team` ile elle verdiği takım, takımsız bir mod seçilince silinir ve o mod seçili kaldıkça yenisi atanamaz — elle takım ataması **takımlı** mod seçildikten sonra yapılır. Tanınmayan ya da boş `modeId` hiçbir takıma dokunmaz |
 | Maç başlatılabilir mi? | **Hayır.** `lobby` kayıtlı bir `IGameMode` olmadığı için `start_match` reddedilir (§10.1) |
 
 **Lobi türünün iki kilidi birbirini tamamlar:**
