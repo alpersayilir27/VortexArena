@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Text;
 using TMPro;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 using VortexArena.Core;
 using VortexArena.Core.Combat;
 using VortexArena.Core.UI;
@@ -724,8 +723,7 @@ namespace VortexArena.App
             boardTeamSummaryText.text = _sb.ToString();
         }
 
-        /// <summary>Card's bottom band. The admin card shows server diagnostics here; the player's
-        /// counterpart is the match identity + their own summary.</summary>
+        /// <summary>Card's bottom band: the player's own summary (no mode/map line — not player-facing).</summary>
         private void RefreshMatchSummary()
         {
             if (boardMatchSummaryText == null)
@@ -733,11 +731,7 @@ namespace VortexArena.App
                 return;
             }
 
-            string mode = Admin.AdminContent.ModeDisplayName(ModeRuntime.ModeId);
-            string map = SceneManager.GetActiveScene().name;
-
             _sb.Clear();
-            _sb.AppendLine($"Mod: {mode} · Harita: {map}");
 
             PlayerInfo self = FindSelf();
             _sb.Append(self == null

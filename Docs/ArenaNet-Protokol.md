@@ -676,15 +676,19 @@ yeniden yüklemeyi dener** ve sonucu bildirir (§10.6): başarıda normal bir
 ```
 - Gönderim anları: her bağlantının `welcome`'ından hemen sonra (rolü ne olursa olsun) ve **seçilen
   mod değiştiğinde** (`set_selection` / `start_match`). Harita, süre, limit değişimi bu mesajı
-  ÜRETMEZ — oyuncunun tek kullandığı alan `teamMode`'dur.
+  ÜRETMEZ — oyuncu yalnız `teamMode`'u ve `modeId` üzerinden **yerel katalogdaki** mod tanımını
+  kullanır.
 - `modeId` = ortak seçim (`admin_state.modeId` ile aynı değer; açılışta `"lobby"`).
 - `teamMode` = `"two"` | `"none"` — seçili modun takım kipi (§10.5 sözlüğü). Sunucu kayıtlı modun
   `Rules`'undan okur; tanınmayan/kayıtsız modda (lobi dahil) `"two"` döner.
 - ⚠️ **Bu bir KURAL mesajı DEĞİLDİR ve `ModeRuntime`'a uygulanmaz.** Aktif kuralların tek kaynağı
   `load_match.rules` / `welcome.match.rules` / `return_to_lobby.rules`'tur (§10.5). Buradaki alan
-  yalnız *"henüz başlamamış maçın şekli"*ni anlatır; istemci onu tek bir şey için kullanır: **taban
-  bölgesi şeritlerinin görünürlüğü** (§10.7). Bu yüzden `modeId` telde ayrıca taşınsa da maç
-  türünü, HUD'u ya da loadout'u DEĞİŞTİRMEZ — onlar `start_match`'i bekler.
+  yalnız *"henüz başlamamış maçın şekli"*ni anlatır; istemci onu yalnız **sunum** için kullanır:
+  **taban bölgesi şeritlerinin görünürlüğü** (§10.7), çocuk oturumunda silah kapısı ve seçili modun
+  **oyuncu gövdeleri** (`ModeDefinition.bodyPrefab`/`redBodyPrefab` — maç kurulmamışken lobide de
+  seçili modun gövdesi çizilir; maç kurulunca `load_match`'in modu geçerlidir). Bu yüzden `modeId`
+  telde ayrıca taşınsa da maç türünü, HUD'u ya da loadout'u DEĞİŞTİRMEZ — onlar `start_match`'i
+  bekler.
 - ⚠️ **`admin_state`'e binmez:** o mesaj yalnız adminlere gider (roster/duyuru/telemetri taşır) ve
   herkese açılması bu ayrımı bozardı. Bu yüzden ayrı, tek alanlı ve seyrek bir yayın.
 - Eski sunucu bu mesajı hiç yollamaz; istemci o zaman **aktif kuralın** takım kipine düşer (§10.7).

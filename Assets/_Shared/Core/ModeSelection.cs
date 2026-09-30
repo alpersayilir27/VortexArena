@@ -16,8 +16,9 @@ namespace VortexArena.Core
     /// <b>Why it exists:</b> while waiting in the lobby (and when admin stages an arena) whether the
     /// base strips are visible depends on the selected mode — in a team mode (TDM/tournament) the
     /// strips are needed, in a teamless one (FFA) they are misleading. Since the active rule at that
-    /// moment is the lobby profile, this information cannot be read from anywhere else. Its only
-    /// consumer is <c>Arena.BaseZoneVisibility</c>.
+    /// moment is the lobby profile, this information cannot be read from anywhere else. Consumers:
+    /// <c>Arena.BaseZoneVisibility</c> (team mode), the weapon gate (<see cref="IsKidsGame"/>) and
+    /// <c>RemoteAvatar</c> (the selected mode's player bodies, <see cref="FindDefinition"/>).
     /// </para>
     /// <para>
     /// ⚠️ <b>No field without a consumer is added here</b>: the rest of the selection (map, duration,
@@ -35,9 +36,9 @@ namespace VortexArena.Core
         /// are not the same thing.</summary>
         public static bool HasValue { get; private set; }
 
-        /// <summary>Selected mode id (<c>"lobby"</c> at startup). For diagnostics/logging only —
-        /// behaviour is read from <see cref="IsTeamless"/> (no <c>if (modeId == …)</c> chain is
-        /// written on the client, §10.5).</summary>
+        /// <summary>Selected mode id (<c>"lobby"</c> at startup). Only a catalog key
+        /// (<see cref="FindDefinition"/>) — no <c>if (modeId == …)</c> chain is written on the client
+        /// (§10.5).</summary>
         public static string ModeId { get; private set; } = "";
 
         /// <summary>Whether the selected mode is teamless (<c>teamMode:"none"</c>).</summary>
@@ -61,6 +62,19 @@ namespace VortexArena.Core
         public static void Apply(string modeId, string teamMode)
         {
             Set(true, modeId ?? "", string.Equals(teamMode, "none", StringComparison.OrdinalIgnoreCase));
+        }
+
+        /// <summary>Catalog definition of the SELECTED mode; null when nothing was reported or the mode
+        /// is unknown. Content only (e.g. player bodies) — never a rule.</summary>
+        public static ModeDefinition FindDefinition()
+        {
+            if (!HasValue || string.IsNullOrEmpty(ModeId))
+            {
+                return null;
+            }
+
+            GameCatalog catalog = Resources.Load<GameCatalog>(CatalogResourceName);
+            return catalog != null ? catalog.FindMode(ModeId) : null;
         }
 
         /// <summary>Connection lost / session ended: returns to "unknown" so the consumer falls back

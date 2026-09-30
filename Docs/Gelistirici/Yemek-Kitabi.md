@@ -1285,11 +1285,11 @@ kendi oranlarına** göre verilir, varsayılan gövdeden kopyalanmaz.
 iki alan **gözle ayırt edilen iki ayrı model** olmalıdır — takım rengi gövdeye yazılmaz, dost/düşman
 ayrımının taşıyıcısı modelin kendisidir.
 
-**Test (gözlükle, iki oyuncu):** maç başlayınca iki oyuncu da modun gövdeleriyle çizilmeli,
-takımlarına göre farklı modelde olmalı; çömelip zıplarken poz karakteri takip etmeli ve kafa
-oyuncunun gerçek kafasının olduğu yerde durmalı; her bölgeden isabet almalı; maç bitip lobiye
-dönünce gövdeler varsayılana geri dönmeli, lobide **arenadan çıkmadan** başka bir mod başlatılınca
-gövde o modunkine geçmeli.
+**Test (gözlükle, iki oyuncu):** admin modu **seçer seçmez** (maç başlamadan, lobide ve arena
+sahnelemesinde) iki oyuncu da modun gövdeleriyle çizilmeli, takımlarına göre farklı modelde olmalı;
+çömelip zıplarken poz karakteri takip etmeli ve kafa oyuncunun gerçek kafasının olduğu yerde
+durmalı; her bölgeden isabet almalı; admin başka bir mod seçince gövde o modunkine (alanları boşsa
+varsayılana) geçmeli.
 
 ---
 

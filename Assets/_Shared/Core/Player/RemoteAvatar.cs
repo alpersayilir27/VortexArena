@@ -410,7 +410,7 @@ namespace VortexArena.Core.Player
         /// <summary>Is an alternate body actually drawn — false when the selected one has no renderer.</summary>
         private bool _useAlt;
 
-        // Catalog lookup cached on the mode id: SetInfo runs on every lobby_state.
+        // Catalog lookup cached on the running + selected mode ids: SetInfo runs on every lobby_state.
         private string _bodyModeId;
         private ModeDefinition _bodyMode;
         private bool _bodyModeResolved;
@@ -497,16 +497,18 @@ namespace VortexArena.Core.Player
         private void OnEnable()
         {
             ModeRuntime.Changed += OnModeChanged;
+            ModeSelection.Changed += OnModeChanged;
         }
 
         private void OnDisable()
         {
             ModeRuntime.Changed -= OnModeChanged;
+            ModeSelection.Changed -= OnModeChanged;
         }
 
         /// <summary>The mode can change under a LIVE avatar (a <c>load_match</c> arriving while the
-        /// lobby already stands in the arena scene, or a <c>rules_update</c>), so the drawn body has to
-        /// follow without the avatar being recreated.</summary>
+        /// lobby already stands in the arena scene, a <c>rules_update</c>, or the admin selecting another
+        /// mode), so the drawn body has to follow without the avatar being recreated.</summary>
         private void OnModeChanged()
         {
             SelectBody();
@@ -818,18 +820,33 @@ namespace VortexArena.Core.Player
             SwitchAlt(wanted);
         }
 
-        /// <summary>Catalog definition of the current mode, cached on the mode id: <see cref="SetInfo"/>
-        /// runs on every <c>lobby_state</c> and the lookup loads a Resource.</summary>
+        /// <summary>Catalog definition whose bodies are drawn: the set-up match's mode, else (lobby
+        /// profile running) the admin's selected mode. Cached: <see cref="SetInfo"/> runs on every
+        /// <c>lobby_state</c> and the lookup loads a Resource.</summary>
         private ModeDefinition ResolveBodyMode()
         {
-            string modeId = ModeRuntime.ModeId ?? "";
-            if (_bodyModeResolved && _bodyModeId == modeId)
+            string key = (ModeRuntime.ModeId ?? "") + "|" + (ModeSelection.HasValue ? ModeSelection.ModeId : "");
+            if (_bodyModeResolved && _bodyModeId == key)
             {
                 return _bodyMode;
             }
 
-            _bodyModeId = modeId;
-            _bodyMode = ModeRuntime.FindDefinition();
+            // ⚠️ A SET UP match's mode wins; while the lobby profile runs (waiting, staging) the admin's
+            // SELECTED mode is drawn — otherwise players meet in the arena in the wrong bodies and only
+            // switch when the match starts.
+            ModeDefinition running = ModeRuntime.FindDefinition();
+            ModeDefinition body = running;
+            if (running == null || running.IsLobbyProfile)
+            {
+                ModeDefinition selected = ModeSelection.FindDefinition();
+                if (selected != null)
+                {
+                    body = selected;
+                }
+            }
+
+            _bodyModeId = key;
+            _bodyMode = body;
             _bodyModeResolved = true;
             return _bodyMode;
         }
