@@ -74,6 +74,9 @@ namespace VortexArena.Modes.Burger
         public const string PayloadSlot = "slot";
         public const string PayloadRecipe = "r";
 
+        /// <summary>Customer look index the server picked (§10.5); mapped with <c>% looks.Length</c>.</summary>
+        public const string PayloadLook = "v";
+
         /// <summary>Patty time on the grill, integer ms (§10.5). Empty payload = never grilled.</summary>
         public const string PayloadCookProgress = "p";
 

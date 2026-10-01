@@ -1982,7 +1982,7 @@ kuralın söyleyeceği bir şey yoktur (telde yine `false` gider).
 > | `board` | `none` | `serve` (`anyone`) | — | — |
 > | `cutting_board` | `anyone` | — | — | — |
 > | `knife` · `spatula` | `anyone` | — | — | — |
-> | `customer` | `none` | — | `0` geliyor · `1` bekliyor · `2` mutlu · `3` mutsuz | `slot:<n>;r:<tarif>` |
+> | `customer` | `none` | — | `0` geliyor · `1` bekliyor · `2` mutlu · `3` mutsuz | `slot:<n>;r:<tarif>;v:<n>` |
 >
 > Olayların yükü: `take` → `i:[el]` (`0` sol, `1` sağ), sonucu **sahibi isteyen olan** yeni bir
 > malzeme objesidir. `cut` → yükü yok; sunucu bütünü despawn edip aynı pozda iki yarım doğurur.
@@ -2098,6 +2098,16 @@ kuralın söyleyeceği bir şey yoktur (telde yine `false` gider).
 > **yaklaşık bir göstergedir** — `1`'e geçiş anından kendi sabitine göre sayar; maçın ortasında
 > bağlanan başlık geçen süreyi bilmediği için tam sabırdan başlar. Kabul edilen sapmadır; kalan süreyi
 > tele koymak saniyede bir `object_state` demek olurdu.
+>
+> **Müşteri görünümü `s` alanının `v:<n>` anahtarıdır** ve seçimi sunucuya aittir: sunucu, **o anda
+> dünyada bulunan** müşterilerin (çıkışa yürüyenler dahil, çünkü despawn edilene kadar sahnededirler)
+> kullandığı görünümleri dışarıda bırakıp kalanlardan rastgele birini verir — bankoda aynı anda iki
+> özdeş müşteri durmaz. İstemci indeksi kendi görünüm dizisine `v % uzunluk` ile eşler; `v` yoksa ya da
+> okunamıyorsa `slot`tan türetilmiş bir görünüme düşer (görünümsüz müşteri olmaz).
+> - ⚠️ **Görünüm sayısı iki uçta ELLE eşlenir:** sunucudaki görünüm sayısı sabiti ile istemci
+>   prefabındaki görünüm dizisinin uzunluğu birebir aynı olmalıdır. İstemcide daha az görünüm varsa
+>   modulo iki indeksi aynı görünüme katlar ve "aynı anda iki özdeş müşteri olmaz" güvencesi sessizce
+>   düşer; daha fazlaysa sondaki görünümler hiç çıkmaz.
 
 > **`mole` — Çocuk Oyunları ailesinin ilk YARIŞMALI turu.** `gameType:"kids"`, yani yalnız `gameType`
 > alanı `kids` olan haritalarda başlatılır (§10.1 üçüncü kapı, §11). Ailenin değişmezleri durur: silah

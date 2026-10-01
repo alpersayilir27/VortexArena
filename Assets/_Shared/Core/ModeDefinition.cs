@@ -75,6 +75,9 @@ namespace VortexArena.Core
         [Tooltip("Kırmızı takımın gövdesi; boşsa varsayılan kırmızı gövde (Ch18) çizilir. " +
                  "⚠️ İki takımın gövdesi belirgin biçimde farklı model olmalı — takım modelden okunur.")]
         [SerializeField] private GameObject redBodyPrefab;
+        [Tooltip("Takımsız modda ikinci gövde. Doluysa oyuncular kadro sırasına göre bodyPrefab ile " +
+                 "bu gövde arasında dönüşümlü dağıtılır (eşit sayı). Takımlı modda kullanılmaz.")]
+        [SerializeField] private GameObject altBodyPrefab;
 
         /// <summary>Protocol key ("tdm").</summary>
         public string ModeId => modeId;
@@ -152,5 +155,10 @@ namespace VortexArena.Core
 
         /// <summary>Body of the red team; null = default red body (rationale in <see cref="BodyPrefab"/>).</summary>
         public GameObject RedBodyPrefab => redBodyPrefab;
+
+        /// <summary>Second body of a TEAMLESS mode; null = every teamless player gets
+        /// <see cref="BodyPrefab"/>. The roster order decides who gets which (see
+        /// <c>RemotePlayerSpawner</c>), so the split is identical on every client.</summary>
+        public GameObject AltBodyPrefab => altBodyPrefab;
     }
 }

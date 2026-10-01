@@ -502,6 +502,15 @@ yazılabilir; referans koptuğunda gövde mor çizilir, ayar ezildiğinde sessiz
 materyal ve doku modun kendi klasörüne **kopyalanır** (Android doku override'ı da orada verilir),
 paketin gitmesi gövdeyi bozmaz.
 
+### ⛔ NPC görünümünü oyuncu gövdesi hattıyla kurma
+
+Oyuncu gövdesi hattı (`Mod Gövdesi Kur` aracı + `SkeletonPoseMirror` + `RemoteHitBox`) uzak
+oyuncunun pozunu **aynalamak** için vardır: rig Generic/Avatar'sız kalır, pozu ağ yazar. NPC
+(müşteri, köstebek gibi) ise Humanoid'dir ve kendi `Animator`'ıyla oynar — ayna kemikleri ele
+geçirir ve animasyonu dondurur. `RemoteHitBox` ayrıca `RemoteAvatar` ister ve vurulduğunda
+`hit_report` göndererek NPC'yi **oyuncu isabeti** saydırır. NPC görünümünün reçetesi
+`Docs/Gelistirici/Yemek-Kitabi.md`'dedir.
+
 ### ⛔ `.meta` dosyası kopyalayarak asmdef/asset üretme
 
 GUID çakışır ve Unity referansları rastgele koparır. JSON'u kopyala, `.meta`'yı Unity üretsin.

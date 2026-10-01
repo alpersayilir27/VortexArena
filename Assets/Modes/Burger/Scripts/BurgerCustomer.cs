@@ -21,6 +21,12 @@ namespace VortexArena.Modes.Burger
         [Tooltip("Mutlu/mutsuz renginin uygulanacağı görsel. Atanmazsa renk değiştirilmez.")]
         [SerializeField] private Renderer moodRenderer;
 
+        [Tooltip("Müşteri görünümleri (karakter prefabları). Sunucunun seçtiği indeks v % uzunluk ile eşlenir.")]
+        [SerializeField] private GameObject[] looks;
+
+        [Tooltip("Görünümün kurulacağı ebeveyn. Boşsa müşterinin kendisi.")]
+        [SerializeField] private Transform lookRoot;
+
         [Tooltip("Müşteri bankoya varınca çalan ses. Atanmazsa sessizdir.")]
         [SerializeField] private AudioSource arriveSound;
 
@@ -34,6 +40,8 @@ namespace VortexArena.Modes.Burger
         private const float SlotBlendStart = 0.75f;
 
         private static readonly List<BurgerCustomer> Customers = new List<BurgerCustomer>();
+
+        private static readonly int StageParam = Animator.StringToHash("stage");
 
         /// <summary>All enabled customers in the scene.</summary>
         public static IReadOnlyList<BurgerCustomer> All => Customers;
@@ -49,11 +57,18 @@ namespace VortexArena.Modes.Burger
 
         private int _lastStage = -1;
 
+        private Animator _animator;
+        private bool _lookBuilt;
+        private bool _lookWarned;
+
         /// <summary>Counter slot from the payload (<c>slot:&lt;n&gt;</c>); <c>-1</c> until it arrives.</summary>
         public int Slot { get; private set; } = -1;
 
         /// <summary>Order from the payload (<c>r:&lt;tarif&gt;</c>), bottom to top.</summary>
         public string Recipe { get; private set; } = "";
+
+        /// <summary>Look index from the payload (<c>v:&lt;n&gt;</c>); <c>-1</c> until it arrives.</summary>
+        public int Look { get; private set; } = -1;
 
         public int NetId => _net != null ? _net.NetId : 0;
 
@@ -78,6 +93,7 @@ namespace VortexArena.Modes.Burger
 
             _net.StateChanged += HandleStateChanged;
             ReadPayload();
+            EnsureLook();
             ApplyStage(_net.Stage);
         }
 
@@ -115,6 +131,7 @@ namespace VortexArena.Modes.Burger
         private void HandleStateChanged(NetObject net, NetStateOrigin origin)
         {
             ReadPayload();
+            EnsureLook();
             ApplyStage(net.Stage);
         }
 
@@ -126,6 +143,52 @@ namespace VortexArena.Modes.Burger
                 : -1;
 
             Recipe = _net.TryGetPayloadValue(BurgerKinds.PayloadRecipe, out string recipe) ? recipe : "";
+
+            Look = _net.TryGetPayloadValue(BurgerKinds.PayloadLook, out string look) &&
+                   int.TryParse(look, out int parsedLook)
+                ? parsedLook
+                : -1;
+        }
+
+        /// <summary>Builds the look ONCE, from the payload's <c>v</c> (§10.5). Without a <c>v</c> the slot
+        /// decides, so a customer is never invisible; both are waited for, because the spawn's state
+        /// arrives right after registration and the payload is empty on the first read.
+        /// <para>⚠️ The look visuals must NOT use root motion: this script owns the transform, and a
+        /// second writer would carry the customer off its path.</para></summary>
+        private void EnsureLook()
+        {
+            if (_lookBuilt || looks == null || looks.Length == 0)
+            {
+                return;
+            }
+
+            int index = Look >= 0 ? Look : (Slot >= 0 ? Slot * 2 + (NetId & 1) : -1);
+            if (index < 0)
+            {
+                return;
+            }
+
+            GameObject prefab = looks[index % looks.Length];
+            if (prefab == null)
+            {
+                if (!_lookWarned)
+                {
+                    _lookWarned = true;
+                    Debug.LogWarning($"[Burger] Müşteri görünüm dizisinde boş giriş var (indeks {index % looks.Length}).", this);
+                }
+
+                return;
+            }
+
+            _lookBuilt = true;
+            GameObject instance = Instantiate(prefab, lookRoot != null ? lookRoot : transform, false);
+            _animator = instance.GetComponentInChildren<Animator>();
+
+            // ApplyStage may already have run with no animator in hand.
+            if (_animator != null)
+            {
+                _animator.SetInteger(StageParam, Stage);
+            }
         }
 
         private void ApplyStage(int stage)
@@ -154,6 +217,11 @@ namespace VortexArena.Modes.Burger
             if (stageChanged && known)
             {
                 PlayStageSound(stage);
+            }
+
+            if (_animator != null)
+            {
+                _animator.SetInteger(StageParam, stage);
             }
 
             if (bubble != null)

@@ -1656,8 +1656,9 @@ varsayılanı yeni bir mekanın başlayacağı yoğunluktur. Katalog sorguları:
 destekleyen haritaları, `MapsForGameType(GameType)` operatörün ilk seçim listesini,
 `ModesForMap(MapDefinition)` ise o haritada başlatılabilecek tur tiplerini verir — sonuncusu lobi
 profilini eler, oyun tipini ve haritanın `supportedModeIds`'ini **birlikte** süzer. Mod tanımı ayrıca
-moda özel **oyuncu gövdesi** taşıyabilir: `bodyPrefab` (mavi takım + takımsız) ve `redBodyPrefab`
-(kırmızı takım) → `BodyPrefab` / `RedBodyPrefab`; boş alan o slotu varsayılan gövdede bırakır),
+moda özel **oyuncu gövdesi** taşıyabilir: `bodyPrefab` (mavi takım + takımsız), `redBodyPrefab`
+(kırmızı takım) ve `altBodyPrefab` (takımsız modda ikinci gövde, kadro sırasıyla dönüşümlü) →
+`BodyPrefab` / `RedBodyPrefab` / `AltBodyPrefab`; boş alan o slotu varsayılan gövdede bırakır),
 `Weapon` (ISDK ile tutulan hitscan tüfek; tetik **silahı tutan elin** kumandasından okunur — çift
 silahta tetikler bağımsız; şarjör+yedek şarjör durumu taşır, boş şarjörde **otomatik reload YOK**
 (kuru tetik sesi + kısa haptik; bu ipucu tetik **basılı tutulurken de** yinelenir — otomatik silah
@@ -1954,7 +1955,15 @@ durur (prefaba elle yerleştirilir) ve yalnız çizilen gövdeninkiler açıktı
 derlemelerine referans vermez). **Boş alan o slotu varsayılan gövdede bırakır**, yani alanlarını
 doldurmayan mod hiç değişmez; her alan yalnız kendi slotunu ezer. ⚠️ Kırmızı gövde slotu bu yüzden
 genel bir **ikinci gövde** slotudur: içinde ya prefabta bağlı `RedTeamBody` durur ya da modun
-prefabından çalışma anında kurulan `ModeBody`. **Hangi modun gövdesi:** kurulmuş maçın modu
+prefabından çalışma anında kurulan `ModeBody`. **Takımsız modda ikinci gövde:** `altBodyPrefab`
+doluysa takımsız oyuncular `bodyPrefab` ile onun arasında **dönüşümlü** dağıtılır (kadın/erkek aşçı
+gibi iki gövde olabildiğince eşit sayıda) — takımlı modda kullanılmaz, kırmızı/mavi kuralı önce
+gelir. Varyantı `RemotePlayerSpawner` `lobby_state` kadrosundan hesaplar: oyuncunun **`playerId`'ye
+göre sıralı oyuncu satırları içindeki sırası** (admin satırları elenir) `% 2`, ham id çiftliği değil
+— id'lerde boşluk olur ve çiftlik herkesi tek gövdeye yığardı. `left`/`reconnecting` satırları da
+sayılır, yoksa biri düşünce gövdeler maç ortasında yer değiştirirdi; kadrodan tamamen silinen bir
+oyuncu yine kendisinden sonraki sıraları kaydırır. Kadro her istemciye ve admine aynı sırayla
+gittiği için sonuç her başlıkta aynıdır; **protokole alan eklenmez**. **Hangi modun gövdesi:** kurulmuş maçın modu
 (`ModeRuntime.FindDefinition()`); aktif kural **lobi profiliyken** (bekleme, arena sahnelemesi)
 adminin **seçili modu** (`ModeSelection.FindDefinition()`, `selection_state`) — yoksa oyuncular arenada
 yanlış gövdeyle buluşur ve ancak maç başlayınca değişirdi. Seçim ÜÇ yerde yapılır — `SetInfo`'ya gelen
@@ -2736,7 +2745,7 @@ gerçeği sunucudadır (`BurgerMode`). İki kural bütün kutuyu yönetir:
 | `BurgerStackColumn` | Hamburger tahtalarının **ortak sütunu** (MonoBehaviour değil, iki tahtanın da içinde duran düz sınıf): çapa pozu, dik döndürme (yalnız çapanın Y'si etrafındaki fırıl korunur — iki aynı dilim basılmış gibi durmasın), sütunun tepesi, katmanın **katı** kutusu (kalınlık prefabdan okunur, elle yazılan tür tablosu bayatlar), hacim içindeki katmanların alttan üste toplanması ve dinlenme pozu düzeltmesi (`INetRestPoseAdjuster`). ⚠️ **Sıra fizik sonucu değil, KONULMA sırasıdır** — ince bir katman kendinden öncekinin altına kayar ve tarif alttan üste okunur, yani kayma yanlış servistir. `TryComputeColumnPoses` **sıralı bir listenin tamamını** tek seferde dizer (tepe katmandan katmana taşınır) — devralınan yığının sırasını ve kalınlıklarını koruyan şey budur. **Pinler burada yaşar:** yayınladığımız poza oturtulan katman sunucu cevabına kadar orada tutulur; devralmada pin **elde görünen** katmanı da kapsar (kısa bir süre boyunca), çünkü `object_rest` katman hâlâ elde sayılırken gider |
 | `BurgerCounterSlot` | Bir banko slotu: müşterinin bekleyeceği yer + o slotun servis tahtasını **içine alan** hacim (tahta sahnede o hacmin içine kurulur). Telde giden şey slotun **numarasıdır** (müşterinin `s` alanında), konumu değil. ⚠️ Collider'ı olmayan slot hiçbir tahtayı sahiplenmez (sessizce hepsini yutmasın diye) |
 | `BurgerCustomerPath` | Kapıdan bankoya sahnede bake'li yürüme yolu. ⚠️ Örneklemesi **uzunluğa** göredir, waypoint indeksine göre değil: indeksle uzun ve kısa parça aynı süreyi alır ve müşteri uzun parçada koşar |
-| `BurgerCustomer` | Müşteri sunumu: `stage` + `s`'e bakarak yolu yürür, slotuna oturur, mutlu/mutsuz çıkar. `s` **her durumda** yeniden okunur — maç ortasında bağlanan başlık bekleyen müşterinin siparişini oradan kurar. ⚠️ Prefabında poz/kavrama bileşeni **yoktur** (yukarıdaki ikinci kural) |
+| `BurgerCustomer` | Müşteri sunumu: `stage` + `s`'e bakarak yolu yürür, slotuna oturur, mutlu/mutsuz çıkar. `s` **her durumda** yeniden okunur — maç ortasında bağlanan başlık bekleyen müşterinin siparişini oradan kurar. ⚠️ Prefabında poz/kavrama bileşeni **yoktur** (yukarıdaki ikinci kural). Görünümü `looks` dizisinden kurar: `s`'teki `v` indeksi (`v % uzunluk`), `v` yoksa slottan türetilen bir görünüm; örnek **bir kez** doğurulur ve içindeki `Animator`'a `stage` int parametresi yazılır. ⚠️ Görünümde **root motion olmaz** — transform'u bu script sürüyor |
 | `BurgerOrderBubble` | Siparişi (`bun_bottom,patty,cheese,bun_top`) okunur satırlara çevirip oyuncuya döner; yanına **alttan üste renkli dilimler** çizer (hedef kitle okuma bilmeyebilir; tür→renk tablosu prefab malzeme renkleriyle aynı tutulur, bilinmeyen tür gri). Kısa süreli **bildirim** (red sebebi) gösterip siparişe geri döner; arka plan rengi sabır göstergesidir (yeşil→kırmızı). ⚠️ **Bilinmeyen anahtar olduğu gibi yazılır**, atılmaz: sözlük sunucu tarafında malzeme kazanabilir ve sessizce eksilen bir satır "yanlış sipariş" diye okunurdu |
 
 ### İstemci: `VortexArena.Modes.Mole` (çocuk oyunu sunumu)

@@ -175,9 +175,54 @@ namespace VortexArena.App
                 }
             }
 
+            // BEFORE SetInfo: SetInfo runs SelectBody, so setting the variant first rebuilds the body once.
+            int variant = RosterBodyVariant(avatar.PlayerId);
+            if (variant >= 0)
+            {
+                avatar.SetBodyVariant(variant);
+            }
+
             avatar.SetInfo(displayName, number, team);
             avatar.SetCalibrated(calibrated);
             avatar.SetBodyScale(bodyScale);
+        }
+
+        /// <summary>Teamless body variant (0/1) from the roster, or <c>-1</c> when the player has no
+        /// roster row yet (variant left as it is — never guessed).
+        /// <para>The key is the player's RANK among the player rows ordered by <c>playerId</c>, not the
+        /// id's parity: ids have gaps (admins, rejoins), and parity would pile everyone onto one body.
+        /// Counting rank by "how many player rows have a smaller id" needs no sorting, so an unordered
+        /// roster gives the same answer. ⚠️ <c>left</c>/<c>reconnecting</c> rows are COUNTED: they stay
+        /// listed, so bodies do not swap mid-match when somebody drops — but a player removed from the
+        /// roster entirely does shift the ranks after them.</para></summary>
+        private int RosterBodyVariant(int playerId)
+        {
+            if (_lastLobbyState == null || _lastLobbyState.players == null)
+            {
+                return -1;
+            }
+
+            bool found = false;
+            int rank = 0;
+            for (int i = 0; i < _lastLobbyState.players.Length; i++)
+            {
+                PlayerInfo info = _lastLobbyState.players[i];
+                if (info == null || info.role == AppSession.RoleAdmin)
+                {
+                    continue;
+                }
+
+                if (info.playerId == playerId)
+                {
+                    found = true;
+                }
+                else if (info.playerId < playerId)
+                {
+                    rank++;
+                }
+            }
+
+            return found ? rank % 2 : -1;
         }
     }
 }

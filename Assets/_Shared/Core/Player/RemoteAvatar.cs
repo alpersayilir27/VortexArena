@@ -221,6 +221,10 @@ namespace VortexArena.Core.Player
         /// identity question, not a colour one.</summary>
         private Team _team = Team.Neutral;
 
+        /// <summary>Which of the teamless mode bodies this player draws (0 = <c>BodyPrefab</c>,
+        /// 1 = <c>AltBodyPrefab</c>). Fed from the roster order, not from the protocol.</summary>
+        private int _bodyVariant;
+
         /// <summary>Ghost body colour — same source as <see cref="_teamColor"/>, own tone so it reads
         /// while translucent.</summary>
         private Color _ghostTeamColor = GhostNeutralColor;
@@ -789,13 +793,31 @@ namespace VortexArena.Core.Player
             TintHeldItem(_itemInstanceR, _itemDefR);
         }
 
+        /// <summary>Sets the teamless body variant (0/1). Called BEFORE <see cref="SetInfo"/> on a
+        /// roster update so a single <see cref="SelectBody"/> covers both.</summary>
+        public void SetBodyVariant(int variant)
+        {
+            if (_bodyVariant == variant)
+            {
+                return;
+            }
+
+            _bodyVariant = variant;
+            SelectBody();
+        }
+
         /// <summary>Picks the body to draw from the team AND the mode's optional body prefabs; only ONE
         /// body is drawn at a time. With no mode prefab this is exactly the old team rule (red team →
         /// red body), and with no red body set up nothing happens at all.</summary>
         private void SelectBody()
         {
             ModeDefinition mode = ResolveBodyMode();
-            GameObject prefab = mode == null ? null : _team == Team.Red ? mode.RedBodyPrefab : mode.BodyPrefab;
+            // Teamless + variant 1 → the mode's second body: the roster is split evenly between the two
+            // bodies (e.g. female/male), so neither gender is over-represented in a teamless mode.
+            GameObject prefab = mode == null ? null
+                : _team == Team.Red ? mode.RedBodyPrefab
+                : _team == Team.Neutral && _bodyVariant == 1 && mode.AltBodyPrefab != null ? mode.AltBodyPrefab
+                : mode.BodyPrefab;
 
             if (_modeAlt != null && _modeAlt.SourcePrefab != prefab)
             {

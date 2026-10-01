@@ -26,6 +26,11 @@ public sealed class BurgerMode : IGameMode
 
     private const int CounterSlotCount = 3;
 
+    /// <summary>Distinct customer looks (`v:` payload). ⚠️ Must equal the look count on the client
+    /// prefab: fewer there and the modulo folds two indexes onto one look, breaking the
+    /// no-two-identical-customers guarantee (§10.5).</summary>
+    private const int CustomerLookCount = 6;
+
     /// <summary>Retry interval while every counter slot is taken — a whole arrival interval would be
     /// burnt on a busy shift.</summary>
     private const float CounterFullRetrySeconds = 1f;
@@ -197,12 +202,14 @@ public sealed class BurgerMode : IGameMode
         var progress = Progress(director);
         _slotTaken[slot] = true;
         var recipe = BuildRecipe();
-        var netId = director.SpawnObject("customer", default, payload: $"slot:{slot};r:{recipe}");
+        var look = PickLook();
+        var netId = director.SpawnObject("customer", default, payload: $"slot:{slot};r:{recipe};v:{look}");
         if (netId == 0) _slotTaken[slot] = false;
         else _customers[netId] = new Customer
         {
             Slot = slot,
             Recipe = recipe,
+            Look = look,
             Stage = CustomerWalking,
             Timer = CustomerWalkSeconds,
             // Frozen at BIRTH: a patience read later would keep shrinking under a customer who is
@@ -515,6 +522,28 @@ public sealed class BurgerMode : IGameMode
         return -1;
     }
 
+    /// <summary>A look no customer in the world uses right now — walking-out ones included, since they
+    /// stay visible until despawn. Free ones always exist (slots &lt; looks), the fallback only guards a
+    /// future count change.</summary>
+    private int PickLook()
+    {
+        var free = new List<int>(CustomerLookCount);
+        for (var look = 0; look < CustomerLookCount; look++)
+        {
+            var taken = false;
+            foreach (var customer in _customers.Values)
+            {
+                if (customer.Look != look) continue;
+                taken = true;
+                break;
+            }
+
+            if (!taken) free.Add(look);
+        }
+
+        return free.Count == 0 ? 0 : free[Random.Shared.Next(free.Count)];
+    }
+
     private void ReleaseCustomer(int netId, Customer customer)
     {
         _slotTaken[customer.Slot] = false;
@@ -534,6 +563,9 @@ public sealed class BurgerMode : IGameMode
 
         /// <summary>Comma separated order, buns included.</summary>
         public string Recipe = "";
+
+        /// <summary>Look index on the wire (`v:`); kept so the next arrival can avoid it.</summary>
+        public int Look;
 
         public int Stage;
 

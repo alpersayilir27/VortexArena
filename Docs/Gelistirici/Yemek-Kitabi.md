@@ -27,6 +27,7 @@ Her reçetenin altında *neden böyle* kutusu var — orayı okumazsan çalış�
 | Çocuk oyunu eklemek (silahsız, kooperatif) | [13.1](#131-çocuk-oyunu-eklemek-silahsız-kooperatif) |
 | Moda özel maç sonu ekranı (tema) | [13.2](#132-moda-özel-maç-sonu-ekranı) |
 | Moda özel oyuncu gövdesi (karakter modeli) | [13.3](#133-moda-özel-oyuncu-gövdesi) |
+| Burger müşterisine yeni görünüm (NPC karakteri) | [13.4](#134-burger-müşteri-görünümü-ekleme) |
 | Yeni arena eklemek | [14](#14-yeni-arena-eklemek) |
 | Hazır bir environment'ın içinde arena bölgesi kurmak | [14.1](#141-hazır-bir-environmentın-içinde-arena-bölgesi-kurmak) |
 | Gözlüksüz test (dev penceresi) | [15](#15-gözlüksüz-test-dev-penceresi) |
@@ -1258,18 +1259,26 @@ OBJ olarak dışa aktarılır — Mixamo OBJ'yi kabul eder.
 **3. FBX'i `Assets/Modes/<Ad>/Avatars/` altına koy** ve import ayarlarına bak:
 - ⚠️ **Ölçek:** Mixamo'nun çıktısı cm/m karışıklığıyla 100 kat küçük gelebilir — kalça kemiği
   ~0.7 m yerine ~0.007 m'deyse *Scale Factor* 100 yapılır. Küçük modelle kurulan araç devasa bir
-  kalibrasyon çarpanı yazar ve vuruş kutuları santimetre ölçeğinde kalır.
+  kalibrasyon çarpanı yazar ve vuruş kutuları santimetre ölçeğinde kalır. Ters yönde de olur: inç
+  birimli (3ds Max) kaynaktan gelen model ~2.5 kat büyük gelir — *Scale Factor* kalça ~0.85-0.95 m'ye
+  inecek şekilde küçültülür.
 - *Import Animation* kapalı, *Material Creation Mode* `None` (materyaller 5. adımda atanır).
 - ⚠️ **Alt-mesh kaybı:** Mixamo her parçanın alt-mesh'lerini TEK yüzeye indirir (kafadaki göz,
   ten, kaş, diş tek materyal olur ve gözler ten dokusuyla boyanır). Parça başına birden çok
   materyal gerekiyorsa her üçgen, rig'e giden pişmiş orijinaldeki en yakın üçgenin alt-mesh'ine
   atanarak yeniden bölünür ve mesh `Avatars/Meshes/` altına asset olarak kaydedilir; prefabın
-  renderer'ı bu mesh'i kullanır.
+  renderer'ı bu mesh'i kullanır. Kaynak tek mesh + çok materyalse Mixamo alt-mesh'leri
+  koruyabilir — önce çıktıdaki alt-mesh sayısına bak, korunmuşsa bölme gerekmez.
 
 **4. Aracı çalıştır:** `Tools > VortexArena > Avatars > Mod Gövdesi Kur (seçili FBX)`. Aynı klasörde
 `<FBX adı>_Body.prefab` üretilir/güncellenir (kökte `SkeletonPoseMirror`, altında FBX'in prefab
 örneği). Prefab zaten varsa **yalnız ayna alanları** tazelenir — elle konan kutular ve materyal
 atamaları korunur, yani araç modeli her güncellediğinde tekrar koşulabilir.
+⚠️ **Şapka/uzun saç:** araç kafa ortasını `Head`↔`HeadTop_End` ortasından alır; auto-rigger
+`HeadTop_End`'i şapkanın tepesine koyarsa kafa ortası gözün üstüne kayar ve gövde oyuncunun gerçek
+kafasından alçakta çizilir. Böyle bir modelde araçtan sonra `SkeletonPoseMirror.heightCalibration`
+`× (kafa ortası / göz yüksekliği)` ile düzeltilir; araç yeniden koşulursa bu düzeltme ezilir, tekrar
+uygulanır.
 
 **5. Materyalleri ve dokuları modun klasörüne KOPYALA** (`Assets/Modes/<Ad>/Avatars/` altına) ve
 prefabın renderer'ında alt-mesh başına ata. Dokulara Android override'ı uygula. ⚠️ Üçüncü parti
@@ -1283,13 +1292,56 @@ kendi oranlarına** göre verilir, varsayılan gövdeden kopyalanmaz.
 **7. Bağla:** `Assets/Modes/<Ad>/Data/<AD>.asset` → **`bodyPrefab`** (mavi takım + takımsız oyuncu) ve
 **`redBodyPrefab`** (kırmızı takım). Boş alan o slotu varsayılan gövdede bırakır. ⚠️ Takımlı bir modda
 iki alan **gözle ayırt edilen iki ayrı model** olmalıdır — takım rengi gövdeye yazılmaz, dost/düşman
-ayrımının taşıyıcısı modelin kendisidir.
+ayrımının taşıyıcısı modelin kendisidir. **Takımsız modda** ayrıca **`altBodyPrefab`** doldurulabilir:
+oyuncular `bodyPrefab` ile bu gövde arasında kadro sırasına göre **dönüşümlü** dağıtılır (iki gövde
+olabildiğince eşit sayıda, her başlıkta aynı). Boşsa takımsız herkes `bodyPrefab`'ı çizer.
 
 **Test (gözlükle, iki oyuncu):** admin modu **seçer seçmez** (maç başlamadan, lobide ve arena
 sahnelemesinde) iki oyuncu da modun gövdeleriyle çizilmeli, takımlarına göre farklı modelde olmalı;
+`altBodyPrefab` dolu takımsız bir modda iki oyuncu **farklı gövdede** görünmeli;
 çömelip zıplarken poz karakteri takip etmeli ve kafa oyuncunun gerçek kafasının olduğu yerde
 durmalı; her bölgeden isabet almalı; admin başka bir mod seçince gövde o modunkine (alanları boşsa
 varsayılana) geçmeli.
+
+---
+
+## 13.4 Burger müşteri görünümü ekleme
+
+Hamburgerci müşterisinin görünümü ağ nesnesinin kendisi değil, prefabın `looks` dizisinden
+doğurulan bir **karakter örneğidir**; hangisinin çıkacağını sunucu seçer (`s` → `v`,
+`Docs/ArenaNet-Protokol.md` §10.5). Yerleşim: `Assets/Modes/Burger/Customers/`.
+
+**1. FBX.** Mixamo'dan **T-pozda** indirilen karakter `Customers/` altına konur. Import:
+*Animation Type* **Humanoid**, *Avatar Definition* **Create From This Model**, *Import Animation*
+**kapalı**. Mixamo dokuları FBX'e gömülüdür: *Extract Textures* ile `Customers/Textures/<Model>/`
+altına çıkarılır (kullanılmayan *Specular/Glossiness* haritaları silinir), materyaller
+`Customers/Materials` altına çıkarılıp URP Lit'e dokusu elle bağlanır. Yüz parçaları (kaş/göz/ağız)
+gövdeden ayrı bir dokudan okuyabilir — ön izlemede yüzü kontrol et. Dokulara Android override'ı
+verilir (max 1024, ASTC; alfalı dokuda materyal *Alpha Clipping*).
+
+**2. Görünüm prefabı** = FBX'in prefab örneği + kökünde `Animator`; controller
+`AC_BurgerCustomer`, *Apply Root Motion* **kapalı**, *Culling Mode* **Cull Update Transforms**.
+Controller tek `stage` (int) parametresiyle sürülür: `1` → *Idle*, diğerleri → *Walk*. Klipler
+`Customers/Animations/` altındadır (Humanoid, avatar kendi modelinden, kök hareketi pozda pişirilmiş,
+yürüme *in place*); üçüncü parti paketten kopyalanır, oraya referans verilmez.
+
+Sipariş balonu `NO_customer` → `Bubble` yüksekliğindedir: yeni görünüm ondan uzunsa balon başına
+gömülür.
+
+**3. Bağla:** prefab `NO_customer` → `BurgerCustomer` → **`looks`** dizisine eklenir. Dizideki sıra
+`v` indeksinin sırasıdır; `lookRoot` boş bırakılırsa görünüm müşterinin kendisine çocuk olur.
+
+⚠️ **Görünüm sayısı değişiyorsa sunucudaki sabit de değişir** (`BurgerMode.CustomerLookCount`).
+İstemci indeksi modulo ile katladığı için sayılar ayrıldığında ya bir görünüm hiç çıkmaz ya da
+"aynı anda iki özdeş müşteri olmaz" güvencesi sessizce düşer.
+
+⚠️ **Müşteri görünümü oyuncu gövdesi hattından geçmez:** `Mod Gövdesi Kur` aracı
+([13.3](#133-moda-özel-oyuncu-gövdesi)), `RemoteHitBox` ve `SkeletonPoseMirror` müşteriye
+**konmaz**. O hat uzak oyuncunun pozunu aynalamak içindir; `RemoteHitBox` ayrıca `RemoteAvatar`
+ister ve vurulduğunda `hit_report` göndererek NPC'yi oyuncu isabeti sayar.
+
+⚠️ **Görünümde root motion olmaz** — müşterinin transform'unu `BurgerCustomer` sürüyor; animasyon da
+sürerse iki yazıcı müşteriyi yolundan kaçırır.
 
 ---
 
