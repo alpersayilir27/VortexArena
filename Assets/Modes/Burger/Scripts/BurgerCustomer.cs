@@ -36,6 +36,12 @@ namespace VortexArena.Modes.Burger
         [Tooltip("Sabrı bitip giderken çalan ses. Atanmazsa sessizdir.")]
         [SerializeField] private AudioSource unhappySound;
 
+        [Tooltip("Sipariş kabul edilince patlayan efekt (konfeti). Atanmazsa efektsizdir.")]
+        [SerializeField] private ParticleSystem happyFx;
+
+        [Tooltip("Sabrı bitip giderken başının üstünde beliren efekt (yağmur bulutu). Atanmazsa efektsizdir.")]
+        [SerializeField] private ParticleSystem unhappyFx;
+
         /// <summary>Path fraction at which the customer starts peeling off toward its own slot.</summary>
         private const float SlotBlendStart = 0.75f;
 
@@ -193,8 +199,8 @@ namespace VortexArena.Modes.Burger
 
         private void ApplyStage(int stage)
         {
-            // A late joiner's FIRST apply is a snapshot, not a transition: the sounds stay silent for it,
-            // or every joiner would hear the whole counter arrive at once.
+            // A late joiner's FIRST apply is a snapshot, not a transition: sounds and effects stay off for
+            // it, or every joiner would hear the whole counter arrive at once.
             bool known = _lastStage >= 0;
             bool stageChanged = stage != _lastStage;
             _lastStage = stage;
@@ -216,7 +222,7 @@ namespace VortexArena.Modes.Burger
 
             if (stageChanged && known)
             {
-                PlayStageSound(stage);
+                PlayStageCue(stage);
             }
 
             if (_animator != null)
@@ -259,7 +265,15 @@ namespace VortexArena.Modes.Burger
             }
         }
 
-        private void PlayStageSound(int stage)
+        private static void Play(ParticleSystem fx)
+        {
+            if (fx != null)
+            {
+                fx.Play(true);
+            }
+        }
+
+        private void PlayStageCue(int stage)
         {
             switch (stage)
             {
@@ -269,10 +283,12 @@ namespace VortexArena.Modes.Burger
 
                 case BurgerKinds.CustomerHappy:
                     Play(happySound);
+                    Play(happyFx);
                     break;
 
                 case BurgerKinds.CustomerUnhappy:
                     Play(unhappySound);
+                    Play(unhappyFx);
                     break;
             }
         }

@@ -1325,8 +1325,8 @@ Controller tek `stage` (int) parametresiyle sürülür: `1` → *Idle*, diğerle
 `Customers/Animations/` altındadır (Humanoid, avatar kendi modelinden, kök hareketi pozda pişirilmiş,
 yürüme *in place*); üçüncü parti paketten kopyalanır, oraya referans verilmez.
 
-Sipariş balonu `NO_customer` → `Bubble` yüksekliğindedir: yeni görünüm ondan uzunsa balon başına
-gömülür.
+Sipariş balonu `NO_customer` → `Bubble`, mutsuz bulutu `NO_customer` → `UnhappyFx` sabit
+yüksekliktedir: yeni görünüm onlardan uzunsa balon ve bulut başına gömülür.
 
 **3. Bağla:** prefab `NO_customer` → `BurgerCustomer` → **`looks`** dizisine eklenir. Dizideki sıra
 `v` indeksinin sırasıdır; `lookRoot` boş bırakılırsa görünüm müşterinin kendisine çocuk olur.
