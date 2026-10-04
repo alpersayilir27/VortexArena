@@ -335,6 +335,25 @@ canlanamaz olurdu ve hiçbir yerde uyarı çıkmazdı.
 basıp kendini kapatır ve "açık taban yok" fail-open'ı devreye girer — belirtisi "taban çalışmıyor"
 değil, herkesin arenanın her yerinde canlanmasıdır.
 
+### ⛔ Taban şeridini occlusion culling'e sokma
+
+Şeridin Renderer'ında **`Dynamic Occlusion` kapalıdır** (`VA_BaseZone` prefabında böyle gelir) ve
+şerit **`Occludee Static` işaretlenmez**. Occlusion bake'li sahnede duvarın ardında kalan renderer
+**bütünüyle** elenir; duvar-arkası çizim (x-ray) aynı renderer'ın ikinci slotu olduğu için onunla
+gider ve ölen oyuncu canlanma noktasını göremez. Bake'siz sahnede hiçbir belirti çıkmaz — hata
+ancak o haritaya occlusion bake alındığında görünür. `BaseZoneVisibility` slotu eklerken
+`Dynamic Occlusion`'ı kendisi de kapatır; static işaretli şeridi kurtaramaz (o, bake verisine
+girmiştir).
+
+### ⛔ Kopyalanan sahneyi kaynağın occlusion verisiyle bırakma
+
+Sahne kopyalanınca `Occlusion Culling` bağlantısı da kopyalanır: kopya **kaynağın** veri dosyasını
+gösterir ve **başka yerleşim için** bake edilmiş görünürlük verisiyle çalışır — görünmesi gereken
+objeler elenir, hata ya da uyarı çıkmaz. Occlusion kullanan bir sahneden kopyalanan sahne **kendi**
+bake'ini alır ve bağlı olduğu `OcclusionCullingData.asset` **kendi klasöründe** durur. Kontrol:
+sahneye sağ tık → *Select Dependencies*; başka sahnenin klasöründen bir `OcclusionCullingData.asset`
+seçiliyorsa bağlantı hâlâ kaynağınkidir.
+
 ### ⛔ Üst kat plakasını `Obstacle` layer'ına koyma / collider'sız bırakma
 
 İki yarısı da bağlayıcıdır. `Obstacle` layer'ı **"kafa girerse ceza"** sözleşmesidir: plaka oraya

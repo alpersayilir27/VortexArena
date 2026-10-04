@@ -60,6 +60,9 @@ namespace VortexArena.Core.Arena
 
         private readonly List<Material> _xrayMaterials = new List<Material>();
 
+        /// <summary>Renderers whose dynamic occlusion THIS component switched off for the x-ray.</summary>
+        private readonly List<Renderer> _occlusionOptOuts = new List<Renderer>();
+
         /// <summary>Scratch buffer for material array read/write — avoids per-frame garbage.</summary>
         private readonly List<Material> _materialScratch = new List<Material>();
 
@@ -298,6 +301,14 @@ namespace VortexArena.Core.Arena
                 return;
             }
 
+            // ⚠️ Baked occlusion culls a hidden renderer WHOLE, x-ray slot included. Before the
+            // early-out below: a hand-placed slot needs it too.
+            if (renderer.allowOcclusionWhenDynamic)
+            {
+                renderer.allowOcclusionWhenDynamic = false;
+                _occlusionOptOuts.Add(renderer);
+            }
+
             renderer.GetSharedMaterials(_materialScratch);
 
             // Skip if a hand-placed or leftover slot is already there (idempotent).
@@ -368,8 +379,17 @@ namespace VortexArena.Core.Arena
                 }
             }
 
+            for (int i = 0; i < _occlusionOptOuts.Count; i++)
+            {
+                if (_occlusionOptOuts[i] != null)
+                {
+                    _occlusionOptOuts[i].allowOcclusionWhenDynamic = true;
+                }
+            }
+
             _xrayRenderers.Clear();
             _xrayMaterials.Clear();
+            _occlusionOptOuts.Clear();
         }
 
         private bool IsOwnXRayMaterial(Material material)

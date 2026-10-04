@@ -1463,7 +1463,10 @@ bağlı değilse bake hiç alınmamıştır ve bütün static dekor her karede g
 (Mixed + Shadowmask), static flag'ler, gölge işaretleri ve güneş transform'u orada kurulur ve
 kopyayla gelir. **Lightmap gelmez** — bake sahnenin kendisine yazılır, o yüzden her mekan sahnesi
 çiti ve mekana özel yerleştirmesi bittikten sonra **kendi başına** bake edilir
-([Sahne Kurulumu](Sahne-Kurulumu.md)).
+([Sahne Kurulumu](Sahne-Kurulumu.md)). ⚠️ **Occlusion bağlantısı ise kopyayla gelir** ve kaynağın
+veri dosyasını gösterir: kopya kendi occlusion bake'ini alana kadar başka yerleşimin görünürlük
+verisiyle çalışır ([Yapma Listesi](Yapma-Listesi.md) — "Kopyalanan sahneyi kaynağın occlusion
+verisiyle bırakma").
 
 ⚠️ **Ölçekleme yoktur ve eklenmez.** Her işletmenin alanı farklı ölçüde ve çoğu kare/dikdörtgen
 bile değil — orantılı ölçekleme elle düzeltilecek bir yalancı-doğru üretir.
