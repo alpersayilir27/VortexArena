@@ -43,12 +43,21 @@ rem  (updater_uploader\updater_uploader_main.py); if the endpoint is down only
 rem  a warning is printed and the build still counts as successful.
 rem
 rem  Usage:
-rem    deploy-player-apk.bat             double-clickable; asks for the
-rem                                      version, waits at the end
-rem    deploy-player-apk.bat --no-pause  exits without waiting - BUT the
-rem                                      version cannot be asked in this mode,
-rem                                      so the script fails with exit 2
+rem    deploy-player-apk.bat                   double-clickable; asks for the
+rem                                            tenant (A = every venue, number =
+rem                                            one venue) and the version, waits
+rem                                            at the end
+rem    deploy-player-apk.bat --no-pause        exits without waiting - BUT the
+rem                                            version cannot be asked in this
+rem                                            mode, so the script fails with exit 2
+rem    deploy-player-apk.bat --tenant <Venue>  only the shared scenes + that
+rem                                            venue's scenes, no tenant menu
 rem    (the VORTEX_NO_PAUSE environment variable disables the wait too)
+rem
+rem  THE TENANT MUST MATCH THE ADMIN BUILD: start_match looks the scene up in
+rem  every player's hello.scenes, so an installation's headsets and its admin
+rem  have to be built with the SAME --tenant, otherwise the match is rejected
+rem  silently. The server version list carries no tenant information.
 rem
 rem  NOTE: script-local variables are VA_ prefixed - they are inherited by
 rem  child processes (Unity -> IL2CPP -> Gradle) and short generic names break
@@ -61,9 +70,37 @@ set "VA_AUTO="
 set "VA_CL=%cmdcmdline%"
 if not "!VA_CL:%~nx0=!"=="!VA_CL!" set "VA_HOLD=1"
 if defined VORTEX_NO_PAUSE set "VA_AUTO=1"
-if /i "%~1"=="--no-pause" set "VA_AUTO=1"
-if defined VA_AUTO set "VA_HOLD="
 set "VA_RC=0"
+
+rem --- Arguments (any order) -------------------------------------------
+set "VA_TENANT="
+:va_args
+if "%~1"=="" goto :va_args_done
+if /i "%~1"=="--no-pause" (
+  set "VA_AUTO=1"
+  shift /1
+  goto :va_args
+)
+if /i "%~1"=="--tenant" (
+  if "%~2"=="" (
+    echo [HATA] --tenant icin isletme adi verilmedi.
+    echo        Kullanim: deploy-player-apk.bat [--no-pause] [--tenant ^<Isletme^>]
+    set "VA_RC=2"
+    goto :son
+  )
+  set "VA_TENANT=%~2"
+  rem  "/1" matters: a bare shift moves %0 too and %~dp0 below would
+  rem  point at an argument instead of the script.
+  shift /1
+  shift /1
+  goto :va_args
+)
+echo [HATA] Bilinmeyen arguman: %~1
+echo        Kullanim: deploy-player-apk.bat [--no-pause] [--tenant ^<Isletme^>]
+set "VA_RC=2"
+goto :son
+:va_args_done
+if defined VA_AUTO set "VA_HOLD="
 
 set "VA_REPO=%~dp0.."
 for %%I in ("%VA_REPO%") do set "VA_REPO=%%~fI"
@@ -74,9 +111,40 @@ rem  Publish server, single place: the version listing (GET /versions) and the
 rem  upload at the end (POST /upload) must never point at different machines.
 set "VA_SERVER=http://159.100.20.26:8091"
 
+rem --- Tenant menu -----------------------------------------------------
+rem  Asked only when --tenant was not given. Automation mode skips it; that
+rem  mode then fails at the version prompt anyway.
+if not defined VA_TENANT if not defined VA_AUTO (
+  call "%~dp0lib\select-tenant.bat" "%VA_REPO%"
+  if errorlevel 1 (
+    set "VA_RC=2"
+    goto :son
+  )
+  echo.
+)
+
 echo === VortexArena : oyuncu ^(Meta Quest / Android^) build ===
 echo   Proje : %VA_REPO%
+if defined VA_TENANT (
+  echo   Tenant: !VA_TENANT!
+) else (
+  echo   Tenant: hepsi
+)
 echo.
+
+rem --- Tenant folder ---------------------------------------------------
+rem  Checked BEFORE the version prompt: a typo must not cost the operator the
+rem  whole prompt sequence and a 20 minute build that then aborts in Unity.
+if defined VA_TENANT (
+  if not exist "%VA_REPO%\Assets\Arenas\Venues\!VA_TENANT!\" (
+    echo [HATA] Boyle bir isletme klasoru yok:
+    echo        "%VA_REPO%\Assets\Arenas\Venues\!VA_TENANT!"
+    echo        Kullanilabilir isletmeler:
+    dir /b /ad "%VA_REPO%\Assets\Arenas\Venues" 2>nul
+    set "VA_RC=1"
+    goto :son
+  )
+)
 
 rem --- 0) Version (interactive) ----------------------------------------
 rem  Automation mode has no console to ask on: set /p would return empty
@@ -218,12 +286,21 @@ del /q "%VA_LOG%" 2>nul
 if exist "%VA_LOG%" (
   echo   [UYARI] Onceki log silinemedi - bir Unity sureci hala tutuyor.
 )
+rem  The tenant flag is prebuilt into a variable: an unset tenant must disappear
+rem  from the command line entirely - a bare "-tenant" with no value would make
+rem  PlayerBuildTool abort the build.
+set "VA_TARG_PS="
+set "VA_TARG_U="
+if defined VA_TENANT (
+  set "VA_TARG_PS=-Tenant !VA_TENANT!"
+  set "VA_TARG_U=-tenant !VA_TENANT!"
+)
 set "VA_WATCH=%~dp0lib\watch-unity-build.ps1"
 if exist "%VA_WATCH%" (
   powershell -NoProfile -ExecutionPolicy Bypass -File "%VA_WATCH%" ^
     -Unity "!VA_UNITY!" -Project "%VA_REPO%" -OutDir "%VA_OUT%" -Log "%VA_LOG%" ^
     -Method VortexArena.Core.Editor.PlayerBuildTool.BuildQuestPlayer ^
-    -UnityBuildTarget Android -BuildVersion !VA_VER!
+    -UnityBuildTarget Android -BuildVersion !VA_VER! !VA_TARG_PS!
   set "VA_RC=!ERRORLEVEL!"
 ) else (
   echo   [UYARI] Izleyici yok, ilerleme basilamayacak: "%VA_WATCH%"
@@ -233,6 +310,7 @@ if exist "%VA_WATCH%" (
     -executeMethod VortexArena.Core.Editor.PlayerBuildTool.BuildQuestPlayer ^
     -buildOutput "%VA_OUT%" ^
     -buildVersion !VA_VER! ^
+    !VA_TARG_U! ^
     -logFile "%VA_LOG%"
   set "VA_RC=!ERRORLEVEL!"
 )
@@ -293,6 +371,10 @@ if errorlevel 1 (
 ) else (
   echo.
   echo   Sunucuya yuklendi - gozlukteki Vortex Updater artik bu surumu gorur.
+)
+if defined VA_TENANT (
+  echo   [UYARI] Sunucudaki surum listesi isletme bilgisi TASIMAZ: bu surumu her
+  echo           gozluk gorur. Hangi surum hangi isletmeye ait, not edin.
 )
 echo.
 echo   Gozluge kurmak icin: gozlugu USB ile bagla, gelistirici modu acik olsun,

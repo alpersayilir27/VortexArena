@@ -2969,18 +2969,27 @@ Dört bileşenin her biri kendi script'iyle `deploy/` altına üretilir:
 
 | Komut | Ne yapar | Çıktı |
 |---|---|---|
-| `scripts\deploy-admin-game.bat` | Unity batch-mode Windows build (`PlayerBuildTool.BuildWindowsAdmin`) | `deploy\admin\VortexArena.exe` |
-| `scripts\deploy-player-apk.bat` | Unity batch-mode Android build (`PlayerBuildTool.BuildQuestPlayer`) | `deploy\player\game_v<sürüm>.apk` + `install_game.bat` |
+| `scripts\deploy-admin-game.bat` | Unity batch-mode Windows build (`PlayerBuildTool.BuildWindowsAdmin`); tenant menüsü ya da `--tenant <İşletme>` | `deploy\admin\VortexArena.exe` |
+| `scripts\deploy-player-apk.bat` | Unity batch-mode Android build (`PlayerBuildTool.BuildQuestPlayer`); tenant menüsü ya da `--tenant <İşletme>` | `deploy\player\game_v<sürüm>.apk` + `install_game.bat` |
 | `scripts\deploy-server.bat` | `dotnet publish -r win-x64 --self-contained` + `config/` kopyası | `deploy\server\VortexArena.Server.App.exe` |
 | `scripts\deploy-launcher.bat` | `dotnet publish -r win-x64 --self-contained` | `deploy\launcher\VortexArena.Launcher.exe` |
 
-**İki Unity build'i tek sahne listesini paylaşır.** Windows build'i admin, Android build'i Quest
-oyuncusudur; ikisi de Build Settings'teki etkin sahneleri aynen kullanır. Liste platforma göre
+**İki Unity build'i tek sahne listesinden başlar.** Windows build'i admin, Android build'i Quest
+oyuncusudur; ikisi de Build Settings'teki etkin sahneleri kullanır. Liste platforma göre
 ayrıştırılmaz — ayrışsaydı bir arenayı admin bilir oyuncu bilmez olurdu ve `start_match` sessizce
 reddedilirdi (sahne TÜM oyuncuların `hello.scenes` listesinde aranır). `PlayerBuildTool` build'e
 girmeden önce **diskte olmayan sahne satırlarını** yakalayıp adlarıyla iptal eder: silinmiş bir
 arenanın satırı Build Settings'te kalabiliyor ve o hâlde `BuildPipeline` sebebi görünmeyen bir
 yığın iziyle düşerdi.
+
+**İşletmeye özel build isteğe bağlıdır:** betikler çift tıklanınca tenant'ı numaralı menüden
+sorar (`A` = hepsi; `scripts\lib\select-tenant.bat`) ya da `--tenant <İşletme>` argümanını alır.
+`-tenant <İşletme>` verilirse `PlayerBuildTool` o tek listeyi **paylaşılan sahneler + `Assets/Arenas/Venues/<İşletme>/`
+altındaki sahneler** olarak süzer; sıra korunur, Boot 0. indeks kalır. `A` seçilirse (ya da
+`--no-pause` kipinde bayrak yoksa) tüm işletmeler build'e girer. **Build Settings listesi değişmez** — tüm arenalar listede durmaya devam
+eder, filtre yalnız o build'e özeldir. ⚠️ Bir kurulumun APK'sı ve admin'i **aynı tenant** ile
+alınır, yoksa yukarıdaki sessiz ret yaşanır; o kurulumun sunucusu da aynı işletmeye sabitlenmiş
+olmalıdır (`server.json` → `venue`). OTA sürüm listesi işletme bilgisi taşımaz.
 
 - **Oyuncu build'i sürümlüdür, admin build'i değildir.** `BuildQuestPlayer` `-buildVersion <tam
   sayı>` argümanını **zorunlu** ister (betik numarayı operatöre sorar); sürümsüz oyuncu build'i
@@ -3058,7 +3067,8 @@ yığın iziyle düşerdi.
   bağlantı için geçerlidir: adb server'ı her yeniden başladığında cihaz `unauthorized`'a döner ve
   onay yeniden istenir.
 - Boot sahnesi build listesinde **index 0** olmalı; tüm arena sahneleri listede olmalı
-  (`Configure All Build Elements` sahneyi listeye kendisi ekler).
+  (`Configure All Build Elements` sahneyi listeye kendisi ekler) — işletmeye özel build de bu tam
+  listeden süzer, listeden sahne çıkarılmaz.
 
 **Operatör akışı (işletmede):** launcher'ı aç → (bir kez) sunucu exe'si + **mekan**, sunucu IP'si,
 admin exe'si → **Sunucuyu Başlat** → **Yönetimi Başlat**. Sunucu `--venue <mekan>` ile açılır; oyun
@@ -5474,9 +5484,11 @@ konsoluna tek satır sebep yazar.
     formülün shader varyantları elendiği için **sahnede sisi sessizce kaybettirir** — ne derleyici
     ne çalışma anı uyarır, sis yalnızca yoktur. Başka bir formül gerçekten gerekiyorsa önce eleme
     ayarı açılmalıdır; bedeli varyant sayısının ~1,5 katına çıkmasıdır.
-    **(d)** Mobil URP asset'inde **Light Cookies** ve **LOD Cross Fade** kapalıdır; her biri
-    açıldığında varyant sayısı ikiye çıkar. Sonuçları da sessizdir: cookie'li bir ışık cookie'siz
-    çizilir, LOD geçişleri yumuşamaz, ani değişir — ikisi de ilgili ayar açılmadan düzelmez.
+    **(d)** **İki URP asset'inde de** **Light Cookies** ve **LOD Cross Fade** kapalıdır; (b)
+    yüzünden birinde açılması iki build'i birden ikiye katlar. Sonuçları da sessizdir: cookie'li bir
+    ışık cookie'siz çizilir, LOD geçişleri yumuşamaz, ani değişir — ikisi de ilgili ayar açılmadan
+    düzelmez. **Soft Shadow Quality** de iki asset'te aynıdır (Low): farklı kaliteler birleşip her
+    kalite için ayrı varyant ürettirir. Admin görüntüsü bu üçünden bilinçli olarak feragat eder.
     **Teşhis:** yavaş bir build'de `deploy/player-build.log` içindeki
     `Pass <ad> (vp, <api>) finished in <N> seconds ... compiled <N> variants` satırları hangi
     shader'ın kaç varyant derlediğini verir; `Logs/shadercompiler-*.log` ise varyant başına açık

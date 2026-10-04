@@ -170,7 +170,9 @@ Sahne dosyası tek başına yetmez — üç kayıt daha gerekir:
 
 > ⚠️ **Yeni sahneyi Build Settings'e eklemeyi unutma.** Sunucu sahneyi TÜM oyuncuların
 > `hello.scenes` listesinde arar (bu liste Build Settings'ten üretilir); listesi eksik kalan bir
-> istemci maçı bloklar.
+> istemci maçı bloklar. İşletmeye özel build'de (`--tenant <İşletme>`) listeye yalnız paylaşılan
+> sahneler + o işletmenin sahneleri girer — o build'le gelen başlıklar başka işletmenin arenasını
+> bilmez; ayrıntı `scripts/README.md`.
 
 ### Lobi sahnesi kuruyorsan
 

@@ -15,10 +15,38 @@ durduğu için o klasör silinmez, yalnız aynı adlı dosya üzerine yazılır.
 | `defender-exclusions.cmd` | `defender-exclusions.ps1` | Windows Defender dışlama listesi | **Yönetici** + Defender'ın etkin olması |
 
 İki Unity betiği aynı `PlayerBuildTool` sınıfını farklı `-executeMethod` ile çağırır ve **aynı
-sahne listesini** kullanır (Build Settings). Fark yalnız platformdur: Windows = admin, Android =
+sahne listesinden** başlar (Build Settings). Fark yalnız platformdur: Windows = admin, Android =
 Quest oyuncusu. Rol ve sunucu adresi **hiçbirine gömülmez** — admin adresi launcher'ın
-`--server-ip` argümanından, oyuncu ise UDP beacon keşfinden alır, yani **aynı APK her gözlüğe**
-kurulur.
+`--server-ip` argümanından, oyuncu ise UDP beacon keşfinden alır, yani **bir kurulumun bütün
+gözlüklerine aynı APK** kurulur.
+
+## İşletmeye özel build (`--tenant`)
+
+Her iki Unity betiği de çift tıklanınca **hangi tenant için build alınacağını sorar**:
+`Assets/Arenas/Venues/` altındaki işletme klasörleri numaralı listelenir, **`A` = hepsi**, numara =
+o işletme. Menü `scripts\lib\select-tenant.bat`'tadır, iki betik onu paylaşır. Sormadan seçmek için
+`--tenant <İşletme>` argümanı verilir (`--no-pause` ile birlikte, sırası serbest):
+
+```
+scripts\deploy-player-apk.bat --tenant <İşletme>
+scripts\deploy-admin-game.bat --tenant <İşletme>
+```
+
+- **`A` seçilirse ya da `--no-pause` kipinde `--tenant` verilmezse** Build Settings'teki etkin
+  sahnelerin tamamı, yani tüm işletmeler build'e girer (otomasyon kipinde menü açılmaz).
+- Bir işletme seçilirse build'e **yalnız paylaşılan sahneler** (`Assets/Arenas/Venues/` dışındaki her
+  şey — Boot, lobi, ölçüm sahnesi…) **+ `Assets/Arenas/Venues/<İşletme>/` altındaki sahneler**
+  girer. Sıra korunur, Boot 0. indeks kalır. İşletme adı klasör adıdır, büyük/küçük harf
+  önemsizdir; o işletmeden hiç etkin sahne yoksa build başlamadan düşer.
+- **Build Settings listesi değiştirilmez** — filtre yalnız build sırasında uygulanır, listede tüm
+  arenalar durmaya devam eder.
+- ⚠️ **Bir kurulumun APK'sı ve admin'i AYNI tenant ile alınır:** `start_match` sahneyi her
+  oyuncunun `hello.scenes` listesinde arar; admin'in bildiği bir arenayı gözlükler bilmiyorsa maç
+  sessizce reddedilir.
+- ⚠️ O kurulumun **sunucusu da aynı işletmeye sabitlenmiş olmalıdır** (`server.json` → `venue` ya
+  da `--venue`): sabitlenmemiş sunucu launcher altında ilk işletmeyi sessizce açar.
+- ⚠️ **OTA/updater sürüm listesi işletme bilgisi taşımaz** — yüklenen her sürümü her gözlük görür;
+  hangi sürüm hangi işletmeye ait, dışarıda not edilir.
 
 ## Oyuncu APK'sının sürümü
 

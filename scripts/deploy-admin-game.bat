@@ -2,53 +2,127 @@
 setlocal EnableDelayedExpansion
 rem =====================================================================
 rem  deploy-admin-game.bat
-rem  Unity admin (Windows) build'ini alir -> deploy\admin\VortexArena.exe
+rem  Builds the Unity admin (Windows) build -> deploy\admin\VortexArena.exe
 rem
-rem  Rol ve sunucu adresi build'e GOMULMEZ: masaustu build'i calisma aninda
-rem  admin rolune duser ve adresi launcher'in gectigi --server-ip
-rem  argumanindan okur (AppBoot). Launcher bu exe'yi baslatir.
+rem  The role and the server address are NOT baked into the build: the desktop
+rem  build falls to the admin role at runtime and reads the address from the
+rem  --server-ip argument passed by the launcher (AppBoot). The launcher starts
+rem  this exe.
 rem
-rem  ONEMLI: batch-mode Unity, editor ayni projeyi acikken proje kilidine
-rem  takilabilir. Betik bunu KONTROL ETMEZ (bilincli): editor kapatildiktan
-rem  sonra bile AI motoru gibi alt sureclerin Unity.exe'si arka planda
-rem  yasayabiliyor ve tasklist kontrolu yanlis alarm veriyordu. Build kilitte
-rem  takilirsa elle iptal edip tekrar baslatin.
+rem  IMPORTANT: batch-mode Unity can hit the project lock while the editor has
+rem  the same project open. This script does NOT check for it (deliberate): even
+rem  after the editor is closed, the Unity.exe of sub-processes such as the AI
+rem  engine can live on in the background, and the tasklist check kept raising
+rem  false alarms. If the build hangs on the lock, cancel and restart it by hand.
 rem
-rem  Unity yolu: UNITY_EXE ortam degiskeni > Hub'daki proje surumu.
+rem  Unity path: UNITY_EXE environment variable > project version from Hub.
 rem
-rem  Kullanim:
-rem    deploy-admin-game.bat             cift tiklanabilir; sonda bekler
-rem    deploy-admin-game.bat --no-pause  otomasyon; beklemeden cikar
-rem    (VORTEX_NO_PAUSE=1 ortam degiskeni de beklemeyi kapatir)
+rem  Usage:
+rem    deploy-admin-game.bat                    double-clickable; asks for the tenant
+rem                                             (A = every venue, number = one venue),
+rem                                             waits at the end
+rem    deploy-admin-game.bat --no-pause         automation; no menu (every venue),
+rem                                             exits without waiting
+rem    deploy-admin-game.bat --tenant <Venue>   only the shared scenes + that
+rem                                             venue's scenes, no menu
+rem    (the VORTEX_NO_PAUSE=1 environment variable disables the wait too)
 rem
-rem  NOT: betik-ici degiskenler VA_ onekli. Sebep: bu degiskenler cocuk
-rem  sureclere (Unity -> IL2CPP -> MSVC) miras kaliyor ve kisa genel adlar
-rem  derleme zincirini kiriyor (ornek: "RC" -> CMake/MSVC onu resource
-rem  compiler saniyor). Yeni degisken eklerken VA_ onekini koru.
+rem  THE TENANT MUST MATCH THE APK: start_match looks the scene up in every
+rem  player's hello.scenes, so an installation's admin and its headsets have to
+rem  be built with the SAME --tenant, otherwise the match is rejected silently.
+rem
+rem  NOTE: script-local variables are VA_ prefixed. Reason: they are inherited by
+rem  child processes (Unity -> IL2CPP -> MSVC) and short generic names break the
+rem  build chain (example: "RC" -> CMake/MSVC takes it for the resource
+rem  compiler). Keep the VA_ prefix on new variables.
 rem =====================================================================
 
-rem --- Cift tiklamada pencere kapanmasin -------------------------------
-rem  cmdcmdline, betik cift tiklanarak (veya "cmd /c betik" ile) baslatilinca
-rem  betigin adini icerir. Oyleyse sonda bekleriz; yoksa hata mesaji goz
-rem  kirpip kaybolur. Zaten acik bir konsoldan calistirilirsa beklemez.
+rem --- Keep the window open on double click ----------------------------
+rem  cmdcmdline contains the script name when the script is started by double
+rem  click (or via "cmd /c script"). Then we wait at the end; otherwise an error
+rem  message blinks and disappears. Run from an already open console it does not wait.
 set "VA_HOLD="
+set "VA_AUTO="
 set "VA_CL=%cmdcmdline%"
 if not "!VA_CL:%~nx0=!"=="!VA_CL!" set "VA_HOLD=1"
-if defined VORTEX_NO_PAUSE set "VA_HOLD="
-if /i "%~1"=="--no-pause" set "VA_HOLD="
+if defined VORTEX_NO_PAUSE (
+  set "VA_AUTO=1"
+  set "VA_HOLD="
+)
 set "VA_RC=0"
+
+rem --- Arguments (any order) -------------------------------------------
+set "VA_TENANT="
+:va_args
+if "%~1"=="" goto :va_args_done
+if /i "%~1"=="--no-pause" (
+  set "VA_AUTO=1"
+  set "VA_HOLD="
+  shift /1
+  goto :va_args
+)
+if /i "%~1"=="--tenant" (
+  if "%~2"=="" (
+    echo [HATA] --tenant icin isletme adi verilmedi.
+    echo        Kullanim: deploy-admin-game.bat [--no-pause] [--tenant ^<Isletme^>]
+    set "VA_RC=2"
+    goto :son
+  )
+  set "VA_TENANT=%~2"
+  rem  "/1" matters: a bare shift moves %0 too and %~dp0 below would
+  rem  point at an argument instead of the script.
+  shift /1
+  shift /1
+  goto :va_args
+)
+echo [HATA] Bilinmeyen arguman: %~1
+echo        Kullanim: deploy-admin-game.bat [--no-pause] [--tenant ^<Isletme^>]
+set "VA_RC=2"
+goto :son
+:va_args_done
 
 set "VA_REPO=%~dp0.."
 for %%I in ("%VA_REPO%") do set "VA_REPO=%%~fI"
 set "VA_OUT=%VA_REPO%\deploy\admin"
 set "VA_LOG=%VA_REPO%\deploy\admin-build.log"
 
+rem --- Tenant menu -----------------------------------------------------
+rem  Asked only when --tenant was not given; automation mode has no console,
+rem  so it builds every venue without asking.
+if not defined VA_TENANT if not defined VA_AUTO (
+  call "%~dp0lib\select-tenant.bat" "%VA_REPO%"
+  if errorlevel 1 (
+    set "VA_RC=2"
+    goto :son
+  )
+  echo.
+)
+
 echo === VortexArena : admin (Windows) build ===
 echo   Proje : %VA_REPO%
 echo   Hedef : %VA_OUT%
+if defined VA_TENANT (
+  echo   Tenant: !VA_TENANT!
+) else (
+  echo   Tenant: hepsi
+)
 echo.
 
-rem --- 1) Proje Unity surumu -------------------------------------------
+rem --- Tenant folder ---------------------------------------------------
+rem  Checked up front: a typo must not be paid for with a build that only
+rem  aborts inside Unity minutes later.
+if defined VA_TENANT (
+  if not exist "%VA_REPO%\Assets\Arenas\Venues\!VA_TENANT!\" (
+    echo [HATA] Boyle bir isletme klasoru yok:
+    echo        "%VA_REPO%\Assets\Arenas\Venues\!VA_TENANT!"
+    echo        Kullanilabilir isletmeler:
+    dir /b /ad "%VA_REPO%\Assets\Arenas\Venues" 2>nul
+    set "VA_RC=1"
+    goto :son
+  )
+)
+
+rem --- 1) Project Unity version ----------------------------------------
 set "VA_UVER="
 for /f "tokens=2" %%v in ('findstr /b "m_EditorVersion:" "%VA_REPO%\ProjectSettings\ProjectVersion.txt"') do set "VA_UVER=%%v"
 if not defined VA_UVER (
@@ -59,7 +133,7 @@ if not defined VA_UVER (
 )
 echo   Surum : %VA_UVER%
 
-rem --- 2) Unity.exe bul ------------------------------------------------
+rem --- 2) Locate Unity.exe ---------------------------------------------
 if defined UNITY_EXE (
   set "VA_UNITY=%UNITY_EXE%"
 ) else (
@@ -74,7 +148,7 @@ if not exist "!VA_UNITY!" (
 )
 echo   Unity : !VA_UNITY!
 
-rem --- 3) Cikti klasorunu temizle --------------------------------------
+rem --- 3) Wipe the output folder ---------------------------------------
 if exist "%VA_OUT%" (
   echo   Temizlik: eski cikti siliniyor...
   rmdir /s /q "%VA_OUT%"
@@ -88,41 +162,50 @@ if exist "%VA_OUT%" (
 mkdir "%VA_OUT%" 2>nul
 
 rem --- 4) Build --------------------------------------------------------
-rem  -nographics KULLANILMIYOR: player build'inde shader varyant derlemesi
-rem  grafik cihazi isteyebilir ve sessizce bozuk cikti uretebilir.
-rem  HEDEF PLATFORM BU BETIKTE SABITTIR: -buildTarget Win64. Aktif platformdan
-rem  turetilmez - projede hangi platform acik kalmis olursa olsun bu betik
-rem  Windows build'i alir. Bayrak Unity'ye ACILISTA verilir: platformu
-rem  -executeMethod'un icinden cevirmek domain reload tetikler ve calisan
-rem  metot yarida kalir.
-rem  Aktif platform zaten Windows ise bayrak etkisizdir; degilse gecis
-rem  acilista olur ve o kosu tam reimport yuzunden uzun surer (texture'lar
-rem  DXT'ye yeniden sikistirilir) - sonrakiler hizlidir.
+rem  -nographics IS NOT USED: in the player build shader variant compilation may
+rem  need a graphics device and could silently produce a broken build.
+rem  THE TARGET PLATFORM IS PINNED HERE: -buildTarget Win64. It is not derived
+rem  from the active platform - whatever platform the project was left on, this
+rem  script produces a Windows build. The flag is passed at Unity STARTUP:
+rem  switching platform from inside -executeMethod triggers a domain reload and
+rem  aborts the running method.
+rem  If the active platform is already Windows the flag is a no-op; otherwise the
+rem  switch happens at startup and that run takes long because of a full reimport
+rem  (textures recompressed to DXT) - later runs are fast.
 echo.
 echo   Build basliyor (hedef: Windows; platform degisiyorsa uzun surebilir)...
 echo   Asagidaki durum satiri canli guncellenir; hicbir sey ilerlemiyorsa
 echo   izleyici uyari basar (editor/arka plan Unity.exe proje kilidini tutuyor
 echo   olabilir - Ctrl+C ile iptal edip surecleri kapattiktan sonra tekrar deneyin).
 echo   Log   : %VA_LOG%
-rem  Eski log'u sil: Unity hic baslayamazsa hata dalinda BAYAT log basilir,
-rem  yanlis teshise goturur. Silinemiyorsa dosyayi tutan bir Unity sureci
-rem  hala yasiyor demektir - engellemiyoruz, yalnizca uyariyoruz.
+rem  Delete the old log: if Unity never starts, the error branch would print a
+rem  STALE log and lead to the wrong diagnosis. If it cannot be deleted, a Unity
+rem  process still holds the file - we do not block, only warn.
 del /q "%VA_LOG%" 2>nul
 if exist "%VA_LOG%" (
   echo   [UYARI] Onceki log silinemedi - bir Unity sureci hala tutuyor.
   echo           Build takilirsa o sureci kapatip tekrar deneyin;
   echo           asagida basilan log satirlari da bayat olabilir.
 )
-rem  Unity'yi DOGRUDAN degil, izleyici uzerinden calistiriyoruz: batch-mode Unity
-rem  konsola hicbir sey yazmadigi icin "takildi mi ilerliyor mu" sorusu baska
-rem  turlu cevaplanamiyordu. lib\watch-unity-build.ps1 ayni komut satirini kurar,
-rem  log'u canli okur, asama + yuzde + hareketsizlik uyarisi basar ve Unity'nin
-rem  cikis kodunu aynen dondurur. Izleyici yoksa eski davranisa duseriz.
+rem  Unity is run through the watcher, NOT directly: batch-mode Unity prints
+rem  nothing to the console, so "stalled or progressing?" had no other answer.
+rem  lib\watch-unity-build.ps1 builds the same command line, tails the log live,
+rem  prints phase + percentage + stall warning and returns Unity's exit code
+rem  unchanged. Without the watcher we fall back to the old behaviour.
+rem  The tenant flag is prebuilt into a variable: an unset tenant must disappear
+rem  from the command line entirely - a bare "-tenant" with no value would make
+rem  PlayerBuildTool abort the build.
+set "VA_TARG_PS="
+set "VA_TARG_U="
+if defined VA_TENANT (
+  set "VA_TARG_PS=-Tenant !VA_TENANT!"
+  set "VA_TARG_U=-tenant !VA_TENANT!"
+)
 set "VA_WATCH=%~dp0lib\watch-unity-build.ps1"
 if exist "%VA_WATCH%" (
   powershell -NoProfile -ExecutionPolicy Bypass -File "%VA_WATCH%" ^
     -Unity "!VA_UNITY!" -Project "%VA_REPO%" -OutDir "%VA_OUT%" -Log "%VA_LOG%" ^
-    -UnityBuildTarget Win64
+    -UnityBuildTarget Win64 !VA_TARG_PS!
   set "VA_RC=!ERRORLEVEL!"
 ) else (
   echo   [UYARI] Izleyici yok, ilerleme basilamayacak: "%VA_WATCH%"
@@ -131,15 +214,16 @@ if exist "%VA_WATCH%" (
     -buildTarget Win64 ^
     -executeMethod VortexArena.Core.Editor.PlayerBuildTool.BuildWindowsAdmin ^
     -buildOutput "%VA_OUT%" ^
+    !VA_TARG_U! ^
     -logFile "%VA_LOG%"
   set "VA_RC=!ERRORLEVEL!"
 )
 
-rem  Basarisizlik teshisi lib\explain-build-failure.ps1'e aittir: log'un son 30
-rem  satiri her zaman kapanis gurultusudur (bellek sizinti JSON'u, licensing),
-rem  gercek sebep orada gorunmez; kilit ipucunu de kosulsuz basmak hicbir Unity
-rem  acik degilken yanlis teshise goturuyordu. Yardimci hem sebebi cikarir hem
-rem  kilit ipucunu yalnizca log'da kilit izi varsa basar.
+rem  Failure diagnosis belongs to lib\explain-build-failure.ps1: the last 30 log
+rem  lines are always shutdown noise (memory leak JSON, licensing), the real cause
+rem  is not visible there; and printing the lock hint unconditionally led to the
+rem  wrong diagnosis with no Unity open. The helper extracts the cause and prints
+rem  the lock hint only if the log really shows a lock.
 set "VA_EXPLAIN=%~dp0lib\explain-build-failure.ps1"
 if not "%VA_RC%"=="0" (
   echo.

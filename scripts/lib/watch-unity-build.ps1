@@ -1,25 +1,25 @@
 <#
 .SYNOPSIS
-  Unity batch-mode build'ini calistirir ve log dosyasini canli izleyerek konsola
-  ilerleme basar (asama, yuzde, hareketsizlik uyarisi).
+  Runs the Unity batch-mode build and prints live progress by tailing the log file
+  (phase, percentage, stall warning).
 
 .DESCRIPTION
-  Sorun: "Unity.exe -batchmode -logFile <dosya>" konsola HICBIR sey yazmaz. 20 dakika
-  bos ekrana bakilir, build takildi mi ilerliyor mu anlasilmaz. Bu betik Unity'yi
-  baslatir, log dosyasini paylasimli kipte (Unity yazarken) okur ve tek satirlik
-  canli bir durum satiri gosterir:
+  Problem: "Unity.exe -batchmode -logFile <file>" prints NOTHING to the console. You
+  stare at an empty screen for 20 minutes with no way to tell stalled from working.
+  This script starts Unity, reads the log in shared mode (while Unity writes it) and
+  shows a single live status line:
 
     [04:12 / ~12:30] Scriptler derleniyor | %53 (1450/2714) | Csc Meta.XR.Editor.dll | log 2.4 MB | cpu +9.8 sn -
 
-  Asama degisince satir sabitlenir (gecmis kalir) ve yenisi baslar. Log bir sure
-  buyumezse ve CPU da harcanmiyorsa "takildi mi" uyarisi basilir.
+  On a phase change the line is frozen (kept as history) and a new one starts. If the
+  log stops growing and no CPU is burned, a "stalled?" warning is printed.
 
-  ASCII-CI CIKTI: konsol kod sayfasi (cp857) Turkce karakterleri bozdugu icin
-  ciktida sapkasiz/noktasiz harf kullanilir. Yeni metin eklerken bu kurali koru.
+  ASCII-ONLY OUTPUT: the console code page (cp857) mangles Turkish characters, so
+  output text uses undotted/unaccented letters. Keep this rule for new text.
 
 .PARAMETER ReplayLog
-  Var olan bir log'u bastan sona ayni ayristiriciyla gecirir (Unity baslatmaz).
-  Post-mortem icin: "hangi asamada ne kadar satir harcandi, hata var miydi".
+  Re-runs an existing log through the same parser (does not start Unity).
+  For post-mortem: "which phase burned how many lines, were there errors".
 
 .EXAMPLE
   powershell -NoProfile -File watch-unity-build.ps1 -Unity "C:\...\Unity.exe" `
@@ -39,18 +39,20 @@ param(
   [string]$UnityBuildTarget,
   # Player build only; PlayerBuildTool refuses to build without it.
   [string]$BuildVersion,
+  # Optional venue name, forwarded as -tenant (empty = every tenant).
+  [string]$Tenant,
   [int]$HeartbeatSeconds = 15,
   [int]$StallSeconds = 180,
   [string]$ReplayLog
 )
 
 # ---------------------------------------------------------------------------
-# Asama kurallari. Rank = ilerleme sirasi, grup = geri donulebilirlik:
-#   grup 0 (rank 1-2) acilis - grup 1 (rank 3-5) hazirlik - grup 2 (rank 6+) build.
-# Hazirlik icinde asamalar serbestce gidip gelir (Unity gercekten de import <->
-# derleme <-> domain reload arasinda salinir), ama build grubuna gecildikten
-# sonra hazirliga DONULMEZ; yoksa gec gelen bir "[Licensing::]" satiri durumu
-# basa atar. "Bitiriyor" son duraktir.
+# Phase rules. Rank = progress order, group = how far back we may fall:
+#   group 0 (rank 1-2) startup - group 1 (rank 3-5) preparation - group 2 (rank 6+) build.
+# Inside preparation phases swing freely (Unity really does oscillate between
+# import <-> compile <-> domain reload), but once the build group is entered
+# there is NO way back to preparation; otherwise a late "[Licensing::]" line
+# would throw the status back to the start. "Bitiriyor" is the last stop.
 # ---------------------------------------------------------------------------
 $PhaseRules = @(
   @{ Rank = 1; Label = 'Lisans dogrulaniyor';                     Re = '^\[Licensing::' }
@@ -64,13 +66,13 @@ $PhaseRules = @(
   @{ Rank = 7; Label = 'Player build';             Gate = $true; Re = 'DisplayProgressbar: Build|PlayerBuildProgram|Building Player|Start building Player' }
   @{ Rank = 7; Label = 'Shader varyantlari derleniyor';           Re = 'Compiling shader |Compiled shader |shader variants' }
   @{ Rank = 8; Label = 'IL2CPP / native derleme';  Gate = $true; Re = 'il2cpp\.exe|IL2CPP Conversion|Building native binary|UnityLinker' }
-  # Android'e ozgu son asama: IL2CPP bittikten sonra Gradle APK'yi paketler.
-  # Desene CIPLAK "Gradle" KOYMA: Windows build'inin logunda da geciyor
-  # (perf-test paketinin metadata JSON'unda "AndroidBuildSystem":"Gradle",
-  # OVRGradleGeneration.cs stack-trace yollari) ve kural Gate'li + ayni gruptaki
-  # dusuk rank'e donus yasak oldugu icin tek yanlis eslesme etiketi build'in
-  # sonuna kadar "Gradle / APK" diye kilitler. Yalniz gercek Gradle CIKTISINDA
-  # gecen isaretler kullanilir.
+  # Android-only last phase: after IL2CPP, Gradle packages the APK.
+  # DO NOT put a BARE "Gradle" in the pattern: it also appears in the Windows
+  # build log (the perf-test package's metadata JSON has "AndroidBuildSystem":"Gradle",
+  # plus OVRGradleGeneration.cs stack-trace paths) and since the rule is Gated and
+  # falling back to a lower rank in the same group is forbidden, one false match
+  # locks the label to "Gradle / APK" until the end of the build. Only markers that
+  # appear in real Gradle OUTPUT are used.
   @{ Rank = 8; Label = 'Gradle / APK paketleniyor'; Gate = $true; Re = 'Building Gradle project|Gradle Daemon|> Task :|assembleRelease|assembleDebug|Packaging APK|aapt2|gradleOut' }
   @{ Rank = 9; Label = 'Bitiriyor (rapor + kapanis)'; Gate = $true; Re = '\[PlayerBuildTool\] Build |Total build time|Exiting batchmode' }
 )
@@ -81,7 +83,7 @@ function Get-PhaseGroup([int]$rank) {
   return 2
 }
 
-# Hemen ekrana basilacak satirlar.
+# Lines printed to the screen at once.
 $ErrorRules = @(
   'Multiple Unity instances cannot open the same project'
   'It looks like another Unity instance is running'
@@ -92,21 +94,21 @@ $ErrorRules = @(
 )
 $LockRule  = 'Multiple Unity instances|another Unity instance is running'
 $InfoRule  = '\[PlayerBuildTool\]'
-# Cok satirli bir Debug.Log mesajinin GOVDESI ilk satirda degil devaminda durur
-# (ornek: "diskte olmayan 1 sahne var" basligi bir satir, sahnenin YOLU digeri).
-# Devam satirlari da basilmazsa ekranda hatanin adi olur ama adresi olmaz.
-# $InfoFollowMax satir kadar izlenir; bos satir ya da yigin izi gelince kesilir.
+# The BODY of a multi-line Debug.Log message is not on the first line but on the
+# ones after it (e.g. the "1 scene missing from disk" heading is one line, the
+# scene PATH another). Without the follow-up lines the screen names the error but
+# not its address. Followed for $InfoFollowMax lines; cut on a blank line or a stack trace.
 $InfoFollowMax = 6
 $StackRule = '^(UnityEngine|UnityEditor|VortexArena|System|Mono|Microsoft)\.|^\(Filename:|^\s*at\s'
 $MaxErrors = 20
 
-# Aktiflik olcumu: baslattigimiz Unity sureci + build zincirinin cocuklari.
-# Genel "Unity" adi BILEREK yok - baska bir editor acikken onun CPU'su
-# takilmis bir build'i calisiyor gibi gosterirdi.
+# Activity measurement: the Unity process we started + the build chain's children.
+# The generic "Unity" name is DELIBERATELY absent - with another editor open its CPU
+# would make a stalled build look alive.
 $CpuNames = @('bee_backend', 'il2cpp', 'netcorerun', 'UnityShaderCompiler', 'cl', 'link', 'csc')
 
 # ---------------------------------------------------------------------------
-# Durum
+# State
 # ---------------------------------------------------------------------------
 $script:Phase        = 'Baslatiliyor'
 $script:PhaseRank    = 0
@@ -136,7 +138,7 @@ $script:Width        = 100
 $script:Sw           = $null
 
 # ---------------------------------------------------------------------------
-# Yardimcilar
+# Helpers
 # ---------------------------------------------------------------------------
 function Get-ElapsedSeconds {
   if ($script:Sw) { return $script:Sw.Elapsed.TotalSeconds }
@@ -205,22 +207,22 @@ function Write-Live([string]$text) {
 }
 
 # ---------------------------------------------------------------------------
-# Log ayristirma
+# Log parsing
 # ---------------------------------------------------------------------------
 function Update-State([string]$line) {
   $script:LineNo++
   if ([string]::IsNullOrWhiteSpace($line)) { return }
   if ($line.Length -lt 400) { $script:LastLine = $line }
 
-  # Asama: satirdaki EN YUKSEK rank'li eslesme kazanir; grup kurali geri
-  # donusleri sinirlar (bkz. $PhaseRules basligi).
+  # Phase: the HIGHEST ranked match on the line wins; the group rule limits
+  # falling back (see the $PhaseRules header).
   $bestRank = -1
   $bestLabel = $null
   $curGroupNow = Get-PhaseGroup $script:PhaseRank
   foreach ($rule in $PhaseRules) {
-    # Build grubuna GECIS yalniz "Gate" kurallariyla olur. Shader derlemesi
-    # editor tarafinda da olur; kapisiz birakilirsa hazirlik daha bitmeden
-    # build grubuna atlar ve import asamasi bir daha gorunmez.
+    # ENTERING the build group happens only through "Gate" rules. Shader compilation
+    # also happens editor-side; left ungated it would jump into the build group before
+    # preparation is over and the import phase would never show again.
     if ((Get-PhaseGroup $rule.Rank) -eq 2 -and $curGroupNow -lt 2 -and -not $rule.Gate) { continue }
     if ($line -match $rule.Re) {
       if ($rule.Rank -gt $bestRank) { $bestRank = $rule.Rank; $bestLabel = $rule.Label }
@@ -233,9 +235,9 @@ function Update-State([string]$line) {
     if ($newGroup -gt $curGroup) {
       $allow = $true
     } elseif ($newGroup -eq $curGroup) {
-      # Hazirlik grubu serbest salinir; build grubunda geri donus YOK. Sebep:
-      # IL2CPP'nin Cpp satirlari "WinPlayerBuildProgram" yolunu tasiyor, serbest
-      # birakilirsa asama IL2CPP <-> Player build arasinda titriyor.
+      # The preparation group swings freely; in the build group there is NO way back.
+      # Reason: IL2CPP's Cpp lines carry the "WinPlayerBuildProgram" path, so left free
+      # the phase flickers between IL2CPP <-> Player build.
       if ($newGroup -eq 2) { $allow = ($bestRank -ge $script:PhaseRank) } else { $allow = $true }
     }
     if ($allow) {
@@ -245,7 +247,7 @@ function Update-State([string]$line) {
     }
   }
 
-  # Bee/Tundra ilerleme satiri: "[ 152/2714  0s] Csc Library/.../Foo.dll"
+  # Bee/Tundra progress line: "[ 152/2714  0s] Csc Library/.../Foo.dll"
   if ($line -match '^\[\s*(\d+)/(\d+)\s') {
     $script:BeeDone = [int]$Matches[1]
     $script:BeeTotal = [int]$Matches[2]
@@ -256,13 +258,13 @@ function Update-State([string]$line) {
     return
   }
 
-  # Calisan alt arac: "Starting: C:\...\bee_backend.exe --ipc ..."
+  # Running sub-tool: "Starting: C:\...\bee_backend.exe --ipc ..."
   if ($line -match '^Starting:\s+(.*?\.exe)') {
     $script:Detail = Get-Leaf $Matches[1]
     return
   }
 
-  # Import satirlari worker on ekli de gelebilir: "[Worker3] Start importing ..."
+  # Import lines may carry a worker prefix: "[Worker3] Start importing ..."
   if ($line -match 'Start importing ')  { $script:Imports++ }
   if ($line -match 'Compiling shader ') { $script:Shaders++ }
 
@@ -272,7 +274,7 @@ function Update-State([string]$line) {
     return
   }
 
-  # Unity'nin kendi ilerleme cubugu basligi en iyi kaba isarettir.
+  # Unity's own progress bar title is the best coarse hint.
   if ($line -match '^DisplayProgressbar:\s*(.+)$') { $script:Detail = $Matches[1].Trim() }
 
   if ($line -match $LockRule) { $script:LockSeen = $true }
@@ -297,7 +299,7 @@ function Update-State([string]$line) {
     return
   }
 
-  # Onceki [PlayerBuildTool] satirinin devami mi? (yukaridaki $InfoFollowMax notu)
+  # Continuation of the previous [PlayerBuildTool] line? (see the $InfoFollowMax note above)
   if (-not $script:Replay -and $script:InfoFollow -gt 0) {
     if ($line.Trim() -eq '' -or $line -match $StackRule) {
       $script:InfoFollow = 0
@@ -310,8 +312,8 @@ function Update-State([string]$line) {
   }
 }
 
-# Log'u paylasimli kipte okur (Unity dosyayi acik tutuyor); yalniz TAM satirlari
-# dondurur, yarim kalan son parca tamponda bekler.
+# Reads the log in shared mode (Unity keeps the file open); returns only COMPLETE
+# lines, the trailing half line waits in the buffer.
 function Read-NewLines {
   if ($null -eq $script:Reader) {
     if (-not (Test-Path -LiteralPath $Log)) { return @() }
@@ -325,9 +327,9 @@ function Read-NewLines {
     }
   }
 
-  # Unity log'u yeniden yaratirsa (FileMode.Create) dosya kisalir; imlecimiz
-  # EOF'un otesinde kalir ve bir daha hicbir sey okuyamayiz. Kisalmayi gorunce
-  # basa saralim - yoksa "hicbir sey ilerlemiyor" gibi gorunur.
+  # If Unity recreates the log (FileMode.Create) the file shrinks; our cursor stays
+  # past EOF and we would never read anything again. On a shrink, rewind to the start -
+  # otherwise it looks like "nothing is progressing".
   try {
     if ($script:Stream.Length -lt $script:Stream.Position) {
       [void]$script:Stream.Seek(0, [System.IO.SeekOrigin]::Begin)
@@ -348,7 +350,7 @@ function Read-NewLines {
 }
 
 # ---------------------------------------------------------------------------
-# Replay kipi: var olan log'u ayni ayristiriciyla gecir, asama haritasi bas.
+# Replay mode: run an existing log through the same parser, print a phase map.
 # ---------------------------------------------------------------------------
 if ($ReplayLog) {
   if (-not (Test-Path -LiteralPath $ReplayLog)) {
@@ -357,8 +359,8 @@ if ($ReplayLog) {
   }
   $script:Replay = $true
   Write-Host ('=== Log analizi: ' + $ReplayLog + ' ===')
-  # Salinimlari (import <-> derleme) bastirmak icin: ayni etiketi tekrar yazma
-  # ve iki kayit arasinda en az 50 satir olsun.
+  # To suppress oscillation (import <-> compile): never repeat the same label and
+  # keep at least 50 lines between two entries.
   $prevPhase = ''
   $prevAt = -999
   Get-Content -LiteralPath $ReplayLog | ForEach-Object {
@@ -386,7 +388,7 @@ if ($ReplayLog) {
 }
 
 # ---------------------------------------------------------------------------
-# Calistirma kipi
+# Run mode
 # ---------------------------------------------------------------------------
 foreach ($pair in @(@('Unity', $Unity), @('Project', $Project), @('OutDir', $OutDir), @('Log', $Log))) {
   if ([string]::IsNullOrWhiteSpace($pair[1])) {
@@ -402,9 +404,15 @@ if (-not (Test-Path -LiteralPath $Unity)) {
 try { $script:Interactive = -not [Console]::IsOutputRedirected } catch { $script:Interactive = $false }
 try { if ([Console]::WindowWidth -gt 40) { $script:Width = [Console]::WindowWidth - 1 } } catch { }
 
-# Onceki basarili build suresi = referans. Kullanici "ne kadar kaldi" diye
-# bakabilsin diye durum satirinda "/ ~mm:ss" olarak gosterilir.
-$refFile = [System.IO.Path]::ChangeExtension($Log, 'last')
+# Previous successful build duration = reference. Shown in the status line as
+# "/ ~mm:ss" so the user can tell "how much is left".
+# Per-tenant reference file: a single-venue build is much shorter than the full one,
+# a shared file would make the estimate lie in both directions.
+if ([string]::IsNullOrWhiteSpace($Tenant)) {
+  $refFile = [System.IO.Path]::ChangeExtension($Log, 'last')
+} else {
+  $refFile = [System.IO.Path]::ChangeExtension($Log, ($Tenant + '.last'))
+}
 $refSeconds = 0.0
 if (Test-Path -LiteralPath $refFile) {
   try {
@@ -419,8 +427,9 @@ $argList = @(
   '-quit'
   '-projectPath'; ('"{0}"' -f $Project)
 )
-# Platformu -executeMethod'un ICINDEN cevirmek olmuyor: SwitchActiveBuildTarget domain
-# reload tetikler ve calisan metot yarida kalir. Unity'yi dogru platformda BASLATIRIZ.
+# Switching platform from INSIDE -executeMethod does not work: SwitchActiveBuildTarget
+# triggers a domain reload and the running method is cut off. We START Unity on the
+# right platform instead.
 if (-not [string]::IsNullOrWhiteSpace($UnityBuildTarget)) {
   $argList += @('-buildTarget'; $UnityBuildTarget)
 }
@@ -431,18 +440,21 @@ $argList += @(
 if (-not [string]::IsNullOrWhiteSpace($BuildVersion)) {
   $argList += @('-buildVersion'; $BuildVersion)
 }
+if (-not [string]::IsNullOrWhiteSpace($Tenant)) {
+  $argList += @('-tenant'; $Tenant)
+}
 $argList += @(
   '-logFile'; ('"{0}"' -f $Log)
 )
 
-# Bayat log = yanlis teshis: eski dosya duruyorsa onu okuyup "bitti" saniriz.
-# .bat zaten siliyor, izleyici de kendi basina calistirilabildigi icin tekrarlar.
+# Stale log = wrong diagnosis: if the old file is still there we read it and think
+# "done". The .bat already deletes it; the watcher repeats it because it can be run alone.
 Remove-Item -LiteralPath $Log -Force -ErrorAction SilentlyContinue
 
 $script:Sw = [System.Diagnostics.Stopwatch]::StartNew()
 $proc = Start-Process -FilePath $Unity -ArgumentList $argList -PassThru -NoNewWindow
-# Handle'a bir kez dokunmak sart: yoksa PowerShell tutamaci birakiyor ve surec
-# bitince $proc.ExitCode bos ($null) donuyor -> her build "basarili" gorunur.
+# Touching Handle once is mandatory: otherwise PowerShell releases the handle and
+# $proc.ExitCode comes back empty ($null) after exit -> every build looks "successful".
 $null = $proc.Handle
 
 Write-Host ('  Unity PID : {0}' -f $proc.Id)
@@ -474,7 +486,7 @@ try {
 
     $now = Get-ElapsedSeconds
 
-    # CPU ornegi: log sessizken "calisiyor mu" sorusunun tek dogru cevabi.
+    # CPU sample: the only honest answer to "is it working" while the log is silent.
     if (($now - $cpuSampleAt) -ge 5.0) {
       $cpuNow = Get-CpuSeconds $proc
       $cpuDelta = $cpuNow - $cpuLast
@@ -485,7 +497,7 @@ try {
 
     $exited = $proc.HasExited
     if ($exited -and -not $drained) {
-      # Unity kapanirken son bloklari yazabiliyor: bir tur daha oku.
+      # Unity may still write its last blocks while shutting down: read one more round.
       Start-Sleep -Milliseconds 400
       $tail = @(Read-NewLines)
       foreach ($l in $tail) { Update-State $l }
@@ -495,9 +507,9 @@ try {
     $renderEvery = 1.0
     if (-not $script:Interactive) { $renderEvery = [double]$HeartbeatSeconds }
     if ($script:PhaseChanged -or ($now - $lastRenderAt) -ge $renderEvery -or $exited) {
-      # Asama degisiminde canli satiri sabitle (gecmiste kalsin). Import <->
-      # derleme arasi salinim dakikada onlarca satir uretebildigi icin en fazla
-      # 10 saniyede bir sabitleriz; canli satir yine de aninda guncellenir.
+      # On a phase change, freeze the live line (keep it as history). Since the
+      # import <-> compile oscillation can produce dozens of lines per minute we
+      # freeze at most once every 10 seconds; the live line still updates instantly.
       if ($script:PhaseChanged) {
         $script:PhaseChanged = $false
         if (($now - $lastHistoryAt) -ge 10.0) { Close-Live; $lastHistoryAt = $now }
@@ -511,8 +523,8 @@ try {
       $parts = New-Object System.Collections.Generic.List[string]
       $parts.Add($script:Phase)
 
-      # Yuzde yalniz TAZE bir Bee/Tundra sayacindan gelir; eski DAG'in
-      # "2714/2714"u sonraki asamada yalan olur, o yuzden 30 sn'de bayatlar.
+      # The percentage comes only from a FRESH Bee/Tundra counter; the old DAG's
+      # "2714/2714" lies in the next phase, so it goes stale after 30 s.
       if ($script:BeeTotal -gt 0 -and ($now - $script:BeeAt) -lt 30.0) {
         $pct = [int](100.0 * $script:BeeDone / $script:BeeTotal)
         $parts.Add(('%{0} ({1}/{2})' -f $pct, $script:BeeDone, $script:BeeTotal))
@@ -536,7 +548,7 @@ try {
       Write-Live ($head + ' ' + [string]::Join(' | ', $parts))
     }
 
-    # Takilma uyarisi: ne log buyudu ne CPU harcandi.
+    # Stall warning: neither the log grew nor CPU was burned.
     $idle = $now - $lastGrowthAt
     if ($idle -ge $StallSeconds -and ($now - $lastStallWarnAt) -ge $StallSeconds) {
       $lastStallWarnAt = $now
@@ -555,7 +567,7 @@ try {
   $exitCode = 1
   try { if ($null -ne $proc.ExitCode) { $exitCode = [int]$proc.ExitCode } } catch { }
 } finally {
-  # Ctrl+C: izleyici olurken Unity'yi arkada birakma (proje kilidi orada kalir).
+  # Ctrl+C: do not leave Unity behind when the watcher dies (the project lock stays with it).
   if ($proc -and -not $proc.HasExited) {
     Close-Live
     Write-Host '  Iptal edildi - Unity sureci kapatiliyor...'

@@ -823,6 +823,15 @@ Paket Unity'nin içe aktarma penceresinden alınır; arşivin kendisi projeye gi
 iki pack'i **aynı GUID'leri paylaştığı** için ikincisi birincinin klasörüne açılır — yani klasör
 adı artık içeriğini anlatmaz. Yeni bir pack aramadan önce **mevcut pack klasörüne bak**.
 
+### ⛔ Paket içe aktarırken `Assets/Settings/` ve `ProjectSettings/` satırlarını işaretli bırakma
+
+URP şablonundan üretilmiş projelerin `Mobile_RPAsset` / `PC_RPAsset` / global settings asset'leri
+**aynı GUID'leri taşır**; bu asset'leri içeren bir pack içe aktarılınca bizimkilerin **üzerine
+yazar** — hata da uyarı da çıkmaz. Sonuç sessizdir: Quest'te MSAA/HDR/gölge değişir, kapalı tutulan
+varyant çarpanları (Light Cookies, LOD Cross Fade) açılır ve build süresi katlanır. İçe aktarma
+penceresinde bu iki klasörün işareti kaldırılır; commit'ten önce `git status`'ta `Assets/Settings/`
+görünüyorsa geri alınır.
+
 ### ⛔ `Assets/ThirdPartyPackages/` altındaki klasörleri editör AÇIKKEN taşıma
 
 Windows dosya kilidi yüzünden taşıma yarıda kalır ve geride yetim `.meta`'larla yarım bir ağaç
@@ -894,9 +903,11 @@ soft shadow kalitesi, Android dışlanmış olsa bile Quest build'ine sızıp va
 kalite seviyesinin asset'ini "nasılsa o platforma girmiyor" diye zenginleştirme.
 `Shader Stripping > Fog Modes` = Custom, yalnız **Linear** işaretli: başka bir fog
 formülü seçen sahne **sisi sessizce kaybeder** (hata vermez) — gerçekten gerekiyorsa önce eleme
-ayarı açılır, bedeli varyant sayısının ~1,5 katına çıkmasıdır. Mobil asset'te **Light Cookies** ve
-**LOD Cross Fade** kapalıdır, her biri varyantı ikiye katlar: cookie'li ışık kullanılacaksa önce
-Light Cookies açılır (yoksa cookie sessizce çizilmez), kapalı cross-fade'de LOD geçişi yumuşamaz.
+ayarı açılır, bedeli varyant sayısının ~1,5 katına çıkmasıdır. **İki URP asset'inde de**
+(`Mobile_RPAsset` · `PC_RPAsset`) **Light Cookies** ve **LOD Cross Fade** kapalıdır, **Soft Shadow
+Quality** ikisinde aynıdır (Low): biri açılınca ya da kalite ayrışınca varyant her iki build'de de
+katlanır. Cookie'li ışık kullanılacaksa önce Light Cookies açılır (yoksa cookie sessizce çizilmez),
+kapalı cross-fade'de LOD geçişi yumuşamaz.
 ⚠️ Yavaş build'in teşhisi `deploy/player-build.log` içindeki `compiled <N> variants` satırları,
 hangi çarpanın açık kaldığı ise `Logs/shadercompiler-*.log`. Gerekçe: `Docs/Sistem-Ozeti.md`,
 "Tuzaklar".

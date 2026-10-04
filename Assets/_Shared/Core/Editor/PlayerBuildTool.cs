@@ -19,6 +19,9 @@ namespace VortexArena.Core.Editor
     /// Unity.exe -batchmode -quit -projectPath &lt;project&gt; -buildTarget Android \
     ///   -executeMethod VortexArena.Core.Editor.PlayerBuildTool.BuildQuestPlayer \
     ///   -buildOutput &lt;deploy\player&gt; -buildVersion 132
+    ///
+    ///   # only the shared scenes + one venue's scenes
+    ///   ... -buildOutput &lt;deploy\player&gt; -buildVersion 132 -tenant &lt;Venue&gt;
     /// </code>
     /// <para><b>The player build is versioned, the admin build is not:</b> <c>-buildVersion</c> is
     /// REQUIRED for <c>BuildQuestPlayer</c> and produces <c>game_v&lt;version&gt;.apk</c> with the
@@ -36,10 +39,13 @@ namespace VortexArena.Core.Editor
     /// platform from inside this method triggers a domain reload and aborts the running
     /// <c>-executeMethod</c>.</para>
     /// <para><b>Two roles, two platforms, ONE scene list:</b> the Windows build is admin, the
-    /// Android build is the Quest player; both use the enabled Build Settings scenes as-is (Boot
-    /// at index 0, arenas listed) because <c>start_match</c> looks the scene up in EVERY player's
-    /// <c>hello.scenes</c>. Splitting the list per platform would let admin know an arena the
-    /// players do not, and the match would be rejected silently.</para>
+    /// Android build is the Quest player; both start from the same enabled Build Settings scenes
+    /// (Boot at index 0, arenas listed) because <c>start_match</c> looks the scene up in EVERY
+    /// player's <c>hello.scenes</c>. Splitting the list per platform would let admin know an arena
+    /// the players do not, and the match would be rejected silently. <c>-tenant &lt;Venue&gt;</c>
+    /// filters that one list down to the shared scenes plus that venue's scenes — so the APK and
+    /// the admin build of one installation MUST be produced with the SAME tenant, otherwise the
+    /// same rejection happens.</para>
     /// <para><b>Role and address are not baked in:</b> the desktop build falls to the admin role at
     /// runtime and reads the server address from the launcher's <c>--server-ip</c> argument
     /// (<c>AppBoot</c>), so extra desktop roles need no extra build.</para>
@@ -50,6 +56,7 @@ namespace VortexArena.Core.Editor
     {
         private const string ArgBuildOutput = "-buildOutput";
         private const string ArgBuildVersion = "-buildVersion";
+        private const string ArgTenant = "-tenant";
         private const string ExeName = "VortexArena.exe";
 
         /// <summary>Base application id; the versioned build appends <c>v&lt;version&gt;</c>.</summary>
@@ -234,7 +241,8 @@ namespace VortexArena.Core.Editor
             return value.Substring(0, i - 1);
         }
 
-        /// <summary>Enabled Build Settings scenes, order preserved (index 0 = Boot).</summary>
+        /// <summary>Enabled Build Settings scenes, order preserved (index 0 = Boot), optionally
+        /// filtered by <c>-tenant</c>.</summary>
         /// <remarks>⚠️ Catches scenes missing from disk: Unity keeps the row when a deleted arena's
         /// folder disappears from the file system, and <c>BuildPipeline</c> would then fail with a
         /// stack trace that hides the cause. Failing early and by name saves a 20 minute build.
@@ -261,7 +269,85 @@ namespace VortexArena.Core.Editor
                 return false;
             }
 
+            return TryFilterByTenant(ref scenes);
+        }
+
+        /// <summary>Narrows <paramref name="scenes"/> to shared + one venue when
+        /// <c>-tenant</c> is given; Build Settings itself is never touched.</summary>
+        /// <remarks>Order is preserved, so Boot stays at index 0. Shared scenes (Boot, lobby,
+        /// survey…) live outside <c>Assets/Arenas/Venues/</c> and are always kept — dropping them
+        /// would leave the build without an entry scene.</remarks>
+        private static bool TryFilterByTenant(ref string[] scenes)
+        {
+            string requested = GetArgValue(ArgTenant);
+            if (string.IsNullOrWhiteSpace(requested))
+            {
+                Debug.Log("[PlayerBuildTool] Tenant: hepsi");
+                return true;
+            }
+
+            requested = requested.Trim();
+            if (!TryResolveVenueFolder(requested, out string tenant))
+            {
+                return false;
+            }
+
+            string prefix = ServerConfigExporter.VenuesRoot + tenant + "/";
+            int kept = 0;
+            scenes = scenes
+                .Where(p =>
+                {
+                    string norm = p.Replace('\\', '/');
+                    if (!norm.StartsWith(ServerConfigExporter.VenuesRoot, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return true;
+                    }
+
+                    bool mine = norm.StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
+                    if (mine)
+                    {
+                        kept++;
+                    }
+
+                    return mine;
+                })
+                .ToArray();
+
+            if (kept == 0)
+            {
+                Fail($"`{ArgTenant} {tenant}` için Build Settings'te etkin sahne yok — build iptal edildi. " +
+                     $"{ServerConfigExporter.VenuesRoot}{tenant}/ altındaki sahneleri " +
+                     "File > Build Profiles listesine ekleyip etkinleştirin.");
+                return false;
+            }
+
+            Debug.Log($"[PlayerBuildTool] Tenant: {tenant} ({kept} sahne)");
             return true;
+        }
+
+        /// <summary>Matches the requested tenant against the venue folder names on disk,
+        /// case-insensitively; the on-disk casing wins (asset paths are case sensitive).</summary>
+        private static bool TryResolveVenueFolder(string requested, out string tenant)
+        {
+            tenant = null;
+
+            string projectRoot = Path.GetDirectoryName(Application.dataPath) ?? ".";
+            string venuesDir = Path.Combine(projectRoot, ServerConfigExporter.VenuesRoot.Replace('/', Path.DirectorySeparatorChar));
+
+            string[] available = Directory.Exists(venuesDir)
+                ? Directory.GetDirectories(venuesDir).Select(Path.GetFileName).OrderBy(n => n).ToArray()
+                : Array.Empty<string>();
+
+            tenant = available.FirstOrDefault(n => string.Equals(n, requested, StringComparison.OrdinalIgnoreCase));
+            if (!string.IsNullOrEmpty(tenant))
+            {
+                return true;
+            }
+
+            Fail($"`{ArgTenant} {requested}` bulunamadı — {ServerConfigExporter.VenuesRoot} altında böyle bir " +
+                 "klasör yok. Kullanılabilir işletmeler: " +
+                 (available.Length > 0 ? string.Join(", ", available) : "(hiç yok)"));
+            return false;
         }
 
         /// <summary><c>-buildOutput &lt;path&gt;</c>; defaults to

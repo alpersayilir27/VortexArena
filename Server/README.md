@@ -188,6 +188,10 @@ dahil) export'a hiç girmez.
 Soruyu atlamak için `venue` doldurulur ya da `--venue <ad>` argümanı verilir; konsol etkileşimli
 değilse (servis/betik) sunucu **bloklanmaz**, ilk mekanla açılır ve bunu loglar.
 
+⚠️ İstemciler **işletmeye özel build** ile alındıysa (`--tenant <İşletme>`, `../scripts/README.md`)
+bu alan o işletmeye **sabitlenmelidir**: sabitlenmemiş sunucu launcher altında ilk mekanı sessizce
+açar, o mekanın sahnesi ise istemcilerde yoktur ve `start_match` reddedilir.
+
 `lobbyScene` = lobi sahnesi (§10.7). **Boş bırakılırsa seçilen mekanın lobi haritası
 (`modes:["lobby"]`) otomatik bulunur** — normalde boş kalır. Maç koşmadığı sürece oyuncular ve
 admin lobide durur: birbirlerini görürler, kalibrasyonlarını orada yaparlar, silah alıp
