@@ -205,6 +205,10 @@ namespace VortexArena.App.Editor
             word.enableVertexGradient = true;
             word.colorGradient = new VertexGradient(Color.white, Color.white, Girdap.Good,
                 Girdap.Good);
+            // CSS `drop-shadow(0 0 44px rgba(tone, .55))`; the overlay recolours it per result.
+            Color wordGlow = Girdap.Good;
+            wordGlow.a = 0.55f;
+            TextGlow(word, wordGlow);
 
             // .rlow — winner line + score plate, centred in the lower half
             RectTransform low = Node(fill, "RLow");
@@ -644,6 +648,7 @@ namespace VortexArena.App.Editor
                 TextMeshProUGUI value = ResultLabel(cell, "Value", samples[i], GirdapFont.ChakraBold,
                     50f, Girdap.Text, TextAlignmentOptions.Center);
                 Place(value.rectTransform, 0f, 44f, cellW, 50f);
+                TextGlow(value, Girdap.Glow); // CSS `text-shadow: 0 0 26px var(--glow)`
                 values[i] = value;
             }
 

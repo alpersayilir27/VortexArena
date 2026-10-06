@@ -526,6 +526,12 @@ namespace VortexArena.App
                 resultTitleText.enableVertexGradient = true;
                 resultTitleText.colorGradient =
                     new VertexGradient(Color.white, Color.white, tone, tone);
+
+                // The halo (material Underlay) follows the tone too. Instance material: the shared
+                // preset keeps the builder's colour.
+                Color halo = tone;
+                halo.a = 0.55f;
+                resultTitleText.fontMaterial.SetColor(ShaderUtilities.ID_UnderlayColor, halo);
             }
 
             if (resultSlabGlow != null)

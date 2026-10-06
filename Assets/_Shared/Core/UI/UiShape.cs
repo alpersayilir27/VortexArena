@@ -162,6 +162,15 @@ namespace VortexArena.Core.UI
             DrawFeather(vh);
         }
 
+        /// <summary>Outer glow ring count — one Gaussian sample per ring.</summary>
+        private const int GlowRings = 4;
+
+        /// <summary>
+        /// CSS <c>box-shadow</c>/<c>drop-shadow</c>: the shape's mask blurred by a Gaussian with
+        /// σ = blur/2. The profile is sampled outward from the edge, so a big plate gets half its
+        /// alpha at the edge and a 2 px rule glows faintly — a flat "0.6 at the edge" ramp read as a
+        /// translucent box with a dark rim.
+        /// </summary>
         private void DrawOuterGlow(VertexHelper vh)
         {
             if (glowWidth <= 0f || glowColor.a <= 0f)
@@ -169,10 +178,8 @@ namespace VortexArena.Core.UI
                 return;
             }
 
-            float a = glowColor.a;
-            Color near = glowColor;
-            Color mid = new Color(glowColor.r, glowColor.g, glowColor.b, a * 0.35f);
-            Color far = new Color(glowColor.r, glowColor.g, glowColor.b, 0f);
+            float sigma = Mathf.Max(glowWidth * 0.5f, 0.01f);
+            float thickness = Mathf.Max(Mathf.Min(box.width, box.height), 0f);
 
             // Base is the shape edge, optionally shifted to read as a drop shadow.
             scratch.Clear();
@@ -181,14 +188,43 @@ namespace VortexArena.Core.UI
                 scratch.Add(outer[i] + glowOffset);
             }
 
-            Offset(scratch, -glowWidth / 3f, glowA);
-            Offset(scratch, -glowWidth, glowB);
+            List<Vector2> innerRing = scratch;
+            Color32 innerColor = Tint(GlowShade(0f, thickness, sigma));
+            for (int k = 1; k <= GlowRings; k++)
+            {
+                List<Vector2> outerRing = (k & 1) == 1 ? glowA : glowB;
+                float dist = glowWidth * k / GlowRings;
+                Offset(scratch, -dist, outerRing);
+                Color32 outerColor = k == GlowRings
+                    ? Tint(new Color(glowColor.r, glowColor.g, glowColor.b, 0f))
+                    : Tint(GlowShade(dist, thickness, sigma));
+                Ring(vh, outerRing, innerRing, _ => outerColor, _ => innerColor);
+                innerRing = outerRing;
+                innerColor = outerColor;
+            }
+        }
 
-            Color32 cNear = Tint(near);
-            Color32 cMid = Tint(mid);
-            Color32 cFar = Tint(far);
-            Ring(vh, glowA, scratch, _ => cMid, _ => cNear);
-            Ring(vh, glowB, glowA, _ => cFar, _ => cMid);
+        // Blurred-mask alpha `dist` px outside the edge of a `thickness` px wide shape.
+        private Color GlowShade(float dist, float thickness, float sigma)
+        {
+            float coverage = Phi((dist + thickness) / sigma) - Phi(dist / sigma);
+            return new Color(glowColor.r, glowColor.g, glowColor.b, glowColor.a * coverage);
+        }
+
+        private static float Phi(float z)
+        {
+            return 0.5f * (1f + Erf(z * 0.70710678f));
+        }
+
+        // Abramowitz–Stegun 7.1.26, |error| < 1.5e-7.
+        private static float Erf(float x)
+        {
+            float sign = x < 0f ? -1f : 1f;
+            x = Mathf.Abs(x);
+            float t = 1f / (1f + 0.3275911f * x);
+            float y = 1f - (((((1.061405429f * t - 1.453152027f) * t) + 1.421413741f) * t
+                             - 0.284496736f) * t + 0.254829592f) * t * Mathf.Exp(-x * x);
+            return sign * y;
         }
 
         private void DrawBorder(VertexHelper vh)

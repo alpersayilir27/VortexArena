@@ -296,6 +296,7 @@ namespace VortexArena.App.Editor
             TextMeshProUGUI text = Text(cell.transform, "Value", "", GirdapFont.ChakraBold, 48f,
                 Girdap.AccHi, TextAlignmentOptions.Center, 0.04f);
             Stretch(text.rectTransform);
+            TextGlow(text, Girdap.Glow); // CSS `text-shadow: 0 0 24px var(--glow)`
             HudSet(hud, "clockText", text);
         }
 

@@ -698,7 +698,7 @@ tabanda **değildir** (aşağıdaki nota bak).
 
 | Tip | Üye | Açıklama |
 |---|---|---|
-| `UiShape` | ✅ `Chamfer(c)` / `Chamfer(tl,tr,br,bl)` · `Slant(l,r)` · `Fill(c)` / `Fill(a,b,UiGradientMode,end)` · `Outline(w,a,b)` · `Glow(w,c,offset)` · `InnerGlow(w,c)` · `Antialias(bool)` | Akıcı API, hepsi `UiShape` döner. `OutlineWidth` okunur |
+| `UiShape` | ✅ `Chamfer(c)` / `Chamfer(tl,tr,br,bl)` · `Slant(l,r)` · `Fill(c)` / `Fill(a,b,UiGradientMode,end)` · `Outline(w,a,b)` · `Glow(w,c,offset)` · `InnerGlow(w,c)` · `Antialias(bool)` | Akıcı API, hepsi `UiShape` döner. `OutlineWidth` okunur. `Glow`'un `w`'si CSS blur yarıçapıdır (σ = w/2) ve profil Gauss'tur: kalın şekil kenarında alfanın yarısını alır, 2 px çizgi soluk parlar — CSS `box-shadow` ile aynı |
 | `UiPolygonGraphic` | ⚠️ `ChamferTopLeft`…`ChamferBottomLeft` · `SlantLeft`/`SlantRight` · statik `SignedArea` · `Offset` · `ClipHalfPlane` · `Fan` · `Ring` | Taban; statikler kendi poligon grafiğini yazanlar için. ⚠️ Türev kendi `[RequireComponent(typeof(CanvasRenderer))]`'ını taşır |
 | `UiStripes` | ✅ `Stripes(angle, width, period, color)` · `AngleDeg` · `StripeWidth` · `Period` · `StripeColor` | Poligona kırpılı çapraz şeritler |
 | `UiSegmentBar` | ✅ `SetFill(0..1)` · `SetFillColors(a,b)` · `SetTrack(c)` · `SetMetrics(segment, gap, skewDeg)` · `Fill` | Dilimli eğik çubuk (can, kumanda tiki) |

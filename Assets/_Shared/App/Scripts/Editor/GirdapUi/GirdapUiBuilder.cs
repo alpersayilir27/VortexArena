@@ -123,6 +123,19 @@ namespace VortexArena.App.Editor
             rt.sizeDelta = new Vector2(w, h);
         }
 
+        /// <summary>Centre-anchored box; <paramref name="dx"/>/<paramref name="dy"/> are CSS-style
+        /// offsets from the parent's centre (y down). ⚠️ Full-screen panel cards use this, not
+        /// <see cref="Place"/>: CanvasScaler Expand gives a non-16:9 window extra canvas width or
+        /// height, and a top-left-placed card drifts off centre.</summary>
+        public static void PlaceCenter(RectTransform rt, float dx, float dy, float w, float h)
+        {
+            rt.anchorMin = new Vector2(0.5f, 0.5f);
+            rt.anchorMax = new Vector2(0.5f, 0.5f);
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.anchoredPosition = new Vector2(dx, -dy);
+            rt.sizeDelta = new Vector2(w, h);
+        }
+
         /// <summary>Vertically centered, left-anchored box (inline row content).</summary>
         public static void PlaceMiddleLeft(RectTransform rt, float x, float w, float h)
         {
@@ -281,6 +294,43 @@ namespace VortexArena.App.Editor
             tmp.enableAutoSizing = false; // every size comes from the mockup; autosize would hide drift
             tmp.raycastTarget = false;
             return tmp;
+        }
+
+        /// <summary>
+        /// CSS <c>text-shadow: 0 0 Npx C</c> / <c>drop-shadow</c> on text: a TMP material preset
+        /// with Underlay on, one asset per font + colour. ⚠️ Must be an ASSET, not a runtime
+        /// keyword: <c>UNDERLAY_ON</c> is a shader_feature and the build strips the variant unless
+        /// a material in the build uses it. Blur is capped by the atlas padding, so a 48 px clock
+        /// gets a few px of halo where CSS gives 24.
+        /// </summary>
+        public static void TextGlow(TextMeshProUGUI tmp, Color color, float softness = 1f,
+            float dilate = 0.3f)
+        {
+            if (tmp == null || tmp.font == null || tmp.font.material == null)
+            {
+                return;
+            }
+
+            Material baseMaterial = tmp.font.material;
+            string path = FontAssetDir + tmp.font.name + " Glow " + ColorUtility.ToHtmlStringRGBA(color)
+                          + ".mat";
+            var mat = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (mat == null)
+            {
+                mat = new Material(baseMaterial);
+                AssetDatabase.CreateAsset(mat, path);
+            }
+
+            mat.shader = baseMaterial.shader;
+            mat.SetTexture(ShaderUtilities.ID_MainTex, baseMaterial.GetTexture(ShaderUtilities.ID_MainTex));
+            mat.EnableKeyword(ShaderUtilities.Keyword_Underlay);
+            mat.SetColor(ShaderUtilities.ID_UnderlayColor, color);
+            mat.SetFloat(ShaderUtilities.ID_UnderlayOffsetX, 0f);
+            mat.SetFloat(ShaderUtilities.ID_UnderlayOffsetY, 0f);
+            mat.SetFloat(ShaderUtilities.ID_UnderlayDilate, dilate);
+            mat.SetFloat(ShaderUtilities.ID_UnderlaySoftness, softness);
+            EditorUtility.SetDirty(mat);
+            tmp.fontSharedMaterial = mat;
         }
 
         public static TMP_FontAsset LoadFontAsset(GirdapFont font)

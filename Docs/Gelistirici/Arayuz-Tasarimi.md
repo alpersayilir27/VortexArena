@@ -49,8 +49,14 @@ fontsuz/ikonsuz çizilir ve konsola tek seferlik hata düşer.
 
 **Fontlar** — kaynak TTF'ler `Assets/_Shared/App/UI/Fonts/`, menünün ürettiği TMP SDF asset'leri
 `Assets/_Shared/App/Resources/UI/Fonts/` (dinamik atlas; Türkçe glifler ve ayraçlar öne pişirilir).
+Aynı klasördeki `<Font> SDF Glow <renk>.mat` dosyaları metin parıltısı (CSS `text-shadow`)
+preset'leridir: builder `TextGlow(...)` ile üretir, elle düzenlenmez; silinirse bir sonraki
+üretimde geri gelir.
 **İkonlar** — `Assets/_Shared/App/UI/Sprites/Ic_<Ad>.png`; kodda **çıplak adla** istenir
-(`Girdap.Icon("Skull")`).
+(`Girdap.Icon("Skull")`). Kaynak çizim mockup'ın `tema.js` dosyasındaki 24×24 çizgi ikon
+haritasıdır (`P`, 2 px kalın, yuvarlak uçlu); Unity kopyası 64×64, beyaz + alfa PNG'dir ve import
+ayarları mevcut ikonlarla aynıdır (Sprite · Single · 100 ppu · sıkıştırmasız). Yeni ikon önce
+`tema.js`'e, sonra aynı geometriyle PNG'ye yazılır; kaba `Fontları ve asset kabını üret` toplar.
 
 **Mockup'lar** — `plan/arayuz-yenileme/` (ortak stil `tema.css`, parça kiti `kit.html`, ekran
 başına bir HTML). Her ölçünün kaynağı orasıdır; plan maddesi açık olduğu sürece orada durur.
@@ -86,7 +92,8 @@ kabı değiştiyse önce *Fontları ve asset kabını üret*).
 - **Yeni parça eklerken hangi yardımcı:** kutu → `Shape`/`ShapeBox`, düğme → `Button(...)`
   (`UiButtonKind` + isteğe bağlı ikon/keycap/hold), rozet → `Chip(...)`, yazı → `Text(...)`
   (`GirdapFont` + punto + `TextAlignmentOptions`), ikon → `Icon(...)`, klavye ipucu → `Kbd(...)`,
-  şerit → `Stripes(...)`, can çubuğu → `SegmentBar(...)`.
+  şerit → `Stripes(...)`, can çubuğu → `SegmentBar(...)`, metin parıltısı (CSS `text-shadow`) →
+  `TextGlow(...)`, tam ekran kart → `PlaceCenter(...)`.
 - **Yeni bir alan bağlanacaksa** bileşene `[SerializeField]` eklenir ve builder onu
   `SerializedObject` üstünden yazar — elle sürüklenen bağ ilk üretimde silinir.
 - **Satır yüksekliği koddan okunur:** `AdminPlayerRow.Height` · `AdminStatsRow.Height` ·
@@ -121,6 +128,21 @@ kabı değiştiyse önce *Fontları ve asset kabını üret*).
 - ⚠️ **Var olan TMP font asset'i yeniden üretilmez.** Taze atlas, kayıtlı prefablardaki glif
   indekslerini geçersiz kılar ve yazılar yeniden import edilene kadar boş çizilir; menü bu yüzden
   mevcut asset'e dokunmaz.
+- ⚠️ **Tam ekran panel kartı merkeze ankrajlanır** (`PlaceCenter`), sol-üstten `Place` ile değil:
+  CanvasScaler `Expand` 16:9 dışı pencerede tuvale fazladan alan verir ve sol-üstten konan kart
+  merkezden kayar. Kenara yapışan HUD parçaları (kolonlar, akışlar, çubuklar) kendi kenarına
+  ankrajlıdır, onlar etkilenmez.
+- ⚠️ **Gölge/parıltı CSS gibi Gauss'tur** (`UiShape.Glow`): `w` blur yarıçapı, σ = w/2. Kalın bir
+  plaka kenarında alfanın yarısını, 2 px bir çizgi onda birinden azını alır — bölüm başlığı
+  çizgisinin "parlaması" istenmiyorsa alfayı değil kalınlığı düşün; CSS de aynı sonucu verir.
+- ⚠️ **Metin parıltısı (TMP Underlay) çalışma anında keyword açarak yapılmaz.** `UNDERLAY_ON`
+  bir `shader_feature`'dır: build'de o varyantı yalnız bir **material asset** kullanıyorsa kalır,
+  yoksa atılır ve editörde görünen parıltı gözlükte/admin build'inde sessizce kaybolur. Kapı
+  builder'ın `TextGlow(...)` preset'idir; çalışma anında yalnız `fontMaterial` örneğinin
+  `_UnderlayColor`'u değişir (maç sonu kelimesinin tonu).
+- ⚠️ **Parıltı yarıçapı atlas dolgusuyla sınırlıdır.** Underlay'in yumuşaklığı SDF yayılımını
+  aşamaz: 286 px kelimede ~30 px halo çıkar, 48 px saatte birkaç px — CSS'in 24 px'i birebir
+  gelmez, fontu yeniden üretmeden büyütülemez (bkz. "Var olan TMP font asset'i yeniden üretilmez").
 
 ## Renk ve yazı
 

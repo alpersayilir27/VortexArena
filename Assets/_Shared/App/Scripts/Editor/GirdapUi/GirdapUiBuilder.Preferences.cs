@@ -26,8 +26,6 @@ namespace VortexArena.App.Editor
         private const string PrefsPrefab = "AdminPreferencesPanel";
 
         // .panel
-        private const float PrefsX = 240f;
-        private const float PrefsY = 135f;
         private const float PrefsW = 1440f;
         private const float PrefsH = 810f;
         private const float PrefsChamfer = 26f;
@@ -114,7 +112,8 @@ namespace VortexArena.App.Editor
             var so = new SerializedObject(panel);
 
             RectTransform card = Node(root.transform, "Card");
-            Place(card, PrefsX, PrefsY, PrefsW, PrefsH);
+            // CSS `left: 240px; top: 135px` in a 1920x1080 stage = dead centre.
+            PlaceCenter(card, 0f, 0f, PrefsW, PrefsH);
             PrefsBind(so, "_root", card.gameObject);
 
             PrefsCardBackground(card);
@@ -267,7 +266,8 @@ namespace VortexArena.App.Editor
             string[] calib = { "2 ÇAPA", "ESKİ KALİBRE", "ÇAPA BULUTU" };
             string[] calibFields =
                 { "_calibModeTwoButton", "_calibModeSavedButton", "_calibModeCloudButton" };
-            UiButtonStyle[] calibButtons = PrefsBigSeg(wide, ref y, calib, PrefsWideW, null);
+            UiButtonStyle[] calibButtons = PrefsBigSeg(wide, ref y, calib, PrefsWideW,
+                new[] { "Anchor", "History", "Cloud" });
             for (int i = 0; i < calibButtons.Length; i++)
             {
                 PrefsBind(so, calibFields[i], calibButtons[i].TargetButton);

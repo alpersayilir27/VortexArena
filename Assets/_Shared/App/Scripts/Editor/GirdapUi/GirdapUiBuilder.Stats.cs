@@ -25,8 +25,6 @@ namespace VortexArena.App.Editor
     {
         // ---------------------------------------------------------------- metrics
 
-        private const float StatsPanelX = 240f;
-        private const float StatsPanelY = 135f;
         private const float StatsPanelW = 1440f;
         private const float StatsPanelH = 810f;
         private const float StatsPanelChamfer = 26f;
@@ -331,11 +329,12 @@ namespace VortexArena.App.Editor
             UiImage scrim = Image(shell, "Scrim", null, StatsScrim);
             Stretch(scrim.rectTransform);
             UiImage scrimCore = Image(shell, "ScrimCore", LoadSprite("Radial_256.png"), StatsScrimCore);
-            // Ellipse centre at CSS `50% 42%` of the screen.
-            Place(scrimCore.rectTransform, -240f, -221f, 2400f, 1350f);
+            // Ellipse centre at CSS `50% 42%` of the screen: 86 px above the middle at 1080.
+            PlaceCenter(scrimCore.rectTransform, 0f, -86f, 2400f, 1350f);
 
             UiShape card = Shape(shell, "Card");
-            Place(card.rectTransform, StatsPanelX, StatsPanelY, StatsPanelW, StatsPanelH);
+            // CSS `left: 240px; top: 135px` in a 1920x1080 stage = dead centre.
+            PlaceCenter(card.rectTransform, 0f, 0f, StatsPanelW, StatsPanelH);
             // ⚠️ The card itself blocks clicks: without it a press on an empty part of the panel
             // would reach the HUD button sitting underneath.
             card.raycastTarget = true;

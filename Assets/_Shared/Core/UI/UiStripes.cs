@@ -80,6 +80,9 @@ namespace VortexArena.Core.UI
             float rad = angleDeg * Mathf.Deg2Rad;
             var d = new Vector2(Mathf.Sin(rad), Mathf.Cos(rad));
             var origin = new Vector2(r.xMin, r.yMax); // CSS gradients start at the top-left
+            // ⚠️ Band distances are measured from `origin`, but the clip planes see local
+            // coordinates — without this term every band vanishes unless the pivot is top-left.
+            float originT = Vector2.Dot(origin, d);
 
             float min = float.MaxValue;
             float max = float.MinValue;
@@ -115,7 +118,7 @@ namespace VortexArena.Core.UI
                 band.Add(a + d * stripeWidth + side * span);
                 band.Add(a + side * span);
 
-                if (!Trim(band, d, hi) || !Trim(band, -d, -lo))
+                if (!Trim(band, d, hi + originT) || !Trim(band, -d, -(lo + originT)))
                 {
                     continue;
                 }

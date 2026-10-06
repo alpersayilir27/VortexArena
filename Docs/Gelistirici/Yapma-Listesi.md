@@ -303,6 +303,19 @@ Kitin yerleşimi sabit anchor'a ve kodda ölçülen genişliğe dayanır (`GetPr
 `anchoredPosition`); araya giren bir layout bileşeni mockup'tan gelen px ölçülerini yeniden akıtır
 ve ekran çözünürlükten çözünürlüğe sessizce kayar.
 
+### ⛔ Tam ekran panel kartını sol-üstten `Place` ile koyma
+
+İstatistik ve tercihler kartı `PlaceCenter` ile merkeze ankrajlanır. CanvasScaler `Expand` 16:9
+dışı bir pencerede tuvale fazladan genişlik ya da yükseklik verir; mockup'ın `left: 240px; top:
+135px` değerleriyle sol-üstten konan kart o pencerede merkezden kayar.
+
+### ⛔ TMP metin parıltısını çalışma anında keyword açarak verme
+
+`UNDERLAY_ON` bir `shader_feature`'dır; build'de varyant yalnız bir material asset onu kullanıyorsa
+kalır. Çalışma anında `EnableKeyword` ile açılan parıltı editörde görünür, build'de sessizce yok
+olur. Parıltı builder'ın `TextGlow(...)` preset'inden gelir (`Resources/UI/Fonts/<Font> SDF Glow
+<renk>.mat`); çalışma anında yalnız `fontMaterial` örneğinin rengi değiştirilir.
+
 ### ⛔ Admin arayüzünde ve maç sonu ekranında `UiKit` paletini kullanma
 
 O ekranların tek palet kaynağı `Girdap`'tır; ikinci bir palet aynı rolü iki tonda çizer ve oyuncu
