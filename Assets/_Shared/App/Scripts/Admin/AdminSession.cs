@@ -22,10 +22,10 @@ namespace VortexArena.App.Admin
     {
         Off = 0,
 
-        /// <summary>Top-down only (default).</summary>
+        /// <summary>Top-down only.</summary>
         TopDownOnly = 1,
 
-        /// <summary>In every mode except POV.</summary>
+        /// <summary>In every mode except POV (default).</summary>
         Always = 2
     }
 
@@ -64,7 +64,8 @@ namespace VortexArena.App.Admin
     public static class AdminSession
     {
         private const string Prefix = "VortexArena.Admin.";
-        private const string KeyMarkers = Prefix + "Markers";
+        // Not "Markers": that key holds the old TopDownOnly default on existing admin PCs.
+        private const string KeyMarkers = Prefix + "MarkerVisibility";
         private const string KeyNameplates = Prefix + "Nameplates";
         private const string KeyViolationSound = Prefix + "ViolationSound";
         private const string KeyFreeSpeed = Prefix + "FreeSpeed";
@@ -104,7 +105,7 @@ namespace VortexArena.App.Admin
         private static int _floor;
         private static AdminPanelKind _openPanel = AdminPanelKind.None;
 
-        private static AdminMarkerVisibility _markers = AdminMarkerVisibility.TopDownOnly;
+        private static AdminMarkerVisibility _markers = AdminMarkerVisibility.Always;
         private static bool _nameplates = true;
         private static bool _violationSound = true;
         private static float _freeSpeed = 4f;
@@ -643,7 +644,7 @@ namespace VortexArena.App.Admin
             }
 
             _loaded = true;
-            _markers = (AdminMarkerVisibility)PlayerPrefs.GetInt(KeyMarkers, (int)AdminMarkerVisibility.TopDownOnly);
+            _markers = (AdminMarkerVisibility)PlayerPrefs.GetInt(KeyMarkers, (int)AdminMarkerVisibility.Always);
             _nameplates = PlayerPrefs.GetInt(KeyNameplates, 1) != 0;
             _violationSound = PlayerPrefs.GetInt(KeyViolationSound, 1) != 0;
             _freeSpeed = Mathf.Clamp(PlayerPrefs.GetFloat(KeyFreeSpeed, 4f), FreeSpeedMin, FreeSpeedMax);

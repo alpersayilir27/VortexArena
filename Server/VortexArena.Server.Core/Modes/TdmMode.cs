@@ -15,7 +15,7 @@ public sealed class TdmMode : IGameMode
 
     public int DefaultRoundSeconds => 300;
 
-    public int DefaultScoreLimit => 30;
+    public int DefaultScoreLimit => 120;
 
     public void OnMatchStart(MatchDirector director) =>
         Console.WriteLine($"[tdm] maç başladı — {director.RoundSeconds} sn, skor limiti {director.ScoreLimit}.");

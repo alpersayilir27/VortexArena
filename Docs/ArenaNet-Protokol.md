@@ -1947,8 +1947,8 @@ olmalı, tanınmayan `modeId` reddedilir):
 
 | `modId` | Ad | `teamMode` | `allies` | `scoring` | `reviveAnchor` | `weaponSource` | `respawnDelay` | `fireWhilePaused` | Varsayılan süre / limit |
 |---|---|---|---|---|---|---|---|---|---|
-| `tdm` | Takım Ölüm Maçı | `two` | — | `team` | `base` | `weaponcanvas` | `5` | `false` | 300 sn / 30 |
-| `ffa` | Herkes Tek | `none` | `false` | `player` | `standstill` | `random` | `0` | `false` | 300 sn / 20 |
+| `tdm` | Takım Ölüm Maçı | `two` | — | `team` | `base` | `weaponcanvas` | `5` | `false` | 300 sn / 120 |
+| `ffa` | Herkes Tek | `none` | `false` | `player` | `standstill` | `random` | `0` | `false` | 300 sn / 120 |
 | `tournament` | Turnuva | `two` | — | `team` | **`none`** | `weaponcanvas` | `0` | `false` | 120 sn / 4 tur |
 | `burger` | Hamburgerci | `none` | **`true`** | `shared` | `none` | **`none`** | `0` | `false` | 600 sn / limitsiz |
 | `mole` | Köstebek Ezme | `two` | — | `team` | **`none`** | **`none`** | `0` | `false` | 300 sn / limitsiz |

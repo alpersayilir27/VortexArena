@@ -17,13 +17,14 @@ MonoBehaviour:
   gameType: 0
   lobbyProfile: 0
   roundSeconds: 300
-  scoreLimit: 20
+  scoreLimit: 120
   teamMode: 1
   scoring: 1
   friendlyFire: 0
   revive: 1
   weapons: 1
   respawnDelay: 0
+  allies: 0
   maps:
   - {fileID: 11400000, guid: bceb09007c055e248973177e91f29578, type: 2}
   - {fileID: 11400000, guid: 8d80aec57ee4c0f49b93d3a6d371eb55, type: 2}
@@ -50,3 +51,7 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 4cbbfae87263a724b9a07e1f59744962, type: 2}
   - {fileID: 11400000, guid: 5eca3b2d226a8e6429680e472ae49813, type: 2}
   hudPrefab: {fileID: 2488338122132002829, guid: b7c4e1a90f3d48e4ab25c6d7f81a3e52, type: 3}
+  resultScreenPrefab: {fileID: 0}
+  bodyPrefab: {fileID: 0}
+  redBodyPrefab: {fileID: 0}
+  altBodyPrefab: {fileID: 0}

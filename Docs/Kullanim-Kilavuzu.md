@@ -884,8 +884,9 @@ ve **arenanın dışı**. İkisini de sen görürsün, oyuncu da kendi ekranınd
 | Halkası normal renkte | Kural dışı bir durum yok | — |
 
 - **İkisi aynı anda olursa halka kırmızı kalır** — canı giden durum daha acildir.
-- **Halkalar yalnız kuş bakışında (`3`) çizilir.** POV veya serbest kipteyken oyuncu listesindeki
-  **satır kenarlığı** aynı şekilde yanıp söner, yani ihlali orada da görürsün.
+- **Halkalar POV'da çizilmez** (Tercihler → GÖRÜNÜM → **Halkalar** *kuş bakışı* seçiliyse serbest
+  kipte de çizilmez). O kiplerde oyuncu listesindeki **satır kenarlığı** aynı şekilde yanıp söner,
+  yani ihlali orada da görürsün.
 - Sağ alttaki **ihlal listesi** kim, ne zaman, ne kadar süre kural dışı kaldığını yazar
   (ölüm listesinden ayrıdır — o maçın hikâyesi, bu senin iş listen). **Yarım saniyeden kısa
   temaslar yazılmaz**: sınır çizgisinde gidip gelen bir oyuncu listeyi doldurup okunmaz hâle

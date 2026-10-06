@@ -35,7 +35,7 @@ namespace VortexArena.Core
         [SerializeField] private int roundSeconds = 300;
         [Tooltip("Varsayılan skor limiti; -1 = sınırsız. 0 = modun skor limiti YOK (sunucudaki mod " +
                  "limiti okumaz, yalnız süre biter) — admin'de satır kilitlenir, limit gönderilmez.")]
-        [SerializeField] private int scoreLimit = 30;
+        [SerializeField] private int scoreLimit = 120;
 
         [Header("Mod şekli — YALNIZ ÖNİZLEME (§10.5; otorite sunucudadır)")]
         [Tooltip("Takım kipi. Gerçek maçta load_match.rules.teamMode kazanır.")]

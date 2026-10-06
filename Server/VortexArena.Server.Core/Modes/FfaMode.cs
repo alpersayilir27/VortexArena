@@ -31,7 +31,7 @@ public sealed class FfaMode : IGameMode
 
     public int DefaultRoundSeconds => 300;
 
-    public int DefaultScoreLimit => 20;
+    public int DefaultScoreLimit => 120;
 
     public void OnMatchStart(MatchDirector director) =>
         Console.WriteLine($"[ffa] maç başladı — {director.RoundSeconds} sn, skor limiti {director.ScoreLimit}.");
