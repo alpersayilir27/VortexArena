@@ -70,6 +70,12 @@ namespace VortexArena.Net
         /// <summary>Message of the last connect error (cleared on connect); may be empty.</summary>
         public string LastError => _lastError;
 
+        /// <summary>Server's protocol version from the last <c>version_mismatch</c> (§1); 0 = none.
+        /// Cleared by the next welcome. Read by the connection screens.</summary>
+        public int RejectedServerVersion => Volatile.Read(ref _rejectedServerVersion);
+
+        private int _rejectedServerVersion;
+
         private readonly ConcurrentQueue<Action> _mainThreadActions = new ConcurrentQueue<Action>();
 
         /// <summary>One socket + its own send gate. ⚠️ Paired on purpose: a send stuck on a dead
@@ -234,6 +240,8 @@ namespace VortexArena.Net
             ServerPort = port;
             _role = string.IsNullOrWhiteSpace(role) ? "player" : role.Trim();
             _userDisconnect = false;
+            // A new target may be a different server; its version is unknown until it answers.
+            Volatile.Write(ref _rejectedServerVersion, 0);
 
             _cts = new CancellationTokenSource();
             CancellationToken token = _cts.Token;
@@ -810,6 +818,17 @@ namespace VortexArena.Net
                         HandleKicked(JsonUtility.FromJson<KickedMsg>(json));
                         break;
 
+                    case MessageTypes.VersionMismatch:
+                    {
+                        // NOT a kick (§1): no quit, the reconnect loop keeps retrying so an updated
+                        // server/APK pairs up by itself. Set before the close frame is read.
+                        VersionMismatchMsg msg = JsonUtility.FromJson<VersionMismatchMsg>(json);
+                        Volatile.Write(ref _rejectedServerVersion, Math.Max(1, msg.serverVersion));
+                        Debug.LogWarning($"[ArenaClient] Sunucu sürüm uyumsuzluğu nedeniyle reddetti " +
+                                         $"(sunucu v{msg.serverVersion}, bu cihaz v{ArenaProtocol.PROTOCOL_VERSION}).");
+                        break;
+                    }
+
                     default:
                         // Unknown type → log and ignore (forward version compatibility).
                         Debug.Log($"[ArenaClient] Bilinmeyen mesaj tipi '{envelope.type}' yok sayıldı.");
@@ -849,9 +868,11 @@ namespace VortexArena.Net
 
             if (msg.protocolVersion != ArenaProtocol.PROTOCOL_VERSION)
             {
-                // By protocol a mismatch does NOT drop the connection, it is only logged.
-                Debug.LogWarning($"[ArenaClient] Protokol sürümü uyuşmuyor (sunucu {msg.protocolVersion}, istemci {ArenaProtocol.PROTOCOL_VERSION}); bağlantı sürdürülüyor.");
+                // The server rejects a mismatch before welcome (§1); only an older, warn-only server lands here.
+                Debug.LogWarning($"[ArenaClient] Protokol sürümü uyuşmuyor (sunucu {msg.protocolVersion}, istemci {ArenaProtocol.PROTOCOL_VERSION}); eski sunucu reddetmedi, bağlantı sürdürülüyor.");
             }
+
+            Volatile.Write(ref _rejectedServerVersion, 0);
 
             // New session = new version axis. Reset ON THE NETWORK THREAD (not queued): the lobby_state
             // following this welcome is handled on the network thread too, and waiting for the queue

@@ -54,7 +54,7 @@ namespace VortexArena.Core.Arena
         /// reopens it (§10.6).</summary>
         public static bool ManualAllowed => !_hasEverConnected || !_serverCalibrated;
 
-        /// <summary>Last reported source ("manual" | "anchor" | "cloud" | "").</summary>
+        /// <summary>Last reported source ("manual" | "anchor" | "cloud" | editor-only "dev" | "").</summary>
         public static string Source => _source;
 
         /// <summary>The server's calibration mode (<c>ArenaProtocol.CALIB_MODE_*</c>, §10.6); empty =

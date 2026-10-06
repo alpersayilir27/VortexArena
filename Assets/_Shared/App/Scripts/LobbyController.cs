@@ -441,19 +441,29 @@ namespace VortexArena.App
                 ? ArenaClient.Instance.State
                 : ArenaConnectionState.Disconnected;
 
-            switch (state)
+            int rejectedVersion = ArenaClient.Instance != null ? ArenaClient.Instance.RejectedServerVersion : 0;
+            if (state != ArenaConnectionState.Connected && rejectedVersion > 0)
             {
-                case ArenaConnectionState.Connected:
-                    SetStatus($"Bağlı — oyuncu {ArenaClient.Instance.PlayerId} ({ArenaClient.Instance.ServerIp}:{ArenaClient.Instance.ServerPort})");
-                    break;
-                case ArenaConnectionState.Connecting:
-                    SetStatus($"Bağlanılıyor... ({_ipBuffer})");
-                    break;
-                default:
-                    SetStatus(string.IsNullOrEmpty(_ipBuffer)
-                        ? "Sunucu aranıyor..."
-                        : $"Bağlı değil ({_ipBuffer})");
-                    break;
+                // §1: rejected by version — stays here (no welcome, no routing) and keeps retrying.
+                SetStatus($"Sürüm uyumsuz — bu gözlük v{ArenaProtocol.PROTOCOL_VERSION}, sunucu v{rejectedVersion}. " +
+                          "Gözlüğe sunucuyla aynı sürümü kurun.");
+            }
+            else
+            {
+                switch (state)
+                {
+                    case ArenaConnectionState.Connected:
+                        SetStatus($"Bağlı — oyuncu {ArenaClient.Instance.PlayerId} ({ArenaClient.Instance.ServerIp}:{ArenaClient.Instance.ServerPort})");
+                        break;
+                    case ArenaConnectionState.Connecting:
+                        SetStatus($"Bağlanılıyor... ({_ipBuffer})");
+                        break;
+                    default:
+                        SetStatus(string.IsNullOrEmpty(_ipBuffer)
+                            ? "Sunucu aranıyor..."
+                            : $"Bağlı değil ({_ipBuffer})");
+                        break;
+                }
             }
 
             // `connectButton` is driven in `RefreshIpText`, NOT here (rationale there).

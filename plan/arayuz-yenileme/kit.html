@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tema kiti — VortexArena arayüz</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Chakra+Petch:wght@500;600;700&family=Saira+Condensed:wght@500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="tema.css">
+</head>
+<body>
+
+<p class="vcap"><b>Tema kiti</b> — renk, yazı, parçalar ve durumları. Diğer ekranların hepsi bu parçalardan kurulu.</p>
+<div class="frame"><div class="stage kit" data-h="1600">
+
+  <section>
+    <h3>RENK</h3>
+    <div class="sw" id="sw"></div>
+  </section>
+
+  <section class="type">
+    <h3>YAZI</h3>
+    <div id="type"></div>
+  </section>
+
+  <section>
+    <h3>DÜĞMELER</h3>
+    <div class="rowf"><em>Temel</em><button class="btn">NORMAL</button><button class="btn on">SEÇİLİ</button><button class="btn" disabled>PASİF</button></div>
+    <div class="rowf"><em>Anlam</em><button class="btn go"><i data-ic="play"></i>BAŞLAT</button><button class="btn danger">OYUNDAN ÇIK</button><button class="btn confirm">EMİN? ÇIK</button></div>
+    <div class="rowf"><em>Basılı tut</em><button class="btn sm t-bad">SIFIRLA</button><button class="btn sm hold" style="--p:.6">SİLİNİYOR</button><button class="btn sm t-good">SİLİNDİ</button></div>
+    <div class="rowf"><em>Satır içi</em><button class="btn sm">ÖLÇ</button><button class="btn sm t-good">×1.04</button><button class="btn sm t-bad">ÖLÇÜLEMEDİ</button><button class="btn sm confirm">EMİN?</button></div>
+    <div class="rowf"><em>Kalibre</em><button class="btn sm">KALİBRE</button><button class="btn sm on">YÜKLENİYOR</button><button class="btn sm t-good">TAMAM</button><button class="btn sm t-bad">HATA</button></div>
+    <div class="rowf"><em>Seçiciler</em><div class="seg in" style="width:200px"><button class="btn on">KAPALI</button><button class="btn">AÇIK</button></div><kbd>Esc</kbd></div>
+  </section>
+
+  <section class="span2">
+    <h3>MAÇ ŞERİDİ — FAZA GÖRE</h3>
+    <div class="rowf"><em>Lobi</em><div class="mbar static"><button class="btn go"><i data-ic="play"></i>BAŞLAT</button><button class="btn" disabled><i data-ic="pause"></i>DURAKLAT</button><button class="btn" disabled><i data-ic="stop"></i>BİTİR</button><span class="sep"></span><button class="btn" disabled><i data-ic="x"></i>İPTAL</button></div></div>
+    <div class="rowf"><em>Maç</em><div class="mbar static"><button class="btn" disabled><i data-ic="play"></i>BAŞLAT</button><button class="btn"><i data-ic="pause"></i>DURAKLAT</button><button class="btn"><i data-ic="stop"></i>BİTİR</button><span class="sep"></span><button class="btn danger"><i data-ic="x"></i>İPTAL</button></div></div>
+    <div class="rowf"><em>Duraklatıldı</em><div class="mbar static"><button class="btn" disabled><i data-ic="play"></i>BAŞLAT</button><button class="btn go"><i data-ic="play"></i>DEVAM</button><button class="btn"><i data-ic="stop"></i>BİTİR</button><span class="sep"></span><button class="btn danger"><i data-ic="x"></i>İPTAL</button></div></div>
+    <div class="rowf"><em>Bitir onayı</em><div class="mbar static"><button class="btn" disabled><i data-ic="play"></i>BAŞLAT</button><button class="btn"><i data-ic="pause"></i>DURAKLAT</button><button class="btn warnfill"><i data-ic="stop"></i>BİTİR?</button><span class="sep"></span><button class="btn danger"><i data-ic="x"></i>İPTAL</button></div><span class="mnote">BİTİR: onaylamak için tekrar bas.</span></div>
+  </section>
+
+  <section>
+    <h3>ROZET VE TELEMETRİ</h3>
+    <div class="rowf"><em>Durum</em><span class="chip good">HAZIR</span><span class="chip plain">BEKLİYOR</span><span class="chip dead"><i data-ic="skull"></i>ÖLÜ 4 sn</span><span class="chip dead">TABANDA BEKLENİYOR</span></div>
+    <div class="rowf"><em>İhlal</em><span class="chip bad"><i data-ic="warn"></i>DUVAR</span><span class="chip warn"><i data-ic="warn"></i>ALAN DIŞI</span><span class="chip warn"><i data-ic="warn"></i>1 KALİBRESİZ</span></div>
+    <div class="rowf" style="font:600 17px/1 var(--fd)"><em>Pil</em><span class="tele"><i data-ic="battery"></i>%78</span><span class="tele warn"><i data-ic="battery"></i>%42</span><span class="tele bad"><i data-ic="battery"></i>%18</span></div>
+    <div class="rowf" style="font:600 17px/1 var(--fd)"><em>Kumanda</em>
+      <span class="tele"><span class="ctrl"><i></i><i></i></span>izleniyor</span>
+      <span class="tele warn"><span class="ctrl"><i></i><i class="warn"></i></span>izlenmiyor</span>
+      <span class="tele bad"><span class="ctrl"><i class="bad"></i><i></i></span>kayıp</span>
+      <span class="tele"><span class="ctrl"><i class="unk"></i><i class="unk"></i></span>bilinmiyor</span></div>
+    <div class="rowf" style="font:600 17px/1 var(--fd)"><em>Gövde</em><span class="tele"><i data-ic="body"></i>izleniyor</span><span class="tele warn"><i data-ic="body"></i>yedek</span><span class="tele bad"><i data-ic="body"></i>izin yok</span></div>
+    <div class="rowf"><em>Can</em><div class="hp" style="max-width:120px"><i style="width:87%"></i></div><div class="hp warn" style="max-width:120px"><i style="width:34%"></i></div><div class="hp bad" style="max-width:120px"><i style="width:12%"></i></div></div>
+    <div class="rowf"><em>Uyarı</em><span class="toast"><i data-ic="warn"></i>Mehmet · başlıktan yanıt gelmedi</span></div>
+  </section>
+
+  <section class="span3" style="display:flex;gap:48px">
+    <div>
+      <h3>OYUNCU KARTI — DURUMLAR</h3>
+      <div class="cards" id="cards"></div>
+    </div>
+    <div style="flex:1">
+      <h3>ÖLDÜRME AKIŞI</h3>
+      <div class="stack" id="feed"></div>
+      <h3 style="margin-top:28px">İHLAL AKIŞI</h3>
+      <div class="stack">
+        <div class="vf live"><i data-ic="warn"></i><b>Mehmet</b> — DUVAR</div>
+        <div class="vf live oob"><i data-ic="warn"></i><b>Ece</b> — ALAN DIŞI</div>
+        <div class="vf"><b>Burak</b> — DUVAR bitti (1.2 sn)</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="span3">
+    <h3>MAÇ SONUCU</h3>
+    <div class="slabs">
+      <div class="slab"><b>KAZANDIN</b></div>
+      <div class="slab lose"><b>KAYBETTİN</b></div>
+      <div class="slab draw"><b>BERABERE</b></div>
+    </div>
+  </section>
+
+</div></div>
+
+<script src="tema.js"></script>
+<script>
+  // Swatch: [name, css background, label, dark text?]
+  const SW = [
+    ['Mürekkep', '#070B16'], ['Panel', '#0E1526'], ['Yükseltilmiş', '#151F36'], ['Kontrol', '#1B2845'],
+    ['Çizgi', '#2A3A5C'], ['Metin', '#EAF2FF', 0, 1], ['İkincil', '#A6B6D4', 0, 1], ['Soluk', '#7385AB', 0, 1],
+    ['Kırmızı takım', 'linear-gradient(180deg,#F4544B,#B32428)', '#F4544B → #B32428'], ['Kırmızı · ölen', '#55161D'],
+    ['Mavi takım', 'linear-gradient(180deg,#5C8CFF,#2147B4)', '#5C8CFF → #2147B4'], ['Mavi · ölen', '#162C66'],
+    ['Vurgu', 'linear-gradient(180deg,#C9F4FF,#6FD8F7)', '#7DE3FF', 1], ['İyi', '#3EE6A0', 0, 1], ['Uyarı', '#FFC53D', 0, 1], ['Tehlike', '#FF5747', 0, 1],
+  ];
+  // Specimen: [caption, inline style, sample]
+  const NUM = '14 — 11 · 04:37', NAMES = 'Çağrı Iğdır İstanbul Şükrü Gül Ömer', CAPS = 'KALİBRASYON VE BOY · OYUNCU · DURUM';
+  const TYPE = [
+    ['Chakra Petch 700 — skor, saat, sayı', 'font:700 66px/1 var(--fx);font-variant-numeric:tabular-nums', NUM],
+    ['Chakra Petch 700, aralıklı büyük harf — ekran, takım ve düğme başlığı', 'font:700 26px/1.2 var(--fx);letter-spacing:.14em', 'İSTATİSTİKLER · KIRMIZI · BAŞLAT'],
+    ['Saira Condensed 700 — ad, değer, satır içi düğme', 'font:700 34px/1.2 var(--fd)', NAMES],
+    ['Chakra Petch 600, geniş aralıklı — bölüm ve sütun başlığı', 'font:600 14px/1 var(--fx);letter-spacing:.22em;color:var(--acc)', CAPS],
+    ['Barlow 500 — açıklama cümlesi', 'font:500 17px/1.3 var(--fb);color:var(--muted)', 'tüm adminlerde ortak'],
+  ];
+  document.getElementById('sw').innerHTML = SW.map((s) =>
+    `<div${s[3] ? ' class="dk"' : ''} style="background:${s[1]}">${s[0]}<small>${s[2] || s[1]}</small></div>`).join('');
+  document.getElementById('type').innerHTML = TYPE.map((t) =>
+    `<p><small>${t[0]}</small><span style="${t[1]}">${t[2]}</span></p>`).join('');
+
+  const base = (o) => Object.assign({ no: 7, id: 12, name: 'Mehmet', hp: 87, k: 3, d: 1, bat: 78, state: 'HAZIR', st: 'good' }, o);
+  const CARDS = [
+    [base({}), 'red'],
+    [base({ name: 'Ayşe', sel: true }), 'red'],
+    [base({ hp: 34, state: 'DUVAR', st: 'bad', stIcon: 'warn', alert: true, ctrl: ['ok', 'warn'], body: 'warn' }), 'red'],
+    [base({ name: 'Deniz', hp: 0, state: 'ÖLÜ 4 sn', st: 'dead', stIcon: 'skull', dead: true }), 'blue'],
+    [base({ name: 'Elif', hp: 100, state: 'BEKLİYOR', st: '', uncal: true }), 'blue'],
+    [base({ name: 'Emre', hp: 12, bat: 18, state: 'HAZIR', btn: { olc: ['×1.04', 't-good'], at: ['EMİN?', 'confirm'] } }), 'blue'],
+  ];
+  document.getElementById('cards').innerHTML = CARDS.map((c) => VA.pcard(c[0], c[1])).join('');
+  // Each plate wrapped so the feed's age fade does not apply here; first one shown as "new".
+  document.getElementById('feed').innerHTML = VA.FEED.slice(0, 4).map((e, i) => '<div>' + VA.kf(e, i) + '</div>').join('');
+</script>
+</body>
+</html>

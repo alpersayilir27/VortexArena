@@ -565,6 +565,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 7250570036058384062, guid: 5644a348ed48e9244ac3c80f975a153a, type: 3}
       insertIndex: -1
       addedObject: {fileID: 89033891}
+    - targetCorrespondingSourceObject: {fileID: 7250570036058384062, guid: 5644a348ed48e9244ac3c80f975a153a, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 89033892}
   m_SourcePrefab: {fileID: -4161369568681901532, guid: 5644a348ed48e9244ac3c80f975a153a, type: 3}
 --- !u!1 &89033889 stripped
 GameObject:
@@ -597,6 +600,19 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 0.11126113, y: 2.3, z: 2.0866208}
   m_Center: {x: -0.8208717, y: -0.86099994, z: -0.06930232}
+--- !u!114 &89033892
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 89033889}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ba88a936d801353438a01c7aab47dc80, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Arena.ArenaRoof
+  roofRenderers: []
 --- !u!1001 &89246855
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -930,6 +946,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 5862337541936273673, guid: 40ce9a2715a916c428d18ea8d068dcb9, type: 3}
       insertIndex: -1
       addedObject: {fileID: 102747234}
+    - targetCorrespondingSourceObject: {fileID: 5862337541936273673, guid: 40ce9a2715a916c428d18ea8d068dcb9, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 102747235}
   m_SourcePrefab: {fileID: -4161369568681901532, guid: 40ce9a2715a916c428d18ea8d068dcb9, type: 3}
 --- !u!1 &102747229 stripped
 GameObject:
@@ -962,6 +981,19 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 0.7389486, y: 2.8750002, z: 3.4550238}
   m_Center: {x: 2.9501972, y: 1.76875, z: -0.6877676}
+--- !u!114 &102747235
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 102747229}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ba88a936d801353438a01c7aab47dc80, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Arena.ArenaRoof
+  roofRenderers: []
 --- !u!1001 &115638746
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -2540,6 +2572,10 @@ PrefabInstance:
       value: 2
       objectReference: {fileID: 0}
     - target: {fileID: -3558564593755920235, guid: fb1b970c4372f87429e6e2b087dda891, type: 3}
+      propertyPath: m_Layer
+      value: 8
+      objectReference: {fileID: 0}
+    - target: {fileID: -3558564593755920235, guid: fb1b970c4372f87429e6e2b087dda891, type: 3}
       propertyPath: m_StaticEditorFlags
       value: 2147483645
       objectReference: {fileID: 0}
@@ -2584,13 +2620,55 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: -8679921383154817045, guid: fb1b970c4372f87429e6e2b087dda891, type: 3}
       insertIndex: -1
       addedObject: {fileID: 1925019783}
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 7847162232691855171, guid: fb1b970c4372f87429e6e2b087dda891, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 331179049}
+    - targetCorrespondingSourceObject: {fileID: -3558564593755920235, guid: fb1b970c4372f87429e6e2b087dda891, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 331179048}
   m_SourcePrefab: {fileID: 100100000, guid: fb1b970c4372f87429e6e2b087dda891, type: 3}
 --- !u!4 &331179045 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: fb1b970c4372f87429e6e2b087dda891, type: 3}
   m_PrefabInstance: {fileID: 331179044}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &331179046 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: -3558564593755920235, guid: fb1b970c4372f87429e6e2b087dda891, type: 3}
+  m_PrefabInstance: {fileID: 331179044}
+  m_PrefabAsset: {fileID: 0}
+--- !u!1 &331179047 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 7847162232691855171, guid: fb1b970c4372f87429e6e2b087dda891, type: 3}
+  m_PrefabInstance: {fileID: 331179044}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &331179048
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 331179046}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ba88a936d801353438a01c7aab47dc80, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Arena.ArenaRoof
+  roofRenderers: []
+--- !u!114 &331179049
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 331179047}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ba88a936d801353438a01c7aab47dc80, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Arena.ArenaRoof
+  roofRenderers: []
 --- !u!1001 &336255013
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -4016,6 +4094,10 @@ PrefabInstance:
       value: 2147483645
       objectReference: {fileID: 0}
     - target: {fileID: -8840228459497894755, guid: 932e7d8ef90b50647b8d3576593f878f, type: 3}
+      propertyPath: m_Layer
+      value: 8
+      objectReference: {fileID: 0}
+    - target: {fileID: -8840228459497894755, guid: 932e7d8ef90b50647b8d3576593f878f, type: 3}
       propertyPath: m_StaticEditorFlags
       value: 2147483645
       objectReference: {fileID: 0}
@@ -4024,12 +4106,24 @@ PrefabInstance:
       value: young_priestess
       objectReference: {fileID: 0}
     - target: {fileID: -6689036041284674117, guid: 932e7d8ef90b50647b8d3576593f878f, type: 3}
+      propertyPath: m_Layer
+      value: 8
+      objectReference: {fileID: 0}
+    - target: {fileID: -6689036041284674117, guid: 932e7d8ef90b50647b8d3576593f878f, type: 3}
       propertyPath: m_StaticEditorFlags
       value: 2147483645
       objectReference: {fileID: 0}
     - target: {fileID: -6547043340669757614, guid: 932e7d8ef90b50647b8d3576593f878f, type: 3}
+      propertyPath: m_Layer
+      value: 8
+      objectReference: {fileID: 0}
+    - target: {fileID: -6547043340669757614, guid: 932e7d8ef90b50647b8d3576593f878f, type: 3}
       propertyPath: m_StaticEditorFlags
       value: 2147483645
+      objectReference: {fileID: 0}
+    - target: {fileID: -5919021929273600965, guid: 932e7d8ef90b50647b8d3576593f878f, type: 3}
+      propertyPath: m_Layer
+      value: 8
       objectReference: {fileID: 0}
     - target: {fileID: -5919021929273600965, guid: 932e7d8ef90b50647b8d3576593f878f, type: 3}
       propertyPath: m_StaticEditorFlags
@@ -4052,6 +4146,10 @@ PrefabInstance:
       value: 
       objectReference: {fileID: 2100000, guid: e0eb7ec0f94c4b744adc9c3943b69e44, type: 2}
     - target: {fileID: -4541154038914196621, guid: 932e7d8ef90b50647b8d3576593f878f, type: 3}
+      propertyPath: m_Layer
+      value: 8
+      objectReference: {fileID: 0}
+    - target: {fileID: -4541154038914196621, guid: 932e7d8ef90b50647b8d3576593f878f, type: 3}
       propertyPath: m_StaticEditorFlags
       value: 2147483645
       objectReference: {fileID: 0}
@@ -4067,6 +4165,10 @@ PrefabInstance:
       propertyPath: 'm_Materials.Array.data[0]'
       value: 
       objectReference: {fileID: 2100000, guid: ca92783295339ad4c9cf8e8979b85bf5, type: 2}
+    - target: {fileID: -2980078710221265167, guid: 932e7d8ef90b50647b8d3576593f878f, type: 3}
+      propertyPath: m_Layer
+      value: 8
+      objectReference: {fileID: 0}
     - target: {fileID: -2980078710221265167, guid: 932e7d8ef90b50647b8d3576593f878f, type: 3}
       propertyPath: m_StaticEditorFlags
       value: 2147483645
@@ -4092,12 +4194,20 @@ PrefabInstance:
       value: 2147483645
       objectReference: {fileID: 0}
     - target: {fileID: 1125155341754861375, guid: 932e7d8ef90b50647b8d3576593f878f, type: 3}
+      propertyPath: m_Layer
+      value: 8
+      objectReference: {fileID: 0}
+    - target: {fileID: 1125155341754861375, guid: 932e7d8ef90b50647b8d3576593f878f, type: 3}
       propertyPath: m_StaticEditorFlags
       value: 2147483645
       objectReference: {fileID: 0}
     - target: {fileID: 1461028526872275725, guid: 932e7d8ef90b50647b8d3576593f878f, type: 3}
       propertyPath: m_StaticEditorFlags
       value: 2147483645
+      objectReference: {fileID: 0}
+    - target: {fileID: 2026753325822093497, guid: 932e7d8ef90b50647b8d3576593f878f, type: 3}
+      propertyPath: m_Layer
+      value: 8
       objectReference: {fileID: 0}
     - target: {fileID: 2026753325822093497, guid: 932e7d8ef90b50647b8d3576593f878f, type: 3}
       propertyPath: m_StaticEditorFlags
@@ -4164,6 +4274,10 @@ PrefabInstance:
       value: 2147483645
       objectReference: {fileID: 0}
     - target: {fileID: 4130322567349778815, guid: 932e7d8ef90b50647b8d3576593f878f, type: 3}
+      propertyPath: m_Layer
+      value: 8
+      objectReference: {fileID: 0}
+    - target: {fileID: 4130322567349778815, guid: 932e7d8ef90b50647b8d3576593f878f, type: 3}
       propertyPath: m_StaticEditorFlags
       value: 2147483645
       objectReference: {fileID: 0}
@@ -4184,6 +4298,10 @@ PrefabInstance:
       value: 2147483645
       objectReference: {fileID: 0}
     - target: {fileID: 7510051531048585252, guid: 932e7d8ef90b50647b8d3576593f878f, type: 3}
+      propertyPath: m_Layer
+      value: 8
+      objectReference: {fileID: 0}
+    - target: {fileID: 7510051531048585252, guid: 932e7d8ef90b50647b8d3576593f878f, type: 3}
       propertyPath: m_StaticEditorFlags
       value: 2147483645
       objectReference: {fileID: 0}
@@ -4198,8 +4316,29 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: -6689036041284674117, guid: 932e7d8ef90b50647b8d3576593f878f, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 575701276}
   m_SourcePrefab: {fileID: -5645937942226959685, guid: 932e7d8ef90b50647b8d3576593f878f, type: 3}
+--- !u!1 &575701275 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: -6689036041284674117, guid: 932e7d8ef90b50647b8d3576593f878f, type: 3}
+  m_PrefabInstance: {fileID: 575701274}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &575701276
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 575701275}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ba88a936d801353438a01c7aab47dc80, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Arena.ArenaRoof
+  roofRenderers: []
 --- !u!1001 &581504626
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -6768,6 +6907,10 @@ PrefabInstance:
       value: 2147483645
       objectReference: {fileID: 0}
     - target: {fileID: -8840228459497894755, guid: 932e7d8ef90b50647b8d3576593f878f, type: 3}
+      propertyPath: m_Layer
+      value: 8
+      objectReference: {fileID: 0}
+    - target: {fileID: -8840228459497894755, guid: 932e7d8ef90b50647b8d3576593f878f, type: 3}
       propertyPath: m_StaticEditorFlags
       value: 2147483645
       objectReference: {fileID: 0}
@@ -6776,12 +6919,24 @@ PrefabInstance:
       value: young_priestess (1)
       objectReference: {fileID: 0}
     - target: {fileID: -6689036041284674117, guid: 932e7d8ef90b50647b8d3576593f878f, type: 3}
+      propertyPath: m_Layer
+      value: 8
+      objectReference: {fileID: 0}
+    - target: {fileID: -6689036041284674117, guid: 932e7d8ef90b50647b8d3576593f878f, type: 3}
       propertyPath: m_StaticEditorFlags
       value: 2147483645
       objectReference: {fileID: 0}
     - target: {fileID: -6547043340669757614, guid: 932e7d8ef90b50647b8d3576593f878f, type: 3}
+      propertyPath: m_Layer
+      value: 8
+      objectReference: {fileID: 0}
+    - target: {fileID: -6547043340669757614, guid: 932e7d8ef90b50647b8d3576593f878f, type: 3}
       propertyPath: m_StaticEditorFlags
       value: 2147483645
+      objectReference: {fileID: 0}
+    - target: {fileID: -5919021929273600965, guid: 932e7d8ef90b50647b8d3576593f878f, type: 3}
+      propertyPath: m_Layer
+      value: 8
       objectReference: {fileID: 0}
     - target: {fileID: -5919021929273600965, guid: 932e7d8ef90b50647b8d3576593f878f, type: 3}
       propertyPath: m_StaticEditorFlags
@@ -6804,6 +6959,10 @@ PrefabInstance:
       value: 
       objectReference: {fileID: 2100000, guid: e0eb7ec0f94c4b744adc9c3943b69e44, type: 2}
     - target: {fileID: -4541154038914196621, guid: 932e7d8ef90b50647b8d3576593f878f, type: 3}
+      propertyPath: m_Layer
+      value: 8
+      objectReference: {fileID: 0}
+    - target: {fileID: -4541154038914196621, guid: 932e7d8ef90b50647b8d3576593f878f, type: 3}
       propertyPath: m_StaticEditorFlags
       value: 2147483645
       objectReference: {fileID: 0}
@@ -6819,6 +6978,10 @@ PrefabInstance:
       propertyPath: 'm_Materials.Array.data[0]'
       value: 
       objectReference: {fileID: 2100000, guid: ca92783295339ad4c9cf8e8979b85bf5, type: 2}
+    - target: {fileID: -2980078710221265167, guid: 932e7d8ef90b50647b8d3576593f878f, type: 3}
+      propertyPath: m_Layer
+      value: 8
+      objectReference: {fileID: 0}
     - target: {fileID: -2980078710221265167, guid: 932e7d8ef90b50647b8d3576593f878f, type: 3}
       propertyPath: m_StaticEditorFlags
       value: 2147483645
@@ -6844,12 +7007,20 @@ PrefabInstance:
       value: 2147483645
       objectReference: {fileID: 0}
     - target: {fileID: 1125155341754861375, guid: 932e7d8ef90b50647b8d3576593f878f, type: 3}
+      propertyPath: m_Layer
+      value: 8
+      objectReference: {fileID: 0}
+    - target: {fileID: 1125155341754861375, guid: 932e7d8ef90b50647b8d3576593f878f, type: 3}
       propertyPath: m_StaticEditorFlags
       value: 2147483645
       objectReference: {fileID: 0}
     - target: {fileID: 1461028526872275725, guid: 932e7d8ef90b50647b8d3576593f878f, type: 3}
       propertyPath: m_StaticEditorFlags
       value: 2147483645
+      objectReference: {fileID: 0}
+    - target: {fileID: 2026753325822093497, guid: 932e7d8ef90b50647b8d3576593f878f, type: 3}
+      propertyPath: m_Layer
+      value: 8
       objectReference: {fileID: 0}
     - target: {fileID: 2026753325822093497, guid: 932e7d8ef90b50647b8d3576593f878f, type: 3}
       propertyPath: m_StaticEditorFlags
@@ -6916,6 +7087,10 @@ PrefabInstance:
       value: 2147483645
       objectReference: {fileID: 0}
     - target: {fileID: 4130322567349778815, guid: 932e7d8ef90b50647b8d3576593f878f, type: 3}
+      propertyPath: m_Layer
+      value: 8
+      objectReference: {fileID: 0}
+    - target: {fileID: 4130322567349778815, guid: 932e7d8ef90b50647b8d3576593f878f, type: 3}
       propertyPath: m_StaticEditorFlags
       value: 2147483645
       objectReference: {fileID: 0}
@@ -6936,6 +7111,10 @@ PrefabInstance:
       value: 2147483645
       objectReference: {fileID: 0}
     - target: {fileID: 7510051531048585252, guid: 932e7d8ef90b50647b8d3576593f878f, type: 3}
+      propertyPath: m_Layer
+      value: 8
+      objectReference: {fileID: 0}
+    - target: {fileID: 7510051531048585252, guid: 932e7d8ef90b50647b8d3576593f878f, type: 3}
       propertyPath: m_StaticEditorFlags
       value: 2147483645
       objectReference: {fileID: 0}
@@ -6950,8 +7129,29 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: -6689036041284674117, guid: 932e7d8ef90b50647b8d3576593f878f, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 894286229}
   m_SourcePrefab: {fileID: -5645937942226959685, guid: 932e7d8ef90b50647b8d3576593f878f, type: 3}
+--- !u!1 &894286228 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: -6689036041284674117, guid: 932e7d8ef90b50647b8d3576593f878f, type: 3}
+  m_PrefabInstance: {fileID: 894286227}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &894286229
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 894286228}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ba88a936d801353438a01c7aab47dc80, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Arena.ArenaRoof
+  roofRenderers: []
 --- !u!1001 &896030020
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -12261,6 +12461,10 @@ PrefabInstance:
       value: 2
       objectReference: {fileID: 0}
     - target: {fileID: -3558564593755920235, guid: fb1b970c4372f87429e6e2b087dda891, type: 3}
+      propertyPath: m_Layer
+      value: 8
+      objectReference: {fileID: 0}
+    - target: {fileID: -3558564593755920235, guid: fb1b970c4372f87429e6e2b087dda891, type: 3}
       propertyPath: m_StaticEditorFlags
       value: 2147483645
       objectReference: {fileID: 0}
@@ -12309,13 +12513,55 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: -8679921383154817045, guid: fb1b970c4372f87429e6e2b087dda891, type: 3}
       insertIndex: -1
       addedObject: {fileID: 33796958}
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 7847162232691855171, guid: fb1b970c4372f87429e6e2b087dda891, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1600373675}
+    - targetCorrespondingSourceObject: {fileID: -3558564593755920235, guid: fb1b970c4372f87429e6e2b087dda891, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1600373674}
   m_SourcePrefab: {fileID: 100100000, guid: fb1b970c4372f87429e6e2b087dda891, type: 3}
 --- !u!4 &1600373671 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: fb1b970c4372f87429e6e2b087dda891, type: 3}
   m_PrefabInstance: {fileID: 1600373670}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &1600373672 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: -3558564593755920235, guid: fb1b970c4372f87429e6e2b087dda891, type: 3}
+  m_PrefabInstance: {fileID: 1600373670}
+  m_PrefabAsset: {fileID: 0}
+--- !u!1 &1600373673 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 7847162232691855171, guid: fb1b970c4372f87429e6e2b087dda891, type: 3}
+  m_PrefabInstance: {fileID: 1600373670}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &1600373674
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1600373672}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ba88a936d801353438a01c7aab47dc80, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Arena.ArenaRoof
+  roofRenderers: []
+--- !u!114 &1600373675
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1600373673}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ba88a936d801353438a01c7aab47dc80, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Arena.ArenaRoof
+  roofRenderers: []
 --- !u!1001 &1635901713
 PrefabInstance:
   m_ObjectHideFlags: 0

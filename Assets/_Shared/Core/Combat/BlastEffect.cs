@@ -10,15 +10,12 @@ namespace VortexArena.Core.Combat
     /// </summary>
     public sealed class BlastEffect : ThrowableEffect
     {
-        /// <summary>Pool nodes built at arm time — one is the blast itself, the second covers a
-        /// second bomb landing before the first has faded.</summary>
-        private const int PrewarmNodes = 2;
-
         [Tooltip("Patlama efektinin kaç saniye sonra havuza döneceği.")]
         [SerializeField] private float effectLifetime = 3f;
 
-        /// <summary>Builds the FX pool while the fuse burns, so the explosion itself pays no
-        /// <c>Instantiate</c> or shader warm-up.</summary>
+        /// <summary>Safety net for a session where the load-time warmup never ran: builds the FX
+        /// pool while the fuse burns. A no-op after <c>CombatFxWarmup</c>, which already built the
+        /// whole ring.</summary>
         public override void Prewarm(ThrowableDefinition definition)
         {
             if (definition == null)
@@ -26,7 +23,7 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
-            BlastFxPool.Shared.Prewarm(definition.ExplosionPrefab, PrewarmNodes);
+            BlastFxPool.Shared.Prewarm(definition.ExplosionPrefab, BlastFxPool.NodesPerPrefab);
         }
 
         public override void Trigger(Throwable source)

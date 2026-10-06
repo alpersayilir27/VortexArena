@@ -59,39 +59,40 @@ evetse devret.
 - Arka planda koşan ajanın yerleşik araç seti kırpılır (MCP araçları kırpılmaz); yeni ajan yazarken
   ihtiyacı olan aracı `tools` listesinde açıkça belirt.
 
-## 4. ⚠️ Derleme/build/test KULLANICIYA aittir — ajan projeyi DERLEMEZ
+## 4. ⚠️ Build/test/Play KULLANICIYA aittir — script derlemesi (`recompile`) ajana SERBEST
 
-İş bitince ajan yalnız *"bitti, doğrulanacak"* der. Aşağıdakiler **hiçbir basamakta** çağrılmaz —
-MCP'den de, shell'den de:
+**Script derlemesi ajanın işidir ve her zaman serbesttir:** `recompile` + `recompile_status`
+(MCP; düşerse `unity cmd recompile`) **sorulmadan** çağrılır — "derleyebilir miyim?" diye
+sorulmaz, kullanıcının editöre tıklaması beklenmez. Derleme hatasını ajan alır, düzeltir, yeniden
+derler. ⚠️ Her `recompile` editörü birkaç saniye kilitler ve domain reload tetikler: yazım
+bittiğinde **tek** derleme alınır, her küçük düzenlemeden sonra değil (§5).
+
+Aşağıdakiler ise **hiçbir basamakta** çağrılmaz — MCP'den de, shell'den de:
 
 | Yasak | MCP karşılığı | Shell karşılığı |
 |---|---|---|
-| Script derlemesi | `recompile`, `recompile_status` | `unity cmd recompile` |
 | Oyun build'i | `build`, `build_status`, `switch_build_target` | `unity build`, `scripts\deploy-*.bat` |
 | Test koşusu | `run_tests`, `test_status` | `unity cmd run_tests` |
 | Oynatma kipi | `editor_play`, `editor_pause`, `editor_stop` | — |
 | Sunucu/launcher derlemesi | — | `dotnet build`, `dotnet publish`, `dotnet run` |
 | Asset yeniden import | `refresh_unity`, `import_asset` | — |
 
-⚠️ **"Sadece kontrol etmek için" istisnası YOKTUR:** tek bir `recompile` bile editörü kilitler,
-domain reload tetikler ve kullanıcının elindeki sahne/Play oturumunu bozar.
-
-- Bunun yerine **ne değiştiğini ve neyin doğrulanması gerektiğini** yaz — yeri sohbet değil,
+- Bunların yerine **ne değiştiğini ve neyin doğrulanması gerektiğini** yaz — yeri sohbet değil,
   Notion doğrulama kartıdır (§5); gerçekten gerekiyorsa **kullanıcıdan iste**.
-- **Kod doğruluğu yine ajanındır:** imzalar, namespace'ler, asmdef bağımlılıkları ve kullanılan
-  API'ler yazmadan önce Read/Grep ile teyit edilir — "derleyici nasılsa yakalar" bir çalışma biçimi
-  değildir.
+- **Kod doğruluğu derlemeden önce de ajanındır:** imzalar, namespace'ler, asmdef bağımlılıkları ve
+  kullanılan API'ler yazmadan önce Read/Grep ile teyit edilir — derleme son kontroldür, arama
+  yöntemi değil.
 - Konsol logu **okumak** (`get_console_logs` / `read_console`) yasak değildir; hiçbir şeyi
   tetiklemez.
-- **Kullanıcı açıkça isterse** ("derle", "build al", "testleri koştur") kural düşer ve iş
-  [[unity-erisim]] basamaklarıyla yapılır. "Çalışıyor mu bak" derleme izni DEĞİLDİR.
+- **Kullanıcı açıkça isterse** ("build al", "testleri koştur") kural düşer ve iş [[unity-erisim]]
+  basamaklarıyla yapılır. "Çalışıyor mu bak" build/test izni DEĞİLDİR.
 
 ## 5. Doğrulama batch'lenir
 
 Tüm implementasyon önce yazılır, sonda TEK birleşik doğrulama geçişi yapılır; ara doğrulama yalnız
-gerçek bir blocker için, rutin teyit için değil. ⚠️ O tek geçişi de **kullanıcı koşar** (§4) — ajan
-hiç doğrulama tetiklemez, o ana kadar biriktirir. Doküman güncellemesi de aynı geçişe girer
-([[docs-sync]]).
+gerçek bir blocker için, rutin teyit için değil. Derleme geçişini **ajan** koşar (`recompile`, §4),
+build/test geçişini **kullanıcı**; ajan o ana kadar biriktirir. Doküman güncellemesi de aynı
+geçişe girer ([[docs-sync]]).
 
 - ⚠️ **Test maddeleri Notion'a yazılır, sohbete değil.** İş bitince Notion `Todo` veritabanına
   (`collection://014feff7-dd05-8339-8a3e-87437fdc8ff6`) bir kart açılır (Durum *Yapılacak*).

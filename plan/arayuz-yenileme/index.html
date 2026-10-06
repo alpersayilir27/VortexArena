@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin HUD — VortexArena arayüz</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Chakra+Petch:wght@500;600;700&family=Saira+Condensed:wght@500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="tema.css">
+</head>
+<body>
+
+<p class="vcap"><b>Admin HUD</b> — maç içi, takımlı kip. Arkadaki arena yer tutucudur. Alt şeritteki KAT seçici yalnız birden çok katlı arenada görünür; tek katlı arenada şerit İPTAL'de biter.</p>
+<div class="frame"><div class="stage hud">
+
+  <div class="arena">
+    <div class="floor"></div>
+    <div class="wall" style="left:640px;top:300px;width:180px;height:40px"></div>
+    <div class="wall" style="left:885px;top:360px;width:40px;height:220px"></div>
+    <div class="wall" style="left:1100px;top:300px;width:180px;height:40px"></div>
+    <div class="wall" style="left:620px;top:700px;width:220px;height:40px"></div>
+    <div class="wall" style="left:1150px;top:620px;width:40px;height:200px"></div>
+    <div class="wall" style="left:930px;top:760px;width:160px;height:40px"></div>
+    <div class="mk sel" style="left:760px;top:470px"><span>Ayşe</span></div>
+    <div class="mk" style="left:905px;top:420px"><span>Mehmet</span></div>
+    <div class="mk dead" style="left:1010px;top:650px"><span>Can</span></div>
+    <div class="mk" style="left:590px;top:820px"><span>Kerem</span></div>
+    <div class="mk" style="left:700px;top:610px"><span>Ece</span></div>
+    <div class="mk b" style="left:1230px;top:520px"><span>Deniz</span></div>
+    <div class="mk b dead" style="left:1350px;top:860px"><span>Burak</span></div>
+    <div class="mk b" style="left:1040px;top:470px"><span>Elif</span></div>
+    <div class="mk b" style="left:1290px;top:760px"><span>Emre</span></div>
+    <div class="mk b" style="left:1320px;top:610px"><span>Zeynep</span></div>
+    <div class="ph">3B seyirci kamerası — yer tutucu</div>
+  </div>
+
+  <!-- üst sol: tercihler -->
+  <button class="btn plate tl"><i data-ic="sliders"></i>TERCİHLER <kbd>P</kbd></button>
+
+  <!-- üst orta: skor bandı + istatistik düğmesi -->
+  <div class="scorebug">
+    <div class="sb-team red">KIRMIZI</div>
+    <div class="sb-score">14</div>
+    <div class="sb-clock">04:37</div>
+    <div class="sb-score">11</div>
+    <div class="sb-team blue">MAVİ</div>
+  </div>
+  <button class="sb-chip"><i data-ic="chart"></i>İSTATİSTİK <kbd>I</kbd></button>
+
+  <!-- üst sağ: kamera kipi -->
+  <div class="seg tr">
+    <button class="btn">SERBEST <kbd>2</kbd></button>
+    <button class="btn on">KUŞ BAKIŞI <kbd>3</kbd></button>
+  </div>
+
+  <!-- takım kolonları -->
+  <section class="col red">
+    <div class="col-head"><span class="t">KIRMIZI</span><span>5 OYUNCU</span><span class="chip warn"><i data-ic="warn"></i>1 KALİBRESİZ</span></div>
+    <div id="red"></div>
+  </section>
+  <section class="col blue">
+    <div class="col-head"><span class="t">MAVİ</span><span>5 OYUNCU</span></div>
+    <div id="blue"></div>
+  </section>
+
+  <!-- ihlal akışı: operatörün iş listesi -->
+  <div class="vfeed">
+    <div class="vf live"><i data-ic="warn"></i><b>Mehmet</b> — DUVAR</div>
+    <div class="vf"><b>Ece</b> — ALAN DIŞI bitti (3.4 sn)</div>
+    <div class="vf"><b>Burak</b> — DUVAR bitti (1.2 sn)</div>
+  </div>
+
+  <!-- öldürme akışı: en yeni üstte -->
+  <div class="kfeed" id="kfeed"></div>
+
+  <!-- alt orta: maç kontrolü + kat -->
+  <div class="mbar">
+    <button class="btn" disabled><i data-ic="play"></i>BAŞLAT</button>
+    <button class="btn"><i data-ic="pause"></i>DURAKLAT</button>
+    <button class="btn"><i data-ic="stop"></i>BİTİR</button>
+    <span class="sep"></span>
+    <button class="btn danger"><i data-ic="x"></i>İPTAL</button>
+    <span class="sep"></span>
+    <span class="lbl">KAT</span>
+    <div class="seg">
+      <button class="btn on">Zemin</button>
+      <button class="btn">1. kat</button>
+    </div>
+  </div>
+
+</div></div>
+
+<script src="tema.js"></script>
+<script>
+  const col = (id, list, team) => {
+    const el = document.getElementById(id);
+    el.style.cssText = 'display:flex;flex-direction:column;gap:8px';
+    el.innerHTML = list.map((p) => VA.pcard(p, team)).join('');
+  };
+  col('red', VA.RED, 'red');
+  col('blue', VA.BLUE, 'blue');
+  document.getElementById('kfeed').innerHTML = VA.FEED.map(VA.kf).join('');
+</script>
+</body>
+</html>

@@ -421,14 +421,27 @@ public sealed class ClientConnection
     }
 
     /// <summary>All sends (welcome, broadcasts, commands) pass one semaphore — a single-slot queue.</summary>
+    /// <remarks>Bounded by <see cref="ArenaProtocol.SEND_TIMEOUT"/> (§1): callers await recipients in
+    /// sequence, so one stalled peer would otherwise freeze the match tick and every broadcast.</remarks>
     public async Task SendTextAsync(string json)
     {
         var bytes = Encoding.UTF8.GetBytes(json);
         await _sendLock.WaitAsync();
         try
         {
-            if (_socket.State == WebSocketState.Open)
-                await _socket.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, CancellationToken.None);
+            if (_socket.State != WebSocketState.Open) return;
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(ArenaProtocol.SEND_TIMEOUT));
+            try
+            {
+                await _socket.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, timeout.Token);
+            }
+            catch (OperationCanceledException) when (timeout.IsCancellationRequested)
+            {
+                // Dead link: tear down so the recv loop exits and the normal drop path (§8) runs.
+                Console.WriteLine($"[cihaz] {State?.Name ?? "(hello öncesi)"}: gönderim {ArenaProtocol.SEND_TIMEOUT:0} sn'de bitmedi — bağlantı koparıldı.");
+                Abort();
+                throw;
+            }
         }
         finally
         {
@@ -450,8 +463,10 @@ public sealed class ClientConnection
     /// <see cref="ArenaProtocol.KICK_CLOSE_REASON"/>, so the client still learns it was kicked even if
     /// the JSON is lost.
     /// <para>Fire-and-forget: spending the grace in the admin connection's receive loop would delay
-    /// its other commands.</para></remarks>
-    public async Task CloseAfterKickAsync()
+    /// its other commands.</para>
+    /// <para>The version rejection reuses the sequence with <see cref="ArenaProtocol.VERSION_CLOSE_REASON"/>
+    /// so the client reconnects instead of quitting (§1).</para></remarks>
+    public async Task CloseAfterKickAsync(string closeReason = ArenaProtocol.KICK_CLOSE_REASON)
     {
         try
         {
@@ -462,7 +477,7 @@ public sealed class ClientConnection
                 {
                     using var closeCts = new CancellationTokenSource(TimeSpan.FromSeconds(CloseHandshakeSeconds));
                     await _socket.CloseOutputAsync(
-                        WebSocketCloseStatus.NormalClosure, ArenaProtocol.KICK_CLOSE_REASON, closeCts.Token);
+                        WebSocketCloseStatus.NormalClosure, closeReason, closeCts.Token);
                 }
             }
             finally

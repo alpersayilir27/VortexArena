@@ -21,9 +21,9 @@ varsa uydurma — kısa bir not olarak döndür.
   bir tuzağı önlüyorsa onu yaz, önlemiyorsa hiç yazma.
 - Arama `Grep`/`Glob`/`Read` iledir; sana verilen dosya listesinin dışına taşman gerekiyorsa
   aramayı genişletmek yerine kısa bir not olarak dön.
-- **Doğrulama SENİN İŞİN DEĞİL.** Unity derlemesi/build'i ve `dotnet build` ana thread'de toplu
-  yapılır ([[batch-build-verification]]). Sen yalnızca yazdığın kodun kendi içinde tutarlı
-  olduğundan emin ol.
+- **Doğrulama SENİN İŞİN DEĞİL.** Unity derlemesi ana bağlamda toplu alınır (`recompile`,
+  `.claude/rules/is-akisi.md` §4-5); build/test ve `dotnet build` kullanıcıya aittir. Sen yalnızca
+  yazdığın kodun kendi içinde tutarlı olduğundan emin ol.
 - Sana verilmeyen dosyalara **dokunma** — paralel çalışan başka bir ajan orada olabilir.
 
 ## Ne döndüreceksin

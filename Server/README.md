@@ -76,6 +76,12 @@ görünür.
   kapanış sırası.
 - Gözlüklerden gelen `client_log` satırları da buradadır (`[cihaz] <oyuncu>: …`, hata ise
   `[cihaz/HATA]`) — oyuncu uygulaması gözlükte koştuğu için sahadaki arızanın okunabildiği tek yer.
+- Sunucunun kendi hataları yığın iziyle buradadır: `[çökme]` (süreci düşüren yakalanmamış hata),
+  `[hata]` (gözlenmeyen görev), `[state] … döngüsü hata verdi` (snapshot döngüsü 1 sn sonra kendini
+  yeniden başlatır) ve `[state] paket işlenemedi` (bozuk datagram atlanır, alım sürer; en fazla
+  5 sn'de bir satır).
+- `protokol sürüm uyumsuzluğu: <cihaz> reddedildi` = o cihazda başka sürüm APK/admin kurulu;
+  cihaz oyuna alınmaz, lobide bekleyip yeniden dener (satır cihaz başına dakikada bir basılır).
 - **İşletmeden geri taşınacak şey bu dosyadır;** sorunu incelemek için konsol ekran görüntüsü değil
   ilgili seansın `.log` dosyası istenir.
 - Dosya açılamazsa sunucu tek satır uyarı basıp **dosyasız devam eder** — günlük hiçbir zaman

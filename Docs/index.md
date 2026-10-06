@@ -5,7 +5,7 @@ title: VortexArena — Dokümantasyon
 # VortexArena
 
 Free-roam VR PvP arena. Oyuncular fiziksel alanda **1:1 yürür** — yatay ışınlanma yoktur (çok katlı
-arenada kat geçişi yalnız dikey sanal ofsettir), joystick'le hareket yoktur. Meta Quest 3/3S, Unity 6000.3.20f1, URP. Ağ tarafı kendi .NET sunucumuz
+arenada kat geçişi yalnız dikey sanal ofsettir), joystick'le hareket yoktur (editörde dev hizalama istisnası: [İlk Adımlar](Gelistirici/Ilk-Adimlar.md)). Meta Quest 3/3S, Unity 6000.3.20f1, URP. Ağ tarafı kendi .NET sunucumuz
 (Mirror/NGO yok), tamamen offline LAN'da çalışır.
 
 ---

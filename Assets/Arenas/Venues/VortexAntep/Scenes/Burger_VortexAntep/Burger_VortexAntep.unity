@@ -614,7 +614,7 @@ GameObject:
   - component: {fileID: 96796405}
   - component: {fileID: 96796407}
   - component: {fileID: 96796406}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: Fixture
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1689,7 +1689,7 @@ GameObject:
   - component: {fileID: 252861823}
   - component: {fileID: 252861825}
   - component: {fileID: 252861824}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: Fixture
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -2853,7 +2853,7 @@ GameObject:
   - component: {fileID: 401773829}
   - component: {fileID: 401773831}
   - component: {fileID: 401773830}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: Fixture
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -4658,7 +4658,7 @@ GameObject:
   - component: {fileID: 647713292}
   - component: {fileID: 647713294}
   - component: {fileID: 647713293}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: Fixture
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -4748,7 +4748,7 @@ GameObject:
   - component: {fileID: 651423313}
   - component: {fileID: 651423315}
   - component: {fileID: 651423314}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: Fixture
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -5134,7 +5134,7 @@ GameObject:
   - component: {fileID: 701559966}
   - component: {fileID: 701559968}
   - component: {fileID: 701559967}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: Fixture
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -5620,7 +5620,7 @@ GameObject:
   - component: {fileID: 754431893}
   - component: {fileID: 754431895}
   - component: {fileID: 754431894}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: Fixture
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -6861,7 +6861,7 @@ GameObject:
   - component: {fileID: 851020462}
   - component: {fileID: 851020461}
   - component: {fileID: 851020467}
-  m_Layer: 8
+  m_Layer: 0
   m_Name: Ceiling
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -7630,7 +7630,7 @@ GameObject:
   - component: {fileID: 922726460}
   - component: {fileID: 922726462}
   - component: {fileID: 922726461}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: Fixture
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -12574,7 +12574,7 @@ GameObject:
   - component: {fileID: 1695160918}
   - component: {fileID: 1695160920}
   - component: {fileID: 1695160919}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: Fixture
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -12664,7 +12664,7 @@ GameObject:
   - component: {fileID: 1700696690}
   - component: {fileID: 1700696692}
   - component: {fileID: 1700696691}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: Fixture
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -14014,7 +14014,7 @@ GameObject:
   - component: {fileID: 1916607713}
   - component: {fileID: 1916607715}
   - component: {fileID: 1916607714}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: Fixture
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -14458,7 +14458,7 @@ GameObject:
   - component: {fileID: 2024786304}
   - component: {fileID: 2024786306}
   - component: {fileID: 2024786305}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: Fixture
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -15991,7 +15991,8 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 2131143954}
-  m_Layer: 0
+  - component: {fileID: 2131143955}
+  m_Layer: 8
   m_Name: Kitchen_Lights
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -16025,6 +16026,19 @@ Transform:
   - {fileID: 834509840}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &2131143955
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2131143953}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ba88a936d801353438a01c7aab47dc80, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Arena.ArenaRoof
+  roofRenderers: []
 --- !u!1001 &2144311051
 PrefabInstance:
   m_ObjectHideFlags: 0

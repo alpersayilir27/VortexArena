@@ -3,28 +3,25 @@ using UnityEngine;
 
 namespace VortexArena.Core.Combat
 {
-    /// <summary>Plays the explosion presentation of a blast: particles, one-shot sound and a short
-    /// light flash.
+    /// <summary>Plays the explosion presentation of a blast — and, through the same rings, the break
+    /// effect of a <see cref="BreakableObject"/>: particles and a one-shot sound.
     /// <para>Same pattern as <see cref="SurfaceImpactFx"/>: no scene setup step, self-bootstraps on
     /// the first blast, goes <c>DontDestroyOnLoad</c> and keeps its pools across map changes.</para>
     /// <para>⚠️ Instances are POOLED per explosion prefab, never instantiated per blast: an
     /// <c>Instantiate</c>/<c>Destroy</c> pair plus <c>PlayClipAtPoint</c>'s throwaway AudioSource is a
     /// GC spike on Quest, and the first blast also pays shader/material warm-up mid-fight.</para>
-    /// <para>⚠️ Do NOT call this directly from a damage source — go through
+    /// <para>⚠️ NO real-time light is turned on here, and none is read off the prefab: arena scenes
+    /// run without point/spot lights, so a single extra light pushes every Lit material on screen
+    /// into its <c>_ADDITIONAL_LIGHTS</c> variant and those variants compile on the blast frame.
+    /// The flare is an additive particle in the prefab (<c>Flash</c> child).</para>
+    /// <para>⚠️ Two callers only: <see cref="BlastEffect"/> (blast) and <see cref="BreakableObject"/>
+    /// (break). Do NOT call this directly from a damage source — go through
     /// <see cref="BlastEffect"/>, so the blast rule stays in one place.</para></summary>
     public class BlastFxPool : MonoBehaviour
     {
         /// <summary>Concurrent instances per explosion prefab.</summary>
         // Simultaneous blasts are rare; when full the oldest is recycled.
-        private const int NodesPerPrefab = 4;
-
-        /// <summary>Lifetime of the blast flash (s).</summary>
-        private const float FlashSeconds = 0.25f;
-
-        // Sized to the blast PRESENTATION, not to the damage radius: the flash is what the fireball
-        // throws onto the walls, so it shrinks and grows with the effect, not with the balance number.
-        private const float FlashPeakIntensity = 10f;
-        private const float FlashRangeMeters = 3f;
+        public const int NodesPerPrefab = 4;
 
         /// <summary>Fallback audio rolloff distance (m) when the prefab brings no AudioSource.</summary>
         private const float FallbackMaxDistanceMeters = 30f;
@@ -35,15 +32,11 @@ namespace VortexArena.Core.Combat
             public Transform Root;
             public ParticleSystem[] Particles;
             public AudioSource Audio;
-            public Light Flash;
             public bool Active;
 
             /// <summary><c>Time.unscaledTime</c> at which the node is hidden — unscaled so a paused
             /// match does not freeze an explosion on screen.</summary>
             public float HideAt;
-
-            /// <summary><c>Time.unscaledTime</c> at which the flash reaches zero.</summary>
-            public float FlashUntil;
 
             /// <summary>Scale to put back when a warmup shrank this node — see
             /// <see cref="BlastFxPool.Warmup"/>.</summary>
@@ -111,7 +104,6 @@ namespace VortexArena.Core.Combat
 
             RestartParticles(node);
             PlaySound(node, clip, volume);
-            StartFlash(node);
         }
 
         /// <summary>Builds pool nodes ahead of time — <c>Instantiate</c> ONLY.
@@ -145,9 +137,13 @@ namespace VortexArena.Core.Combat
             // Next is left alone: prewarming must not shift where the next blast lands in the ring.
         }
 
-        /// <summary>Draws one pooled node of this prefab for a moment, SILENT and shrunk, so the
-        /// shader/particle/light cost is paid behind the loading cover instead of on the first real
-        /// blast. Caller must keep the view covered for <paramref name="visibleSeconds"/>.</summary>
+        /// <summary>Draws EVERY pooled node of this prefab for a moment, SILENT and shrunk, so the
+        /// shader/particle cost is paid behind the loading cover instead of on a real blast. Caller
+        /// must keep the view covered for <paramref name="visibleSeconds"/>.
+        /// <para>⚠️ All nodes, not one: a node's first <c>Play</c> also allocates its particle
+        /// buffers, so the second and third blast of the match would each hitch on their own. The
+        /// ring counter is reset instead of advanced — warmup must not shift where the first real
+        /// blast lands.</para></summary>
         /// <param name="scale">Uniform shrink so the fireball cannot reach past the cover; ≤0 keeps
         /// the authored size.</param>
         public void Warmup(GameObject explosionPrefab, Vector3 position, float visibleSeconds, float scale)
@@ -157,24 +153,36 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
-            Node node = TakeNode(explosionPrefab);
-            if (node == null || node.Root == null)
+            if (!_pools.TryGetValue(explosionPrefab, out Pool pool))
             {
-                return;
+                pool = new Pool();
+                _pools.Add(explosionPrefab, pool);
             }
 
-            node.Root.position = position;
-            node.Root.rotation = Quaternion.identity;
-            ApplyWarmupScale(node, scale);
+            float hideAt = Time.unscaledTime + Mathf.Max(0.02f, visibleSeconds);
 
-            node.Root.gameObject.SetActive(true);
-            node.Active = true;
-            node.HideAt = Time.unscaledTime + Mathf.Max(0.02f, visibleSeconds);
+            for (int i = 0; i < pool.Nodes.Length; i++)
+            {
+                Node node = pool.Nodes[i];
+                if (node == null || node.Root == null)
+                {
+                    node = CreateNode(explosionPrefab);
+                    pool.Nodes[i] = node;
+                }
 
-            RestartParticles(node);
+                node.Root.position = position;
+                node.Root.rotation = Quaternion.identity;
+                ApplyWarmupScale(node, scale);
 
-            // No sound on purpose: the player is still behind the loading cover.
-            StartFlash(node);
+                node.Root.gameObject.SetActive(true);
+                node.Active = true;
+                node.HideAt = hideAt;
+
+                // No sound on purpose: the player is still behind the loading cover.
+                RestartParticles(node);
+            }
+
+            pool.Next = 0;
         }
 
         private static void ApplyWarmupScale(Node node, float scale)
@@ -200,7 +208,7 @@ namespace VortexArena.Core.Combat
             node.Root.localScale = node.ScaleBeforeWarmup;
         }
 
-        /// <summary>Fades flashes and hides expired nodes; pool instances are never destroyed.</summary>
+        /// <summary>Hides expired nodes; pool instances are never destroyed.</summary>
         private void Update()
         {
             float now = Time.unscaledTime;
@@ -220,19 +228,6 @@ namespace VortexArena.Core.Combat
                     {
                         node.Active = false;
                         continue;
-                    }
-
-                    if (node.Flash != null)
-                    {
-                        float remaining = node.FlashUntil - now;
-                        if (remaining > 0f)
-                        {
-                            node.Flash.intensity = FlashPeakIntensity * (remaining / FlashSeconds);
-                        }
-                        else if (node.Flash.enabled)
-                        {
-                            node.Flash.enabled = false;
-                        }
                     }
 
                     if (now >= node.HideAt)
@@ -296,18 +291,6 @@ namespace VortexArena.Core.Combat
                 node.Audio.maxDistance = FallbackMaxDistanceMeters;
             }
 
-            node.Flash = instance.GetComponentInChildren<Light>(true);
-            if (node.Flash == null)
-            {
-                node.Flash = instance.AddComponent<Light>();
-                node.Flash.type = LightType.Point;
-                node.Flash.shadows = LightShadows.None;
-                node.Flash.range = FlashRangeMeters;
-                node.Flash.color = new Color(1f, 0.62f, 0.25f);
-                node.Flash.intensity = 0f;
-            }
-
-            node.Flash.enabled = false;
             return node;
         }
 
@@ -344,18 +327,6 @@ namespace VortexArena.Core.Combat
             // PlayOneShot, not Play: a recycled node may still be sounding the previous blast and
             // Play would cut it off mid-tick.
             node.Audio.PlayOneShot(clip, Mathf.Clamp01(volume));
-        }
-
-        private static void StartFlash(Node node)
-        {
-            if (node.Flash == null)
-            {
-                return;
-            }
-
-            node.Flash.intensity = FlashPeakIntensity;
-            node.Flash.enabled = true;
-            node.FlashUntil = Time.unscaledTime + FlashSeconds;
         }
 
         private void OnDestroy()

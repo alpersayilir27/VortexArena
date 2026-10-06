@@ -108,7 +108,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2e4b0bc9650bf324d8ec3cc6f678b8b0, type: 3}
   m_Name: 
   m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.BlastEffect
-  effectLifetime: 4.5
+  effectLifetime: 3.5
 --- !u!1001 &2702885491770283691
 PrefabInstance:
   m_ObjectHideFlags: 0

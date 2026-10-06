@@ -22,6 +22,10 @@ public sealed class LobbyService
     private readonly PlayerRegistry _registry;
     private readonly MatchDirector _director;
 
+    /// <summary>Last version-rejection announcement per device (§1); a rejected device retries on backoff.</summary>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, DateTime> _versionRejectLogged = new();
+    private static readonly TimeSpan VersionRejectLogInterval = TimeSpan.FromMinutes(1);
+
     /// <summary>Guards the shared selection; WS handlers can arrive on different threads.</summary>
     private readonly object _selectionGate = new();
 
@@ -94,8 +98,29 @@ public sealed class LobbyService
     /// The lobby_state broadcast is triggered via Announce AFTER welcome is sent.</summary>
     public async Task HandleHelloAsync(ClientConnection connection, HelloMsg hello)
     {
+        // §1: a mixed install fails silently (garbled poses), so a mismatch is rejected before registration.
+        // ⚠️ Not a kick: a kicked headset quits and the operator never reads why.
         if (hello.protocolVersion != ArenaProtocol.PROTOCOL_VERSION)
-            Console.WriteLine($"[Lobby] protokol sürüm uyumsuzluğu: istemci {hello.protocolVersion}, sunucu {ArenaProtocol.PROTOCOL_VERSION} — devam ediliyor.");
+        {
+            await SendSafeAsync(connection, JsonUtil.Serialize(new VersionMismatchMsg
+            {
+                serverVersion = ArenaProtocol.PROTOCOL_VERSION,
+                clientVersion = hello.protocolVersion
+            }), "(sürüm)");
+            _ = connection.CloseAfterKickAsync(ArenaProtocol.VERSION_CLOSE_REASON);
+
+            // The device keeps retrying on backoff — announce at most once a minute per device.
+            var key = string.IsNullOrEmpty(hello.deviceId) ? hello.deviceName ?? "" : hello.deviceId;
+            var now = DateTime.UtcNow;
+            if (!_versionRejectLogged.TryGetValue(key, out var last) || now - last >= VersionRejectLogInterval)
+            {
+                _versionRejectLogged[key] = now;
+                var versions = $"cihaz v{hello.protocolVersion}, sunucu v{ArenaProtocol.PROTOCOL_VERSION}";
+                Console.WriteLine($"[Lobby] protokol sürüm uyumsuzluğu: {hello.deviceName} ({hello.role}) reddedildi — {versions}.");
+                _ = BroadcastAdminStateAsync($"{hello.deviceName}: reddedildi — sürüm uyumsuz ({versions})");
+            }
+            return;
+        }
 
         // Asked before the registry lock: the director has its own lock and must not be called inside it.
         var teamless = IsTeamlessSetUpOrSelected();

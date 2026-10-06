@@ -5,6 +5,7 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using VortexArena.App.Admin;
 using VortexArena.Core;
+using VortexArena.Core.Arena;
 using VortexArena.Core.Combat;
 using VortexArena.Net;
 using VortexArena.Protocol;
@@ -48,6 +49,10 @@ namespace VortexArena.App
     /// `fireWhilePaused` (trigger without phase `playing`) and `modeId` (where the loadout is read
     /// from — without it no weapon appears).</para>
     ///
+    /// <para><b>Skip-calibration switch:</b> writes <c>ArenaCalibrator.DevSkipRequested</c>, which turns
+    /// on the editor-only dev placement (see <c>ArenaCalibrator.Dev.cs</c>). Independent of
+    /// sandbox — it works with and without a server.</para>
+    ///
     /// <para>⚠️ Sandbox is <b>NOT a match-rule test</b>: team/score/respawn fields stay at
     /// <see cref="ModeRulesInfo"/> defaults (TDM) — a mode's real rules come from the server and the
     /// server wins on divergence (§10.5). Only `modeId` matters here.</para>
@@ -78,6 +83,7 @@ namespace VortexArena.App
         public const string KeyStartFromBoot = Prefix + "StartFromBoot";
         public const string KeySandbox = Prefix + "Sandbox";
         public const string KeySandboxModeId = Prefix + "SandboxModeId";
+        public const string KeySkipCalibration = Prefix + "SkipCalibration";
 
         /// <summary>
         /// Sandbox's weapon source — the <c>ModeRulesInfo.weaponSource</c> wire value.
@@ -145,6 +151,15 @@ namespace VortexArena.App
             set => EditorPrefs.SetBool(KeySandbox, value);
         }
 
+        /// <summary>Skip the physical A/B calibration (plan dev-kalibre-atlama): the head is placed over
+        /// marker A at the default stature and reported as source "dev"; left stick walks, right
+        /// stick snap-turns. Editor only — the flag reaches ArenaCalibrator.Dev.cs.</summary>
+        public static bool SkipCalibration
+        {
+            get => EditorPrefs.GetBool(KeySkipCalibration, false);
+            set => EditorPrefs.SetBool(KeySkipCalibration, value);
+        }
+
         /// <summary>modId applied in sandbox — <b>the loadout is found through it</b>
         /// (<c>GameCatalog.FindMode</c>); empty means no weapons.</summary>
         public static string SandboxModeId
@@ -159,14 +174,15 @@ namespace VortexArena.App
             get
             {
                 string start = StartFromBoot ? "Boot'tan" : "açık sahneden";
+                string skip = SkipCalibration ? " · kalibre atlanır" : "";
                 if (Sandbox)
                 {
                     string mode = string.IsNullOrEmpty(SandboxModeId) ? "(mod seçilmedi)" : SandboxModeId;
-                    return $"{Role} · SANDBOX (sunucusuz) · {mode} · silah: sırayla · {start}";
+                    return $"{Role} · SANDBOX (sunucusuz) · {mode} · silah: sırayla · {start}{skip}";
                 }
 
                 string address = HasAddress ? $"{Ip}:{Port}" : "keşif (adres yok)";
-                return $"{Role} · {address} · {start}";
+                return $"{Role} · {address} · {start}{skip}";
             }
         }
 
@@ -178,6 +194,10 @@ namespace VortexArena.App
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void ApplySelection()
         {
+            // Written unconditionally and BEFORE the Enabled early-out: with domain reload off the
+            // static outlives the previous Play, so the current selection must overwrite it.
+            ArenaCalibrator.DevSkipRequested = Enabled && SkipCalibration;
+
             if (!Enabled)
             {
                 return;

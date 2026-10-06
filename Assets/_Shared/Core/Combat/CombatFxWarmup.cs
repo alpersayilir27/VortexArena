@@ -13,8 +13,10 @@ namespace VortexArena.Core.Combat
     /// <see cref="VisibleSeconds"/>, then returned to its pool. Everything runs muted: a warmup that
     /// is heard is a bug report.</para>
     /// <para>⚠️ Runs on the admin too: the spectator view is built from remote shots.</para>
-    /// <para>Once per session, not once per map: catalogs are statically cached, the pools are
-    /// <c>DontDestroyOnLoad</c> and a compiled shader stays compiled for the process.</para>
+    /// <para>Catalog effects run once per session, not once per map: catalogs are statically
+    /// cached, the pools are <c>DontDestroyOnLoad</c> and a compiled shader stays compiled for the
+    /// process. Break effects are SCENE-scoped: breakables are scene objects, not catalog entries,
+    /// so every arena load draws the break prefabs no earlier scene had.</para>
     /// </summary>
     public static class CombatFxWarmup
     {
@@ -40,17 +42,37 @@ namespace VortexArena.Core.Combat
 
         private static bool _done;
 
+        /// <summary>Break effect prefabs drawn so far this session.</summary>
+        private static readonly HashSet<GameObject> WarmedBreakFx = new HashSet<GameObject>();
+
         /// <summary>Time the caller must keep the view covered (s) for a full run.</summary>
         public static float CoverSeconds => VisibleSeconds + 0.2f;
 
-        /// <summary>True once a full run finished; a later map load skips the work.</summary>
-        public static bool Completed => _done;
+        /// <summary>Whether the loader must hold the cover for <see cref="Run"/>: the catalog pass
+        /// has not finished yet, or the scene just activated brings a break effect no earlier scene
+        /// had. ⚠️ Called AFTER scene activation — it reads the scene's breakables.</summary>
+        public static bool NeedsRun()
+        {
+            if (!_done)
+            {
+                return true;
+            }
 
-        /// <summary>Runs the whole warmup. ⚠️ Yielded by the SCENE LOADER while the fade/loading
+            var pending = new HashSet<GameObject>();
+            CollectBreakFx(pending);
+            return pending.Count > 0;
+        }
+
+        /// <summary>Runs the warmup. ⚠️ Yielded by the SCENE LOADER while the fade/loading
         /// screen is still up — called anywhere else it draws effects in the player's face.</summary>
         public static IEnumerator Run()
         {
-            if (_done)
+            bool full = !_done;
+
+            var breakFxPrefabs = new HashSet<GameObject>();
+            CollectBreakFx(breakFxPrefabs);
+
+            if (!full && breakFxPrefabs.Count == 0)
             {
                 yield break;
             }
@@ -63,7 +85,12 @@ namespace VortexArena.Core.Combat
                 yield break;
             }
 
-            _done = true;
+            if (full)
+            {
+                _done = true;
+            }
+
+            WarmedBreakFx.UnionWith(breakFxPrefabs);
 
             Vector3 center = view.position + view.forward * DistanceMeters;
             Vector3 right = view.right;
@@ -71,21 +98,32 @@ namespace VortexArena.Core.Combat
             Vector3 towardEye = -view.forward;
 
             var explosionPrefabs = new HashSet<GameObject>();
+            var throwablePrefabs = new HashSet<GameObject>();
             var casingPrefabs = new HashSet<GameObject>();
             var muzzleGraphs = new Dictionary<VisualEffectAsset, string>();
-            CollectFromCatalogs(explosionPrefabs, casingPrefabs, muzzleGraphs);
+            if (full)
+            {
+                CollectFromCatalogs(explosionPrefabs, throwablePrefabs, casingPrefabs, muzzleGraphs);
+            }
 
             // Pass 1 — build everything (Instantiate + Resources.Load), still invisible.
             BlastFxPool blasts = BlastFxPool.Shared;
             foreach (GameObject prefab in explosionPrefabs)
             {
-                blasts.Prewarm(prefab, 1);
+                // The whole ring: every node's first Play allocates its own particle buffers.
+                blasts.Prewarm(prefab, BlastFxPool.NodesPerPrefab);
             }
 
-            SurfaceImpactFx impacts = SurfaceImpactFx.Shared;
-            ShotTracer tracers = ShotTracer.Shared;
-            HitMarker markers = HitMarker.Shared;
-            CasingPool casings = CasingPool.Shared;
+            foreach (GameObject prefab in breakFxPrefabs)
+            {
+                blasts.Prewarm(prefab, BlastFxPool.NodesPerPrefab);
+            }
+
+            ThrowablePool throwables = ThrowablePool.Shared;
+            foreach (GameObject prefab in throwablePrefabs)
+            {
+                throwables.Prewarm(prefab, ThrowablePool.NodesPerPrefab);
+            }
 
             var temporaryGraphs = new List<GameObject>();
             foreach (KeyValuePair<VisualEffectAsset, string> graph in muzzleGraphs)
@@ -106,19 +144,34 @@ namespace VortexArena.Core.Combat
                 blasts.Warmup(prefab, center, VisibleSeconds, EffectScale);
             }
 
-            impacts.Warmup(center, towardEye, VisibleSeconds, EffectScale);
-            tracers.Warmup(center - right * TracerHalfMeters, center + right * TracerHalfMeters,
-                VisibleSeconds);
-            markers.Warmup(center + up * 0.1f, VisibleSeconds);
-
-            foreach (GameObject prefab in casingPrefabs)
+            foreach (GameObject prefab in breakFxPrefabs)
             {
-                casings.Warmup(prefab, center - up * 0.1f, VisibleSeconds);
+                blasts.Warmup(prefab, center, VisibleSeconds, EffectScale);
             }
 
-            if (RemoteShotFx.Instance != null)
+            foreach (GameObject prefab in throwablePrefabs)
             {
-                RemoteShotFx.Instance.Warmup(center, view.forward, VisibleSeconds);
+                // No shrink: a throwable is ~10 cm, it already fits behind the cover.
+                throwables.Warmup(prefab, center, VisibleSeconds);
+            }
+
+            if (full)
+            {
+                SurfaceImpactFx.Shared.Warmup(center, towardEye, VisibleSeconds, EffectScale);
+                ShotTracer.Shared.Warmup(center - right * TracerHalfMeters,
+                    center + right * TracerHalfMeters, VisibleSeconds);
+                HitMarker.Shared.Warmup(center + up * 0.1f, VisibleSeconds);
+
+                CasingPool casings = CasingPool.Shared;
+                foreach (GameObject prefab in casingPrefabs)
+                {
+                    casings.Warmup(prefab, center - up * 0.1f, VisibleSeconds);
+                }
+
+                if (RemoteShotFx.Instance != null)
+                {
+                    RemoteShotFx.Instance.Warmup(center, view.forward, VisibleSeconds);
+                }
             }
 
             for (int i = 0; i < temporaryGraphs.Count; i++)
@@ -142,6 +195,23 @@ namespace VortexArena.Core.Combat
             }
         }
 
+        /// <summary>Break effect prefabs of the ACTIVE scene not drawn yet this session. Read off the
+        /// scene, not a catalog: a breakable is a scene object (§10.10).</summary>
+        private static void CollectBreakFx(HashSet<GameObject> into)
+        {
+            BreakableObject[] breakables = Object.FindObjectsByType<BreakableObject>(
+                FindObjectsInactive.Include, FindObjectsSortMode.None);
+
+            for (int i = 0; i < breakables.Length; i++)
+            {
+                GameObject prefab = breakables[i].BreakFxPrefab;
+                if (prefab != null && !WarmedBreakFx.Contains(prefab))
+                {
+                    into.Add(prefab);
+                }
+            }
+        }
+
         /// <summary>⚠️ The eye is <c>OVRCameraRig.centerEyeAnchor</c>, never <c>Camera.main</c> in VR
         /// — all three rig cameras are tagged MainCamera. The admin has no rig and falls back.</summary>
         private static Transform ResolveViewpoint()
@@ -156,28 +226,31 @@ namespace VortexArena.Core.Combat
             return camera != null ? camera.transform : null;
         }
 
-        /// <summary>Gathers what has to be drawn from the catalogs: explosion prefabs, casing prefabs
-        /// and muzzle graphs. Read off the PREFAB assets — no weapon is instantiated, so no gameplay
-        /// component ever wakes up.</summary>
+        /// <summary>Gathers what has to be drawn from the catalogs: explosion prefabs, throwable
+        /// prefabs, casing prefabs and muzzle graphs. WEAPON prefabs are read as ASSETS and never
+        /// instantiated, so no weapon gameplay component wakes up. ⚠️ Throwable prefabs ARE
+        /// instantiated (into <see cref="ThrowablePool"/>) but stay kinematic and disabled —
+        /// <c>Throwable.Update</c> does nothing while the item is not armed.</summary>
         private static void CollectFromCatalogs(HashSet<GameObject> explosions,
-            HashSet<GameObject> casings, Dictionary<VisualEffectAsset, string> graphs)
+            HashSet<GameObject> throwables, HashSet<GameObject> casings,
+            Dictionary<VisualEffectAsset, string> graphs)
         {
             NetItemCatalog items = NetItemCatalog.Load();
             if (items != null)
             {
-                CollectItems(items.Items, explosions, casings, graphs);
+                CollectItems(items.Items, explosions, throwables, casings, graphs);
             }
 
             WeaponCatalog weapons = WeaponCatalog.Load();
             if (weapons != null)
             {
-                CollectItems(weapons.Definitions, explosions, casings, graphs);
+                CollectItems(weapons.Definitions, explosions, throwables, casings, graphs);
             }
         }
 
         private static void CollectItems(IReadOnlyList<ItemDefinition> definitions,
-            HashSet<GameObject> explosions, HashSet<GameObject> casings,
-            Dictionary<VisualEffectAsset, string> graphs)
+            HashSet<GameObject> explosions, HashSet<GameObject> throwables,
+            HashSet<GameObject> casings, Dictionary<VisualEffectAsset, string> graphs)
         {
             if (definitions == null)
             {
@@ -192,9 +265,17 @@ namespace VortexArena.Core.Combat
                     continue;
                 }
 
-                if (definition is ThrowableDefinition throwable && throwable.ExplosionPrefab != null)
+                if (definition is ThrowableDefinition throwable)
                 {
-                    explosions.Add(throwable.ExplosionPrefab);
+                    if (throwable.ExplosionPrefab != null)
+                    {
+                        explosions.Add(throwable.ExplosionPrefab);
+                    }
+
+                    if (throwable.Prefab != null)
+                    {
+                        throwables.Add(throwable.Prefab);
+                    }
                 }
 
                 GameObject prefab = definition.Prefab;

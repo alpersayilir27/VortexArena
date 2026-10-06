@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tercihler — VortexArena arayüz</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Chakra+Petch:wght@500;600;700&family=Saira+Condensed:wght@500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="tema.css">
+</head>
+<body>
+
+<p class="vcap"><b>Tercihler · MAÇ</b></p>
+<div class="frame"><div class="stage" data-tab="0"></div></div>
+
+<p class="vcap"><b>Tercihler · GÖRÜNÜM</b></p>
+<div class="frame"><div class="stage" data-tab="1"></div></div>
+
+<p class="vcap"><b>Tercihler · BAĞLANTI</b></p>
+<div class="frame"><div class="stage" data-tab="2"></div></div>
+
+<p class="vcap"><b>Tercihler · SES</b> — Seslendirme kanalı sessizde gösteriliyor.</p>
+<div class="frame"><div class="stage" data-tab="3"></div></div>
+
+<script src="tema.js"></script>
+<script>
+  const { ic } = VA;
+  const TABS = ['MAÇ', 'GÖRÜNÜM', 'BAĞLANTI', 'SES'];
+
+  const select = (v) => `<button class="select">${v}${ic('down')}</button>`;
+  const stepper = (v, dim) => `<div class="stepper"><button class="btn" aria-label="Önceki">${ic('left')}</button><div class="val${dim ? ' dimv' : ''}">${v}</div><button class="btn" aria-label="Sonraki">${ic('right')}</button></div>`;
+  const toggle = (a, b, onB, bad) => `<div class="seg in"><button class="btn${onB ? '' : ' on'}">${a}</button><button class="btn${onB ? (bad ? ' confirm' : ' on') : ''}">${b}</button></div>`;
+  const frow = (label, control) => `<div class="frow"><span class="lab">${label}</span>${control}</div>`;
+  const level = (label, pct, muted) => {
+    const cells = Array.from({ length: 10 }, (_, i) => `<i${i < pct / 10 ? ' class="f"' : ''}></i>`).join('');
+    return `<div class="frow"><span class="lab">${label}</span>
+      <button class="btn sq${muted ? ' on' : ''}" aria-label="${muted ? 'Sesi aç' : 'Sessize al'}">${ic(muted ? 'mute' : 'vol')}</button>
+      <div class="stepper wide"><button class="btn" aria-label="Azalt">${ic('left')}</button>
+        <div class="val${muted ? ' dimv' : ''}"><span class="meter${muted ? ' muted' : ''}">${cells}</span>${muted ? 'sessiz' : '%' + pct}</div>
+      <button class="btn" aria-label="Artır">${ic('right')}</button></div></div>`;
+  };
+
+  const BODY = [
+    // MAÇ
+    `<div><h2 class="sec">OYUN</h2>
+       ${frow('Oyun tipi', select('Hızlı Savaş'))}
+       ${frow('Mod', select('[MOD ADI]'))}
+       ${frow('Harita', select('[HARİTA ADI]'))}
+     </div>
+     <div><h2 class="sec">KURALLAR</h2>
+       ${frow('Süre', stepper('10 dk'))}
+       ${frow('Skor limiti', stepper('25'))}
+       ${frow('Geri sayım', stepper('varsayılan (5 sn)', true))}
+       ${frow('Dost ateşi', toggle('KAPALI', 'AÇIK', false, true))}
+     </div>
+     <div class="wide"><h2 class="sec">KALİBRASYON VE BOY <small>tüm adminlerde ortak</small></h2>
+       <div class="bigseg"><button class="btn on">2 ÇAPA</button><button class="btn">ESKİ KALİBRE</button><button class="btn" disabled>ÇAPA BULUTU</button></div>
+     </div>`,
+    // GÖRÜNÜM
+    `<div><h2 class="sec">SAHNE</h2>
+       ${frow('Halkalar', stepper('kuş bakışı'))}
+       ${frow('Ad etiketleri', toggle('KAPALI', 'AÇIK', true))}
+       ${frow('Çatı', stepper('kuş bakışında gizli'))}
+     </div>
+     <div><h2 class="sec">KAMERA VE UYARI</h2>
+       ${frow('Kamera hızı', stepper('4.0 m/sn'))}
+       ${frow('İhlal sesi', toggle('KAPALI', 'AÇIK', true))}
+     </div>`,
+    // BAĞLANTI
+    `<div><h2 class="sec">SUNUCU</h2>
+       <div class="conn"><span class="dot"></span>bağlı<span style="color:var(--muted);font-weight:600">192.168.1.5:7777 · 2 admin bağlı</span></div>
+       <div class="bigseg" style="grid-template-columns:1fr 1fr"><button class="btn">${ic('refresh')}YENİDEN BAĞLAN</button><button class="btn">${ic('x')}BAĞLANTIYI KES</button></div>
+     </div>
+     <div><h2 class="sec">UYGULAMA</h2>
+       <div class="bigseg" style="grid-template-columns:1fr"><button class="btn danger">${ic('power')}OYUNDAN ÇIK</button></div>
+     </div>`,
+    // SES
+    `<div><h2 class="sec">KANALLAR</h2>
+       ${frow('Ses çıkışı', select('sistem varsayılanı'))}
+       ${level('Ambiyans', 70)}
+       ${level('Silah sesleri', 100)}
+       ${level('Seslendirme', 70, true)}
+       ${level('Müzik', 50)}
+     </div>
+     <div><h2 class="sec">MÜZİK ÇALAR</h2>
+       <div class="track"><b>Action-1</b><span>1/5 — duraklatıldı</span></div>
+       <div class="transport">
+         <button class="btn" aria-label="Önceki parça">${ic('prev')}</button>
+         <button class="btn go" aria-label="Çal">${ic('play')}</button>
+         <button class="btn" aria-label="Durdur">${ic('stop')}</button>
+         <button class="btn" aria-label="Sonraki parça">${ic('next')}</button>
+       </div>
+       ${level('Müzik çalar sesi', 40)}
+     </div>`,
+  ];
+
+  document.querySelectorAll('.stage[data-tab]').forEach((st) => {
+    const t = +st.dataset.tab;
+    st.innerHTML = `<div class="arena"></div><div class="scrim"></div>
+      <section class="panel">
+        <header class="p-head">
+          <h1 class="p-title">TERCİHLER</h1>
+          <nav class="tabs">${TABS.map((n, i) => `<button class="tab${i === t ? ' on' : ''}">${n}</button>`).join('')}</nav>
+          <span class="sp"></span>
+          <button class="btn">${ic('x')}KAPAT <kbd>Esc</kbd></button>
+        </header>
+        <div class="p-body"><div class="pgrid">${BODY[t]}</div></div>
+      </section>`;
+  });
+</script>
+</body>
+</html>

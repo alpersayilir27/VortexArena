@@ -48,6 +48,40 @@ sürecine kalır. Aynı sebeple admin Windows build'i de Link'teki gözlükte a�
 Sanal oyuncu **tam bir editör değildir** — yalnız Play penceresi verir; dev penceresi ve diğer
 araçlar ana editörde kalır.
 
+### "Kalibrasyonu atla" — Link ile gözlüklü testte A/B jestini atlama
+
+Quest Link ile gözlüklü test ediyorsan her Play'de iki zemin işaretine eğilip A/B almak zorunda
+değilsin: dev penceresinde **Kalibrasyonu atla** anahtarını aç (varsayılan kapalı, `EditorPrefs`'te
+kişisel kalır). Sahne açılışında rig kafası **A işaretinin üstüne**, A→B'ye bakar ve varsayılan boya
+(1,80 m) göre oturur biçimde konur, ardından başlık kendini kalibre bildirir — yani savaş kapıları
+(ateş, hasar, canlanma) açılır. Çapa oluşturulmaz ve **gözlüğün kayıtlı gerçek hizalaması
+silinmez**. Sunucusuz sandbox kipiyle birlikte de çalışır; o zaman bildirim gitmez, yerleştirme ve
+yürüme aynıdır.
+
+Dev hizalama yürürlükteyken kumanda:
+
+| Girdi | Ne yapar |
+|---|---|
+| **Sol çubuk** (yat) | Kafanın bakış yönüne göre yürü (ileri/geri/yana), ~2 m/s |
+| **Sağ çubuk** (yat) | Kafanın etrafında **30°** adım dön (her itişte bir adım) |
+| **Sol çubuğa kısa basış** | Boyu yeniden oturt (yalnız yükseklik) |
+| **Sol çubuğa 1 sn basış** | A işaretine dön |
+
+Gözlüğü ilk taktığın anda boy kendiliğinden yeniden oturtulur. ⚠️ **Sağ çubuğun BASIŞI** gizli IP
+panelinindir, dev yolu ona dokunmaz.
+
+Gerçek kalibrasyon akışını denemek istediğinde anahtarı kapatmak gerekmez: admin ekranından
+**kalibrasyonu sıfırla** → dev hizalama düşer ve elle A/B kapısı açılır; **yeniden yükle** → dev
+hizalama geri gelir. Aynı süreçte gerçekten A/B aldıysan dev dalı kendiliğinden susar.
+
+> ⚠️ **Bu bir hizalama testi DEĞİLDİR.** Sanal alan fiziksel alanla örtüşmez: çapa, zemin sapması,
+> takip bozulması ve A/B jestinin kendisi bununla doğrulanamaz; duvar çarpışması yoktur. Alan dışı
+> ve engel karartmaları ile ateş kapıları kafa konumuna baktığı için **yürüyerek de tetiklenir** —
+> kurtarma yolu A'ya dönmektir. Oturarak test edersen dünya ayakta görünür ama gövde izleme kendi
+> zeminini varsaydığı için karşı taraf avatarını oturur pozda ve yüksekte görür. Birden çok oyuncu
+> aynı A noktasında doğar, yakınlık uyarısı titreşir. Anahtar **APK'ya taşınmaz** — kodun tamamı
+> `#if UNITY_EDITOR` içindedir.
+
 ---
 
 ## 3. Sunucusuz ilk test (en hızlı yol, sınırlı)

@@ -128,7 +128,7 @@ public sealed class StateHost
         _cts = new CancellationTokenSource();
         var token = _cts.Token;
         _loop = Task.Run(() => ReceiveLoopAsync(udp, token));
-        _snapshotLoop = Task.Run(() => SnapshotLoopAsync(udp, token));
+        _snapshotLoop = Task.Run(() => RunGuardedAsync("snapshot", () => SnapshotLoopAsync(udp, token), token));
     }
 
     /// <summary>Cancel → drain BOTH loops → close the socket → dispose. Idempotent.</summary>
@@ -178,36 +178,84 @@ public sealed class StateHost
             Interlocked.Increment(ref _rxPackets);
             Interlocked.Add(ref _rxBytes, data.Length);
 
-            switch (data[0])
+            // ⚠️ Per-datagram guard: one bad packet must not end the loop — poses/hits would stop
+            // while WS still looks connected.
+            try
             {
-                case UdpPacketType.UdpHello:
-                    if (data.Length < UdpHello.SIZE) { Interlocked.Increment(ref _rxRejected); break; }
-                    await HandleUdpHelloAsync(udp, data, result.RemoteEndPoint, token);
-                    break;
-                case UdpPacketType.PoseUpdate:
-                    if (data.Length < PoseUpdate.SIZE) { Interlocked.Increment(ref _rxRejected); break; }
-                    HandlePoseUpdate(data, result.RemoteEndPoint);
-                    break;
-                case UdpPacketType.FireEvent:
-                    if (data.Length < FireEvent.SIZE) { Interlocked.Increment(ref _rxRejected); break; }
-                    HandleFireEvent(data, result.RemoteEndPoint);
-                    break;
-                case UdpPacketType.RttProbe:
-                    if (data.Length < RttProbe.SIZE) { Interlocked.Increment(ref _rxRejected); break; }
-                    await HandleRttProbeAsync(udp, data, result.RemoteEndPoint, token);
-                    break;
-                case UdpPacketType.ObjectPose:
-                    if (data.Length < ObjectPose.SIZE) { Interlocked.Increment(ref _rxRejected); break; }
-                    HandleObjectPose(data, result.RemoteEndPoint);
-                    break;
-                case UdpPacketType.SkeletonUpdate:
-                    if (data.Length < SkeletonUpdate.HEADER_SIZE) { Interlocked.Increment(ref _rxRejected); break; }
-                    HandleSkeletonUpdate(data, result.RemoteEndPoint);
-                    break;
-                default:
-                    // Unknown packet type — ignored (forward version compatibility).
-                    Interlocked.Increment(ref _rxRejected);
-                    break;
+                switch (data[0])
+                {
+                    case UdpPacketType.UdpHello:
+                        if (data.Length < UdpHello.SIZE) { Interlocked.Increment(ref _rxRejected); break; }
+                        await HandleUdpHelloAsync(udp, data, result.RemoteEndPoint, token);
+                        break;
+                    case UdpPacketType.PoseUpdate:
+                        if (data.Length < PoseUpdate.SIZE) { Interlocked.Increment(ref _rxRejected); break; }
+                        HandlePoseUpdate(data, result.RemoteEndPoint);
+                        break;
+                    case UdpPacketType.FireEvent:
+                        if (data.Length < FireEvent.SIZE) { Interlocked.Increment(ref _rxRejected); break; }
+                        HandleFireEvent(data, result.RemoteEndPoint);
+                        break;
+                    case UdpPacketType.RttProbe:
+                        if (data.Length < RttProbe.SIZE) { Interlocked.Increment(ref _rxRejected); break; }
+                        await HandleRttProbeAsync(udp, data, result.RemoteEndPoint, token);
+                        break;
+                    case UdpPacketType.ObjectPose:
+                        if (data.Length < ObjectPose.SIZE) { Interlocked.Increment(ref _rxRejected); break; }
+                        HandleObjectPose(data, result.RemoteEndPoint);
+                        break;
+                    case UdpPacketType.SkeletonUpdate:
+                        if (data.Length < SkeletonUpdate.HEADER_SIZE) { Interlocked.Increment(ref _rxRejected); break; }
+                        HandleSkeletonUpdate(data, result.RemoteEndPoint);
+                        break;
+                    default:
+                        // Unknown packet type — ignored (forward version compatibility).
+                        Interlocked.Increment(ref _rxRejected);
+                        break;
+                }
+            }
+            catch (OperationCanceledException) when (token.IsCancellationRequested) { break; }
+            catch (ObjectDisposedException) { break; }
+            catch (Exception ex)
+            {
+                Interlocked.Increment(ref _rxRejected);
+                // Rate-limited: a misbehaving sender would otherwise flood the log at packet rate.
+                var nowMs = Environment.TickCount64;
+                if (nowMs - _lastRxErrorLogMs >= ErrorLogIntervalMs)
+                {
+                    _lastRxErrorLogMs = nowMs;
+                    Console.WriteLine($"[state] paket işlenemedi (tip 0x{data[0]:X2}, {data.Length} B, {result.RemoteEndPoint}) — alım sürüyor: {ex}");
+                }
+            }
+        }
+    }
+
+    /// <summary>Minimum gap between two guard log lines (ms); repeats in between are only counted.</summary>
+    private const long ErrorLogIntervalMs = 5000;
+
+    /// <summary>Recv-thread only, so no Interlocked.</summary>
+    private long _lastRxErrorLogMs = -ErrorLogIntervalMs;
+
+    /// <summary>Survives a snapshot loop restart: clients drop ticks older than the last one seen
+    /// (§6.5), so restarting from 0 would silence every snapshot.</summary>
+    private uint _serverTick;
+
+    /// <summary>Restarts a faulted loop after a short pause instead of letting it die silently.</summary>
+    private static async Task RunGuardedAsync(string name, Func<Task> loop, CancellationToken token)
+    {
+        while (!token.IsCancellationRequested)
+        {
+            try
+            {
+                await loop();
+                return;
+            }
+            catch (OperationCanceledException) when (token.IsCancellationRequested) { return; }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[state] {name} döngüsü hata verdi, 1 sn sonra yeniden başlıyor: {ex}");
+                try { await Task.Delay(1000, token); }
+                catch (OperationCanceledException) { return; }
             }
         }
     }
@@ -552,7 +600,7 @@ public sealed class StateHost
     private async Task SnapshotLoopAsync(UdpClient udp, CancellationToken token)
     {
         using var timer = new PeriodicTimer(TimeSpan.FromSeconds(1.0 / ArenaProtocol.SNAPSHOT_RATE_HZ));
-        uint serverTick = 0;
+        var serverTick = _serverTick;
         var summaryDue = DateTime.UtcNow.AddSeconds(1);
         var entries = new List<SnapshotEntry>(ArenaProtocol.SNAPSHOT_MAX_ENTRIES_PER_PACKET);
         var targets = new List<IPEndPoint>();
@@ -673,6 +721,7 @@ public sealed class StateHost
             if (entries.Count == 0 && targets.Count == 0 && _events.IsEmpty) continue;
 
             serverTick++;
+            _serverTick = serverTick;
 
             // ⚠️ Events are drained BEFORE the snapshot: the combine decision (§6.8) needs the event
             // count. Send order is unchanged — the snapshot still goes first.

@@ -37,8 +37,10 @@ namespace VortexArena.Core.Arena
     /// <para><c>PlayerPoseTracker</c> does not wait for alignment; earlier poses are offset by
     /// design so the network sees a connected player. An uncalibrated headset is placed by guess
     /// (<see cref="PreAlignWhenTracked"/>) — not a calibration, just enough to see the
-    /// arena.</para></summary>
-    public class ArenaCalibrator : MonoBehaviour
+    /// arena.</para>
+    /// <para>The editor-only dev alignment (physical calibration skipped) lives in
+    /// <c>ArenaCalibrator.Dev.cs</c>.</para></summary>
+    public partial class ArenaCalibrator : MonoBehaviour
     {
         /// <summary>Object name of the first calibration marker — single source for the scene
         /// marker, mock cube and editor tools. The field <c>anchorA</c> is the same name in
@@ -140,7 +142,7 @@ namespace VortexArena.Core.Arena
         public const string SourceAnchor = "anchor";
 
         /// <summary>Raised on the main thread when calibration completes; the argument is the
-        /// SOURCE (<see cref="SourceManual"/> / <see cref="SourceAnchor"/>).
+        /// SOURCE (<see cref="SourceManual"/> / <see cref="SourceAnchor"/>, editor-only <c>"dev"</c>).
         /// <c>CalibrationState</c> listens and sends <c>set_calibration</c> (§10.6). Pose sending
         /// does not depend on this.</summary>
         public static event Action<string> Calibrated;
@@ -203,6 +205,22 @@ namespace VortexArena.Core.Arena
         /// outright) that can fire back to back; a second run would shift the rig again.</summary>
         private bool preAlignStarted;
 
+        // ---------------------------------------------------------------- editor-only dev alignment
+        // Bodies live in ArenaCalibrator.Dev.cs (#if UNITY_EDITOR). A bodiless partial method is
+        // erased by the compiler, so a build carries neither the calls nor their arguments.
+
+        /// <summary>Scene start: the dev placement takes over the launch path when it applies.</summary>
+        partial void DevStart(ref bool handled);
+
+        /// <summary>Every frame, ahead of the manual gesture.</summary>
+        partial void DevUpdate();
+
+        /// <summary>A real alignment or a clear replaced the dev placement.</summary>
+        partial void DevAlignmentReplaced();
+
+        /// <summary>Operator reload: the dev placement re-applies itself when it applies.</summary>
+        partial void DevReload(Action<string> onResult, ref bool handled);
+
         private Transform RigRoot
         {
             get
@@ -254,6 +272,11 @@ namespace VortexArena.Core.Arena
             PlaceMarkersFromPlan();
             SetMarkersVisible(false);
             TryHookTrackingEvents();
+
+            bool devHandled = false;
+            DevStart(ref devHandled);
+            if (devHandled)
+                return;
 
             string saved = ResolveSavedUuid();
 
@@ -413,6 +436,8 @@ namespace VortexArena.Core.Arena
             // OVRManager may wake after us; keep trying until hooked.
             if (!trackingEventsHooked)
                 TryHookTrackingEvents();
+
+            DevUpdate();
 
             // Gesture: while A is HELD, tap B twice within doubleTapSeconds. No hold duration —
             // waiting with the tip on the mark makes the hand shake and the measurement drift.
@@ -676,6 +701,7 @@ namespace VortexArena.Core.Arena
             float rise = virtualFloorY - physicalB.y;
             rig.position += Vector3.up * rise;
             ApplyFloorLift();
+            DevAlignmentReplaced();
 
             CalibrationGeneration++;
             // Relayed too: the venue calibration procedure reads this line off the SERVER log.
@@ -708,6 +734,7 @@ namespace VortexArena.Core.Arena
             Vector3 target = new Vector3(virtualA.x, VirtualFloorY, virtualA.z);
             rig.position += target - anchorPos;
             ApplyFloorLift();
+            DevAlignmentReplaced();
 
             CalibrationGeneration++;
             // Callers MUST MeasureFloorOffset with this same anchor pose first, otherwise the
@@ -997,6 +1024,7 @@ namespace VortexArena.Core.Arena
         /// here: the other caller is <see cref="CapturePoint"/>, where A must STAY held.</para></summary>
         private void ResetAlignmentState()
         {
+            DevAlignmentReplaced();
             capturedCount = 0;
             capturedA = Vector3.zero;
             pendingBTaps = 0;
@@ -1205,6 +1233,11 @@ namespace VortexArena.Core.Arena
                 onResult?.Invoke("yükleme zaten sürüyor");
                 return;
             }
+
+            bool devHandled = false;
+            DevReload(onResult, ref devHandled);
+            if (devHandled)
+                return;
 
             // ⚠️ Pierces the mode gate: calibration mode gates only the launch restore (§10.6).
             string saved = ResolveSavedUuid(true);

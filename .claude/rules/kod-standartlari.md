@@ -38,6 +38,7 @@ sessizce yalan olur.
 
 - ⚠️ **Serialize edilen enum'a yeni değer SONA eklenir** (Unity sayısal indeks saklar):
   `Team`, `HitZone` (`Body` sıfırda kalır), `GameType`, `ModeTeamMode`, `ModeScoreKind`,
-  `ModeReviveAnchor`, `ModeWeaponSource`, `ModeAudioEvent`, `ModeAudioGameType`.
+  `ModeReviveAnchor`, `ModeWeaponSource`, `ModeAudioEvent`, `ModeAudioGameType`; Girdap arayüz
+  kitinde `UiButtonKind`, `UiChipKind`, `UiGradientMode`, `GirdapFont` (prefablara serileşir).
 - Gerekçe ve diğer serileştirme tuzakları: `Docs/Gelistirici/Yapma-Listesi.md`
   "Serialize edilen veriler" bölümü.

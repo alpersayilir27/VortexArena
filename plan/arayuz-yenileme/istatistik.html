@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>İstatistikler — VortexArena arayüz</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Chakra+Petch:wght@500;600;700&family=Saira+Condensed:wght@500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="tema.css">
+</head>
+<body>
+
+<p class="vcap"><b>İstatistikler</b> — takımlı kip. Tek tablo, takım başına bir grup; takımsız kipte aynı tablo grup başlıksız çizilir.</p>
+<div class="frame"><div class="stage">
+  <div class="arena"></div>
+  <div class="scrim"></div>
+
+  <section class="panel">
+    <header class="p-head">
+      <h1 class="p-title">İSTATİSTİKLER</h1>
+      <span class="sp"></span>
+      <div class="scorebug mini">
+        <div class="sb-team red">KIRMIZI</div>
+        <div class="sb-score">14</div>
+        <div class="sb-score">11</div>
+        <div class="sb-team blue">MAVİ</div>
+      </div>
+      <span class="sp"></span>
+      <button class="btn"><i data-ic="x"></i>KAPAT <kbd>Esc</kbd></button>
+    </header>
+
+    <div class="info">
+      <span><em>FAZ</em>oynanıyor</span>
+      <span><em>KALAN</em>04:37</span>
+      <span><em>MOD</em>[MOD ADI]</span>
+      <span><em>HARİTA</em>[HARİTA ADI]</span>
+      <span><em>SÜRE</em>10 dk</span>
+      <span><em>SKOR LİMİTİ</em>25</span>
+      <span><em>SUNUCU</em>192.168.1.5:7777</span>
+      <span><em>POZ AKIŞI</em>0.1 sn önce</span>
+      <span><em>BAĞLI ADMİN</em>2</span>
+    </div>
+
+    <div class="p-body">
+      <div class="tbl" id="tbl"></div>
+    </div>
+
+    <footer class="p-foot">
+      <span class="sp"></span>
+      <button class="btn"><i data-ic="refresh"></i>GÖVDE YENİLE</button>
+      <button class="btn"><i data-ic="scale"></i>TÜMÜNÜ ÖLÇEKLENDİR</button>
+      <button class="btn on"><i data-ic="target"></i>TÜMÜNÜ KALİBRE ET</button>
+    </footer>
+  </section>
+</div></div>
+
+<script src="tema.js"></script>
+<script>
+  const { ic, kd, batc, ctrl } = VA;
+  const head = `<div class="thead">
+    <span></span><span>OYUNCU</span><span>DURUM</span>
+    <span class="c">${ic('target')}</span><span class="c">${ic('skull')}</span><span class="c">K/D</span><span class="c">SKOR</span>
+    <span>PİL</span><span>KUMANDA</span><span>GÖVDE</span><span>KAT</span><span>PING</span><span>İHLAL</span><span></span>
+  </div>`;
+  const group = (team, name, list, alive) => {
+    const K = list.reduce((a, p) => a + p.k, 0), D = list.reduce((a, p) => a + p.d, 0);
+    return `<div class="tgroup ${team}"><span class="t"><b>${name}</b>${list.length} oyuncu · ${alive} canlı</span>
+      <span class="n c">${K}</span><span class="n c">${D}</span><span></span><span class="n c">${K}</span></div>`;
+  };
+  const row = (p, team) => {
+    const viol = (p.v || []).map((v) => `<span class="chip ${v[2]}">${v[0]} ${v[1]}</span>`).join('') || '<span class="dim">—</span>';
+    const st = p.dead ? 'dead' : p.away ? '' : p.s2 === 'hazır' ? 'good' : 'plain';
+    return `<div class="trow ${team}${p.away ? ' away' : ''}">
+      <span class="no">${p.no}</span>
+      <span class="nm"><b>${p.name}</b><span>#${p.id}</span></span>
+      <span><span class="chip ${st}">${p.s2}</span></span>
+      <span class="n c">${p.k}</span><span class="n c">${p.d}</span><span class="n c">${kd(p.k, p.d)}</span><span class="n c">${p.k}</span>
+      <span class="tele${batc(p.bat)}">${ic('battery')}%${p.bat}</span>
+      <span>${ctrl(p)}</span>
+      <span class="tele ${p.body || ''}">${ic('body')}</span>
+      <span class="dim">${p.kat ? p.kat + '. kat' : '—'}</span>
+      <span class="dim">${p.ping == null ? '—' : p.ping + ' ms'}</span>
+      <span class="viol">${viol}</span>
+      <span class="act">
+        <button class="btn sm ${p.uncal ? 'warnfill' : ''}" style="width:76px">${p.uncal ? 'KALİBRE !' : 'KALİBRE'}</button>
+        <button class="btn sm" style="width:48px"${p.uncal || p.away ? ' disabled' : ''}>ÖLÇ</button>
+        <button class="btn sm sq" aria-label="İsim değiştir">${ic('pencil')}</button>
+        <span class="gap"></span>
+        <button class="btn sm t-bad" style="width:62px">SIFIRLA</button>
+        <button class="btn sm t-bad" style="width:40px">AT</button>
+      </span>
+    </div>`;
+  };
+  document.getElementById('tbl').innerHTML = head +
+    group('red', 'KIRMIZI', VA.RED, 4) + VA.RED.map((p) => row(p, 'red')).join('') +
+    group('blue', 'MAVİ', VA.BLUE, 4) + VA.BLUE.map((p) => row(p, 'blue')).join('');
+</script>
+</body>
+</html>

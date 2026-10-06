@@ -47,9 +47,9 @@ Unity 6000.3.20f1, URP. VR build = player, Windows build = admin. Online haberle
 
 - **Arama = hedefli Grep/Glob; çok dosyaya yayılan keşif alt-ajana.** Büyük dokümanda geniş
   bağlamlı grep yasak. → `is-akisi.md`
-- **Projeyi ajan DERLEMEZ.** Derleme/build/test/Play ajana kapalıdır; doğrulanacaklar sohbete
-  değil Notion kartına yazılır — **yalnız test edilecek şey, birkaç satır**: build adımı, numara
-  öneki, uzun senaryo listesi yok. → `is-akisi.md`
+- **Script derlemesi (`recompile`) ajana her zaman serbesttir, sorulmaz; build/test/Play/refresh
+  ajana kapalıdır.** Doğrulanacaklar sohbete değil Notion kartına yazılır — **yalnız test edilecek
+  şey, birkaç satır**: build adımı, numara öneki, uzun senaryo listesi yok. → `is-akisi.md`
 - **Shell SON basamaktır** — aynı işi MCP tool'u ya da yerleşik araç yapabiliyorsa açılmaz;
   Unity verisi `manage_*` ile okunur, **YAML grep'lenmez**. Makine HER ZAMAN Windows.
   → `unity-erisim.md`

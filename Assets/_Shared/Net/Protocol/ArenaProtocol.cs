@@ -322,6 +322,10 @@ namespace VortexArena.Protocol
         /// JSON loses the race with the close, the client would reconnect by itself.</summary>
         public const string KICK_CLOSE_REASON = "kicked";
 
+        /// <summary>Close-frame reason after <c>version_mismatch</c> (§1). ⚠️ Must differ from
+        /// <see cref="KICK_CLOSE_REASON"/>, else the client treats it as a kick and quits.</summary>
+        public const string VERSION_CLOSE_REASON = "version";
+
         /// <summary>Max entries per snapshot datagram; overflow spills into extra datagrams in the same
         /// tick (§6.3, 550 B &lt; MTU). Each packet applies its own entries independently.</summary>
         public const int SNAPSHOT_MAX_ENTRIES_PER_PACKET = 16;

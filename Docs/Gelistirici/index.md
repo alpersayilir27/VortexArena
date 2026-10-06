@@ -16,7 +16,7 @@ okumadıysan ve "silahımı ateşleyince ne çağıracağım?" sorusunun cevabı
 | 2 | **[Yemek Kitabı](Yemek-Kitabi.md)** | "Şunu yapmak istiyorum" → kopyala-yapıştır reçete. **Günlük olarak burayı kullanacaksın** |
 | 3 | **[API Referansı](API-Referansi.md)** | Çağırabileceğin her şey: tip tip, üye üye, ne zaman çağrılır |
 | 4 | **[Sahne Kurulumu](Sahne-Kurulumu.md)** | Yeni arena/sahne yaparken sahnede bulunması gerekenler |
-| 5 | **[Arayüz Tasarımı](Arayuz-Tasarimi.md)** | 2D/UI nerede duruyor, hangisi prefab hangisi kod, düzenlerken nelere dikkat edilir |
+| 5 | **[Arayüz Tasarımı](Arayuz-Tasarimi.md)** | Girdap arayüz kiti: hangi ekran nerede, prefablar builder'dan nasıl üretilir, ölçü/renk kaynağı, düzenlerken nelere dikkat edilir |
 | 6 | **[Yapma Listesi](Yapma-Listesi.md)** | Pahalıya öğrenilmiş tuzaklar. Bir şey "sessizce çalışmıyorsa" önce buraya bak |
 
 ---
@@ -51,7 +51,8 @@ gücü... hepsi senin tarafında yaşar ve **sunucuya hiçbir şey eklemeden** y
 
 **1. Oyuncu fiziksel olarak yürür.** Rig'i, kamerayı, oyuncunun transformunu **asla taşıma**.
 Işınlanma, knockback, "spawn noktasına götür" — hiçbiri yok. Ölüp canlanmak bile bir *konum*
-değişimi değil *durum* değişimidir.
+değişimi değil *durum* değişimidir. (Tek istisna editördedir: dev hizalama yürürlükteyken
+çubukla yürüme — [İlk Adımlar](Ilk-Adimlar.md).)
 
 **2. Bağlantı yokken de çalışmalı.** Sunucusuz editör oturumunda oyun kodun aynen koşar; ağ
 çağrılarının hepsi sessizce no-op'tur. `if (bağlıysa)` sarmalayıcıları yazma.

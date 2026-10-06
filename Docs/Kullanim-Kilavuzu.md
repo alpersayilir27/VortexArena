@@ -157,8 +157,8 @@ ertesi gün açtığında aynı isimle, aynı numarayla listeye düşer. Bu yüz
 olduğunu bir kez çözmen yeter — gözlükleri **teker teker** aç, listede beliren ismi ve numarayı o
 gözlüğün üstüne etiketle (kurulum sırasında yapılmış olması beklenir).
 
-İsmi değiştirmek istersen: **İstatistik** panelini aç (`I`), o oyuncunun satırındaki **İSİM**
-(kalem) düğmesine bas — ad okunur yazıdan yazı kutusuna döner. Yeni adı yaz ve **Enter**'a bas (ya da
+İsmi değiştirmek istersen: **İstatistik** panelini aç (`I`), o oyuncunun satırındaki **kalem**
+düğmesine bas — ad okunur yazıdan yazı kutusuna döner. Yeni adı yaz ve **Enter**'a bas (ya da
 yanındaki onay düğmesine); vazgeçersen iptal düğmesi satırı eski adına döndürür. Yeni ad o
 gözlükte kalıcıdır, ertesi gün bağlandığında da geçerlidir.
 
@@ -267,38 +267,44 @@ harita değişimi kalibrasyonu bozmaz. (Maç sırasında da aynı adımlarla yen
   örtüşme kalibrasyondan sonra oturur. Bağlantı ekranında (gözlük sunucuyu henüz bulamadıysa)
   gösterilen basit bekleme sahnesinde de örtüşme beklenmez.
 
-### 4.1 Bir oyuncunun kalibrasyonu kaydıysa — **KAL** düğmesi
+### 4.1 Bir oyuncunun kalibrasyonu kaydıysa — **KALİBRE** ve **SIFIRLA** düğmeleri
 
 Maç sırasında bir oyuncunun ekrandaki yeri fiziksel yerinden kaymış görünüyorsa (arkadaşları onu
 duvarın içinde/yanlış yerde görüyor, kendisi "ben oraya nişan almadım" diyor), o oyuncunun
 kalibrasyonu bozulmuştur. **Maçı durdurmana gerek yok:**
 
-- [ ] **1.** Yönetim ekranında o oyuncunun satırındaki **KAL** düğmesine bas.
-      Düğme **yeşil KAL** ise kalibrasyonu iyidir; basınca **EMİN?** yazar.
-- [ ] **2.** Tekrar bas → oyuncunun kalibrasyonu sıfırlanır. Satırın çerçevesi kırmızı olur,
-      düğme **kırmızı KAL !** olur ve kolon başlığında "1 KALİBRESİZ" yazar.
-- [ ] **3.** O andan itibaren oyuncu **ateş edemez, vurulamaz ve ölürse canlanmaz**;
+**Oyuncu başına kalibrasyon işi İSTATİSTİK panelindedir** (`I`), o oyuncunun satırında. Yan
+kolondaki oyuncu kartında kalibrasyon düğmesi **yoktur** — karttaki düğmeler POV, ÖLÇ, takım
+değiştirme ve oyuncuyu atmadır.
+
+- [ ] **1.** `I` ile İSTATİSTİK panelini aç, o oyuncunun satırını bul.
+- [ ] **2.** Önce **KALİBRE**'ye bas: gözlükte kayıtlı olan hizalamayı geri yüklemeyi dener ve
+      **kimseyi oyun dışı bırakmaz**. Düğme kısa süre **YÜKLENİYOR** yazar, sonra **TAMAM** ya da
+      **HATA** gösterip eski hâline döner. Tuttuysa iş bitti.
+- [ ] **3.** Tutmadıysa **SIFIRLA**'ya **kısa bas**: oyuncunun o anki hizalaması anında geçersiz
+      olur. ⚠️ **Onay sormaz, ilk basışta gider.** Satırdaki **KALİBRE** düğmesi **KALİBRE !**
+      olur, yan kolondaki kartı kırmızı çerçeveye döner ve kolonun başlığında "N KALİBRESİZ" yazar.
+- [ ] **4.** O andan itibaren oyuncu **ateş edemez, vurulamaz ve ölürse canlanmaz**;
       diğer oyuncuların ekranında **avatarı yanıp söner** (kimin sorunlu olduğu belli olsun).
       Kendi ekranında "Kalibrasyon gerekli — sağ kumandada A basılıyken B×2" yazar.
-- [ ] **4.** Oyuncu §4'teki adımlarla **yeniden kalibre olur** (artık kombinasyon açıktır).
-      Bitince tik kendiliğinden yeşile döner.
-- [ ] **5.** Oyuncu **kaldığı yerden devam eder** — canı, öldürme sayısı ve skoru sıfırlanmaz.
+- [ ] **5.** Oyuncu §4'teki adımlarla **yeniden kalibre olur** (artık kombinasyon açıktır).
+      Bitince satır kendiliğinden düzelir.
+- [ ] **6.** Oyuncu **kaldığı yerden devam eder** — canı, öldürme sayısı ve skoru sıfırlanmaz.
 
-> **Kısa basınca KAL, gözlükteki kaydı SİLMEZ** — yalnız hizalamayı geçersiz kılar. Yani
-> oyuncunun elle yeniden kalibre olmasını beklemek zorunda değilsin: **TÜMÜNÜ KALİBRE ET**'e
-> basarak onu kayıttan geri kurmayı deneyebilirsin.
+> **Kısa basılan SIFIRLA, gözlükteki kaydı SİLMEZ** — yalnız o anki hizalamayı geçersiz kılar.
+> Yani oyuncunun elle yeniden kalibre olmasını beklemek zorunda değilsin: **KALİBRE** ile onu
+> kayıttan geri kurmayı tekrar deneyebilirsin.
 >
 > ⚠️ **Aynı düğmeyi 1 saniye BASILI TUTARSAN gözlükteki kayıt da silinir.** Basılı tuttukça düğme
 > kırmızıyla dolar ve üstünde **SİLİNİYOR** yazar; dolmadan **parmağını düğmeden kaydırırsan**
 > hiçbir şey olmaz. Dolduğu anda yazı **yeşil SİLİNDİ**'ye döner — iş bitti demektir, parmağını
 > kaldırabilirsin. Ondan sonra o oyuncuda **KALİBRE** artık iş görmez, tek yol elle A/B'dir.
 
-**Tek bir gözlüğün KAYDI bozuksa — sıfırlama düğmesini BASILI TUT.** Oyuncu KAL'dan sonra
-yeniden kalibre oluyor ama aynı oyuncu tekrar tekrar kayıyorsa sorun hizalamada değil, o gözlükte
-**kayıtlı olan** çapadadır. O oyuncunun sıfırlama düğmesini (yan karttaki **KAL**, ya da İstatistik
-panelindeki satırın **SIFIRLA**'sı) **1 saniye basılı tut** — düğme kırmızıyla dolar, **SİLİNİYOR**
-yazar ve dolduğu anda **yeşil SİLİNDİ**'ye döner: kayıt gitti demektir. Dolmadan parmağını
-kaydırırsan iptal olur.
+**Tek bir gözlüğün KAYDI bozuksa — SIFIRLA'yı BASILI TUT.** Oyuncu sıfırlamadan sonra yeniden
+kalibre oluyor ama aynı oyuncu tekrar tekrar kayıyorsa sorun hizalamada değil, o gözlükte
+**kayıtlı olan** çapadadır. O satırın **SIFIRLA** düğmesini **1 saniye basılı tut** — düğme
+kırmızıyla dolar, **SİLİNİYOR** yazar ve dolduğu anda **yeşil SİLİNDİ**'ye döner: kayıt gitti
+demektir. Dolmadan parmağını kaydırırsan iptal olur.
 
 - Yalnız **o gözlüğün** kaydı silinir; salondaki kimse etkilenmez, maç durmaz.
 - Ardından o oyuncuda **KALİBRE** iş görmez ("kayıtlı kalibrasyon yok" der): tek yol oyuncunun
@@ -310,24 +316,27 @@ kaydırırsan iptal olur.
 
 | Düğme | Ne yapar | Ne zaman basılır |
 |---|---|---|
-| **TÜMÜNÜ KALİBRE ET** | Kimseyi kalibresiz yapmaz: bağlı olan **herkesin** gözlüğüne, orada kayıtlı hizalamayı yeniden yükletmeyi dener. Tutmayan oyuncu eskisi gibi kalır, kimse oyun dışı kalmaz | Zemin işaretleri yerinde dururken birkaç kişi kaymış görünüyorsa — herkesi tek tek kalibre ettirmeden dener. Onay istemez, çünkü kimseye zarar vermez |
-| **HİZALAMALARI SIFIRLA** — *kısa bas* (kırmızı yazılı, küçük) | Bağlı olan **herkesi kalibresiz** bırakır: sahadaki herkes aynı anda ateş edemez, vurulamaz ve canlanamaz hâle gelir. Gözlüklerdeki kayıtlar **durur**, yani sonrasında **TÜMÜNÜ KALİBRE ET** ile geri kurmayı deneyebilirsin | Herkesin birden kaydığı bir durumda temiz sayfa açmak için; seans sonunda yeni gruba geçerken. Normal kurtarma yolu budur: **hizalamaları sıfırla → tümünü kalibre et** |
-| **Aynı düğme — 1 sn BASILI TUT** | Yukarıdakinin hepsi + gözlüklerde saklanan hizalama kayıtlarını **siler**. Bundan sonra **TÜMÜNÜ KALİBRE ET** iş görmez ("kayıtlı kalibrasyon yok" der); herkes gözlükte **elle A/B** almak zorundadır | Yalnız kayıtlı hizalamanın kendisi yanlışsa: zemindeki **A/B bantları yerinden oynadıysa/yenilendiyse** ya da gözlükler odayı yeniden tanıdıysa. Bakım işidir, seans arasında yapılır |
+| **TÜMÜNÜ KALİBRE ET** | Kimseyi kalibresiz yapmaz: bağlı olan **herkesin** gözlüğüne, orada kayıtlı hizalamayı yeniden yükletmeyi dener. Tutmayan oyuncu eskisi gibi kalır, kimse oyun dışı kalmaz | Zemin işaretleri yerinde dururken birkaç kişi kaymış görünüyorsa — herkesi tek tek kalibre ettirmeden dener. Onay istemez, çünkü kimseye zarar vermez. **Kurtarmaya buradan başla** |
 | **TÜMÜNÜ ÖLÇEKLENDİR** | Herkesin boyunu birden ölçer (§4.2) | Herkesin dik durduğu bir an; maç öncesi hazırlık en uygunu |
 | **GÖVDE YENİLE** | Herkesin gözlüğünde **vücut takibini** yeniden başlatır. Kalibrasyonla ilgisi yoktur, kimseyi oyun dışı bırakmaz, hiçbir kayıt silinmez — bedeli herkeste birkaç saniyelik gövde donmasıdır | Bir oyuncunun karakteri görünmüyorsa **ve kendiliğinden düzelmediyse**. Gözlükler bunu zaten kendi başına deniyor, o yüzden ilk başvurulacak düğme değildir |
 
-**Sıfırlama düğmelerinin hepsi aynı mantıkla çalışır — her yerde tek düğme vardır:**
-**kısa bas** = hizalamayı sıfırla (gözlükteki kayıt durur), **1 saniye basılı tut** = gözlükteki
-kaydı da sil. Basılı tuttukça düğme kırmızıyla dolar ve ne sildiğini yazar; dolduğu anda yazı
-**yeşile döner ve SİLİNDİ** der. Dolmadan **parmağını düğmeden kaydırırsan** hiçbir şey olmaz.
-⚠️ Yeşil yazıyı görmeden parmağını kaldırdıysan komut GİTMEMİŞTİR — baştan bas.
+⚠️ **Toplu bir sıfırlama düğmesi YOKTUR** — ve aranmasın. Sıfırlamak oyuncuyu oyun dışı bırakır;
+tek tıkla salondaki herkesi aynı anda oyun dışı bırakacak bir düğme, bir yanlış tıklamayla maçın
+tamamını götürürdü. Sıfırlama bu yüzden **yalnız oyuncu başına**, İstatistik satırındaki
+**SIFIRLA** ile yapılır.
 
-⚠️ **Kırmızı düğmeye maçın ortasında basma.** Tek tıklamayla sahadaki **herkes** oyun dışı kalır.
-Tek bir oyuncu kaymışsa doğru yer o oyuncunun satırındaki **KAL** düğmesidir (yukarıdaki adımlar);
-herkesi hizaya sokmayı deniyorsan önce **TÜMÜNÜ KALİBRE ET**'i dene — o kimseyi oyun dışı bırakmaz.
-⚠️ **Basılı tutmak en son çaredir:** ardından salondaki her oyuncunun gözlükte tek tek A/B
-kalibrasyonu alması gerekir, yani bir seans molası demektir. Sorun **tek bir gözlükteyse** toplu
-düğmeye hiç dokunma — o oyuncunun kendi sıfırlama düğmesini basılı tutmak aynı işi yalnız ona yapar.
+**Herkes birden kaymışsa sıra şudur:** (1) **TÜMÜNÜ KALİBRE ET** — kimseyi oyun dışı bırakmadan
+herkeste kayıtlı hizalamayı geri yüklemeyi dener; (2) düzelmeyen oyuncular için tek tek
+**SIFIRLA** (kısa bas) + oyuncu gözlükte elle A/B alır; (3) sorun kayıtlı hizalamanın kendisindeyse
+— zemindeki **A/B bantları yerinden oynadıysa/yenilendiyse** — o oyuncuların **SIFIRLA**'sını
+**basılı tut** (kayıt silinir) ve hepsi elle yeniden kalibre olsun. Üçüncü adım bir **bakım
+işidir**, seans arasında yapılır: ardından o oyuncularda **KALİBRE** iş görmez.
+
+**Sıfırlama düğmesi tek düğmedir ve iki şiddeti vardır:** **kısa bas** = hizalamayı sıfırla
+(gözlükteki kayıt durur), **1 saniye basılı tut** = gözlükteki kaydı da sil. Basılı tuttukça düğme
+kırmızıyla dolar ve **SİLİNİYOR** yazar; dolduğu anda yazı **yeşile döner ve SİLİNDİ** der.
+Dolmadan **parmağını düğmeden kaydırırsan** hiçbir şey olmaz. ⚠️ Yeşil yazıyı görmeden parmağını
+kaldırdıysan silme komutu GİTMEMİŞTİR — baştan bas.
 
 > **Neden tik'i elle geri açamıyorsun:** hizalamanın gerçekten düzeldiğini yalnız gözlüğün
 > kendisi bilir. Sen "tamam" diyebilseydin, aslında hâlâ kaymış bir oyuncu ateş etmeye ve
@@ -341,7 +350,8 @@ kadar herkes **1,80 m** sayılır.
 
 - **Kendiliğinden:** her kalibrasyondan **10 saniye sonra** ölçü alınır — oyuncu kumandayı yere
   değdirip doğrulmuş olsun diye. Oyuncuya kalibrasyondan sonra **ayakta ve dik** durmasını söyle.
-- **Elle, her an:** yönetim ekranında o oyuncunun satırındaki **ÖLÇ** düğmesi. Onay istemez.
+- **Elle, her an:** o oyuncunun **ÖLÇ** düğmesi — hem yan kolondaki kartta hem de İSTATİSTİK
+  panelindeki satırda durur, ikisi aynı işi yapar. Onay istemez.
   Otomatik ölçü yanlış geldiyse (oyuncu o an eğilmişti, gözlük elindeydi, çocuk sonradan taktı)
   oyuncuyu dik durdurup bas; yeni ölçü eskisinin yerine geçer.
 - Düğmenin etiketi ölçülen çarpanı gösterir (`×1.04` gibi) — ölçünün oturduğu anlamına gelir.
@@ -351,7 +361,7 @@ kadar herkes **1,80 m** sayılır.
   *"gövde pozu yok"* → o gözlük ölçülemiyor. Aynı oyuncu başkalarının ekranında **donuk bir
   T-pozunda** duruyorsa teşhis kesindir → §4.4'teki bakım adımlarını uygula.
 
-**Hepsini birden ölçmek için:** İSTATİSTİK paneli (`I`) > listenin altındaki şeritte, sağdaki
+**Hepsini birden ölçmek için:** İSTATİSTİK paneli (`I`) > listenin altındaki şeritte
 **TÜMÜNÜ ÖLÇEKLENDİR** düğmesi. Herkesin gözlüğü kafasında ve dik durduğu bir an seç — maç
 başlamadan önceki hazırlık en uygunu.
 
@@ -389,8 +399,8 @@ seçersin:** TERCİHLER > **KALİBRASYON** bölümündeki üç düğme.
   Pratik sonuç: modu **seans başlamadan**, gözlükler bağlanmadan önce seç.
 - Mod ne olursa olsun **oyun içinde kalibrasyon korunur** — harita değiştirmek kimseyi yeniden
   kalibre ettirmez. Seçim yalnız "uygulama açılırken eski kayda güvenilsin mi" sorusudur.
-- **ESKİ KALİBRE'de bir oyuncu yanlış yerde başlarsa** çözüm bellidir: satırındaki **KAL**
-  düğmesiyle sıfırla, elle yeniden kalibre olsun (§4.1). Bu tekrarlıyorsa modu **2 ÇAPA**'ya al.
+- **ESKİ KALİBRE'de bir oyuncu yanlış yerde başlarsa** çözüm bellidir: İstatistik panelinde o
+  satırın **SIFIRLA**'sına bas, elle yeniden kalibre olsun (§4.1). Bu tekrarlıyorsa modu **2 ÇAPA**'ya al.
 
 ### 4.4 Bakım — gözlüğün kendi alan verisini temizlemek
 
@@ -402,24 +412,26 @@ bir katta veya odada kullanıldığında ortamlar birbirine karışır ve tipik 
 
 **Şu belirtilerden biri varsa temizlik yap:**
 
-- Yönetim ekranında bir oyuncunun kalibre etiketi turuncu **KAL ?** oldu (aşağıda).
+- Yönetim ekranında bir oyuncunun **KALİBRE** düğmesinin yazısı **maviye** döndü — zemin sapması
+  uyarısı (aşağıda).
 - Gözlük başka bir kata/odaya götürülüp geri getirildi.
 - Kalibrasyon tuttu ama oyuncu diğer ekranlarda **havada ya da yere gömülü** duruyor; boyu
   saçmalıyor.
 - Oyuncu diğer ekranlarda sürekli **donuk bir T-pozunda** duruyor (kolları yana açık, hiç
   kıpırdamıyor ama konumu doğru takip ediyor).
 
-**Zemin sapması uyarısı (KAL ?) ne demek**
+**Zemin sapması uyarısı ne demek**
 
 Oyuncu kalibre olurken sistem iki şeyi karşılaştırır: gözlüğün kendi zemin tahmini ile gerçek
 zemin noktası (elle kalibrede kumandanın yere değdiği nokta, kayıtlı hizalama kendiliğinden
 gelirken kaydın kendisi — yani açılışta ve her harita geçişinde yeniden ölçülür). Aradaki fark
-büyükse yönetim ekranında bir duyuru düşer ve
-o oyuncunun satırındaki kalibre etiketi turuncu **KAL ?** olur (kırmızı **KAL !** ile karıştırma —
-o "kalibresiz" demektir ve oyuncu oynayamaz).
+büyükse yönetim ekranında bir duyuru düşer ve İstatistik panelinde o oyuncunun **KALİBRE**
+düğmesinin **yazısı maviye döner** — düğmenin üstündeki kelime aynı kalır. Kalibresiz oyuncunun
+düğmesiyle karıştırma: orada düğme **dolu kırmızı** olur ve **KALİBRE !** yazar, o oyuncu
+oynayamaz.
 
 - **Kalibrasyon yine de geçerlidir** — ölçüm zemini zaten düzeltiyor, maça devam edebilirsin.
-- **KAL ?** bir **bakım sinyalidir**: o gözlüğün alan verisi bozulmuş demektir. Seans arasında
+- Renkli yazı bir **bakım sinyalidir**: o gözlüğün alan verisi bozulmuş demektir. Seans arasında
   temizle, yoksa aynı gözlükte yükseklik sorunları tekrarlar.
 - ⚠️ **Aynı uyarı yanlış yakalamadan da çıkar:** oyuncuya elle kalibrede **kumandanın ucu iki
   noktada da zeminde olsun** dedir — uç havadayken alınan nokta hizalamayı yukarı kaydırır ve o
@@ -537,23 +549,26 @@ Yönetim ekranındaki dashboard'da elindeki kontroller:
 | **Çıkar (kick)** | Oyuncuyu atar — **o gözlükteki oyun kapanır** | Yanlışlıkla bağlanan/oyunda olmaması gereken cihaz |
 | **Mod seçimi** | Oyun türü: **Takım Ölüm Maçı** (kırmızı-mavi), **Herkes Tek** (takım yok, herkes herkese karşı) veya **Turnuva** (turlar hâlinde takım elemesi). Satıra bas, liste aşağı açılır, seçeceğine tıkla | Her maç öncesi — aşağıdaki "Üç oyun modu" kutusuna bak |
 | **Harita seçimi** | Hangi arenada oynanacağı — mod seçimiyle aynı açılır liste. Listenin **ilk satırı "Lobi"dir**: seçersen herkes lobiye döner | Her maç öncesi — sadece seçili modla uyumlu haritalar listelenir |
-| **Maçı Başlat** (ekranın **alt ortasındaki yeşil ▶**) | Herkesi arenaya alır, geri sayımı başlatır | Herkes bağlı ve hazır olduğunda. Düğme yalnız bir arena açıkken ve maç kurulmamışken yanar; lobideyken sönüktür |
-| **Maçı İptal** (alt ortadaki **kırmızı ■**) | Maçı erken bitirir, herkesi lobiye döndürür | Acil durum, oyuncu değişimi, yanlış harita. Lobide sönüktür (iptal edilecek maç yok) |
-| **Duraklat / Devam et** (alt ortadaki **⏸** — duraklattığında **▶** olur) | Koşan maçı dondurur, aynı düğme kaldığı yerden sürdürür | Aşağıdaki "Maçı geçici olarak durdurmak" bölümü |
+| **Maçı Başlat** (ekranın **alt ortasındaki yeşil ▶ BAŞLAT**) | Herkesi arenaya alır, geri sayımı başlatır | Herkes bağlı ve hazır olduğunda. Düğme yalnız bir arena açıkken ve maç kurulmamışken yanar; lobideyken sönüktür |
+| **Maçı İptal** (alt ortadaki kırmızı **✕ İPTAL**) | Maçı erken keser, herkesi lobiye döndürür — sonuç ekranı çıkmaz | Acil durum, oyuncu değişimi, yanlış harita. Lobide sönüktür (iptal edilecek maç yok) |
+| **Maçı Bitir** (alt ortadaki **■ BİTİR**) | Maçı **normal yoldan** kapatır: o anki skora göre kazanan ilan edilir, sonuç ekranı ve skor tablosu çıkar | Doğal yoldan bitmeyen maçlarda. **İki kez basılır** (aşağıda) |
+| **Duraklat / Devam et** (alt ortadaki **⏸ DURAKLAT** — duraklattığında **▶ DEVAM** olur) | Koşan maçı dondurur, aynı düğme kaldığı yerden sürdürür | Aşağıdaki "Maçı geçici olarak durdurmak" bölümü |
+| **Kat seçici** (alt barın sağ ucundaki **KAT** düğmeleri) | İzlediğin katı seçer; kuş bakışında yalnız o kat görünür | **Yalnız çok katlı arenada görünür** — tek katlı arenada şerit İPTAL'de biter |
 | **Dost ateşi** | Takım arkadaşının da vurulup vurulamayacağını belirler (Tercihler → **MAÇ** sekmesi). **Kapalı** (varsayılan): takım arkadaşına ateş etsen de canı azalmaz. **Açık**: azalır. Satırdaki iki düğmeden hangisine bassan aç/kapa yapar; açıkken değer kırmızı yanar | Diğer satırların aksine **maç sırasında da değiştirilebilir** — maçı iptal etmen gerekmez, etkisi anında geçer. Takım arkadaşını öldürmek **puan kazandırmaz, tersine öldürenden 1 öldürme ve 1 puan siler** (Counter-Strike kuralı; sayı eksiye düşebilir, takım skoru değişmez, öldürme listesinde yine görünür). Ayar sunucu kapanana kadar kalır: maç bitince, harita değişince kendiliğinden kapanmaz |
-| **Skor ve öldürme akışı** | Ortada canlı skor + faz/süre, sağ altta "kim kimi vurdu" listesi | Maç sırasında takip |
+| **Skor ve öldürme akışı** | Üst ortada canlı skor ve süre; **sağ yanda** "kim kimi vurdu" listesi, **sol yanda** ihlal listesi (oyun alanının dışına çıkan ya da engele giren oyuncular) | Maç sırasında takip. İki liste bilerek karşı yanlardadır: biri maçın hikâyesi, diğeri senin iş listen |
 | **Kamera: Kuş bakışı** (sağ üstteki **KUŞ BAKIŞI** düğmesi ya da `3`) | Arenayı yukarıdan görürsün; her oyuncunun **etrafında renkli halka, altında adı** yazar | Kimin nerede olduğunu görmek, güvenlik takibi — **varsayılan görünüm** |
 | **Kamera: POV** (oyuncu kartındaki **POV** düğmesi; seçili oyuncu için `1` ya da `F`) | O oyuncunun **kendi gözünden** izlersin — karttaki POV'a basmak hem oyuncuyu seçer hem gözünden bakmaya geçer. Sağ üstte ayrı bir POV düğmesi yoktur; hangi oyuncuya baktığını listede **turuncu çerçeveli** satırdan görürsün | "Bu oyuncu ne görüyor / neden takıldı?" |
 | **Kamera: Serbest** (sağ üstteki **SERBEST** düğmesi ya da `2`) | Arenada özgürce dolaşırsın: **W A S D** yürü, **Q/E** in-çık, **sağ fare tuşunu basılı tutup** bakış çevir, **Shift** hızlı | Bir köşeye yakından bakmak |
-| **İstatistik** | Skorun ortasındaki kutuya bas (veya `I`) | Oyuncu başına öldürme/ölüm/can/batarya **ve PING** tablosu. Takımlı bir modda liste **ikiye bölünür — solda kırmızı, sağda mavi**; her iki tarafta da aynı bilgiler ve aynı düğmeler vardır, düğmeler dar sütunda yazı yerine **ikon** olarak görünür. Herkes tek modunda tek listeye döner. Takımı henüz belli olmayan oyuncular **sol sütunda** durur, sütunun başlığı kaç tane olduğunu yazar |
-| **Tercihler** | Sol üstteki düğme (veya `P`). Panel **dört sekmelidir**: **MAÇ** (mod/harita/süre/skor limiti/geri sayım/dost ateşi + kalibre modu), **GÖRÜNÜM** (halkalar, ad etiketleri, ihlal sesi, kamera hızı, çatı — yalnız senin ekranın), **BAĞLANTI** (yeniden bağlan/kes, oyundan çık), **SES** (ses çıkışı + dört ses türünün seviyesi + salona fon müziği çalan **müzik çalar** — yalnız senin ekranın) | Maç kurmak, görünümü ayarlamak, bağlantıyı yönetmek. Başlat/duraklat/iptal düğmeleri panelde **değil**, ekranın alt ortasındadır |
+| **İstatistik** | Skorun altındaki **İSTATİSTİK** kutusuna bas (veya `I`; `Esc` ya da tekrar `I` kapatır) | **Tek tablo**: oyuncu başına öldürme/ölüm/skor, pil, kumanda, gövde, kat **ve PING**; satırın sonunda o oyuncunun ihlal sayıları. Takımlı bir modda satırlar **takım başlıklarıyla gruplanır** (kırmızı grubu, mavi grubu — takım toplamları başlıkta yazar), Herkes Tek modunda grup başlığı olmadan skora göre sıralanır. Tablo ikiye bölünmez; düğmeler her satırda yazıyla durur. Takımı henüz belli olmayan oyuncular **kırmızı grubunda** durur, başlık kaç tane olduğunu yazar |
+| **Tercihler** | Sol üstteki **TERCİHLER** düğmesi (veya `P`; `Esc` kapatır). Panel **dört sekmelidir**: **MAÇ** (mod/harita/süre/skor limiti/geri sayım/dost ateşi + kalibre modu), **GÖRÜNÜM** (halkalar, ad etiketleri, ihlal sesi, kamera hızı, çatı — yalnız senin ekranın), **BAĞLANTI** (yeniden bağlan/kes, oyundan çık), **SES** (ses çıkışı + dört ses türünün seviyesi + salona fon müziği çalan **müzik çalar** — yalnız senin ekranın) | Maç kurmak, görünümü ayarlamak, bağlantıyı yönetmek. Başlat/duraklat/iptal düğmeleri panelde **değil**, ekranın alt ortasındadır |
 | **Tam ekran / Pencereli** | `F11` (ekranda düğmesi yoktur) | Yönetim penceresini tüm ekrana yay veya küçült. Seçimin bu bilgisayarda **hatırlanır**: uygulama bir dahaki açılışta aynı kiple gelir |
 | **Oyundan çık** | Tercihler → **BAĞLANTI** sekmesindeki **OYUNDAN ÇIK** | Yönetim uygulamasını kapatır. Güvenlik için **iki kez** basmak gerekir (ilk basışta düğme "EMİN? ÇIK" olur). Sunucuyu ve maçı **kapatmaz** — o ayrı bir penceredir |
 
-**Oyuncu seçmek:** yandaki listede bir oyuncuya tıkla — seçili oyuncunun çerçevesi turuncu olur,
-zemindeki halkası büyür. `Tab` ile sıradakine geçersin. Satırdaki küçük düğmeler: **POV** (o oyuncunun
-gözünden izle), **MAVİYE/KIRMIZIYA** (takımını değiştir), **AT** (bağlantıdan çıkar — güvenlik için **iki kez** basmak gerekir, ilk basışta
-düğme "EMİN?" olur). ⚠️ **AT o gözlükteki oyunu kapatır** ve **satırı listeden siler**: oyuncu
+**Oyuncu seçmek:** yandaki kolonda bir oyuncu kartına tıkla — seçili oyuncunun çerçevesi turuncu
+olur, zemindeki halkası büyür. `Tab` ile sıradakine geçersin. Karttaki dört düğme: **POV** (o
+oyuncunun gözünden izle), **ÖLÇ** (boyunu ölç — §4.2), **MAVİ/KIRMIZI** (takımını değiştir),
+**AT** (bağlantıdan çıkar — güvenlik için **iki kez** basmak gerekir, ilk basışta düğme "EMİN?"
+olur). ⚠️ **Kartta kalibrasyon düğmesi yoktur** — o iş İSTATİSTİK panelindeki satırdadır (§4.1). ⚠️ **AT o gözlükteki oyunu kapatır** ve **satırı listeden siler**: oyuncu
 birkaç saniye içinde Quest'in kendi menüsünde bulur kendini, geri dönmesi için oyunun elle yeniden
 açılması gerekir. Yani "AT" molaya çıkarmak için değil, o cihazı oturumdan çıkarmak içindir.
 Listede "ayrıldı" ya da "yeniden bağlanıyor" olarak kalmış bir satırı temizlemek için de AT kullanılır. Atmak yasaklamak
@@ -761,8 +776,9 @@ bitmişse lobiye de dönmez. Bu molanın **süresi yoktur** — istediğin kadar
 > Yanlış harita seçtiysen alt ortadaki kırmızı **✕ İPTAL** → doğru haritayı seç → **▶ BAŞLAT**.
 
 > **Alt ortadaki dört düğme:** **▶ BAŞLAT** · **⏸ DURAKLAT/DEVAM** · **■ BİTİR** · **✕ İPTAL**.
-> ⚠️ **BİTİR İKİ KEZ basılır:** ilk basışta ikon turuncuya döner ("onaylamak için tekrar bas"),
-> ikinci basışta maç biter. Turuncu ~3 saniye sonra kendiliğinden söner ve hiçbir şey gönderilmez.
+> ⚠️ **BİTİR İKİ KEZ basılır:** ilk basışta düğmenin yazısı **BİTİR?** olur, zemini turuncuya döner
+> ve şeridin üstünde "onaylamak için tekrar bas" satırı belirir; ikinci basışta maç biter. Turuncu
+> ~3 saniye sonra kendiliğinden söner ve hiçbir şey gönderilmez.
 > Sebebi: BİTİR geri alınamaz ve **oynanmakta olan turu saymaz** — kazanan o anki tur skorundan
 > ilan edilir.
 > ⚠️ **BİTİR ile İPTAL aynı şey değildir:** BİTİR maçı **normal yoldan** kapatır — o anki skora göre
@@ -848,7 +864,7 @@ bekler. **Operatörün elle canlandırma düğmesi yoktur** — canlanmak oyuncu
 Şartı yerine getiremeyen oyuncu (gözlüğü donmuş, tabanına yürüyemiyor) maçın sonuna kadar ölü
 kalır. Yapılabilecekler:
 
-- **Oyuncu kalibresiz mi?** (satırı kırmızı, düğmesinde **KAL !** yazıyor) Kalibresiz oyuncu zaten
+- **Oyuncu kalibresiz mi?** (kartı kırmızı çerçeveli, İstatistik satırında **KALİBRE !** yazıyor) Kalibresiz oyuncu zaten
   ateş edemez, vurulamaz ve **canlanamaz**. Kalibrasyonu yaptır (Bölüm 4) — şart zaten dolduğu için
   hemen canlanır.
 - **Bir engelin/duvarın içinde mi duruyor?** (sütun, kasa, blok — halkası kırmızı yanıp sönüyorsa
@@ -939,8 +955,8 @@ yürüdüğü yer aynı kalır, değişen yalnız gözlükte gördüğü kattır
   rakiptir. Oyuncuya söylenecek cümle: **"Soluk görünen rakibe ateş etme, o başka katta."**
 - Yönetim ekranındaki oyuncu listesinde, üst kattaki oyuncunun satırında **"1. kat"** gibi bir not
   çıkar (zemin katta bir şey yazmaz; zemin 0, bir üstü 1. kattır) ve kuş bakışında halkası o katın zemininde durur.
-- **Katlı arenada alt barda kat düğmeleri belirir** — BAŞLAT/BİTİR düğmelerinin sağında **Zemin**,
-  **1. kat**, **2. kat** … Bir kata basmak ekranı o katın kuş bakışına alır ve **yalnız o katı**
+- **Katlı arenada alt barın sağ ucunda KAT düğmeleri belirir** — İPTAL'in sağında **Zemin**,
+  **1. kat**, **2. kat** … (tek katlı arenada hiç çıkmaz, şerit İPTAL'de biter). Bir kata basmak ekranı o katın kuş bakışına alır ve **yalnız o katı**
   gösterir: diğer katların oyuncuları, halkaları ve zeminleri görünmez olur, yani üst kat plakası
   alt kattaki kalabalığı gizlemez. Serbest kamerada ve oyuncu gözünde (POV) böyle bir ayıklama
   yoktur. Yeni harita yüklenince seçim **Zemin**'e döner.
@@ -1006,7 +1022,7 @@ ekranın alt ortasındaki **⏸ DURAKLAT** düğmesi (BAŞLAT ile BİTİR'in ara
 | **ÖLÇ**'e bastın, düğmede **ÖLÇÜLEMEDİ** yazdı | Duyuru satırında sebebi yazar: oyuncu kalibresiz **ya da** o gözlük gövde takibi üretemiyor | "kalibre yok" ise önce kalibrasyon. Sebep "gövde pozu yok" ise §4.4'teki temizliği yap |
 | Bir oyuncu diğer ekranlarda **kolları yana açık, donuk** duruyor (T-poz) ama konumu doğru | O gözlükte gövde takibi arızalı — oyuncu görünmez kalmasın diye sistem onu bu şekilde çiziyor | **Önce birkaç saniye bekle:** gözlük takibi kendi kendine yeniden başlatmayı deniyor ve çoğu zaman kendiliğinden düzelir. Geçmezse İstatistik panelinde **GÖVDE YENİLE**, sonra §4.4'teki alan verisi temizliği + yeniden kalibre + **ÖLÇ**. Oyuncunun kendi ekranında belirti olmaz |
 | Bir oyuncunun **karakteri hiç görünmüyor** ama isim etiketi ve silahı doğru yerde duruyor | O gözlükten gövde bilgisi hiç gelmiyor. Sistem gövdeyi kafa ve el konumlarından çizmeye geçer, yani oyuncu görünür ve **vurulabilir** kalır — ama hareketleri sadeleşir (bacaklar oynamaz) | **Önce birkaç saniye bekle** (kendi kendine onarım). Geçmezse **GÖVDE YENİLE**. O da yetmezse §4.4'teki alan verisi temizliği; en son çare gözlüğü tamamen kapatıp açmak |
-| Kalibre etiketi turuncu **KAL ?** oldu | Gözlüğün zemin tahmini ile gerçek zemin arasında büyük fark var (alan verisi bozulmuş) — ya da oyuncu kalibre ederken kumandanın ucunu yere değdirmemiş | Maça devam edebilirsin (kalibrasyon geçerli). Oyuncuya **kumandanın ucu iki noktada da zeminde olsun** deyip tekrar kalibre ettir; yine çıkıyorsa seans arasında §4.4'teki temizliği yap |
+| **KALİBRE** düğmesinin yazısı maviye döndü (zemin sapması) | Gözlüğün zemin tahmini ile gerçek zemin arasında büyük fark var (alan verisi bozulmuş) — ya da oyuncu kalibre ederken kumandanın ucunu yere değdirmemiş | Maça devam edebilirsin (kalibrasyon geçerli). Oyuncuya **kumandanın ucu iki noktada da zeminde olsun** deyip tekrar kalibre ettir; yine çıkıyorsa seans arasında §4.4'teki temizliği yap |
 | Oyuncular uygulamayı her açtığında yeniden kalibre olmak zorunda kalıyor | Kalibre modu **2 ÇAPA** (varsayılan) | Beklenen davranış. Tek katlı, sorunsuz bir kurulumda hızlandırmak istersen TERCİHLER > MAÇ > KALİBRASYON > **ESKİ KALİBRE** (§4.3) |
 | Kalibre modunu değiştirdin ama hiçbir şey değişmedi | Gözlükler ayarı yalnız **bağlanırken** okur | O gözlüklerde uygulamayı kapatıp yeniden aç; modu bundan sonra seans başında seç (§4.3) |
 | Oyun ortasında arena birden kaydı | Gözlüğün konum takibi sıfırlandı | Genelde kendiliğinden düzelir. Düzelmezse o oyuncuya kalibrasyonu tekrarlat |
@@ -1018,7 +1034,7 @@ ekranın alt ortasındaki **⏸ DURAKLAT** düğmesi (BAŞLAT ile BİTİR'in ara
 | Maç başlamıyor | Bağlı oyuncu yok ya da bir gözlükte eski sürüm var | Listede oyuncu var mı bak; varsa sunucu penceresindeki son satırı teknik ekibe ilet |
 | Ses gelmiyor | Gözlüğün sesi kısık | Gözlüğün ses seviyesini aç |
 | Oyuncunun ekranı karardı, uyarı çıktı | Oyun alanının dışına çıkmış | Oyuncuya geri içeri girmesini söyle |
-| Bir oyuncu yanlış yerde görünüyor / "nişan aldığım yere gitmiyor" diyor | O gözlüğün kalibrasyonu kaymış | Satırındaki **KAL** düğmesiyle sıfırla, yeniden kalibre ettir (§4.1) |
+| Bir oyuncu yanlış yerde görünüyor / "nişan aldığım yere gitmiyor" diyor | O gözlüğün kalibrasyonu kaymış | İstatistik panelinde önce **KALİBRE**'yi dene; tutmazsa **SIFIRLA**'ya basıp yeniden kalibre ettir (§4.1) |
 | Bir avatar yanıp sönüyor | O oyuncu kalibresiz — ateş edemez, vurulamaz | Yeniden kalibre olmasını söyle (§4.1); bitince kendiliğinden düzelir |
 | Oyuncu "silahım çalışmıyor" diyor, ekranında kalibrasyon yazısı var | Kalibrasyonu sıfırlanmış | Bölüm 4'teki adımlarla yeniden kalibre olsun (§4.1/4) |
 | Sahne değişince gözlük siyah kalıyor | Yükleme uzuyor — karartma yeni sahne açılana kadar sürer | Oyuncunun ekranındaki yükleme kartının **yüzdesine** bak: ilerliyorsa beklemek yeterli. İlerlemiyorsa maçı **İPTAL** edip yeniden başlat |

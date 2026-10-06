@@ -5,7 +5,7 @@ using VortexArena.Core.Arena;
 namespace VortexArena.Core.Editor
 {
     /// <summary>Hierarchy context menu: adds <see cref="ArenaRoof"/> to the selection and stamps
-    /// <see cref="ArenaRoof.LayerName"/> on every Renderer below it.</summary>
+    /// <see cref="ArenaRoof.LayerName"/> on every collider-free Renderer below it.</summary>
     /// <remarks>The layer is only for visibility/filtering in the Scene view; hiding is driven by
     /// the component's Renderer list and works even without the stamp. Prefab assets are skipped
     /// (scene objects only); objects that already have the component keep it but get the layer

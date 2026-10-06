@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using VortexArena.Core.Arena;
 using VortexArena.Core.Player;
@@ -23,7 +24,8 @@ namespace VortexArena.Core.Combat
         /// jumping the item metres ahead is worse than the delay itself.</summary>
         private const float MaxCatchUpSeconds = 0.5f;
 
-        /// <summary>Avatars can spawn DURING the flight, so the ignore list is rebuilt this often.</summary>
+        /// <summary>Avatars can spawn DURING the flight, so NEW hitboxes are picked up this often;
+        /// already-excluded ones are skipped (<see cref="_ignoredHitBoxes"/>).</summary>
         private const float AvatarScanIntervalSeconds = 0.5f;
 
         /// <summary>Extra life after the fuse before a never-triggered item removes itself (an
@@ -43,6 +45,17 @@ namespace VortexArena.Core.Combat
         private float _flightLinearDamping;
         private float _flightAngularDamping;
 
+        /// <summary>Hitboxes already excluded from this flight — a rescan only costs the new ones.</summary>
+        private readonly HashSet<RemoteHitBox> _ignoredHitBoxes = new HashSet<RemoteHitBox>();
+
+        private Collider[] _localColliders = EmptyColliders;
+        private bool _localIgnored;
+
+        /// <summary>Came from <see cref="ThrowablePool"/>, so it goes back there instead of being
+        /// destroyed. Set by the pool at node creation (<see cref="MarkPooled"/>), never by
+        /// <see cref="Arm"/>: the wrist holster arms its own instance and that one is not pooled.</summary>
+        private bool _pooled;
+
         private bool _armed;
         private bool _triggered;
         private bool _landed;
@@ -58,11 +71,13 @@ namespace VortexArena.Core.Combat
         /// <summary>Was the throw made by THIS client — the single copy allowed to report damage.</summary>
         public bool LocalOwner { get; private set; }
 
-        /// <summary>Raised at detonation, right before the object is destroyed (the wrist holster
+        /// <summary>Raised at detonation, right before the item leaves play (the wrist holster
         /// starts its refill from here, never from the throw).</summary>
         public System.Action<Throwable> Triggered;
 
-        /// <summary>Instantiates the definition's prefab and arms it. Null if there is no prefab.</summary>
+        /// <summary>Takes a pooled copy of the definition's prefab and arms it. Null if there is no
+        /// prefab. ⚠️ POOLED, not instantiated: a bomb created at throw time pays its own material
+        /// warm-up on that frame (<see cref="ThrowablePool"/>).</summary>
         public static Throwable SpawnAndArm(ThrowableDefinition definition, Vector3 worldOrigin,
             Vector3 worldDirection, float speedMetersPerSecond, bool localOwner, float catchUpSeconds)
         {
@@ -72,7 +87,11 @@ namespace VortexArena.Core.Combat
                 return null;
             }
 
-            GameObject instance = Instantiate(definition.Prefab, worldOrigin, Quaternion.identity);
+            GameObject instance = ThrowablePool.Shared.Take(definition.Prefab);
+            if (instance == null)
+            {
+                return null;
+            }
 
             var throwable = instance.GetComponent<Throwable>();
             if (throwable == null)
@@ -150,6 +169,10 @@ namespace VortexArena.Core.Combat
 
             _body.angularVelocity = axis.normalized * (definition.SpinDegreesPerSecond * Mathf.Deg2Rad);
 
+            // A copy coming back from the pool was parked asleep; velocities alone do not always
+            // wake PhysX and a sleeping body would hang in the air.
+            _body.WakeUp();
+
             // 4) Second net over the code-side avatar exclusion below (scene volumes that are not
             // geometry).
             _body.excludeLayers = definition.ExcludedLayers;
@@ -192,7 +215,7 @@ namespace VortexArena.Core.Combat
             if (now >= _expireTime)
             {
                 // Nothing ever set it off (an Impact type that hit nothing): leave silently, no FX.
-                Destroy(gameObject);
+                Despawn();
             }
         }
 
@@ -233,7 +256,50 @@ namespace VortexArena.Core.Combat
             }
 
             Triggered?.Invoke(this);
-            Destroy(gameObject);
+            Despawn();
+        }
+
+        /// <summary>Called ONCE by <see cref="ThrowablePool"/> when the node is built, so a node taken
+        /// back before it was ever armed (warmup overlap) is parked, not destroyed.</summary>
+        public void MarkPooled()
+        {
+            _pooled = true;
+        }
+
+        /// <summary>Pulls a still-flying pooled copy out of play WITHOUT firing its effect — the pool
+        /// needs the slot back. No blast, no <see cref="Triggered"/>.</summary>
+        public void ReturnToPool()
+        {
+            Despawn();
+        }
+
+        /// <summary>Leaves play: a pooled copy is reset and parked, anything else is destroyed.
+        /// <para>⚠️ Every piece of flight state is cleared here, not in <see cref="Arm"/> alone: the
+        /// same instance comes back for the next throw and a leftover <see cref="Triggered"/>
+        /// subscriber would refill the previous thrower's holster.</para>
+        /// <para>The <c>Physics.IgnoreCollision</c> pairs are intentionally NOT undone (same
+        /// colliders, same answer); clearing <see cref="_ignoredHitBoxes"/> only makes the next
+        /// flight re-apply them.</para></summary>
+        private void Despawn()
+        {
+            if (!_pooled)
+            {
+                Destroy(gameObject);
+                return;
+            }
+
+            _armed = false;
+            _triggered = false;
+            _landed = false;
+            Triggered = null;
+            Definition = null;
+            LocalOwner = false;
+
+            _ignoredHitBoxes.Clear();
+            _localColliders = EmptyColliders;
+            _localIgnored = false;
+
+            ThrowablePool.Shared.Release(gameObject);
         }
 
         // ------------------------------------------------------------------ determinism helpers
@@ -299,6 +365,10 @@ namespace VortexArena.Core.Combat
         /// physics. ⚠️ Remote bodies are interpolated, so they sit somewhere slightly different on
         /// every client — bouncing off one would split the copies (§6.4). A throwable collides with
         /// STATIC GEOMETRY only.
+        /// <para>⚠️ The scan must stay CHEAP: it repeats every <see cref="AvatarScanIntervalSeconds"/>
+        /// for every item in the air. Hence the static registry instead of
+        /// <c>FindObjectsByType</c>, each hitbox's cached colliders, and a per-flight set so a
+        /// hitbox is processed once.</para>
         /// </summary>
         private void IgnoreAvatarColliders()
         {
@@ -307,26 +377,39 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
-            RemoteHitBox[] hitBoxes = FindObjectsByType<RemoteHitBox>(FindObjectsSortMode.None);
-            for (int i = 0; i < hitBoxes.Length; i++)
+            IReadOnlyList<RemoteHitBox> hitBoxes = RemoteHitBox.Active;
+            for (int i = 0; i < hitBoxes.Count; i++)
             {
-                if (hitBoxes[i] == null)
+                RemoteHitBox hitBox = hitBoxes[i];
+                if (hitBox == null || !_ignoredHitBoxes.Add(hitBox))
                 {
                     continue;
                 }
 
-                IgnoreAll(hitBoxes[i].GetComponentsInChildren<Collider>(true));
+                IgnoreAll(hitBox.Colliders);
+            }
+
+            if (_localIgnored)
+            {
+                return;
             }
 
             LocalBodyAvatar local = LocalBodyAvatar.Instance;
             if (local != null)
             {
-                IgnoreAll(local.GetComponentsInChildren<Collider>(true));
+                _localIgnored = true;
+                _localColliders = local.GetComponentsInChildren<Collider>(true);
+                IgnoreAll(_localColliders);
             }
         }
 
         private void IgnoreAll(Collider[] others)
         {
+            if (others == null)
+            {
+                return;
+            }
+
             for (int i = 0; i < others.Length; i++)
             {
                 Collider other = others[i];

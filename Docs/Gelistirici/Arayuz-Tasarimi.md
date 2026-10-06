@@ -7,320 +7,180 @@ title: Arayüz tasarımı — 2D'yi nerede bulurum, nasıl düzenlerim
 Projedeki tüm arayüz **uGUI**'dir: `Canvas` + `TextMeshPro`. **UI Toolkit kullanılmıyor** —
 projede tek bir `.uxml`/`.uss` yok, aramayın.
 
-**Arayüzün tamamı prefabtır ve elle düzenlenir.** Kodda görsel kurulum kalmadı; sınıflar yalnız
-veri yazar (metin, renk, görünürlük, konum). Yerleşim, punto, renk, sprite — hepsi prefabta.
+Admin ekranları ile oyuncunun maç sonu ekranı **"Girdap" arayüz kitiyle koddan üretilir**: prefab
+bir çıktıdır, kaynak builder'dır. Oyuncunun görüş alanındaki HUD'lar, ölüm/bildirim ekranları ve
+yükleme/bağlantı ekranları bunun dışındadır ve **elle düzenlenir**.
 
 ## Nerede ne var
 
-Tüm arayüz prefabları **tek klasörde**: `Assets/_Shared/App/Resources/UI/`
+**Kit** — `Assets/_Shared/Core/UI/` (asmdef `VortexArena.Core`, namespace `VortexArena.Core.UI`):
 
-| Prefab | Ne çizer | Kim kullanır |
-|---|---|---|
-| **`PanelGlow.prefab`** | İki büyük kartın (`AdminStatsPanel` · `AdminPreferencesPanel`) kenarını saran **yumuşak lacivert ışıma**. Kök `PanelGlow` karta tam gerili, grafiksiz bir çerçevedir; ışımanın kendisi çocuğu **`Glow`**'dadır (tek `Image`, `PanelGlow` sprite'ı, `Simple`). Kartın kökünde **ilk çocuk** olarak nested örnek: `PanelBG`'nin üstünde, `Fill`'in (yani tüm içeriğin) altında çizilir. `Glow` karta **anchor'la** bağlıdır ve dışarı taşması orantılıdır (`anchorMin` (−0,075 · −0,133), `anchorMax` (1,075 · 1,133), `sizeDelta` 0 → kart genişliğinin %7,5'i / yüksekliğinin %13,3'ü; 16:9 kartta dört kenarda eşit, 1440×810'da 108 px) — dokudaki tepe çizgisi tam kart kenarına oturur, kart büyüyüp küçülünce kalınlık onunla birlikte ölçeklenir, elle sayı girilmez. ⚠️ Pay ÇOCUKTA durur, kökte değil: nested örneğin KÖK `RectTransform`'u örnek başına saklanır (varsayılan override) ve asset'teki değişiklik oraya yayılmaz — pay kökte olsaydı her kartta elle güncellenirdi. Rengi ve saydamlığı `Glow`'un `Image.color`'undadır (sprite beyaz+alfa; koyu lacivert ton ve yoğunluk buradan gelir, alfa 0,6), `raycastTarget` KAPALI — tıklamayı yutmaz. Işımayı başka bir karta vermek = bu prefabı o kartın kökünün altına ilk çocuk olarak koymak, sprite'ı ikinci kez kullanmak değil | `AdminStatsPanel` · `AdminPreferencesPanel` içinde nested örnek |
-| **`AdminHud.prefab`** | Admin ekranının kalıcı katmanı: skorlar, chip, takım kolonları, sağ üstte **kamera kipi düğmeleri** (`CameraBar` → `Mode1` SERBEST · `Mode2` KUŞ BAKIŞI; ⚠️ POV düğmesi YOKTUR — `AdminHud.modeButtons[0]` yuvası bilerek boştur, POV oyuncu kartından girilir), alt ortada **maç kontrol şeridi** (`MatchBar` → `Start`/`Pause`/`End`/`Abort` ikon düğmeleri, her birinin `Icon` çocuğu; sürücü bileşeni `AdminMatchControls` bu objededir — dördü 70 birim aralıkla ortalanmıştır, x −105/−35/+35/+105). ⚠️ **`End` ile `Abort` ikonları bilerek AYRIDIR:** `End` ■ `stop` (maçı normal yoldan bitirir), `Abort` ✕ `cross` (maçı sonuçsuz kaldırır) — aynı ikonu iki renkte kullanmak operatöre iki farklı yıkıcı eylemi tek şekille öğretirdi. Şeridin **sağ yarısında kat düğmeleri** durur ("Zemin" · "1. kat" · "2. kat" …, 64×40, ikon düğmelerinin sağından başlayarak yatayda dizili): prefabta YOKTUR, `AdminFloorControls` satırı `MatchBar` içinde **kodla** kurar ve **yalnız kat sayısı birden büyük** arenada gösterir — kat sayısı sahneden türediği için düğme sayısı tasarımda sabitlenemez, tek katlı arenada ise şeritte ölü bir seçim durur. Üst bantta chip'in altında **`ScoreBand/Clock`** durur (TMP, `AdminHud.clockText`): maç saati, lobide boş. İsteğe bağlı **`AdminHud.customerCountsText`** (TMP, ör. `ScoreBand/CustomerCounts`) ko-op müşteri sayacını yazar; bağlanmazsa sayaç lider tablosu satırına düşer. Ayrıca ölüm ve ihlal akışları. ⚠️ **Saat ve ko-op sayacı DIŞINDA durum/bilgi metni taşımaz** — maç·harita satırı, bağlantı göstergesi, çoklu admin satırı, seçili oyuncu satırı ve şeridin durum satırı yoktur; ekranda yalnız veri ve kontrol durur. Tercihler ve istatistik panelleri içinde **nested prefab örneği** olarak durur | `AdminSpectator` |
-| **`AdminStatsPanel.prefab`** | İstatistik paneli: kart + takım özeti + **oyuncu satırı listesi** (kaydırılabilir) + maç bilgisi + alttaki toplu eylem şeridi — soldan sağa `Fill/BottomBar/ClearAllCalibration` (herkesin kalibrasyonunu sıfırlar; küçük ve kırmızı yazılı — ⚠️ **kısa basış yumuşak, 1 sn basılı tutmak cihaz kayıtlarını da siler**, ayrı bir `PurgeAllCalibration` düğmesi YOKTUR), `Fill/BottomBar/CalibrateAll` (herkesin kayıtlı hizalamasını yeniden yükletir), `Fill/BottomBar/MeasureAll` (herkesin gövde ölçüsü) ve şeridin **sol ucunda** `Fill/BottomBar/RestartBodyAll` (GÖVDE YENİLE — herkesin gövde izlemesini yeniden başlatır; ⚠️ kalibrasyon düğmesi DEĞİLDİR, yan yana durmaları sıralamadandır) + kendi kapanan uyarı penceresi — sürücü bileşeni kökünde. **Liste iki sütunludur:** `Fill/Scroll/Viewport/Content` altında `RedColumn` ve `BlueColumn` durur (ikisi de boş `RectTransform`; satırlar bunların altına kurulur) ve başlık şeridi ikilidir — `Fill/TableHeader` HERKES TEK kipinin tek şeridi, `Fill/TeamHeaders/RedHeader` + `BlueHeader` takımlı kipin çiftidir. ⚠️ **Sütunların ve takım başlıklarının yatay sınırları KODDAN sürülür** (`AdminStatsPanel._columnGap`): prefabta elle daraltılırlarsa değer ilk tazelemede geri yazılır, ara boşluğu değiştirmenin yeri o alandır. Takım başlığının `IconKills`/`IconDeaths`/`HeaderKd` ögeleri **dar satırın** hücre merkezlerine göre kaydırılmıştır — dar satırdaki hücreleri oynatırsan bu üçünü de oynat | `AdminHud` içinde nested örnek |
-| **`AdminPreferencesPanel.prefab`** | Tercihler paneli — **dört sekmeli** — sürücü bileşeni kökünde; kart kabuğu `AdminStatsPanel` ile aynıdır ve **aynı ölçüdedir** (`PreferencesPanel` 1440×810 — 16:9, 1920×1080 referansta ekranın %75'i: yatay 1440, dikey 810; `PanelBG` bu oranda çizilir → `PanelGlow` (kenar ışıması, nested) → `Fill`). ⚠️ **`Fill`'in koyu dolgu `Image`'ı iki panelde de KAPALIDIR** (`ChamferRect_20`, bileşen enabled=0): açılırsa `PanelBG` sanatının üstüne yarı saydam bir perde çeker ve arka plan "gelmemiş" görünür — kapatmak için objeyi değil yalnız Image bileşenini kapat, obje çocukların kökü. Sekme çubuğu `Fill/Tabs` (`Tab_Mac` · `Tab_Gorunum` · `Tab_Baglanti` · `Tab_Ses`; zemini `BtnDark`/`BtnCyan`, hangisinin çizileceğini kod seçer), sayfalar `Fill/Page_Mac` · `Page_Gorunum` · `Page_Baglanti` · `Page_Ses` (hepsi `Fill`'i dolduran boş kökler; hangisinin açık olduğunu kod belirler, prefabta açık olan yalnız tasarım kolaylığıdır). Satırlar sayfanın altında **70 px adımla** üstten dizilir (ilk satır y = −186; başlık ve `X` istatistik paneliyle birebir aynı ölçüdedir, iki panel arasında geçişte kabuk zıplamaz — birini oynatırsan ötekini de oynat); yeni satır = o sayfada en alta bir satır daha (kart yüksekliği en dolu sayfa olan MAÇ'a göre seçilmiştir). MAÇ: mod/harita açılır listeleri, süre/skor limiti/geri sayım/dost ateşi adımlayıcıları, KALİBRASYON alt bölümü (yalnız **kalibre modu** düğmeleri — iki çapa / kayıtlı çapa / bulut-rezerve); toplu eylemler (kalibrasyon sıfırlama · yeniden yükletme · gövde ölçümü) `AdminStatsPanel`'in alt şeridinde, oyuncu adı `AdminStatsRow`'dadır. GÖRÜNÜM: halkalar · ad etiketleri · ihlal sesi · kamera hızı · çatı. BAĞLANTI: bağlantı metni, `Reconnect` · `Disconnect` · `QuitGame`. SES: ilk satır **ses çıkışı** seçicisidir (`Label_Ses çıkışı` + `Dropdown_Ses çıkışı`; açılır liste, sağ kenardan 45 birim içeride ve adımlayıcı üçlüsüyle aynı genişlikte durur), altında kanal başına bir satır (`AudioChannel` sırasında — ambiyans · silah · seslendirme · müzik), satır ögeleri `Label_` · `Mute_` · `Prev_` · `Value_` · `Next_`; diziler `_audioValues` · `_audioPrev` · `_audioNext` · `_audioMuteButtons` · `_audioMuteLabels` ve **hepsi aynı kanal sırasındadır** — biri kaydırılırsa yanlış kanal kısılır. Kanal satırlarının altında `Section_Muzik` + `Divider_Muzik` başlığıyla **müzik çalar** durur (`AdminMusicPlayer`): bir taşıma satırı (`Track_Prev` · `Track_PlayPause` · `Track_Stop` · `Track_Next` + geniş `Track_Value` parça adı; ortadaki ikisi maç şeridinin `play`/`pause`/`stop` ikonlarını taşır) ve bir ses satırı (`MusicLevel_Mute` · `MusicLevel_Prev` · `MusicLevel_Value` · `MusicLevel_Next`) — dizi değil, tek tek alanlar. ⚠️ Bu bölüm üstteki **Müzik kanalı satırıyla aynı şey değildir**: o kanal haritanın müziğini kısar, bu bölüm admin PC'sindeki klasörden çalan işletme müziğidir. ⚠️ **BAŞLAT/DURAKLAT/İPTAL bu prefabta YOKTUR** — `AdminHud.prefab`'ın `MatchBar`'ındadır. Başlık çubuğunda yalnız `X` vardır (`Close`, `BtnRed`); ⚠️ **pencere kipi düğmesi YOKTUR** — tam ekran/pencereli yalnız `F11`'dedir. ⚠️ `X` sağ kenardan **52 birim** içeride durur (iki panelde de aynı): `PanelBG`'nin sağ üst köşesi ~52 birim pahlıdır, daha sağa alınırsa düğmenin köşesi sanatın dışına taşar. ⚠️ **Kırmızı zemin boştayken GÖRÜNMEZ** ve prefabta böyle kalmalıdır: `Button.colors.normalColor`'ın alfası 0, `highlightedColor`'ınki 1 — kırmızı yalnız fare üstüne gelince gelir (`selectedColor` da 0, yoksa tıklandıktan sonra kırmızı asılı kalırdı). Zemini `Image.color`'dan söndürme: o kapı hover'ı da söndürür | `AdminHud` içinde nested örnek |
-| **`AdminPlayerRow.prefab`** | Kolonlardaki tek oyuncu satırı (ad, HP barı, POV/KAL/ÖLÇ/TAKIM/AT — beş eylem sütunu `Fill` içinde eşit paylaşır, biri eklenir/çıkarılırsa hepsinin anchor'ı yeniden bölünür; `TAKIM` takımsız modda **kod tarafından gizlenir** — prefabta açık durur). ⚠️ **CAN (canlandırma) düğmesi YOKTUR ve eklenmez** — operatörün elle canlandırması yoktur, canlanmanın tek yolu oyuncunun kendi `revive_request`'idir | `AdminHud` örnekler |
-| **`AdminStatsRow.prefab`** | İstatistik panelindeki tek oyuncu satırı (takım şeridi, ad + `#id`, K/D/K-D hücreleri, ayrıntı şeridi (`SKOR · pil · kumanda · kat · ping · durum · ihlal` — ihlal jetonları tür başına sayı taşır ve tek `Fill/Stats` metnidir, ayrı öge eklenmez; ⚠️ `Fill/Stats` **tek satır + otomatik boyut**tur (geniş 14–20, dar varyant 13–18 punto): şerit sığmayınca yazı küçülür, sondaki ihlal jetonu kesilmez — otomatik boyutu kapatıp sabit puntoya dönmek en sağdaki ihlal sayısını "…" arkasına saklar; şeridin tamamını `AdminStatsRow` **tek string olarak** kurar, `"{n}. kat"` jetonu da orada üretilir ve yalnız zemin katın üstündeki oyuncuda yazılır), soldan sağa `Fill/Purge` (SIFIRLA — ⚠️ obje adı tarihseldir, düğme artık **iki kipi de** taşır: kısa basış hizalamayı düşürür, 1 sn basılı tutmak cihaz kaydını siler) /İSİM/AT/ÖLÇ/KALİBRE düğmeleri + satır içi ad yazı kutusu; ⚠️ ayrıntı şeridi (`Fill/Stats`) ile ad yazı kutusunun sağ ucu SIFIRLA'nın soluna kadardır, düğmeyi genişletirsen ikisini de kısalt). Oyuncunun adı **yalnız burada** düzenlenir. `AdminPlayerRow` ile karıştırmayın: o dar yan panel kartı, bu geniş liste satırıdır | `AdminStatsPanel` örnekler ve havuzlar |
-| **`AdminStatsRowNarrow.prefab`** | Yukarıdakinin **prefab VARYANTI** — takımlı kipte panel ikiye bölününce sütuna sığan satır. Aynı ögeler üç şeride yığılmıştır (1: şerit + ad + `#id` + K/D/K-D · 2: ayrıntı şeridi tam genişlik · 3: sağa yaslı beş **ikon düğmesi**), yükseklik 74 yerine 124'tür. Düğmelerde yazı yerine `Fill/<Düğme>/Icon` durur; etiket düğmenin altındaki ince şeride iner ve **yalnız durum yazar** (`EMİN?` · `TAMAM` · `HATA` · `!` · `×ölçek`), boştayken boştur — anahtarı `AdminStatsRow.iconButtons` alanıdır ve **yalnız bu varyantta açıktır**. ⚠️ **Varyant olması sözleşmedir:** rect'ler ve ikonlar dışında her şey tabandan miras alınır, yani geniş satıra eklenen bir öge buraya da gelir — kopyalanmış ikinci bir prefaba dönüştürmeyin. ⚠️ Sütun genişliği ~675 px'dir: sağa yaslı düğme şeridi 272 px yer kaplar, ayrıntı şeridi onun bir alt satırındadır — düğmeleri genişletirsen şeridin sol ucu adı ezmeye başlar | `AdminStatsPanel` örnekler ve havuzlar (yalnız takımlı kipte) |
-| **`AdminPlayerMarker.prefab`** | Oyuncunun zemindeki halkası + ad etiketi (dünya uzayı) | `AdminPlayerMarkers` örnekler |
-| **`ConnectionOverlayScreen.prefab`** | Bağlantı hata ekranı — masaüstü (scrim + "Yeniden Bağlan" düğmesi) | `ConnectionOverlay` |
-| **`ConnectionOverlayWorld.prefab`** | Bağlantı hata ekranı — VR (world-space kart, düğmesiz) | `ConnectionOverlay` |
-| **`LoadingOverlayScreen.prefab`** | Sahne geçişi yükleme ekranı — masaüstü (scrim + kart + ilerleme barı) | `LoadingOverlay` |
-| **`LoadingOverlayWorld.prefab`** | Sahne geçişi yükleme ekranı — VR (world-space kart, **scrim YOK**) | `LoadingOverlay` |
-| **`MatchResultOverlay.prefab`** | Maç sonu ekranı: sonuç kartı (KAZANDIN/KAYBETTİN/BERABERE; kooperatif modda kazanansız kart) + genel skor tablosu. İkisi aynı prefabta iki paneldir ve **ikisi de `AdminStatsPanel`'in kart kabuğunu** kullanır (`StatsPanel` → `Fill`). Moda özel temalı ekranlar bu prefabın **varyantlarıdır** ve mod kutusunda durur (aşağıda) | `MatchResultOverlay` |
-| **`DeathHud.prefab`** | Ölüm ekranı — **tek görsel tanım**, üç mod HUD'ının altında iç içe örnek ve HUD'da **kapalı doğar** (tabanın `deathOverlay` alanı açıp kapatır). Kök `DeathHud` (kendi `Canvas`'ı, ana HUD canvas'ına tam gerili) → **`DeathPanel`** (yırtık kenarlı opak siyah plaka, `DeathHud` sprite'ı) → **`KillerName`** (beyaz, 52 punto, y +70, 800×150; `deathKillerNameText`) ve **`StatusText`** (sarı, 40 punto, y −70, 800×90; `deathStatusText` — HUD'ın durum satırının kopyası, canlanma sayacı tam budur). ⚠️ İki metinde de **kelime kaydırma AÇIK** olmalı: kapalıyken uzun bir katil satırı (`<uzun ad> tarafından öldürüldün!`) tek satır hâlinde panelin dışına taşar. ⚠️ Kutuların **genişlik/yükseklik sırasını karıştırma** — dar ve çok yüksek iki kutu (ör. 90×760) tamamen üst üste biner ve iki metin iç içe çizilir. ⚠️ **Örneğin kökündeki `RectTransform` kaynağa değil ÖRNEĞE aittir** (bkz. `PanelGlow` satırındaki aynı tuzak): kaynakta ortalamak yetmez, panel kaymışsa her mod HUD'ındaki örnekte `anchoredPosition`'ı sıfırlamak gerekir | üç mod HUD'ı içinde nested örnek |
-| **`HealthHud.prefab`** | Oyuncunun can barı — **tek görsel tanım**, üç mod HUD'ının altında iç içe örnek. Kök `HealthHud` (560×142, oran 3,94 = `HealthBar_Frame` sprite'ının oranı; farklı oran çerçeveyi ezer) kendi `Canvas`'ını ve `HeadLockedHud`'unu taşır. ⚠️ **Şeridin görüş alanındaki yüksekliği rect'ten değil `HeadLockedHud`'un açısından gelir** (`pitchDegrees` — bakış ekseninden yukarı derece): kökün dünya pozu her karede yeniden yazılır, yani kökün `anchoredPosition`'ını oynatmak hiçbir şey yapmaz; şeridi yukarı/aşağı almanın tek yeri o alandır. Altında **`Backdrop`** (çerçeve + boş yuva, `HealthBar_Frame`, `Simple`, köke gerili) → onun altında **`Fill`** (`HealthBar_Fill`, `Image.Type: Filled` · `Horizontal` · `Origin Left`; `ModeHudBase.healthFill` bunu sürer) ve **`Value`** (TMP, `ModeHudBase.healthText`; taban `CAN <n>` yazar, prefabtaki metin yer tutucudur). `Value`'nun materyali `_Shared/App/UI/Fonts/LiberationSans SDF - HealthBar.mat`'tır — siyah kenarlıklı (`_OutlineWidth` 0,2) bir TMP preset'i: beyaz yazı hem parlak yeşil dolgunun hem koyu boş yuvanın üstünden geçtiği için kenarlıksız ikisinden birinde eriyor. ⚠️ `Fill` ve `Value` yuvaya **anchor'la** oturur (`anchorMin` 0,045 · 0,1374 — `anchorMax` 0,9546 · 0,8435, offsetler 0): oranlar çerçeve sprite'ındaki iç yuvanın kendisinden ölçülmüştür, bar büyüyüp küçülünce dolgu yerinde kalır, piksel girilmez — sprite yeniden üretilirse bu dört sayı da yeniden ölçülür. ⚠️ Kökün `localScale`'i **1'dir**: ölçek mod HUD canvas'ından (0,0005) miras alınır, buraya da yazılırsa iki kez ölçeklenir. Skor panelinin **altında** ayrı bir çocuk daha var: **`Status`** (TMP, sarı, 30 punto, kelime kaydırma açık, kenarlıklı materyal; `ModeHudBase.statusText` buna bağlanır). Barın kendisi 560 geniş ama bu kutu **900**'dür: en uzun metin (kalibrasyon uyarısı) tek satıra ancak öyle sığıyor — daraltılırsa iki satıra kırılır. ⚠️ Kökün `Canvas`'ında `Override Sorting` açık ve `Sorting Order` **−1**: bar HUD'ın geri kalanının **altında** çizilsin diye — kafaya kilitli olduğu için ölüm ekranıyla üst üste gelir ve sıralama olmadan opak ölüm panelinin üstünde asılı kalırdı. Bu kök yalnız canın değil, **kafaya kilitli şeridin tamamının** tanımıdır: `Status` gibi iki öge daha altındadır ve ikisi de barın **tek** `HeadLockedHud`'una biner — "canın yanında" ancak ikisi kafayla birlikte dönerse doğrudur, ikinci bir kafa kilidi ise tam olarak `HudFollow`'un seyrek tutmaya çalıştığı istisnadır. **`RoundScore`** (`TeamScorePanel`; 380×142, barın **tam altında**: x 0, üst kenarı barın alt kenarından 14 birim aşağıda) → `Panel` (düz siyah, alfa 0,55) → `Round` (32 punto, "TUR n"), `Red` (56 punto, sağa yaslı), `Dash` (durağan ayraç, koda hiç dokunmaz), `Blue` (56 punto, sola yaslı). ⚠️ İki takım rengi `UiKit.TeamColor` / `RemoteAvatar` ile **birebir aynı** iki tondur (0,85·0,20·0,20 ve 0,20·0,40·0,90): oyuncu "bu mavi = mavi takım" eşlemesini avatardan öğreniyor, HUD'da başka bir mavi kullanılırsa eşleme kopar. ⚠️ Bileşen takımsız modda **`Panel`'i** kapatır, kendi nesnesini değil — kendini kapatan bileşen `OnDisable`'da aboneliğini bırakır ve onu geri açacak kural değişimini bir daha duymaz. **`Clock`** (maç saati; 300×82, üst kenara çapalı, pivot altta, y +18 — yani barın **üstünde**, 18 birim boşlukla) → `Panel` (düz siyah, alfa 0,55, `Time`'ın kutusu) → `Time` (56 punto kalın, ortalanmış, `HealthBar.mat`; `ModeHudBase.timeText`). Kök prefabta **kapalı doğar** ve `timeFrame`'e bağlanır: ilk `match_state` gelince taban açar, süre boşalınca (lobi) yine kapatır — boş bir kutu barın üstünde asılı kalmasın. ⚠️ Şerit **tek sütundur**, yukarıdan aşağı: saat · bar · skor paneli · durum satırı · tur sonucu; hepsi x 0'dadır ve kutular arası boşluk 14 birimdir — bir kutunun yüksekliği değişirse altındakilerin hepsi kayar. "Kalan süre" ile "tur skoru" bilerek AYRI kutulardır — biri her modda, diğeri yalnız takımlı modda vardır. **`RoundResult`** (`RoundResultBanner`; 560×130, pivot üstte, şeridin en altında) → `Panel` (alfa 0,70, prefabta **kapalı**) → `Label` (54 punto). Yeri `Status`'un 20 birim **altıdır**: 3 saniyelik bir kutlama, tabana dönüş yönergesini örtmez. ⚠️ `RoundResult` **kendi `Canvas`'ını taşır** (`Override Sorting`, `Sorting Order` **1**): kökün −1'i altında kalsaydı opak ölüm ekranı sonucu tam da onu görmesi gereken oyuncudan gizlerdi | üç mod HUD'ı içinde nested örnek |
-| **`RoundNoticeHud.prefab`** | Ekranın ortasındaki **büyük bildirim** — tur geri sayımı ve modun toplanma başlığı **AYNI metin ögesini** kullanır (`ModeHudBase.centerNoticeText`): iki durum arasında yazı yer ya da punto değiştirseydi göz her seferinde onu yeniden arardı. Kök `RoundNoticeHud` (kendi `Canvas`'ı, ana HUD canvas'ına tam gerili) HUD'da **kapalı doğar** — `centerNoticeRoot` yazacak bir şey oldukça açar. Altında **`Dim`** (düz siyah, alfa 0,30, 4000×2800, y +640; `centerNoticeDim`) ve **`Notice`** (TMP, sarı, **75 punto** kalın, ortalanmış, 1800×400, y +640, `HealthBar.mat` kenarlıklı materyali; `centerNoticeText`). **y +640 kaza değil:** `HudFollow` paneli göz hizasının 0,32 m altına koyuyor, 640 birim × 0,0005 ölçek tam 0,32 m — bildirim böyle bakış ekseninin ortasına döner; sıfırlanırsa yazı 16° aşağı kayar. **75 punto** da `HealthHud/Status`'un 30 puntosunun 2,5 katıdır. ⚠️ **Karartma YALNIZ geri sayımda açılır** (tabanın kuralı): free-roam'da tabanına yürüyen oyuncunun görüşünü sürekli örten bir perde vurgu değil tehlikedir. ⚠️ **En son kardeş olmalı** — opak ölüm ekranının ÜSTÜNDE çizilsin diye. ⚠️ `Dim` bilerek HUD canvas'ının rect'inden **büyüktür** (canvas çocuğunu kırpmaz): 900×520'lik panel kadar bir dikdörtgen "ekran karardı" hissi vermez. ⚠️ Kökün `localScale`'i **1'dir**; ölçek mod HUD canvas'ından (0,0005) miras alınır | mod HUD'ı içinde nested örnek |
-
-Oyuncu HUD'ları ayrı yerdedir (mod kutularında):
-
-| Prefab | Ne çizer |
+| Tip | Ne yapar |
 |---|---|
-| `Assets/Modes/TeamDeathmatch/UI/TdmHud.prefab` | TDM oyuncu HUD'ı |
-| `Assets/Modes/FreeForAll/UI/FfaHud.prefab` | FFA oyuncu HUD'ı |
-| `Assets/Modes/Tournament/UI/TournamentHud.prefab` | Turnuva oyuncu HUD'ı |
-| `Assets/Modes/Mole/UI/MoleHud.prefab` | Köstebek oyuncu HUD'ı — aşağıdaki istisna |
-| `Assets/Modes/Burger/UI/BurgerHud.prefab` | Hamburgerci oyuncu HUD'ı — aşağıdaki istisna |
+| `UiPolygonGraphic` | Köşe kesimli (chamfer) + yan eğimli (slant) konveks poligon tabanı; yarım düzlem kırpma ve üçgen fan yardımcıları burada |
+| `UiShape` | Temanın kutusu: dış çerçeve halkası + gradyan dolgu + dış/iç parıltı + 0,75 px kenar yumuşatma, **tek draw**. Akıcı API: `Chamfer` · `Slant` · `Fill` · `Outline` · `Glow` · `InnerGlow` · `Antialias` |
+| `UiStripes` | CSS `repeating-linear-gradient` karşılığı çapraz şeritler, poligona kırpılı (takım plakaları, canlı ihlal bandı) |
+| `UiSegmentBar` | Dilimli, eğik can çubuğu (`SetFill` · `SetFillColors` · `SetTrack` · `SetMetrics`) |
+| `UiButtonStyle` | Bir düğmenin TÜM görünümü: `SetKind(UiButtonKind)` · `SetInteractable` · `SetLabel` · `SetHold(0..1)`; parçaları `Bind(...)` bağlar |
+| `UiChip` | Rozet: `Set(text, UiChipKind, icon)`; genişliğini kendi ölçer |
+| `Girdap` | Palet ve yardımcılar: `Hex` · `Rgba` · `TeamHi/TeamLo/TeamInk(team)` · `Spacing(em)` · `Upper` · `Font(GirdapFont)` · `Icon(name)` · `Assets` |
+| `GirdapAssets` | ScriptableObject kabı: TMP fontları + ikon sprite'ları |
+| `UiButtonKind` · `UiChipKind` · `UiGradientMode` · `GirdapFont` | Prefablara **serileşen** enum'lar |
 
-⚠️ **`MoleHud` şeridi başka dizer:** bu modda can yoktur, bu yüzden iç içe `HealthHud` örneğinde
-`Backdrop` **kapatılmıştır** (silinmez) ve `RoundScore` örnekte x 0 · y 0'a alınmıştır — yani kapalı
-barın yerinde durur: saat üstte, skor paneli onun altında, durum satırı da örnekte −85'te tutulur.
-⚠️ Örnek panelin **hem x'ini hem y'sini** ezer ve `Status`'u da ezer: tabanda ikisi bir sıra aşağıda
-durduğu için yalnız biri ezilseydi Mole'da panel durum satırının üstüne binerdi. Panelin `Panel`'ine örnekte iki çocuk eklenir: `RedHits` (x −330, sağa
-yaslı) ve `BlueHits` (x +330, sola yaslı); 260×72, 44 punto kalın, `HealthBar.mat`. Renk metnin
-kendisinde (rich text: `D` yeşil, `Y` kırmızı) — metin rengi beyaz kalır. `MoleHud` kökünün ölçeği
-de diğer HUD'lar gibi **0,0005**'tir; şerit bu ölçeği bekler. `DeathHud` bu HUD'da yoktur.
+**Builder** — `Assets/_Shared/App/Scripts/Editor/GirdapUi/`, `partial static class GirdapUiBuilder`
+(ns `VortexArena.App.Editor`). `GirdapUiBuilder.cs` ortak yardımcıları taşır
+(`Node` · `Place`/`PlaceRight`/`PlaceTopCenter`/`PlaceMiddleLeft`/`PlaceBottom*` · `Stretch`/
+`StretchTop`/`StretchBottom`/`StretchLeft` · `Shape`/`ShapeBox` · `Stripes` · `SegmentBar` ·
+`Image` · `Icon` · `Text` · `Kbd` · `Button` · `Chip` · prefab kaydetme), ekran başına bir kardeş
+partial durur (`.Assets` · `.PlayerRow` · `.Stats` · `.Preferences` · `.Hud` · `.MatchResult`).
 
-⚠️ **`BurgerHud` da aynı şeridi can olmadan kullanır, ama takımsızdır:** `Backdrop` kapalı, `RoundScore`
-de **kapalı** — `TeamScorePanel` takımsız modda kendi `Panel`'ini gizler, skor oradan çizilemez. Yerine
-örneğe eklenmiş **`Score`** kutusu (620×140, x 0 · y −25 — kapalı barın yerinde; `Clock/Panel`'in kopyası)
-→ `Value` (50 punto) `scoreText`'e bağlıdır ve `BurgerClientController` oraya **iki satır** yazar:
-"SKOR: x" / "EKİP SKORU: y". Kutu iki satırlık
-yüksekliktedir, üst kenarı +45'te, alt kenarı −95'te. `Status` örnekte −100'dedir (skor kutusunun altı)
-— kutu uzatılırsa `Status` de aşağı alınır. Görüş alanında yalnız saat, skor ve durum satırı
-vardır: `phaseText` ile müşteri sayacı (`customerCountsText`) bilerek **bağlanmamıştır**.
+**Menü** — `Tools > VortexArena > UI > Girdap`: *Fontları ve asset kabını üret* · *Tüm prefabları
+üret* · *Yalnız `<Ekran>`*. Toplu üretimin sırası PlayerRow → StatsRow → StatsPanel →
+PreferencesPanel → Hud → MatchResult'tır; HUD, panelleri ve satır prefabını içine gömer.
 
-Üçünün de içi **bilerek boştur**: taşıdıkları tek şey nested prefab örnekleridir — `HealthHud`
-(kafaya kilitli şerit: can barı + maç saati + durum satırı + tur/skor paneli + tur sonucu) ve
-`DeathHud` (ölüm ekranı) üçünde de, `RoundNoticeHud` (merkez bildirimi) yalnız tur tabanlı HUD'da.
-`ModeHudBase`'in geri kalan alanları (`phaseText` · `scoreText` · `killFeedText` · `standingsText`)
-**bağlanmamıştır**; taban bağlanmayan alanı çizmez. Görüş alanına yeni bir öge eklenecekse yeri bu
-prefablardır, alan `ModeHudBase`'de zaten hazır.
+**Üretilen prefablar** — `Assets/_Shared/App/Resources/UI/`: `AdminPlayerRow` · `AdminStatsRow` ·
+`AdminStatsPanel` · `AdminPreferencesPanel` · `AdminHud` · `MatchResultOverlay`. Builder prefabı
+**yerinde** düzenler: içeriği yükler, kendi ürettiği çocukları siler, yeniden kurar, alanları
+`SerializedObject` ile bağlar, kaydeder.
 
-⚠️ **Şeritteki tur/skor ögeleri `ModeHudBase`'in alanı DEĞİLDİR** — taban takım-agnostiktir (bkz.
-`ScoreLine`), bu yüzden `TeamScorePanel` ve `RoundResultBanner` referansları **takımlı alt
-sınıfların** alanlarıdır: `TdmHud` ve `MoleHud` yalnız skor panelini bağlar, `TournamentHud` ikisini
-de, `FfaHud` hiçbirini. Prefab örneği üçünde de duruyor; FFA'da panel kendini `ModeRuntime.IsTeamless` ile kapatır.
+**Asset kabı** — `Assets/_Shared/App/Resources/UI/Girdap.asset` (`GirdapAssets`): fontlar + ikon
+dizisi + desen sprite'ları. `Girdap.Assets` onu `Resources`'tan tembel yükler; yoksa arayüz
+fontsuz/ikonsuz çizilir ve konsola tek seferlik hata düşer.
 
-⚠️ **Saat `timeText` + `timeFrame` olarak İKİ alan bağlanır** (üç HUD'da da): metin
-`HealthHud/Clock/Panel/Time`, kök `HealthHud/Clock`. Kökün de bağlanması şart, çünkü saatin arkasında
-panel var — lobide süre boşalınca metin siliniyor ama kutu kalıyor ve can barının üstünde asılı boş
-bir dikdörtgen bozuk HUD gibi okunuyor. Kutuyu tabanın kapatması gerekiyor: değerin ne zaman
-kaybolduğunu yalnız o biliyor.
+**Fontlar** — kaynak TTF'ler `Assets/_Shared/App/UI/Fonts/`, menünün ürettiği TMP SDF asset'leri
+`Assets/_Shared/App/Resources/UI/Fonts/` (dinamik atlas; Türkçe glifler ve ayraçlar öne pişirilir).
+**İkonlar** — `Assets/_Shared/App/UI/Sprites/Ic_<Ad>.png`; kodda **çıplak adla** istenir
+(`Girdap.Icon("Skull")`).
 
-⚠️ **`statusText` bu boşaltmanın DIŞINDADIR ve boş bırakılmaz** — `HealthHud/Status`'a bağlıdır.
-Sebebi: o satır süs değil, oyuncunun oyuna girebilmesi için gereken tek talimatı taşıyor.
-`PlayerCombatState.RefreshStatusText()`'in **ilk** dalı kalibrasyon uyarısıdır ("Kalibrasyon gerekli
-— …") ve kalibresiz oyuncu ne canlanabilir ne de engel cezası alır; uyarı çizilmezse oyuncu oyunun
-bozuk olduğunu sanır. Aynı satır maç öncesi **geri sayımı**, yeniden doğma korumasını ve canlanma
-yönergesini de taşır. Ölüm ekranındaki `deathStatusText` bunun **kopyasıdır**, yerine geçmez — o
-yalnız ölüyken çizilir.
+**Mockup'lar** — `plan/arayuz-yenileme/` (ortak stil `tema.css`, parça kiti `kit.html`, ekran
+başına bir HTML). Her ölçünün kaynağı orasıdır; plan maddesi açık olduğu sürece orada durur.
 
-Cephane göstergesi bu ikisinin de dışındadır: **silahın kendi üstünde** durur
-(`Assets/_Shared/Arsenal/Prefabs/AmmoCanvas.prefab` — dünya uzayı, `WeaponAmmoPanel` sürer) ve
-bütün `WPN_*` prefablarına iç içe geçmiş örnek olarak girer. Puntosu/ayracı/ikonu/rengi orada
-düzenlenir, **tek yerde** — silah başına kopyası yoktur. ⚠️ Görüş alanına düşen ayrı bir cephane
-paneli yoktur ve geri eklenmez: aynı sayının iki yerde çizilmesi demek olurdu.
+**Girdap dışında kalan arayüz** (elle düzenlenen prefablar, hepsi
+`Assets/_Shared/App/Resources/UI/` altında): `HealthHud` (kafaya kilitli şerit: can + saat + durum
++ takım skoru + tur sonucu) · `DeathHud` · `RoundNoticeHud` · `LoadingOverlayScreen`/`…World` ·
+`ConnectionOverlayScreen`/`…World` · `AdminPlayerMarker`. Mod HUD'ları mod
+kutusundadır (`Assets/Modes/<Mod>/UI/<Mod>Hud.prefab`) ve içleri bilerek boştur: taşıdıkları şey
+yukarıdaki iç içe prefab örnekleridir. Cephane göstergesi silahın kendi üstündedir
+(`Assets/_Shared/Arsenal/Prefabs/AmmoCanvas.prefab`). Bu grupta alan bağları, `onClick` boşluğu ve
+"metin yer tutucudur" kuralları geçerlidir → `Yapma-Listesi.md` "Sahne ve prefab".
 
-Ortak görseller: `Assets/_Shared/App/UI/Sprites/` — yuvarlak köşe (`RoundedRect_4/8/12/20`,
-9-slice kenarları ayarlı), halka (`Ring_16`), pahlı tema kiti ve ikonlar:
+> **Neden `Resources/` altında?** Prefablar **sahneye KONMAZ** — çalışırken `Resources.Load` ile
+> yüklenip örneklenirler; sahneye konsalardı her yeni arena sahnesine elle bir kurulum adımı
+> doğardı. Klasörden çıkarılırsa ilgili arayüz sessizce hiç çizilmez (konsola `… prefabı
+> bulunamadı` düşer).
 
-| Sprite | Ne işe yarar |
-|---|---|
-| `ChamferRect_20` | Dört köşesi 45° pahlı dolu plaka (panel gövdesi) — 9-slice, border 28 |
-| `ChamferRectBottom_20` | Üst köşeler kare, alt köşeler pahlı (başlık bandı / alt şerit) — 9-slice, border 28 |
-| `ChamferOutline_20` | Aynı oktagonun 3px kenarlığı, içi boş — 9-slice, border 28 |
-| `SlantButton_20` | Paralelkenar düğme/sekme zemini — yatay 9-slice (border sol/sağ 30) |
-| `FadeH_256` / `FadeV_256` | Eriyen beyaz gradyan (takım kenar şeridi, bant parlaması) — `Image.Type: Simple` |
-| `ArrowDown_128` | Aşağı bakan dolu üçgen (başlık chevron'u) |
-| `skull` / `crosshair` / `calibrate` / `scale` / `settings` | İkonlar (ölüm · öldürme · kalibrasyon · gövde ölçeği · ayarlar). Ekranda 24–30 px çizilirler: **kalın gövdeli** üretilir (kıl çizgi bu boyutta örneklemeye düşer, noktalı görünür), import'ta mipmap açık + max 128 px |
-| `trash` / `cross` / `pencil` | Dar istatistik satırının ikon düğmeleri (kayıt sil · at · isim). ⚠️ **Yer tutucudurlar** — koddan üretilmiş düz beyaz siluetler, komşularının (`calibrate`/`scale`) çizim diliyle henüz eşleşmezler; yerlerine çizilmiş PNG konulacaktır. Değiştirirken dosya adı ve import ayarı korunur (`AdminStatsRowNarrow` prefabındaki bağ dosyaya bakar), boyut 128 px + mipmap açık |
-| `play` / `pause` / `stop` | Maç kontrol şeridinin ikonları (▶ başlat/devam · ⏸ duraklat · ■ iptal) — saf geometrik beyaz silüetler, aynı import ayarı. `AdminMatchControls.playSprite`/`pauseSprite` alanları DURAKLAT düğmesinin iki hâlini taşır; renk kod tint'inden gelir (yeşil/başlık/kırmızı, pasifte soluk) |
-| `PanelGlow` | Kart kenarı ışıması: beyaz+alfa, kenar çizgisinde tepe yapıp içe ve dışa aynı Gauss eğrisiyle sönen **pahlı sekizgen** hale — köşeleri `PanelBG` ile aynı 45° kesiktir (pah ≈ kart genişliğinin %3,6'sı; 1440'ta 52 birim), tepe çizgisi `PanelBG`'nin görünür kenarına (kart kenarından ~2 sprite px içeride) oturur (552×342: 480×270'lik 16:9 kart bölgesi + dört yanda 36 tx pay, σ ≈ 10,5 tx; ortası tümden saydam). ⚠️ `PanelBG` değişirse (pah/kenar) doku da yeniden üretilir, yoksa hale köşelerde sanattan sapar. Pay/kart oranı (36/480 · 36/270) `PanelGlow.prefab`'taki `Glow` anchor'larıyla BİREBİR aynıdır — dokuyu yeniden üretirken pay değişirse anchor'lar da değişir — `Image.Type: Simple`, `Uncompressed` + `FullRect` mesh (yumuşak alfa bantlanmasın/kırpılmasın diye), mipmap yok. Rengi sprite'ta değil `PanelGlow.prefab`'ın `Image.color`'unda; kartın oranı 16:9 kaldığı sürece kalınlık dört kenarda eşittir |
-| `PanelBG` | Panel kartının **tek parça AI arka planı** (başlık bandı + chevron + takım parlamaları dahil) — `Image.Type: Simple`, karta gerilir; kartın en-boy oranı görsele uydurulur |
-| `BtnDark` / `BtnCyan` / `BtnRed` | AI paralelkenar buton zeminleri (pasif · seçili · tehlike). Tercihler panelinde `AdminPreferencesPanel`'in `_buttonIdleSprite` / `_buttonActiveSprite` / `_buttonDangerSprite` alanlarına bağlanır ve **sekme · kalibre kipi · pencere kipi · çıkış** düğmelerinin hepsini besler. ⚠️ **Pasif ve seçili İKİSİ birden bağlı olmalı** — biri boşsa panel eski düz renk tintine düşer (yarım bağ yanlış renkli bir görsel bırakmasın). Bağlıyken `Image.color` **beyaz** olur: rengi görselin kendisi taşır |
-| `HealthBar_Frame` | Can barının çerçevesi + **boş** iç yuvası (2267×575). `Image.Type: Simple`, mipmap **açık** (VR'de küçültülerek çizilir, kapalıyken grunge doku kafa hareketinde titrer). Rengi görselin kendisindedir, tint **beyaz** kalır |
-| `HealthBar_Fill` | Can barının yeşil dolgusu (1024×407). ⚠️ **Yatayda düz üretilir** — gradyan yalnız dikeydir, sağ ucunda parlak kenar/uç kapağı **yoktur**: `Image.Type: Filled` sprite'ı UV'den keser ve 9-slice'ı yok sayar, sağ uca gömülü bir parlaklık can %100'ün altına inince kaybolur ve dolgu ortasından kesilmiş görünürdü. Sol uçtaki kenar bakidir (soldan dolduğu için hep görünür) |
-| `RowPlate` | Çok geniş AI satır/bant plakası — **bugün hiçbir yerde kullanılmıyor.** ⚠️ İstatistik satırına (`AdminStatsRow`) uymaz, denemeye değmez: (1) plakanın kendi rengi amber, satırın koyu paletiyle çakışıyor; (2) satır ~20:1 iken plaka ~6:1 — 9-slice uçları kaynak piksel genişliğinde çizdiği için 65 px yüksekliğinde eğim uzun ve yatık bir kama olarak okunuyor. Yeri, en-boy oranı kaynağa yakın (~6:1) ve amber tonun kasıtlı olduğu bir bant olurdu |
+## Nasıl değiştirilir
 
-⚠️ **AI zeminlerinin 9-slice border'ı**: dördü de paralelkenar, yani yatay 9-slice ister — border'sız
-gerildiklerinde eğim açısı ve kenar kalınlığı orana göre bozulur. Ölçülmüş yatay border değerleri
-(sol/sağ, üst/alt 0): `BtnDark` 56 · `BtnCyan` 60 · `BtnRed` 64 · `RowPlate` 108. Import ayarı
-Inspector'dan verilir (Sprite Editor → Border); bileşenlerde `Image.Type` `Sliced`'tır. Yürürlükteki
-değerler: `BtnDark` 56/56 · `BtnCyan` 56/60 · `BtnRed` 62/62 · `RowPlate` 132/132 (hepsi üst/alt 0).
-⚠️ Border **eğimin yatay uzanımından küçük olamaz** (sırasıyla 45 · 50 · 53 · 73 px) — küçükse
-ortadaki gerilen bant eğik ucun içine taşar.
+⛔ **Girdap prefabları elle düzenlenmez.** Inspector'da yapılan her şey bir sonraki üretimde
+kaybolur. Değişiklik **builder'a** yazılır, sonra ilgili `Yalnız <Ekran>` menüsü koşulur (asset
+kabı değiştiyse önce *Fontları ve asset kabını üret*).
 
-Tema kiti ve ikonlar (dişli hariç) **beyaz üretilir** — renk `Image.color` tint'inden verilir,
-böylece tek sprite hem kırmızı hem mavi takım için kullanılır. Ayna görünüm (sağ kenar, ters
-paralelkenar) yeni sprite değil, RectTransform'da `scale.x = -1` ile alınır.
+- **Ölçü = CSS px.** `CanvasScaler` 1920×1080 `Expand` olduğu için 1 CSS px = 1 birimdir; mockup'ta
+  okunan sayı koda birebir yazılır. `Place` ailesi CSS kafasıyla çalışır: x/y **ebeveynin sol üst
+  köşesinden** ölçülür, artı genişlik/yükseklik.
+- ⛔ **Layout Group / ContentSizeFitter konulmaz.** Yerleşim sabit anchor'ladır; değişken
+  genişlikli içerik kodda ölçülür (`TMP_Text.GetPreferredValues` + `anchoredPosition`/`sizeDelta`).
+- **Şablon = prefabta pasif bırakılmış çocuk.** Satırlar, akış plakaları, dropdown öğeleri ve kat
+  düğmeleri çalışırken o şablondan klonlanır. Şablonu açık bırakmak her tablonun altına boş bir
+  satır çizer.
+- **Yeni parça eklerken hangi yardımcı:** kutu → `Shape`/`ShapeBox`, düğme → `Button(...)`
+  (`UiButtonKind` + isteğe bağlı ikon/keycap/hold), rozet → `Chip(...)`, yazı → `Text(...)`
+  (`GirdapFont` + punto + `TextAlignmentOptions`), ikon → `Icon(...)`, klavye ipucu → `Kbd(...)`,
+  şerit → `Stripes(...)`, can çubuğu → `SegmentBar(...)`.
+- **Yeni bir alan bağlanacaksa** bileşene `[SerializeField]` eklenir ve builder onu
+  `SerializedObject` üstünden yazar — elle sürüklenen bağ ilk üretimde silinir.
+- **Satır yüksekliği koddan okunur:** `AdminPlayerRow.Height` · `AdminStatsRow.Height` ·
+  `AdminKillFeedRow.Height`/`NewHeight` · `AdminViolationFeedRow.Height`/`LiveHeight` ·
+  `MatchResultOverlay.RowHeight`/`RowGap`/`RowsTop`. Yerleşim bu sabitlerden türer; prefabtaki rect
+  ile sabit **birlikte** değişir.
+- **Mod varyantları tabandan miras alır.** `MatchResultOverlay` builder'ı varyantların ezdiği
+  düğümleri silmez, yeniden ebeveynler (`ResultKeptNodes`) — silinen bir düğüm varyantın
+  override'ını sarkıtır ve o modun sanatı kaybolur.
 
-> **Neden `Resources/` altında?** Prefablar **sahneye KONMAZ** — çalışırken `Resources.Load`
-> ile yüklenip örneklenirler. Sahneye konsalardı her yeni arena sahnesine elle bir kurulum adımı
-> doğardı ve bir gün unutulurdu. Bu yüzden `Resources/` klasöründen **çıkarılmamalıdırlar**;
-> taşınırlarsa ilgili arayüz sessizce hiç çizilmez (konsola `… prefabı bulunamadı` hatası düşer).
+## Tuzaklar
 
-> **Panelleri KENDİ prefabında düzenleyin** (`AdminStatsPanel.prefab` /
-> `AdminPreferencesPanel.prefab` çift tıklanır): `AdminHud` içindeki örneğin üstünde yapılan
-> değişiklik instance override olarak birikir ve panel prefabındaki sonraki düzeltmelerle
-> çatışır. Örneği **unpack etmeyin** — bağ kopunca panel prefabında yapılan düzeltmeler
-> AdminHud'a bir daha inmez.
+- ⚠️ **`RequireComponent` Graphic'ten MİRAS ALINMAZ.** Özel bir `Graphic` türevi kendi
+  `[RequireComponent(typeof(CanvasRenderer))]`'ını taşımak zorundadır; yoksa `AddComponent`
+  hiçbir şey çizmeyen bir grafik üretir ve obje pasifleşirken `MissingComponentException` fırlatır.
+- ⚠️ **TMP `Ellipsis` DİKEY de keser.** Metin kutusu fontun satır kutusunu kapsamalıdır (Saira
+  Condensed 24 px ≈ 38 px); daha kısa bir rect'te metin kısalmaz, **tamamen kaybolur**. Kutuyu
+  büyütüp midline hizalamak görsel konumu korur.
+- ⚠️ **Düğme/rozet rengi ekrandan ayarlanmaz.** Düğme çalışırken tür değiştiriyor (BİTİR → BİTİR?,
+  tehlike → onay) ve elle boyanmış dört katmanı geri almak gerekiyor: tek kapı
+  `UiButtonStyle.SetKind`/`SetInteractable`, `UiChip.Set`.
+- ⚠️ **`raycastTarget` `Graphic`'in `true` varsayılanında kalır** (serileşen taban alanı; constructor
+  ya da `Reset` ondan geri yazar). Builder'ın fabrika yardımcıları şekil/yazı/ikon başına **kapatır**,
+  tıklanabilir yüzey kendi açar. Yeni bir dekoratif grafik eklerken kapatmayı unutma: üstündeki
+  düğmenin tıklamasını yutar.
+- ⚠️ **`UiKit` paleti Girdap ekranlarında kullanılmaz** (`Assets/_Shared/App/Scripts/UiKit.cs`
+  yalnız elle düzenlenen ekranlar ve sahne işaretçileri içindir). Admin tarafında ondan kalan tek
+  çağrı `UiKit.EnsureEventSystem()`'dir — arena sahnelerinde `EventSystem` yoktur.
+- ⚠️ **Serileşen enum'a yeni değer SONA eklenir** (`UiButtonKind` · `UiChipKind` ·
+  `UiGradientMode` · `GirdapFont`): Unity sayısal indeks saklar, araya giren değer üretilmiş her
+  prefabın görünümünü kaydırır.
+- ⚠️ **Var olan TMP font asset'i yeniden üretilmez.** Taze atlas, kayıtlı prefablardaki glif
+  indekslerini geçersiz kılar ve yazılar yeniden import edilene kadar boş çizilir; menü bu yüzden
+  mevcut asset'e dokunmaz.
 
-## Düzenlerken nelere dikkat edilir
+## Renk ve yazı
 
-Prefabı Project penceresinden çift tıklayıp prefab kipinde açın. **Serbestçe yapabilecekleriniz:**
-konum/boyut/anchor değiştirmek, renk, punto, font, sprite değiştirmek, öge eklemek/çıkarmak,
-görsel efekt (Shadow, Outline) eklemek.
+- **Paletin tek yeri `Girdap`** (`Assets/_Shared/Core/UI/Girdap.cs`): yüzeyler, yazı tonları, takım
+  renkleri, durum renkleri, düğme çerçeve/dolgu çiftleri, tablo/akış tonları. Alan adları ve CSS
+  karşılıkları dosyanın kendisinde; çağrı yerinde elle renk seçilmez — kopyalanan bir literal token
+  değişince sessizce sapar ve arayüzde iki ayrı "kırmızı" doğar.
+- **Takım rengi üç yardımcıdan gelir:** `Girdap.TeamHi(team)` (gradyan tepesi) ·
+  `TeamLo(team)` (gradyan tabanı) · `TeamInk(team)` (koyu zeminde yazı). Takımsızda nötr griye
+  düşerler. ⚠️ Düz takım kırmızısı/mavisi (`Girdap.Red`/`Blue`) avatar materyali ve `UiKit` ile
+  **birebir aynıdır**: oyuncu eşlemeyi avatardan öğreniyor, arayüzde başka bir ton eşlemeyi koparır.
+- **Yazı rolleri `GirdapFont`'tur**, font asset'i `Girdap.Font(...)` ile çözülür. Punto, harf
+  aralığı (`Girdap.Spacing(em)`) ve hizalama builder'da durur. Dinamik metni büyütmek için
+  `Girdap.Upper` kullanılır: TMP'nin `UpperCase` stili ve `ToUpperInvariant` `i → I` yapar, oyuncu
+  adları `İ` ister.
+- **İkonlar `GirdapAssets` kabından** gelir (`Girdap.Icon("<Ad>")`, dosyada `Ic_<Ad>.png`). Eksik
+  ikon ad başına tek uyarı basar ve çizilmez.
 
-**Dikkat edilecek üç şey var:**
+## Ekran başına notlar
 
-1. **Bileşen alan bağlarını koparmayın.** Kök objedeki bileşende (`AdminHud`,
-   `AdminPreferencesPanel`, `AdminPlayerRow`…) her ögenin bir alanı var (`scoreRedText`,
-   `hpFill`, `_modeDropdown`…). Bir ögeyi **silerseniz** o alan boşalır ve **hata vermez —
-   sessizce çizilmez.** Silmek yerine objeyi devre dışı bırakın ya da alfasını 0 yapın.
-   Yeni bir öge ekleyip koda bağlamak gerekiyorsa geliştiriciye söyleyin (yeni alan gerekir).
-
-2. **Düğme `onClick` kayıtlarını inspector'dan doldurmayın.** Prefablarda bilerek boştur;
-   davranış çalışırken koddan bağlanır (`WireButtons` / `Initialize`). Inspector'dan eklenen
-   kalıcı bir kayıt, kodun koşullarını atlar — ör. oyuncu satırındaki "AT" düğmesi iki adımlı
-   onayı atlayıp doğrudan atardı, ya da tercihler panelindeki **OYUNDAN ÇIK** ilk basışta
-   uygulamayı kapatırdı ("EMİN? ÇIK" adımını yazan `AdminPreferencesPanel.ArmQuit` hiç koşmazdı).
-
-3. **Metinleri yazmayın, yer tutucu sayın.** `ScoreRed`, `KillFeed`, `Name` gibi ögelerin
-   içeriği çalışırken koddan yazılır; prefabtaki yazı yalnız tasarım yaparken görebilmeniz
-   içindir. **Punto/renk/hizalama kalıcıdır**, metnin kendisi değil.
-
-Ayrıca birkaç teknik not:
-
-- **Font atamayın** (ya da atarken dikkat edin): varsayılan TMP fontu Türkçe glifleri taşıyor.
-  Türkçe karakteri olmayan bir fonta geçerseniz `İ Ş Ğ Ü Ö Ç` kutu (□) çizilir. Aynı sebeple
-  arayüzde `✓ ✗ ⚠ → •` gibi sembol **kullanılmaz** — garantisi yok. (Açılır listedeki ok ve
-  seçim işareti birer **sprite**tır, glif değil — onlar bu kuraldan etkilenmez.)
-- ⚠️ **Bir TMP yazısına kenarlık/gölge vermek için PAYLAŞILAN materyali düzenlemeyin.** Varsayılan
-  materyal font asset'inin içinde durur ve projedeki **her** TMP yazısı onu kullanır — `Outline
-  Thickness`'ı oynatmak arayüzün tamamını değiştirir. Doğrusu materyalin bir **kopyasını** proje
-  içine almak (`_Shared/App/UI/Fonts/`) ve yalnız o yazıya bağlamak; örneği can barının
-  `LiberationSans SDF - HealthBar.mat`'ıdır. ⚠️ TMP'nin kendi hazır preset'lerini
-  (`Assets/TextMesh Pro/…/LiberationSans SDF - Outline.mat`) doğrudan bağlamayın da: paket klasörü
-  TMP yeniden import edilince üzerine yazılır.
-  Ayrıca Inspector'daki `Outline` alanını (bileşenin kendi alanı) kullanmayın — çalışırken
-  materyal **örneği** üretir, prefabta kalıcı olmaz.
-- **Açılır listelerde (`Dropdown_Mod`, `Dropdown_Harita`) `Template` çocuğunu AÇMAYIN.** Prefabta
-  bilerek kapalıdır: TMP_Dropdown onu tıklanınca kopyalayıp açar, açık kaydedilirse liste panelin
-  üstünde sürekli asılı durur. Rengini/puntosunu/satır yüksekliğini (`Item`) değiştirmek serbest.
-  ⚠️ Listedeki **seçenek metinleri yer tutucudur** ("katalog yok"): gerçek mod/harita adlarını
-  çalışırken kod doldurur, prefabta yazdığınız satırlar temizlenir.
-- **Zengin metin (rich text) bayrağını kurcalamayın.** Oyuncu satırındaki `Stats` metni ve
-  istatistik satırının ayrıntı şeridi, kodun ürettiği `<color=…>` etiketlerini taşır (pil ve
-  kumanda simgeleri token başına renklenir — tek TMP'nin tek rengi olduğu için başka yolu yok).
-  Bayrağı **kod açar**, yani inspector'dan kapatmanız görünümü değiştirmez. ⚠️ Diğer metinlerde
-  bayrak **KAPALI kalmalı**: `Name` ve `OYUNCU` kolonunda oyuncunun kendi yazdığı ad var,
-  `<b>` içeren bir ad biçimi bozardı.
-- **Toplu sıfırlama düğmesinin metnini ve rengini kod sürer.** `BottomBar/ClearAllCalibration`'ın
-  etiketi iki adımlı onayla değişiyor (boştaki hâli ↔ onay bekleyen hâli) ve rengini de
-  `AdminStatsPanel` yazıyor; prefabtaki metin ile renk yalnız tasarım yaparken düğmeyi görebilmeniz
-  içindir. Punto, hizalama, font ve düğmenin ölçüsü prefabta kalıcıdır — metin ve renk değil.
-- **İstatistik panelinin KAPAT düğmesinin metnini de kod sürer.** `Fill/Close/Label` TMP'si
-  `AdminStatsPanel`'in `_closeLabel` alanına bağlıdır: sunucu biten turun sonucunda beklerken yazı
-  `TURA DEVAM`a döner (kapatmak turu ilerletir, §3.8.2), diğer her durumda prefabta yazan hâline
-  geri konur. Prefabtaki metin ve renk **başlangıç hâlidir**; alan boş bırakılırsa panel yine
-  çalışır, yalnız düğme adını değiştirmez.
-- **Tercihler panelinin sekmelerini ve maç şeridinin ikonlarını kod sürer.** `Tabs/Tab_*`
-  düğmelerinin zemin/etiket rengi ve `Page_*` sayfalarının açık/kapalı hâli çalışırken
-  `AdminPreferencesPanel` tarafından yazılır (aktif sekme `UiKit.Accent`); prefabta hangi sayfanın
-  açık, hangi sekmenin boyalı olduğu yalnız tasarım kolaylığıdır. `MatchBar`'daki dört düğmenin
-  `interactable`'ı ve `Icon` renkleri `AdminMatchControls`'tan gelir; DURAKLAT düğmesinin ikonu faza
-  göre `playSprite`/`pauseSprite` arasında değişir — prefabtaki sprite yalnız başlangıç hâlidir.
-  Sekme eklemek yeni alan gerektirir (`AdminPreferencesTab`'a SONA değer + üç diziye birer öge).
-  ⚠️ Satır deseni sayfadan sayfaya aynı değildir: SES sayfasında satır başına **beşinci** bir öge
-  vardır (`Mute_` düğmesi), diğer sayfalarda yoktur. SES sayfasının **müzik çalar** bölümü
-  (`Section_Muzik` başlığının altındaki `Track_*` ve `MusicLevel_*` ögeleri) desenin tamamen
-  dışındadır: taşıma satırında dört 51×51 düğme (`Track_Prev` · `Track_PlayPause` · `Track_Stop` ·
-  `Track_Next`) ve sol tarafta geniş bir parça adı metni (`Track_Value`) durur. ⚠️ Ortadaki iki
-  düğme **ikonludur, yazılı değil** — `Icon` çocuğundaki `Image` maç şeridinin sprite'larını taşır
-  (`play` · `pause` · `stop`) ve rengi de aynı sözleşmededir (yeşil = başlat, beyaz = koşuyor,
-  kırmızı = durdur, sönük = basılamaz): aynı üç eylem için ikinci bir ikon dili operatöre uygulamayı
-  iki kez öğretirdi. ⚠️ Parça adının içeriğini, `Track_PlayPause`'ın **hangi sprite'ı gösterdiğini**,
-  ikon renklerini ve düğmelerin `interactable`'ını **kod sürer**
-  (`AdminPreferencesPanel.ApplyMusicRows`; sprite'lar bileşenin `_musicPlaySprite`/`_musicPauseSprite`
-  alanlarından gelir) — klasörde parça yokken düğmeler sönükleşir; prefabtaki yazı ve ikon yalnız
-  tasarım yaparken görebilmeniz içindir. ⚠️ `Icon`'un `Raycast Target`'ı **KAPALIDIR**; açarsanız
-  tıklama ikonda kalır ve düğme basılmamış gibi olur.
-- **Ad renkleri koddan sürülür.** Oyuncu satırındaki `Name` ve sahnedeki ad etiketleri **takım
-  renginde** yazılır (ölüde karartılmış); prefabtaki renk yalnız tasarım yaparken görebilmeniz
-  içindir. Punto, hizalama ve font kalıcıdır — renk değil.
-- **Satır yüksekliğini değiştirebilirsiniz.** `AdminPlayerRow` prefabının yüksekliğini
-  büyütürseniz kolon yerleşimi kendiliğinden uyar (kod yüksekliği prefabtan okur). Satır arası
-  boşluk ve kolon başına satır sayısı `AdminHud` bileşeninde alandır (`rowGap`,
-  `maxRowsPerColumn`).
-- **Aynısı istatistik listesi için de geçerli:** `AdminStatsRow` prefabının yüksekliğini
-  büyütürseniz liste yerleşimi kendiliğinden uyar (kod yüksekliği prefabtan okur), satır arası
-  boşluk `AdminStatsPanel` bileşenindeki `_rowGap` alanıdır. Liste kaydırılabilir olduğu için satır
-  sayısı sınırı yoktur — satırı büyütmek kimseyi listeden düşürmez. **İki prefabın yüksekliği
-  ayrı ayrı okunur** (`AdminStatsRow` geniş, `AdminStatsRowNarrow` dar kip): birini büyütmek
-  diğerini etkilemez, ikisini birden istiyorsan ikisini de büyüt.
-- ⚠️ **Panel prefabının KÖK objesini KAPATMAYIN** (`AdminStatsPanel`, `AdminPreferencesPanel`).
-  Paneli açan tuş ve sunucudan gelen tazeleme kökteki bileşenin kendi `Start`/`Update`'inde
-  koşuyor; kök kapalıyken panel **hiçbir tuşla açılmaz** ve hata da vermez. Gizlenecek olan içteki
-  kart objesidir (bileşenin `_root` alanına bağlı olan) — çalışırken kod zaten onu açıp kapatıyor, prefabta hangi hâlde
-  bıraktığınız yalnız tasarım kolaylığıdır.
-- **`AdminHud.rowPrefab` alanı doluysa bırakın.** Kopması hâlinde `AdminPlayerRow.prefab`'ı
-  inspector'da o alana sürükleyin — yoksa oyuncu satırları hiç çizilmez.
-- **Seçili oyuncunun halkası:** `AdminPlayerMarker` bileşeninde `ringNormal` ve `ringSelected`
-  iki ayrı sprite alanıdır. Şu an ikisi de aynı görseldir (seçim yalnız boyut artışıyla
-  anlatılır); `ringSelected`'a **daha kalın** bir halka koyarsanız seçim belirginleşir.
-- **`ConnectionOverlay`'in iki varyantı ayrı prefabtır** ve farklı alanları dolu olur:
-  masaüstü varyantında `_hudFollow` boştur, VR varyantında `_reconnectButton`/`_reconnectLabel`
-  boştur (VR'da düğme yoktur, yerine "joystick'i 1 sn basılı tut" ipucu vardır).
-  **Bu boşluklar normaldir, doldurmayın.**
-  ⚠️ **Kartın canvas'ındaki `sortingOrder = 10` değerini kod `Awake`'te yazar, prefabta aramayın:**
-  kart alan-dışı karartmasının üstünde kalmak zorunda ve prefabta bırakılan bir sayı sanat
-  düzenlemesinde sessizce sıfırlanabilir.
-- **`LoadingOverlay` de iki varyattır** ve aynı kural geçerlidir: masaüstü varyantında `_hudFollow`
-  boştur, VR varyantında **scrim objesi hiç yoktur**. Scrim'i VR prefabına EKLEMEYİN — oyuncu
-  fiziksel alanda yürüyor, görüşü karartmak tehlikelidir (`ConnectionOverlayWorld` ile aynı
-  gerekçe). Kart üstündeki `Title` ve `Hint` metinleri **sabittir** (kod onlara dokunmaz);
-  `SceneLine`, `Percent` ve barın `Fill`'i çalışırken sürülür.
-- **İlerleme barının `Fill`'ine dokunurken:** dolum `anchorMax.x` ile sürülür
-  (`UiKit.SetBarFill` deseni). Pivot `(0, 0.5)` ve offsetler 0 kalmalı; `Fill`'i ortalarsanız ya da
-  `Image.Type`'ını `Filled` yaparsanız bar sessizce hep boş görünür.
-- **`MatchResultOverlay`'in iki paneli aynı prefabta durur** (`ResultPanel` ve `ScoreboardPanel`) ve
-  hangisinin ne zaman açılacağını kod belirler — prefabta ikisinin de açık/kapalı olması yalnız
-  tasarım kolaylığıdır (çalışırken ikisi de kapatılıp sırayla açılır). Panelin **oyun içi HUD'dan
-  büyük** olması bilinçlidir: kök 1400×860 birim, ölçek 0,0007 (≈0,98 m) ve `HudFollow` mesafesi
-  1,5 m — mod HUD'ı 900×520 / 0,0005 / 1,1 m'dir. Küçültürseniz maç sonu ekranı HUD'la karışır.
-- **Her iki panel de `AdminStatsPanel`'in kart kabuğunu taşır** (`StatsPanel` → `Fill`; `PanelBG`
-  arka planı + `ChamferRect_20` dolgu, **1440×810** — 16:9, 1920×1080 referansta ekranın %75'i:
-  yatay 1440, dikey 810). ⚠️ **Kartın en-boy oranını değiştirmeyin** —
-  `PanelBG` tek parça bir görseldir (başlık bandı, chevron, takım parlamaları görselin içinde) ve
-  oran bozulunca sanat gerilir. Kolon ekleyip çıkarmak yerine mevcut kolonların genişliğini
-  değiştirin.
-- **Moda özel maç sonu ekranı = bu prefabın VARYANTI**, kopyası değil:
-  `Assets/Modes/<Mod>/UI/<Mod>ResultOverlay.prefab`, modun `ModeDefinition.resultScreenPrefab`
-  alanına bağlı (reçete: `Yemek-Kitabi.md` 13.2). Varyant iki kartın zeminini kendi sanatıyla
-  değiştirir (oran yine 1265×705), süs `Image`'ları ekler, yazı renk/materyal/konumunu ezer; alan
-  bağları tabandan miras gelir. Sonuç başlıkları, ko-op başlığı, skor kolonu başlığı ve dört sonuç
-  rengi kökteki bileşenin **alanlarıdır** (`wonTitle` … `coopColor`) — `TitleText`/`Header2`'ye
-  prefabta yazılan metin yer tutucudur. ⚠️ Tabanda bir ögeyi oynatmak, varyantın o ögeyi **ezdiği**
-  alanlarda varyanta inmez — tabanı düzenlerken varyantları da aç. ⚠️ Varyantta kapalı duran
-  kolonlar (kuralın o modda hep gizlediği K/D, ko-opta TAKIM) yalnız tasarım kolaylığıdır; açıp
-  kapatmayı kod yapar. Tema sanatı (`Modes/<Mod>/UI/Sprites/`) **renkli** üretilir ve tint'i beyaz
-  kalır — "beyaz üret, rengi tint'ten ver" kuralı ortak tema kiti içindir. Tema yazılarının
-  kenarlıklı materyal kopyaları `Modes/<Mod>/UI/Fonts/` altındadır.
-- **Skor tablosu kolonları `Header0..5` / `Column0..5` çiftleridir** ve sıraları koddaki
-  `ColumnOrder` ile eşleşmek zorundadır (OYUNCU · TAKIM · SKOR · K · D · K/D). Bir kolonu
-  **silerseniz** kod onu sessizce atlar; yenisini eklemek prefab + kod işidir.
-  ⚠️ `Header3`/`Header4`'ün metni **bilerek boştur** — K ve D başlıkları `IconKills`/`IconDeaths`
-  (crosshair/skull) ikonlarıyla anlatılır, admin kartındaki gibi.
-- **Kolon gizleme kuralla çalışır, prefabta değil:** kooperatif ve silahsız modlarda kod bazı
-  kolonları kapatır (§3.8, `Docs/Sistem-Ozeti.md`). Bunun için `Header0..5` nesneleri
-  `boardColumnHeaders` dizisine, varsa kolon kapsayıcıları `boardColumnRoots`'a **`ColumnOrder`
-  sırasıyla** bağlanır. ⚠️ Bağlanmayan alan hata vermez: kod o kolonun yalnız erişebildiği
-  parçasını gizler — başlık ikonu ortada kalırsa eksik olan bağlantıdır.
-  ⚠️ İkonla anlatılan başlığın **ikonu başlık nesnesinin İÇİNDE** olmalıdır; kardeş olarak
-  durursa başlık gizlendiğinde ikon ekranda kalır.
-- **`Headline` otomatik küçülür** (`enableAutoSizing`, 44→30) ve **sarmaz**: kazanan + skor tek
-  satırda taşınıyor, sarmasına izin verilirse alttaki takım özetinin üstüne biner.
-- **`AdminHud`'ın `sortingOrder`'ı 4000, yükleme ekranınınki 4500, bağlantı ekranınınki 5000.**
-  Bu sıra bilinçlidir: yükleme HUD'ın üstünü, bağlantı hatası ise her şeyin üstünü kaplamalı.
-  Canvas bileşeninde değiştirmeyin.
-- **Admin arayüzü 16:9 içindir** (`CanvasScaler` 1920×1080 referans, eşleme `Expand`): tüm
-  yerleşim bu orana göre çizilir, iki büyük panel (`AdminStatsPanel` · `AdminPreferencesPanel`)
-  16:9 kartla ekranın %75'ini kaplar (1440×810). Başka oranda bir pencere **kırpılmaz**, kenarda boşluk
-  bırakır — 16:9 dışı bir düzen için ayrı yerleşim YOKTUR ve yapılmaz. Kartı büyütmek/küçültmek
-  gerekirse ölçüyü **oranı bozmadan** ve içindeki her ögeyi (konum, boyut, punto) aynı çarpanla
-  değiştirin; yalnız kartı büyütüp içeriği bırakmak sanatı bir tarafa yığar.
-
-## Renk paleti
-
-⚠️ **Renkler artık prefablarda gömülüdür** — paleti tek yerden değiştirmek mümkün değil.
-Kodda kalan `UiKit` paleti (`Assets/_Shared/App/Scripts/UiKit.cs`) yalnız **çalışırken sürülen**
-renkler için kullanılır: HP barının yeşil/turuncu/kırmızısı, seçim vurgusu, kalibresiz satırın
-kenarlığı, bağlantı noktasının rengi. Ton değişikliği yaparken **hem prefabları hem `UiKit`
-paletini** güncelleyin, yoksa statik ögelerle durum renkleri birbirini tutmaz.
-
-⚠️ **Takım renkleri iki yerde birden yaşar:** `UiKit.TeamRed`/`TeamBlue` ve
-`Core.Player.RemoteAvatar`. Aynı oyuncu HUD'da ve sahnede farklı renkte görünürse operatör
-yanılır — ikisini birlikte değiştirin.
-
-## Bu prefablar nasıl doğdu
-
-Elle çizilmediler: arayüzü kuran prosedürel kod bir kereliğine çalıştırılıp sonucu prefab olarak
-kaydedildi (geçici bir editör aracıyla). Bu yüzden tasarım, koddaki hâliyle **piksel piksel
-aynıdır**. Aynı geçiş sırasında `UiKit`'in çalışırken ürettiği yuvarlak köşe ve halka görselleri
-de gerçek PNG asset'lerine yazıldı ve 9-slice kenarları ayarlandı.
-
-**O araç işini bitirdiği için silindi.** Görünümün tek doğruluk kaynağı artık prefablardır;
-araç dursaydı ikinci ve sessizce bayatlayan bir kaynak olurdu (ve yanlışlıkla çalıştırılması
-elle yapılmış tüm tasarımı ezerdi).
+- **AdminHud** — üst şerit: TERCİHLER `[P]`, skor plakası (kırmızı skor · süre · mavi skor),
+  İSTATİSTİK `[I]` çipi, kamera segmentleri SERBEST `[2]` / KUŞ BAKIŞI `[3]`. ⚠️ `modeButtons[0]`
+  (POV) yuvası bilerek **boştur**: POV karttan/klavyeden girilir, o kipte hiçbir segment yanmaz.
+  İki takım sütunu, sütun başına en çok `maxRowsPerColumn` kart (fazlası "+N oyuncu daha
+  (istatistiklerde)"), sütun başlığında takım adı · oyuncu sayısı · "N KALİBRESİZ" çipi; takımsız
+  kipte tek sütun. Solda ihlal akışı (`AdminViolationFeedView` + havuzlu `AdminViolationFeedRow`),
+  sağda öldürme akışı (`AdminKillFeedView` + `AdminKillFeedRow`). Alt şerit `AdminMatchControls`
+  (BAŞLAT · DURAKLAT/DEVAM · BİTİR→BİTİR? · İPTAL) + KAT grubu (`AdminFloorControls`; yalnız
+  `ArenaFloors.Count > 1` iken görünür, şerit onunla genişler). İstatistik ve tercihler panelleri
+  bu prefaba **gömülüdür**, görünürlüğü `AdminSession.OpenPanel` sürer.
+- **AdminPlayerRow** (yan sütun kartı) — forma numarası plakası (takım gradyanı; `0` → boş), ad
+  (takım mürekkebi) + `#playerId`, durum çipi, can sayısı + dilimli çubuk, telemetri satırı (K/D ·
+  gözlük pili · iki kumanda tiki · gövde ikonu) ve dört düğme: POV · ÖLÇ · takım (MAVİ/KIRMIZI) ·
+  AT (EMİN? onayı). Çerçeve önceliği: ihlal > seçim > kalibresiz > normal; yeniden bağlanan/ayrılan
+  kart soluklaşır. ⚠️ Kartta **kalibrasyon düğmesi yoktur** — o iş istatistik satırındadır.
+  ⚠️ Kartın yalnız yüksekliği sabittir; genişliği sütundan gelir, bu yüzden her parça ya kenara
+  çapalıdır ya `Bind`'da ölçülür.
+- **AdminStatsRow** — plaka · ad + `#playerId` · durum çipi · öldürme/ölüm/K-D/skor · pil ·
+  kumanda · gövde · kat · ping · ihlal defteri çipleri. Düğmeler: **KALİBRE** (kalibresizse
+  "KALİBRE !" uyarı dolgusuyla; yüklenirken YÜKLENİYOR, sonra TAMAM/HATA; zemin sapması
+  `ArenaProtocol.CALIB_FLOOR_WARN_METERS`'i aşarsa yalnız yazı mürekkebi uyarıya döner —
+  kalibresiz bağırır, sapan yalnız boyanır) · **ÖLÇ** (ölçülmüşse ×ölçek) · **kalem ikonlu düğme**
+  (ad/numara) ·
+  **SIFIRLA** · **AT** (EMİN?). ⚠️ Kalibresizlik **durum çipine yansımaz**, uyaran KALİBRE
+  düğmesidir. ⚠️ SIFIRLA tek düğmede iki kip taşır (`HoldButton`): kısa basış hizalamayı geçersiz
+  kılar, basılı tutma gözlükteki kaydı siler (SİLİNİYOR → SİLİNDİ) — basış süresi onayın kendisidir,
+  üstüne ikinci adım konmaz.
+- **AdminStatsPanel** — tek tablo; takımlı kipte takım grup satırları (takım adı · "N oyuncu · M
+  canlı" · takım öldürme/ölüm/skor), takımsız kipte grup satırsız aynı tablo. Bilgi şeridi faz ·
+  kalan · mod · harita · süre · skor limiti · sunucu · poz akışı · bağlı admin taşır (sığmazsa kod
+  sıkıştırır). Alt düğmeler: GÖVDE YENİLE · TÜMÜNÜ ÖLÇEKLENDİR · TÜMÜNÜ KALİBRE ET. ⚠️ Toplu bir
+  "hizalamaları sıfırla" düğmesi **yoktur**. Esc / `I` kapatır.
+- **AdminPreferencesPanel** — sekmeler MAÇ · GÖRÜNÜM · BAĞLANTI · SES (aktif sekme
+  `UiButtonKind.SegOn`, diğerleri `Tab`); içerik dropdown'lar (liste şablonundan klonlanır), iki
+  durumlu anahtarlar (KAPALI/AÇIK), adımlayıcılar ve kalibrasyon kipi düğmeleri. Esc kapatır.
+- **MatchResultOverlay** (oyuncunun maç sonu ekranı, `VortexArena.App`) — prefab kökü dünya uzayı
+  `Canvas` + `HudFollow`. Önce **sonuç kartı**: MAÇ SONUCU şeridi, sonuç kelimesi (vertex gradyanı
+  sonucun tonunu taşır), kazanan satırı, skor plakası. Sonra **skor tablosu**: başlıkta kazanan
+  satırı + skor plakası, gövdede takım başına bir blok (başlık plakası + şablondan klonlanan
+  satırlar: sıra · ad · SEN çipi · `#id` · skor/öldürme/ölüm/K-D), altta oyuncunun kendi şeridi.
+  Kendi satırı vurgulanır, ayrılan oyuncunun satırı soluklaşır. ⚠️ Eski kolon metinleri (`Column0..5`
+  + `Header0..5`) **bağlı ve çalışır durumda tutulur**: bir mod varyantı onların etrafına
+  giydirilmişse `boardRowTemplate` alanını boşaltmak tabloyu kolonlara döndürür.

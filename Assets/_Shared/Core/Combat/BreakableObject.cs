@@ -30,7 +30,7 @@ namespace VortexArena.Core.Combat
         [Tooltip("Kırılma anında oynatılacak efekt prefabı (isteğe bağlı).")]
         [SerializeField] private GameObject breakFxPrefab;
 
-        [Tooltip("Kırılma efektinin kaç saniye sonra silineceği.")]
+        [Tooltip("Kırılma efektinin kaç saniye sonra havuza döneceği.")]
         [SerializeField] private float breakFxLifetime = 3f;
 
         [Tooltip("Kırılma sesi (isteğe bağlı).")]
@@ -46,6 +46,10 @@ namespace VortexArena.Core.Combat
         private NetObject _netObject;
         private MaterialPropertyBlock _block;
         private bool _broken;
+
+        /// <summary>Break effect prefab, read by <c>CombatFxWarmup</c> so the first break of a map
+        /// does not compile the debris material mid-fight.</summary>
+        public GameObject BreakFxPrefab => breakFxPrefab;
 
         private void Awake()
         {
@@ -160,20 +164,14 @@ namespace VortexArena.Core.Combat
             _broken = broken;
         }
 
+        /// <summary>⚠️ Pooled through <see cref="BlastFxPool"/>, never instantiated: a per-break
+        /// <c>Instantiate</c>/<c>Destroy</c> pair plus <c>PlayClipAtPoint</c>'s throwaway AudioSource
+        /// is a hitch on Quest, and the first break of a map would also draw the debris material for
+        /// the first time — <c>CombatFxWarmup</c> pays that behind the loading cover.</summary>
         private void PlayBreakPresentation()
         {
-            Vector3 position = transform.position;
-
-            if (breakFxPrefab != null)
-            {
-                GameObject fx = Instantiate(breakFxPrefab, position, Quaternion.identity);
-                Destroy(fx, Mathf.Max(0.1f, breakFxLifetime));
-            }
-
-            if (breakClip != null)
-            {
-                AudioSource.PlayClipAtPoint(breakClip, position, breakVolume);
-            }
+            BlastFxPool.Shared.Play(breakFxPrefab, transform.position, breakClip, breakVolume,
+                breakFxLifetime);
         }
     }
 }

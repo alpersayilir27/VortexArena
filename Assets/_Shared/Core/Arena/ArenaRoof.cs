@@ -16,7 +16,8 @@ namespace VortexArena.Core.Arena
     /// added (or via right click → <i>Çatı katmanını uygula</i>) the <see cref="LayerName"/> layer
     /// is stamped on all of them: with the Layers filter in the scene view "which one is roof" can
     /// be seen at a glance. The layer is only for VISIBILITY/FILTERING — the behaviour comes from
-    /// the Renderer list, so hiding works even if the stamp is forgotten.</para>
+    /// the Renderer list, so hiding works even if the stamp is forgotten. Objects carrying a
+    /// Collider are never stamped: their layer is gameplay (e.g. Obstacle).</para>
     ///
     /// <para><b>Hiding method:</b> the <c>_BaseColor</c> alpha via a
     /// <c>MaterialPropertyBlock</c> — the shared material is not modified, a block is written per
@@ -173,18 +174,28 @@ namespace VortexArena.Core.Arena
             }
 
             Resolve();
-            UnityEditor.Undo.RecordObject(gameObject, "Çatı katmanı");
-            gameObject.layer = layer;
+            Stamp(gameObject, layer);
             for (int i = 0; i < resolved.Length; i++)
             {
-                if (resolved[i] == null || resolved[i].gameObject.layer == layer)
+                if (resolved[i] != null)
                 {
-                    continue;
+                    Stamp(resolved[i].gameObject, layer);
                 }
-
-                UnityEditor.Undo.RecordObject(resolved[i].gameObject, "Çatı katmanı");
-                resolved[i].gameObject.layer = layer;
             }
+        }
+
+        /// <summary>Stamps one object; an object carrying a Collider keeps its own layer.</summary>
+        private static void Stamp(GameObject target, int layer)
+        {
+            // A collider's layer is gameplay (Obstacle = violation, muzzle block, blast cover);
+            // overwriting it with this cosmetic layer would silently break those queries.
+            if (target.layer == layer || target.GetComponent<Collider>() != null)
+            {
+                return;
+            }
+
+            UnityEditor.Undo.RecordObject(target, "Çatı katmanı");
+            target.layer = layer;
         }
 #endif
     }

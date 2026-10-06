@@ -1,21 +1,25 @@
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+using VortexArena.Core.UI;
 using VortexArena.Net;
 using VortexArena.Protocol;
 
 namespace VortexArena.App.Admin
 {
     /// <summary>
-    /// The <b>match control bar</b> at the bottom center of the HUD: four icon buttons
-    /// (▶ START · ⏸/▶ PAUSE-RESUME · ⏹ END · ■ ABORT).
+    /// The <b>match control bar</b> at the bottom center of the HUD: BAŞLAT · DURAKLAT/DEVAM ·
+    /// BİTİR · İPTAL.
     ///
-    /// <para>⚠️ <b>END and ABORT are not the same button twice.</b> END finishes the match normally —
-    /// result screen, scoreboard, the usual return to the lobby; ABORT drops it and shows nothing. Both
-    /// exist because a mode's own end condition may never fire (an unlimited tournament has no win limit
-    /// and no round cap), and the operator should not have to pay the scoreboard to get out.</para>
+    /// <para>⚠️ <b>BİTİR and İPTAL are not the same button twice.</b> BİTİR finishes the match
+    /// normally — result screen, scoreboard, the usual return to the lobby; İPTAL drops it and shows
+    /// nothing. Both exist because a mode's own end condition may never fire (an unlimited tournament
+    /// has no win limit and no round cap), and the operator should not have to pay the scoreboard to
+    /// get out.</para>
     ///
     /// <para><b>Visuals come from the prefab</b> (<c>AdminHud.prefab</c> → <c>MatchBar</c>); this
-    /// class only wires, colors and disables the buttons by phase.</para>
+    /// class only wires the buttons and switches their kind/label by phase
+    /// (<see cref="UiButtonStyle"/>).</para>
     ///
     /// <para><b>Why separate:</b> the buttons live in the HUD's <b>persistent</b> layer (clickable
     /// while the panel is closed) but the selection state lives in the preferences panel. ⚠️ This
@@ -33,11 +37,25 @@ namespace VortexArena.App.Admin
         /// <summary>Safety refresh interval (s) — same rhythm as <see cref="AdminHud"/>.</summary>
         private const float RefreshInterval = 0.25f;
 
-        /// <summary>How long END stays armed after the first click (s).</summary>
-        /// <remarks>⚠️ END is irreversible and its neighbour is the destructive ABORT, so it asks twice:
-        /// first click arms (icon goes accent), second click inside this window sends. Short on purpose —
-        /// an armed button the operator has forgotten about is a trap, not a safeguard.</remarks>
+        /// <summary>How long BİTİR stays armed after the first click (s).</summary>
+        /// <remarks>⚠️ BİTİR is irreversible and its neighbour is the destructive İPTAL, so it asks twice:
+        /// first click arms (label becomes "BİTİR?", surface goes amber), second click inside this window
+        /// sends. Short on purpose — an armed button the operator has forgotten about is a trap, not a
+        /// safeguard.</remarks>
         private const float EndArmSeconds = 3f;
+
+        private const string LabelStart = "BAŞLAT";
+        private const string LabelPause = "DURAKLAT";
+        private const string LabelResume = "DEVAM";
+        private const string LabelEnd = "BİTİR";
+        private const string LabelEndArmed = "BİTİR?";
+        private const string LabelAbort = "İPTAL";
+
+        /// <summary>CSS <c>.mbar .btn .ic</c> — bigger than the builder's default for this height.</summary>
+        private const float IconSize = 22f;
+
+        /// <summary>CSS <c>.btn { gap }</c>.</summary>
+        private const float IconGap = 8f;
 
         [Header("Seçim kaynağı")]
         [Tooltip("Mod/harita/süre seçimi ve lobi durumu bu panelde yaşar; BAŞLAT ona sorar. " +
@@ -45,26 +63,31 @@ namespace VortexArena.App.Admin
         [SerializeField] private AdminPreferencesPanel preferences;
 
         [Header("Düğmeler")]
-        [SerializeField] private Button startButton;
-        [SerializeField] private Image startIcon;
-        [SerializeField] private Button pauseButton;
-        [SerializeField] private Image pauseIcon;
+        [SerializeField] private UiButtonStyle startButton;
+        [Tooltip("DURAKLAT/DEVAM tek düğmedir: koşan maçta duraklatır, duraklatılmış maçta sürdürür.")]
+        [SerializeField] private UiButtonStyle pauseButton;
         [Tooltip("BİTİR: maçı normal yoldan bitirir (sonuç ekranı çıkar). İPTAL'den farkı budur.")]
-        [SerializeField] private Button endButton;
-        [SerializeField] private Image endIcon;
-        [SerializeField] private Button abortButton;
-        [SerializeField] private Image abortIcon;
+        [SerializeField] private UiButtonStyle endButton;
+        [SerializeField] private UiButtonStyle abortButton;
 
         [Header("İkonlar")]
-        [Tooltip("DURAKLAT/DEVAM ET tek düğmedir: koşan maçta pauseSprite, operatörün duraklattığı " +
-                 "maçta playSprite gösterir.")]
+        [Tooltip("DURAKLAT/DEVAM düğmesinin ikon nesnesi — etiketle birlikte yeniden ortalanır.")]
+        [SerializeField] private Image pauseIcon;
+        [SerializeField] private Image startIcon;
+        [SerializeField] private Image endIcon;
+        [SerializeField] private Image abortIcon;
         [SerializeField] private Sprite playSprite;
         [SerializeField] private Sprite pauseSprite;
+
+        [Header("Not")]
+        [Tooltip("Şeridin üstündeki \"BİTİR: onaylamak için tekrar bas.\" satırı (CSS .mnote); " +
+                 "yalnız BİTİR kurulu iken görünür.")]
+        [SerializeField] private TextMeshProUGUI armedNote;
 
         private float _nextRefresh;
         private bool _dirty = true;
 
-        /// <summary>When the armed END disarms itself; <c>&lt;= 0</c> = not armed.</summary>
+        /// <summary>When the armed BİTİR disarms itself; <c>&lt;= 0</c> = not armed.</summary>
         private float _endArmedUntil;
 
         private void Awake()
@@ -81,7 +104,7 @@ namespace VortexArena.App.Admin
 
         /// <summary>
         /// Wires behaviour onto the prefab's buttons. ⚠️ <b>No persistent onClick in the prefab</b>
-        /// (as in <see cref="AdminHud"/>): the commands are conditional (START refuses while the
+        /// (as in <see cref="AdminHud"/>): the commands are conditional (BAŞLAT refuses while the
         /// lobby is open, pause/resume differs by phase) and an inspector-wired call would skip
         /// those conditions.
         /// </summary>
@@ -93,8 +116,9 @@ namespace VortexArena.App.Admin
             Wire(abortButton, AdminCommands.AbortMatch);
         }
 
-        private static void Wire(Button button, UnityEngine.Events.UnityAction action)
+        private static void Wire(UiButtonStyle style, UnityEngine.Events.UnityAction action)
         {
+            Button button = style != null ? style.TargetButton : null;
             if (button == null)
             {
                 return;
@@ -185,11 +209,10 @@ namespace VortexArena.App.Admin
             preferences.StartSelectedMatch();
         }
 
-        /// <summary>Two-step END: the first click arms, a second one inside
+        /// <summary>Two-step BİTİR: the first click arms, a second one inside
         /// <see cref="EndArmSeconds"/> sends.</summary>
-        /// <remarks>⚠️ Not the same weight as the other three: END declares a winner from the CURRENT
-        /// score and throws away the round in progress, and the operator cannot take it back. The arming
-        /// is shown by the icon turning accent — no label to change on a 60×60 icon button.</remarks>
+        /// <remarks>⚠️ Not the same weight as the other three: BİTİR declares a winner from the CURRENT
+        /// score and throws away the round in progress, and the operator cannot take it back.</remarks>
         private void EndMatch()
         {
             if (!IsEndArmed)
@@ -249,51 +272,34 @@ namespace VortexArena.App.Admin
 
         // ------------------------------------------------------------------ refresh
 
-        /// <summary>Colors the three buttons by phase. ⚠️ All fields are read null-safely so an
-        /// unwired element does not take the rest of the bar down.</summary>
+        /// <summary>Switches the four buttons' kind, label and icon by phase (kit.html "MAÇ ŞERİDİ —
+        /// FAZA GÖRE"). ⚠️ All fields are read null-safely so an unwired element does not take the
+        /// rest of the bar down.</summary>
         private void Refresh()
         {
             AdminRoster roster = AdminRoster.Instance;
 
-            // START: without the panel the gate is left open (the server rejects it anyway).
+            // BAŞLAT: without the panel the gate is left open (the server rejects it anyway). Green
+            // while it is the operator's next move, so the bar has exactly one obvious action.
             bool canStart = preferences == null || preferences.CanStartMatch;
-            if (startButton != null)
-            {
-                startButton.interactable = canStart;
-            }
+            Apply(startButton, startIcon, LabelStart,
+                canStart ? UiButtonKind.Go : UiButtonKind.Normal, canStart, null);
 
-            if (startIcon != null)
-            {
-                startIcon.color = canStart ? UiKit.Good : UiKit.Faint;
-            }
-
-            // PAUSE/RESUME: a single button, its icon and its command come from the phase.
+            // DURAKLAT/DEVAM: a single button; its label, icon and command come from the phase.
             bool paused = IsOperatorPaused;
             bool live = IsMatchLive;
-            if (pauseButton != null)
-            {
-                pauseButton.interactable = paused || live;
-            }
+            Apply(pauseButton, pauseIcon, paused ? LabelResume : LabelPause,
+                paused ? UiButtonKind.Go : UiButtonKind.Normal, paused || live,
+                paused ? playSprite : pauseSprite);
 
-            if (pauseIcon != null)
-            {
-                Sprite icon = paused ? playSprite : pauseSprite;
-                if (icon != null)
-                {
-                    pauseIcon.sprite = icon;
-                }
-
-                pauseIcon.color = paused ? UiKit.Good : live ? UiKit.Title : UiKit.Faint;
-            }
-
-            // ABORT returns to the lobby from any phase (abort_match, §10.1); nothing to abort when
+            // İPTAL returns to the lobby from any phase (abort_match, §10.1); nothing to abort when
             // already waiting in the lobby.
             bool inLobby = roster != null &&
                            roster.Phase == ArenaProtocol.PHASE_PAUSED &&
                            (string.IsNullOrEmpty(roster.PhaseReason) ||
                             roster.PhaseReason == ArenaProtocol.PAUSE_REASON_LOBBY);
 
-            // END: a match that is running or paused can be finished; one already finished has its
+            // BİTİR: a match that is running or paused can be finished; one already finished has its
             // result on screen and one in the lobby does not exist.
             bool canEnd = roster == null ||
                           (!inLobby && roster.Phase != ArenaProtocol.PHASE_FINISHED);
@@ -304,24 +310,68 @@ namespace VortexArena.App.Admin
                 _endArmedUntil = 0f;
             }
 
-            if (endButton != null)
+            bool armed = IsEndArmed;
+            Apply(endButton, endIcon, armed ? LabelEndArmed : LabelEnd,
+                armed ? UiButtonKind.WarnFill : UiButtonKind.Normal, canEnd, null);
+
+            Apply(abortButton, abortIcon, LabelAbort,
+                inLobby ? UiButtonKind.Normal : UiButtonKind.Danger, !inLobby, null);
+
+            if (armedNote != null && armedNote.gameObject.activeSelf != armed)
             {
-                endButton.interactable = canEnd;
+                armedNote.gameObject.SetActive(armed);
+            }
+        }
+
+        /// <summary>
+        /// Applies one button's whole state. The icon+label block is re-centered because the label can
+        /// change width mid-match (DURAKLAT → DEVAM, BİTİR → BİTİR?) while the box stays its CSS
+        /// <c>min-width</c>.
+        /// </summary>
+        private static void Apply(UiButtonStyle style, Image icon, string label, UiButtonKind kind,
+            bool interactable, Sprite iconSprite)
+        {
+            if (style == null)
+            {
+                return;
             }
 
-            if (endIcon != null)
+            if (icon != null && iconSprite != null)
             {
-                endIcon.color = !canEnd ? UiKit.Faint : IsEndArmed ? UiKit.Accent : UiKit.Title;
-            }
-            if (abortButton != null)
-            {
-                abortButton.interactable = !inLobby;
+                icon.sprite = iconSprite;
             }
 
-            if (abortIcon != null)
+            style.SetLabel(label);
+            style.SetKind(kind);
+            style.SetInteractable(interactable);
+            Center(style, icon);
+        }
+
+        private static void Center(UiButtonStyle style, Image icon)
+        {
+            TMP_Text text = style.Label;
+            if (text == null)
             {
-                abortIcon.color = !inLobby ? UiKit.Bad : UiKit.Faint;
+                return;
             }
+
+            var box = (RectTransform)style.transform;
+            float width = box.rect.width;
+            float height = box.rect.height;
+            float labelWidth = Mathf.Ceil(text.GetPreferredValues(text.text).x);
+            bool hasIcon = icon != null;
+            float cursor = (width - (labelWidth + (hasIcon ? IconSize + IconGap : 0f))) * 0.5f;
+
+            if (hasIcon)
+            {
+                RectTransform iconRect = icon.rectTransform;
+                iconRect.sizeDelta = new Vector2(IconSize, IconSize);
+                iconRect.anchoredPosition = new Vector2(cursor, 0f);
+                cursor += IconSize + IconGap;
+            }
+
+            text.rectTransform.anchoredPosition = new Vector2(cursor, 0f);
+            text.rectTransform.sizeDelta = new Vector2(labelWidth, height);
         }
     }
 }

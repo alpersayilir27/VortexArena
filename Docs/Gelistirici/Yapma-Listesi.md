@@ -20,9 +20,15 @@ hiçbiri yok. Ölüp canlanmak bile bir **durum** değişimidir, konum değişim
 Ölünce dönülecek bir "başlangıç noktası" da yoktur: oyuncu **taban bölgesine** (`BaseZone`) kendi
 ayaklarıyla yürüyerek canlanır.
 
-Tek istisna **dikey** sanal ofsettir: çok katlı arenada kat geçişi rig kökünü yalnız Y'de taşır ve
-bunu yapan tek yer `ArenaCalibrator.SetFloorLift`'tir (`FloorState` üzerinden). Yatayda hiçbir kod
-rig'i oynatmaz; başka hiçbir kod rig kökünü de oynatmaz.
+Birinci istisna **dikey** sanal ofsettir: çok katlı arenada kat geçişi rig kökünü yalnız Y'de taşır
+ve bunu yapan tek yer `ArenaCalibrator.SetFloorLift`'tir (`FloorState` üzerinden). **Ürün kodunda
+yatayda hiçbir kod rig'i oynatmaz**; başka hiçbir kod rig kökünü de oynatmaz.
+
+İkinci istisna **yalnız editördedir**: dev hizalama ("Kalibrasyonu atla") yürürlükteyken kumanda
+çubukları rig'i yatayda yürütür ve kafanın etrafında döndürür. Bunu yapan tek yer
+`ArenaCalibrator.Dev.cs`'dir ve dosyanın tamamı `#if UNITY_EDITOR` içindedir — build'e tek satır
+girmez; ürün kodu için kural yukarıdaki biçimiyle aynen geçerlidir. ⚠️ Meta rig'indeki kapalı
+locomotion yığını (`Locomotor` vb.) bunun için de **açılmaz**: dev yürüyüşü o yığını kullanmaz.
 
 ### ⛔ Harita değişiminde oyuncuyu "yeniden doğurma"
 
@@ -46,6 +52,10 @@ Aynı sebeple: bir oyuncu durumuna savaş kapısı eklerken **o durumu değişti
 Kalibrasyon yasağı canlandırmanın **iki yolunda birden** duruyor (oyuncunun `revive_request`'i ve
 yalnızca `revive_request`); ikinci bir yol eklenip yasak orada tekrarlanmazsa kural sessizce
 işlevsizleşir — hata da vermez.
+
+⚠️ Editördeki dev hizalama bir **yerel ezme değildir**: o da `Calibrated` → `set_calibration`
+yolundan `source:"dev"` ile bildirir, kapı yine sunucudadır. `IsCalibrated` / `ManualAllowed`
+editörde bile ezilmez.
 
 ### ⛔ `VA_ArenaBoundary`'yi taşımak / döndürmek
 
@@ -279,14 +289,58 @@ gerçekten yer değiştirdiyse dosyadaki A/B elle güncellenir, sonra ölçüm a
 
 ---
 
+## Arayüz (Girdap)
+
+### ⛔ Girdap prefabını elle düzenleme
+
+Admin ekranları ve maç sonu ekranı koddan üretilir (`GirdapUiBuilder`); Inspector'da yapılan her
+şey bir sonraki üretimde kaybolur — değişiklik builder'a yazılır, sonra `Tools > VortexArena > UI >
+Girdap > Yalnız <Ekran>` koşulur.
+
+### ⛔ Girdap prefabına Layout Group / ContentSizeFitter koyma
+
+Kitin yerleşimi sabit anchor'a ve kodda ölçülen genişliğe dayanır (`GetPreferredValues` +
+`anchoredPosition`); araya giren bir layout bileşeni mockup'tan gelen px ölçülerini yeniden akıtır
+ve ekran çözünürlükten çözünürlüğe sessizce kayar.
+
+### ⛔ Admin arayüzünde ve maç sonu ekranında `UiKit` paletini kullanma
+
+O ekranların tek palet kaynağı `Girdap`'tır; ikinci bir palet aynı rolü iki tonda çizer ve oyuncu
+"bu kırmızı hangi takım" eşlemesini kaybeder. `UiKit` yalnız elle düzenlenen ekranlar, sahne
+işaretçileri ve `UiKit.EnsureEventSystem()` için kalır.
+
+### ⛔ Düğme/rozet rengini ekrandan ayarlama
+
+Düğme çalışırken tür değiştiriyor (BİTİR → BİTİR?, tehlike → onay) ve elle boyanan dört katmanı
+geri almak gerekiyor: tek kapı `UiButtonStyle.SetKind`/`SetInteractable` ve `UiChip.Set`.
+
+### ⛔ Özel `Graphic` türevini kendi `[RequireComponent(typeof(CanvasRenderer))]`'ı olmadan bırakma
+
+`RequireComponent` tabandan **miras alınmaz**: eksikse `AddComponent` hiçbir şey çizmeyen bir
+grafik üretir ve obje pasifleşirken `MissingComponentException` fırlatır.
+
+### ⛔ TMP `Ellipsis` metin kutusunu fontun satır kutusundan kısa bırakma
+
+`Ellipsis` DİKEY de keser (Saira Condensed 24 px'in satır kutusu ≈ 38 px): dar bir rect'te metin
+kısalmaz, **tamamen kaybolur** — kutu büyütülür, görsel konum midline hizalamayla korunur.
+
+### ⚠️ Girdap şeklinin `raycastTarget`'ını açık bırakma
+
+`Graphic`'in varsayılanı `true`'dur ve serileşen taban alanı olduğu için koddan "bir kez"
+kapatılamaz; builder'ın fabrika yardımcıları şekil/yazı/ikon başına kapatır, tıklanabilir yüzey
+kendi açar. Açık kalan dekoratif bir grafik üstündeki düğmenin tıklamasını yutar.
+
+---
+
 ## Sahne ve prefab
 
 ### ⛔ Arayüz prefabındaki bir ögeyi SİLME
 
-Arayüzün tamamı `_Shared/App/Resources/UI/` altında prefabtır ve her öge kök bileşende bir
-`[SerializeField]` alanına bağlıdır (`scoreRedText`, `hpFill`, `_modeDropdown`…). Ögeyi silersen
-alan boşalır ve **hiçbir hata çıkmaz — o parça sessizce çizilmez.** Gizlemen gerekiyorsa objeyi
-devre dışı bırak ya da alfasını sıfırla.
+Elle düzenlenen arayüz prefablarında (`_Shared/App/Resources/UI/` altındaki oyuncu HUD'ı, ölüm,
+bildirim, yükleme ve bağlantı ekranları) her öge kök bileşende bir `[SerializeField]` alanına
+bağlıdır (`healthFill`, `statusText`, `_reconnectButton`…). Ögeyi silersen alan boşalır ve
+**hiçbir hata çıkmaz — o parça sessizce çizilmez.** Gizlemen gerekiyorsa objeyi devre dışı bırak ya
+da alfasını sıfırla. (Girdap ekranlarında kural daha katıdır: orada prefab hiç elle düzenlenmez.)
 
 Aynı sebeple prefabı `Resources/` klasöründen **çıkarma**: sahneye konmuyorlar, çalışırken
 `Resources.Load` ile yükleniyorlar. Taşınırsa o arayüz hiç doğmaz (konsola
@@ -295,10 +349,11 @@ Aynı sebeple prefabı `Resources/` klasöründen **çıkarma**: sahneye konmuyo
 ### ⛔ Arayüz düğmesinin `onClick`'ini inspector'dan doldurma
 
 Prefablarda bilerek boştur; davranış çalışırken koddan bağlanır (`WireButtons` / `Initialize`).
-Geri çağrıların çoğu **koşulludur** — iki adımlı onay (`AT`, `KAL`, toplu kalibrasyon sıfırlama),
-maç sürerken kilitlenen mod/harita satırları, faza göre komut değiştiren DURAKLAT/DEVAM.
-Inspector'dan eklenen kalıcı bir kayıt bu koşulları **atlar**: oyuncu satırındaki `AT` düğmesi
-"EMİN?" adımını geçip doğrudan atardı.
+Geri çağrıların çoğu **koşulludur** — `AT`'ın iki adımlı onayı, `SIFIRLA`'nın kısa basış/basılı
+tutma ayrımı, maç sürerken kilitlenen mod/harita satırları, faza göre komut değiştiren
+DURAKLAT/DEVAM. Inspector'dan eklenen kalıcı bir kayıt bu koşulları **atlar**: oyuncu kartındaki
+`AT` düğmesi "EMİN?" adımını geçip doğrudan atardı, `SIFIRLA` ise basış süresine bakmadan hem
+yumuşak sıfırlamayı hem kayıt silmeyi gönderirdi.
 
 Ayrıca hedef statik değildir — satır her `Bind`'da başka bir oyuncuya bağlanır; kalıcı bir kayıt
 yanlış oyuncuya komut gönderir.
@@ -308,7 +363,7 @@ yanlış oyuncuya komut gönderir.
 ### ⛔ Moda özel maç sonu ekranını `MatchResultOverlay.prefab`'ın KOPYASI olarak yapma
 
 Moda özel görünüm, tabanın **varyantı** olur (`ModeDefinition.resultScreenPrefab`'a bağlanır).
-Kopya, alan bağlarını o anki hâliyle dondurur: tabana sonradan eklenen bir kolon ya da alan kopyaya
+Kopya, alan bağlarını o anki hâliyle dondurur: tabana sonradan eklenen bir öge ya da alan kopyaya
 inmez ve o modda **hata vermeden** çizilmez. Aynı sebeple varyantın kökündeki `MatchResultOverlay`
 bileşeni kaldırılmaz, `modeId`'ye bakan bir görünüm dalı da kodda açılmaz — görünüm veridir.
 → reçete: **[Yemek Kitabı 13.2](Yemek-Kitabi.md#132-moda-özel-maç-sonu-ekranı)**
@@ -354,6 +409,18 @@ bake'ini alır ve bağlı olduğu `OcclusionCullingData.asset` **kendi klasörü
 sahneye sağ tık → *Select Dependencies*; başka sahnenin klasöründen bir `OcclusionCullingData.asset`
 seçiliyorsa bağlantı hâlâ kaynağınkidir.
 
+### ⛔ Görünürlükle budanmış dekoru, kaynağı değişince yeniden üretmeden bırakma
+
+Sahnede `FarImpostors` kökü varsa arena dışı dekor oyun alanından görünürlüğe göre budanmıştır:
+renderer'lar sahneye özel `Art/Optimized/Culled/` mesh'lerini gösterir, uzak dekor kartlara
+çevrilmiştir ([Yemek Kitabı, Reçete 14](Yemek-Kitabi.md)). Bu çıktılar üretildikleri andaki
+**oyun alanı sınırına, iç duvarlara, dekor yerleşimine ve ışık bake'ine** göredir: alan genişler
+ya da tek yüzlü bir duvar kalkarsa atılmış üçgenler delik olarak görünür, yeniden bake sonrası
+kartlar eski ışıkla kalır — hata ya da uyarı çıkmaz. Biri değişince budama yeniden üretilir.
+Sahne kopyalanınca kopya kaynağın `Art/Optimized/` asset'lerini göstermeye devam eder; kopyanın
+oyun alanı farklıysa budama kopya için ayrıca üretilir. Gölge/LOD tarafındaki editör-gözlük farkı
+→ [Sistem Özeti, Tuzaklar](../Sistem-Ozeti.md).
+
 ### ⛔ Üst kat plakasını `Obstacle` layer'ına koyma / collider'sız bırakma
 
 İki yarısı da bağlayıcıdır. `Obstacle` layer'ı **"kafa girerse ceza"** sözleşmesidir: plaka oraya
@@ -366,6 +433,14 @@ collider **`Default`** layer'da kalır.
 
 Admin kuş bakışı için plakayı `ArenaRoof` kökünün altına al (`GameObject > VortexArena > Arena Roof`)
 — aksi hâlde operatör tepeden alt katı hiç göremez.
+
+### ⛔ Kuş bakışında gizlemek için layer'ı elle `ArenaRoof` yapma
+
+Layer hiçbir şeyi gizlemez — gizleyen `ArenaRoof` **bileşenidir**, layer yalnız sahne görünümünde
+süzme içindir. Elle değiştirmek iki yerden kırar: obje gizlenmez, objede collider varsa `Obstacle`
+sözleşmesi (engel ihlali, namlu engeli, patlama siperi) o obje için hata vermeden kalkar. Doğrusu:
+kapatan objeyi seç → `GameObject > VortexArena > Arena Roof`; damga collider'lı objenin layer'ına
+dokunmaz.
 
 ### ⛔ Kat yüksekliğini elle yazma
 
@@ -574,6 +649,16 @@ patlamada takılma döner), çocuktaysa o parça **oturum boyunca bir daha gör�
 kısmı nadiren çıkıyor" diye okunur. **Hata satırı yoktur.** Hepsi `None` kalır; gizleme havuzun
 işidir.
 
+### ⛔ Efekt için çalışma anında gerçek zamanlı ışık yakma
+
+Arena sahneleri gerçek zamanlı **nokta/spot ışık taşımaz**. Patlamada, namlu alevinde ya da isabette
+bir tanesi açılınca URP Forward o kareden itibaren ekrandaki **her Lit materyali** ek-ışık
+varyantıyla (`_ADDITIONAL_LIGHTS`) çizer ve o varyantlar tam o karede derlenir: ilk görüşte büyük
+bir takılma olur, **hata satırı yoktur**, ikinci bakışta geçtiği için "bir kerelik" sanılır. Işığı
+prefaba koymak da aynı şeydir — havuz düğümü açıldığı anda ışık sahnededir. Parlama **additive bir
+parçacıkla** yapılır (kurulu örnek: `FX_BombBlast/Flash`); parçacık sisteminin `Lights` modülü de
+aynı kuralın içindedir.
+
 ### ⛔ İstasyonun loop sesini/efektini taşınan nesneye koyma
 
 Izgara cızırtısı gibi "istasyon çalışıyor" sesi **istasyonun kendisinde** durur ve yerel durumdan
@@ -781,6 +866,10 @@ Unity enum'ları **sayısal indeksle** saklar. `Team`'e başa bir değer eklemek
 
 Aynısı `HitZone` (`Body` sıfırda kalır) / `ModeTeamMode` / `ModeScoreKind` / `ModeReviveAnchor` /
 `ModeWeaponSource` / `ModeAudioEvent` için de geçerli.
+
+Arayüz kitinin enum'ları da öyledir (`UiButtonKind` · `UiChipKind` · `UiGradientMode` ·
+`GirdapFont`): araya giren bir değer üretilmiş her Girdap prefabında düğme türünü, rozet türünü,
+gradyan yönünü ve fontu kaydırır — görünüm bozulur, derleme susar.
 
 Eşyanın üç ekseni de aynı kuraldadır ve **0. indeksleri bugünkü davranıştır**:
 `ItemGrabPath.DistanceGrab` · `ItemInstancing.PerViewerClone` · `ItemReleaseMode.Return`. Bu alanlar

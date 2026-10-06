@@ -30,6 +30,10 @@ namespace VortexArena.Core.Player
     /// <see cref="DefaultStatureMeters"/> assumption reported on connect.
     /// </para>
     /// <para>
+    /// Under the editor-only dev alignment the automatic measurement is skipped and the default is
+    /// re-reported instead.
+    /// </para>
+    /// <para>
     /// ⚠️ <b>Never the character's LIVE eye height.</b> The retargeter drives the character's head to
     /// the tracked head, so player-eye over character-eye is <c>1</c> by construction — every player,
     /// whatever their height, measures <c>0.99…1.01</c>.
@@ -218,6 +222,17 @@ namespace VortexArena.Core.Player
             }
 
             _autoPending = false;
+
+#if UNITY_EDITOR
+            // Dev placement (editor only): the rig was placed, not aligned, so the tester's posture is
+            // not a stature. The default stays authoritative and is re-reported — the server zeroes
+            // the scale on every clear.
+            if (ArenaCalibrator.IsDevAligned)
+            {
+                ReportKnownScale();
+                return;
+            }
+#endif
 
             // The alignment was not acknowledged (or no rig): there is no arena floor to measure against.
             if (!CalibrationState.IsCalibrated || ResolveRig() == null)

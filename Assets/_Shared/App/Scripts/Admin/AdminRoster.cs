@@ -105,8 +105,8 @@ namespace VortexArena.App.Admin
 
         /// <summary>Floor offset from the last manual calibration (signed meters, §10.6);
         /// <c>0</c> = no measurement or clean. Rows above
-        /// <c>ArenaProtocol.CALIB_FLOOR_WARN_METERS</c> get a ⚠ on the KAL button — the cause is
-        /// stale headset space data.</summary>
+        /// <c>ArenaProtocol.CALIB_FLOOR_WARN_METERS</c> tint the stats row's KALİBRE button blue —
+        /// the cause is stale headset space data.</summary>
         public float floorOffset;
 
         /// <summary>Which arena floor the player is on; <c>0</c> = ground. Multi-floor arenas only —
@@ -176,6 +176,72 @@ namespace VortexArena.App.Admin
                 : Mathf.Max(0f, ArenaProtocol.RESPAWN_DELAY - (Time.unscaledTime - diedAt));
     }
 
+    /// <summary>
+    /// What a <c>kill_event</c> means, so the feed can draw the right plates.
+    /// <para>⚠️ The branches mirror <see cref="KillFeedText"/> — the SAME classification, not a
+    /// second one: a suicide drawn as a plain death sends the operator after a bug that never
+    /// happened.</para>
+    /// <para>⚠️ Not serialized (built per event, never stored), so the "append at the end" rule
+    /// does not apply.</para>
+    /// </summary>
+    public enum AdminKillKind
+    {
+        /// <summary>Killer and victim are two different players.</summary>
+        Kill,
+
+        /// <summary>Own blast (§10.3): <c>killerId == victimId</c>.</summary>
+        Suicide,
+
+        /// <summary>§10.9 environmental death inside an obstacle.</summary>
+        Obstacle,
+
+        /// <summary>Server death with no attributable killer.</summary>
+        Death
+    }
+
+    /// <summary>
+    /// One kill feed plate's data. ⚠️ Names and teams are SNAPSHOTTED at event time: a player who
+    /// changes team or leaves must not retroactively repaint an older line.
+    /// </summary>
+    public class AdminKillFeedEntry
+    {
+        public int killerId;
+        public string killerName = "";
+
+        /// <summary>"red" | "blue" | "" (teamless) — what <see cref="Girdap.TeamHi"/> expects.</summary>
+        public string killerTeam = "";
+
+        public int victimId;
+        public string victimName = "";
+
+        /// <inheritdoc cref="killerTeam"/>
+        public string victimTeam = "";
+
+        public string weaponId = "";
+        public AdminKillKind kind;
+
+        /// <summary><c>Time.unscaledTime</c> of arrival.</summary>
+        public float time;
+    }
+
+    /// <summary>One violation feed row's data (§10.9). Edge triggered, like the message itself.</summary>
+    public class AdminViolationFeedEntry
+    {
+        public int playerId;
+        public string name = "";
+
+        /// <summary>Raw <c>ArenaProtocol.VIOLATION_KIND_*</c>; an unknown value is still shown.</summary>
+        public string kind = "";
+
+        public bool active;
+
+        /// <summary>Duration (s) of a finished violation; 0 while active.</summary>
+        public float seconds;
+
+        /// <inheritdoc cref="AdminKillFeedEntry.time"/>
+        public float time;
+    }
+
     /// <summary>Unified live model of everything from the server — the admin UI's data layer. It
     /// touches no UI types; HUD and panels only read from here.
     /// <para>Authority: <c>lobby_state</c> is the FULL authoritative snapshot (name/role/team/ready/
@@ -223,6 +289,9 @@ namespace VortexArena.App.Admin
         private readonly List<AdminPlayerView> _all = new List<AdminPlayerView>();
         private readonly List<string> _killFeed = new List<string>();
         private readonly List<string> _violationFeed = new List<string>();
+        private readonly List<AdminKillFeedEntry> _killEvents = new List<AdminKillFeedEntry>();
+        private readonly List<AdminViolationFeedEntry> _violationEvents =
+            new List<AdminViolationFeedEntry>();
         private readonly List<int> _removeScratch = new List<int>();
 
         /// <summary>Time of the last violation alert (<c>Time.unscaledTime</c>); see
@@ -238,11 +307,27 @@ namespace VortexArena.App.Admin
         /// <summary>All players (role=player only, ordered by playerId).</summary>
         public IReadOnlyList<AdminPlayerView> Players => _all;
 
+        /// <summary>Plain-text kill feed, OLDEST first — the one-line-per-kill form.</summary>
         public IReadOnlyList<string> KillFeed => _killFeed;
 
         /// <summary>Violation feed (§10.9). ⚠️ Kept separate from the kill feed: that one is the
         /// match story, this one is the operator's to-do list; merged, neither is readable.</summary>
         public IReadOnlyList<string> ViolationFeed => _violationFeed;
+
+        /// <summary>Same kill feed as <see cref="KillFeed"/>, structured so the HUD can draw plates
+        /// (killer / weapon / victim) instead of one text line. Oldest first.</summary>
+        public IReadOnlyList<AdminKillFeedEntry> KillEvents => _killEvents;
+
+        /// <inheritdoc cref="ViolationFeed"/>
+        public IReadOnlyList<AdminViolationFeedEntry> ViolationEvents => _violationEvents;
+
+        /// <summary>Bumped on every kill feed append/clear, so the view can skip a redraw. The feed
+        /// changes a few times a minute while <c>Changed</c> fires at 4 Hz — re-measuring eight
+        /// variable-width plates on every tick is pure waste.</summary>
+        public int KillFeedVersion { get; private set; }
+
+        /// <inheritdoc cref="KillFeedVersion"/>
+        public int ViolationFeedVersion { get; private set; }
 
         /// <summary>Connected admin count (including us) — shown in the stats panel.</summary>
         public int AdminCount { get; private set; }
@@ -479,8 +564,7 @@ namespace VortexArena.App.Admin
         private void HandleDisconnected()
         {
             _players.Clear();
-            _killFeed.Clear();
-            _violationFeed.Clear();
+            ClearFeeds();
             AdminCount = 0;
             Rebuild();
         }
@@ -615,8 +699,7 @@ namespace VortexArena.App.Admin
             // this one's. The server clears its own violation ledger at match start (§10.9).
             // load_match is only ever sent by start_match — a late-joining admin is caught up with
             // lobby_state and a violation replay, so nothing already drawn is wiped here.
-            _killFeed.Clear();
-            _violationFeed.Clear();
+            ClearFeeds();
 
             Raise();
         }
@@ -679,8 +762,7 @@ namespace VortexArena.App.Admin
             WinnerTeam = "";
             WinnerPlayerId = 0;
             TimeRemaining = 0f;
-            _killFeed.Clear();
-            _violationFeed.Clear();
+            ClearFeeds();
 
             foreach (KeyValuePair<int, AdminPlayerView> kv in _players)
             {
@@ -796,7 +878,71 @@ namespace VortexArena.App.Admin
                 _killFeed.RemoveAt(0);
             }
 
+            _killEvents.Add(BuildKillEntry(msg));
+            while (_killEvents.Count > KillFeedMaxLines)
+            {
+                _killEvents.RemoveAt(0);
+            }
+
+            KillFeedVersion++;
             Raise();
+        }
+
+        /// <summary>
+        /// Classifies a <c>kill_event</c> for the plate feed. ⚠️ The branch ORDER is
+        /// <see cref="KillFeedText"/>'s: a self-kill has <c>killerId == victimId</c> and would
+        /// otherwise fall into the plain "killer → victim" case.
+        /// </summary>
+        private AdminKillFeedEntry BuildKillEntry(KillEventMsg msg)
+        {
+            string weaponId = msg.weaponId ?? "";
+            var entry = new AdminKillFeedEntry
+            {
+                victimId = msg.victimId,
+                victimName = NameOf(msg.victimId),
+                victimTeam = TeamOf(msg.victimId),
+                weaponId = weaponId,
+                time = Time.unscaledTime
+            };
+
+            if (msg.killerId > 0 && msg.killerId != msg.victimId)
+            {
+                entry.kind = AdminKillKind.Kill;
+                entry.killerId = msg.killerId;
+                entry.killerName = NameOf(msg.killerId);
+                entry.killerTeam = TeamOf(msg.killerId);
+                return entry;
+            }
+
+            if (msg.killerId > 0)
+            {
+                entry.kind = AdminKillKind.Suicide;
+                return entry;
+            }
+
+            entry.kind = string.Equals(weaponId, ArenaProtocol.WEAPON_ID_OBSTACLE)
+                ? AdminKillKind.Obstacle
+                : AdminKillKind.Death;
+            return entry;
+        }
+
+        /// <summary>Team of a player id; empty when unknown — <see cref="Girdap.TeamHi"/>'s neutral.</summary>
+        private string TeamOf(int playerId)
+        {
+            AdminPlayerView view = Find(playerId);
+            return view != null ? view.team ?? "" : "";
+        }
+
+        /// <summary>Both feeds at once — three call sites clear them together and a forgotten one
+        /// would leave the previous match's plates on screen.</summary>
+        private void ClearFeeds()
+        {
+            _killFeed.Clear();
+            _killEvents.Clear();
+            _violationFeed.Clear();
+            _violationEvents.Clear();
+            KillFeedVersion++;
+            ViolationFeedVersion++;
         }
 
         /// <summary>Start/end of a physical violation (§10.9) — FEED ONLY: this class derives no edges,
@@ -834,6 +980,21 @@ namespace VortexArena.App.Admin
                 _violationFeed.RemoveAt(0);
             }
 
+            _violationEvents.Add(new AdminViolationFeedEntry
+            {
+                playerId = msg.playerId,
+                name = NameOf(msg.playerId),
+                kind = msg.kind ?? "",
+                active = msg.active,
+                seconds = msg.seconds,
+                time = Time.unscaledTime
+            });
+            while (_violationEvents.Count > ViolationFeedMaxLines)
+            {
+                _violationEvents.RemoveAt(0);
+            }
+
+            ViolationFeedVersion++;
             PlayViolationSound(msg);
             Raise();
         }

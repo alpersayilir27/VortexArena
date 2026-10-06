@@ -45,6 +45,15 @@ internal static class Program
             $"server-{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.log");
         ConsoleTee.Install(logPath);
 
+        // Last-resort trace: without these a crash leaves no line in the session log.
+        AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+            Console.WriteLine($"[çökme] yakalanmamış hata (süreç kapanıyor: {e.IsTerminating}): {e.ExceptionObject}");
+        TaskScheduler.UnobservedTaskException += (_, e) =>
+        {
+            Console.WriteLine($"[hata] gözlenmeyen görev hatası: {e.Exception}");
+            e.SetObserved();
+        };
+
         var configDir = ResolveConfigDir();
         var config = ServerConfig.Load(Path.Combine(configDir, "server.json"));
         // No weapon table (§10.3): the client computes damage, the server applies it as-is.

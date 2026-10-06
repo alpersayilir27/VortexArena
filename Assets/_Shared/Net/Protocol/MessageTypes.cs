@@ -83,6 +83,8 @@ namespace VortexArena.Protocol
         // guaranteed periodic frame — a silently dead Wi-Fi link never errors on its own.
         public const string Heartbeat = "heartbeat";
         public const string Kicked = "kicked";
+        // Sent INSTEAD of welcome when hello.protocolVersion differs (§1). Not a kick: the app stays up.
+        public const string VersionMismatch = "version_mismatch";
         public const string AdminState = "admin_state"; // admins only: shared selection + announcement
         public const string SelectionState = "selection_state"; // TO EVERYONE: team mode of the selected mode (§5.3)
         public const string RulesUpdate = "rules_update"; // TO EVERYONE: the rule shape of the running match changed (§5.3)

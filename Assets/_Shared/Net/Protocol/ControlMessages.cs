@@ -840,6 +840,15 @@ namespace VortexArena.Protocol
         public string reason;
     }
 
+    /// <summary>Protocol version rejection (§1/§5.3); the device stays in the shell lobby and retries.</summary>
+    [Serializable]
+    public class VersionMismatchMsg
+    {
+        public string type = MessageTypes.VersionMismatch;
+        public int serverVersion;
+        public int clientVersion;
+    }
+
     /// Admin connections only (§5.3): the single source of truth for state SHARED between admins —
     /// selection, a "<name>: <action>" notice of the last admin action, online admin count.
     /// ⚠️ Per-screen view preferences (camera, rings, transparency…) do NOT belong here.

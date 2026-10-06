@@ -5,6 +5,7 @@ using UnityEngine.UI;
 using VortexArena.Core;
 using VortexArena.Core.Arena;
 using VortexArena.Core.Audio;
+using VortexArena.Core.UI;
 using VortexArena.Net;
 using VortexArena.Protocol;
 
@@ -43,12 +44,11 @@ namespace VortexArena.App.Admin
     /// </summary>
     public class AdminPreferencesPanel : MonoBehaviour
     {
-        // ⚠️ Layout is NOT decided in code: panel size, tab bar and row stacking live in
-        // `_Shared/App/Resources/UI/AdminPreferencesPanel.prefab`. Rows are hand-stacked by y under
-        // the page roots (no Layout Group, 70 px step), so adding a row means shifting everything
-        // below it in the prefab. The card aspect is tied to the `PanelBG` art, which stretches
-        // badly — tabs exist precisely so the card stays a fixed size. See
-        // `Docs/Gelistirici/Arayuz-Tasarimi.md`.
+        // ⚠️ Layout is NOT decided in code: the prefab
+        // `_Shared/App/Resources/UI/AdminPreferencesPanel.prefab` is GENERATED from
+        // `GirdapUiBuilder.Preferences.cs` (px values come from `plan/arayuz-yenileme/tema.css`).
+        // Hand-editing the prefab drifts from the mockup and is overwritten on the next generate;
+        // change the builder instead. See `Docs/Gelistirici/Arayuz-Tasarimi.md`.
 
         /// <summary>Score-limit stepper threshold: ±1 below, ±5 above. Gives precision at low
         /// limits and speed at high ones without a four-button widget.</summary>
@@ -79,24 +79,9 @@ namespace VortexArena.App.Admin
         [Tooltip("Sekme düğmeleri — sıra AdminPreferencesTab ile aynı: MAÇ, GÖRÜNÜM, BAĞLANTI, SES.")]
         [SerializeField] private Button[] _tabButtons = new Button[4];
 
-        [Tooltip("Sekme etiketleri — _tabButtons ile aynı sırada: MAÇ, GÖRÜNÜM, BAĞLANTI, SES.")]
-        [SerializeField] private TextMeshProUGUI[] _tabLabels = new TextMeshProUGUI[4];
-
         [Tooltip("Sekme sayfaları (satırların kökleri) — aynı sırada: MAÇ, GÖRÜNÜM, BAĞLANTI, SES; " +
                  "yalnız etkin sekmenin sayfası açık kalır.")]
         [SerializeField] private GameObject[] _tabPages = new GameObject[4];
-
-        [Header("Düğme zeminleri (görsel)")]
-
-        [Tooltip("PASİF düğme zemini. Bunun ve VURGULU'nun İKİSİ birden bağlıysa düğmeler " +
-                 "sprite değiştirir (tint beyaz kalır); biri boşsa renk tintine düşülür.")]
-        [SerializeField] private Sprite _buttonIdleSprite;
-
-        [Tooltip("SEÇİLİ/ETKİN düğme zemini (aktif sekme, yürürlükteki kalibre kipi, tam ekran).")]
-        [SerializeField] private Sprite _buttonActiveSprite;
-
-        [Tooltip("YIKICI eylemin kurulmuş hâli (çıkış onayı). Boşsa vurgulu zemin kullanılır.")]
-        [SerializeField] private Sprite _buttonDangerSprite;
 
         /// <summary>Open tab. Persists for the session but never to <c>PlayerPrefs</c>: which page
         /// is open is task context, not a screen preference.</summary>
@@ -136,10 +121,11 @@ namespace VortexArena.App.Admin
 
         // Friendly fire (§5.2 set_friendly_fire). ⚠️ Not a SELECTION but an immediate command that
         // applies mid-match, so ApplySelectionLock skips it — being pressable during a live match is
-        // the whole point. Both buttons toggle, keeping the row pattern.
-        [SerializeField] private TextMeshProUGUI _friendlyFireValue;
-        [SerializeField] private Button _friendlyFirePrev;
-        [SerializeField] private Button _friendlyFireNext;
+        // the whole point.
+        // ⚠️ Two-state segment: each button SETS its own value instead of toggling. A toggle on a
+        // segment would flip the state when the operator presses the half already lit.
+        [SerializeField] private Button _friendlyFireOff;
+        [SerializeField] private Button _friendlyFireOn;
 
         // ⚠️ No separate "LOBİYE DÖN" button and none is added back: the lobby is the first row of
         // the map selector, so the rule has one gate. Ending a running match is İPTAL.
@@ -153,32 +139,28 @@ namespace VortexArena.App.Admin
         [Tooltip("Başlıklar açılışta İKİ ÇAPA ile elle kalibre edilsin (sunucu varsayılanı): " +
                  "diskteki kayıtlı çapa OKUNMAZ. Anlık komut, tüm adminlere yayılır.")]
         [SerializeField] private Button _calibModeTwoButton;
-        [SerializeField] private TextMeshProUGUI _calibModeTwoLabel;
 
         [Tooltip("Başlıklar açılışta cihazda KAYITLI çapadan hizalansın — oyuncu her seansta " +
                  "yeniden kalibre etmez. Zemin işaretleri yerinden oynamadıysa kullanılır.")]
         [SerializeField] private Button _calibModeSavedButton;
-        [SerializeField] private TextMeshProUGUI _calibModeSavedLabel;
 
         [Tooltip("Paylaşılan uzamsal çapa — REZERVE. Düğme hiçbir komut göndermez ve pasiftir; " +
                  "sunucu bu modu zaten reddeder. Seçenek yalnız görünür olsun diye durur.")]
         [SerializeField] private Button _calibModeCloudButton;
-        [SerializeField] private TextMeshProUGUI _calibModeCloudLabel;
-
-        /// <summary>Idle button background, distinct from the active <see cref="UiKit.Accent"/>.
-        /// Used by <see cref="PaintButtonBackground"/> when no sprites are bound.</summary>
-        private static readonly Color CalibModeIdleFill = UiKit.Hex(0x2A303B, 0xFF);
 
         [Header("Bağlantı")]
         [SerializeField] private TextMeshProUGUI _connectionText;
+
+        [Tooltip("Bağlantı durumunu renkle söyleyen nokta (yeşil bağlı · sarı bağlanıyor · " +
+                 "kırmızı bağlı değil).")]
+        [SerializeField] private UiShape _connectionDot;
+
         [SerializeField] private Button _reconnectButton;
         [SerializeField] private Button _disconnectButton;
 
         /// <summary>Quits the admin app behind a two-step confirm (<see cref="ArmQuit"/>). Sits next
         /// to the connection row: both end the session and are looked for in the same place.</summary>
         [SerializeField] private Button _quitButton;
-
-        [SerializeField] private TextMeshProUGUI _quitLabel;
 
         /// <summary>Quit confirm window (s): a misclick mid-match would close the admin and leave
         /// the operator blind, with no undo.</summary>
@@ -190,17 +172,16 @@ namespace VortexArena.App.Admin
         [SerializeField] private Button _markersPrev;
         [SerializeField] private Button _markersNext;
 
-        [SerializeField] private TextMeshProUGUI _nameplatesValue;
-        [SerializeField] private Button _nameplatesPrev;
-        [SerializeField] private Button _nameplatesNext;
+        // Two-state segments: each half SETS its value (see _friendlyFireOff).
+        [SerializeField] private Button _nameplatesOff;
+        [SerializeField] private Button _nameplatesOn;
 
-        // Violation alert sound (§10.9). Both buttons toggle, keeping the row pattern.
+        // Violation alert sound (§10.9).
         // ⚠️ Lives in GÖRÜNÜM because it belongs to THIS SCREEN only (AdminSession/PlayerPrefs):
         // one operator muting it does not mute another's.
         [Tooltip("Fiziksel ihlal başlayınca uyarı sesi çalsın mı (yalnız bu admin PC'sinde).")]
-        [SerializeField] private TextMeshProUGUI _violationSoundValue;
-        [SerializeField] private Button _violationSoundPrev;
-        [SerializeField] private Button _violationSoundNext;
+        [SerializeField] private Button _violationSoundOff;
+        [SerializeField] private Button _violationSoundOn;
 
         [SerializeField] private TextMeshProUGUI _speedValue;
         [SerializeField] private Button _speedPrev;
@@ -233,8 +214,17 @@ namespace VortexArena.App.Admin
         [Tooltip("Tek dokunuşta sessize alan / eski seviyeye döndüren düğmeler — aynı sırada.")]
         [SerializeField] private Button[] _audioMuteButtons = new Button[AudioMix.ChannelCount];
 
-        [Tooltip("Sessize alma düğmelerinin etiketleri — aynı sırada.")]
-        [SerializeField] private TextMeshProUGUI[] _audioMuteLabels = new TextMeshProUGUI[AudioMix.ChannelCount];
+        [Tooltip("Sessize alma düğmelerinin ikonları (hoparlör / sessiz) — aynı sırada.")]
+        [SerializeField] private Image[] _audioMuteIcons = new Image[AudioMix.ChannelCount];
+
+        [Tooltip("Seviyeyi gösteren 10 dilimli çubuklar — aynı sırada.")]
+        [SerializeField] private UiSegmentBar[] _audioMeters = new UiSegmentBar[AudioMix.ChannelCount];
+
+        [Tooltip("Hoparlör ikonu (ses açık).")]
+        [SerializeField] private Sprite _volSprite;
+
+        [Tooltip("Sessiz ikonu.")]
+        [SerializeField] private Sprite _muteSprite;
 
         [Header("MÜZİK ÇALAR (yalnız bu ekran)")]
 
@@ -264,19 +254,19 @@ namespace VortexArena.App.Admin
 
         [Tooltip("Tamamen durdurur; imleç bulunduğu parçada kalır.")]
         [SerializeField] private Button _musicStopButton;
-        [SerializeField] private Image _musicStopIcon;
 
         [Tooltip("Sonraki parça.")]
         [SerializeField] private Button _musicNextTrack;
 
         [Tooltip("Müzik çalar sesinin yüzdesi.")]
         [SerializeField] private TextMeshProUGUI _musicLevelValue;
+        [SerializeField] private UiSegmentBar _musicLevelMeter;
         [SerializeField] private Button _musicLevelPrev;
         [SerializeField] private Button _musicLevelNext;
 
         [Tooltip("Müzik çaları sessize alan / geri açan düğme.")]
         [SerializeField] private Button _musicMuteButton;
-        [SerializeField] private TextMeshProUGUI _musicMuteLabel;
+        [SerializeField] private Image _musicMuteIcon;
 
         private readonly List<ModeDefinition> _modes = new List<ModeDefinition>();
         private readonly List<MapDefinition> _maps = new List<MapDefinition>();
@@ -349,8 +339,8 @@ namespace VortexArena.App.Admin
             Wire(_scoreLimitNext, ScoreLimitUp);
             Wire(_countdownPrev, CountdownDown);
             Wire(_countdownNext, CountdownUp);
-            Wire(_friendlyFirePrev, ToggleFriendlyFire);
-            Wire(_friendlyFireNext, ToggleFriendlyFire);
+            Wire(_friendlyFireOff, () => AdminCommands.SetFriendlyFire(false));
+            Wire(_friendlyFireOn, () => AdminCommands.SetFriendlyFire(true));
 
             Wire(_calibModeTwoButton, () => AdminCommands.SetCalibrationMode(ArenaProtocol.CALIB_MODE_TWO_ANCHOR));
             Wire(_calibModeSavedButton, () => AdminCommands.SetCalibrationMode(ArenaProtocol.CALIB_MODE_SAVED_ANCHOR));
@@ -359,10 +349,10 @@ namespace VortexArena.App.Admin
 
             Wire(_markersPrev, PrevMarkers);
             Wire(_markersNext, NextMarkers);
-            Wire(_nameplatesPrev, ToggleNameplates);
-            Wire(_nameplatesNext, ToggleNameplates);
-            Wire(_violationSoundPrev, ToggleViolationSound);
-            Wire(_violationSoundNext, ToggleViolationSound);
+            Wire(_nameplatesOff, () => AdminSession.Nameplates = false);
+            Wire(_nameplatesOn, () => AdminSession.Nameplates = true);
+            Wire(_violationSoundOff, () => AdminSession.ViolationSound = false);
+            Wire(_violationSoundOn, () => AdminSession.ViolationSound = true);
             Wire(_speedPrev, SpeedDown);
             Wire(_speedNext, SpeedUp);
             Wire(_roofPrev, PrevRoof);
@@ -832,16 +822,10 @@ namespace VortexArena.App.Admin
             PublishSelection(mapChanged: false);
         }
 
-        /// <summary>Toggles friendly fire (§5.2). ⚠️ Not via <c>PublishSelection</c>: this is a live
-        /// session setting, not part of the shared selection, and does not fit
-        /// <c>set_selection</c>'s "0/empty = leave alone" contract.
-        /// <para>No local field is kept — the wanted state is the inverse of the server's, and the
-        /// panel shows the value broadcast back via <c>admin_state</c> so two operators cannot
-        /// diverge.</para></summary>
-        private void ToggleFriendlyFire()
-        {
-            AdminCommands.SetFriendlyFire(!AdminSelection.FriendlyFire);
-        }
+        // Friendly fire (§5.2) goes out as an immediate command, NOT via PublishSelection: it is a
+        // live session setting and does not fit set_selection's "0/empty = leave alone" contract.
+        // No local field is kept — the panel shows the value broadcast back via admin_state, so two
+        // operators cannot diverge.
 
         /// <summary>Map selected — rationale in <see cref="SelectMode"/>.
         /// <para>⚠️ The first row is the LOBBY, not an arena (<see cref="LobbyRowLabel"/>): it sends
@@ -1370,16 +1354,6 @@ namespace VortexArena.App.Admin
             AdminSession.Markers = (AdminMarkerVisibility)next;
         }
 
-        private static void ToggleNameplates()
-        {
-            AdminSession.Nameplates = !AdminSession.Nameplates;
-        }
-
-        private static void ToggleViolationSound()
-        {
-            AdminSession.ViolationSound = !AdminSession.ViolationSound;
-        }
-
         private static void SpeedDown() { AdminSession.FreeSpeed -= 0.5f; }
         private static void SpeedUp() { AdminSession.FreeSpeed += 0.5f; }
 
@@ -1550,14 +1524,16 @@ namespace VortexArena.App.Admin
             ApplyQuitButton();
 
             // 0 = UI knows no value → the server uses the mode default.
-            _durationValue.text = _roundSeconds > 0
+            bool hasDuration = _roundSeconds > 0;
+            _durationValue.text = hasDuration
                 ? AdminCommands.FormatDuration(_roundSeconds)
                 : "mod varsayılanı";
+            _durationValue.color = hasDuration ? Girdap.Text : Girdap.Muted;
             // Three states: number · unlimited · mode default (0 = UI knows no value); a no-limit
             // mode shows none of them and locks the stepper.
             bool hasLimit = SelectedModeHasScoreLimit;
             _scoreLimitValue.text = hasLimit ? AdminCommands.FormatScoreLimit(_scoreLimit) : "yok (süreli mod)";
-            _scoreLimitValue.color = hasLimit ? UiKit.Title : UiKit.Faint;
+            _scoreLimitValue.color = hasLimit && _scoreLimit != 0 ? Girdap.Text : Girdap.Muted;
             SetInteractable(_scoreLimitPrev, hasLimit);
             SetInteractable(_scoreLimitNext, hasLimit);
 
@@ -1567,28 +1543,20 @@ namespace VortexArena.App.Admin
                 _countdownValue.text = _countdownSeconds > 0
                     ? $"{_countdownSeconds} sn"
                     : $"varsayılan ({ArenaProtocol.COUNTDOWN_SECONDS} sn)";
+                _countdownValue.color = _countdownSeconds > 0 ? Girdap.Text : Girdap.Muted;
             }
 
-            if (_friendlyFireValue != null)
-            {
-                // Read from the server, no local cursor: the switch can change mid-match, so "sent"
-                // must not be shown as "in effect".
-                bool friendlyFire = AdminSelection.FriendlyFire;
-                _friendlyFireValue.text = friendlyFire ? "AÇIK" : "kapalı";
-                // Highlighted when on: a match where teammates can be shot must not go unnoticed.
-                _friendlyFireValue.color = friendlyFire ? UiKit.Bad : UiKit.Title;
-            }
+            // Read from the server, no local cursor: the switch can change mid-match, so "sent" must
+            // not be shown as "in effect". AÇIK wears the destructive colour — a match where
+            // teammates can be shot must not go unnoticed.
+            ApplyToggle(_friendlyFireOff, _friendlyFireOn, AdminSelection.FriendlyFire, true);
 
             ApplyCalibrationMode();
 
             _markersValue.text = AdminSession.Markers == AdminMarkerVisibility.Off ? "kapalı"
                 : AdminSession.Markers == AdminMarkerVisibility.TopDownOnly ? "kuş bakışı" : "her zaman";
-            _nameplatesValue.text = AdminSession.Nameplates ? "açık" : "kapalı";
-
-            if (_violationSoundValue != null)
-            {
-                _violationSoundValue.text = AdminSession.ViolationSound ? "açık" : "kapalı";
-            }
+            ApplyToggle(_nameplatesOff, _nameplatesOn, AdminSession.Nameplates, false);
+            ApplyToggle(_violationSoundOff, _violationSoundOn, AdminSession.ViolationSound, false);
 
             _speedValue.text = $"{AdminSession.FreeSpeed:0.0} m/sn";
             _roofValue.text = AdminSession.Roof == AdminRoofMode.Visible ? "görünür"
@@ -1608,9 +1576,11 @@ namespace VortexArena.App.Admin
             string endpoint = AppSession.HasServerEndpoint
                 ? $"{AppSession.ServerIp}:{AppSession.ServerPort}"
                 : "adres yok (launcher'dan başlatılmalı)";
+            bool connecting = client != null && client.State == ArenaConnectionState.Connecting;
+            bool connected = client != null && client.IsConnected;
             string state = client == null ? "istemci yok"
-                : client.IsConnected ? "bağlı"
-                : client.State == ArenaConnectionState.Connecting ? "bağlanılıyor" : "bağlı değil";
+                : connected ? "bağlı"
+                : connecting ? "bağlanılıyor" : "bağlı değil";
 
             // Connected admin count: the operator must know they are not alone (all admins are
             // equally authoritative).
@@ -1618,25 +1588,27 @@ namespace VortexArena.App.Admin
                 ? $" — {AdminSelection.AdminCount} admin bağlı"
                 : "";
             _connectionText.text = $"{state} — {endpoint}{peers}";
+
+            if (_connectionDot != null)
+            {
+                Color dot = connected ? Girdap.Good : connecting ? Girdap.Warn : Girdap.Bad;
+                _connectionDot.Fill(dot).Glow(12f, new Color(dot.r, dot.g, dot.b, 0.55f));
+            }
         }
 
         /// <summary>Quit button: text and colour warn while the confirm window is open (same pattern
         /// as the destructive buttons in <see cref="AdminPlayerRow"/>).</summary>
         private void ApplyQuitButton()
         {
-            if (_quitLabel == null)
+            UiButtonStyle style = StyleOf(_quitButton);
+            if (style == null)
             {
                 return;
             }
 
             bool armed = _quitArmedAt >= 0f;
-            _quitLabel.text = armed ? "EMİN? ÇIK" : "OYUNDAN ÇIK";
-            _quitLabel.color = armed ? UiKit.OnAccent : UiKit.Bad;
-
-            if (_quitButton != null && _quitButton.targetGraphic is Image image)
-            {
-                PaintButtonBackground(image, armed, UiKit.Bad, _buttonDangerSprite);
-            }
+            style.SetLabel(armed ? "EMİN? ÇIK" : "OYUNDAN ÇIK");
+            style.SetKind(armed ? UiButtonKind.Confirm : UiButtonKind.Danger);
         }
 
         /// <summary>Paints the calibration-mode buttons from the current value (§5.2). Read from the
@@ -1653,29 +1625,25 @@ namespace VortexArena.App.Admin
                 mode = ArenaProtocol.CALIB_MODE_TWO_ANCHOR;
             }
 
-            PaintCalibModeButton(_calibModeTwoButton, _calibModeTwoLabel,
+            PaintCalibModeButton(_calibModeTwoButton,
                 mode == ArenaProtocol.CALIB_MODE_TWO_ANCHOR, true);
-            PaintCalibModeButton(_calibModeSavedButton, _calibModeSavedLabel,
+            PaintCalibModeButton(_calibModeSavedButton,
                 mode == ArenaProtocol.CALIB_MODE_SAVED_ANCHOR, true);
-            // Reserved option: disabled and dim on every refresh. Its label comes from the prefab;
-            // the code writes no text, the colour carries the state.
-            PaintCalibModeButton(_calibModeCloudButton, _calibModeCloudLabel, false, false);
+            // Reserved option: disabled on every refresh. Its label comes from the prefab; the code
+            // writes no text, the disabled surface carries the state.
+            PaintCalibModeButton(_calibModeCloudButton, false, false);
         }
 
-        private void PaintCalibModeButton(Button button, TextMeshProUGUI label,
-            bool active, bool usable)
+        private static void PaintCalibModeButton(Button button, bool active, bool usable)
         {
-            SetInteractable(button, usable);
-
-            if (label != null)
+            UiButtonStyle style = StyleOf(button);
+            if (style == null)
             {
-                label.color = !usable ? UiKit.Faint : active ? UiKit.OnAccent : UiKit.Muted;
+                return;
             }
 
-            if (button != null && button.targetGraphic is Image image)
-            {
-                PaintButtonBackground(image, active, UiKit.Accent);
-            }
+            style.SetKind(active ? UiButtonKind.On : UiButtonKind.Normal);
+            style.SetInteractable(usable);
         }
 
         /// <summary>Paints the audio rows: level percentage, muted state and the mute button. Values
@@ -1689,31 +1657,44 @@ namespace VortexArena.App.Admin
                 bool muted = AdminSession.AudioMuted(channel);
                 int percent = Mathf.RoundToInt(AdminSession.AudioLevel(channel) * 100f);
 
-                TextMeshProUGUI value = At(_audioValues, i);
-                if (value != null)
-                {
-                    // The stored level stays visible while muted: the stepper still moves it and the
-                    // operator must see what unmuting will restore.
-                    value.text = muted ? $"sessiz (%{percent})" : $"%{percent}";
-                    value.color = muted ? UiKit.Faint : UiKit.Title;
-                }
+                PaintLevel(At(_audioValues, i), At(_audioMeters, i), At(_audioMuteButtons, i),
+                    At(_audioMuteIcons, i), percent, muted);
+            }
+        }
 
-                TextMeshProUGUI label = At(_audioMuteLabels, i);
-                if (label != null)
-                {
-                    label.text = muted ? "SESİ AÇ" : "SESSİZ";
-                    label.color = muted ? UiKit.OnAccent : UiKit.Muted;
-                }
+        /// <summary>Paints one level row (channel or music player): percent text, 10-cell meter and
+        /// the mute button's icon + lit state.
+        /// <para>⚠️ The stored level stays visible while muted — the meter keeps its cells (dimmed)
+        /// and the stepper still moves them, so the operator sees what unmuting will
+        /// restore.</para></summary>
+        private void PaintLevel(TextMeshProUGUI value, UiSegmentBar meter, Button mute, Image icon,
+            int percent, bool muted)
+        {
+            if (value != null)
+            {
+                value.text = muted ? "sessiz" : $"%{percent}";
+                value.color = muted ? Girdap.Muted : Girdap.Text;
+            }
 
-                Button mute = At(_audioMuteButtons, i);
-                if (mute != null && mute.targetGraphic is Image image)
+            if (meter != null)
+            {
+                meter.SetFill(percent / 100f);
+                meter.SetFillColors(muted ? Girdap.Faint : Girdap.OnA, muted ? Girdap.Faint : Girdap.OnB);
+            }
+
+            SetKind(mute, muted ? UiButtonKind.On : UiButtonKind.Normal);
+
+            if (icon != null)
+            {
+                Sprite sprite = muted ? _muteSprite : _volSprite;
+                if (sprite != null)
                 {
-                    PaintButtonBackground(image, muted, UiKit.Accent);
+                    icon.sprite = sprite;
                 }
             }
         }
 
-        /// <summary>Paints the music player rows: track line, transport labels and the level.
+        /// <summary>Paints the music player rows: track line, transport state and the level.
         /// <para>The transport buttons go dead on an empty folder — a PLAY that does nothing looks
         /// like a broken app, while the track line says WHY (and prints the folder being read, so
         /// the operator knows where to drop the files).</para></summary>
@@ -1729,7 +1710,7 @@ namespace VortexArena.App.Admin
                 if (!hasTracks)
                 {
                     _musicTrackValue.text = $"klasörde parça yok — {AdminMusicPlayer.Folder}";
-                    _musicTrackValue.color = UiKit.Faint;
+                    _musicTrackValue.color = Girdap.Faint;
                 }
                 else
                 {
@@ -1739,15 +1720,21 @@ namespace VortexArena.App.Admin
                         : state == AdminMusicState.Playing ? track
                         : state == AdminMusicState.Paused ? $"{track} — duraklatıldı"
                         : $"{track} — durduruldu";
-                    _musicTrackValue.color = playing ? UiKit.Title : UiKit.Muted;
+                    _musicTrackValue.color = playing ? Girdap.Text : Girdap.Muted;
                 }
             }
 
             bool canStop = hasTracks && state != AdminMusicState.Stopped;
 
             SetInteractable(_musicPrevTrack, hasTracks);
-            SetInteractable(_musicPlayPauseButton, hasTracks);
             SetInteractable(_musicNextTrack, hasTracks);
+
+            // ⚠️ Colour convention shared with the HUD match strip: yeşil = başlat, beyaz = koşuyor,
+            // kırmızı = durdur. Two languages for the same three verbs would make the operator learn
+            // the app twice.
+            SetKind(_musicPlayPauseButton, playing ? UiButtonKind.Normal : UiButtonKind.Go);
+            SetInteractable(_musicPlayPauseButton, hasTracks);
+            SetKind(_musicStopButton, UiButtonKind.TextBad);
             // STOP stays pressable only while there is something to stop.
             SetInteractable(_musicStopButton, canStop);
 
@@ -1760,65 +1747,11 @@ namespace VortexArena.App.Admin
                 {
                     _musicPlayPauseIcon.sprite = icon;
                 }
-
-                _musicPlayPauseIcon.color = !hasTracks ? UiKit.Faint : playing ? UiKit.Title : UiKit.Good;
             }
 
-            if (_musicStopIcon != null)
-            {
-                // The button's tint only reaches its background; a disabled icon must fade itself.
-                _musicStopIcon.color = canStop ? UiKit.Bad : UiKit.Faint;
-            }
-
-            bool muted = AdminSession.MusicPlayerMuted;
-            int percent = Mathf.RoundToInt(AdminSession.MusicPlayerLevel * 100f);
-
-            if (_musicLevelValue != null)
-            {
-                // Same contract as the channel rows: the stored level stays visible while muted, so
-                // the operator sees what unmuting will restore.
-                _musicLevelValue.text = muted ? $"sessiz (%{percent})" : $"%{percent}";
-                _musicLevelValue.color = muted ? UiKit.Faint : UiKit.Title;
-            }
-
-            if (_musicMuteLabel != null)
-            {
-                _musicMuteLabel.text = muted ? "SESİ AÇ" : "SESSİZ";
-                _musicMuteLabel.color = muted ? UiKit.OnAccent : UiKit.Muted;
-            }
-
-            if (_musicMuteButton != null && _musicMuteButton.targetGraphic is Image musicMuteImage)
-            {
-                PaintButtonBackground(musicMuteImage, muted, UiKit.Accent);
-            }
-        }
-
-        /// <summary>Paints a button background by state — every button with a selected/idle
-        /// distinction goes through here (tabs, calibration mode, window mode, quit).
-        /// <para>The look stays in the prefab: backgrounds are bound to
-        /// <see cref="_buttonIdleSprite"/> / <see cref="_buttonActiveSprite"/> and the code only
-        /// picks one. With both bound the sprite swaps and the tint goes white; if either is empty
-        /// it falls back to a flat colour tint, so a half binding never leaves a mis-tinted
-        /// sprite.</para></summary>
-        private void PaintButtonBackground(Image image, bool active, Color activeTint,
-            Sprite activeSprite = null)
-        {
-            if (image == null)
-            {
-                return;
-            }
-
-            Sprite on = activeSprite != null ? activeSprite : _buttonActiveSprite;
-
-            if (_buttonIdleSprite != null && on != null)
-            {
-                image.sprite = active ? on : _buttonIdleSprite;
-                image.type = Image.Type.Sliced;
-                image.color = Color.white;
-                return;
-            }
-
-            image.color = active ? activeTint : CalibModeIdleFill;
+            PaintLevel(_musicLevelValue, _musicLevelMeter, _musicMuteButton, _musicMuteIcon,
+                Mathf.RoundToInt(AdminSession.MusicPlayerLevel * 100f),
+                AdminSession.MusicPlayerMuted);
         }
 
         /// <summary>Disables the mode/map rows while a match is set up (§10.7). Duration/limit stay
@@ -1833,30 +1766,21 @@ namespace VortexArena.App.Admin
             SetInteractable(_modeDropdown, open && _modes.Count > 0);
             SetInteractable(_mapDropdown, open && (_maps.Count > 0 || HasLobbyRow));
 
-            Color valueColor = open ? UiKit.Title : UiKit.Faint;
+            Color valueColor = open ? Girdap.Text : Girdap.Muted;
             SetCaptionColor(_gameTypeDropdown, valueColor);
             SetCaptionColor(_modeDropdown, valueColor);
             SetCaptionColor(_mapDropdown, valueColor);
         }
 
-        /// <summary>Paints the tab bar and shows the active page — same language as the
-        /// calibration-mode buttons (background via <see cref="PaintButtonBackground"/>). The arrays
-        /// may be under-bound in the prefab, so all reads are null-safe.</summary>
+        /// <summary>Paints the tab bar and shows the active page. The arrays may be under-bound in
+        /// the prefab, so all reads are null-safe.</summary>
         private void ApplyTabs()
         {
             var active = (int)_tab;
 
             for (int i = 0; i < _tabButtons.Length; i++)
             {
-                if (_tabButtons[i] != null && _tabButtons[i].targetGraphic is Image image)
-                {
-                    PaintButtonBackground(image, i == active, UiKit.Accent);
-                }
-
-                if (i < _tabLabels.Length && _tabLabels[i] != null)
-                {
-                    _tabLabels[i].color = i == active ? UiKit.OnAccent : UiKit.Muted;
-                }
+                SetKind(_tabButtons[i], i == active ? UiButtonKind.SegOn : UiButtonKind.Tab);
             }
 
             for (int i = 0; i < _tabPages.Length; i++)
@@ -1868,13 +1792,50 @@ namespace VortexArena.App.Admin
             }
         }
 
-        /// <summary>Shared by buttons and dropdowns (<see cref="Selectable"/> is the base of both).</summary>
+        /// <summary>Shared by buttons and dropdowns (<see cref="Selectable"/> is the base of both).
+        /// ⚠️ A themed button is switched through its <see cref="UiButtonStyle"/>: that repaints the
+        /// disabled surface too, while <c>Selectable.interactable</c> alone would leave a dead button
+        /// looking pressable.</summary>
         private static void SetInteractable(Selectable selectable, bool value)
         {
-            if (selectable != null)
+            if (selectable == null)
             {
-                selectable.interactable = value;
+                return;
             }
+
+            var style = selectable.GetComponent<UiButtonStyle>();
+            if (style != null)
+            {
+                style.SetInteractable(value); // also writes Button.interactable
+                return;
+            }
+
+            selectable.interactable = value;
+        }
+
+        /// <summary>Visual role of a themed button; no-op on an unbound/unstyled button.</summary>
+        private static void SetKind(Button button, UiButtonKind kind)
+        {
+            UiButtonStyle style = StyleOf(button);
+            if (style != null)
+            {
+                style.SetKind(kind);
+            }
+        }
+
+        private static UiButtonStyle StyleOf(Button button)
+        {
+            return button != null ? button.GetComponent<UiButtonStyle>() : null;
+        }
+
+        /// <summary>Paints a two-state segment (CSS <c>.seg.in</c>): the live half is lit, the other
+        /// stays transparent. <paramref name="dangerousOn"/> lights AÇIK in the destructive colour
+        /// instead of the accent.</summary>
+        private static void ApplyToggle(Button off, Button on, bool value, bool dangerousOn)
+        {
+            SetKind(off, value ? UiButtonKind.Seg : UiButtonKind.SegOn);
+            SetKind(on, !value ? UiButtonKind.Seg
+                : dangerousOn ? UiButtonKind.Confirm : UiButtonKind.SegOn);
         }
 
         /// <summary>Dims a dropdown's caption. <see cref="Selectable"/>'s own <c>disabledColor</c>

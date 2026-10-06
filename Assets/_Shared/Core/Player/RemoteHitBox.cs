@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using VortexArena.Core.Combat;
 
@@ -14,6 +15,8 @@ namespace VortexArena.Core.Player
     /// </remarks>
     public class RemoteHitBox : MonoBehaviour
     {
+        private static readonly List<RemoteHitBox> ActiveBoxes = new List<RemoteHitBox>();
+
         /// <summary>Head — the most striking colour, being the highest-multiplier zone.</summary>
         private static readonly Color HeadColor = new Color(1f, 0.25f, 0.2f, 0.9f);
 
@@ -35,6 +38,15 @@ namespace VortexArena.Core.Player
         // expensive to diagnose.
         [Tooltip("Vuruş bölgesi — hasar çarpanının kaynağı (kafa silaha göre, karın gövde sayılır, bacak 0.75×).")]
         [SerializeField] private HitZone zone = HitZone.Body;
+
+        /// <summary>Every enabled hitbox in the scene. ⚠️ Kept as a registry because the callers
+        /// poll: <c>FindObjectsByType</c> allocates and walks the whole scene on every poll
+        /// (<c>Throwable.IgnoreAvatarColliders</c>).</summary>
+        public static IReadOnlyList<RemoteHitBox> Active => ActiveBoxes;
+
+        /// <summary>This box's own colliders, resolved once — the box hangs on a bone and its
+        /// collider set never changes at runtime.</summary>
+        public Collider[] Colliders { get; private set; }
 
         /// <summary>The avatar this hitbox belongs to.</summary>
         public RemoteAvatar Avatar => avatar;
@@ -58,6 +70,8 @@ namespace VortexArena.Core.Player
 
         private void Awake()
         {
+            Colliders = GetComponentsInChildren<Collider>(true);
+
             if (avatar == null)
             {
                 avatar = GetComponentInParent<RemoteAvatar>(true);
@@ -67,6 +81,16 @@ namespace VortexArena.Core.Player
             {
                 Debug.LogWarning($"[RemoteHitBox] '{name}' bir RemoteAvatar altında değil; vuruşlar raporlanamaz.", this);
             }
+        }
+
+        private void OnEnable()
+        {
+            ActiveBoxes.Add(this);
+        }
+
+        private void OnDisable()
+        {
+            ActiveBoxes.Remove(this);
         }
 
         // ------------------------------------------------------------------ gizmo

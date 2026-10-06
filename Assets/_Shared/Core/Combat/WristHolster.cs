@@ -5,7 +5,7 @@ namespace VortexArena.Core.Combat
 {
     /// <summary>
     /// <b>The left wrist holster</b>: where the throwable is carried, taken from and refilled
-    /// (plan/bomba.md §2-§3). Placed by hand on the rig prefab; it binds itself to the left hand
+    /// (Docs/Sistem-Ozeti.md, throwables). Placed by hand on the rig prefab; it binds itself to the left hand
     /// anchor at runtime.
     /// <para><b>Nothing here reaches the wire.</b> The holster is part of the avatar and the server
     /// does not know it exists; the only network event is the throw itself

@@ -2,7 +2,7 @@ namespace VortexArena.App.Admin
 {
     /// <summary>
     /// Preferences panel tabs — index into <see cref="AdminPreferencesPanel"/>'s
-    /// button/label/page arrays.
+    /// button/page arrays.
     /// <list type="bullet">
     /// <item><b>Match</b>: SHARED settings — server-side selection, visible on every admin.</item>
     /// <item><b>View</b>: LOCAL settings (<see cref="AdminSession"/>, <c>PlayerPrefs</c>).</item>

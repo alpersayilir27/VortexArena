@@ -144,6 +144,7 @@ namespace VortexArena.App
         // Values currently on screen (TMP untouched unless changed → no garbage).
         private bool _shownKnown;
         private bool _shownExpelled;
+        private int _shownRejected;
         private string _shownIp = null;
         private int _shownPort = -1;
         private int _shownSeconds = -1;
@@ -489,21 +490,24 @@ namespace VortexArena.App
             string error = client != null ? client.LastError : "";
             int graceLeft = Mathf.Max(0, Mathf.CeilToInt(ArenaProtocol.RECONNECT_GRACE - seconds));
             bool expelled = known && IsPlayerRole && graceLeft == 0;
+            // §1 version rejection: never registered, so no removal countdown — the version is the message.
+            int rejected = client != null ? client.RejectedServerVersion : 0;
 
             // Title / address / hint: rewritten only when address state or the removal threshold changes.
             if (_shownIp == null || _shownKnown != known || _shownPort != port ||
-                _shownExpelled != expelled ||
+                _shownExpelled != expelled || _shownRejected != rejected ||
                 !string.Equals(_shownIp, ip, StringComparison.Ordinal))
             {
                 _shownKnown = known;
                 _shownExpelled = expelled;
+                _shownRejected = rejected;
                 _shownIp = ip;
                 _shownPort = port;
 
-                _titleText.text = BuildTitle(known, expelled);
+                _titleText.text = rejected > 0 ? "SÜRÜM UYUMSUZ" : BuildTitle(known, expelled);
                 _addressText.text = known ? $"{ip}:{port}" : "adres yok";
                 _addressText.color = known ? ColorAccent : ColorFaint;
-                _hintText.text = BuildHint(known, expelled, graceLeft);
+                _hintText.text = rejected > 0 ? BuildVersionHint(rejected) : BuildHint(known, expelled, graceLeft);
 
                 ApplyButtonState(known);
                 _shownAttempts = -1; // refresh the meta line too (attempt counter visibility changed)
@@ -522,7 +526,7 @@ namespace VortexArena.App
                 // Time left until removal changes every second, and the title block only runs on
                 // state change → refresh the countdown HERE (no extra counter field needed;
                 // `_shownSeconds` is already at second resolution).
-                if (known && IsPlayerRole && !expelled)
+                if (known && IsPlayerRole && !expelled && rejected == 0)
                 {
                     _hintText.text = BuildHint(true, false, graceLeft);
                 }
@@ -601,6 +605,14 @@ namespace VortexArena.App
                 ? "Yeniden bağlanılıyor — ağ dönünce otomatik katılacaksın."
                 : $"Yeniden bağlanılıyor · oyundan çıkarılmana {graceLeft} sn\n" +
                   "Maç istatistiklerin korunuyor.";
+        }
+
+        /// <summary>Version rejection (§1): names both versions so the operator knows what to install.</summary>
+        private static string BuildVersionHint(int serverVersion)
+        {
+            string device = AppSession.Role == AppSession.RoleAdmin ? "Bu admin" : "Bu gözlük";
+            return $"{device} v{ArenaProtocol.PROTOCOL_VERSION}, sunucu v{serverVersion}.\n" +
+                   "Aynı sürümü kurun; sürümler eşleşince kendiliğinden bağlanır.";
         }
 
         private void ApplyButtonState(bool addressKnown)

@@ -249,6 +249,19 @@ namespace VortexArena.App.Editor
                 DrawSandbox();
             }
 
+            // ---- skip calibration (dev placement, ArenaCalibrator.Dev.cs)
+            EditorGUI.BeginChangeCheck();
+            bool skipCalibration = EditorGUILayout.ToggleLeft(
+                new GUIContent("Kalibrasyonu atla",
+                    "Fiziksel A/B alınmaz: kafa A işaretine, boy 1,80 m, sunucuya kalibreli bildirilir. " +
+                    "Sol çubuk yürür, sağ çubuk 30° döner; sol çubuğa kısa basış boyu oturtur, " +
+                    "1 sn basış A'ya döndürür."),
+                DevSession.SkipCalibration);
+            if (EditorGUI.EndChangeCheck())
+            {
+                DevSession.SkipCalibration = skipCalibration;
+            }
+
             // ---- target (meaningless in sandbox: nothing connects)
             using (new EditorGUI.DisabledScope(DevSession.Sandbox))
             {

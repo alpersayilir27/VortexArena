@@ -34,7 +34,7 @@ Kullanıcının isteği ne olursa olsun, önce **okuma-yazma yapmayan hafif bir 
 - **"Zorla devam et"** gibi **açık** talimatta kural düşer: dokunan iş de yapılır, ama her varsayım
   **açıkça yazılır** ("şu alanın adının `x` olduğunu varsaydım"), iş **"Unity açılınca
   doğrulanacaklar"** listesiyle biter, izin yalnız o iş içindir. ⚠️ Yasak yine yasaktır: YAML
-  okuyarak "teyit ettim" denmez, derleme/build/test yine ajana kapalıdır ([[is-akisi]]).
+  okuyarak "teyit ettim" denmez, build/test yine ajana kapalıdır ([[is-akisi]]).
 
 ## 4. Basamaklar — ancak bir üstteki GERÇEKTEN düşünce aşağı inilir
 
@@ -53,8 +53,8 @@ tırnak/kaçış/timeout tuzaklarına girmez.
 4. **Dosya sistemi** — `Logs/`, `Library/`, `Editor.log`. Konsol logu için **son** çare:
    `get_console_logs` / `read_console` zaten seviyeye göre filtreli döner.
 
-⚠️ Basamaklar "hangi kapıdan" sorusunu cevaplar, "yapılır mı" sorusunu değil: derleme, build, test
-ve oynatma kipi ajana KAPALIDIR → [[is-akisi]].
+⚠️ Basamaklar "hangi kapıdan" sorusunu cevaplar, "yapılır mı" sorusunu değil: build, test ve
+oynatma kipi ajana KAPALIDIR; script derlemesi (`recompile`) ise sorulmadan serbesttir → [[is-akisi]].
 
 **"Tool düştü":** bağlantı hatası, "no Unity instance connected", timeout, komut yok.
 **Düşme sayılmaz:** yanlış argüman/şema hatası ya da boş sonuç — çağrıyı düzelt, başarısızlığı
@@ -102,7 +102,7 @@ unity cmd run_tests / test_status
 unity shell                        # warm REPL (çok komut tek process)
 ```
 
-⚠️ Bunları ajan kendiliğinden çalıştırmaz ([[is-akisi]]); burası kullanıcı istediğinde **nasıl**
+⚠️ `recompile` dışındakileri ajan kendiliğinden çalıştırmaz ([[is-akisi]]); burası kullanıcı istediğinde **nasıl**
 koşulacağıdır.
 
 - `unity cmd …` **yalnız editör açıkken** çalışır.

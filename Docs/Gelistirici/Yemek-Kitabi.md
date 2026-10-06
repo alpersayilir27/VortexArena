@@ -94,8 +94,9 @@ Bu kadar. Hiçbir DTO kurmadın, hiçbir koordinat dönüşümü yapmadın, hiç
 > kaybeder.
 > `ReportRaycastHit` `false` dönerse hedef ağ oyuncusu değildir (dekor, duvar) —
 > **hasar uygulanmaz ve yapılacak yerel bir şey yoktur**; istemcide can tutan bir yol YOKTUR.
-> Dönüş değerini yalnız sunum için kullan (kan efekti mi, isabet izi mi). Kırılabilir objeler
-> ileride ağsal (sunucu-otoriter) olacak → `plan/agsal-kirilabilir-objeler.md`.
+> Dönüş değerini yalnız sunum için kullan (kan efekti mi, isabet izi mi). Hasar alması gereken
+> obje (kırılabilir örtü) ağ nesnesidir ve sunucu-otoriterdir → `Docs/ArenaNet-Protokol.md`
+> "Ağ nesneleri (`netId`)" kuralı.
 
 > **İsabet göstergesini yazma, hazır geliyor.** Bildirilen her vuruşta değdiği noktada bir X
 > belirir (`HitMarker`) ve onu **yalnız vuran oyuncu görür** — `ReportHit`'in içinde olduğu için
@@ -805,7 +806,9 @@ görünür; ayrı bir görünüm ayarlaması gerekmez.
 
 Kurulu iki örnek `_Shared/World/Prefabs/` altındadır (`NO_BreakableCover` · `NO_TargetBoard`) —
 yeni bir kırılabilir için en kısa yol birini kopyalayıp mesh/tür/`maxHp`'sini değiştirmektir.
-Ortak kırılma efekti `_Shared/FX/FX_BreakDebris` (enkaz parçacıkları + toz).
+Ortak kırılma efekti `_Shared/FX/FX_BreakDebris` (enkaz parçacıkları + toz). Efekt `BlastFxPool`'dan
+havuzlu oynar: yeni bir kırılma efekti yazarken `Stop Action` `None` kalır ve efekt gerçek zamanlı
+ışık taşımaz (`Yapma-Listesi`); ilk çizimi sahne yüklenirken `CombatFxWarmup` öder.
 
 Kendi sunumunu yazacaksan `NetObject.StateChanged`'e abone ol: **hasar oranını** materyale yaz
 (`_DamageAmount`, `MaterialPropertyBlock`), `IsBroken` olunca collider'ı kapat ve kırık görünüme
@@ -1142,7 +1145,7 @@ tutan** istemci, ya da olayı üreten aleti tutan kişi.
 
 ---
 
-## 13.2 Bir oyun istasyonunu ikinci bir mekana kurmak
+### 13.1.1 Bir oyun istasyonunu ikinci bir mekana kurmak
 
 Bir çocuk oyununun sahne kurulumu (banko, mutfak/atölye, işaretler, proplar) **tek prefabtır** ve
 `Modes/<Mod>/Prefabs/Station/` altında durur. Parçaları ikinci mekana tek tek taşımak bu bölümdeki
@@ -1200,38 +1203,58 @@ eşya dinlenmeye hiç varamaz ve kaybolur. Eşya prefablarının `Rigidbody`'si
 
 ## 13.2 Moda özel maç sonu ekranı
 
-Maç sonu ekranının **mantığı** ortaktır (kazanan, sıralama, hangi kolonun çizileceği modun
-kuralından gelir); **görünümü** moda özel olabilir. Kod işi yoktur — iş prefab ve bir asset alanıdır.
-Örnek: `Assets/Modes/Mole/UI/MoleResultOverlay.prefab` · `Assets/Modes/Burger/UI/BurgerResultOverlay.prefab`.
+Maç sonu ekranının **mantığı** ortaktır (kazanan, sıralama, hangi hücrenin çizileceği modun
+kuralından gelir); **görünümü** moda özel olabilir. Kod işi yoktur — iş bir prefab varyantı ve bir
+asset alanıdır. Varyantların yeri: `Assets/Modes/<Ad>/UI/<Ad>ResultOverlay.prefab`.
 
-**1. VARYANT oluştur, kopya değil.** `Assets/_Shared/App/Resources/UI/MatchResultOverlay.prefab` →
-sağ tık → *Create > Prefab Variant* → `Assets/Modes/<Ad>/UI/<Ad>ResultOverlay.prefab`.
-⚠️ Kopya (Ctrl+D) alan bağlarını dondurur: tabana sonradan eklenen kolon/alan kopyaya inmez ve
-**hata vermeden** çizilmez.
+⚠️ **Taban prefab koddan üretilir.** `Assets/_Shared/App/Resources/UI/MatchResultOverlay.prefab`'ın
+içeriğini `GirdapUiBuilder` yazar (`Tools > VortexArena > UI > Girdap > Yalnız MatchResult`);
+tabanda yapılacak her değişiklik builder'a yazılır → `Arayuz-Tasarimi.md`. Varyantın kendi
+override'ları Inspector'da yaşar, bu kuralın dışındadır.
 
-**2. Varyantta serbest olanlar:** iki kartın zemin sprite'ı (`ResultPanel/Card` ·
-`ScoreboardPanel/StatsPanel` `Image`'ı), yazı rengi/punto/materyal, konumlar, prefabta sabit duran
-başlık metinleri (`Fill/Title` · `Header0` · `Header1`) ve süs objeleri (yeni `Image` çocukları —
-`Raycast Target` kapalı). Kartın arkasında görünecek süs `ResultPanel`/`ScoreboardPanel`'in altında
-hiyerarşide karttan **önce** (ilk kardeş), yazının arkasında kalacak süs kartın altında `Fill`'den
-**önce** durur; diğerleri sona eklenir ve her şeyin üstünde çizilir.
+**1. VARYANT oluştur, kopya değil.** Taban prefaba sağ tık → *Create > Prefab Variant* →
+`Assets/Modes/<Ad>/UI/<Ad>ResultOverlay.prefab`. ⚠️ Kopya (Ctrl+D) alan bağlarını dondurur: tabana
+sonradan eklenen öge/alan kopyaya inmez ve **hata vermeden** çizilmez.
+
+**2. Varyantta serbest olanlar:** iki kartın zemini (`ResultPanel/Card` ·
+`ScoreboardPanel/StatsPanel` — ikisinin `Image`'ı tabanda boş/saydam bırakılır, tam da varyant
+kendi sprite'ını koyabilsin diye), yazı rengi/punto/materyal, konumlar, prefabta sabit duran başlık
+metinleri (`Title` · `Header0..5`) ve süs objeleri (yeni `Image` çocukları, `Raycast Target`
+kapalı). Kartın arkasında kalacak süs `ResultPanel`/`ScoreboardPanel` altında hiyerarşide karttan
+**önce**, yazının arkasında kalacak süs kartın altında `Fill`'den **önce** durur; sona eklenen her
+şey en üstte çizilir.
 
 **3. Kelimeler ve sonuç renkleri kökteki `MatchResultOverlay` bileşeninin alanlarıdır**
 (`wonTitle` · `lostTitle` · `drawTitle` · `coopTitle` · `scoreHeader` · `coopScoreHeader` ·
-`wonColor` · `lostColor` · `drawColor` · `coopColor`) — varyantta ezilir. `TitleText`'e ve
-`Header2`'ye prefabta yazılan metin yer tutucudur, her maç sonunda kod yazar.
+`soloBlockTitle` · `wonColor` · `lostColor` · `drawColor` · `coopColor` · `redTeamColor` ·
+`blueTeamColor`) — varyantta ezilir. Sonuç kelimesine (`TitleText`), kazanan satırına
+(`WinnerText` · `Headline`) ve hücrelere prefabta yazılan metin **yer tutucudur**, her maç sonunda
+kod yazar.
 
-**4. Dokunulmayanlar:** kökteki `MatchResultOverlay` bileşeni ve alan bağları; kök ölçü ve ölçek
-(HUD'la karışmasın diye büyük tutulur, gerekçesi `Arayuz-Tasarimi.md`); kartın **1265×705** oranı
-(kart sanatı bu orana göre çizilir, oran bozulursa gerilir). Öge silinmez, kapatılır (bağlı alan
-sessizce boşalır). Yazı kenarlığı için paylaşılan TMP materyali düzenlenmez — kopyası
-`Modes/<Ad>/UI/Fonts/` altına alınır.
+**4. Dokunulmayanlar:** kökteki `MatchResultOverlay` bileşeni ve alan bağları (satır şablonu, blok
+dizileri, alt bant alanları dahil); kök ölçü ve ölçek (HUD'la karışmasın diye büyük tutulur,
+gerekçesi `Arayuz-Tasarimi.md`); kartın **1400×860** oranı — kart sanatı bu orana göre çizilir,
+oran bozulursa gerilir. Öge **silinmez**, kapatılır: silinen bir düğüm varyantın override'ını
+sarkıtır ve o parçanın sanatı kaybolur. Yazı kenarlığı için paylaşılan TMP materyali düzenlenmez —
+kopyası `Modes/<Ad>/UI/Fonts/` altına alınır.
 
-**5. Kuralın hep gizlediği kolonlar** (silahsız modda `Header3..5`/`Column3..5`, ko-opta ayrıca
-`Header1`/`Column1`) varyantta kapalı bırakılabilir — yalnız tasarım kolaylığıdır, açıp kapatmayı
-kod yapar. Kalan kolonları boşalan genişliğe yaymak serbesttir.
+**5. Tablonun şekli satır tabanlıdır:** takım başına bir blok (`Block0`/`Block1`), blok başlığı +
+`Rows` altında pasif satır şablonundan klonlanan oyuncu satırları, altta oyuncunun kendi şeridi.
+Varyant bunları giydirir; satır adımını **kod okur** (`MatchResultOverlay.RowHeight`/`RowGap`/
+`RowsTop`), yani satır yüksekliğini varyanttan büyütmek sıralamayı üst üste bindirir. Kuralın hep
+gizlediği hücreler (silahsız modda öldürme/ölüm/K-D, ko-opta skor hücresinin başlığı) varyantta
+kapalı bırakılabilir — yalnız tasarım kolaylığıdır, açıp kapatmayı kod yapar.
 
-**6. Bağla:** `Data/<Ad>.asset` → **`resultScreenPrefab`** alanına varyantı sürükle. Boş = genel ekran.
+**6. Eski kolon tablosu bir çıkış kapısıdır.** `Column0..5` + `Header0..5` metinleri tabanda bağlı
+durur ama gizlidir; varyant onların etrafına giydirilmişse kökteki `boardRowTemplate` alanını
+**boşaltmak** tabloyu kolon metinlerine döndürür (sıra `OYUNCU · TAKIM · SKOR · K · D · K/D`).
+Satır tabanlı tabloyu kullanan varyant bu alana dokunmaz.
+
+**7. Bağla:** `Data/<Ad>.asset` → **`resultScreenPrefab`** alanına varyantı sürükle. Boş = genel ekran.
+
+⚠️ **Taban yeniden üretildikten sonra her varyant AÇILIP kontrol edilir.** Builder kendi ürettiği
+çocukları siler ve yeniden kurar; varyantın ezdiği düğümler korunur ama yeniden ebeveynlenir — yeri
+kayan ya da override'ı artık tutmayan bir süs hata vermeden yanlış yerde çizilir.
 
 **Test:** dev penceresinde bu modda bir maç bitir → sonuç kartı ve tablo temalı gelmeli; ardından
 başka bir modda maç bitir → genel ekran geri gelmeli (tekil moda göre kendini yeniden örnekler).
@@ -1458,6 +1481,24 @@ dokusuna Android override `Max Size 1024` konur; başka oyun sahnesinin de kulla
 dokunulmaz. ⚠️ Sahnenin `.lighting` dosyası klasörde durup **sahneye bağlı olmayabilir** —
 bağlı değilse bake hiç alınmamıştır ve bütün static dekor her karede gerçek zamanlı gölge öder.
 
+**Oyun alanından görünmeyen dekor atılır, uzak dekor karta çevrilir.** Arena dışı dekor
+köklerinin (şehir blokları, çevre sahası) her üçgeni, oyun alanının içinden alınan sık göz
+noktalarıyla (1.0–2.2 m yükseklik, kenara yaslanma noktaları dahil, beş yöne bakış) sınanır:
+hiçbir noktadan görünmeyen üçgen atılır, arenaya 3 m'den yakın üçgen her durumda kalır. Görünen
+parçası arenaya 25 m'den uzak dekor, arena merkezinden yakalanmış **kartlara** çevrilir
+(`FarImpostors` — tek atlas, tek draw call, alfa kesmeli Unlit; sis oyunda uygulanır, yakalamada
+kapalıdır). Oyun alanından yalnız tek seviyesi seçilen `LODGroup` o seviyeye indirilir ve
+kullanılmayan seviyelerin objesi silinir; birden çok seviyesi seçilen grup korunur. Seviye seçimi
+Quest'in kalite seviyesine (`Mobile`, LOD Bias 1) göre hesaplanır. Çıktılar sahneye özeldir ve
+arena kutusunun `Art/Optimized/`'ına yazılır (`Culled/` · `Props/` · `FarImpostors_*`); paylaşılan
+paket mesh'i yerinde değiştirilmez. ⚠️ Budama üretildiği andaki oyun alanı sınırına, iç duvarlara,
+dekor yerleşimine ve **ışık bake'ine** bağlıdır — biri değişince yeniden üretilir
+([Yapma Listesi](Yapma-Listesi.md) — "Görünürlükle budanmış dekoru…"). Bu adımın menü aracı
+yoktur. Oyun alanındaki prop'ta zeminin altında kalan ve zemine oturan alt yüzler atılır;
+`MeshLodUtility` seviyesi yalnız yan yana görsel karşılaştırmadan geçen mesh'e konur: ayrık
+parçalı yığınlar (tuğla, briket), ince kafes/iskele ve makaralar sadeleştirmede dağılır, açıklıklı
+kabukta (büfe, kulübe) açıklığı kapatan üçgen oluşur.
+
 ⚠️ **Aydınlatma kurulumu ana haritada bir kez, bake her mekan sahnesinde.** Ana harita
 (`Assets/Maps/<Harita>/`) mekan sahnelerinin kopyalandığı kaynaktır: `VA_LightProbes`, `.lighting`
 (Mixed + Shadowmask), static flag'ler, gölge işaretleri ve güneş transform'u orada kurulur ve
@@ -1612,6 +1653,7 @@ değişimi **dikey sanal ofsettir** (`Docs/Sistem-Ozeti.md` §3.13, ağ tarafı
 | **Sunucusuz sandbox** | Sunucuya hiç bağlanmadan Play; silahlar loadout'tan sırayla ele gelir — aşağı bak |
 | **Hedef** | Sunucu adresi (`dev-targets.json`'dan gelir: Local, Keşif, örnek PC) |
 | **Play başlangıcı** | Boot'tan mı, açık sahneden mi |
+| **Kalibrasyonu atla** | Quest Link ile gözlüklü testte elle A/B jestini atlar (dev hizalama + çubukla yürüme) — [İlk Adımlar](Ilk-Adimlar.md) |
 
 Pencerede maç parametresi yoktur: mod / takım / süre / limit **yalnız sunucudan** gelir, yani maçı
 bir **admin** başlatmalıdır. Kurallar telde gelmezse (`rules == null`) `ModeDefinition`'daki
@@ -1637,6 +1679,10 @@ zaten açıktır (`CalibrationState.IsCalibrated` = `!_hasEverConnected`) ve `Ar
 kanalı yokken sessiz no-op'tur; kapalı kalan iki kapıyı `DevSession` tek `ModeRuntime.Apply`
 çağrısıyla açar — `modeId` (**silah loadout'u buradan okunur**, onsuz silah gelmez) ve
 `fireWhilePaused` (faz sunucusuz `paused` kaldığı için tetiği açan tek şey).
+
+Sunucuya **bağlanılan** gözlüklü testte kalibrasyon kapısı bu kısa yoldan açılmaz; onun karşılığı
+**Kalibrasyonu atla** anahtarıdır (dev hizalama) ve ikisi birlikte de kullanılabilir —
+ayrıntı ve sınırlar [İlk Adımlar](Ilk-Adimlar.md).
 
 > Çerçeve (`WeaponFrame`) yolu sandbox'ta kullanılmaz: amaç silahı uzaktan seçmek değil, hemen
 > ele almak. Zaten **ele alınan her silahta çerçeve kapanır** — bu sandbox'a özel değil, genel

@@ -5,7 +5,9 @@
         "VortexArena.App",
         "VortexArena.Core",
         "VortexArena.Net",
-        "VortexArena.Protocol"
+        "VortexArena.Protocol",
+        "Unity.TextMeshPro",
+        "UnityEngine.UI"
     ],
     "includePlatforms": [
         "Editor"

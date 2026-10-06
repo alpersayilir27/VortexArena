@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maç sonu (oyuncu) — VortexArena arayüz</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Chakra+Petch:wght@500;600;700&family=Saira+Condensed:wght@500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="tema.css">
+</head>
+<body>
+
+<p class="vcap"><b>Maç sonu · sonuç kartı</b> — oyuncunun gözlükte ilk gördüğü ekran (6 sn). Örnek oyuncu: Ayşe, kırmızı takım.</p>
+<div class="frame"><div class="stage">
+  <div class="vr"><div class="ph">VR görüş alanı — yer tutucu</div></div>
+  <section class="rcard">
+    <div class="slab"><small>MAÇ SONUCU</small><b>KAZANDIN</b></div>
+    <div class="rlow">
+      <p class="rwin"><span class="r">KIRMIZI</span> TAKIM KAZANDI</p>
+      <div class="scorebug xl">
+        <div class="sb-team red">KIRMIZI TAKIM</div>
+        <div class="sb-score">14</div>
+        <div class="sb-score">11</div>
+        <div class="sb-team blue">MAVİ TAKIM</div>
+      </div>
+    </div>
+  </section>
+</div></div>
+
+<p class="vcap"><b>Maç sonu · skor tablosu</b> — sonuç kartından sonra açılır. Oyuncunun kendi satırı vurgulanır.</p>
+<div class="frame"><div class="stage">
+  <div class="vr"><div class="ph">VR görüş alanı — yer tutucu</div></div>
+  <section class="rcard">
+    <header class="sc-head">
+      <h2>SKOR TABLOSU</h2>
+      <span class="sp"></span>
+      <p class="rwin"><span class="r">KIRMIZI</span> TAKIM KAZANDI</p>
+      <div class="scorebug md">
+        <div class="sb-team red">KIRMIZI</div>
+        <div class="sb-score">14</div>
+        <div class="sb-score">11</div>
+        <div class="sb-team blue">MAVİ</div>
+      </div>
+    </header>
+    <div class="sc-body" id="teams"></div>
+    <footer class="sc-foot">
+      <div class="who">SEN</div>
+      <div class="st"><em>ÖLDÜRME</em><b>6</b></div>
+      <div class="st"><em>ÖLÜM</em><b>2</b></div>
+      <div class="st"><em>K/D</em><b>3.00</b></div>
+      <div class="st"><em>SKOR</em><b>6</b></div>
+    </footer>
+  </section>
+</div></div>
+
+<script src="tema.js"></script>
+<script>
+  const { ic, kd } = VA;
+  const ME = 12; // Ayşe
+  const LEFT = 11; // Emre left the match
+  const team = (cls, name, list) => {
+    const rows = [...list].sort((a, b) => b.k - a.k).map((p, i) => `
+      <div class="sc-row${p.id === ME ? ' me' : ''}${p.id === LEFT ? ' left' : ''}">
+        <span class="rk">${i + 1}</span>
+        <span class="nm">${p.name}${p.id === ME ? '<span class="tag">SEN</span>' : ''}<small>#${p.id}${p.id === LEFT ? ' · ayrıldı' : ''}</small></span>
+        <span class="c lead">${p.k}</span><span class="c sub">${p.k}</span><span class="c sub">${p.d}</span><span class="c sub">${kd(p.k, p.d)}</span>
+      </div>`).join('');
+    const K = list.reduce((a, p) => a + p.k, 0), D = list.reduce((a, p) => a + p.d, 0);
+    return `<div class="sc-team">
+      <div class="sc-th ${cls}"><b>${name}</b><span class="c">SKOR</span><span class="c">${ic('target')}</span><span class="c">${ic('skull')}</span><span class="c">K/D</span></div>
+      ${rows}
+      <p class="sc-sum">${list.length} oyuncu · ${K} öldürme · ${D} ölüm</p>
+    </div>`;
+  };
+  document.getElementById('teams').innerHTML = team('red', 'KIRMIZI TAKIM', VA.RED) + team('blue', 'MAVİ TAKIM', VA.BLUE);
+</script>
+</body>
+</html>

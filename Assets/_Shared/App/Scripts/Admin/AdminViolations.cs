@@ -1,4 +1,5 @@
 using UnityEngine;
+using VortexArena.Core.UI;
 using VortexArena.Net;
 using VortexArena.Protocol;
 
@@ -78,7 +79,7 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>
-        /// The violation's current blink color; <see cref="UiKit.Border"/> for
+        /// The violation's current blink color; <see cref="Girdap.Line"/> for
         /// <see cref="AdminViolationKind.None"/> so an accidental call is not a visible error.
         /// <para>
         /// ⚠️ <b>The phase is NOT offset per player</b> (<c>Time.unscaledTime</c> only): synchronous
@@ -95,26 +96,42 @@ namespace VortexArena.App.Admin
                 case AdminViolationKind.OutOfBounds:
                     return Pulse(Tint(kind), OutOfBoundsBlinkHz);
                 default:
-                    return UiKit.Border;
+                    return Girdap.Line;
             }
         }
 
         /// <summary>
         /// The violation's steady color — for the ledger cells that must not blink
-        /// (<see cref="AdminStatsRow"/>); <see cref="UiKit.Border"/> when there is none.
+        /// (<see cref="AdminStatsRow"/>); <see cref="Girdap.Line"/> when there is none.
         /// </summary>
         public static Color Tint(AdminViolationKind kind)
         {
             switch (kind)
             {
                 case AdminViolationKind.Obstacle:
-                    return UiKit.Bad;
+                    return Girdap.Bad;
                 case AdminViolationKind.OutOfBounds:
-                    // "Warning but not an error" is Accent here (low battery, floor drift).
-                    return UiKit.Accent;
+                    // "Warning but not an error" — the theme's amber, not the danger red.
+                    return Girdap.Warn;
                 default:
-                    return UiKit.Border;
+                    return Girdap.Line;
             }
+        }
+
+        /// <summary>
+        /// Protocol <c>ArenaProtocol.VIOLATION_KIND_*</c> string → visible kind. The feed rows read
+        /// the wire value (an event), not the snapshot bit <see cref="Of"/> reads.
+        /// </summary>
+        public static AdminViolationKind Kind(string kind)
+        {
+            if (kind == ArenaProtocol.VIOLATION_KIND_OBSTACLE)
+            {
+                return AdminViolationKind.Obstacle;
+            }
+
+            return kind == ArenaProtocol.VIOLATION_KIND_OUT_OF_BOUNDS
+                ? AdminViolationKind.OutOfBounds
+                : AdminViolationKind.None;
         }
 
         /// <summary>
@@ -158,7 +175,13 @@ namespace VortexArena.App.Admin
         private static Color Pulse(Color color, float hz)
         {
             bool on = Mathf.Repeat(Time.unscaledTime * hz, 1f) < 0.5f;
-            return on ? color : UiKit.Dim(color, BlinkDim);
+            return on ? color : Dim(color, BlinkDim);
+        }
+
+        /// <summary>Darkens a color, alpha kept — the dim half of the blink.</summary>
+        private static Color Dim(Color color, float scale)
+        {
+            return new Color(color.r * scale, color.g * scale, color.b * scale, color.a);
         }
     }
 }

@@ -1,37 +1,49 @@
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
-using UnityEngine.UI;
 using VortexArena.Core.Arena;
+using VortexArena.Core.UI;
 
 namespace VortexArena.App.Admin
 {
     /// <summary>
-    /// Floor selector row in the HUD's match bar: picks which floor the operator watches
+    /// Floor selector at the right end of the HUD's match bar: picks which floor the operator watches
     /// (<see cref="AdminSession.Floor"/>).
-    /// <para>Visible only when the arena has more than one floor; the top-down camera then clips to
-    /// that floor (<see cref="AdminSpectatorCamera"/>).</para>
-    /// <para>Built from <see cref="ArenaFloors"/> at runtime — the floor count is a property of the
-    /// loaded scene, so a prefab row would be wrong in every other arena.</para>
+    /// <para>⚠️ <b>Visible only in a multi-floor arena</b>, and the bar SHRINKS back when it is not:
+    /// in a single-floor arena the strip ends at İPTAL (index.html says so in words). The floor count
+    /// is a property of the loaded scene, so the buttons cannot live in the prefab — they are cloned
+    /// from an inactive template.</para>
+    /// <para>The top-down camera clips to the chosen floor (<see cref="AdminSpectatorCamera"/>),
+    /// which is why picking one also switches the camera mode.</para>
     /// </summary>
     public class AdminFloorControls : MonoBehaviour
     {
-        private const float ButtonWidth = 64f;
-        private const float ButtonHeight = 40f;
-        private const float ButtonGap = 6f;
-        private const float BarHeight = 44f;
-        private const float FontSize = 14f;
+        /// <summary>CSS <c>.mbar .seg .btn { min-width: 92px }</c>.</summary>
+        private const float MinButtonWidth = 92f;
 
-        /// <summary>Gap between the prefab's icon row and the first floor button (px).</summary>
-        private const float RowGap = 24f;
+        /// <summary>CSS <c>.btn { padding: 0 16px }</c> on both sides.</summary>
+        private const float ButtonPadding = 32f;
 
-        /// <summary>Idle button background, distinct from the selected <see cref="UiKit.Accent"/>.</summary>
-        private static readonly Color IdleFill = UiKit.Hex(0x2A303B, 0xFF);
+        /// <summary>CSS <c>.seg { gap: 4px }</c>.</summary>
+        private const float ButtonGap = 4f;
 
-        private readonly List<Image> _backgrounds = new List<Image>();
-        private readonly List<TextMeshProUGUI> _labels = new List<TextMeshProUGUI>();
+        [Tooltip("Maç şeridinin kökü; kat grubu açılınca genişler, kapanınca İPTAL'de biter.")]
+        [SerializeField] private RectTransform matchBar;
 
-        private RectTransform _bar;
+        [Tooltip("Şeridin kat grubu OLMADAN genişliği (px) — builder yazar.")]
+        [SerializeField] private float baseWidth;
+
+        [Tooltip("Ayırıcı + \"KAT\" etiketi + seçici; tek katlı arenada tamamen kapanır.")]
+        [SerializeField] private RectTransform floorGroup;
+
+        [Tooltip("Kat düğmelerinin konduğu kutu; genişliği kat sayısından hesaplanır.")]
+        [SerializeField] private RectTransform floorSegment;
+
+        [Tooltip("Kat düğmesi şablonu — PASİF durur, her kat için bir kopya çıkar.")]
+        [SerializeField] private UiButtonStyle buttonTemplate;
+
+        private readonly List<UiButtonStyle> _buttons = new List<UiButtonStyle>();
+
         private int _builtVersion = -1;
         private int _builtCount = -1;
 
@@ -45,54 +57,17 @@ namespace VortexArena.App.Admin
             AdminSession.Changed -= Refresh;
         }
 
-        private void Start()
+        private void Update()
         {
-            // The driver component marks the bar; a bare name lookup breaks on a re-parented node.
-            AdminMatchControls match = GetComponentInChildren<AdminMatchControls>(true);
-            Transform matchBar = match != null ? match.transform : transform.Find("MatchBar");
-            if (matchBar == null)
+            if (matchBar == null || floorGroup == null)
             {
-                Debug.LogWarning("[AdminFloorControls] MatchBar bulunamadı; kat seçici çizilmedi.");
-                enabled = false;
                 return;
             }
 
-            _bar = UiKit.Node(matchBar, "FloorBar");
-            // Grows to the RIGHT of the icon row: the bar has no visible edge to hang from, and a
-            // right-anchored row would run back over the icons on a narrow bar.
-            _bar.anchorMin = new Vector2(0.5f, 0.5f);
-            _bar.anchorMax = new Vector2(0.5f, 0.5f);
-            _bar.pivot = new Vector2(0f, 0.5f);
-            _bar.anchoredPosition = new Vector2(IconRowRightEdge((RectTransform)matchBar, _bar) + RowGap, 0f);
-            _bar.sizeDelta = new Vector2(0f, BarHeight);
-            _bar.gameObject.SetActive(false);
-        }
-
-        /// <summary>Right edge of the prefab's icon buttons, as an offset from the bar's center (local x).</summary>
-        private static float IconRowRightEdge(RectTransform matchBar, RectTransform exclude)
-        {
-            // World corners, so the answer does not depend on how the prefab anchors its buttons.
-            var corners = new Vector3[4];
-            float edge = float.NegativeInfinity;
-            for (int i = 0; i < matchBar.childCount; i++)
+            if (floorSegment == null || buttonTemplate == null)
             {
-                var child = matchBar.GetChild(i) as RectTransform;
-                if (child == null || child == exclude || !child.gameObject.activeSelf)
-                {
-                    continue;
-                }
-
-                child.GetWorldCorners(corners);
-                edge = Mathf.Max(edge, matchBar.InverseTransformPoint(corners[2]).x); // top-right
-            }
-
-            return float.IsNegativeInfinity(edge) ? 0f : edge - matchBar.rect.center.x;
-        }
-
-        private void Update()
-        {
-            if (_bar == null)
-            {
+                Debug.LogWarning("[AdminFloorControls] Kat seçici referansları eksik; kat şeridi çizilmedi.");
+                enabled = false;
                 return;
             }
 
@@ -108,54 +83,91 @@ namespace VortexArena.App.Admin
             _builtVersion = ArenaFloors.Version;
             _builtCount = count;
 
-            for (int i = 0; i < _backgrounds.Count; i++)
+            for (int i = 0; i < _buttons.Count; i++)
             {
-                if (_backgrounds[i] != null)
+                if (_buttons[i] != null)
                 {
-                    Destroy(_backgrounds[i].gameObject);
+                    Destroy(_buttons[i].gameObject);
                 }
             }
 
-            _backgrounds.Clear();
-            _labels.Clear();
+            _buttons.Clear();
 
             // A shrinking arena must not leave the selection pointing at a floor that no longer exists.
             AdminSession.Floor = Mathf.Clamp(AdminSession.Floor, 0, Mathf.Max(0, count - 1));
 
-            _bar.gameObject.SetActive(count > 1);
-            if (count <= 1)
+            bool show = count > 1;
+            floorGroup.gameObject.SetActive(show);
+            if (!show)
+            {
+                SetBarWidth(0f);
+                return;
+            }
+
+            float x = 0f;
+            for (int floor = 0; floor < count; floor++)
+            {
+                int index = floor;
+                UiButtonStyle button = Instantiate(buttonTemplate, floorSegment);
+                button.gameObject.SetActive(true);
+                button.name = $"Floor{floor}";
+                button.SetLabel(FloorLabel(floor));
+
+                float width = ButtonWidth(button);
+                var rect = (RectTransform)button.transform;
+                rect.anchoredPosition = new Vector2(x, 0f);
+                rect.sizeDelta = new Vector2(width, rect.sizeDelta.y);
+                CenterLabel(button, width);
+
+                if (button.TargetButton != null)
+                {
+                    button.TargetButton.onClick.RemoveAllListeners();
+                    button.TargetButton.onClick.AddListener(() => Select(index));
+                }
+
+                _buttons.Add(button);
+                x += width + ButtonGap;
+            }
+
+            float segmentWidth = Mathf.Max(0f, x - ButtonGap);
+            floorSegment.sizeDelta = new Vector2(segmentWidth, floorSegment.sizeDelta.y);
+
+            // The group's own left offset already covers the separator and the "KAT" label, so the
+            // selector's x inside the group IS everything that precedes it.
+            float groupWidth = floorSegment.anchoredPosition.x + segmentWidth;
+            floorGroup.sizeDelta = new Vector2(groupWidth, floorGroup.sizeDelta.y);
+            SetBarWidth(groupWidth);
+
+            Refresh();
+        }
+
+        /// <summary>Bar width with the floor group's contribution. The bar is center-anchored, so it
+        /// grows symmetrically and the whole strip re-centers — what the mockup shows.</summary>
+        private void SetBarWidth(float extra)
+        {
+            matchBar.sizeDelta = new Vector2(baseWidth + extra, matchBar.sizeDelta.y);
+        }
+
+        private static float ButtonWidth(UiButtonStyle button)
+        {
+            TMP_Text label = button.Label;
+            float text = label != null ? Mathf.Ceil(label.GetPreferredValues(label.text).x) : 0f;
+            return Mathf.Max(MinButtonWidth, ButtonPadding + text);
+        }
+
+        /// <summary>Centers the label in a box whose width was just computed (no Layout Group here).</summary>
+        private static void CenterLabel(UiButtonStyle button, float width)
+        {
+            TMP_Text label = button.Label;
+            if (label == null)
             {
                 return;
             }
 
-            float width = count * ButtonWidth + (count - 1) * ButtonGap;
-            _bar.sizeDelta = new Vector2(width, BarHeight);
-
-            for (int floor = 0; floor < count; floor++)
-            {
-                int index = floor;
-                Button button = UiKit.Button(
-                    _bar,
-                    $"Floor{floor}",
-                    FloorLabel(floor),
-                    FontSize,
-                    IdleFill,
-                    UiKit.Muted,
-                    () => Select(index),
-                    out TextMeshProUGUI label);
-
-                var rect = (RectTransform)button.transform;
-                rect.anchorMin = new Vector2(0f, 0.5f);
-                rect.anchorMax = new Vector2(0f, 0.5f);
-                rect.pivot = new Vector2(0f, 0.5f);
-                rect.sizeDelta = new Vector2(ButtonWidth, ButtonHeight);
-                rect.anchoredPosition = new Vector2(floor * (ButtonWidth + ButtonGap), 0f);
-
-                _backgrounds.Add(button.targetGraphic as Image);
-                _labels.Add(label);
-            }
-
-            Refresh();
+            var rect = (RectTransform)button.transform;
+            float text = Mathf.Ceil(label.GetPreferredValues(label.text).x);
+            label.rectTransform.anchoredPosition = new Vector2((width - text) * 0.5f, 0f);
+            label.rectTransform.sizeDelta = new Vector2(text, rect.sizeDelta.y);
         }
 
         /// <summary>Ground floor is named, the rest numbered — "0. kat" means nothing to an operator.</summary>
@@ -174,18 +186,13 @@ namespace VortexArena.App.Admin
         private void Refresh()
         {
             int selected = AdminSession.Floor;
-            for (int i = 0; i < _backgrounds.Count; i++)
+            for (int i = 0; i < _buttons.Count; i++)
             {
-                bool active = i == selected;
-
-                if (_backgrounds[i] != null)
+                if (_buttons[i] != null)
                 {
-                    _backgrounds[i].color = active ? UiKit.Accent : IdleFill;
-                }
-
-                if (_labels[i] != null)
-                {
-                    _labels[i].color = active ? UiKit.OnAccent : UiKit.Muted;
+                    // CSS overrides `.seg .btn` inside `.mbar` back to the normal surface, so the idle
+                    // item is a plain button here — not the transparent Seg item.
+                    _buttons[i].SetKind(i == selected ? UiButtonKind.On : UiButtonKind.Normal);
                 }
             }
         }

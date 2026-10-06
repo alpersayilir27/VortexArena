@@ -332,9 +332,10 @@ namespace VortexArena.App
             LoadingOverlay.SetProgress(1f);
 
             // Combat FX warmup while the cover is STILL UP: the effects are drawn once so the first
-            // bullet/grenade does not hitch. Arena scenes only — the lobby has no combat — and only
-            // until it has run once (rationale in CombatFxWarmup).
-            if (!CombatFxWarmup.Completed && sceneName == LastMatchScene)
+            // bullet/grenade/break does not hitch. Arena scenes only — the lobby has no combat. The
+            // catalog pass runs once per session; the break-FX pass whenever the scene brings a
+            // prefab no earlier scene had (rationale in CombatFxWarmup).
+            if (sceneName == LastMatchScene && CombatFxWarmup.NeedsRun())
             {
                 SceneTransitionFade.HoldBlack(CombatFxWarmup.CoverSeconds);
                 yield return CombatFxWarmup.Run();

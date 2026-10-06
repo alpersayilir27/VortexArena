@@ -14,7 +14,8 @@ Oyun kodundan çağırabileceğin her şey. Sıralama **kullanım sıklığına*
 | Ağ olayları | `VortexArena.Net` | Sunucudan gelen her şey |
 | Mod kuralları | `VortexArena.Core` | Modun şekli, katalog |
 | Arena | `VortexArena.Core.Arena` | Koordinat, sınır, taban bölgesi, başlangıç noktası |
-| UI | `VortexArena.Core.UI` | HUD tabanı |
+| UI | `VortexArena.Core.UI` | HUD tabanı + "Girdap" arayüz kiti |
+| Admin arayüzü | `VortexArena.App.Admin` | Operatör ekranı, roster, akışlar |
 | DTO'lar | `VortexArena.Protocol` | Olay parametrelerinin tipleri |
 
 Assembly bağımlılığı hep aşağı akar: `Protocol ← Net ← Core ← App, Modes.<X>`.
@@ -353,7 +354,26 @@ durumdur: PlayerPrefs'te anchor UUID'si hiç yok, ya da geri yükleme tüm denem
 > Koşmadığı durumlar: kayıtlı anchor geri yüklendiyse, oyuncu jeste başladıysa, operatör
 > sıfırladıysa, rig kökü kapalıysa (admin gözlemci) ve işaretçiler yok/aynıysa.
 
-**Kat ofseti — rig'i taşımanın TEK meşru yolu:**
+**Dev hizalama — yalnız editör:** kalibratörün editöre özel parçası `ArenaCalibrator.Dev.cs`'dir
+(sınıf `partial`, dosyanın tamamı `#if UNITY_EDITOR`). Ana dosya yalnız **gövdesiz `partial void`
+kancalar** taşır; build'e tek satır girmez.
+
+| Üye | Tip | Açıklama |
+|---|---|---|
+| ✅ `ArenaCalibrator.SourceDev` | `const string` = `"dev"` | `set_calibration.source` etiketi (`SourceManual`, `SourceAnchor` yanında) |
+| ✅ `ArenaCalibrator.DevSkipRequested` | `static bool` | Dev penceresinin "Kalibrasyonu atla" seçimi; `DevSession.ApplySelection` yazar |
+| ✅ `ArenaCalibrator.IsDevAligned` | `static bool` | Dev hizalama şu an yürürlükte mi — çubukların ve `BodyScaleState`'in otomatik ölçüm atlamasının kapısı |
+
+Kancalar: `DevStart` (sahne açılışı; geri yükleme ve ön-hizalamadan ÖNCE) · `DevUpdate` (her kare,
+jestten önce) · `DevAlignmentReplaced` (`AlignRig`, `AlignRigToAnchorPose`, `ResetAlignmentState`) ·
+`DevReload` (operatörün `reload_calibration` düğmesi).
+
+> ⚠️ Dev hizalama bir **yerel ezme değildir**: tamamlanmayı yine `Calibrated` olayından bildirir
+> (`CalibrationState` → `set_calibration{source:"dev"}`) ve `IsCalibrated` / `ManualAllowed`
+> ezilmez. Çapa kaydına, yakalama sayacına ve oturum-içi UUID'ye dokunmaz.
+> Kullanımı ve sınırları: `Docs/Gelistirici/Ilk-Adimlar.md`.
+
+**Kat ofseti — rig'i taşımanın tek meşru yolu (ürün kodunda):**
 
 | Üye | Tip | Açıklama |
 |---|---|---|
@@ -362,7 +382,8 @@ durumdur: PlayerPrefs'te anchor UUID'si hiç yok, ya da geri yükleme tüm denem
 
 > ⛔ **Bunu doğrudan çağırma** — katın sahibi `FloorState`'tir (`Request` / `MoveWithFade`), yoksa
 > rig'in ofseti ile oyuncunun bildirdiği kat ayrışır. Başka hiçbir kod rig kökünü oynatmaz ve
-> **yatayda hiçbir kod oynatamaz** (`Docs/Sistem-Ozeti.md` §3.13).
+> ürün kodunda **yatayda hiçbir kod oynatamaz** (`Docs/Sistem-Ozeti.md` §3.13); editördeki ikinci
+> yol yukarıdaki dev hizalamadır.
 
 ### ArenaObstacle
 
@@ -667,6 +688,67 @@ tabanda **değildir** (aşağıdaki nota bak).
 > onlar HUD'ın kendi satırlarıdır (ekran kapandığında görünen değerler).
 
 > ⚠️ Yaşam döngüsü metotlarını override edersen `base.` çağır.
+
+---
+
+## Arayüz kiti — "Girdap"
+
+`VortexArena.Core.UI`. Admin ekranlarının ve maç sonu ekranının tüm görsel parçaları. Yerleşim ve
+üretim **builder'ın** işidir (`Arayuz-Tasarimi.md`); burada çalışırken çağrılanlar var.
+
+| Tip | Üye | Açıklama |
+|---|---|---|
+| `UiShape` | ✅ `Chamfer(c)` / `Chamfer(tl,tr,br,bl)` · `Slant(l,r)` · `Fill(c)` / `Fill(a,b,UiGradientMode,end)` · `Outline(w,a,b)` · `Glow(w,c,offset)` · `InnerGlow(w,c)` · `Antialias(bool)` | Akıcı API, hepsi `UiShape` döner. `OutlineWidth` okunur |
+| `UiPolygonGraphic` | ⚠️ `ChamferTopLeft`…`ChamferBottomLeft` · `SlantLeft`/`SlantRight` · statik `SignedArea` · `Offset` · `ClipHalfPlane` · `Fan` · `Ring` | Taban; statikler kendi poligon grafiğini yazanlar için. ⚠️ Türev kendi `[RequireComponent(typeof(CanvasRenderer))]`'ını taşır |
+| `UiStripes` | ✅ `Stripes(angle, width, period, color)` · `AngleDeg` · `StripeWidth` · `Period` · `StripeColor` | Poligona kırpılı çapraz şeritler |
+| `UiSegmentBar` | ✅ `SetFill(0..1)` · `SetFillColors(a,b)` · `SetTrack(c)` · `SetMetrics(segment, gap, skewDeg)` · `Fill` | Dilimli eğik çubuk (can, kumanda tiki) |
+| `UiButtonStyle` | ✅ `SetKind(UiButtonKind)` · `SetInteractable(bool)` · `SetLabel(string)` · `SetHold(0..1)` · `Apply()` · `Kind` · `Interactable` · `TargetButton` · `Label` · `Shape` ⛔ `Bind(...)` | Düğmenin TÜM görünümü. ⚠️ Renk/zemin elle boyanmaz; `Bind` builder'ındır |
+| `UiChip` | ✅ `Set(text, UiChipKind, iconName = null)` · `Root` · `Label` · sabitler `Height`/`Padding`/`IconSize`/`IconGap` ⛔ `Bind(...)` | Rozet; genişliğini `Set` ölçüp yazar |
+| `Girdap` | ✅ `Hex(rgb[, a])` · `Rgba(r,g,b,a)` · `TeamHi/TeamLo/TeamInk(team)` · `Spacing(em)` · `Upper(s)` · `Font(GirdapFont)` · `Icon(name)` · `Assets` + palet alanları | **Statik.** Renk literali çağrı yerinde yazılmaz; `Upper` tr-TR'dir (`i → İ`) |
+| `GirdapAssets` | ✅ `Font(GirdapFont)` · `Icon(name)` · `InvalidateIconLookup()` | `Resources/UI/Girdap.asset`; ikon çıplak adla istenir (`"Skull"` → `Ic_Skull`) |
+
+> ⚠️ `UiButtonKind` · `UiChipKind` · `UiGradientMode` · `GirdapFont` prefablara **serileşir** —
+> yeni değer sona eklenir (→ **[Yapma Listesi](Yapma-Listesi.md)**, "Serialize edilen veriler").
+
+---
+
+## Admin arayüzü
+
+`VortexArena.App.Admin`. Oyun kodundan değil, admin ekranının kendi içinden çağrılır; hepsi
+`Resources/UI/` altındaki üretilmiş prefablara oturur.
+
+| Tip | Üye | Açıklama |
+|---|---|---|
+| `AdminHud` | ✅ `ResourcePath` | Üst şerit + takım sütunları + iki akış + alt şerit. Dışa açık metodu yoktur: veriyi `AdminRoster`'dan okur, panelleri `AdminSession.OpenPanel` açar |
+| `AdminPlayerRow` | ✅ `Height` · `Initialize(Action<int> onSelect, Action<int> onPov)` · `Bind(AdminPlayerView, bool selected)` · `Tick()` · `SetVisible(bool)` · `Place(float top, float height)` ⛔ `EditorWire(...)` | Yan sütun kartı; havuzlanır. Yalnız YÜKSEKLİK sabittir, genişlik sütundan gelir |
+| `AdminStatsRow` | ✅ `Height` · `PlayerId` · `Initialize(Action<int> onSelect, Action<int,string> onPopup)` · `Bind(AdminPlayerView, bool selected)` · `Tick()` · `SetVisible(bool)` · `Place(float top, float height)` · `BeginCalibrationLoad()` · `ApplyCalibrationResult(bool ok, string error)` | İstatistik tablosunun satırı; KALİBRE · ÖLÇ · ad · SIFIRLA · AT düğmelerini kendi sürer |
+| `AdminStatsPanel` · `AdminPreferencesPanel` · `AdminMatchControls` · `AdminFloorControls` | — | Dışa açık API'leri **yoktur**; roster/oturum durumuna abonedirler. Panel görünürlüğü `AdminSession`, kat şeridi `ArenaFloors.Version` ile tazelenir |
+| `AdminKillFeedView` | ✅ `Bind(IReadOnlyList<AdminKillFeedEntry> feed, int version)` | Havuzlu satırları (`AdminKillFeedRow`) kurar; `version` değişmedikçe hiçbir şey yapmaz |
+| `AdminViolationFeedView` | ✅ `Bind(IReadOnlyList<AdminViolationFeedEntry> feed, int version)` | Aynı desen; canlı ihlal satırı daha yüksektir |
+| `AdminKillFeedRow` | ✅ `Height` · `NewHeight` · `Bind(entry, weapon, newest, alpha, top)` | Vuran plakası · silah · vurulan plakası |
+| `AdminViolationFeedRow` | ✅ `Height` · `LiveHeight` · `IsLive` · `Bind(entry, live, top)` · `TickBlink()` | Canlı ihlal satırı yanıp söner |
+| `AdminViolations` | ✅ `Of(int playerId)` · `Kind(string)` · `Label(AdminViolationKind)` / `Label(string)` · `Blink(kind)` · `Tint(kind)` | **Statik.** İhlal türü → etiket ve Girdap rengi |
+| `AdminRoster` | ✅ `Instance` · `Changed` · `CalibrationResult` · `Red`/`Blue`/`Players` · `KillEvents`/`ViolationEvents` · `KillFeedVersion`/`ViolationFeedVersion` · `KillFeed`/`ViolationFeed` · `Find`/`NameOf`/`NextPlayerId` · `TeamTotals(team, out kills, out deaths, out alive)` · `Phase`/`PhaseReason`/`ModeState` · `TimeRemaining`/`ScoreRed`/`ScoreBlue`/`CountdownSeconds` · `WinnerTeam`/`WinnerPlayerId` · `ModeId`/`SceneName`/`ScoreLimit`/`RoundSeconds` · `IsFfa`/`AdminCount`/`SnapshotAge`/`CanChangeSelection` | Admin tarafının tek veri kaynağı; satır tipi `AdminPlayerView`, öldürme türü `AdminKillKind` |
+
+> ⚠️ `AdminKillKind` (`Kill` · `Suicide` · `Obstacle` · `Death`) ve `AdminViolationKind` serileşmez
+> ama **akış cümlesini** seçer; yeni değer yine sona eklenir.
+
+---
+
+## MatchResultOverlay
+
+`VortexArena.App.MatchResultOverlay` — oyuncunun maç sonu ekranı. Kendini örnekleyen kalıcı
+tekildir, sahneye konmaz; çağrılacak bir metodu yoktur.
+
+| Üye | Açıklama |
+|---|---|
+| ✅ `ResourcePath` | `Resources` içindeki yol |
+| ⚠️ `RowHeight` · `RowGap` · `RowsTop` | Skor tablosu satır adımı — builder'ın şablonu ve çalışırken dizilen satırlar **aynı** sabitleri okur |
+| ⚠️ `NameCellX` · `NameGap` | Ad hücresinin sol kenarı ve SEN çipinin boşluğu |
+| ⚠️ `BlockCount` | Tablo bloğu sayısı (takım başına bir blok; takımsız kipte tek sıralama ikiye bölünür) |
+
+> Moda özel görünüm bir **prefab varyantıdır** (`ModeDefinition.resultScreenPrefab`); mantık
+> değişmez — reçete: `Yemek-Kitabi.md` "Moda özel maç sonu ekranı".
 
 ---
 

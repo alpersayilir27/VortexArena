@@ -65,8 +65,12 @@ public sealed class PlayerRegistry : IDisposable
     {
         _devicesPath = devicesJsonPath;
         LoadDevices();
-        _connectionTimer = new Timer(_ => CheckConnections(), null,
-            TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
+        // ⚠️ Guarded: an exception escaping a Timer callback terminates the whole process.
+        _connectionTimer = new Timer(_ =>
+        {
+            try { CheckConnections(); }
+            catch (Exception ex) { Console.WriteLine($"[PlayerRegistry] bağlantı taraması hatası: {ex}"); }
+        }, null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
     }
 
     public IReadOnlyList<PlayerState> Snapshot() => _players.Values.ToList();
