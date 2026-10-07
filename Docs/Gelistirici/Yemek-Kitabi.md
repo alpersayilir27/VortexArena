@@ -1366,9 +1366,11 @@ dokusunu başka yüze boyar.
 **1. `blender/<Eldiven>/` klasörünü kur.** Geometri Meta'nın OpenXR el FBX'inden türetilir
 (`Packages/com.meta.xr.sdk.interaction/Runtime/Meshes/OpenXR{Right,Left}Hand.fbx` — iskeletleri ve
 kaynak mesh'leri `.blend`'e alınır) ve iki betikle üretilir: **builder** (eli şişirir, eldiveni ve
-manşeti ekler) + **doku** betiği (UV, albedo + normal doku seti, Unity için mesh dökümü). Örnek ve
-ortak yardımcılar `blender/ChefGlove/README.md`'dedir — doku yardımcıları
-`blender/TacticalGlove/glove_tex.py`'den içe aktarılır, kopyalanmaz. Betik dokuları doğrudan
+manşeti ekler) + **doku** betiği (UV, albedo + normal doku seti, Unity için mesh dökümü). Örnekler:
+`blender/ChefGlove/` (takımsız, tek alt-mesh) ve `blender/MoleGlove/` (takım rengi alan kayışlı, iki
+alt-mesh) — README'leri akışı anlatır. Ortak kod kopyalanmaz, içe aktarılır: builder geometrisi
+`blender/ChefGlove/chef_builder.py`'den (yeni eldiven yalnız kendi manşet profilini verir), doku
+yardımcıları `blender/TacticalGlove/glove_tex.py`'den. Betik dokuları doğrudan
 `Assets/Modes/<Mod>/Avatars/<Eldiven>/`'e, mesh dökümlerini `export/<Eldiven>_{R,L}.txt`'ye yazar.
 ⚠️ Kemiklere, kemik adlarına ve iskelet hiyerarşisine dokunulmaz (Unity kemikleri **adla** eşler);
 sol el sağın X aynasıdır.
@@ -1385,8 +1387,10 @@ maks boyut **2048**, *Wrap Mode* **Clamp**, Android override **ASTC 6x6** (albed
 (normal).
 
 **4. Materyal:** `M_TacticalGlove.mat`'ın kopyası (URP/Lit, smoothness albedo alfasından, normal map
-açık) + eldivenin kendi dokuları. ⚠️ Kopyada taktik eldivenin dokusu kalmamalı: hata çıkmaz, el
-taktik desenle çizilir.
+açık) + eldivenin kendi dokuları. Takım kayışı varsa ikinci materyal `M_TacticalGlove_Band.mat`'ın
+kopyasıdır, aynı dokularla: kayış dokuda **açık gri** çizilir ki takım rengi onu çarparak boyasın;
+materyalin kendi rengi takım atanmamışken görünen renktir. ⚠️ Kopyada taktik eldivenin dokusu
+kalmamalı: hata çıkmaz, el taktik desenle çizilir.
 
 **5. `GloveSkin` asset'i** (`Create > VortexArena > Glove Skin`): `left`/`right` = 2. adımın ürettiği
 mesh asset'leri, `materials` = alt-mesh sırasıyla materyaller. ⚠️ **Slot 1'i yalnız takım kayışıysa

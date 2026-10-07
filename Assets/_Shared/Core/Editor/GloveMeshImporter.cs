@@ -30,6 +30,7 @@ namespace VortexArena.Core.Editor
 
         private static readonly Glove Tactical = new Glove { Name = "TacticalGlove", AssetDir = "Assets/_Shared/Avatars/TacticalGlove", Submeshes = 2 };
         private static readonly Glove Chef = new Glove { Name = "ChefGlove", AssetDir = "Assets/Modes/Burger/Avatars/ChefGlove", Submeshes = 1 };
+        private static readonly Glove Mole = new Glove { Name = "MoleGlove", AssetDir = "Assets/Modes/Mole/Avatars/MoleGlove", Submeshes = 2 };
 
         private sealed class Dump
         {
@@ -50,6 +51,9 @@ namespace VortexArena.Core.Editor
 
         [MenuItem("Tools/VortexArena/Avatars/Eldiven Mesh'ini İçe Aktar/Aşçı Eldiveni", false, 26)]
         private static void ImportChef() => Import(Chef);
+
+        [MenuItem("Tools/VortexArena/Avatars/Eldiven Mesh'ini İçe Aktar/Köstebek Eldiveni", false, 27)]
+        private static void ImportMole() => Import(Mole);
 
         private static void Import(Glove glove)
         {

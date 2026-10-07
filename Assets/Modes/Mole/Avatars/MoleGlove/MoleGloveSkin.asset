@@ -1,0 +1,19 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 83b19df728d371048a664d86dcb64481, type: 3}
+  m_Name: MoleGloveSkin
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Player.GloveSkin
+  left: {fileID: 4300000, guid: 8a04b2c0b1545a94b9f5558f6161f45a, type: 2}
+  right: {fileID: 4300000, guid: eec656937d36efe498ef262f623eb393, type: 2}
+  materials:
+  - {fileID: 2100000, guid: 95adf1f613a0fe14ea4d1d43b4053b3a, type: 2}
+  - {fileID: 2100000, guid: 9ef9703b997e2954db783dedde57e1be, type: 2}

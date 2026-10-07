@@ -15,7 +15,9 @@ bağlandığı `Docs/Sistem-Ozeti.md` (`LocalGloves`, `GloveSkin`); yeni bir mod
 | `renders/` | `render()` önizlemeleri — git'e girmez |
 
 ⚠️ `chef_tex.py` raster, gürültü, UV ve döküm yardımcılarını `../TacticalGlove/glove_tex.py`'den içe aktarır
-(kopyası yoktur): oradaki genel bir yardımcıyı değiştirmek iki eldiveni de değiştirir.
+(kopyası yoktur): oradaki genel bir yardımcıyı değiştirmek bütün eldivenleri değiştirir. Aynı şekilde
+`chef_builder.py`'nin `build()`'i ve `chef_tex.py`'nin manşet yardımcıları (`ring_arc`, `uv_overlap_px`)
+`../MoleGlove/` betiklerince içe aktarılır: parametre eklerken varsayılan bugünkü davranış kalmalı.
 
 ## Bölgeler
 

@@ -43,7 +43,9 @@ def boundary_loop(bm):
     fwd = vs[(vs.index(loop[0]) + 1) % len(vs)] is loop[1]
     return loop, fwd
 
-def build(src_name, out_name):
+def build(src_name, out_name, rings=None, inflate=INFLATE, material="M_ChefGlove"):
+    """rings / inflate / material: other gloves (../MoleGlove/mole_builder.py) reuse this with their own profile."""
+    rings = rings or SLEEVE_RINGS
     src = bpy.data.objects[src_name]; arm = src.parent
     old = bpy.data.objects.get(out_name)
     if old: bpy.data.objects.remove(old, do_unlink=True)
@@ -62,7 +64,7 @@ def build(src_name, out_name):
     cap = [f for f in bm.faces if f.calc_center_median().y < -0.008 and f.normal.y < -0.8]
     bmesh.ops.delete(bm, geom=cap, context='FACES')
     bm.normal_update()
-    for v, n in [(v, v.normal.copy()) for v in bm.verts]: v.co += n * INFLATE
+    for v, n in [(v, v.normal.copy()) for v in bm.verts]: v.co += n * inflate
     bm.normal_update()
     for f in bm.faces: f[zl] = GLOVE
     loop, fwd = boundary_loop(bm)
@@ -74,7 +76,7 @@ def build(src_name, out_name):
     def tri(a, b, cc, z):                                    # a, b: consecutive on the old ring
         f = bm.faces.new([b, a, cc] if fwd else [a, b, cc]); f[zl] = z
     prev, prof, tags = None, 0.0, {}
-    for ri, (dy, s, z, tag) in enumerate(SLEEVE_RINGS):
+    for ri, (dy, s, z, tag) in enumerate(rings):
         ring = []
         for p in shape:
             nv = bm.verts.new(Vector((c.x + (p.x - c.x) * s, ymin + dy, c.z + (p.z - c.z) * s))); nv[dl][wi] = 1.0; ring.append(nv)
@@ -107,7 +109,7 @@ def build(src_name, out_name):
     bm.to_mesh(me); bm.free()
     if "custom_normal" in me.attributes: me.attributes.remove(me.attributes["custom_normal"])  # Meta's normals no longer fit the inflated shape
     while me.uv_layers: me.uv_layers.remove(me.uv_layers[0])    # chef_tex.py lays out UVMap
-    mat = bpy.data.materials.get("M_ChefGlove") or bpy.data.materials.new("M_ChefGlove")
+    mat = bpy.data.materials.get(material) or bpy.data.materials.new(material)
     me.materials.clear(); me.materials.append(mat)
     ob["ring_prof"] = tags                                   # tag -> prof (mm)
     ob["axis_mm"] = (c.x * 1000, ymin * 1000, c.z * 1000)    # sleeve axis (x, z) + wrist opening's lowest y

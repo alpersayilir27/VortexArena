@@ -9,7 +9,7 @@ dokunarak değiştirme" bölümü.
 | Dosya | İçerik |
 |---|---|
 | `TacticalGlove.blend` | `Glove_R` / `Glove_L` mesh'leri, OpenXR el iskeletleri (`OXRRightHand` / `OXRLeftHand`, `XRHand_*` kemik adları), `GlovePreview` önizleme sahnesi. Dokular paketli değildir, `Assets/` altındaki PNG'leri gösterir |
-| `glove_tex.py` | Prosedürel doku seti (albedo + normal) ve Unity için mesh dökümü. ⚠️ Genel yardımcıları (raster, gürültü, UV, döküm) `../ChefGlove/chef_tex.py` de içe aktarır: birini değiştirmek iki eldiveni de değiştirir, parametre eklerken varsayılanı bugünkü davranış kalmalı |
+| `glove_tex.py` | Prosedürel doku seti (albedo + normal) ve Unity için mesh dökümü. ⚠️ Genel yardımcıları (raster, gürültü, UV, döküm) mod eldivenlerinin doku betikleri (`../<Eldiven>/*_tex.py`) de içe aktarır: birini değiştirmek bütün eldivenleri değiştirir, parametre eklerken varsayılanı bugünkü davranış kalmalı |
 | `export/` | Betiğin ürettiği mesh dökümleri (`TacticalGlove_R/L.txt`) — git'e girmez |
 | `renders/` | `render()` önizlemeleri — git'e girmez |
 
