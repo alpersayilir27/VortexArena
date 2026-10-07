@@ -127,7 +127,7 @@ def ensure_zone(me):
     z = zones_from_palette(me, me.uv_layers[0].name)
     a = me.attributes.new("zone", 'INT', 'FACE'); a.data.foreach_set("value", z)
 
-def unwrap(o):
+def unwrap(o, angle=66):
     me = o.data
     ensure_zone(me)
     if "Palette" not in me.uv_layers: me.uv_layers[0].name = "Palette"
@@ -138,7 +138,7 @@ def unwrap(o):
     with bpy.context.temp_override(**view3d_override()):
         bpy.ops.object.mode_set(mode='EDIT')
         bpy.ops.mesh.select_all(action='SELECT')
-        bpy.ops.uv.smart_project(angle_limit=math.radians(66), island_margin=0.003, area_weight=0.0, correct_aspect=True, scale_to_bounds=False)
+        bpy.ops.uv.smart_project(angle_limit=math.radians(angle), island_margin=0.003, area_weight=0.0, correct_aspect=True, scale_to_bounds=False)
         bpy.ops.uv.select_all(action='SELECT')
         bpy.ops.uv.average_islands_scale()
         bpy.ops.uv.pack_islands(rotate=True, margin=0.004)
@@ -237,8 +237,8 @@ def vertex_ao(A, rays=48, maxd=0.02):
         ao[i] = 1.0 - occ / rays
     return ao
 
-def stage_raster():
-    o = bpy.data.objects["Glove_R"]
+def stage_raster(name="Glove_R"):
+    o = bpy.data.objects[name]
     A = mesh_arrays(o)
     tri = rasterize(A)
     cov = tri >= 0
@@ -268,7 +268,7 @@ def stage_raster():
     ao_v = vertex_ao(A)
     AO = (ao_v[LV[TL[t]]] * W).sum(1)
     S.update(A=A, tri=tri, cov=cov, ev=ev, ys=ys, xs=xs, t=t, P=P.astype(np.float32), N=N.astype(np.float32), T=T.astype(np.float32),
-             SG=SG, Pu=Pu, Pv=Pvv, AO=AO.astype(np.float32), Z=A["FZ"][A["TP"][t]])
+             SG=SG, Pu=Pu, Pv=Pvv, AO=AO.astype(np.float32), Z=A["FZ"][A["TP"][t]], W=W)
     mmpp = np.linalg.norm(Pu, axis=1).mean() * 1000
     print("covered %.1f%%  eval texels %d  mm/px %.3f (%.1f px/mm)  AO min %.2f" % (cov.mean() * 100, len(t), mmpp, 1 / mmpp, ao_v.min()))
 
@@ -412,6 +412,30 @@ def rubber_shells(A):
 def is_rim(inf): return inf["c"][1] < -55
 def is_tab(inf): return -55 < inf["c"][1] < -30 and inf["ext"][2] < 12
 
+# Knuckle guard is painted on the fabric, not modelled: a separate plate cannot follow flexing knuckles.
+KNUCKLE_HW, KNUCKLE_EXT = 9.5, 4.0          # half width, overhang past index/little (mm)
+PANEL_TOP = 68.4                            # back panel top edge, just below the guard (mm)
+
+def catmull_rom(K, n=12):
+    Q = np.vstack([K[0], K, K[-1]]); out = []
+    for i in range(1, len(Q) - 2):
+        p0, p1, p2, p3 = Q[i - 1], Q[i], Q[i + 1], Q[i + 2]
+        for t in np.linspace(0, 1, n, endpoint=False):
+            out.append(0.5 * (2 * p1 + (p2 - p0) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t * t + (3 * p1 - p0 - 3 * p2 + p3) * t ** 3))
+    return np.vstack(out + [Q[-2]])
+
+def knuckle_sdf(P, B):
+    """Signed xy distance (mm) to the guard: a capsule along a smooth curve through the index→little MCP joints."""
+    K = np.array([B[f"XRHand_{f}Proximal"][:2] for f in ("Index", "Middle", "Ring", "Little")])
+    d0, d1 = K[0] - K[1], K[3] - K[2]
+    K = np.vstack([K[0] + d0 / np.linalg.norm(d0) * KNUCKLE_EXT, K, K[3] + d1 / np.linalg.norm(d1) * KNUCKLE_EXT])
+    K = catmull_rom(K)                      # a straight polyline puts kinks into the offset edge
+    q = P[:, :2]; best = np.full(len(q), 1e9, np.float32)
+    for a, b in zip(K[:-1], K[1:]):
+        ab = b - a; t = np.clip(((q - a) @ ab) / (ab @ ab), 0, 1)
+        best = np.minimum(best, np.linalg.norm(q - (a + t[:, None] * ab), axis=1))
+    return best - KNUCKLE_HW
+
 def stage_material():
     A = S["A"]; P = S["P"] * 1000; N = S["N"]; Z = S["Zeff"]; D = S["D"]; AL = S["AL"]; TY = S["TY"]; types = S["types"]
     K = len(P)
@@ -428,10 +452,8 @@ def stage_material():
     dorsal = (Nm[:, 2] > 0.5) & (Pm[:, 1] > 10) & (Pm[:, 1] < 60)
     x0, x1 = np.percentile(Pm[dorsal, 0], 2), np.percentile(Pm[dorsal, 0], 98)
     shells, sinfo = rubber_shells(A)
-    knuckle = [v for v in sinfo.values() if v["ext"][0] > 35 and v["c"][1] > 0]
-    kyl = min(v["c"][1] - v["ext"][1] * 0.5 for v in knuckle) if knuckle else 72.0
-    pcx, pcy = (x0 + x1) * 0.5, (2.0 + kyl - 7.0) * 0.5
-    phx, phy = (x1 - x0) * 0.5 - 8.0, (kyl - 7.0 - 2.0) * 0.5
+    pcx, pcy = (x0 + x1) * 0.5, (2.0 + PANEL_TOP - 7.0) * 0.5
+    phx, phy = (x1 - x0) * 0.5 - 8.0, (PANEL_TOP - 7.0 - 2.0) * 0.5
     sd, al = rrect(Pm[:, 0] - pcx, Pm[:, 1] - pcy, phx, phy, 9.0)
     top = sstep(0.25, 0.45, Nm[:, 2])
     inside = (1 - sstep(-0.35, 0.35, sd)) * top
@@ -456,6 +478,18 @@ def stage_material():
             wz = sstep(half, half - 1.0, np.abs(tt)) * sstep(11.0, 8.0, lat) * sstep(0.0, 0.35, up)
             rib = 0.5 + 0.5 * np.cos(2 * np.pi * tt / 1.25)
             c *= (1 - wz * (0.10 + 0.12 * (1 - rib)))[:, None]; hh += wz * 0.28 * rib; s += wz * 0.04 * rib
+    # knuckle guard: moulded rubber plate with hex cells; the bevel carries the relief in the normal map
+    sdK = knuckle_sdf(Pm, B)
+    topK = sstep(0.05, 0.35, Nm[:, 2])
+    inK = (1 - sstep(-0.3, 0.3, sdK)) * topK
+    bevel = sstep(0.0, -1.6, sdK); edgeK = 1 - bevel
+    cell = sstep(0.44, 0.40, hexedge(hexlattice(Pm[:, 0], Pm[:, 1], 3.0), 3.0)) * sstep(-1.8, -2.6, sdK)
+    cK = C_RUB * (1 + 0.35 * edgeK[:, None] + 0.12 * cell[:, None]) * (0.95 + 0.1 * rough_n[m][:, None])
+    c = c * (1 - inK[:, None]) + cK * inK[:, None]
+    hh = hh * (1 - inK) + (0.55 * bevel + 0.30 * cell) * inK
+    s = s * (1 - inK) + (0.40 + 0.18 * edgeK + 0.08 * cell) * inK
+    out = sstep(-0.2, 0.2, sdK) * topK                              # contact shadow + seam groove; soft start or the edge aliases
+    c *= (1 - 0.35 * sstep(2.2, 0.0, sdK) * out)[:, None]; hh -= 0.15 * sstep(0.8, 0.0, sdK) * out
     col[m], h[m], sm[m] = c, hh, s
     # ---------------- leather (palm, finger pads, tips)
     m = Z == LEA
@@ -490,7 +524,7 @@ def stage_material():
         a_, p_, o_ = stitch(sdP + 1.5, alP)
         c = c * (1 - a_[:, None]) + C_THREAD * 0.85 * (0.8 + 0.2 * p_[:, None]) * a_[:, None]; hh += 0.15 * p_; c *= (1 - 0.35 * o_)[:, None]
     col[m], h[m], sm[m] = c, hh, s
-    # ---------------- rubber (knuckle guards + cuff rim)
+    # ---------------- rubber (finger pads, cuff rim, strap pull tab)
     m = Z == RUB
     Pm, Nm = P[m], N[m]
     sh = shells[A["TP"][S["t"][m]]]
@@ -531,14 +565,11 @@ def stage_material():
             cc = cc * (1 - a_[:, None]) + C_THREAD_DK * a_[:, None]; hk += 0.12 * p_; cc *= (1 - 0.3 * o_ * top)[:, None]
             c[k], hh[k], s[k] = cc, hk, sk
             continue
-        if inf["ext"][0] > 35:                                     # knuckle bar: hex cells
-            g = hexlattice(Pk[:, 0], Pk[:, 1], 3.0); e = hexedge(g, 3.0)
-            pat = sstep(0.44, 0.40, e)
-        else:                                                      # finger pad: ribs across the finger
-            fname = min(("Index", "Middle", "Ring", "Little"), key=lambda f: np.linalg.norm(B[f"XRHand_{f}Proximal"][:2] - inf["c"][:2]))
-            J, Jn = B[f"XRHand_{fname}Proximal"], B[f"XRHand_{fname}Intermediate"]
-            fd = (Jn - J) / np.linalg.norm(Jn - J); tt = (Pk - J) @ fd
-            pat = sstep(0.25, 0.6, 0.5 + 0.5 * np.cos(2 * np.pi * tt / 2.3))
+        # finger pad: ribs across the finger
+        fname = min(("Index", "Middle", "Ring", "Little"), key=lambda f: np.linalg.norm(B[f"XRHand_{f}Proximal"][:2] - inf["c"][:2]))
+        J, Jn = B[f"XRHand_{fname}Proximal"], B[f"XRHand_{fname}Intermediate"]
+        fd = (Jn - J) / np.linalg.norm(Jn - J); tt = (Pk - J) @ fd
+        pat = sstep(0.25, 0.6, 0.5 + 0.5 * np.cos(2 * np.pi * tt / 2.3))
         hh[k] = 0.32 * pat * topk
         c[k] = C_RUB * (1 + 0.35 * edge[:, None] + 0.12 * pat[:, None] * topk[:, None])
         s[k] = 0.40 + 0.18 * edge + 0.08 * pat * topk
@@ -600,8 +631,8 @@ def pad(img, mask, n=40):
         img[new] = acc[new] / cnt[new][:, None]; mask = mask | new
     return img
 
-def save_png(name, arr, noncolor):
-    path = os.path.join(OUT, name + ".png")
+def save_png(name, arr, noncolor, out=None):
+    path = os.path.join(out or OUT, name + ".png")
     if bpy.data.images.get(name): bpy.data.images.remove(bpy.data.images[name])
     img = bpy.data.images.new(name, RES, RES, alpha=arr.shape[2] == 4)
     img.colorspace_settings.name = 'Non-Color' if noncolor else 'sRGB'
@@ -611,8 +642,9 @@ def save_png(name, arr, noncolor):
     img.alpha_mode = 'CHANNEL_PACKED'
     return img
 
-def stage_images():
-    os.makedirs(OUT, exist_ok=True)
+def stage_images(prefix="T_TacticalGlove", out=None):
+    out = out or OUT
+    os.makedirs(out, exist_ok=True)
     ev = S["ev"]; ys, xs = S["ys"], S["xs"]
     H = grid(S["h"])
     def d(axis):
@@ -634,9 +666,9 @@ def stage_images():
     nrm = grid(ts * 0.5 + 0.5); alb = grid(np.concatenate([S["col"], S["sm"][:, None]], 1))
     nrm = pad(nrm, ev); alb = pad(alb, ev)
     nrm[~ev & (nrm.sum(-1) == 0)] = (0.5, 0.5, 1.0)
-    save_png("T_TacticalGlove_Albedo", alb, False)
-    save_png("T_TacticalGlove_Normal", nrm, True)
-    print("saved to", OUT)
+    save_png(prefix + "_Albedo", alb, False, out)
+    save_png(prefix + "_Normal", nrm, True, out)
+    print("saved to", out)
 
 # ---------------------------------------------------------------- export for Unity
 def vertex_weights(o):
@@ -651,7 +683,8 @@ def vertex_weights(o):
         out.append(" ".join("%d %.6f" % (b, w / s) for b, w in inf))
     return bones, out
 
-def export_dump(side, o, A):
+def export_dump(side, o, A, name="TacticalGlove", sub_zone=STR, export=None):
+    """sub_zone: faces of that zone go to submesh 1 (None = single submesh)."""
     bones, W = vertex_weights(o)
     LV, LN, LUV, LT, LS = A["LV"], A["LN"], A["LUV"], A["LT"], A["LS"]
     key2idx, verts, remap = {}, [], np.zeros(len(LV), np.int64)
@@ -659,8 +692,9 @@ def export_dump(side, o, A):
         k = (int(LV[l]), *np.round(LN[l], 4), *np.round(LUV[l], 6), *np.round(LT[l], 4), float(LS[l]))
         if k not in key2idx: key2idx[k] = len(verts); verts.append(l)
         remap[l] = key2idx[k]
-    os.makedirs(EXPORT, exist_ok=True)
-    path = os.path.join(EXPORT, f"TacticalGlove_{side}.txt")
+    export = export or EXPORT
+    os.makedirs(export, exist_ok=True)
+    path = os.path.join(export, f"{name}_{side}.txt")
     with open(path, "w") as f:
         f.write("bones " + " ".join(bones) + "\n")
         for l in verts: f.write("v %.7f %.7f %.7f\n" % tuple(A["V"][LV[l]]))
@@ -668,7 +702,7 @@ def export_dump(side, o, A):
         for l in verts: f.write("t %.7f %.7f\n" % tuple(LUV[l]))
         for l in verts: f.write("g %.6f %.6f %.6f %.0f\n" % (*LT[l], LS[l]))
         for l in verts: f.write("w " + W[LV[l]] + "\n")
-        sub = (A["FZ"][A["TP"]] == STR).astype(int)               # submesh 1 = team-tinted strap band
+        sub = (A["FZ"][A["TP"]] == sub_zone).astype(int)          # tactical: submesh 1 = team-tinted strap band
         for tl, sb in zip(A["TL"], sub): f.write("f %d %d %d %d\n" % (*remap[tl], sb))
     print(side, "split verts", len(verts), "tris", len(A["TL"]), "->", path)
 

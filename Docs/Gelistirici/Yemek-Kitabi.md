@@ -27,7 +27,8 @@ Her reçetenin altında *neden böyle* kutusu var — orayı okumazsan çalış�
 | Çocuk oyunu eklemek (silahsız, kooperatif) | [13.1](#131-çocuk-oyunu-eklemek-silahsız-kooperatif) |
 | Moda özel maç sonu ekranı (tema) | [13.2](#132-moda-özel-maç-sonu-ekranı) |
 | Moda özel oyuncu gövdesi (karakter modeli) | [13.3](#133-moda-özel-oyuncu-gövdesi) |
-| Burger müşterisine yeni görünüm (NPC karakteri) | [13.4](#134-burger-müşteri-görünümü-ekleme) |
+| Moda özel eldiven (oyuncunun kendi eli) | [13.4](#134-moda-özel-eldiven-oyuncunun-kendi-eli) |
+| Burger müşterisine yeni görünüm (NPC karakteri) | [13.5](#135-burger-müşteri-görünümü-ekleme) |
 | Yeni arena eklemek | [14](#14-yeni-arena-eklemek) |
 | Hazır bir environment'ın içinde arena bölgesi kurmak | [14.1](#141-hazır-bir-environmentın-içinde-arena-bölgesi-kurmak) |
 | Gözlüksüz test (dev penceresi) | [15](#15-gözlüksüz-test-dev-penceresi) |
@@ -1350,7 +1351,57 @@ varsayılana) geçmeli.
 
 ---
 
-## 13.4 Burger müşteri görünümü ekleme
+## 13.4 Moda özel eldiven (oyuncunun kendi eli)
+
+Bir mod oyuncunun gözlükte **kendi elinde** gördüğü eldiveni değiştirebilir (aşçı eldiveni gibi).
+Yalnız sahibini ilgilendirir: başkaları o eli görmez, uzak avatarın eli gövde modelinindir. Tek kod
+satırı importer'daki eldiven tanımıdır — gerisi bir Blender klasörü, dokular, bir materyal, bir
+`GloveSkin` asset'i ve mod tanımındaki tek alandır. Örnek yerleşim:
+`Assets/Modes/<Mod>/Avatars/<Eldiven>/`, kaynağı `blender/<Eldiven>/`.
+**Adım atlamanın bedeli:** `GloveSkin`'e FBX mesh'i atanırsa el **parçalanmış** çizilir (kemik sırası
+ve bindpose'lar paketin elininkinden farklıdır), ters normalli bir yüz Blender'da düzgün görünür ama
+oyunda **hiç görünmez** (Blender arka yüzü de çizer, Unity çizmez), çakışan UV adaları bir yüzün
+dokusunu başka yüze boyar.
+
+**1. `blender/<Eldiven>/` klasörünü kur.** Geometri Meta'nın OpenXR el FBX'inden türetilir
+(`Packages/com.meta.xr.sdk.interaction/Runtime/Meshes/OpenXR{Right,Left}Hand.fbx` — iskeletleri ve
+kaynak mesh'leri `.blend`'e alınır) ve iki betikle üretilir: **builder** (eli şişirir, eldiveni ve
+manşeti ekler) + **doku** betiği (UV, albedo + normal doku seti, Unity için mesh dökümü). Örnek ve
+ortak yardımcılar `blender/ChefGlove/README.md`'dedir — doku yardımcıları
+`blender/TacticalGlove/glove_tex.py`'den içe aktarılır, kopyalanmaz. Betik dokuları doğrudan
+`Assets/Modes/<Mod>/Avatars/<Eldiven>/`'e, mesh dökümlerini `export/<Eldiven>_{R,L}.txt`'ye yazar.
+⚠️ Kemiklere, kemik adlarına ve iskelet hiyerarşisine dokunulmaz (Unity kemikleri **adla** eşler);
+sol el sağın X aynasıdır.
+
+**2. İçe aktar.** `GloveMeshImporter`'a eldivenin **tek satırlık tanımını** (ad = `blender/` klasör
+adı = döküm/asset/doku öneki, asset klasörü, alt-mesh sayısı) ve bir `MenuItem` ekle, sonra
+`Tools > VortexArena > Avatars > Eldiven Mesh'ini İçe Aktar > <Eldiven>`'i çalıştır:
+`<Eldiven>_R/L.asset` oluşur — var olan asset **yerinde** yeniden yazılır, yani GUID ve `GloveSkin`
+bağı korunur. Blender betiği her değiştiğinde yalnız bu adım yeniden koşulur.
+
+**3. Doku import ayarları** (taktik eldivenle aynı): albedo **sRGB** ve alfası = smoothness
+(*Alpha Is Transparency* **kapalı**), normal haritası *Texture Type* **Normal map**; ikisinde de
+maks boyut **2048**, *Wrap Mode* **Clamp**, Android override **ASTC 6x6** (albedo) / **ASTC 5x5**
+(normal).
+
+**4. Materyal:** `M_TacticalGlove.mat`'ın kopyası (URP/Lit, smoothness albedo alfasından, normal map
+açık) + eldivenin kendi dokuları. ⚠️ Kopyada taktik eldivenin dokusu kalmamalı: hata çıkmaz, el
+taktik desenle çizilir.
+
+**5. `GloveSkin` asset'i** (`Create > VortexArena > Glove Skin`): `left`/`right` = 2. adımın ürettiği
+mesh asset'leri, `materials` = alt-mesh sırasıyla materyaller. ⚠️ **Slot 1'i yalnız takım kayışıysa
+kullan** — takımlı modda o slot takım rengiyle boyanır (`Yapma-Listesi.md`).
+
+**6. Bağla:** `Assets/Modes/<Mod>/Data/<MOD>.asset` → **`gloveSkin`**. Boş bırakılan alan oyuncuyu
+taktik eldivende bırakır.
+
+**Test (gözlükle):** mod seçiliyken hem lobide hem maçta oyuncunun kendi elinde o eldiven olmalı;
+başka bir moda geçince taktik eldivene dönmeli; takımlı bir modda kayışın takım rengi bozulmamış
+olmalı.
+
+---
+
+## 13.5 Burger müşteri görünümü ekleme
 
 Hamburgerci müşterisinin görünümü ağ nesnesinin kendisi değil, prefabın `looks` dizisinden
 doğurulan bir **karakter örneğidir**; hangisinin çıkacağını sunucu seçer (`s` → `v`,

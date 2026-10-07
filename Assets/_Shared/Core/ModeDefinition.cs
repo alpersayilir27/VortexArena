@@ -83,6 +83,11 @@ namespace VortexArena.Core
                  "bu gövde arasında dönüşümlü dağıtılır (eşit sayı). Takımlı modda kullanılmaz.")]
         [SerializeField] private GameObject altBodyPrefab;
 
+        [Header("Oyuncunun kendi eli (opsiyonel)")]
+        [Tooltip("Oyuncunun gözlükte KENDİ elinde gördüğü eldiven; boşsa taktik eldiven. Başkaları bu eli görmez " +
+                 "(uzak avatarın eli gövde modelinindir). Gövdelerle aynı modu izler: lobide admin'in seçtiği mod.")]
+        [SerializeField] private Player.GloveSkin gloveSkin;
+
         /// <summary>Protocol key ("tdm").</summary>
         public string ModeId => modeId;
 
@@ -170,5 +175,9 @@ namespace VortexArena.Core
         /// gets which (see <c>RemotePlayerSpawner</c>), so the split is identical on every
         /// client.</summary>
         public GameObject AltBodyPrefab => altBodyPrefab;
+
+        /// <summary>Glove on the local player's own hands; null = the rig's tactical glove
+        /// (<see cref="Player.LocalGloves"/>).</summary>
+        public Player.GloveSkin GloveSkin => gloveSkin;
     }
 }
