@@ -141,6 +141,7 @@ Kalıcı tekil, kendini önyükler (`Instance`). Sahneye koyma.
 | ✅ `Hp` | `float` | Yalnız `health_update`'ten set edilir |
 | ✅ `IsAlive` | `bool` | |
 | ✅ `StatusText` | `string` | Ölüm/canlanma metni; ⚠️ kendi metnini yazma |
+| ✅ `StatusKind` | `CombatStatusKind` | `StatusText`'i hangi kuralın yazdığı (`None` · `Calibration` · `ModePrompt` · `DeadWait` · `Obstacle` · `DeadCountdown` · `HoldStill` · `Reviving` · `ReturnBase` · `SpawnProtection`); HUD ikonu bundan seçer, metinle birlikte değişir ve `StatusChanged` aynı anda gelir |
 | ✅ `CanFire` | `bool` | |
 | ✅ `HpChanged` / `AliveChanged` / `StatusChanged` | olay | `float` / `bool` / `string` |
 | ✅ `LocalTeamChanged` | **statik** olay | `Team` — yalnız değer değişince. Statik olmasının sebebi: dinleyicileri kendini önyükleyen kalıcı tekiller ve `Instance`'tan önce doğabiliyorlar |
@@ -664,16 +665,20 @@ merkez bildirimi, kill-feed, kendi öldürme/ölüm sayacın. Takım skoru panel
 tabanda **değildir** (aşağıdaki nota bak).
 
 > **Ölüm ekranı da moda ait DEĞİLDİR:** görseli `_Shared/App/Resources/UI/DeathHud.prefab`'da
-> durur, HUD prefabının altına iç içe konur ve taban açıp kapatır. Katil satırını
-> (`<ad> tarafından öldürüldün!` · `Engelde kaldın` · `Öldün`) ve canlanma sayacını taban yazar —
-> alt sınıfın yapacağı iş yoktur, prefab bağları yeterlidir.
+> durur (Girdap builder'ı üretir), HUD prefabının altına iç içe konur ve taban açıp kapatır. Katil
+> satırını (`<ad> tarafından öldürüldün!` · `Engelde kaldın` · `Öldün`; ad takım mürekkebiyle,
+> `richText` açıkken `<noparse>` içinde) ve canlanma sayacını taban yazar — alt sınıfın yapacağı iş
+> yoktur, bağlar `deathOverlay` · `deathKillerNameText` (`Card/KillerLine`) · `deathStatusPlate`
+> (`Card/StatusFrame`, `StatusPlate`) builder'dan gelir.
 
 > **Can barı da moda ait DEĞİLDİR:** görseli `_Shared/App/Resources/UI/HealthHud.prefab`'da durur
-> ve o da HUD prefabının altına iç içe konur. Taban iki alanı sürer: `healthFill`
-> (`Backdrop/Fill`, `Image.type = Filled`) ve `healthText` (`Backdrop/Value`). Alt sınıfın işi
-> yoktur.
+> (Girdap builder'ı üretir) ve o da HUD prefabının altına iç içe konur. Taban `healthStrip`'i
+> (`HpBar`, `HealthStrip.SetHp(hp, max)` — dilimli bar + sayı, eşik rengi bileşenin kendisinde) ve
+> durum satırını `statusPlate` (`Status`, `StatusPlate.Set(text, kind)`) ile sürer; düz
+> `healthFill`/`healthText`/`statusText` alanları elle kurulu bir HUD için durur, builder onları boş
+> bırakır. Alt sınıfın işi yoktur.
 
-> **Maç saati de aynı prefabtadır** ve iki alan ister: `timeText` (`Clock/Panel/Time`) ile
+> **Maç saati de aynı prefabtadır** ve iki alan ister: `timeText` (`Clock/Time`) ile
 > `timeFrame` (`Clock` — kutunun kökü). Taban süreyi yazarken kutuyu açar, süre boşalınca
 > (lobi) kapatır; `timeFrame` bağlanmazsa yalnız metin silinir ve arkadaki panel asılı kalır.
 
@@ -693,8 +698,8 @@ tabanda **değildir** (aşağıdaki nota bak).
 >
 > | Bileşen | Çağrılar |
 > |---|---|
-> | `VortexArena.Core.UI.TeamScorePanel` | `SetScore(int red, int blue)` · `SetRoundLabel(string)` (tur kavramı yoksa hiç çağrılmaz) · `Clear()` (lobiye dönüşte) |
-> | `VortexArena.Core.UI.RoundResultBanner` | `Show(string text, RoundOutcome, bool sticky = false)` — `Won`/`Lost`/`Draw` yalnız **tonu** seçer, metin modundur; `sticky` şeridi sayaçsız açık bırakır (sunucunun telde TUTTUĞU sonuç için — süresi bilinmeyen bir bekleme okuma süresine sığmaz), indiren `Hide()` olur · `Hide()` |
+> | `VortexArena.Core.UI.TeamScorePanel` | `SetScore(int red, int blue)` · `SetRoundLabel(string)` (tur kavramı yoksa hiç çağrılmaz; boş etiket `roundFrame` çipini de kapatır) · `Clear()` (lobiye dönüşte) |
+> | `VortexArena.Core.UI.RoundResultBanner` | `Show(string text, RoundOutcome, bool sticky = false)` — `Won`/`Lost`/`Draw` yalnız **tonu** seçer (metin + hale + `plate` kenarı + `underline`), metin modundur; `sticky` şeridi sayaçsız açık bırakır (sunucunun telde TUTTUĞU sonuç için — süresi bilinmeyen bir bekleme okuma süresine sığmaz), indiren `Hide()` olur · `Hide()` |
 >
 > Panel takımsız modda kendini gizler (`ModeRuntime.IsTeamless`), yani takımsız bir HUD'da alanı boş
 > bırakmak yeterlidir. Şerit süresini kendi tutar (prefab alanı, bugün 3 sn) — modun kapatması gerekmez.
@@ -721,8 +726,10 @@ tabanda **değildir** (aşağıdaki nota bak).
 |---|---|---|
 | `UiShape` | ✅ `Chamfer(c)` / `Chamfer(tl,tr,br,bl)` · `Slant(l,r)` · `Fill(c)` / `Fill(a,b,UiGradientMode,end)` · `Outline(w,a,b)` · `Glow(w,c,offset)` · `InnerGlow(w,c)` · `Antialias(bool)` | Akıcı API, hepsi `UiShape` döner. `OutlineWidth` okunur. `Glow`'un `w`'si CSS blur yarıçapıdır (σ = w/2) ve profil Gauss'tur: kalın şekil kenarında alfanın yarısını alır, 2 px çizgi soluk parlar — CSS `box-shadow` ile aynı |
 | `UiPolygonGraphic` | ⚠️ `ChamferTopLeft`…`ChamferBottomLeft` · `SlantLeft`/`SlantRight` · statik `SignedArea` · `Offset` · `ClipHalfPlane` · `Fan` · `Ring` | Taban; statikler kendi poligon grafiğini yazanlar için. ⚠️ Türev kendi `[RequireComponent(typeof(CanvasRenderer))]`'ını taşır |
-| `UiStripes` | ✅ `Stripes(angle, width, period, color)` · `AngleDeg` · `StripeWidth` · `Period` · `StripeColor` | Poligona kırpılı çapraz şeritler |
+| `UiStripes` | ✅ `Stripes(angle, width, period, color)` · `AngleDeg` · `StripeWidth` · `Period` · `StripeColor` · `Drift(seconds)` · `DriftSeconds` | Poligona kırpılı çapraz şeritler |
 | `UiSegmentBar` | ✅ `SetFill(0..1)` · `SetFillColors(a,b)` · `SetTrack(c)` · `SetMetrics(segment, gap, skewDeg)` · `Fill` | Dilimli eğik çubuk (can, kumanda tiki) |
+| `HealthStrip` | ✅ `SetHp(hp, max)` | Oyuncu can şeridi: `UiSegmentBar` + sayı + CAN etiketi/ikonu; >%50 iyi · >%20 uyarı · altı kötü (sayıya kırmızı hale) — rengi taban değil bileşen bilir |
+| `StatusPlate` | ✅ `Set(text, CombatStatusKind)` | Durum plakası: ikon + metin, metne göre genişler, boş metinde **gövdesini** kapatır. İkon türden: `Calibration`/`Obstacle` → Warn · `DeadWait` → Skull · `DeadCountdown`/`HoldStill` → Timer · `Reviving` → Refresh · `ReturnBase` → Home · `SpawnProtection` → Shield · diğerleri ikonsuz |
 | `UiButtonStyle` | ✅ `SetKind(UiButtonKind)` · `SetInteractable(bool)` · `SetLabel(string)` · `SetHold(0..1)` · `Apply()` · `Kind` · `Interactable` · `TargetButton` · `Label` · `Shape` ⛔ `Bind(...)` | Düğmenin TÜM görünümü. ⚠️ Renk/zemin elle boyanmaz; `Bind` builder'ındır |
 | `UiChip` | ✅ `Set(text, UiChipKind, iconName = null)` · `Root` · `Label` · sabitler `Height`/`Padding`/`IconSize`/`IconGap` ⛔ `Bind(...)` | Rozet; genişliğini `Set` ölçüp yazar |
 | `Girdap` | ✅ `Hex(rgb[, a])` · `Rgba(r,g,b,a)` · `TeamHi/TeamLo/TeamInk(team)` · `Spacing(em)` · `Upper(s)` · `Font(GirdapFont)` · `Icon(name)` · `Assets` + palet alanları | **Statik.** Renk literali çağrı yerinde yazılmaz; `Upper` tr-TR'dir (`i → İ`) |

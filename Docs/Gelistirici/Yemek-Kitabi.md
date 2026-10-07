@@ -975,15 +975,19 @@ koymana gerek yok — `ModeHudSpawner` maç başlayınca örnekler (yalnız play
 
 **Ölüm ekranını yeniden çizme:** `_Shared/App/Resources/UI/DeathHud.prefab`'ı HUD prefabının
 altına **iç içe prefab** olarak koy (en son kardeş → en üstte çizilir), örneği **kapat**, sonra üç
-alanı bağla: `deathOverlay` → örneğin kökü, `deathKillerNameText` → `DeathPanel/KillerName`,
-`deathStatusText` → `DeathPanel/StatusText`. Metinleri taban yazar. ⚠️ Panel opaktır ve HUD'ın
-kendi `statusText`'ini örter — canlanma sayacını oyuncu **yalnız** `deathStatusText` bağlıysa
-görür.
+alanı bağla: `deathOverlay` → örneğin kökü, `deathKillerNameText` → `Card/KillerLine`,
+`deathStatusPlate` → `Card/StatusFrame`. Metinleri taban yazar. ⚠️ Kart opaktır ve HUD'ın kendi
+durum satırını örter — canlanma sayacını oyuncu **yalnız** `deathStatusPlate` bağlıysa görür.
+⚠️ Prefabı elle düzenleme: Girdap builder'ı üretir (`Tools > VortexArena > UI > Girdap > Yalnız
+Oyuncu HUD`) ve `Assets/Modes/**` altındaki her mod HUD'ının bu bağlarını kendisi yeniler — yeni
+HUD prefabını da o klasöre koy ki aynı geçişe girsin.
 
 **Can barını da yeniden çizme:** `_Shared/App/Resources/UI/HealthHud.prefab`'ı aynı şekilde HUD
-prefabının altına **iç içe prefab** olarak koy, sonra iki alanı bağla: `healthFill` →
-`Backdrop/Fill`, `healthText` → `Backdrop/Value`. Bar kendi `HeadLockedHud`'uyla kafaya kilitlidir;
-HUD'da ayrıca bir can göstergesi **bulundurma** — aynı sayı iki yerde çizilirdi.
+prefabının altına **iç içe prefab** olarak koy, sonra alanları bağla: `healthStrip` → `HpBar`,
+`statusPlate` → `Status`, `timeText` → `Clock/Time`, `timeFrame` → `Clock` (builder'ın bağ geçişi
+bunları da yazar). Bar kendi `HeadLockedHud`'uyla kafaya kilitlidir; HUD'da ayrıca bir can
+göstergesi **bulundurma** — aynı sayı iki yerde çizilirdi. Can kavramı olmayan modda `HpBar`
+örneğini kapat ve skor bandını onun yerine al (Mole/Burger'da builder bunu da yapar).
 
 **Takım skoru / tur sonucu gerekiyorsa:** ikisi de aynı `HealthHud` örneğinin içinden gelir, yeni
 prefab koymana gerek yok — çünkü ikisi de barın **tek** `HeadLockedHud`'una biner (ikinci bir kafa
@@ -1323,7 +1327,10 @@ kendi oranlarına** göre verilir, varsayılan gövdeden kopyalanmaz.
 iki alan **gözle ayırt edilen iki ayrı model** olmalıdır — takım rengi gövdeye yazılmaz, dost/düşman
 ayrımının taşıyıcısı modelin kendisidir. **Takımsız modda** ayrıca **`altBodyPrefab`** doldurulabilir:
 oyuncular `bodyPrefab` ile bu gövde arasında kadro sırasına göre **dönüşümlü** dağıtılır (iki gövde
-olabildiğince eşit sayıda, her başlıkta aynı). Boşsa takımsız herkes `bodyPrefab`'ı çizer.
+olabildiğince eşit sayıda, her başlıkta aynı). **Üç alanı da boş bırakılmış takımsız mod** varsayılan
+gövdeyle varsayılan kırmızı gövdeyi `bodySeed`'den **rastgele** dağıtır (her sahnelemede yeniden,
+her başlıkta aynı — `Docs/Sistem-Ozeti.md` §4); yani takımsız modda "gövde yok" demek "tek gövde"
+demek değildir.
 
 **Test (gözlükle, iki oyuncu):** admin modu **seçer seçmez** (maç başlamadan, lobide ve arena
 sahnelemesinde) iki oyuncu da modun gövdeleriyle çizilmeli, takımlarına göre farklı modelde olmalı;

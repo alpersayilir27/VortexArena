@@ -34,8 +34,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 330, y: -24}
-  m_SizeDelta: {x: 260, y: 72}
+  m_AnchoredPosition: {x: 96, y: -46}
+  m_SizeDelta: {x: 180, y: 24}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &7830457112639565983
 CanvasRenderer:
@@ -67,15 +67,15 @@ MonoBehaviour:
       m_Calls: []
   m_text: 
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
-  m_sharedMaterial: {fileID: 2100000, guid: 37957dd1ce0bc17479d9d5a432c845f1, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: 5a1f11a0f5acbeb4db1a2079b94695d2, type: 2}
+  m_sharedMaterial: {fileID: -3442796336324981609, guid: 5a1f11a0f5acbeb4db1a2079b94695d2, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontColor: {r: 1, g: 1, b: 1, a: 1}
+  m_fontColor: {r: 0.91764706, g: 0.9490196, b: 1, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
   m_fontColorGradient:
@@ -92,17 +92,17 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 44
-  m_fontSizeBase: 44
+  m_fontSize: 18
+  m_fontSizeBase: 18
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
   m_fontSizeMax: 72
   m_fontStyle: 1
   m_HorizontalAlignment: 1
-  m_VerticalAlignment: 512
+  m_VerticalAlignment: 4096
   m_textAlignment: 65535
-  m_characterSpacing: 0
+  m_characterSpacing: 4
   m_characterHorizontalScale: 1
   m_wordSpacing: 0
   m_lineSpacing: 0
@@ -258,18 +258,21 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: VortexArena.Modes.Mole::VortexArena.Modes.Mole.MoleClientController
   phaseText: {fileID: 0}
-  timeText: {fileID: 9207958943613171377}
-  timeFrame: {fileID: 6873168416434020303}
+  timeText: {fileID: 4236238614124063340}
+  timeFrame: {fileID: 3388781941738023446}
   scoreText: {fileID: 0}
   killFeedText: {fileID: 0}
   killFeedSeconds: 6
   killFeedMaxLines: 5
   healthText: {fileID: 0}
-  statusText: {fileID: 5498937670900751815}
+  statusText: {fileID: 0}
+  statusPlate: {fileID: 5969816071312905192}
   deathOverlay: {fileID: 0}
   deathKillerNameText: {fileID: 0}
   deathStatusText: {fileID: 0}
+  deathStatusPlate: {fileID: 0}
   healthFill: {fileID: 0}
+  healthStrip: {fileID: 4307660568219750557}
   selfStatsText: {fileID: 0}
   deathOverlaySeconds: 0
   centerNoticeRoot: {fileID: 0}
@@ -329,8 +332,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: -330, y: -24}
-  m_SizeDelta: {x: 260, y: 72}
+  m_AnchoredPosition: {x: -96, y: -46}
+  m_SizeDelta: {x: 180, y: 24}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &7296050509245257323
 CanvasRenderer:
@@ -362,15 +365,15 @@ MonoBehaviour:
       m_Calls: []
   m_text: 
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
-  m_sharedMaterial: {fileID: 2100000, guid: 37957dd1ce0bc17479d9d5a432c845f1, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: 5a1f11a0f5acbeb4db1a2079b94695d2, type: 2}
+  m_sharedMaterial: {fileID: -3442796336324981609, guid: 5a1f11a0f5acbeb4db1a2079b94695d2, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontColor: {r: 1, g: 1, b: 1, a: 1}
+  m_fontColor: {r: 0.91764706, g: 0.9490196, b: 1, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
   m_fontColorGradient:
@@ -387,17 +390,17 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 44
-  m_fontSizeBase: 44
+  m_fontSize: 18
+  m_fontSizeBase: 18
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
   m_fontSizeMax: 72
   m_fontStyle: 1
   m_HorizontalAlignment: 4
-  m_VerticalAlignment: 512
+  m_VerticalAlignment: 4096
   m_textAlignment: 65535
-  m_characterSpacing: 0
+  m_characterSpacing: 4
   m_characterHorizontalScale: 1
   m_wordSpacing: 0
   m_lineSpacing: 0
@@ -440,6 +443,10 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 4647684427740298490}
     m_Modifications:
+    - target: {fileID: 543385863658429457, guid: 5ff3c669afc37ee489adf83b1df0dc8f, type: 3}
+      propertyPath: m_AnchoredPosition.y
+      value: -88
+      objectReference: {fileID: 0}
     - target: {fileID: 695199490520228219, guid: 5ff3c669afc37ee489adf83b1df0dc8f, type: 3}
       propertyPath: m_AnchoredPosition.y
       value: -85
@@ -540,6 +547,10 @@ PrefabInstance:
       propertyPath: m_AnchoredPosition.y
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 5853153782435102969, guid: 5ff3c669afc37ee489adf83b1df0dc8f, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects:
@@ -562,40 +573,51 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: dcb1b217b7e9a8b40b08598adfc6b077, type: 3}
   m_Name: 
   m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.UI.TeamScorePanel
+--- !u!1 &3388781941738023446 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 4814755121378703155, guid: 5ff3c669afc37ee489adf83b1df0dc8f, type: 3}
+  m_PrefabInstance: {fileID: 7914563411131276581}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &4236238614124063340 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 6276902900373452617, guid: 5ff3c669afc37ee489adf83b1df0dc8f, type: 3}
+  m_PrefabInstance: {fileID: 7914563411131276581}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f4688fdb7df04437aeb418b961361dc5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.TextMeshPro::TMPro.TextMeshProUGUI
+--- !u!114 &4307660568219750557 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 6201965812270140856, guid: 5ff3c669afc37ee489adf83b1df0dc8f, type: 3}
+  m_PrefabInstance: {fileID: 7914563411131276581}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4954decb9cbda9d41849076415c68fdd, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.UI.HealthStrip
 --- !u!224 &5073456897316509436 stripped
 RectTransform:
   m_CorrespondingSourceObject: {fileID: 3152140784313486297, guid: 5ff3c669afc37ee489adf83b1df0dc8f, type: 3}
   m_PrefabInstance: {fileID: 7914563411131276581}
   m_PrefabAsset: {fileID: 0}
---- !u!114 &5498937670900751815 stripped
+--- !u!114 &5969816071312905192 stripped
 MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 2415631238460408034, guid: 5ff3c669afc37ee489adf83b1df0dc8f, type: 3}
+  m_CorrespondingSourceObject: {fileID: 4543887293052522189, guid: 5ff3c669afc37ee489adf83b1df0dc8f, type: 3}
   m_PrefabInstance: {fileID: 7914563411131276581}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: f4688fdb7df04437aeb418b961361dc5, type: 3}
+  m_Script: {fileID: 11500000, guid: 21764b2dceeaa7a439091711cacb4f7c, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Unity.TextMeshPro::TMPro.TextMeshProUGUI
---- !u!1 &6873168416434020303 stripped
-GameObject:
-  m_CorrespondingSourceObject: {fileID: 3653627932031795946, guid: 5ff3c669afc37ee489adf83b1df0dc8f, type: 3}
-  m_PrefabInstance: {fileID: 7914563411131276581}
-  m_PrefabAsset: {fileID: 0}
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.UI.StatusPlate
 --- !u!224 &8321087131971888604 stripped
 RectTransform:
   m_CorrespondingSourceObject: {fileID: 2210244689067161849, guid: 5ff3c669afc37ee489adf83b1df0dc8f, type: 3}
   m_PrefabInstance: {fileID: 7914563411131276581}
   m_PrefabAsset: {fileID: 0}
---- !u!114 &9207958943613171377 stripped
-MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 1305780708500384660, guid: 5ff3c669afc37ee489adf83b1df0dc8f, type: 3}
-  m_PrefabInstance: {fileID: 7914563411131276581}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: f4688fdb7df04437aeb418b961361dc5, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Unity.TextMeshPro::TMPro.TextMeshProUGUI

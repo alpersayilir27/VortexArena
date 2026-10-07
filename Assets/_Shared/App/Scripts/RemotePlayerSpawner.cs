@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using VortexArena.Core;
 using VortexArena.Core.Player;
 using VortexArena.Net;
 using VortexArena.Protocol;
@@ -38,6 +39,10 @@ namespace VortexArena.App
             registry.OnRemoteJoined += Spawn;
             registry.OnRemoteLeft += Despawn;
             NetEvents.OnLobbyState += HandleLobbyState;
+            // The body variant depends on the mode shape and on the scene's bodySeed, both of which can
+            // change under LIVE avatars (staging a new scene does not respawn them).
+            ModeRuntime.Changed += RefreshBodyVariants;
+            ModeSelection.Changed += RefreshBodyVariants;
             _subscribed = true;
 
             // Late scene load: spawn the already active remote players retroactively.
@@ -60,6 +65,8 @@ namespace VortexArena.App
                 }
 
                 NetEvents.OnLobbyState -= HandleLobbyState;
+                ModeRuntime.Changed -= RefreshBodyVariants;
+                ModeSelection.Changed -= RefreshBodyVariants;
                 _subscribed = false;
             }
 
@@ -176,7 +183,7 @@ namespace VortexArena.App
             }
 
             // BEFORE SetInfo: SetInfo runs SelectBody, so setting the variant first rebuilds the body once.
-            int variant = RosterBodyVariant(avatar.PlayerId);
+            int variant = BodyVariant(avatar.PlayerId);
             if (variant >= 0)
             {
                 avatar.SetBodyVariant(variant);
@@ -185,6 +192,60 @@ namespace VortexArena.App
             avatar.SetInfo(displayName, number, team);
             avatar.SetCalibrated(calibrated);
             avatar.SetBodyScale(bodyScale);
+        }
+
+        /// <summary>Re-applies the body variants of the live avatars (mode shape or scene seed changed).
+        /// Only the variant: name/team/calibration did not move.</summary>
+        private void RefreshBodyVariants()
+        {
+            foreach (KeyValuePair<int, RemoteAvatar> kv in _avatars)
+            {
+                RemoteAvatar avatar = kv.Value;
+                if (avatar == null)
+                {
+                    continue;
+                }
+
+                int variant = BodyVariant(avatar.PlayerId);
+                if (variant >= 0)
+                {
+                    avatar.SetBodyVariant(variant);
+                }
+            }
+        }
+
+        /// <summary>Teamless body variant (0/1), or <c>-1</c> = leave it as it is (unknown).
+        /// <para>Two sources, and the gate is whether the mode brings a body of its own: a mode with
+        /// bodies splits the roster EVENLY (<c>altBodyPrefab</c>, equal numbers of each model), while a
+        /// teamless mode with no bodies draws from the scene's <c>bodySeed</c> — there the two bodies
+        /// are the DEFAULT ones, nobody authored a pairing, and a fresh draw per staging is what keeps
+        /// the arena from looking the same every round.</para></summary>
+        private int BodyVariant(int playerId)
+        {
+            ModeDefinition mode = RemoteAvatar.ResolveBodyMode(out bool teamless);
+            if (teamless && (mode == null || mode.BodyPrefab == null))
+            {
+                return SeedBodyVariant(ModeRuntime.BodySeed, playerId);
+            }
+
+            return RosterBodyVariant(playerId);
+        }
+
+        /// <summary>Body variant from the scene seed + player id. Deterministic on every client
+        /// (players and admin) and for a late joiner too, because both inputs travel on the wire.
+        /// <para>⚠️ Explicit integer mixing (murmur3 <c>fmix32</c>) on purpose:
+        /// <c>string.GetHashCode</c> is seeded per process and <c>UnityEngine.Random</c> is not shared,
+        /// so either would draw a DIFFERENT body on each headset. The id is folded in with the golden
+        /// ratio constant so neighbouring ids do not land on the same body.</para></summary>
+        private static int SeedBodyVariant(int seed, int playerId)
+        {
+            uint h = (uint)seed ^ ((uint)playerId * 0x9E3779B1u);
+            h ^= h >> 16;
+            h *= 0x85EBCA6Bu;
+            h ^= h >> 13;
+            h *= 0xC2B2AE35u;
+            h ^= h >> 16;
+            return (int)(h & 1u);
         }
 
         /// <summary>Teamless body variant (0/1) from the roster, or <c>-1</c> when the player has no

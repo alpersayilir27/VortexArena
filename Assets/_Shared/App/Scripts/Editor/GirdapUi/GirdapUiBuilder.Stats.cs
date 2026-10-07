@@ -523,7 +523,7 @@ namespace VortexArena.App.Editor
             Stretch(stripes.rectTransform);
             stripes.SlantLeft = red ? 16f : 0f;
             stripes.SlantRight = red ? 0f : 16f;
-            stripes.Stripes(-55f, 6f, 17f, StatsPlateStripe);
+            stripes.Stripes(-55f, 6f, 17f, StatsPlateStripe).Drift(2.4f);
 
             TextMeshProUGUI text = Text(plate.transform, "Label", label, GirdapFont.ChakraBold, 17f,
                 Color.white, TextAlignmentOptions.MidlineLeft, 0.12f);

@@ -8157,7 +8157,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Meta.XR.BuildingBlocks::Meta.XR.BuildingBlocks.BuildingBlock
   blockId: 5817f7c0-f2a5-45f9-a5ca-64264e0166e8
-  instanceId: 65333c62-6bb9-4b30-88ce-c47bcc457a1f
+  instanceId: 0a226568-e419-4eec-b214-046727f6fa12
   version: 1
   installationRoutineCheckpoint:
     _installationRoutineId: 
@@ -8867,6 +8867,7 @@ GameObject:
   - component: {fileID: 3928402165460773773}
   - component: {fileID: 7858258814388069739}
   - component: {fileID: 3359760567684406891}
+  - component: {fileID: 1258823612754268119}
   m_Layer: 0
   m_Name: VA_CameraRig
   m_TagString: Untagged
@@ -8905,7 +8906,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Meta.XR.BuildingBlocks::Meta.XR.BuildingBlocks.BuildingBlock
   blockId: e47682b9-c270-40b1-b16d-90b627a5ce1b
-  instanceId: 764fc733-fc45-4cbf-8f46-872b11684c4c
+  instanceId: 5e996392-4340-4e83-9152-77a538754053
   version: 1
   installationRoutineCheckpoint:
     _installationRoutineId: 
@@ -9067,6 +9068,22 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3d750d987bdd7184b81c4f69280c8eba, type: 3}
   m_Name: 
   m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Player.HandGripCalibrationProbe
+--- !u!114 &1258823612754268119
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7306791853712668284}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 17161b62db836794bb20c7dfbd7420c4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Player.GloveTeamBand
+  gloves:
+  - {fileID: 7397442224064150590}
+  - {fileID: 1181875234384517669}
+  neutralBand: {fileID: 2100000, guid: 7a6b9a3b283750e46b3c7ea4017283ae, type: 2}
 --- !u!1 &7321205856775988313
 GameObject:
   m_ObjectHideFlags: 0
@@ -10878,7 +10895,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Meta.XR.BuildingBlocks::Meta.XR.BuildingBlocks.BuildingBlock
   blockId: 5817f7c0-f2a5-45f9-a5ca-64264e0166e8
-  instanceId: aa1f8183-8d2b-4453-b96d-c4579a949c49
+  instanceId: 7dee166f-f11e-433d-b643-4a773e254362
   version: 1
   installationRoutineCheckpoint:
     _installationRoutineId: 
@@ -11645,9 +11662,17 @@ PrefabInstance:
       value: 0.13431525
       objectReference: {fileID: 0}
     - target: {fileID: 2295201657191556265, guid: 0a7d2469f24041c4284c66706f84c45e, type: 3}
+      propertyPath: m_Materials.Array.size
+      value: 2
+      objectReference: {fileID: 0}
+    - target: {fileID: 2295201657191556265, guid: 0a7d2469f24041c4284c66706f84c45e, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
       value: 
       objectReference: {fileID: 2100000, guid: 5f9dd521b03bce042947a278216b1c8b, type: 2}
+    - target: {fileID: 2295201657191556265, guid: 0a7d2469f24041c4284c66706f84c45e, type: 3}
+      propertyPath: 'm_Materials.Array.data[1]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 7a6b9a3b283750e46b3c7ea4017283ae, type: 2}
     - target: {fileID: 2336446269904782542, guid: 0a7d2469f24041c4284c66706f84c45e, type: 3}
       propertyPath: _centerEyeCamera
       value: 
@@ -11837,9 +11862,17 @@ PrefabInstance:
       value: 0.13431382
       objectReference: {fileID: 0}
     - target: {fileID: 7571697209268880050, guid: 0a7d2469f24041c4284c66706f84c45e, type: 3}
+      propertyPath: m_Materials.Array.size
+      value: 2
+      objectReference: {fileID: 0}
+    - target: {fileID: 7571697209268880050, guid: 0a7d2469f24041c4284c66706f84c45e, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
       value: 
       objectReference: {fileID: 2100000, guid: 5f9dd521b03bce042947a278216b1c8b, type: 2}
+    - target: {fileID: 7571697209268880050, guid: 0a7d2469f24041c4284c66706f84c45e, type: 3}
+      propertyPath: 'm_Materials.Array.data[1]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 7a6b9a3b283750e46b3c7ea4017283ae, type: 2}
     - target: {fileID: 8126227624582512917, guid: 0a7d2469f24041c4284c66706f84c45e, type: 3}
       propertyPath: _radius
       value: 0.008
@@ -11872,6 +11905,11 @@ PrefabInstance:
       insertIndex: 1
       addedObject: {fileID: 6233142406970064365}
   m_SourcePrefab: {fileID: 100100000, guid: 0a7d2469f24041c4284c66706f84c45e, type: 3}
+--- !u!137 &1181875234384517669 stripped
+SkinnedMeshRenderer:
+  m_CorrespondingSourceObject: {fileID: 7571697209268880050, guid: 0a7d2469f24041c4284c66706f84c45e, type: 3}
+  m_PrefabInstance: {fileID: 8751284887960148119}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &4675199232595593974 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 4148778239110795873, guid: 0a7d2469f24041c4284c66706f84c45e, type: 3}
@@ -11890,7 +11928,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Meta.XR.BuildingBlocks::Meta.XR.BuildingBlocks.BuildingBlock
   blockId: 81f55626-5fad-45e9-a1df-184f330da7ba
-  instanceId: 35df3b63-9025-43cf-8577-173e10c76620
+  instanceId: 598fa8ed-f9dd-472d-822c-925626cd349e
   version: 1
   installationRoutineCheckpoint:
     _installationRoutineId: 2063f481-1b63-4eda-9ee8-a00df98536bc
@@ -11898,5 +11936,10 @@ MonoBehaviour:
 --- !u!4 &4932967236195108406 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 4397664628265918113, guid: 0a7d2469f24041c4284c66706f84c45e, type: 3}
+  m_PrefabInstance: {fileID: 8751284887960148119}
+  m_PrefabAsset: {fileID: 0}
+--- !u!137 &7397442224064150590 stripped
+SkinnedMeshRenderer:
+  m_CorrespondingSourceObject: {fileID: 2295201657191556265, guid: 0a7d2469f24041c4284c66706f84c45e, type: 3}
   m_PrefabInstance: {fileID: 8751284887960148119}
   m_PrefabAsset: {fileID: 0}

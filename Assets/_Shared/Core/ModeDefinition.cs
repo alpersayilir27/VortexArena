@@ -71,9 +71,10 @@ namespace VortexArena.Core
         [SerializeField] private GameObject resultScreenPrefab;
 
         [Header("Oyuncu gövdesi (opsiyonel)")]
-        [Tooltip("Mavi takım ve takımsız oyuncunun gövdesi; boşsa varsayılan gövde (Ch15) çizilir. " +
-                 "Kök SkeletonPoseMirror taşıyan, Tools > VortexArena > Avatars > Mod Gövdesi Kur " +
-                 "(seçili FBX) ile kurulmuş prefab olmalı.")]
+        [Tooltip("Mavi takım ve takımsız oyuncunun gövdesi; boşsa varsayılan gövde (Ch15) çizilir — " +
+                 "TAKIMSIZ modda boş bırakılırsa varsayılan iki gövde (Ch15/Ch18) sahne tohumundan " +
+                 "rastgele dağıtılır. Kök SkeletonPoseMirror taşıyan, Tools > VortexArena > Avatars > " +
+                 "Mod Gövdesi Kur (seçili FBX) ile kurulmuş prefab olmalı.")]
         [SerializeField] private GameObject bodyPrefab;
         [Tooltip("Kırmızı takımın gövdesi; boşsa varsayılan kırmızı gövde (Ch18) çizilir. " +
                  "⚠️ İki takımın gövdesi belirgin biçimde farklı model olmalı — takım modelden okunur.")]
@@ -155,16 +156,19 @@ namespace VortexArena.Core
         /// type lives in App, which Core does not reference.</summary>
         public GameObject ResultScreenPrefab => resultScreenPrefab;
 
-        /// <summary>Body of the blue/teamless player; null = default body. A <c>GameObject</c> for the
-        /// same reason as <see cref="HudPrefab"/>.</summary>
+        /// <summary>Body of the blue/teamless player; null = default body — in a TEAMLESS mode null
+        /// also means the two default bodies are split by the scene's <c>bodySeed</c>
+        /// (<c>RemotePlayerSpawner</c>). A <c>GameObject</c> for the same reason as
+        /// <see cref="HudPrefab"/>.</summary>
         public GameObject BodyPrefab => bodyPrefab;
 
         /// <summary>Body of the red team; null = default red body (rationale in <see cref="BodyPrefab"/>).</summary>
         public GameObject RedBodyPrefab => redBodyPrefab;
 
         /// <summary>Second body of a TEAMLESS mode; null = every teamless player gets
-        /// <see cref="BodyPrefab"/>. The roster order decides who gets which (see
-        /// <c>RemotePlayerSpawner</c>), so the split is identical on every client.</summary>
+        /// <see cref="BodyPrefab"/> (unless that is null too — see there). The roster order decides who
+        /// gets which (see <c>RemotePlayerSpawner</c>), so the split is identical on every
+        /// client.</summary>
         public GameObject AltBodyPrefab => altBodyPrefab;
     }
 }

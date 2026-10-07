@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Oyuncu HUD (VR) — VortexArena arayüz</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Chakra+Petch:wght@500;600;700&family=Saira+Condensed:wght@500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="tema.css">
+</head>
+<body>
+
+<p class="vcap"><b>Oyun içi · can ve skor</b> — başa kilitli şerit (1 m önde, 40° aşağıda). Mockup gerçek HUD boyutunun 1,6 katı; şerit 560 birim = 0,28 m. Örnek: Ayşe, kırmızı takım, TDM 14–11, yeniden doğma koruması açık.</p>
+<div class="frame"><div class="stage">
+  <div class="vr"><div class="ph top">VR görüş alanı — yer tutucu</div></div>
+  <div class="vhud">
+    <div class="hpbar vp"><span class="lab"><i data-ic="heart"></i>CAN</span><div class="hp"><i style="width:87%"></i></div><b class="val">87</b></div>
+    <div class="scorebug hud">
+      <div class="sb-team red">KIRMIZI</div>
+      <div class="sb-score">14</div>
+      <div class="sb-score">11</div>
+      <div class="sb-team blue">MAVİ</div>
+    </div>
+    <div class="vstat vp"><i data-ic="shield"></i>Yeniden doğma koruması — hasar almıyorsun</div>
+  </div>
+</div></div>
+
+<p class="vcap"><b>Oyun içi · turnuva</b> — TUR etiketi yalnız turlu modda; tur bitince sonuç bandı 3 sn görünür. Saat plakası prefabda var ama kapalı (<code>Clock</code>); açılırsa böyle durur. Can 34 → sarı.</p>
+<div class="frame"><div class="stage">
+  <div class="vr"><div class="ph top">VR görüş alanı — yer tutucu</div></div>
+  <div class="vhud up">
+    <div class="vclock vp">02:14</div>
+    <div class="hpbar vp warn"><span class="lab"><i data-ic="heart"></i>CAN</span><div class="hp warn"><i style="width:34%"></i></div><b class="val">34</b></div>
+    <div class="scorebug hud">
+      <span class="round">TUR 3</span>
+      <div class="sb-team red">KIRMIZI</div>
+      <div class="sb-score">2</div>
+      <div class="sb-score">1</div>
+      <div class="sb-team blue">MAVİ</div>
+    </div>
+    <div class="rres vp">TUR KAZANILDI</div>
+    <div class="vstat vp"><i data-ic="home"></i>Tabanına dön ve canlan</div>
+  </div>
+</div></div>
+
+<p class="vcap"><b>Öldün ekranı</b> — mod tuvalinde kart (1,1 m, başı takip eder) + kırmızı vinyet; can şeridi altta kalır, can 0 → kırmızı. Katil adı takım renginde.</p>
+<div class="frame"><div class="stage">
+  <div class="vr"><div class="ph top">VR görüş alanı — yer tutucu</div></div>
+  <div class="vdead"></div>
+  <section class="dcard vp">
+    <div class="dstripes"></div>
+    <small>MAÇ SÜRÜYOR</small>
+    <b>ÖLDÜN</b>
+    <p class="dline"><i data-ic="skull"></i><span class="blue">Deniz</span> tarafından öldürüldün!</p>
+    <div class="vstat vp"><i data-ic="timer"></i>Öldün! Canlanmaya 4 sn</div>
+  </section>
+  <div class="vhud">
+    <div class="hpbar vp bad"><span class="lab"><i data-ic="heart"></i>CAN</span><div class="hp bad"><i style="width:0%"></i></div><b class="val">0</b></div>
+    <div class="scorebug hud">
+      <div class="sb-team red">KIRMIZI</div>
+      <div class="sb-score">14</div>
+      <div class="sb-score">11</div>
+      <div class="sb-team blue">MAVİ</div>
+    </div>
+  </div>
+</div></div>
+
+<p class="vcap"><b>Durum çeşitleri</b> — can seviyeleri, koddaki bütün durum satırları, tur sonucu tonları ve öldün kartı satırları. Takımsız modda (FFA) skor bandı gizlenir, şeritte yalnız can kalır.</p>
+<div class="frame"><div class="stage" data-h="1320" style="background:#070B16">
+  <div class="vgrid">
+    <div class="g"><h4>Can</h4>
+      <div class="hpbar vp"><span class="lab"><i data-ic="heart"></i>CAN</span><div class="hp"><i style="width:100%"></i></div><b class="val">100</b></div>
+      <div class="hpbar vp"><span class="lab"><i data-ic="heart"></i>CAN</span><div class="hp"><i style="width:62%"></i></div><b class="val">62</b></div>
+      <div class="hpbar vp warn"><span class="lab"><i data-ic="heart"></i>CAN</span><div class="hp warn"><i style="width:34%"></i></div><b class="val">34</b></div>
+      <div class="hpbar vp bad"><span class="lab"><i data-ic="heart"></i>CAN</span><div class="hp bad"><i style="width:12%"></i></div><b class="val">12</b></div>
+      <div class="hpbar vp bad"><span class="lab"><i data-ic="heart"></i>CAN</span><div class="hp bad"><i style="width:0%"></i></div><b class="val">0</b></div>
+    </div>
+    <div class="g"><h4>Durum satırı (PlayerCombatState.StatusText)</h4>
+      <div class="vstat vp"><i data-ic="warn"></i>Kalibrasyon gerekli — sağ kumandada A basılıyken B×2</div>
+      <div class="vstat vp"><i data-ic="timer"></i>Öldün! Canlanmaya 4 sn</div>
+      <div class="vstat vp"><i data-ic="skull"></i>Öldün — tur bitene kadar bekle</div>
+      <div class="vstat vp"><i data-ic="warn"></i>Engelden çık ve canlan</div>
+      <div class="vstat vp"><i data-ic="timer"></i>Canlanmak için sabit dur — 3 sn</div>
+      <div class="vstat vp"><i data-ic="refresh"></i>Canlanılıyor...</div>
+      <div class="vstat vp"><i data-ic="home"></i>Tabanına dön ve canlan</div>
+      <div class="vstat vp"><i data-ic="shield"></i>Yeniden doğma koruması — hasar almıyorsun</div>
+    </div>
+    <div class="g"><h4>Tur sonucu bandı</h4>
+      <div class="rres vp">TUR KAZANILDI</div>
+      <div class="rres vp lose">TUR KAYBEDİLDİ</div>
+      <div class="rres vp draw">TUR BERABERE</div>
+    </div>
+    <div class="g"><h4>Skor bandı · tur etiketli / etiketsiz</h4>
+      <div class="scorebug hud"><span class="round">TUR 1</span><div class="sb-team red">KIRMIZI</div><div class="sb-score">0</div><div class="sb-score">0</div><div class="sb-team blue">MAVİ</div></div>
+      <div class="scorebug hud"><div class="sb-team red">KIRMIZI</div><div class="sb-score">7</div><div class="sb-score">12</div><div class="sb-team blue">MAVİ</div></div>
+    </div>
+    <div class="g"><h4>Öldün kartı satırları</h4>
+      <p class="dline"><i data-ic="skull"></i><span class="blue">Deniz</span> tarafından öldürüldün!</p>
+      <p class="dline"><i data-ic="skull"></i><span class="red">Mehmet</span> tarafından öldürüldün!</p>
+      <p class="dline"><i data-ic="warn"></i>Kendini havaya uçurdun</p>
+      <p class="dline"><i data-ic="warn"></i>Engelde kaldın</p>
+      <p class="dline"><i data-ic="skull"></i>Öldün</p>
+    </div>
+  </div>
+</div></div>
+
+<script src="tema.js"></script>
+</body>
+</html>

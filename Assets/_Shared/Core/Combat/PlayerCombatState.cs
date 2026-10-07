@@ -81,6 +81,9 @@ namespace VortexArena.Core.Combat
 
         public string StatusText { get; private set; } = "";
 
+        /// <summary>Which rule wrote <see cref="StatusText"/> (the HUD's icon choice); changes with it.</summary>
+        public CombatStatusKind StatusKind { get; private set; } = CombatStatusKind.None;
+
         /// <summary>§10.4: is the local player spawn-protected — the server's snapshot bit, NOT a
         /// local timer (source: <see cref="RemotePlayerRegistry.IsLocalSpawnProtected"/>).
         /// <para>⚠️ An INDICATOR, not a permission: the damage gate is on the server and no
@@ -394,18 +397,21 @@ namespace VortexArena.Core.Combat
         private void RefreshStatusText()
         {
             string text = "";
+            CombatStatusKind kind = CombatStatusKind.None;
 
             // §10.6 — comes BEFORE the death text: an uncalibrated player cannot revive anyway,
             // so telling them to run to their base would be a wasted trip.
             if (!CalibrationState.IsCalibrated)
             {
                 text = "Kalibrasyon gerekli — sağ kumandada A basılıyken B×2";
+                kind = CombatStatusKind.Calibration;
             }
             else if (!string.IsNullOrEmpty(_modePrompt))
             {
                 // The mode's own prompt (e.g. muster between rounds). OVERRIDES the death text:
                 // during a mode pause there is no revive, this is the only thing to do.
                 text = _modePrompt;
+                kind = CombatStatusKind.ModePrompt;
             }
             else if (!IsAlive)
             {
@@ -416,12 +422,14 @@ namespace VortexArena.Core.Combat
                 if (ModeRuntime.Revive == ModeReviveAnchor.None)
                 {
                     text = "Öldün — tur bitene kadar bekle";
+                    kind = CombatStatusKind.DeadWait;
                 }
                 else if (ObstacleViolationProbe.IsViolating)
                 {
                     // §10.9: no revive before leaving the obstacle; a countdown would lie, what
                     // is awaited is the player's own move.
                     text = "Engelden çık ve canlan";
+                    kind = CombatStatusKind.Obstacle;
                 }
                 else
                 {
@@ -429,6 +437,7 @@ namespace VortexArena.Core.Combat
                     if (remaining > 0f)
                     {
                         text = $"Öldün! Canlanmaya {Mathf.CeilToInt(remaining)} sn";
+                        kind = CombatStatusKind.DeadCountdown;
                     }
                     else if (ModeRuntime.Revive == ModeReviveAnchor.StandStill)
                     {
@@ -436,10 +445,13 @@ namespace VortexArena.Core.Combat
                         text = hold > 0f
                             ? $"Canlanmak için sabit dur — {Mathf.CeilToInt(hold)} sn"
                             : "Canlanılıyor...";
+                        kind = hold > 0f ? CombatStatusKind.HoldStill : CombatStatusKind.Reviving;
                     }
                     else
                     {
-                        text = !HasOpenBaseZone || IsInsideOwnBase ? "Canlanılıyor..." : "Tabanına dön ve canlan";
+                        bool reviving = !HasOpenBaseZone || IsInsideOwnBase;
+                        text = reviving ? "Canlanılıyor..." : "Tabanına dön ve canlan";
+                        kind = reviving ? CombatStatusKind.Reviving : CombatStatusKind.ReturnBase;
                     }
                 }
             }
@@ -448,14 +460,16 @@ namespace VortexArena.Core.Combat
                 // §10.4: protection applies only while alive, right after a revive — hence it
                 // comes AFTER the death branch and never overrides it.
                 text = "Yeniden doğma koruması — hasar almıyorsun";
+                kind = CombatStatusKind.SpawnProtection;
             }
 
-            if (text == StatusText)
+            if (text == StatusText && kind == StatusKind)
             {
                 return;
             }
 
             StatusText = text;
+            StatusKind = kind;
             StatusChanged?.Invoke(text);
         }
 

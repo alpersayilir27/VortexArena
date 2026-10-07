@@ -23,11 +23,16 @@ namespace VortexArena.Core.UI
 
         [SerializeField] private Color stripeColor = new Color(1f, 1f, 1f, 0.075f);
 
+        /// <summary>Seconds per one-period slide (CSS <c>animation</c> duration); 0 = static, negative = reversed.</summary>
+        [SerializeField] private float driftSeconds;
+
         private const int MaxBands = 512;
 
         private readonly List<Vector2> outline = new List<Vector2>(12);
         private readonly List<Vector2> band = new List<Vector2>(16);
         private readonly List<Vector2> clip = new List<Vector2>(16);
+
+        private float phase; // band offset along the gradient axis, 0..period
 
         public override Texture mainTexture => s_WhiteTexture;
 
@@ -55,6 +60,12 @@ namespace VortexArena.Core.UI
             set { stripeColor = value; SetVerticesDirty(); }
         }
 
+        public float DriftSeconds
+        {
+            get => driftSeconds;
+            set => driftSeconds = value;
+        }
+
         public UiStripes Stripes(float angle, float width, float stripePeriod, Color c)
         {
             angleDeg = angle;
@@ -63,6 +74,25 @@ namespace VortexArena.Core.UI
             stripeColor = c;
             SetVerticesDirty();
             return this;
+        }
+
+        /// <summary>Endless slow slide, one period per <paramref name="seconds"/> (CSS <c>drift</c> keyframes).</summary>
+        public UiStripes Drift(float seconds)
+        {
+            driftSeconds = seconds;
+            return this;
+        }
+
+        private void Update()
+        {
+            if (driftSeconds == 0f || period <= 0f)
+            {
+                return;
+            }
+
+            // Phase runs against the gradient axis so a −55° pattern slides right, like CSS translateX(+).
+            phase = Mathf.Repeat(phase - period * Time.unscaledDeltaTime / driftSeconds, period);
+            SetVerticesDirty();
         }
 
         protected override void OnPopulateMesh(VertexHelper vh)
@@ -93,8 +123,8 @@ namespace VortexArena.Core.UI
                 max = Mathf.Max(max, t);
             }
 
-            int first = Mathf.FloorToInt(min / period);
-            int last = Mathf.CeilToInt(max / period);
+            int first = Mathf.FloorToInt((min - phase) / period);
+            int last = Mathf.CeilToInt((max - phase) / period);
             if (last - first > MaxBands)
             {
                 last = first + MaxBands; // guard against a 1 px period on a full-screen rect
@@ -107,7 +137,7 @@ namespace VortexArena.Core.UI
 
             for (int k = first; k <= last; k++)
             {
-                float lo = k * period;
+                float lo = k * period + phase;
                 float hi = lo + stripeWidth;
 
                 // Oversized quad along the band, then trimmed down to the band and the polygon.

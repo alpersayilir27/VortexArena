@@ -433,6 +433,10 @@ namespace VortexArena.Protocol
         /// missing → 0 → music from the top.</summary>
         public float sceneElapsed;
 
+        /// <summary>Cosmetic body seed of the staged scene (§5.3); redrawn with the
+        /// <see cref="sceneElapsed"/> epoch. Teamless body split only — no rule reads it; missing → 0.</summary>
+        public int bodySeed;
+
         public float timeRemaining;
         public int scoreRed;
         public int scoreBlue;
@@ -592,6 +596,10 @@ namespace VortexArena.Protocol
 
         /// <summary>How long the scene has been staged; 0 while a new one is being staged.</summary>
         public float sceneElapsed;
+
+        /// <summary>Cosmetic body seed of the staged scene (§5.3), same field as
+        /// <c>welcome.match.bodySeed</c>.</summary>
+        public int bodySeed;
 
         /// <summary>Rule shape of this match (§10.5); the client configures itself from THIS.</summary>
         public ModeRulesInfo rules;
@@ -821,6 +829,10 @@ namespace VortexArena.Protocol
 
         /// <summary>How long the scene has been staged; 0 while a new one is being staged.</summary>
         public float sceneElapsed;
+
+        /// <summary>Cosmetic body seed of the staged scene (§5.3), same field as
+        /// <c>welcome.match.bodySeed</c>.</summary>
+        public int bodySeed;
 
         /// <summary>Rule shape of the lobby profile (§10.5).</summary>
         public ModeRulesInfo rules;

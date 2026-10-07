@@ -44,13 +44,19 @@ namespace VortexArena.Core.UI
         [Header("Yerel oyuncu")]
         [SerializeField] protected TMP_Text healthText;
         [SerializeField] protected TMP_Text statusText;
+        [Tooltip("Opsiyonel Girdap durum plakası (ikon + metin, boşken kapanır) — statusText'in yerine.")]
+        [SerializeField] protected StatusPlate statusPlate;
         [SerializeField] protected GameObject deathOverlay;
         [Tooltip("Opsiyonel: ölüm ekranındaki katil satırı. Atanmazsa çizilmez.")]
         [SerializeField] protected TMP_Text deathKillerNameText;
         [Tooltip("Opsiyonel: ölüm ekranındaki durum/canlanma satırı — statusText'in kopyası.")]
         [SerializeField] protected TMP_Text deathStatusText;
+        [Tooltip("Opsiyonel: ölüm ekranındaki Girdap durum plakası — deathStatusText'in yerine.")]
+        [SerializeField] protected StatusPlate deathStatusPlate;
         [Tooltip("Opsiyonel can barı (Image.type = Filled).")]
         [SerializeField] protected Image healthFill;
+        [Tooltip("Opsiyonel Girdap can şeridi (bar + değer + CAN etiketi); eşik renklerini kendisi verir.")]
+        [SerializeField] protected HealthStrip healthStrip;
         [Tooltip("Opsiyonel: kendi öldürme/ölüm sayacın (lobby_state'ten). Atanmazsa çizilmez.")]
         [SerializeField] protected TMP_Text selfStatsText;
         [Tooltip("Ölüm ekranının açık kalma süresi (sn). 0 = canlanana kadar açık kalır.")]
@@ -73,6 +79,7 @@ namespace VortexArena.Core.UI
 
         private readonly List<KillFeedLine> _killFeed = new List<KillFeedLine>();
         private readonly Dictionary<int, string> _names = new Dictionary<int, string>();
+        private readonly Dictionary<int, string> _teams = new Dictionary<int, string>(); // playerId → "red"/"blue"
         private readonly StringBuilder _sb = new StringBuilder();
 
         private PlayerCombatState _combat;
@@ -84,6 +91,7 @@ namespace VortexArena.Core.UI
         private Canvas _canvas;
 
         private string _combatStatus = "";
+        private CombatStatusKind _combatKind = CombatStatusKind.None;
         private string _countdownLabel = "";
         private bool _countdownActive;
         private bool _killFeedDirty;
@@ -211,6 +219,7 @@ namespace VortexArena.Core.UI
                 }
 
                 _names[p.playerId] = p.name;
+                _teams[p.playerId] = p.team ?? "";
             }
 
             RefreshSelfStats(msg);
@@ -388,6 +397,11 @@ namespace VortexArena.Core.UI
             float clamped = Mathf.Clamp(hp, 0f, ArenaProtocol.PLAYER_MAX_HP);
             SetText(healthText, $"CAN {Mathf.RoundToInt(clamped)}");
 
+            if (healthStrip != null)
+            {
+                healthStrip.SetHp(clamped, ArenaProtocol.PLAYER_MAX_HP);
+            }
+
             if (healthFill != null)
             {
                 healthFill.fillAmount = ArenaProtocol.PLAYER_MAX_HP > 0f
@@ -446,6 +460,7 @@ namespace VortexArena.Core.UI
         private void HandleStatusChanged(string status)
         {
             _combatStatus = status ?? "";
+            _combatKind = _combat != null ? _combat.StatusKind : CombatStatusKind.None;
             RefreshStatusText();
         }
 
@@ -462,6 +477,20 @@ namespace VortexArena.Core.UI
             string text = _countdownActive && centerNoticeText == null ? _countdownLabel : _combatStatus;
             SetText(statusText, text);
             SetText(deathStatusText, text);
+
+            // The countdown number carries no rule of its own — no icon.
+            CombatStatusKind kind = _countdownActive && centerNoticeText == null
+                ? CombatStatusKind.None
+                : _combatKind;
+            if (statusPlate != null)
+            {
+                statusPlate.Set(text, kind);
+            }
+
+            if (deathStatusPlate != null)
+            {
+                deathStatusPlate.Set(text, kind);
+            }
         }
 
         /// <summary>The mode's own big centre line (empty clears). ONE element carries all of it — the
@@ -519,7 +548,11 @@ namespace VortexArena.Core.UI
             string line;
             if (_deathKillerId > 0 && _deathKillerId != LocalPlayerId)
             {
-                line = $"{NameOf(_deathKillerId)} tarafından öldürüldün!";
+                string name = NameOf(_deathKillerId);
+                // Killer in their team ink; <noparse> keeps a "<b>"-style name from formatting.
+                line = deathKillerNameText.richText && _teams.TryGetValue(_deathKillerId, out string team)
+                    ? $"<color=#{ColorUtility.ToHtmlStringRGB(Girdap.TeamInk(team))}><noparse>{name}</noparse></color> tarafından öldürüldün!"
+                    : $"{name} tarafından öldürüldün!";
             }
             else if (_deathKillerId > 0 && _deathKillerId == LocalPlayerId)
             {

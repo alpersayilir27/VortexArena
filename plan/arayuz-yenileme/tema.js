@@ -5,6 +5,7 @@
     ['istatistik.html', 'İstatistikler'],
     ['tercihler.html', 'Tercihler'],
     ['mac-sonu.html', 'Maç sonu (oyuncu)'],
+    ['oyuncu-hud.html', 'Oyuncu HUD (VR)'],
     ['kit.html', 'Tema kiti'],
   ];
 
@@ -40,6 +41,12 @@
     anchor: '<circle cx="12" cy="5" r="3"/><path d="M12 22V8"/><path d="M5 12H2a10 10 0 0020 0h-3"/>',
     history: '<path d="M3 12a9 9 0 109-9 9.75 9.75 0 00-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/>',
     cloud: '<path d="M17.5 19H9a7 7 0 116.71-9h1.79a4.5 4.5 0 110 9Z"/>',
+    // oyuncu HUD (VR)
+    heart: '<path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/>',
+    clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+    shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
+    timer: '<path d="M10 2h4M12 14l3-3"/><circle cx="12" cy="14" r="8"/>',
+    home: '<path d="M3 11l9-8 9 8v10a1 1 0 01-1 1h-5v-7h-6v7H4a1 1 0 01-1-1V11z"/>',
   };
   function ic(n) {
     return '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (P[n] || '') + '</svg>';
@@ -83,6 +90,7 @@
       ? `<span class="chip warn">${ic('warn')}KALİBRESİZ</span>`
       : `<span class="chip ${p.st || 'plain'}">${p.stIcon ? ic(p.stIcon) : ''}${p.state}</span>`;
     const olc = b.olc || ['ÖLÇ', ''];
+    const rst = b.rst || ['SIFIRLA', 't-bad'];
     const at = b.at || ['AT', 't-bad'];
     const olcOff = (p.uncal || p.away) && !b.olc ? ' disabled' : '';
     const cls = ['pcard', team, p.sel && 'sel', p.dead && 'dead', p.alert && 'alert', p.uncal && 'uncal', p.away && 'away'].filter(Boolean).join(' ');
@@ -101,6 +109,7 @@
           <button class="btn sm${p.sel ? ' on' : ''}">POV</button>
           <button class="btn sm ${olc[1]}"${olcOff}>${olc[0]}</button>
           <button class="btn sm ${other[1]}">${other[0]}</button>
+          <button class="btn sm ${rst[1]}"${rst[2] ? ` style="${rst[2]}"` : ''}>${rst[0]}</button>
           <button class="btn sm ${at[1]}">${at[0]}</button>
         </div>
       </div>

@@ -107,6 +107,9 @@ MonoBehaviour:
   positionSmoothTime: 0.175
   yawDeadZoneDegrees: 9
   yawSmoothTime: 0.175
+  avoidWalls: 0
+  minDistance: 0.55
+  wallClearance: 0.08
 --- !u!114 &2126660521902699881
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -120,18 +123,21 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: VortexArena.Modes.Tournament::VortexArena.Modes.Tournament.TournamentClientController
   phaseText: {fileID: 0}
-  timeText: {fileID: 2105129005482191102}
-  timeFrame: {fileID: 4439898530289107328}
+  timeText: {fileID: 6356253501394973731}
+  timeFrame: {fileID: 5618391488026063961}
   scoreText: {fileID: 0}
   killFeedText: {fileID: 0}
   killFeedSeconds: 6
   killFeedMaxLines: 5
-  healthText: {fileID: 229831314960297773}
-  statusText: {fileID: 3364172289693123464}
+  healthText: {fileID: 0}
+  statusText: {fileID: 0}
+  statusPlate: {fileID: 3469700688774466983}
   deathOverlay: {fileID: 814865193668156437}
-  deathKillerNameText: {fileID: 6617737147115459048}
-  deathStatusText: {fileID: 4486634434675728925}
-  healthFill: {fileID: 3436471591758789920}
+  deathKillerNameText: {fileID: 7409095637129020383}
+  deathStatusText: {fileID: 0}
+  deathStatusPlate: {fileID: 2284460729859000011}
+  healthFill: {fileID: 0}
+  healthStrip: {fileID: 6428945661934210770}
   selfStatsText: {fileID: 0}
   deathOverlaySeconds: 3
   centerNoticeRoot: {fileID: 206951411324978731}
@@ -252,33 +258,11 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 5ff3c669afc37ee489adf83b1df0dc8f, type: 3}
---- !u!114 &229831314960297773 stripped
-MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 871865800336747591, guid: 5ff3c669afc37ee489adf83b1df0dc8f, type: 3}
-  m_PrefabInstance: {fileID: 1092680428715377514}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: f4688fdb7df04437aeb418b961361dc5, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Unity.TextMeshPro::TMPro.TextMeshProUGUI
 --- !u!224 &1262598726049905555 stripped
 RectTransform:
   m_CorrespondingSourceObject: {fileID: 2210244689067161849, guid: 5ff3c669afc37ee489adf83b1df0dc8f, type: 3}
   m_PrefabInstance: {fileID: 1092680428715377514}
   m_PrefabAsset: {fileID: 0}
---- !u!114 &2105129005482191102 stripped
-MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 1305780708500384660, guid: 5ff3c669afc37ee489adf83b1df0dc8f, type: 3}
-  m_PrefabInstance: {fileID: 1092680428715377514}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: f4688fdb7df04437aeb418b961361dc5, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Unity.TextMeshPro::TMPro.TextMeshProUGUI
 --- !u!114 &2329507843652553254 stripped
 MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 3422146400664652108, guid: 5ff3c669afc37ee489adf83b1df0dc8f, type: 3}
@@ -290,9 +274,25 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: cf242698db5f5424a8fd0cfca53d0cb6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.UI.RoundResultBanner
---- !u!114 &3364172289693123464 stripped
+--- !u!114 &3469700688774466983 stripped
 MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 2415631238460408034, guid: 5ff3c669afc37ee489adf83b1df0dc8f, type: 3}
+  m_CorrespondingSourceObject: {fileID: 4543887293052522189, guid: 5ff3c669afc37ee489adf83b1df0dc8f, type: 3}
+  m_PrefabInstance: {fileID: 1092680428715377514}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 21764b2dceeaa7a439091711cacb4f7c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.UI.StatusPlate
+--- !u!1 &5618391488026063961 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 4814755121378703155, guid: 5ff3c669afc37ee489adf83b1df0dc8f, type: 3}
+  m_PrefabInstance: {fileID: 1092680428715377514}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &6356253501394973731 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 6276902900373452617, guid: 5ff3c669afc37ee489adf83b1df0dc8f, type: 3}
   m_PrefabInstance: {fileID: 1092680428715377514}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 0}
@@ -301,22 +301,17 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f4688fdb7df04437aeb418b961361dc5, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.TextMeshPro::TMPro.TextMeshProUGUI
---- !u!114 &3436471591758789920 stripped
+--- !u!114 &6428945661934210770 stripped
 MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 2348969957437144650, guid: 5ff3c669afc37ee489adf83b1df0dc8f, type: 3}
+  m_CorrespondingSourceObject: {fileID: 6201965812270140856, guid: 5ff3c669afc37ee489adf83b1df0dc8f, type: 3}
   m_PrefabInstance: {fileID: 1092680428715377514}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
+  m_Script: {fileID: 11500000, guid: 4954decb9cbda9d41849076415c68fdd, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
---- !u!1 &4439898530289107328 stripped
-GameObject:
-  m_CorrespondingSourceObject: {fileID: 3653627932031795946, guid: 5ff3c669afc37ee489adf83b1df0dc8f, type: 3}
-  m_PrefabInstance: {fileID: 1092680428715377514}
-  m_PrefabAsset: {fileID: 0}
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.UI.HealthStrip
 --- !u!114 &8406794531321632960 stripped
 MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 8899979391816522666, guid: 5ff3c669afc37ee489adf83b1df0dc8f, type: 3}
@@ -439,20 +434,20 @@ RectTransform:
   m_CorrespondingSourceObject: {fileID: 3385589058030605848, guid: 05e194f0aaa91b440b006bd11c2e2937, type: 3}
   m_PrefabInstance: {fileID: 4444436618465382338}
   m_PrefabAsset: {fileID: 0}
---- !u!114 &4486634434675728925 stripped
+--- !u!114 &2284460729859000011 stripped
 MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 283293233092488671, guid: 05e194f0aaa91b440b006bd11c2e2937, type: 3}
+  m_CorrespondingSourceObject: {fileID: 2457214289737238793, guid: 05e194f0aaa91b440b006bd11c2e2937, type: 3}
   m_PrefabInstance: {fileID: 4444436618465382338}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: f4688fdb7df04437aeb418b961361dc5, type: 3}
+  m_Script: {fileID: 11500000, guid: 21764b2dceeaa7a439091711cacb4f7c, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Unity.TextMeshPro::TMPro.TextMeshProUGUI
---- !u!114 &6617737147115459048 stripped
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.UI.StatusPlate
+--- !u!114 &7409095637129020383 stripped
 MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 7384534848845078058, guid: 05e194f0aaa91b440b006bd11c2e2937, type: 3}
+  m_CorrespondingSourceObject: {fileID: 6593176072175930397, guid: 05e194f0aaa91b440b006bd11c2e2937, type: 3}
   m_PrefabInstance: {fileID: 4444436618465382338}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 0}

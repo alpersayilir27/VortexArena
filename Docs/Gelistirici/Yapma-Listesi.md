@@ -349,9 +349,9 @@ kendi açar. Açık kalan dekoratif bir grafik üstündeki düğmenin tıklamas�
 
 ### ⛔ Arayüz prefabındaki bir ögeyi SİLME
 
-Elle düzenlenen arayüz prefablarında (`_Shared/App/Resources/UI/` altındaki oyuncu HUD'ı, ölüm,
-bildirim, yükleme ve bağlantı ekranları) her öge kök bileşende bir `[SerializeField]` alanına
-bağlıdır (`healthFill`, `statusText`, `_reconnectButton`…). Ögeyi silersen alan boşalır ve
+Elle düzenlenen arayüz prefablarında (`_Shared/App/Resources/UI/` altındaki bildirim, yükleme ve
+bağlantı ekranları) her öge kök bileşende bir `[SerializeField]` alanına bağlıdır
+(`centerNoticeText`, `_reconnectButton`…). Ögeyi silersen alan boşalır ve
 **hiçbir hata çıkmaz — o parça sessizce çizilmez.** Gizlemen gerekiyorsa objeyi devre dışı bırak ya
 da alfasını sıfırla. (Girdap ekranlarında kural daha katıdır: orada prefab hiç elle düzenlenmez.)
 
@@ -759,14 +759,19 @@ Oyuncunun gördüğü el `VA_CameraRig` → `OVRHandVisualLeft/Right` altındaki
 SkinnedMeshRenderer'ıdır (`OpenXR{Left,Right}Hand/{Left,Right}Hand`); eldiven onun üstünde yalnız
 **mesh + materyal override'ıdır** (`_Shared/Avatars/TacticalGlove/`). Kemikler, nesne adları ve
 `HandVisual` alanları paketin olduğu gibi kalır: kavrama pozları eklem kimliğiyle, kumanda gizleyici
-tam adla bağlanır. Yeni bir el mesh'i:
+tam adla bağlanır. Eldivenin kaynağı ve değiştirme akışı `blender/TacticalGlove/README.md`'dir.
+Yeni bir el mesh'i:
 - paket mesh'inin (`OpenXR{Left,Right}Hand.fbx`) **bindpose'larını aynen taşır**, kemik ağırlıkları
-  SMR'ın `bones` sırasına **adla** eşlenir. Blender'dan gelen FBX'in mesh'i doğrudan atanırsa kemik
-  sırası ve bindpose farklıdır: hata çıkmaz, el parçalanmış çizilir;
+  SMR'ın `bones` sırasına **adla** eşlenir (`TacticalGloveImporter` bunu yapar). Blender'dan gelen
+  FBX'in mesh'i doğrudan atanırsa kemik sırası ve bindpose farklıdır: hata çıkmaz, el parçalanmış
+  çizilir;
 - OVR dalına (`OculusHand_L/R`) konmaz: ISDK OpenXR dalında derlenir ve OVR kökünü kapatır, değişiklik
   hiç görünmez;
 - `quality` Bone4 kalır (gerekçe: `Docs/Sistem-Ozeti.md` §7 "Bilek 30 cm'den bakıldığında
-  `skinWeights` bir görsel ayar değil, DOĞRULUK ayarıdır").
+  `skinWeights` bir görsel ayar değil, DOĞRULUK ayarıdır");
+- takım rengi alacak parça **alt-mesh 1**'dir, materyal sırası `[gövde, kayış]` kalır:
+  `GloveTeamBand` (`VA_CameraRig` kökü) çalışma anında yalnız slot 1'i değiştirir. Sıra bozulursa
+  hata çıkmaz, gövde boyanır. Takım renkleri `Girdap.Red/Blue`'dan gelir, materyale elle yazılmaz.
 
 ### ⛔ `VenueSurvey` sahnesine elle bileşen koyma
 
