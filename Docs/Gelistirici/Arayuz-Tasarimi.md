@@ -205,7 +205,8 @@ kabı değiştiyse önce *Fontları ve asset kabını üret*).
   `UiButtonKind.SegOn`, diğerleri `Tab`); içerik dropdown'lar (liste şablonundan klonlanır), iki
   durumlu anahtarlar (KAPALI/AÇIK), adımlayıcılar ve kalibrasyon kipi düğmeleri. Esc kapatır.
 - **MatchResultOverlay** (oyuncunun maç sonu ekranı, `VortexArena.App`) — prefab kökü dünya uzayı
-  `Canvas` + `HudFollow`. Önce **sonuç kartı**: MAÇ SONUCU şeridi, sonuç kelimesi (vertex gradyanı
+  `Canvas` + `HudFollow`; derinlikten bağımsız çizim (`UiDrawOnTop`) ve duvar kaçınması **koddan**
+  gelir, prefabta ayarlanmaz. Önce **sonuç kartı**: MAÇ SONUCU şeridi, sonuç kelimesi (vertex gradyanı
   sonucun tonunu taşır), kazanan satırı, skor plakası. Sonra **skor tablosu**: başlıkta kazanan
   satırı + skor plakası, gövdede takım başına bir blok (başlık plakası + şablondan klonlanan
   satırlar: sıra · ad · SEN çipi · `#id` · skor/öldürme/ölüm/K-D), altta oyuncunun kendi şeridi.

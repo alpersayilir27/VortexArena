@@ -17,8 +17,8 @@ namespace VortexArena.Core.Arena
     /// </para>
     /// <para>
     /// X-ray: while the local player is DEAD, a second material slot (<c>M_BaseZoneXRay</c>,
-    /// <c>ZTest Greater</c>) is added to their OWN team's strip so the revive point is visible
-    /// through decor. Never for a living player, never for the enemy base, never for
+    /// <c>ZTest Greater</c> ghost + additive boost on the visible strip) is added to their OWN
+    /// team's strip so the revive point is visible through decor. Never for a living player, never for the enemy base, never for
     /// <see cref="Team.Neutral"/>. Team color is read from the strip's own material — no second
     /// color definition.
     /// </para>

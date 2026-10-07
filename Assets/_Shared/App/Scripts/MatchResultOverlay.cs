@@ -82,6 +82,9 @@ namespace VortexArena.App
         /// <summary>Blocks per table — one per team; FFA splits its single ranking across both.</summary>
         public const int BlockCount = 2;
 
+        /// <summary>Sorting offset (<see cref="UiDrawOnTop"/>) — above the HUD range.</summary>
+        private const int ResultSortingOffset = 20;
+
         /// <summary>Column order, left to right — documents <see cref="CellText"/>'s <c>switch</c>
         /// order and the expected length of <see cref="boardColumns"/>. Header texts and widths live
         /// IN THE PREFAB (repo-wide UI contract: code only writes data).
@@ -360,6 +363,18 @@ namespace VortexArena.App
             }
 
             _instance = this;
+
+            // Before any material is read (the title tint instances fontMaterial): walls and the
+            // blackout quad must not cover the result screen.
+            UiDrawOnTop.Apply(gameObject, ResultSortingOffset);
+
+            HudFollow follow = GetComponent<HudFollow>();
+            if (follow != null)
+            {
+                // Drawing on top of a NEARER wall is a stereo depth conflict; pulling the panel in
+                // front of the wall keeps depth consistent. Safe here — no head-locked child.
+                follow.AvoidWalls = true;
+            }
 
             // Don't carry a stale "hidden" state over from a Play entry without domain reload.
             HideAll();
