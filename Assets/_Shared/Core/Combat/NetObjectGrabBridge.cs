@@ -221,21 +221,41 @@ namespace VortexArena.Core.Combat
                 socket.CatchMode = flying;
             }
 
-            // Already in a hand (ours would have returned above, so: someone else's). No stealing from a
-            // hand — ownership is only up for grabs once the holder releases (§10.10).
-            if (_net.IsHeld || !IsTakeable || !CalibrationState.IsCalibrated)
+            // Already in a hand (ours would have returned above, so: someone else's, or riding our own
+            // carrier). No stealing from a hand — ownership is only up for grabs once the holder releases
+            // (§10.10). Our own carrier's cargo is the exception: the OTHER hand may take it off.
+            bool onCarrier = OnOwnCarrier;
+            if ((_net.IsHeld && !onCarrier) || !IsTakeable || !CalibrationState.IsCalibrated)
             {
                 return;
             }
 
-            if (!socket.TryResolveHand(out OVRInput.Controller hand, out bool rightHand))
-            {
-                return;
-            }
+            OVRInput.Controller hand;
+            bool rightHand;
+            float distance;
 
-            if (!socket.TryMeasure(hand, out float distance))
+            if (onCarrier)
             {
-                return;
+                // ⚠️ Only the free hand is measured: the carrier's hand sits centimetres from its cargo
+                // and would win the nearest-hand pick, hiding the hand that can actually take.
+                rightHand = !_net.HeldByRightHand;
+                hand = rightHand ? OVRInput.Controller.RTouch : OVRInput.Controller.LTouch;
+                if (!socket.TryMeasure(hand, out distance) || distance > socket.EffectiveRadius)
+                {
+                    return;
+                }
+            }
+            else
+            {
+                if (!socket.TryResolveHand(out hand, out rightHand))
+                {
+                    return;
+                }
+
+                if (!socket.TryMeasure(hand, out distance))
+                {
+                    return;
+                }
             }
 
             // Highlight lane: offered with no press at all, so the sphere the player sees is picked by
@@ -331,6 +351,9 @@ namespace VortexArena.Core.Combat
         /// <returns><c>false</c> when the hand refused the item and nothing was taken.</returns>
         private bool Grab(OVRInput.Controller hand, bool rightHand)
         {
+            // Read before the hand is claimed — OnOwnCarrier is false once _localHand is set.
+            bool offCarrier = OnOwnCarrier;
+
             _localHand = hand;
             _localRight = rightHand;
             _confirmDeadline = Time.unscaledTime + ArenaProtocol.OBJECT_GRAB_CONFIRM_SECONDS;
@@ -364,6 +387,17 @@ namespace VortexArena.Core.Combat
 
             socket.Hide();
             Buzz(rightHand, GrabHapticAmplitude, GrabHapticSeconds);
+
+            if (offCarrier)
+            {
+                // Hand-over off our own carrier: the server refuses a grab on a held object, so it leaves
+                // the carrier's hand first (release → grab, same channel, in order). The carrier drops it
+                // from its cargo on HeldItems.Holds; the anchor is cleared here so the palm pose writes now.
+                CarryAnchor = null;
+                transform.GetPositionAndRotation(out Vector3 position, out Quaternion rotation);
+                NetObjectSync.SendRelease(_net.NetId,
+                    ArenaSpace.WorldToArena(position), ArenaSpace.WorldToArena(rotation));
+            }
 
             NetObjectSync.SendGrab(_net.NetId, rightHand);
             GrabbedLocally?.Invoke(rightHand);
@@ -617,13 +651,21 @@ namespace VortexArena.Core.Combat
             // ⚠️ The definition's indicator flag is ANDed into "is it available", never into the socket's
             // radius: the accept volume and the take gate stay exactly as they were, so hiding the
             // sphere cannot make an item harder to pick up.
-            bool available = IsTakeable && !_net.IsHeld &&
+            bool onCarrier = OnOwnCarrier;
+            bool available = IsTakeable && (!_net.IsHeld || onCarrier) &&
                              _localHand == OVRInput.Controller.None && CalibrationState.IsCalibrated;
 
             // The hand's preview winner is shown even on a definition that hides the sphere: it is the
             // only feedback for "this is what you would take". Local presentation, nothing on the wire.
-            socket.Tick(available && (item.ShowGrabIndicator || GrabArbiter.IsPreviewWinner(this)));
+            // Cargo shows ONLY the winner — the carrier's hand is always near, every layer would light up.
+            bool show = GrabArbiter.IsPreviewWinner(this) || (!onCarrier && item.ShowGrabIndicator);
+            socket.Tick(available && show);
         }
+
+        /// <summary>Riding a carrier held in OUR hand (spatula blade, cutting board): the other hand may
+        /// take it off.</summary>
+        private bool OnOwnCarrier =>
+            CarryAnchor != null && _net.IsHeld && _net.IsMine && _localHand == OVRInput.Controller.None;
 
         /// <summary>Does the definition actually route this object through a socket. The grab path is the
         /// item's rule, not the prefab's: a definition switched to <c>None</c> must stop drawing the

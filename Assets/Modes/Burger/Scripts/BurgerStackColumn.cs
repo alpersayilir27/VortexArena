@@ -409,6 +409,89 @@ namespace VortexArena.Modes.Burger
             return found;
         }
 
+        /// <summary>Box of a layer's solid colliders in <paramref name="frame"/>'s LOCAL space.</summary>
+        /// <remarks>⚠️ Built from collider geometry, not physics bounds: on a tilted board world boxes grow
+        /// taller and drift off the column axis (gaps, sideways slip), and they lag a moved transform until
+        /// the next physics sync.</remarks>
+        public static bool TryLocalBounds(NetObject layer, Transform frame, out Bounds bounds)
+        {
+            bounds = default;
+            bool found = false;
+
+            if (layer == null || frame == null)
+            {
+                return false;
+            }
+
+            layer.GetComponentsInChildren(Parts);
+
+            for (int i = 0; i < Parts.Count; i++)
+            {
+                Collider part = Parts[i];
+                if (part == null || part.isTrigger || !part.enabled ||
+                    !TryShapeBox(part, out Vector3 center, out Vector3 size))
+                {
+                    continue;
+                }
+
+                Transform shape = part.transform;
+                Vector3 extents = size * 0.5f;
+
+                for (int corner = 0; corner < 8; corner++)
+                {
+                    var local = new Vector3(
+                        (corner & 1) == 0 ? -extents.x : extents.x,
+                        (corner & 2) == 0 ? -extents.y : extents.y,
+                        (corner & 4) == 0 ? -extents.z : extents.z);
+                    Vector3 point = frame.InverseTransformPoint(shape.TransformPoint(center + local));
+
+                    if (found)
+                    {
+                        bounds.Encapsulate(point);
+                    }
+                    else
+                    {
+                        bounds = new Bounds(point, Vector3.zero);
+                        found = true;
+                    }
+                }
+            }
+
+            Parts.Clear();
+            return found;
+        }
+
+        /// <summary>Collider-local box of a primitive or mesh collider.</summary>
+        private static bool TryShapeBox(Collider part, out Vector3 center, out Vector3 size)
+        {
+            switch (part)
+            {
+                case BoxCollider box:
+                    center = box.center;
+                    size = box.size;
+                    return true;
+                case SphereCollider sphere:
+                    center = sphere.center;
+                    size = Vector3.one * (2f * sphere.radius);
+                    return true;
+                case CapsuleCollider capsule:
+                    center = capsule.center;
+                    float diameter = 2f * capsule.radius;
+                    size = Vector3.one * diameter;
+                    size[capsule.direction] = Mathf.Max(diameter, capsule.height);
+                    return true;
+                case MeshCollider mesh when mesh.sharedMesh != null:
+                    Bounds meshBounds = mesh.sharedMesh.bounds;
+                    center = meshBounds.center;
+                    size = meshBounds.size;
+                    return true;
+                default:
+                    center = default;
+                    size = default;
+                    return false;
+            }
+        }
+
         /// <summary>⚠️ Compared by the layer's SOLID box, not by its pivot: two ingredient prefabs do not
         /// share a pivot height, so on a tight column pivot order and stacking order are not the same
         /// list — and that list is the recipe.</summary>

@@ -71,10 +71,8 @@ namespace VortexArena.Modes.Burger
         /// the grill would sweep up every patty under it.</summary>
         private const float ClaimBandMetres = 0.10f;
 
-        /// <summary>Layer spacing (m) used when the cargo is DERIVED on a headset that is not the
-        /// holder's. The per-layer offsets the holder measured are not on the wire, so every other client
-        /// re-stacks at a fixed pitch — same set, same order, one fact behind it.</summary>
-        private const float MirrorLayerHeight = 0.03f;
+        /// <summary>Layer thickness (m) for a layer with no solid collider to measure.</summary>
+        private const float FallbackLayerHeight = 0.03f;
 
         private NetObject _net;
         private NetObjectGrabBridge _bridge;
@@ -85,10 +83,11 @@ namespace VortexArena.Modes.Burger
         /// board.</summary>
         private readonly List<NetObject> _cargo = new List<NetObject>();
 
-        /// <summary>Pose of each cargo layer in BOARD space, taken at the pickup: the column the player
-        /// built is the column that must arrive, so the offsets are kept rather than re-stacked at a
-        /// fixed spacing.</summary>
+        /// <summary>Pose of each cargo layer in BOARD space, laid out by <see cref="RestackCargo"/>.</summary>
         private readonly List<Pose> _cargoLocal = new List<Pose>();
+
+        /// <summary>Height of the cargo column along the cargo anchor's up axis (anchor-local units).</summary>
+        private float _cargoTop;
 
         private readonly List<NetObjectGrabBridge> _cargoBridges = new List<NetObjectGrabBridge>();
 
@@ -307,18 +306,21 @@ namespace VortexArena.Modes.Burger
                     continue;
                 }
 
-                AddCargo(layer, ToLocal(layer.transform), rightHand);
+                AddCargo(layer, rightHand);
             }
+
+            RestackCargo();
         }
 
         /// <summary>Takes a layer onto the cargo and asks for it.
         /// <para>⚠️ Optimistic, like every other grab (§10.10): the anchor goes on BEFORE the answer, or
         /// the layer's own bridge would seat it in the palm for a frame and fight for the hand the board
         /// is already in.</para></summary>
-        private void AddCargo(NetObject layer, Pose local, bool rightHand)
+        /// <remarks>The caller lays the column out afterwards (<see cref="RestackCargo"/>).</remarks>
+        private void AddCargo(NetObject layer, bool rightHand)
         {
             _cargo.Add(layer);
-            _cargoLocal.Add(local);
+            _cargoLocal.Add(ToLocal(layer.transform));
             _cargoBridges.Add(Anchor(layer));
             _claimed[layer.NetId] = Time.time + ClaimAnswerSeconds;
             _column.RemovePin(layer);
@@ -344,6 +346,7 @@ namespace VortexArena.Modes.Burger
             }
 
             bool rightHand = _net.HeldByRightHand;
+            bool added = false;
 
             foreach (KeyValuePair<NetObject, NetObjectPoseSender> entry in _watched)
             {
@@ -353,7 +356,13 @@ namespace VortexArena.Modes.Burger
                     continue;
                 }
 
-                AddCargo(layer, SnapOnTop(layer), rightHand);
+                AddCargo(layer, rightHand);
+                added = true;
+            }
+
+            if (added)
+            {
+                RestackCargo();
             }
         }
 
@@ -362,7 +371,9 @@ namespace VortexArena.Modes.Burger
         /// until it lands).</summary>
         private bool CanJoinCargo(NetObject layer)
         {
+            // HeldItems: a layer just taken off by our free hand is briefly "not held" on the wire.
             if (layer == null || layer == _net || layer.NetId <= 0 || layer.IsHeld ||
+                HeldItems.Holds(layer.transform) ||
                 _cargo.Contains(layer) || _claimed.ContainsKey(layer.NetId) ||
                 BurgerStackColumn.IsCarried(layer))
             {
@@ -386,53 +397,66 @@ namespace VortexArena.Modes.Burger
         /// yet.</summary>
         private float CargoTopY()
         {
-            float top = cargoAnchor.position.y;
+            return _cargo.Count > 0
+                ? cargoAnchor.TransformPoint(0f, _cargoTop, 0f).y
+                : cargoAnchor.position.y;
+        }
+
+        /// <summary>Lays the cargo out as the straight column the resting board builds: centred on the
+        /// cargo anchor's axis, each layer level with the anchor (own spin kept), stacked by its own
+        /// thickness in cargo order. Stores each pose in BOARD space for <see cref="SeatCargo"/>.
+        /// <para>⚠️ Measured in the ANCHOR's frame (<see cref="BurgerStackColumn.TryLocalBounds"/>): the
+        /// board tilts in the hand, and world boxes of tilted layers open gaps and slide layers off the
+        /// axis. The result depends only on set + order + prefab, so every headset gets the same column.</para></summary>
+        private void RestackCargo()
+        {
+            _cargoTop = 0f;
+            Quaternion anchorRotation = cargoAnchor.rotation;
 
             for (int i = 0; i < _cargo.Count; i++)
             {
-                if (_cargo[i] != null && BurgerStackColumn.TryBounds(_cargo[i], out Bounds bounds) &&
-                    bounds.max.y > top)
+                NetObject layer = _cargo[i];
+                if (layer == null)
                 {
-                    top = bounds.max.y;
+                    continue;
                 }
+
+                Transform pose = layer.transform;
+                pose.rotation = BurgerStackColumn.Upright(anchorRotation, pose.rotation);
+
+                Vector3 shift;
+                float thickness;
+                if (BurgerStackColumn.TryLocalBounds(layer, cargoAnchor, out Bounds bounds))
+                {
+                    shift = new Vector3(-bounds.center.x, _cargoTop - bounds.min.y, -bounds.center.z);
+                    thickness = bounds.size.y;
+                }
+                else
+                {
+                    Vector3 pivot = cargoAnchor.InverseTransformPoint(pose.position);
+                    shift = new Vector3(-pivot.x, _cargoTop - pivot.y, -pivot.z);
+                    thickness = FallbackLayerHeight / Mathf.Max(1e-4f, cargoAnchor.lossyScale.y);
+                }
+
+                pose.position += cargoAnchor.TransformVector(shift);
+                _cargoTop += thickness;
+                _cargoLocal[i] = ToLocal(pose);
             }
-
-            return top;
-        }
-
-        /// <summary>Stands a newly claimed layer upright on top of the column and returns its pose in
-        /// BOARD space — the offset <see cref="SeatCargo"/> writes from then on.</summary>
-        private Pose SnapOnTop(NetObject layer)
-        {
-            cargoAnchor.GetPositionAndRotation(out Vector3 anchorPosition, out Quaternion anchorRotation);
-            Quaternion rotation = BurgerStackColumn.Upright(anchorRotation, layer.transform.rotation);
-            float top = CargoTopY();
-
-            // Measured AT the target rotation: thickness along the column is a property of how the layer
-            // ends up lying, and the physics bounds only follow the transform after a sync.
-            layer.transform.rotation = rotation;
-            Physics.SyncTransforms();
-
-            Vector3 position = layer.transform.position;
-            if (BurgerStackColumn.TryBounds(layer, out Bounds bounds))
-            {
-                position += new Vector3(anchorPosition.x - bounds.center.x,
-                    top - bounds.min.y,
-                    anchorPosition.z - bounds.center.z);
-            }
-
-            layer.transform.SetPositionAndRotation(position, rotation);
-            return ToLocal(layer.transform);
         }
 
         /// <summary>Drops cargo the server did not give us — a refusal is silent, so the deadline is the
         /// only answer there is.</summary>
         private void PruneCargo()
         {
+            int before = _cargo.Count;
+
             for (int i = _cargo.Count - 1; i >= 0; i--)
             {
                 NetObject layer = _cargo[i];
-                bool lost = layer == null || layer.NetId <= 0;
+
+                // Taken off by our free hand (NetObjectGrabBridge): the wire still says "board's hand"
+                // for a round trip, but seating it again would pull it out of the palm.
+                bool lost = layer == null || layer.NetId <= 0 || HeldItems.Holds(layer.transform);
 
                 if (!lost && _claimed.TryGetValue(layer.NetId, out float deadline))
                 {
@@ -456,9 +480,15 @@ namespace VortexArena.Modes.Burger
                     Drop(i);
                 }
             }
+
+            // A layer taken out of the middle must not leave a gap in the column.
+            if (_cargo.Count != before)
+            {
+                RestackCargo();
+            }
         }
 
-        /// <summary>Cargo rides the board rigidly: the offsets taken at the pickup, written every frame.
+        /// <summary>Cargo rides the board rigidly: the column's board-space poses, written every frame.
         /// <para>⚠️ <c>isKinematic</c> is NOT written here — the ownership flag drives it
         /// (<c>NetObjectBody</c>) and a second writer loses the interpolation setting with it.</para></summary>
         private void SeatCargo()
@@ -503,8 +533,8 @@ namespace VortexArena.Modes.Burger
         /// board's hand.
         /// <para>⚠️ Without this every headset but the holder's seats those layers in the remote
         /// player's PALM (their own grab bridge does it), i.e. the burger floats beside the board.</para>
-        /// <para>The per-layer offsets the holder measured are not on the wire, so the derived column is
-        /// re-stacked at a fixed pitch — same set, same order, one fact behind it.</para></summary>
+        /// <para>Laid out by the same rule as the holder's (<see cref="RestackCargo"/>): set + order +
+        /// prefab thickness, nothing measured that is not on every headset.</para></summary>
         private void MirrorCargo()
         {
             _mirror.Clear();
@@ -518,6 +548,12 @@ namespace VortexArena.Modes.Burger
             }
 
             _mirror.Sort(CompareByRestHeight);
+
+            // Same set, same order: the layout is still valid — re-measuring every frame buys nothing.
+            if (SameLayers(_mirror, _cargo))
+            {
+                return;
+            }
 
             // Handed back BEFORE the set is rebuilt: a layer that stopped riding would hang wherever
             // this board last left it, with nothing writing its pose.
@@ -533,18 +569,32 @@ namespace VortexArena.Modes.Burger
             _cargoLocal.Clear();
             _cargoBridges.Clear();
 
-            Quaternion inverse = Quaternion.Inverse(transform.rotation);
-            cargoAnchor.GetPositionAndRotation(out Vector3 anchorPosition, out Quaternion anchorRotation);
-            Vector3 up = cargoAnchor.up;
-
             for (int i = 0; i < _mirror.Count; i++)
             {
-                Vector3 world = anchorPosition + up * (i * MirrorLayerHeight);
-
                 _cargo.Add(_mirror[i]);
-                _cargoLocal.Add(new Pose(inverse * (world - transform.position), inverse * anchorRotation));
+                _cargoLocal.Add(default);
                 _cargoBridges.Add(Anchor(_mirror[i]));
             }
+
+            RestackCargo();
+        }
+
+        private static bool SameLayers(List<NetObject> a, List<NetObject> b)
+        {
+            if (a.Count != b.Count)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < a.Count; i++)
+            {
+                if (a[i] != b[i])
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         /// <summary>Held by the board's owner, in the board's hand — the one fact the wire carries.</summary>
@@ -941,6 +991,7 @@ namespace VortexArena.Modes.Burger
             _cargoLocal.Clear();
             _cargoBridges.Clear();
             _claimed.Clear();
+            _cargoTop = 0f;
         }
 
         private Pose ToLocal(Transform layer)

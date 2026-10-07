@@ -2066,9 +2066,10 @@ kuralın söyleyeceği bir şey yoktur (telde yine `false` gider).
 > kavranması kabul edilir, §10.10) ve yığının tepesine dik oturtur; talep yine yalnız tepedeki temas
 > bandında yapılır. Başkasının uçurduğu malzeme istenmez — o iniş anına kadar onundur.
 >
-> Tahtanın yükü de aynı üçlüden (`owner` + `held` + `heldRight`) **her istemcide** türetilir;
-> tutmayan başlıkta sütun sabit bir katman aralığıyla yeniden dizilir, çünkü tutanın ölçtüğü katman
-> ofsetleri telde yoktur. Türetme olmadan yük, tutanın dışındaki her başlıkta malzemenin kendi
+> Tahtanın yükü de aynı üçlüden (`owner` + `held` + `heldRight`) **her istemcide** türetilir ve
+> **her başlıkta aynı kuralla** dizilir: kargo çapasının ekseninde ortalanmış, çapaya paralel (katmanın
+> kendi dönüşü korunur), her katman kendi collider kalınlığı kadar, yük sırasıyla — tutan da tutmayan
+> da. Kural yalnız küme + sıra + prefabdan beslenir, yani telde ofset yoktur ve gerekmez. Türetme olmadan yük, tutanın dışındaki her başlıkta malzemenin kendi
 > kavrama köprüsü tarafından **avuca** oturtulur — hamburger tahtanın yanında havada durur.
 >
 > **Yığın sırası DİNLENME pozunun yüksekliğinden okunur, geliş sırasından değil.** ⚠️ Geliş sırası
@@ -2079,6 +2080,14 @@ kuralın söyleyeceği bir şey yoktur (telde yine `false` gider).
 > ve gerekmez de — malzemenin pozu taşıyıcıdan, taşıyıcınınki elden gelir. Yük taşıyıcıdan ayrılınca
 > (yatırma jesti ya da taşıyıcının elden bırakılması) sıradan `object_release` gider ve uçuş penceresi
 > açılır; ızgara ile servis tahtası bu yüzden mevcut kancalarıyla, değişmeden çalışır.
+>
+> **Taşınan yük, taşıyıcıyı tutan oyuncunun BOŞ eliyle alınabilir** (tahtadaki köfte, spatuladaki
+> köfte). Sunucu tutulan nesneye `object_grab`'i sahibi kendisi olsa da reddeder, bu yüzden istemci
+> aynı kanaldan art arda **`object_release` (taşıyıcıdaki poz) + `object_grab` (boş el)** gönderir:
+> ilki nesneyi uçuş penceresine düşürür, ikincisi onu kendi uçuşundan yakalar (§10.10) — yeni mesaj
+> yoktur. İki cevap arasında tel nesneyi bir tur "taşıyıcının elinde" sonra "elde değil" gösterir;
+> taşıyıcılar bu pencerede yükü **yerel kavramadan** (`HeldItems`) tanır ve yeniden oturtmaz, talep
+> etmez. Başka oyuncunun taşıdığı yükten almak **yoktur** — elden çalma kuralı (§10.10) geçerlidir.
 >
 > **Yanlış servisin cevabı, olayın kendisidir:** tarif tutmazsa mod hiçbir şey yazmaz ve `serve`
 > herkese relay edilir (kozmetik dal) — istemci bunu red sesi/HUD uyarısı olarak oynar. Doğru servis

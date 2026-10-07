@@ -262,7 +262,9 @@ namespace VortexArena.Modes.Burger
                    candidate.Kind != null &&
                    candidate.IsHeld && candidate.Owner == _net.Owner &&
                    candidate.HeldByRightHand == _net.HeldByRightHand &&
-                   !_dropped.Contains(candidate.NetId);
+                   !_dropped.Contains(candidate.NetId) &&
+                   // Taken off by our free hand: the wire lags a round trip behind the palm.
+                   !HeldItems.Holds(candidate.transform);
         }
 
         /// <summary>Seated on another carrier ourselves (the anchor is written by that carrier).</summary>

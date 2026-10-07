@@ -68,19 +68,23 @@ namespace VortexArena.Core.World
             Active.Add(this);
         }
 
+        /// <summary>Overlap (m) through a side or bottom face below which the object is only grazing the
+        /// counter and is left where it is.</summary>
+        private const float SideTolerance = 0.005f;
+
+        /// <summary>Separation direction with at least this world-up component means the top face is the
+        /// nearest exit: any overlap counts.</summary>
+        private const float TopFaceDot = 0.7f;
+
+        /// <summary>Lift passes: clearing one box can land the object inside a taller one (shelf on top).</summary>
+        private const int MaxPasses = 3;
+
         /// <summary>Lifts an object let go INSIDE any counter onto its top. ⚠️ Asked before the body turns
-        /// dynamic: set free inside the solid box, PhysX depenetration throws it out sideways.</summary>
+        /// dynamic: set free inside the solid box, PhysX depenetration throws it out sideways.
+        /// <para>Needs no trigger: a release through a side face or right under the top never enters one.</para></summary>
         public static bool TryLiftOut(NetObject net, ref Pose worldPose)
         {
-            for (int i = 0; i < Active.Count; i++)
-            {
-                if (Active[i].TryAdjustRestPose(net, ref worldPose))
-                {
-                    return true;
-                }
-            }
-
-            return false;
+            return net != null && LiftAboveCounters(net, ref worldPose);
         }
 
         private void OnDisable()
@@ -135,57 +139,90 @@ namespace VortexArena.Core.World
             sender.RemoveRestAdjuster(this);
         }
 
-        /// <summary>Lifts the object onto the top of the box its centre is inside of; objects already
-        /// on (or above) the top are left alone.</summary>
+        /// <summary>Lifts an object resting inside the counter onto its top; objects on the top are left alone.</summary>
         public bool TryAdjustRestPose(NetObject net, ref Pose worldPose)
         {
-            if (net == null || !_inside.ContainsKey(net))
-            {
-                return false;
-            }
+            return net != null && _inside.ContainsKey(net) && LiftAboveCounters(net, ref worldPose);
+        }
 
+        /// <summary>Moves the pose straight up (world Y only, rotation kept) until no counter box holds the
+        /// object. ⚠️ Never along the separation direction: that is PhysX's nearest-face push again.</summary>
+        private static bool LiftAboveCounters(NetObject net, ref Pose worldPose)
+        {
             // Bounds only follow the transform after a sync.
             net.transform.SetPositionAndRotation(worldPose.position, worldPose.rotation);
             Physics.SyncTransforms();
 
-            if (!TryBounds(net, out Bounds bounds) || !TryBodyAround(bounds.center, out float top))
+            bool lifted = false;
+            for (int pass = 0; pass < MaxPasses; pass++)
             {
-                return false;
+                if (!TryBounds(net, out Bounds bounds))
+                {
+                    break;
+                }
+
+                float top = float.NegativeInfinity;
+                for (int i = 0; i < Active.Count; i++)
+                {
+                    Active[i].RaiseToPenetratedTop(net, ref top);
+                }
+
+                float lift = top - bounds.min.y + Clearance;
+                if (float.IsNegativeInfinity(top) || lift <= 0f)
+                {
+                    break;
+                }
+
+                worldPose.position += Vector3.up * lift;
+                net.transform.position = worldPose.position;
+                Physics.SyncTransforms();
+                lifted = true;
             }
 
-            worldPose.position += Vector3.up * (top - bounds.min.y + Clearance);
-            return true;
+            return lifted;
         }
 
-        /// <summary>Top of the solid box whose footprint holds <paramref name="point"/>, when the
-        /// point is below that top.</summary>
-        private bool TryBodyAround(Vector3 point, out float top)
+        /// <summary>Raises <paramref name="top"/> to the top of every box of this counter the object
+        /// really overlaps — through any face, so a release against the side or near the floor counts.</summary>
+        private void RaiseToPenetratedTop(NetObject net, ref float top)
         {
-            for (int i = 0; i < _bodies.Count; i++)
+            net.GetComponentsInChildren(Parts);
+            for (int b = 0; b < _bodies.Count; b++)
             {
-                BoxCollider body = _bodies[i];
-                if (body == null || !body.enabled)
+                BoxCollider body = _bodies[b];
+                if (body == null || !body.enabled || body.bounds.max.y <= top)
                 {
                     continue;
                 }
 
-                float bodyTop = body.bounds.max.y;
-                if (point.y >= bodyTop)
+                for (int p = 0; p < Parts.Count; p++)
                 {
-                    continue;
-                }
+                    Collider part = Parts[p];
+                    if (part == null || part.isTrigger || !part.enabled || !part.bounds.Intersects(body.bounds))
+                    {
+                        continue;
+                    }
 
-                // Probed just under the top: ClosestPoint returns the point itself when it is inside.
-                var probe = new Vector3(point.x, bodyTop - 0.01f, point.z);
-                if ((body.ClosestPoint(probe) - probe).sqrMagnitude < 1e-8f)
-                {
-                    top = bodyTop;
-                    return true;
+                    Transform pt = part.transform;
+                    Transform bt = body.transform;
+                    if (!Physics.ComputePenetration(part, pt.position, pt.rotation, body, bt.position, bt.rotation,
+                            out Vector3 direction, out float distance))
+                    {
+                        continue;
+                    }
+
+                    // Grazing a side face (resting against it) is not "inside".
+                    if (direction.y < TopFaceDot && distance < SideTolerance)
+                    {
+                        continue;
+                    }
+
+                    top = body.bounds.max.y;
+                    break;
                 }
             }
 
-            top = 0f;
-            return false;
+            Parts.Clear();
         }
 
         /// <summary>World box of the object's solid colliders.</summary>
