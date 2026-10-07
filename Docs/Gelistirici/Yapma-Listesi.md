@@ -757,21 +757,33 @@ küre kavrama haritasından düşer.
 
 Oyuncunun gördüğü el `VA_CameraRig` → `OVRHandVisualLeft/Right` altındaki **OpenXR dalının**
 SkinnedMeshRenderer'ıdır (`OpenXR{Left,Right}Hand/{Left,Right}Hand`); eldiven onun üstünde yalnız
-**mesh + materyal override'ıdır** (`_Shared/Avatars/TacticalGlove/`). Kemikler, nesne adları ve
+**mesh + materyal override'ıdır** (varsayılanı `_Shared/Avatars/TacticalGlove/`, moda özel olanı
+`Modes/<Mod>/Avatars/<Eldiven>/`). Kemikler, nesne adları ve
 `HandVisual` alanları paketin olduğu gibi kalır: kavrama pozları eklem kimliğiyle, kumanda gizleyici
-tam adla bağlanır. Eldivenin kaynağı ve değiştirme akışı `blender/TacticalGlove/README.md`'dir.
+tam adla bağlanır. Her eldivenin kaynağı ve değiştirme akışı `blender/<Eldiven>/README.md`'dir; yeni
+bir mod eldiveninin reçetesi **[Yemek Kitabı 13.4](Yemek-Kitabi.md#134-moda-özel-eldiven-oyuncunun-kendi-eli)**.
 Yeni bir el mesh'i:
 - paket mesh'inin (`OpenXR{Left,Right}Hand.fbx`) **bindpose'larını aynen taşır**, kemik ağırlıkları
-  SMR'ın `bones` sırasına **adla** eşlenir (`TacticalGloveImporter` bunu yapar). Blender'dan gelen
+  SMR'ın `bones` sırasına **adla** eşlenir (`GloveMeshImporter` bunu yapar). Blender'dan gelen
   FBX'in mesh'i doğrudan atanırsa kemik sırası ve bindpose farklıdır: hata çıkmaz, el parçalanmış
-  çizilir;
+  çizilir — bu yüzden `GloveSkin`'in mesh alanlarına **yalnız importer'ın ürettiği asset** konur,
+  FBX'in mesh'i hiç atanmaz;
 - OVR dalına (`OculusHand_L/R`) konmaz: ISDK OpenXR dalında derlenir ve OVR kökünü kapatır, değişiklik
   hiç görünmez;
 - `quality` Bone4 kalır (gerekçe: `Docs/Sistem-Ozeti.md` §7 "Bilek 30 cm'den bakıldığında
   `skinWeights` bir görsel ayar değil, DOĞRULUK ayarıdır");
 - takım rengi alacak parça **alt-mesh 1**'dir, materyal sırası `[gövde, kayış]` kalır:
-  `GloveTeamBand` (`VA_CameraRig` kökü) çalışma anında yalnız slot 1'i değiştirir. Sıra bozulursa
+  `LocalGloves` (`VA_CameraRig` kökü) çalışma anında yalnız slot 1'i değiştirir. Sıra bozulursa
   hata çıkmaz, gövde boyanır. Takım renkleri `Girdap.Red/Blue`'dan gelir, materyale elle yazılmaz.
+  Aynı kural `GloveSkin.materials` için de geçerlidir: **slot 1 takım kayışına ayrılmıştır** — iki
+  ya da daha çok materyalli bir deride slot 1 takımlı modda boyanır, kayış olmayan bir parça oraya
+  konmaz (tek materyalli deride boyama hiç yapılmaz).
+
+Eldiven görünümünü yazan tek taraf `LocalGloves`'tır:
+- iki eldiven SMR'ının `sharedMesh`/`sharedMaterials`'ına **başka bir betik yazmaz** — yazılan değer
+  bir sonraki mod ya da takım değişiminde sessizce ezilir, hata çıkmaz;
+- mod eldiveni için rig'e **ikinci bir renderer konmaz**: eldiven var olan iki SMR'ın override'ıdır;
+  eklenen renderer kavrama pozlarından ve kumanda gizleyiciden bağımsız kalır, el iki kez çizilir.
 
 ### ⛔ `VenueSurvey` sahnesine elle bileşen koyma
 

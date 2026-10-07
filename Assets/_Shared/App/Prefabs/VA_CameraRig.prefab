@@ -8157,7 +8157,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Meta.XR.BuildingBlocks::Meta.XR.BuildingBlocks.BuildingBlock
   blockId: 5817f7c0-f2a5-45f9-a5ca-64264e0166e8
-  instanceId: 0a226568-e419-4eec-b214-046727f6fa12
+  instanceId: 052ac2ac-f8ee-44a0-87ec-b4e06e4ba3bc
   version: 1
   installationRoutineCheckpoint:
     _installationRoutineId: 
@@ -8906,7 +8906,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Meta.XR.BuildingBlocks::Meta.XR.BuildingBlocks.BuildingBlock
   blockId: e47682b9-c270-40b1-b16d-90b627a5ce1b
-  instanceId: 5e996392-4340-4e83-9152-77a538754053
+  instanceId: 3860f6aa-fb2a-4a7c-92d0-d168ec4ff79b
   version: 1
   installationRoutineCheckpoint:
     _installationRoutineId: 
@@ -9080,10 +9080,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 17161b62db836794bb20c7dfbd7420c4, type: 3}
   m_Name: 
   m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Player.GloveTeamBand
-  gloves:
-  - {fileID: 7397442224064150590}
-  - {fileID: 1181875234384517669}
-  neutralBand: {fileID: 2100000, guid: 7a6b9a3b283750e46b3c7ea4017283ae, type: 2}
+  leftGlove: {fileID: 7397442224064150590}
+  rightGlove: {fileID: 1181875234384517669}
 --- !u!1 &7321205856775988313
 GameObject:
   m_ObjectHideFlags: 0
@@ -10895,7 +10893,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Meta.XR.BuildingBlocks::Meta.XR.BuildingBlocks.BuildingBlock
   blockId: 5817f7c0-f2a5-45f9-a5ca-64264e0166e8
-  instanceId: 7dee166f-f11e-433d-b643-4a773e254362
+  instanceId: 641a44c9-e699-468b-8ba4-728a43c1d162
   version: 1
   installationRoutineCheckpoint:
     _installationRoutineId: 
@@ -11928,7 +11926,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Meta.XR.BuildingBlocks::Meta.XR.BuildingBlocks.BuildingBlock
   blockId: 81f55626-5fad-45e9-a1df-184f330da7ba
-  instanceId: 598fa8ed-f9dd-472d-822c-925626cd349e
+  instanceId: 0a54213d-0a37-416e-a5cd-abb1f4802006
   version: 1
   installationRoutineCheckpoint:
     _installationRoutineId: 2063f481-1b63-4eda-9ee8-a00df98536bc

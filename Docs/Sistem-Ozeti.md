@@ -1753,7 +1753,9 @@ destekleyen haritaları, `MapsForGameType(GameType)` operatörün ilk seçim lis
 profilini eler, oyun tipini ve haritanın `supportedModeIds`'ini **birlikte** süzer. Mod tanımı ayrıca
 moda özel **oyuncu gövdesi** taşıyabilir: `bodyPrefab` (mavi takım + takımsız), `redBodyPrefab`
 (kırmızı takım) ve `altBodyPrefab` (takımsız modda ikinci gövde, kadro sırasıyla dönüşümlü) →
-`BodyPrefab` / `RedBodyPrefab` / `AltBodyPrefab`; boş alan o slotu varsayılan gövdede bırakır),
+`BodyPrefab` / `RedBodyPrefab` / `AltBodyPrefab`; boş alan o slotu varsayılan gövdede bırakır.
+Ayrıca moda özel **yerel eldiven**: `gloveSkin` → `GloveSkin`, boş = taktik eldiven; yalnız oyuncunun
+kendi gözlükte gördüğü eli etkiler, başkaları o eli görmez),
 `Weapon` (ISDK ile tutulan hitscan tüfek; tetik **silahı tutan elin** kumandasından okunur — çift
 silahta tetikler bağımsız; şarjör+yedek şarjör durumu taşır, boş şarjörde **otomatik reload YOK**
 (kuru tetik sesi + kısa haptik; bu ipucu tetik **basılı tutulurken de** yinelenir — otomatik silah
@@ -2128,12 +2130,25 @@ oyuncu gözlükte **yalnız rig'in sentetik ellerini** görür; kumanda modeli *
 ⚠️ **Ellerin görünmesi bu bileşene DEĞİL, `OVRManager.controllerDrivenHandPosesType`'a bağlıdır**
 (`VA_CameraRig` prefabında `Natural`): `None` iken kumanda tutulurken el verisi hiç üretilmez,
 `HandVisual` `!IsTrackedDataValid` görüp mesh'i kendi kapatır ve ekranda hiç el olmaz),
-`GloveTeamBand` (`Core/Player` — **`VA_CameraRig` kökünde**; iki eldiven SMR'ının materyal
-**slot 1**'ini (bileklik kayışı alt-mesh'i) yerel oyuncunun takım rengine boyar.
-`PlayerCombatState.LocalTeamChanged` ve `ModeRuntime.Changed` ile tetiklenir; takımsız modda
-`neutralBand` takılı kalır. Kırmızı/mavi materyaller `neutralBand`'in çalışma anı kopyalarıdır,
-renkleri `Girdap.Red/Blue`'dur — property block değil kopya, SRP Batcher yolu korunsun diye.
-Yalnız yerel eli boyar; uzak avatarın eli bu bileşenin kapsamı dışındadır),
+`LocalGloves` (`Core/Player` — **`VA_CameraRig` kökünde**; oyuncunun kendi ellerinin görünümü: iki
+eldiven SMR'ına (`leftGlove`/`rightGlove` — OVRHandVisual'ların OpenXR dalı) modun eldivenini
+giydirir, sonra bileklik kayışını takım rengine boyar. `ModeRuntime.Changed`,
+`ModeSelection.Changed` ve `PlayerCombatState.LocalTeamChanged` ile tetiklenir. Modu **gövdelerle
+AYNI** yoldan çözer (`RemoteAvatar.ResolveBodyMode`: kurulmuş maçın modu, lobi profili koşarken
+admin'in seçtiği mod). `ModeDefinition.GloveSkin` doluysa her ele o mesh + materyaller takılır,
+boşsa `Awake`'te saklanan prefab görünümü (taktik eldiven) geri gelir; derinin bir elde mesh'i ya da
+hiç materyali yoksa o el varsayılanda kalır. ⚠️ `localBounds` deri mesh'ini **kök kemik uzayında**
+kapsayacak kadar büyütülür: daha uzun bir deri (manşet, kol) ekranda dururken kadraj dışı sayılıp
+kaybolurdu. Boyanan yer takılı görünümün materyal **slot 1**'idir (bileklik kayışı alt-mesh'i), slot
+yoksa atlanır; takımsız modda o materyal olduğu gibi kalır, takımlı modda onun çalışma anı kopyası
+takılır (renk `Girdap.Red/Blue`, kopya kaynak materyal + takım başına bir kez üretilir) — property
+block değil kopya, SRP Batcher yolu korunsun diye. Deri
+değişince boyama yeniden yapılır. Yalnız yerel eli etkiler; uzak avatarın eli bu bileşenin kapsamı
+dışındadır),
+`GloveSkin` (`Core/Player` — bir eldiven görünümünün SO'su (`Create > VortexArena > Glove Skin`):
+`left`/`right` mesh + alt-mesh sırasıyla `materials`; slot 1 varsa takım rengine boyanan kayıştır.
+Mesh'ler rig elinin kemik sırasını ve bindpose'larını taşımak zorundadır, bu yüzden yalnız
+`GloveMeshImporter`'dan gelir — FBX mesh'i atanmaz (kural → Yapma Listesi)),
 `WeatherVolumeFollow` (`Core/FX` — ambiyans parçacık hacmini yerel kameranın üstünde tutar; bağlı
 sistemler **World** simülasyon uzayında olmalı, `Start` sapmayı uyarır. Yalnız kendi transform'unu
 taşır, rig'e dokunmaz), `WeatherWindDriver` (`Core/FX` — kök objeye takılır, altındaki tüm
@@ -2145,11 +2160,15 @@ katmanların göreli hız farkı korunur).
 > gövdesinden **HİÇBİR ŞEY görmez** — ne gövde, ne kol, ne el. Gözlükte gördüğü eller **rig'in
 > sentetik elleridir** (`VA_CameraRig` → `OVRHandVisualLeft/Right`, ISDK `SyntheticHand`) ve
 > gövdeyle hiçbir bağı yoktur: oyuncunun gördüğü el ile başkalarının gördüğü el **ayrı
-> modellerdir**. O elin görünümü taktik eldivendir (`_Shared/Avatars/TacticalGlove/`: iki alt-mesh'li
-> mesh — 0 gövde, 1 bileklik kayışı —, albedo + normal doku seti, albedo alfası = smoothness):
-> OpenXR dalının SkinnedMeshRenderer'ı üstünde `VA_CameraRig`'de mesh + materyal override'ıdır;
-> kemikler ve adlar paketindir (değiştirme kuralı → Yapma Listesi). Kayışın rengi yerel oyuncunun
-> takımıdır (`GloveTeamBand`, §4). Kaynağı ve değişiklik akışı `blender/TacticalGlove/README.md`. Yerel gövde (`LocalBodyAvatar`) yalnız **ağ kaynağıdır**, tüm renderer'ları
+> modellerdir**. O elin **varsayılan** görünümü taktik eldivendir (`_Shared/Avatars/TacticalGlove/`:
+> iki alt-mesh'li mesh — 0 gövde, 1 bileklik kayışı —, albedo + normal doku seti, albedo alfası =
+> smoothness): OpenXR dalının SkinnedMeshRenderer'ı üstünde `VA_CameraRig`'de mesh + materyal
+> override'ıdır; kemikler ve adlar paketindir (değiştirme kuralı → Yapma Listesi). Kayışın rengi
+> yerel oyuncunun takımıdır (`LocalGloves`, §4). Bir mod `ModeDefinition.gloveSkin` ile oyuncuya
+> **kendi eldivenini** giydirebilir (`GloveSkin` SO'su; alan boşken taktik eldiven kalır) — mod
+> eldivenlerinin asset'leri `Modes/<Mod>/Avatars/<Eldiven>/` altındadır, Blender kaynağı ve
+> değişiklik akışı `blender/<Eldiven>/README.md`'de, ekleme reçetesi
+> `Docs/Gelistirici/Yemek-Kitabi.md`'dedir. Yerel gövde (`LocalBodyAvatar`) yalnız **ağ kaynağıdır**, tüm renderer'ları
 > kapalıdır; başkaları o gövdeyi uzak avatarda görür — iki taraf **aynı FBX, aynı retarget
 > config, aynı kod** (prefablar ayrıdır: `Avatars/Resources/LocalBodyAvatar.prefab` ve
 > `App/Prefabs/RemoteAvatar.prefab`). Tek fark
@@ -2831,7 +2850,7 @@ arena geometrisini üreten ve kavrama pozunu yazan araçlar:
 | `BuildReadiness` | Hazırlık satırlarının **toplayıcısı** — `BuildElementsConfigurator`'ın çizdiği liste buradan gelir. ⚠️ **Denetimin mantığı burada DEĞİL, aracın kendi dosyasındadır** (`HmdOverlayBuilder.IsRigUpToDate` · `NetItemIdGuard.IsCatalogUpToDate` · `WeaponKitBuilder.AreWeaponsReady` · `SkeletonStreamGuard.AreJointListsMatched` · `ServerConfigExporter.IsMapsJsonUpToDate`): eşiği/sabiti kim tanımlıyorsa "güncel mi" sorusunu da o cevaplar, buraya kopyalanan bir ölçüt sessizce sapardı. Her denetim kendi istisnasını yutar (satır ✗ olur, mesaj detaya düşer) — tek bir aracın sözleşme kayması pencereyi tümden çizilemez yapmaz. `maps.json` denetimi dosyayı ayrıştırmaz, **üretilecek içerikle bayt bayt karşılaştırır**: export deterministik yazdığı için "aynı mı" sorusu tam olarak "export bu dosyayı değiştirir mi" sorusudur |
 | `ModeAudioRegistryEditor` (+ `ModeAudioRegistryMenu`) | `ModeAudioRegistry`'nin Inspector yüzü: mod ve harita **`GameCatalog`'dan seçilir**, elle yazılmaz. ⚠️ **Var olma sebebi bu iki alanın serbest string olmasıdır** — yanlış yazılan bir modId derlemeyi kırmaz, kural yalnızca hiç eşleşmez ve sahada "ses çalmıyor" diye görünür. Satır başına denetim: klip listesi boşsa (kural sessiz), harita o modu desteklemiyorsa (`supportedModeIds`), seçili mod/harita oyun tipi filtresiyle çelişiyorsa, aynı mod/harita/oyun tipi/tetikleyici dörtlüsü yukarıda da varsa (eşit spesiflikte ilki kazanır → bu satır ölü). Eşik alanı yalnız uyarı tetikleyicilerinde çizilir; klip listesinin etiketi `Countdown`'da saniye eşlemesini yazar. ⚠️ `Kural Ekle` yeni satırın **her alanını tek tek kurar**: `InsertArrayElementAtIndex` bir öncekinin değerlerini kopyalar, kurulmasa yeni kural eski kliplerle sessizce yanlış doğardı. ⚠️ **Ses önizleme düğmesi YOKTUR ve eklenmez** — editörde klip çalmanın tek yolu `UnityEditor.AudioUtil` refleksiyonudur, o internal olduğu için sürüm atlayınca sessizce kırılır. Menü öğesi (`Audio > Mod Sesleri`) kaydı yalnız **bulur ve seçer** (yoksa oluşturur); ikinci bir düzenleme yüzeyi açmaması bilinçli |
 | `ModeBodyBuilder` | `Mod Gövdesi Kur (seçili FBX)` (`Tools > VortexArena > Avatars`): seçili **Mixamo riglenmiş** FBX'ten aynı klasörde `<FBX adı>_Body.prefab` üretir — kökte `SkeletonPoseMirror`, altında FBX'in **prefab örneği** (asla unpack edilmez, model güncellenince gövde de güncellenir), `Animator` kapalı, `SkinnedMeshRenderer`'larda `updateWhenOffscreen` açık (kemikleri ayna sürüyor, Unity'nin bounds'u güncellenmiyor ve gövde kadraj dışı sayılıp kaybolurdu). Aynanın yazılan alanları: `targetRoot`, `targetHips`, `sourceHipsBind` (varsayılan gövdenin FBX'inden), `targetHipsBind`, `heightCalibration`; `sourceRoot`/`sourceHips` **boş bırakılır** — onları çalışma anında `RemoteAvatar` `BindSource` ile yazar. ⚠️ **Prefab varsa yalnız ayna alanları tazelenir**: elle yerleştirilmiş vuruş kutuları ve materyal atamaları korunur, yoksa araç her koşuda o işi silerdi. ⚠️ `heightCalibration` **kafa ortası** oranından hesaplanır (`mixamorig:Head` ↔ `mixamorig:HeadTop_End` ortası), takım gövdesindeki kalça oranından değil (gerekçe yukarıda, uzak avatar bölümü). Kutuları ve materyalleri ÜRETMEZ — reçetesi `Docs/Gelistirici/Yemek-Kitabi.md` |
-| `TacticalGloveImporter` | `Tools > VortexArena > Avatars > Taktik Eldiven Mesh'ini İçe Aktar`: Blender betiğinin `blender/TacticalGlove/export/` dökümlerinden `TacticalGlove_R/L.asset`'i **yerinde** yeniden yazar (GUID ve rig bağı korunur). Bindpose asset'in kendisinden kalır, kemik ağırlıkları rig SMR'ının `bones` sırasına **adla** eşlenir; Blender→Unity'de z eksi işaretlenir, sarım ve tangent işareti çevrilir. İki döküm de okunmadan hiçbir şey yazılmaz. Akış: `blender/TacticalGlove/README.md` |
+| `GloveMeshImporter` | `Tools > VortexArena > Avatars > Eldiven Mesh'ini İçe Aktar > <Eldiven>`: Blender betiğinin `blender/<Eldiven>/export/<Eldiven>_{R,L}.txt` dökümlerinden `<Eldiven>_R/L.asset`'i **yerinde** yeniden yazar (GUID ve `GloveSkin` bağı korunur); asset yoksa paketin el mesh'inin bindpose'larıyla oluşturur — yalnız rig paketin kemik sırasını koruyorsa, korumuyorsa hata. Var olan asset'te bindpose kendisinden kalır, kemik ağırlıkları rig SMR'ının `bones` sırasına **adla** eşlenir; Blender→Unity'de z eksi işaretlenir, sarım ve tangent işareti çevrilir. İki döküm de okunmadan hiçbir şey yazılmaz; dokular zorla yeniden import edilir. ⚠️ Her eldiven **tek satırlık bir tanımdır** (ad = `blender/` klasör adı = döküm/asset/doku öneki, asset klasörü, alt-mesh sayısı) + bir `MenuItem`; ikinci bir importer yazılmaz. Akış: `blender/<Eldiven>/README.md` |
 
 ### İstemci: `VortexArena.Modes.Burger` (çocuk oyunu sunumu)
 
@@ -3746,7 +3765,7 @@ konsoluna tek satır sebep yazar.
     listesiyle değil, `ItemDefinition.teamTintChildren`'da **çocuk obje ADIYLA** tutulur ve iki uç
     (`MoleHammerGranter` yerelde, `RemoteAvatar` uzakta) aynı listeyi `ApplyTeamTint` ile boyar;
     liste boşsa eşya boyanmaz — canlı oyuncunun takım rengi başka hiçbir yerde çizilmez, açmak eşya
-    başına bilinçli bir karardır. Tek istisna yerel eldivenin kayışıdır (`GloveTeamBand`): o eli
+    başına bilinçli bir karardır. Tek istisna yerel eldivenin kayışıdır (`LocalGloves`): o eli
     yalnız sahibi görür, rakibe bilgi taşımaz. ⚠️ İkinci yarısı da aynı derste: "yerelde görünen ama uzakta görünmeyen"
     her animasyon önce *telde eksik bir alan* gibi görünür — oysa girdisi zaten geliyorsa
     (olay + `itemId`) doğru cevap **alıcıda türetmektir**, protokole alan eklemek değil (§6.4).

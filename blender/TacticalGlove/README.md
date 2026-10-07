@@ -2,14 +2,14 @@
 
 Oyuncunun gözlükte kendi elinde gördüğü eldivenin kaynağı. Oyundaki karşılığı
 `Assets/_Shared/Avatars/TacticalGlove/` (mesh asset'leri, dokular, materyaller); rig'e nasıl
-bağlandığı `Docs/Sistem-Ozeti.md` (`GloveTeamBand` ve yerel el görünümü), dokunulmayacak yerler
+bağlandığı `Docs/Sistem-Ozeti.md` (`LocalGloves` ve yerel el görünümü), dokunulmayacak yerler
 `Docs/Gelistirici/Yapma-Listesi.md` "Yerel elin görünümünü rig'in kemiklerine/hiyerarşisine
 dokunarak değiştirme" bölümü.
 
 | Dosya | İçerik |
 |---|---|
 | `TacticalGlove.blend` | `Glove_R` / `Glove_L` mesh'leri, OpenXR el iskeletleri (`OXRRightHand` / `OXRLeftHand`, `XRHand_*` kemik adları), `GlovePreview` önizleme sahnesi. Dokular paketli değildir, `Assets/` altındaki PNG'leri gösterir |
-| `glove_tex.py` | Prosedürel doku seti (albedo + normal) ve Unity için mesh dökümü |
+| `glove_tex.py` | Prosedürel doku seti (albedo + normal) ve Unity için mesh dökümü. ⚠️ Genel yardımcıları (raster, gürültü, UV, döküm) `../ChefGlove/chef_tex.py` de içe aktarır: birini değiştirmek iki eldiveni de değiştirir, parametre eklerken varsayılanı bugünkü davranış kalmalı |
 | `export/` | Betiğin ürettiği mesh dökümleri (`TacticalGlove_R/L.txt`) — git'e girmez |
 | `renders/` | `render()` önizlemeleri — git'e girmez |
 
@@ -47,11 +47,11 @@ Bölge değiştirmek: Edit Mode'da yüzleri seç → *Mesh > Set Attribute* → 
    Geometri değiştiyse UV'ler yeniden açılmalıdır: son satırı `build(unwrap_uv=True)` yap.
    UV'ler yeniden açılınca doku yerleşimi tamamen değişir; yalnız desen/renk değişikliğinde
    kullanma.
-3. Unity'de `Tools > VortexArena > Avatars > Taktik Eldiven Mesh'ini İçe Aktar`: `export/`'taki
+3. Unity'de `Tools > VortexArena > Avatars > Eldiven Mesh'ini İçe Aktar > Taktik Eldiven`: `export/`'taki
    dökümleri okur, `TacticalGlove_R/L.asset`'in mesh verisini **yerinde** yeniden yazar (GUID
    değişmez, `VA_CameraRig` bağı korunur). Blender'ın FBX'ini doğrudan mesh olarak atama — kemik
    sırası ve bindpose farklıdır, el parçalanmış çizilir.
 
 Bölge renkleri `glove_tex.py`'deki `C_*` sabitleridir, desenler `stage_material()`'dadır.
 Kayış dokusu bilerek açık gridir (`C_BAND*`) ki materyal rengi onu boyayabilsin; Blender'daki kayış
-rengi yalnız önizlemedir (`setup_band_material(tint)`), oyunda rengi `GloveTeamBand` verir.
+rengi yalnız önizlemedir (`setup_band_material(tint)`), oyunda rengi `LocalGloves` verir.

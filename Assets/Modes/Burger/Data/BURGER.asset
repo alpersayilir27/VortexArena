@@ -25,6 +25,7 @@ MonoBehaviour:
   weapons: 2
   respawnDelay: 0
   allies: 1
+  limitedReserve: 0
   maps: []
   loadout: []
   hudPrefab: {fileID: 3415840267267884003, guid: e9a3c27e2c57eeb48b044d2b4936ae57, type: 3}
@@ -32,3 +33,4 @@ MonoBehaviour:
   bodyPrefab: {fileID: 6506793205651233118, guid: 1e703d18d428bb848ae7bf067ee3b8e4, type: 3}
   redBodyPrefab: {fileID: 0}
   altBodyPrefab: {fileID: 5822268096631921242, guid: 098a62bbed647f84f891c00496b8de39, type: 3}
+  gloveSkin: {fileID: 11400000, guid: 8dd12292fd6410c48afe828f1ca145ff, type: 2}

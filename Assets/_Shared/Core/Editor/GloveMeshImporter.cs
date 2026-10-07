@@ -9,77 +9,102 @@ using UnityEngine.Rendering;
 
 namespace VortexArena.Core.Editor
 {
-    /// <summary>Rewrites the tactical glove meshes from the Blender dumps (<c>blender/TacticalGlove/export</c>).</summary>
+    /// <summary>Writes the local-hand glove meshes from their Blender dumps (<c>blender/&lt;Glove&gt;/export</c>).</summary>
     /// <remarks>
-    /// Writes into the existing mesh assets, so GUIDs and the rig's references survive. Bindposes stay the
-    /// asset's own (package hand mesh); weights are matched to the rig renderer's bone order BY NAME.
-    /// Both dumps are parsed before anything is written. Pipeline: <c>blender/TacticalGlove/README.md</c>.
+    /// An existing mesh asset is rewritten in place, so GUIDs and references survive; a missing one is created with
+    /// the package hand's bindposes. Weights are matched to the rig renderer's bone order BY NAME. Both dumps are
+    /// parsed before anything is written. Pipeline: the README next to each glove's Blender file.
     /// </remarks>
-    public static class TacticalGloveImporter
+    public static class GloveMeshImporter
     {
-        private const string AssetDir = "Assets/_Shared/Avatars/TacticalGlove";
         private const string RigPath = "Assets/_Shared/App/Prefabs/VA_CameraRig.prefab";
-        private static readonly string[] Textures = { "T_TacticalGlove_Albedo", "T_TacticalGlove_Normal" };
+        private const string PackageHandPath = "Packages/com.meta.xr.sdk.interaction/Runtime/Meshes/OpenXR{0}Hand.fbx";
+
+        // Name = Blender folder = dump/asset/texture prefix.
+        private sealed class Glove
+        {
+            public string Name;
+            public string AssetDir;
+            public int Submeshes;
+        }
+
+        private static readonly Glove Tactical = new Glove { Name = "TacticalGlove", AssetDir = "Assets/_Shared/Avatars/TacticalGlove", Submeshes = 2 };
+        private static readonly Glove Chef = new Glove { Name = "ChefGlove", AssetDir = "Assets/Modes/Burger/Avatars/ChefGlove", Submeshes = 1 };
 
         private sealed class Dump
         {
             public string Side;
-            public Mesh Mesh;
+            public string AssetPath;
+            public Mesh Mesh;               // null = created on apply
+            public Matrix4x4[] Bindposes;   // for a new asset
             public readonly List<Vector3> Vertices = new List<Vector3>();
             public readonly List<Vector3> Normals = new List<Vector3>();
             public readonly List<Vector4> Tangents = new List<Vector4>();
             public readonly List<Vector2> Uvs = new List<Vector2>();
             public readonly List<BoneWeight> Weights = new List<BoneWeight>();
-            public readonly List<int>[] Triangles = { new List<int>(), new List<int>() };
+            public List<int>[] Triangles;
         }
 
-        [MenuItem("Tools/VortexArena/Avatars/Taktik Eldiven Mesh'ini İçe Aktar", false, 25)]
-        private static void Import()
+        [MenuItem("Tools/VortexArena/Avatars/Eldiven Mesh'ini İçe Aktar/Taktik Eldiven", false, 25)]
+        private static void ImportTactical() => Import(Tactical);
+
+        [MenuItem("Tools/VortexArena/Avatars/Eldiven Mesh'ini İçe Aktar/Aşçı Eldiveni", false, 26)]
+        private static void ImportChef() => Import(Chef);
+
+        private static void Import(Glove glove)
         {
-            var exportDir = Path.Combine(Path.GetDirectoryName(Application.dataPath) ?? ".", "blender", "TacticalGlove", "export");
+            var tag = $"[GloveImport:{glove.Name}] ";
+            var exportDir = Path.Combine(Path.GetDirectoryName(Application.dataPath) ?? ".", "blender", glove.Name, "export");
             var rig = AssetDatabase.LoadAssetAtPath<GameObject>(RigPath);
             if (rig == null)
             {
-                Debug.LogError($"[TacticalGlove] Rig prefabı yok: {RigPath}");
+                Debug.LogError(tag + $"Rig prefabı yok: {RigPath}");
+                return;
+            }
+
+            if (!AssetDatabase.IsValidFolder(glove.AssetDir))
+            {
+                Debug.LogError(tag + $"Hedef klasör yok: {glove.AssetDir} — Blender betiği dokuları oraya yazar, önce o çalışmalı.");
                 return;
             }
 
             var dumps = new List<Dump>();
             foreach (var side in new[] { "R", "L" })
             {
-                var dump = Parse(rig, exportDir, side, out var error);
+                var dump = Parse(rig, glove, exportDir, side, out var error);
                 if (dump == null)
                 {
-                    Debug.LogError("[TacticalGlove] " + error);
+                    Debug.LogError(tag + error);
                     return;
                 }
 
                 dumps.Add(dump);
             }
 
-            // Blender writes the PNGs straight into Assets; make sure Unity has the current pixels.
-            foreach (var texture in Textures)
+            // Blender writes the PNGs straight into the asset folder; make sure Unity has the current pixels.
+            foreach (var texture in new[] { "Albedo", "Normal" })
             {
-                AssetDatabase.ImportAsset($"{AssetDir}/{texture}.png", ImportAssetOptions.ForceUpdate);
+                AssetDatabase.ImportAsset($"{glove.AssetDir}/T_{glove.Name}_{texture}.png", ImportAssetOptions.ForceUpdate);
             }
 
             var report = new List<string>();
             foreach (var dump in dumps)
             {
-                Apply(dump);
-                report.Add($"{dump.Side}: {dump.Vertices.Count} vertex, gövde {dump.Triangles[0].Count / 3} / kayış {dump.Triangles[1].Count / 3} üçgen");
+                Apply(dump, glove);
+                report.Add($"{dump.Side}: {dump.Vertices.Count} vertex, alt-mesh üçgenleri " +
+                           string.Join(" / ", dump.Triangles.Select(t => t.Count / 3)));
             }
 
             AssetDatabase.SaveAssets();
-            Debug.Log("[TacticalGlove] Eldiven mesh'leri yeniden yazıldı — " + string.Join(" · ", report));
+            Debug.Log(tag + "Eldiven mesh'leri yazıldı — " + string.Join(" · ", report));
         }
 
-        private static Dump Parse(GameObject rig, string exportDir, string side, out string error)
+        private static Dump Parse(GameObject rig, Glove glove, string exportDir, string side, out string error)
         {
-            var path = Path.Combine(exportDir, $"TacticalGlove_{side}.txt");
+            var path = Path.Combine(exportDir, $"{glove.Name}_{side}.txt");
             if (!File.Exists(path))
             {
-                error = $"Döküm yok: {path} — önce Blender'da glove_tex.py çalıştırılmalı.";
+                error = $"Döküm yok: {path} — önce Blender'daki doku betiği çalıştırılmalı.";
                 return null;
             }
 
@@ -92,17 +117,31 @@ namespace VortexArena.Core.Editor
                 return null;
             }
 
-            var dump = new Dump { Side = side, Mesh = AssetDatabase.LoadAssetAtPath<Mesh>($"{AssetDir}/TacticalGlove_{side}.asset") };
+            var dump = new Dump
+            {
+                Side = side,
+                AssetPath = $"{glove.AssetDir}/{glove.Name}_{side}.asset",
+                Triangles = Enumerable.Range(0, glove.Submeshes).Select(_ => new List<int>()).ToArray(),
+            };
+            dump.Mesh = AssetDatabase.LoadAssetAtPath<Mesh>(dump.AssetPath);
+            var bindposeCount = dump.Mesh != null ? dump.Mesh.bindposes.Length : -1;
             if (dump.Mesh == null)
             {
-                error = $"Mesh asset'i yok: {AssetDir}/TacticalGlove_{side}.asset — araç yalnız var olan asset'i yeniden yazar.";
-                return null;
+                // Bindpose i belongs to bone i: the package mesh is only usable when the rig keeps its bone order.
+                var package = AssetDatabase.LoadAssetAtPath<GameObject>(string.Format(PackageHandPath, hand))?.GetComponentInChildren<SkinnedMeshRenderer>();
+                if (package == null || !package.bones.Select(b => b.name).SequenceEqual(smr.bones.Select(b => b.name)))
+                {
+                    error = $"{side}: yeni asset için paketin el mesh'i bulunamadı ya da kemik sırası rig'inkinden farklı.";
+                    return null;
+                }
+
+                dump.Bindposes = package.sharedMesh.bindposes;
+                bindposeCount = dump.Bindposes.Length;
             }
 
-            // Bindpose i belongs to bone i, so the asset and the renderer must agree on the bone count.
-            if (dump.Mesh.bindposes.Length != smr.bones.Length)
+            if (bindposeCount != smr.bones.Length)
             {
-                error = $"{side}: bindpose sayısı ({dump.Mesh.bindposes.Length}) rig kemik sayısıyla ({smr.bones.Length}) uyuşmuyor.";
+                error = $"{side}: bindpose sayısı ({bindposeCount}) rig kemik sayısıyla ({smr.bones.Length}) uyuşmuyor.";
                 return null;
             }
 
@@ -155,9 +194,9 @@ namespace VortexArena.Core.Editor
                         break;
                     case "f":
                         var sub = int.Parse(p[4], inv);
-                        if (sub < 0 || sub > 1)
+                        if (sub < 0 || sub >= glove.Submeshes)
                         {
-                            error = $"{side}: bilinmeyen alt-mesh {sub} (0 gövde, 1 kayış).";
+                            error = $"{side}: bilinmeyen alt-mesh {sub} (bu eldivende {glove.Submeshes} alt-mesh var).";
                             return null;
                         }
 
@@ -198,10 +237,16 @@ namespace VortexArena.Core.Editor
             return bw;
         }
 
-        private static void Apply(Dump dump)
+        private static void Apply(Dump dump, Glove glove)
         {
             var mesh = dump.Mesh;
-            var bindposes = mesh.bindposes;
+            var bindposes = mesh != null ? mesh.bindposes : dump.Bindposes;
+            if (mesh == null)
+            {
+                mesh = new Mesh { name = $"{glove.Name}_{dump.Side}" };
+                AssetDatabase.CreateAsset(mesh, dump.AssetPath);
+            }
+
             mesh.Clear();
             mesh.indexFormat = dump.Vertices.Count > ushort.MaxValue ? IndexFormat.UInt32 : IndexFormat.UInt16;
             mesh.SetVertices(dump.Vertices);
@@ -210,9 +255,12 @@ namespace VortexArena.Core.Editor
             mesh.SetUVs(0, dump.Uvs);
             mesh.boneWeights = dump.Weights.ToArray();
             mesh.bindposes = bindposes;
-            mesh.subMeshCount = 2;
-            mesh.SetTriangles(dump.Triangles[0], 0);
-            mesh.SetTriangles(dump.Triangles[1], 1);
+            mesh.subMeshCount = dump.Triangles.Length;
+            for (int i = 0; i < dump.Triangles.Length; i++)
+            {
+                mesh.SetTriangles(dump.Triangles[i], i);
+            }
+
             mesh.RecalculateBounds();
             EditorUtility.SetDirty(mesh);
         }

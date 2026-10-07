@@ -127,7 +127,7 @@ def ensure_zone(me):
     z = zones_from_palette(me, me.uv_layers[0].name)
     a = me.attributes.new("zone", 'INT', 'FACE'); a.data.foreach_set("value", z)
 
-def unwrap(o):
+def unwrap(o, angle=66):
     me = o.data
     ensure_zone(me)
     if "Palette" not in me.uv_layers: me.uv_layers[0].name = "Palette"
@@ -138,7 +138,7 @@ def unwrap(o):
     with bpy.context.temp_override(**view3d_override()):
         bpy.ops.object.mode_set(mode='EDIT')
         bpy.ops.mesh.select_all(action='SELECT')
-        bpy.ops.uv.smart_project(angle_limit=math.radians(66), island_margin=0.003, area_weight=0.0, correct_aspect=True, scale_to_bounds=False)
+        bpy.ops.uv.smart_project(angle_limit=math.radians(angle), island_margin=0.003, area_weight=0.0, correct_aspect=True, scale_to_bounds=False)
         bpy.ops.uv.select_all(action='SELECT')
         bpy.ops.uv.average_islands_scale()
         bpy.ops.uv.pack_islands(rotate=True, margin=0.004)
@@ -237,8 +237,8 @@ def vertex_ao(A, rays=48, maxd=0.02):
         ao[i] = 1.0 - occ / rays
     return ao
 
-def stage_raster():
-    o = bpy.data.objects["Glove_R"]
+def stage_raster(name="Glove_R"):
+    o = bpy.data.objects[name]
     A = mesh_arrays(o)
     tri = rasterize(A)
     cov = tri >= 0
@@ -268,7 +268,7 @@ def stage_raster():
     ao_v = vertex_ao(A)
     AO = (ao_v[LV[TL[t]]] * W).sum(1)
     S.update(A=A, tri=tri, cov=cov, ev=ev, ys=ys, xs=xs, t=t, P=P.astype(np.float32), N=N.astype(np.float32), T=T.astype(np.float32),
-             SG=SG, Pu=Pu, Pv=Pvv, AO=AO.astype(np.float32), Z=A["FZ"][A["TP"][t]])
+             SG=SG, Pu=Pu, Pv=Pvv, AO=AO.astype(np.float32), Z=A["FZ"][A["TP"][t]], W=W)
     mmpp = np.linalg.norm(Pu, axis=1).mean() * 1000
     print("covered %.1f%%  eval texels %d  mm/px %.3f (%.1f px/mm)  AO min %.2f" % (cov.mean() * 100, len(t), mmpp, 1 / mmpp, ao_v.min()))
 
@@ -631,8 +631,8 @@ def pad(img, mask, n=40):
         img[new] = acc[new] / cnt[new][:, None]; mask = mask | new
     return img
 
-def save_png(name, arr, noncolor):
-    path = os.path.join(OUT, name + ".png")
+def save_png(name, arr, noncolor, out=None):
+    path = os.path.join(out or OUT, name + ".png")
     if bpy.data.images.get(name): bpy.data.images.remove(bpy.data.images[name])
     img = bpy.data.images.new(name, RES, RES, alpha=arr.shape[2] == 4)
     img.colorspace_settings.name = 'Non-Color' if noncolor else 'sRGB'
@@ -642,8 +642,9 @@ def save_png(name, arr, noncolor):
     img.alpha_mode = 'CHANNEL_PACKED'
     return img
 
-def stage_images():
-    os.makedirs(OUT, exist_ok=True)
+def stage_images(prefix="T_TacticalGlove", out=None):
+    out = out or OUT
+    os.makedirs(out, exist_ok=True)
     ev = S["ev"]; ys, xs = S["ys"], S["xs"]
     H = grid(S["h"])
     def d(axis):
@@ -665,9 +666,9 @@ def stage_images():
     nrm = grid(ts * 0.5 + 0.5); alb = grid(np.concatenate([S["col"], S["sm"][:, None]], 1))
     nrm = pad(nrm, ev); alb = pad(alb, ev)
     nrm[~ev & (nrm.sum(-1) == 0)] = (0.5, 0.5, 1.0)
-    save_png("T_TacticalGlove_Albedo", alb, False)
-    save_png("T_TacticalGlove_Normal", nrm, True)
-    print("saved to", OUT)
+    save_png(prefix + "_Albedo", alb, False, out)
+    save_png(prefix + "_Normal", nrm, True, out)
+    print("saved to", out)
 
 # ---------------------------------------------------------------- export for Unity
 def vertex_weights(o):
@@ -682,7 +683,8 @@ def vertex_weights(o):
         out.append(" ".join("%d %.6f" % (b, w / s) for b, w in inf))
     return bones, out
 
-def export_dump(side, o, A):
+def export_dump(side, o, A, name="TacticalGlove", sub_zone=STR, export=None):
+    """sub_zone: faces of that zone go to submesh 1 (None = single submesh)."""
     bones, W = vertex_weights(o)
     LV, LN, LUV, LT, LS = A["LV"], A["LN"], A["LUV"], A["LT"], A["LS"]
     key2idx, verts, remap = {}, [], np.zeros(len(LV), np.int64)
@@ -690,8 +692,9 @@ def export_dump(side, o, A):
         k = (int(LV[l]), *np.round(LN[l], 4), *np.round(LUV[l], 6), *np.round(LT[l], 4), float(LS[l]))
         if k not in key2idx: key2idx[k] = len(verts); verts.append(l)
         remap[l] = key2idx[k]
-    os.makedirs(EXPORT, exist_ok=True)
-    path = os.path.join(EXPORT, f"TacticalGlove_{side}.txt")
+    export = export or EXPORT
+    os.makedirs(export, exist_ok=True)
+    path = os.path.join(export, f"{name}_{side}.txt")
     with open(path, "w") as f:
         f.write("bones " + " ".join(bones) + "\n")
         for l in verts: f.write("v %.7f %.7f %.7f\n" % tuple(A["V"][LV[l]]))
@@ -699,7 +702,7 @@ def export_dump(side, o, A):
         for l in verts: f.write("t %.7f %.7f\n" % tuple(LUV[l]))
         for l in verts: f.write("g %.6f %.6f %.6f %.0f\n" % (*LT[l], LS[l]))
         for l in verts: f.write("w " + W[LV[l]] + "\n")
-        sub = (A["FZ"][A["TP"]] == STR).astype(int)               # submesh 1 = team-tinted strap band
+        sub = (A["FZ"][A["TP"]] == sub_zone).astype(int)          # tactical: submesh 1 = team-tinted strap band
         for tl, sb in zip(A["TL"], sub): f.write("f %d %d %d %d\n" % (*remap[tl], sb))
     print(side, "split verts", len(verts), "tris", len(A["TL"]), "->", path)
 

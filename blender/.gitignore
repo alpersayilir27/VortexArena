@@ -1,3 +1,5 @@
 # Blender betiklerinin ürettiği ara çıktılar — kaynak .blend + betiktir, bunlar yeniden üretilir
 */export/
 */renders/
+# chef_tex.py, glove_tex.py'yi modül olarak içe aktarır
+__pycache__/
