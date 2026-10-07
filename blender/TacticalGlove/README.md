@@ -21,7 +21,7 @@ Her yüzün `zone` adlı tamsayı attribute'u vardır; doku betiği deseni buna 
 |---|---|
 | 0 | Kumaş |
 | 1 | Deri (avuç, parmak uçları) |
-| 2 | Kauçuk (boğum barı, parmak pedleri, manşet kenarı, kayış etiketi) |
+| 2 | Kauçuk (parmak pedleri, manşet kenarı, kayış etiketi) |
 | 3 | Bileklik kayışı — Unity'de **alt-mesh 1**, takım rengini alır |
 | 5 | İç yüz |
 
@@ -35,6 +35,11 @@ Bölge değiştirmek: Edit Mode'da yüzleri seç → *Mesh > Set Attribute* → 
      sebeple iki el tek doku setini paylaşır.
    - Kemiklere, kemik adlarına ve iskelet hiyerarşisine dokunma — Unity tarafı kemikleri
      **adla** eşler, bindpose'lar paketin mesh'inden gelir.
+   - Bükülen bölgenin üstüne ayrı sert parça modelleme: eklem bükülünce parça gövdeyle kesişir.
+     Boğum koruması bu yüzden geometri değil, kumaşa çizilmiş dokudur (`KNUCKLE_*` sabitleri,
+     `knuckle_sdf`).
+   - ⚠️ Ayrı parça eklenirse normalleri **dışa** bakmalıdır. Blender arka yüzü de çizer, Unity
+     çizmez: ters parça Blender'da düzgün görünür, oyunda görünmez.
 2. *Scripting* sekmesinde `glove_tex.py`'yi aç → *Run Script*. Betik `build()`'i koşar:
    - dokular doğrudan `Assets/_Shared/Avatars/TacticalGlove/`'a yazılır (Unity olduğu gibi alır);
    - mesh dökümleri `export/`'a yazılır.

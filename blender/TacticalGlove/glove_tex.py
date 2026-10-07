@@ -412,6 +412,30 @@ def rubber_shells(A):
 def is_rim(inf): return inf["c"][1] < -55
 def is_tab(inf): return -55 < inf["c"][1] < -30 and inf["ext"][2] < 12
 
+# Knuckle guard is painted on the fabric, not modelled: a separate plate cannot follow flexing knuckles.
+KNUCKLE_HW, KNUCKLE_EXT = 9.5, 4.0          # half width, overhang past index/little (mm)
+PANEL_TOP = 68.4                            # back panel top edge, just below the guard (mm)
+
+def catmull_rom(K, n=12):
+    Q = np.vstack([K[0], K, K[-1]]); out = []
+    for i in range(1, len(Q) - 2):
+        p0, p1, p2, p3 = Q[i - 1], Q[i], Q[i + 1], Q[i + 2]
+        for t in np.linspace(0, 1, n, endpoint=False):
+            out.append(0.5 * (2 * p1 + (p2 - p0) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t * t + (3 * p1 - p0 - 3 * p2 + p3) * t ** 3))
+    return np.vstack(out + [Q[-2]])
+
+def knuckle_sdf(P, B):
+    """Signed xy distance (mm) to the guard: a capsule along a smooth curve through the index→little MCP joints."""
+    K = np.array([B[f"XRHand_{f}Proximal"][:2] for f in ("Index", "Middle", "Ring", "Little")])
+    d0, d1 = K[0] - K[1], K[3] - K[2]
+    K = np.vstack([K[0] + d0 / np.linalg.norm(d0) * KNUCKLE_EXT, K, K[3] + d1 / np.linalg.norm(d1) * KNUCKLE_EXT])
+    K = catmull_rom(K)                      # a straight polyline puts kinks into the offset edge
+    q = P[:, :2]; best = np.full(len(q), 1e9, np.float32)
+    for a, b in zip(K[:-1], K[1:]):
+        ab = b - a; t = np.clip(((q - a) @ ab) / (ab @ ab), 0, 1)
+        best = np.minimum(best, np.linalg.norm(q - (a + t[:, None] * ab), axis=1))
+    return best - KNUCKLE_HW
+
 def stage_material():
     A = S["A"]; P = S["P"] * 1000; N = S["N"]; Z = S["Zeff"]; D = S["D"]; AL = S["AL"]; TY = S["TY"]; types = S["types"]
     K = len(P)
@@ -428,10 +452,8 @@ def stage_material():
     dorsal = (Nm[:, 2] > 0.5) & (Pm[:, 1] > 10) & (Pm[:, 1] < 60)
     x0, x1 = np.percentile(Pm[dorsal, 0], 2), np.percentile(Pm[dorsal, 0], 98)
     shells, sinfo = rubber_shells(A)
-    knuckle = [v for v in sinfo.values() if v["ext"][0] > 35 and v["c"][1] > 0]
-    kyl = min(v["c"][1] - v["ext"][1] * 0.5 for v in knuckle) if knuckle else 72.0
-    pcx, pcy = (x0 + x1) * 0.5, (2.0 + kyl - 7.0) * 0.5
-    phx, phy = (x1 - x0) * 0.5 - 8.0, (kyl - 7.0 - 2.0) * 0.5
+    pcx, pcy = (x0 + x1) * 0.5, (2.0 + PANEL_TOP - 7.0) * 0.5
+    phx, phy = (x1 - x0) * 0.5 - 8.0, (PANEL_TOP - 7.0 - 2.0) * 0.5
     sd, al = rrect(Pm[:, 0] - pcx, Pm[:, 1] - pcy, phx, phy, 9.0)
     top = sstep(0.25, 0.45, Nm[:, 2])
     inside = (1 - sstep(-0.35, 0.35, sd)) * top
@@ -456,6 +478,18 @@ def stage_material():
             wz = sstep(half, half - 1.0, np.abs(tt)) * sstep(11.0, 8.0, lat) * sstep(0.0, 0.35, up)
             rib = 0.5 + 0.5 * np.cos(2 * np.pi * tt / 1.25)
             c *= (1 - wz * (0.10 + 0.12 * (1 - rib)))[:, None]; hh += wz * 0.28 * rib; s += wz * 0.04 * rib
+    # knuckle guard: moulded rubber plate with hex cells; the bevel carries the relief in the normal map
+    sdK = knuckle_sdf(Pm, B)
+    topK = sstep(0.05, 0.35, Nm[:, 2])
+    inK = (1 - sstep(-0.3, 0.3, sdK)) * topK
+    bevel = sstep(0.0, -1.6, sdK); edgeK = 1 - bevel
+    cell = sstep(0.44, 0.40, hexedge(hexlattice(Pm[:, 0], Pm[:, 1], 3.0), 3.0)) * sstep(-1.8, -2.6, sdK)
+    cK = C_RUB * (1 + 0.35 * edgeK[:, None] + 0.12 * cell[:, None]) * (0.95 + 0.1 * rough_n[m][:, None])
+    c = c * (1 - inK[:, None]) + cK * inK[:, None]
+    hh = hh * (1 - inK) + (0.55 * bevel + 0.30 * cell) * inK
+    s = s * (1 - inK) + (0.40 + 0.18 * edgeK + 0.08 * cell) * inK
+    out = sstep(-0.2, 0.2, sdK) * topK                              # contact shadow + seam groove; soft start or the edge aliases
+    c *= (1 - 0.35 * sstep(2.2, 0.0, sdK) * out)[:, None]; hh -= 0.15 * sstep(0.8, 0.0, sdK) * out
     col[m], h[m], sm[m] = c, hh, s
     # ---------------- leather (palm, finger pads, tips)
     m = Z == LEA
@@ -490,7 +524,7 @@ def stage_material():
         a_, p_, o_ = stitch(sdP + 1.5, alP)
         c = c * (1 - a_[:, None]) + C_THREAD * 0.85 * (0.8 + 0.2 * p_[:, None]) * a_[:, None]; hh += 0.15 * p_; c *= (1 - 0.35 * o_)[:, None]
     col[m], h[m], sm[m] = c, hh, s
-    # ---------------- rubber (knuckle guards + cuff rim)
+    # ---------------- rubber (finger pads, cuff rim, strap pull tab)
     m = Z == RUB
     Pm, Nm = P[m], N[m]
     sh = shells[A["TP"][S["t"][m]]]
@@ -531,14 +565,11 @@ def stage_material():
             cc = cc * (1 - a_[:, None]) + C_THREAD_DK * a_[:, None]; hk += 0.12 * p_; cc *= (1 - 0.3 * o_ * top)[:, None]
             c[k], hh[k], s[k] = cc, hk, sk
             continue
-        if inf["ext"][0] > 35:                                     # knuckle bar: hex cells
-            g = hexlattice(Pk[:, 0], Pk[:, 1], 3.0); e = hexedge(g, 3.0)
-            pat = sstep(0.44, 0.40, e)
-        else:                                                      # finger pad: ribs across the finger
-            fname = min(("Index", "Middle", "Ring", "Little"), key=lambda f: np.linalg.norm(B[f"XRHand_{f}Proximal"][:2] - inf["c"][:2]))
-            J, Jn = B[f"XRHand_{fname}Proximal"], B[f"XRHand_{fname}Intermediate"]
-            fd = (Jn - J) / np.linalg.norm(Jn - J); tt = (Pk - J) @ fd
-            pat = sstep(0.25, 0.6, 0.5 + 0.5 * np.cos(2 * np.pi * tt / 2.3))
+        # finger pad: ribs across the finger
+        fname = min(("Index", "Middle", "Ring", "Little"), key=lambda f: np.linalg.norm(B[f"XRHand_{f}Proximal"][:2] - inf["c"][:2]))
+        J, Jn = B[f"XRHand_{fname}Proximal"], B[f"XRHand_{fname}Intermediate"]
+        fd = (Jn - J) / np.linalg.norm(Jn - J); tt = (Pk - J) @ fd
+        pat = sstep(0.25, 0.6, 0.5 + 0.5 * np.cos(2 * np.pi * tt / 2.3))
         hh[k] = 0.32 * pat * topk
         c[k] = C_RUB * (1 + 0.35 * edge[:, None] + 0.12 * pat[:, None] * topk[:, None])
         s[k] = 0.40 + 0.18 * edge + 0.08 * pat * topk
