@@ -343,6 +343,22 @@ kısalmaz, **tamamen kaybolur** — kutu büyütülür, görsel konum midline hi
 kapatılamaz; builder'ın fabrika yardımcıları şekil/yazı/ikon başına kapatır, tıklanabilir yüzey
 kendi açar. Açık kalan dekoratif bir grafik üstündeki düğmenin tıklamasını yutar.
 
+### ⛔ Oyun içi dünya paneline `UiDrawOnTop`'tan geçmeyen arayüz ekleme / panelin sıralamasını elle 0'a çekme
+
+Dünya uzayındaki arayüz derinlik testine tabidir: önüne giren duvar/engel onu yutar, aynı kuyruktaki
+karartma quad'ı da gözden daha yakın olduğu için üstüne boyar — eklediğin parça **hata vermeden**
+görünmez olur. Mod HUD'ı ve maç sonu ekranı `UiDrawOnTop.Apply`'ı kökleri için kendisi çağırır;
+şablondan kopyalanan içerik devralır, ama **başka yerden çalışma anında** eklenen arayüz `Apply`'ı
+kendisi çağırmak zorundadır. Sıralar ofsettir, sabit değil: elle yazılan bir `sortingOrder` (özellikle
+0) paneli karartmanın arkasına geri düşürür.
+
+⚠️ **HUD'a yeni SHADER'lı bir arayüz eklemek de buraya girer:** `UiDrawOnTop` derinlik testini
+materyal alanıyla değil **shader takasıyla** kapatır (`unity_GUIZTestMode` materyal başına
+ezilemez), eşleme kaynak shader adına bakar. Eşlemesi ve `_Shared/Shaders/Resources` altında
+`ZTest Always` kopyası olmayan shader için materyal aynen bırakılır — konsola tek uyarı düşer,
+parça duvarın arkasında kaybolur. → gerekçe: **Sistem Özeti**, Tuzaklar — *"Dünya
+uzayındaki arayüz DERİNLİK TESTİNE TABİDİR"*
+
 ---
 
 ## Sahne ve prefab

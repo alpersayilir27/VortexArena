@@ -86,8 +86,9 @@ namespace VortexArena.App
         /// <summary>Card corner radius (px) — this screen's own value, larger than the panel default.</summary>
         private const float CardRadius = 20f;
 
-        /// <summary>Canvas sorting order — see <see cref="ApplySortingOrder"/>.</summary>
-        private const int CardSortingOrder = 10;
+        /// <summary>Canvas sorting order — above the blackout quad, the mode HUD and the result
+        /// screen; see <see cref="ApplySortingOrder"/>.</summary>
+        private const int CardSortingOrder = 30;
 
         // ----------------------------------------------------------------- state
 
@@ -216,7 +217,8 @@ namespace VortexArena.App
 
         /// <summary>Raises the card above `ArenaBoundary`'s blackout quad: both draw in queue 3000,
         /// where sorting order decides instead of camera distance — without it the quad 0.5 m from
-        /// the eye paints over the card at 1.1 m.</summary>
+        /// the eye paints over the card at 1.1 m. The order also clears the on-top mode HUD and the
+        /// result screen (<see cref="UiDrawOnTop"/>), which can be open at the same time.</summary>
         private void ApplySortingOrder()
         {
             if (_canvas == null)

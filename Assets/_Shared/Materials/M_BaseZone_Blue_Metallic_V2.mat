@@ -29,7 +29,7 @@ Material:
     - _BandSoftness: 0.1
     - _BandSpacing: 1.6
     - _BandWidth: 0.16
-    - _DepthGlow: 0.35
+    - _DepthGlow: 0.55
     - _DetailScale: 2.6
     - _DetailStrength: 0.45
     - _EdgeGlow: 5
@@ -58,7 +58,7 @@ Material:
     - _WaveScale: 1.2
     - _WaveStrength: 0.12
     m_Colors:
-    - _BaseColor: {r: 0, g: 0, b: 0.30188674, a: 1}
+    - _BaseColor: {r: 0, g: 0, b: 0.45, a: 1}
     - _MirrorColor: {r: 0, g: 0, b: 0.53773576, a: 1}
     - _ReflectionColor: {r: 0, g: 0, b: 0.42452827, a: 1}
     - _ScrollDir: {r: 0, g: 1, b: 0, a: 0}

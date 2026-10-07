@@ -974,6 +974,11 @@ public class BenimHudum : ModeHudBase
 Prefabı `Assets/Modes/<Mod>/UI/` altına koy, `ModeDefinition.hudPrefab`'a bağla. Sahneye elle
 koymana gerek yok — `ModeHudSpawner` maç başlayınca örnekler (yalnız player rolünde).
 
+Duvar/karartma için bir şey yapmana gerek yok: HUD'ı duvarın ve karartmanın üstünde çizdiren
+`UiDrawOnTop`'u taban (ve maç sonu ekranı kendi kökü için) etkinleşirken çağırır — ama HUD'ın
+altına **başka yerden çalışma anında** bir arayüz örneklersen `UiDrawOnTop.Apply(örnek, 0)`'ı
+kendin çağır.
+
 **Ölüm ekranını yeniden çizme:** `_Shared/App/Resources/UI/DeathHud.prefab`'ı HUD prefabının
 altına **iç içe prefab** olarak koy (en son kardeş → en üstte çizilir), örneği **kapat**, sonra üç
 alanı bağla: `deathOverlay` → örneğin kökü, `deathKillerNameText` → `Card/KillerLine`,
@@ -1263,6 +1268,10 @@ Satır tabanlı tabloyu kullanan varyant bu alana dokunmaz.
 
 **7. Bağla:** `Data/<Ad>.asset` → **`resultScreenPrefab`** alanına varyantı sürükle. Boş = genel ekran.
 
+⚠️ **Varyantta `sortingOrder` ve duvar kaçınma elle ayarlanmaz:** kök bileşen açılışta
+`UiDrawOnTop`'u uygular (ekran duvarın ve karartmanın üstünde çizilir) ve `HudFollow`'un duvar
+kaçınmasını kendisi açar; varyanta eklenen süsler kökün altında olduğu için devralır.
+
 ⚠️ **Taban yeniden üretildikten sonra her varyant AÇILIP kontrol edilir.** Builder kendi ürettiği
 çocukları siler ve yeniden kurar; varyantın ezdiği düğümler korunur ama yeniden ebeveynlenir — yeri
 kayan ya da override'ı artık tutmayan bir süs hata vermeden yanlış yerde çizilir.
@@ -1491,11 +1500,30 @@ değeri sahne objesinde durduğu için arena başına elle yapılır ve **atlan�
 - **Collider konveks olmalı:** Box/Sphere/Capsule ya da `MeshCollider` + Convex. Environment
   paketleri **konkav** `MeshCollider` ile gelir: layer vermek işe yaramaz (çalışma anında elenir +
   hata), convex işaretlemek ise içbükey mesh'te hull'ü çukura doldurur ve oyuncu **boşlukta** ceza
-  alır. Doğru hamle mesh'in yerel sınırlarına oturan kaba bir **Box/Capsule** koymaktır. Convex
-  `MeshCollider` 255 üçgeni aşarsa Unity **kısmi hull** kullanır ve her sahne yüklemesinde uyarı
-  basar (gözlük günlüğü saniyelik sınırda kısılır, gerçek satırlar kaybolur) — yine Box. İnce panel
-  (çit, ızgara) kutusu en az ~0,3 m kalınlık alır: kafa ince kutudan tek karede geçip ihlale
-  yakalanmaz.
+  alır. Doğru hamle görünen geometrinin **içine** oturan kaba bir **Box/Capsule** koymaktır (aşağıdaki
+  madde). Convex `MeshCollider` 255 üçgeni aşarsa Unity **kısmi hull** kullanır ve her sahne
+  yüklemesinde uyarı basar (gözlük günlüğü saniyelik sınırda kısılır, gerçek satırlar kaybolur) —
+  yine Box.
+- ⚠️ **Engel kutusu mermiyi de durdurur → görünen yüzeyin dışına TAŞMAZ.** Atış ışını layer ayırmaz,
+  yalnız trigger'ı atlar: kutunun mesh'ten dışarı taştığı her yerde (yuvarlak gövde, pahlı kenar,
+  çıkıntı arası) düşmana giden mermi havada kesilir. Kutu mesh'in **içine** çekilir, kenarlarda
+  birkaç cm içeride kalır. Mermiyi görünen yüzeyde durdurmak için konkav `MeshCollider` **ayrı bir
+  child'a** (`<Obje>_BulletCollider`) ve **`Default`** layer'ına konur. Child şarttır: layer
+  GameObject'e aittir, aynı objedeki iki collider farklı layer'da olamaz; konkav mesh `Obstacle`'da
+  kalırsa çalışma anında elenir ve hata basar. Kutuyu **trigger yapmak çözüm DEĞİL** — engel hacmi
+  trigger'ı görmez, karartma ve ceza tamamen kalkar. `Engel Hacimlerini Denetle` kutunun taşmasını
+  **görmez** (kaba kutu bilinçli bir seçim sayılır); kontrol Scene görünümünde collider çizgisiyle,
+  gözle yapılır.
+- **İçi boş ya da arası açık obje** (makara/halka, bariyer çit, ızgara, iskele borusu) engel hacmi
+  **almaz**: içine sığacak dolu hacim yoktur, onu saran kutu boşluktan geçen mermiyi keser. Obje
+  `Default`'a alınır, üzerinde yalnız konkav `MeshCollider` kalır — gövde ince olduğundan kafa girse
+  de arkasında saklı bir şey görmez.
+- **İnce dolu panel** (sac levha, tahta perde, oluklu sac): kutu silüetin içinde kalır, kalınlığı
+  panelin **kendi zarfı** kadardır — dalga/oluk derinliği, düz panelde ~5 cm; yüzeyden dışarı pay
+  VERİLMEZ. Kalınlık payı kenarı sıyıran mermiyi keser: yan açıdan atışta pay ne kadar kalınsa
+  kenarın o kadar ötesindeki kafa vurulamaz olur. Bedeli bilinçli kabul edilir: kafa ince kutudan
+  hızlı geçerse ceza yakalayamayabilir, karartma her karede ölçüldüğü için yine gelir. Yırtık/eksik
+  köşe kutunun dışında bırakılır (gerekirse ikinci kutu); mesh `_BulletCollider` child'ında kalır.
 - **Yüzey (çarpma efekti) ataması YAPILMAZ:** her isabet aynı `default` efektini oynatır;
   `SurfaceLibrary.definitions` yalnız `default`'u taşıdıkça `SurfaceTag` ve materyal eşlemesi
   etkisizdir ([Sistem Özeti, `SurfaceLibrary`](../Sistem-Ozeti.md)). Yüzeye göre efekt yeniden

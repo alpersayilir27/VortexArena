@@ -84,11 +84,16 @@ namespace VortexArena.Core.UI
 
         private PlayerCombatState _combat;
 
-        /// <summary>The HUD's own canvas — while the match result overlay is open ONLY this component
-        /// is disabled. ⚠️ The object itself is <b>not deactivated</b>: a deactivated object would
+        /// <summary>The HUD's own canvas — while the match result overlay is open only the canvas
+        /// components are disabled. ⚠️ The object itself is <b>not deactivated</b>: a deactivated object would
         /// unsubscribe from the network events in <c>OnDisable</c> and would never hear the message
         /// that would turn it back on (<c>load_match</c>).</summary>
         private Canvas _canvas;
+
+        // Nested canvases the gate switched off, so only those are switched back on.
+        private readonly List<Canvas> _gatedCanvases = new List<Canvas>();
+
+        private bool _drawOnTopApplied;
 
         private string _combatStatus = "";
         private CombatStatusKind _combatKind = CombatStatusKind.None;
@@ -143,6 +148,14 @@ namespace VortexArena.Core.UI
             GameplayHudGate.HiddenChanged += ApplyHudGate;
 
             TryBindCombat();
+
+            // Walls must not hide the HUD, and the death card must stay above the blackout quad.
+            if (!_drawOnTopApplied)
+            {
+                _drawOnTopApplied = true;
+                UiDrawOnTop.Apply(gameObject, UiDrawOnTop.HudSortingOffset);
+            }
+
             ApplyHudGate(GameplayHudGate.Hidden);
         }
 
@@ -169,9 +182,43 @@ namespace VortexArena.Core.UI
                 _canvas = GetComponent<Canvas>();
             }
 
+            if (!hidden)
+            {
+                if (_canvas != null)
+                {
+                    _canvas.enabled = true;
+                }
+
+                for (int i = 0; i < _gatedCanvases.Count; i++)
+                {
+                    if (_gatedCanvases[i] != null)
+                    {
+                        _gatedCanvases[i].enabled = true;
+                    }
+                }
+
+                _gatedCanvases.Clear();
+                return;
+            }
+
+            // ⚠️ Every canvas in the tree, not just the root: a nested canvas with overrideSorting
+            // keeps drawing when only its parent canvas is disabled (health strip, round result).
+            Canvas[] canvases = GetComponentsInChildren<Canvas>(true);
+            for (int i = 0; i < canvases.Length; i++)
+            {
+                Canvas canvas = canvases[i];
+                if (canvas == null || canvas == _canvas || !canvas.enabled)
+                {
+                    continue;
+                }
+
+                canvas.enabled = false;
+                _gatedCanvases.Add(canvas);
+            }
+
             if (_canvas != null)
             {
-                _canvas.enabled = !hidden;
+                _canvas.enabled = false;
             }
         }
 
