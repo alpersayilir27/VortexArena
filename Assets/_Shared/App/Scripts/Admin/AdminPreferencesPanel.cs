@@ -46,7 +46,7 @@ namespace VortexArena.App.Admin
     {
         // ⚠️ Layout is NOT decided in code: the prefab
         // `_Shared/App/Resources/UI/AdminPreferencesPanel.prefab` is GENERATED from
-        // `GirdapUiBuilder.Preferences.cs` (px values come from `plan/arayuz-yenileme/tema.css`).
+        // `GirdapUiBuilder.Preferences.cs` (px values come from `Docs/Gelistirici/Arayuz/tema.css`).
         // Hand-editing the prefab drifts from the mockup and is overwritten on the next generate;
         // change the builder instead. See `Docs/Gelistirici/Arayuz-Tasarimi.md`.
 

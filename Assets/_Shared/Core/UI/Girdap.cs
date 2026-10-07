@@ -4,7 +4,7 @@ using UnityEngine;
 namespace VortexArena.Core.UI
 {
     /// <summary>
-    /// "Girdap" theme constants — the ONE place <c>plan/arayuz-yenileme/tema.css</c>'s
+    /// "Girdap" theme constants — the ONE place <c>Docs/Gelistirici/Arayuz/tema.css</c>'s
     /// <c>:root</c> tokens live in code.
     /// <para>
     /// ⚠️ <b>Do not hand-pick a color at a call site.</b> The mockups are the single source of

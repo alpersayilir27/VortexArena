@@ -14,7 +14,7 @@ using UiButton = UnityEngine.UI.Button;
 namespace VortexArena.App.Editor
 {
     /// <summary>
-    /// Builds <c>AdminPreferencesPanel.prefab</c> from <c>plan/arayuz-yenileme/tercihler.html</c>
+    /// Builds <c>AdminPreferencesPanel.prefab</c> from <c>Docs/Gelistirici/Arayuz/tercihler.html</c>
     /// (4 tabs) + <c>tema.css</c>.
     /// <para>⚠️ Edited IN PLACE: the prefab is a NESTED instance inside <c>AdminHud.prefab</c>, and
     /// saving a fresh root over it would break that nesting.</para>

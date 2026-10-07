@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aşçı (Burger) — VortexArena arayüz</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Chakra+Petch:wght@500;600;700&family=Saira+Condensed:wght@500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="tema.css">
+</head>
+<body>
+
+<p class="vcap"><b>Vardiya içi · şerit</b> — oyuncu HUD'ındaki başa kilitli şerit, can yerine vardiya bandı: EKİP skoru (ortak toplam, <code>match_state.scoreRed</code>), SEN (kendi katkın, <code>PlayerInfo.score</code>), mutlu / mutsuz müşteri (<code>modeState h:/u:</code>). Saat plakası VARDİYA etiketi taşır. Örnek: 2 dk 14 sn kaldı, ekip 120, sen 40, 7 mutlu 2 mutsuz.</p>
+<div class="frame"><div class="stage">
+  <div class="vr"><div class="ph top">VR görüş alanı — yer tutucu</div></div>
+  <div class="vhud up">
+    <div class="vclock vp shift"><em>VARDİYA</em><span>02:14</span></div>
+    <div class="scorebug hud">
+      <div class="sb-team coop">EKİP</div>
+      <div class="sb-score">120</div>
+      <div class="sb-score sen"><em>SEN</em>40</div>
+      <div class="sb-cust"><span class="ok"><i data-ic="smile"></i>7</span><span class="no"><i data-ic="frown"></i>2</span></div>
+    </div>
+  </div>
+</div></div>
+
+<p class="vcap"><b>Sipariş baloncuğu</b> — müşterinin üstünde, dünya uzayı 0,42 × 0,30 m, kameraya döner. Üstte SİPARİŞ başlığı ve sabır çubuğu (yeşil → sarı → kırmızı, kırmızıda yanıp söner); solda burger yığını alttan üste, sağda aynı sırayla malzeme listesi. Soldaki müşteri bekliyor; sağdakine yanlış servis yapıldı — ret gerekçesi 2,5 sn başlığın yerine kırmızı plakada, sipariş görünür kalır.</p>
+<div class="frame"><div class="stage">
+  <div class="vr"><div class="ph top">VR görüş alanı — yer tutucu (müşteri üstü)</div></div>
+  <div class="obubs">
+    <section class="obub vp">
+      <div class="oh"><b><i data-ic="burger"></i>SİPARİŞ</b><span class="sp"></span><span class="sabir"><i data-ic="timer"></i><div class="hp"><i style="width:72%"></i></div></span></div>
+      <div class="ob">
+        <div class="burger"><i class="ing bunb"></i><i class="ing patty"></i><i class="ing cheese"></i><i class="ing lettuce"></i><i class="ing tomato"></i><i class="ing bunt"></i></div>
+        <ul class="olist"><li><i class="ing bunb"></i>Alt ekmek</li><li><i class="ing patty"></i>Köfte</li><li><i class="ing cheese"></i>Peynir</li><li><i class="ing lettuce"></i>Marul</li><li><i class="ing tomato"></i>Domates</li><li><i class="ing bunt"></i>Üst ekmek</li></ul>
+      </div>
+    </section>
+    <section class="obub vp">
+      <div class="oh"><b><i data-ic="burger"></i>SİPARİŞ</b><span class="sp"></span><span class="sabir warn"><i data-ic="timer"></i><div class="hp warn"><i style="width:38%"></i></div></span></div>
+      <div class="ob">
+        <div class="burger"><i class="ing bunb"></i><i class="ing patty"></i><i class="ing bacon"></i><i class="ing patty"></i><i class="ing onion"></i><i class="ing pickle"></i><i class="ing bunt"></i></div>
+        <ul class="olist"><li><i class="ing bunb"></i>Alt ekmek</li><li><i class="ing patty"></i>Köfte</li><li><i class="ing bacon"></i>Pastırma</li><li><i class="ing patty"></i>Köfte</li><li><i class="ing onion"></i>Soğan</li><li><i class="ing pickle"></i>Turşu</li><li><i class="ing bunt"></i>Üst ekmek</li></ul>
+      </div>
+      <div class="rej"><i data-ic="warn"></i>Köfte pişmemiş</div>
+    </section>
+  </div>
+</div></div>
+
+<p class="vcap"><b>Köfte termometresi</b> — köftenin 10 cm üstünde, 5 × 10 cm, kameraya döner. Dilimli tüp dolar (çiğ pembe → pişmiş kahve), yeşil bölge "al" aralığıdır (20–40 sn); %87'den sonra kırmızı yanıp söner, 40 sn'de yanar. Izgaradayken alev ikonu.</p>
+<div class="frame"><div class="stage">
+  <div class="vr"><div class="ph top">VR görüş alanı — yer tutucu (köfte üstü)</div></div>
+  <div class="therms">
+    <div class="therm vp" style="--p:.3"><div class="gauge"><div class="tube"><i></i></div><div class="zone"></div></div><div class="st"><i data-ic="flame" class="flame"></i>ÇİĞ</div></div>
+    <div class="therm vp cooked" style="--p:.66"><div class="gauge"><div class="tube"><i></i></div><div class="zone"></div></div><div class="st"><i data-ic="check"></i>HAZIR</div></div>
+    <div class="therm vp hot" style="--p:.92"><div class="gauge"><div class="tube"><i></i></div><div class="zone"></div></div><div class="st"><i data-ic="warn"></i>YANIYOR</div></div>
+    <div class="therm vp burnt" style="--p:1"><div class="gauge"><div class="tube"><i></i></div><div class="zone"></div></div><div class="st"><i data-ic="x"></i>YANDI</div></div>
+  </div>
+</div></div>
+
+<p class="vcap"><b>Vardiya sonu · sonuç kartı</b> — kazanan yok; büyük sayı ekip skoru (amber ton), altında mutlu / mutsuz müşteri sayısı, SEN katkısı ve katkı sırası. Ekran operatör ilerletene kadar kalır.</p>
+<div class="frame"><div class="stage">
+  <div class="vr"><div class="ph">VR görüş alanı — yer tutucu</div></div>
+  <section class="rcard">
+    <div class="slab coop"><small>VARDİYA BİTTİ</small><b>120</b><em>EKİP SKORU</em></div>
+    <div class="rlow">
+      <p class="rwin">GÜNÜN HESABI · <span class="k">7 MUTLU</span> · 2 MUTSUZ MÜŞTERİ</p>
+      <div class="scorebug xl">
+        <div class="sb-team coop">SEN</div>
+        <div class="sb-score">40</div>
+        <div class="sb-score sen"><em>SIRA</em>1.</div>
+      </div>
+    </div>
+  </section>
+</div></div>
+
+<p class="vcap"><b>Vardiya sonu · günün hesabı</b> — sonuç kartından sonra. Oyuncular katkıya göre sıralı, iki bloğa bölünmüş (koddaki gibi); tek sütun KATKI. Kendi satırın vurgulu.</p>
+<div class="frame"><div class="stage">
+  <div class="vr"><div class="ph">VR görüş alanı — yer tutucu</div></div>
+  <section class="rcard">
+    <header class="sc-head">
+      <h2>GÜNÜN HESABI</h2>
+      <span class="sp"></span>
+      <p class="rwin">EKİP SKORU <span class="k">120</span></p>
+      <div class="scorebug md">
+        <div class="sb-team coop">SEN</div>
+        <div class="sb-score sen"><em>KATKI</em>40</div>
+        <div class="sb-cust"><span class="ok"><i data-ic="smile"></i>7</span><span class="no"><i data-ic="frown"></i>2</span></div>
+      </div>
+    </header>
+    <div class="sc-body" id="blocks"></div>
+    <footer class="sc-foot">
+      <div class="who coop">SEN</div>
+      <div class="st"><em>KATKI</em><b>40</b></div>
+      <div class="st"><em>MUTLU</em><b>7</b></div>
+      <div class="st"><em>MUTSUZ</em><b>2</b></div>
+      <div class="st"><em>EKİP SKORU</em><b>120</b></div>
+    </footer>
+  </section>
+</div></div>
+
+<p class="vcap"><b>Durum çeşitleri</b> — saat (normal / son 10 sn), band (vardiya başı / dolu), sabır çubuğu üç ton, koddaki beş ret gerekçesi, geri sayım (merkez bildirimi bağlı değilken durum plakasında).</p>
+<div class="frame"><div class="stage" data-h="900" style="background:#070B16">
+  <div class="vgrid">
+    <div class="g"><h4>Saat</h4>
+      <div class="vclock vp shift"><em>VARDİYA</em><span>09:58</span></div>
+      <div class="vclock vp shift last"><em>VARDİYA</em><span>00:07</span></div>
+    </div>
+    <div class="g"><h4>Vardiya bandı</h4>
+      <div class="scorebug hud"><div class="sb-team coop">EKİP</div><div class="sb-score">0</div><div class="sb-score sen"><em>SEN</em>0</div><div class="sb-cust"><span class="ok"><i data-ic="smile"></i>0</span><span class="no"><i data-ic="frown"></i>0</span></div></div>
+      <div class="scorebug hud"><div class="sb-team coop">EKİP</div><div class="sb-score">460</div><div class="sb-score sen"><em>SEN</em>130</div><div class="sb-cust"><span class="ok"><i data-ic="smile"></i>31</span><span class="no"><i data-ic="frown"></i>15</span></div></div>
+    </div>
+    <div class="g"><h4>Sabır çubuğu</h4>
+      <span class="sabir"><i data-ic="timer"></i><div class="hp"><i style="width:100%"></i></div></span>
+      <span class="sabir warn"><i data-ic="timer"></i><div class="hp warn"><i style="width:42%"></i></div></span>
+      <span class="sabir bad"><i data-ic="timer"></i><div class="hp bad"><i style="width:15%"></i></div></span>
+    </div>
+    <div class="g"><h4>Ret gerekçesi (BurgerServingBoard)</h4>
+      <div class="rej" style="width:380px"><i data-ic="warn"></i>Önce alt ekmek</div>
+      <div class="rej" style="width:380px"><i data-ic="warn"></i>En üste üst ekmek</div>
+      <div class="rej" style="width:380px"><i data-ic="warn"></i>Köfte pişmemiş</div>
+      <div class="rej" style="width:380px"><i data-ic="warn"></i>Köfte yanmış</div>
+      <div class="rej" style="width:380px"><i data-ic="warn"></i>Sipariş tutmadı</div>
+    </div>
+    <div class="g"><h4>Geri sayım · durum plakası</h4>
+      <div class="vstat vp"><i data-ic="timer"></i>3</div>
+      <div class="vstat vp"><i data-ic="timer"></i>Vardiya başlıyor — 3</div>
+    </div>
+  </div>
+</div></div>
+
+<script src="tema.js"></script>
+<script>
+  const { ic } = VA;
+  const ME = 12; // Ayşe
+  // Contribution = served burgers x 10; sorted highest first, split in halves like the code.
+  const ALL = [
+    { id: 12, name: 'Ayşe', s: 40 }, { id: 3, name: 'Deniz', s: 30 }, { id: 7, name: 'Mehmet', s: 20 },
+    { id: 5, name: 'Elif', s: 10 }, { id: 15, name: 'Can', s: 10 }, { id: 9, name: 'Kerem', s: 10 },
+    { id: 18, name: 'Burak', s: 0 }, { id: 21, name: 'Ece', s: 0 }, { id: 11, name: 'Emre', s: 0 }, { id: 14, name: 'Zeynep', s: 0 },
+  ].sort((a, b) => b.s - a.s);
+  const half = Math.ceil(ALL.length / 2);
+  const block = (list, from) => `<div class="sc-team">
+      <div class="sc-th coop"><b>OYUNCULAR</b><span class="c">KATKI</span></div>
+      ${list.map((p, i) => `<div class="sc-row coop${p.id === ME ? ' me' : ''}">
+        <span class="rk">${from + i + 1}</span>
+        <span class="nm">${p.name}${p.id === ME ? '<span class="tag">SEN</span>' : ''}<small>#${p.id}</small></span>
+        <span class="c lead">${p.s}</span>
+      </div>`).join('')}
+      <p class="sc-sum">${list.length} oyuncu · ${list.reduce((a, p) => a + p.s, 0)} katkı</p>
+    </div>`;
+  document.getElementById('blocks').innerHTML = block(ALL.slice(0, half), 0) + block(ALL.slice(half), half);
+</script>
+</body>
+</html>

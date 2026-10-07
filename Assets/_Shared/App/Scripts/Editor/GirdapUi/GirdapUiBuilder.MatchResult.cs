@@ -12,7 +12,7 @@ using UiImage = UnityEngine.UI.Image;
 namespace VortexArena.App.Editor
 {
     /// <summary>
-    /// Player's match end screen (<c>plan/arayuz-yenileme/mac-sonu.html</c>): result card
+    /// Player's match end screen (<c>Docs/Gelistirici/Arayuz/mac-sonu.html</c>): result card
     /// (<c>.rcard</c> + <c>.slab</c>) and scoreboard (<c>.sc-*</c>).
     /// <para>
     /// ⚠️ <b>Edited IN PLACE.</b> Two mode variants (kids' modes) inherit this prefab, so nodes they

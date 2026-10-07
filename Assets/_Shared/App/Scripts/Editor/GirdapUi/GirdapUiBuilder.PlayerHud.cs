@@ -9,7 +9,7 @@ using UiImage = UnityEngine.UI.Image;
 namespace VortexArena.App.Editor
 {
     /// <summary>
-    /// Player's in-match HUD (<c>plan/arayuz-yenileme/oyuncu-hud.html</c>): the head-locked strip
+    /// Player's in-match HUD (<c>Docs/Gelistirici/Arayuz/oyuncu-hud.html</c>): the head-locked strip
     /// <c>HealthHud</c> (<c>.vhud</c>: clock · health bar · score band · status line · round banner)
     /// and the death card <c>DeathHud</c> (<c>.vdead</c> + <c>.dcard</c>).
     /// <para>

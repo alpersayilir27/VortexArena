@@ -13,7 +13,7 @@ namespace VortexArena.App.Editor
     /// <summary>
     /// Generates the "Girdap" theme's prefabs from code.
     /// <para>
-    /// <b>Why generated:</b> the mockups in <c>plan/arayuz-yenileme/</c> are the single source of
+    /// <b>Why generated:</b> the mockups in <c>Docs/Gelistirici/Arayuz/</c> are the single source of
     /// truth and carry exact px values. Hand-placing ~hundreds of rects in the Inspector drifts from
     /// them silently; here a CSS change is a diff in one method.
     /// </para>

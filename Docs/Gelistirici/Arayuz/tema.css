@@ -484,3 +484,104 @@ kbd { display: inline-grid; place-items: center; min-width: 22px; height: 22px; 
 .vgrid { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 36px 48px; padding: 36px 48px; zoom: 1.4; }
 .vgrid .g { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
 .vgrid .g h4 { margin-bottom: 4px; color: var(--faint); font: 600 13px/1 var(--fb); letter-spacing: .1em; text-transform: uppercase; }
+
+/* ---------- aşçı (Burger) ----------
+   Kooperatif mod: takım rengi yerine amber "vardiya" tonu (--coop). Şerit ölçüleri oyuncu HUD'ı ile
+   aynı (560 birim). Sipariş baloncuğu müşterinin üstünde dünya uzayı 420x300 birim (0,42 x 0,30 m),
+   termometre köftenin üstünde 100x200 birim (0,05 x 0,10 m). Mockup baloncuğu 1,9x, termometreyi
+   2,5x büyütülmüş gösterir. */
+:root { --coop: #F5B52E; --coop-hi: #FFD866; --coop-lo: #D9910F; --coop-ink: #FFD98A; --coop-g: linear-gradient(180deg, #FFD866, #F0AA18); }
+
+/* saat: vardiya etiketi solda; son 10 sn kırmızı ve yanıp söner */
+.vclock.shift { grid-template-columns: auto auto; gap: 12px; width: 220px; padding: 0 16px; }
+.vclock em { font: 600 12px/1 var(--fx); font-style: normal; letter-spacing: .18em; color: var(--muted); }
+.vclock.last { --bd: var(--bad); box-shadow: inset 0 2px 0 var(--bad); color: var(--bad); text-shadow: 0 0 14px rgba(255, 87, 71, .6); animation: pulse 1s steps(2, jump-none) infinite; }
+
+/* kooperatif skor bandı: EKİP 150 + skor 110 + SEN 110 + müşteri 190 = 560 */
+.sb-team.coop { padding-left: 14px; background: var(--coop-g); color: #2A1C00; text-shadow: none; clip-path: polygon(0 0, 100% 0, 100% 100%, 18px 100%); }
+.scorebug.hud .sb-team.coop { width: 150px; }
+.sb-team.coop + .sb-score { box-shadow: inset 0 -4px 0 var(--coop); }
+.sb-score.sen { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; box-shadow: inset 0 -4px 0 rgba(170, 205, 255, .22), inset 1px 0 0 rgba(170, 205, 255, .12); }
+.sb-score.sen em { font: 600 11px/1 var(--fx); font-style: normal; letter-spacing: .22em; color: var(--faint); }
+.scorebug.hud .sb-score.sen { font-size: 28px; }
+.sb-cust { display: flex; align-items: center; justify-content: center; gap: 18px; width: 190px; padding-right: 14px; background: linear-gradient(180deg, #17223E, #090F1F); clip-path: polygon(0 0, 100% 0, calc(100% - 18px) 100%, 0 100%); font: 700 28px/1 var(--fx); }
+.sb-cust span { display: inline-flex; align-items: center; gap: 6px; }
+.sb-cust .ic { width: 22px; height: 22px; }
+.sb-cust .ok { color: var(--good); }
+.sb-cust .no { color: var(--bad); }
+.scorebug.md .sb-team.coop { padding-left: 42px; clip-path: polygon(0 0, 100% 0, 100% 100%, 22px 100%); }
+.scorebug.md .sb-cust { width: auto; padding: 0 44px 0 26px; font-size: 34px; clip-path: polygon(0 0, 100% 0, calc(100% - 22px) 100%, 0 100%); }
+.scorebug.md .sb-cust .ic { width: 28px; height: 28px; }
+.scorebug.md .sb-score.sen { width: 110px; font-size: 36px; }
+.scorebug.md .sb-score.sen em { font-size: 12px; }
+.scorebug.xl .sb-team.coop { width: 300px; padding-left: 40px; clip-path: polygon(0 0, 100% 0, 100% 100%, 46px 100%); }
+.scorebug.xl .sb-cust { width: 440px; gap: 44px; padding-right: 46px; font-size: 72px; clip-path: polygon(0 0, 100% 0, calc(100% - 46px) 100%, 0 100%); }
+.scorebug.xl .sb-cust .ic { width: 56px; height: 56px; }
+.scorebug.xl .sb-score.sen { width: 180px; font-size: 72px; }
+.scorebug.xl .sb-score.sen em { font-size: 16px; }
+
+/* sipariş baloncuğu (BurgerOrderBubble): üstte başlık + sabır çubuğu, altta burger yığını + liste.
+   Yığın ve liste DOM sırası alttan üste (column-reverse): koddaki r: listesi sırasıyla aynı.
+   Ret gerekçesi 2,5 sn başlık satırının üstüne biner; sipariş görünür kalır. */
+.obub { --c: 16px; --bd: linear-gradient(180deg, rgba(255, 197, 61, .62), rgba(170, 205, 255, .14)); --bg: radial-gradient(circle, rgba(255, 255, 255, .045) 1px, transparent 1.6px) 0 0 / 18px 18px, linear-gradient(180deg, #141C33, #090E1D); display: grid; grid-template-rows: 40px 1fr; width: 420px; height: 300px; padding: 10px 16px 14px; }
+.obub .oh { display: flex; align-items: center; gap: 10px; }
+.obub .oh b { display: inline-flex; align-items: center; gap: 8px; font: 700 16px/1 var(--fx); letter-spacing: .18em; color: var(--coop-ink); }
+.obub .oh .ic { width: 18px; height: 18px; }
+.obub .sp { flex: 1; }
+.sabir { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font: 700 14px/1 var(--fx); font-variant-numeric: tabular-nums; }
+.sabir .ic { width: 16px; height: 16px; }
+.sabir .hp { flex: none; width: 110px; height: 12px; }
+.sabir.warn { color: var(--warn); }
+.sabir.bad { color: var(--bad); animation: pulse 1s steps(2, jump-none) infinite; }
+.obub .ob { display: grid; grid-template-columns: 160px 1fr; gap: 0 14px; align-items: center; padding-top: 6px; }
+.burger { display: flex; flex-direction: column-reverse; align-items: center; gap: 3px; }
+.ing { width: 140px; height: 12px; border-radius: 3px; box-shadow: inset 0 -3px 0 rgba(0, 0, 0, .22); }
+.ing.bunb { height: 24px; border-radius: 4px 4px 14px 14px; background: linear-gradient(180deg, #E8B166, #C98A3E); }
+.ing.bunt { position: relative; height: 34px; border-radius: 42px 42px 6px 6px; background: linear-gradient(180deg, #F4C274, #CF9344); }
+.ing.bunt::after { content: ''; position: absolute; left: 32px; right: 32px; top: 11px; height: 8px; background: radial-gradient(ellipse, #FFF1C2 2px, transparent 2.6px) 0 0 / 13px 8px; } /* susam */
+.ing.patty { width: 150px; height: 18px; background: linear-gradient(180deg, #7A4328, #4A2615); }
+.ing.cheese { width: 156px; height: 9px; background: linear-gradient(180deg, #FFD54A, #F0A81B); }
+.ing.lettuce { width: 158px; height: 12px; border-radius: 8px; background: linear-gradient(180deg, #78D45C, #3F9E3C); }
+.ing.tomato { height: 10px; background: linear-gradient(180deg, #F25A4C, #C7332A); }
+.ing.onion { height: 8px; background: linear-gradient(180deg, #F4E9FA, #CDB7E4); }
+.ing.pickle { width: 118px; height: 8px; background: linear-gradient(180deg, #9CCB55, #5E8F2E); }
+.ing.bacon { width: 152px; height: 10px; background: repeating-linear-gradient(90deg, #B8463E 0 14px, #E58A7A 14px 20px); }
+.ing.sauce { width: 130px; height: 6px; background: linear-gradient(180deg, #FFA43B, #E07314); }
+.olist { display: flex; flex-direction: column-reverse; gap: 7px; }
+.olist li { display: flex; align-items: center; gap: 10px; list-style: none; color: var(--text); font: 600 21px/1 var(--fx); white-space: nowrap; }
+.olist li .ing { flex: none; width: 16px; height: 16px; border-radius: 3px; box-shadow: none; }
+.olist li .ing::after { display: none; }
+.rej { display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 14px; clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px); background: linear-gradient(180deg, #FF7A68, #E33A2A); color: #260502; font: 700 22px/1 var(--fx); }
+.rej .ic { width: 22px; height: 22px; }
+.obub .rej { position: absolute; left: 16px; right: 16px; top: 8px; }
+.obubs { position: absolute; left: 50%; top: 50%; display: flex; gap: 56px; transform: translate(-50%, -50%) scale(1.9); }
+
+/* köfte termometresi (BurgerPattyThermometer): dilimli dikey tüp dolar (0 = çiğ, 1 = yanık),
+   yeşil bölge pişti–yanıyor arası "al" aralığı; altta durum */
+.therm { --p: .3; --c: 8px; --bd: rgba(170, 205, 255, .35); --bg: linear-gradient(180deg, rgba(22, 32, 60, .94), rgba(8, 12, 24, .94)); display: grid; grid-template-rows: 1fr 24px; gap: 8px; width: 100px; height: 200px; padding: 10px 12px 8px; }
+.therm .gauge { position: relative; }
+.therm .tube { position: absolute; inset: 0 22px 0 0; background: var(--track); -webkit-mask: repeating-linear-gradient(0deg, #000 0 9px, transparent 9px 12px); mask: repeating-linear-gradient(0deg, #000 0 9px, transparent 9px 12px); }
+.therm .tube i { position: absolute; left: 0; right: 0; bottom: 0; height: calc(var(--p) * 100%); background: linear-gradient(0deg, #C96A6A, #E8A0A0); }
+.therm .zone { position: absolute; right: 0; width: 14px; bottom: 50%; height: 37%; box-shadow: inset 3px 0 0 var(--good); background: linear-gradient(90deg, rgba(62, 230, 160, .35), transparent); }
+.therm .zone::before, .therm .zone::after { content: ''; position: absolute; left: 0; width: 14px; height: 3px; background: var(--good); }
+.therm .zone::before { top: 0; }
+.therm .zone::after { bottom: 0; }
+.therm .st { display: flex; align-items: center; justify-content: center; gap: 6px; color: var(--muted); font: 700 12px/1 var(--fx); letter-spacing: .06em; white-space: nowrap; }
+.therm .st .ic { width: 16px; height: 16px; }
+.therm.cooked .tube i { background: linear-gradient(0deg, #4A2615, #8A5033); }
+.therm.cooked .st { color: var(--good); }
+.therm.hot { --bd: var(--bad); animation: pulse .5s steps(2, jump-none) infinite; }
+.therm.hot .tube i { background: linear-gradient(0deg, #4A2615, #B8463E); }
+.therm.hot .st { color: var(--bad); }
+.therm.burnt .tube i { background: linear-gradient(0deg, #0E0A08, #2A1C14); }
+.therm.burnt .st { color: var(--bad); }
+.therm .st .flame { color: #FF9A3B; }
+.therms { position: absolute; left: 50%; top: 50%; display: flex; align-items: flex-end; gap: 60px; transform: translate(-50%, -50%) scale(2.5); }
+
+/* vardiya sonu: slab amber ton, büyük sayı = ekip skoru */
+.slab.coop { --k: 245, 181, 46; }
+.slab em { font: 700 28px/1 var(--fx); font-style: normal; letter-spacing: .3em; color: var(--text); opacity: .85; }
+.rwin .k { color: var(--coop-ink); }
+.sc-th.coop, .sc-row.coop { grid-template-columns: 56px 1fr 140px; }
+.sc-th.coop { background: linear-gradient(90deg, var(--coop-hi), var(--coop-lo) 46%, rgba(217, 145, 15, .40)); clip-path: polygon(0 0, 100% 0, calc(100% - 18px) 100%, 0 100%); color: #2A1C00; }
+.sc-foot .who.coop { background: var(--coop-g); color: #2A1C00; }

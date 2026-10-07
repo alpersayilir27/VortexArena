@@ -13,7 +13,7 @@ using UiButton = UnityEngine.UI.Button;
 namespace VortexArena.App.Editor
 {
     /// <summary>
-    /// Admin HUD (<c>plan/arayuz-yenileme/index.html</c>): vignette, scorebug, team columns, the two
+    /// Admin HUD (<c>Docs/Gelistirici/Arayuz/admin-hud.html</c>): vignette, scorebug, team columns, the two
     /// feeds and the match bar.
     /// <para>⚠️ <b>Edited IN PLACE:</b> <c>AdminHud.prefab</c> nests the stats and preferences panel
     /// prefabs; saving a fresh root over it would drop those instances.</para>

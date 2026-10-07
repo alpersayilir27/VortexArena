@@ -58,7 +58,10 @@ Unity 6000.3.20f1, URP. VR build = player, Windows build = admin. Online haberle
   devredilmez. → `is-akisi.md`
 - **Kod değişti = doküman AYNI commit'te değişti.** Ağ davranışında sıra: önce
   `Docs/ArenaNet-Protokol.md`, sonra kod. Hangi değişiklik nereye → `docs-sync.md`
-- **AI notu kullanıcının makinesine YAZILMAZ** — hatırlanacak her şey repoda. → `docs-sync.md`
+- **AI notu, kuralı, ayarı kullanıcının makinesine (user scope) YAZILMAZ** — hepsi repoda
+  (`.claude/`, `.mcp.json`, `Docs/`). → `docs-sync.md`
+- **claude.ai'de artifact/Doc oluşturulmaz** — sayfa gerekiyorsa düz HTML/CSS/JS dosyası repoya
+  ya da scratchpad'e. → `docs-sync.md`
 - **Kod yorumları İNGİLİZCE yazılır;** UI/log string'leri Türkçe kalır. → `kod-standartlari.md`
 - **Değişiklikten önce `Yapma-Listesi.md`'ye bak** — bu projede tuzaklar hata vermez, sessizce
   yanlış çalışır.

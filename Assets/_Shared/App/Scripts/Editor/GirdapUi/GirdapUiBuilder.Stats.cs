@@ -14,7 +14,7 @@ namespace VortexArena.App.Editor
 {
     /// <summary>
     /// Builds the admin stats screen: the row prefab (<c>AdminStatsRow</c>) and the panel
-    /// (<c>AdminStatsPanel</c>), from <c>plan/arayuz-yenileme/istatistik.html</c> + <c>tema.css</c>.
+    /// (<c>AdminStatsPanel</c>), from <c>Docs/Gelistirici/Arayuz/istatistik.html</c> + <c>tema.css</c>.
     /// <para>
     /// ⚠️ <b>The column grid lives in <see cref="Col"/> only.</b> Row cells, the header strip and
     /// the team group rows all read it; a cell placed with its own literal x drifts out of the

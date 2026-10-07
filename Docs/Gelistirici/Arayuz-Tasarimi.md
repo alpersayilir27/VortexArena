@@ -59,8 +59,9 @@ haritasıdır (`P`, 2 px kalın, yuvarlak uçlu); Unity kopyası 64×64, beyaz +
 ayarları mevcut ikonlarla aynıdır (Sprite · Single · 100 ppu · sıkıştırmasız). Yeni ikon önce
 `tema.js`'e, sonra aynı geometriyle PNG'ye yazılır; kaba `Fontları ve asset kabını üret` toplar.
 
-**Mockup'lar** — `plan/arayuz-yenileme/` (ortak stil `tema.css`, parça kiti `kit.html`, ekran
-başına bir HTML). Her ölçünün kaynağı orasıdır; plan maddesi açık olduğu sürece orada durur.
+**Mockup'lar** — `Docs/Gelistirici/Arayuz/` (ortak stil `tema.css`, parça kiti `kit.html`, ekran başına
+bir HTML; tarayıcıda çift tıkla açılır). Her ölçünün kaynağı orasıdır ve kalıcıdır: görsel değişiklik
+**önce mockup'ta** yapılır, onaylanınca builder'a geçirilir — oyuna doğrudan dokunulmaz.
 
 **Girdap dışında kalan arayüz** (elle düzenlenen prefablar, hepsi
 `Assets/_Shared/App/Resources/UI/` altında): `RoundNoticeHud` · `LoadingOverlayScreen`/`…World` ·

@@ -1,11 +1,12 @@
 // Shared viewer chrome, icon set and sample data for the UI mockups.
 (function () {
   const PAGES = [
-    ['index.html', 'Admin HUD'],
+    ['admin-hud.html', 'Admin HUD'],
     ['istatistik.html', 'İstatistikler'],
     ['tercihler.html', 'Tercihler'],
     ['mac-sonu.html', 'Maç sonu (oyuncu)'],
     ['oyuncu-hud.html', 'Oyuncu HUD (VR)'],
+    ['asci.html', 'Aşçı (Burger)'],
     ['kit.html', 'Tema kiti'],
   ];
 
@@ -47,6 +48,11 @@
     shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
     timer: '<path d="M10 2h4M12 14l3-3"/><circle cx="12" cy="14" r="8"/>',
     home: '<path d="M3 11l9-8 9 8v10a1 1 0 01-1 1h-5v-7h-6v7H4a1 1 0 01-1-1V11z"/>',
+    smile: '<circle cx="12" cy="12" r="9"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><path d="M9 9h.01M15 9h.01"/>',
+    frown: '<circle cx="12" cy="12" r="9"/><path d="M16 16s-1.5-2-4-2-4 2-4 2"/><path d="M9 9h.01M15 9h.01"/>',
+    burger: '<path d="M4 10c0-3.6 3.6-6 8-6s8 2.4 8 6H4z"/><path d="M3 13.5h18"/><path d="M4 17h16v1a2 2 0 01-2 2H6a2 2 0 01-2-2v-1z"/>',
+    flame: '<path d="M8.5 14.5A2.5 2.5 0 0011 12c0-1.38-.5-2-1-3-1.07-2.14-.22-4.05 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 11-14 0c0-1.15.43-2.29 1-3a2.5 2.5 0 002.5 2.5z"/>',
+    check: '<path d="M5 12l5 5L20 7"/>',
   };
   function ic(n) {
     return '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (P[n] || '') + '</svg>';
@@ -136,7 +142,7 @@
     });
   }
 
-  const here = location.pathname.split('/').pop() || 'index.html';
+  const here = location.pathname.split('/').pop() || 'admin-hud.html';
   const nav = document.createElement('nav');
   nav.className = 'vnav';
   nav.innerHTML = '<b>VORTEXARENA · ARAYÜZ</b>' +
