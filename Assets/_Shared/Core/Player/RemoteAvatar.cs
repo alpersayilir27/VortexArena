@@ -224,8 +224,10 @@ namespace VortexArena.Core.Player
         /// identity question, not a colour one.</summary>
         private Team _team = Team.Neutral;
 
-        /// <summary>Which of the teamless mode bodies this player draws (0 = <c>BodyPrefab</c>,
-        /// 1 = <c>AltBodyPrefab</c>). Fed from the roster order, not from the protocol.</summary>
+        /// <summary>Which of the two teamless bodies this player draws: 0 = <c>BodyPrefab</c> (or the
+        /// default body), 1 = <c>AltBodyPrefab</c> (or, in a mode with no bodies, the default RED
+        /// body). Decided by <c>RemotePlayerSpawner</c> — roster order, or the scene's
+        /// <c>bodySeed</c> when the mode brings no body of its own.</summary>
         private int _bodyVariant;
 
         /// <summary>Ghost body colour — same source as <see cref="_teamColor"/>, own tone so it reads
@@ -418,9 +420,17 @@ namespace VortexArena.Core.Player
         private bool _useAlt;
 
         // Catalog lookup cached on the running + selected mode ids: SetInfo runs on every lobby_state.
-        private string _bodyModeId;
-        private ModeDefinition _bodyMode;
-        private bool _bodyModeResolved;
+        // STATIC because the key is global (the running + selected mode) — with one cache per avatar a
+        // roster update would reload the catalog once per player.
+        private static string _bodyModeId;
+        private static ModeDefinition _bodyMode;
+        private static bool _bodyModeTeamless;
+        private static bool _bodyModeResolved;
+
+        // ⚠️ Part of the cache key, not derived state: the admin can flip the team mode WITHOUT
+        // changing the mode id, and a key made of ids alone would keep answering the old shape.
+        private static bool _bodyModeRunTeamless;
+        private static bool _bodyModeSelTeamless;
 
         /// <summary>Missing source for a mode body warns once per instance.</summary>
         private bool _modeBodySourceWarned;
@@ -810,11 +820,12 @@ namespace VortexArena.Core.Player
         }
 
         /// <summary>Picks the body to draw from the team AND the mode's optional body prefabs; only ONE
-        /// body is drawn at a time. With no mode prefab this is exactly the old team rule (red team →
-        /// red body), and with no red body set up nothing happens at all.</summary>
+        /// body is drawn at a time. With no mode prefab the team rule applies (red team → red body) and
+        /// in a teamless mode the variant splits the two DEFAULT bodies; with no red body set up
+        /// nothing happens at all.</summary>
         private void SelectBody()
         {
-            ModeDefinition mode = ResolveBodyMode();
+            ModeDefinition mode = ResolveBodyMode(out bool teamless);
             // Teamless + variant 1 → the mode's second body: the roster is split evenly between the two
             // bodies (e.g. female/male), so neither gender is over-represented in a teamless mode.
             GameObject prefab = mode == null ? null
@@ -838,21 +849,35 @@ namespace VortexArena.Core.Player
             AltBody wanted = prefab != null ? GetOrBuildModeAlt(prefab) : null;
             if (wanted == null)
             {
-                // No mode body (or it could not be built) → the default team rule.
-                wanted = _team == Team.Red ? _redAlt : null;
+                // No mode body (or it could not be built) → the default team rule, plus: in a TEAMLESS
+                // mode variant 1 draws the default RED body, so a mode with no bodies of its own still
+                // has two silhouettes instead of a crowd of identical players. The body is tinted with
+                // the (neutral) team colour, so the red model carries no team meaning here.
+                wanted = _team == Team.Red || (_team == Team.Neutral && teamless && _bodyVariant == 1)
+                    ? _redAlt
+                    : null;
             }
 
             SwitchAlt(wanted);
         }
 
         /// <summary>Catalog definition whose bodies are drawn: the set-up match's mode, else (lobby
-        /// profile running) the admin's selected mode. Cached: <see cref="SetInfo"/> runs on every
-        /// <c>lobby_state</c> and the lookup loads a Resource.</summary>
-        private ModeDefinition ResolveBodyMode()
+        /// profile running) the admin's selected mode. <paramref name="teamless"/> = is THAT mode
+        /// teamless (the body split's gate). Cached: <see cref="SetInfo"/> runs on every
+        /// <c>lobby_state</c> and the lookup loads a Resource.
+        /// <para>Public so the body variant is decided from the SAME mode the drawing reads
+        /// (<c>RemotePlayerSpawner</c>) — a second resolution could disagree with this one.</para></summary>
+        public static ModeDefinition ResolveBodyMode(out bool teamless)
         {
             string key = (ModeRuntime.ModeId ?? "") + "|" + (ModeSelection.HasValue ? ModeSelection.ModeId : "");
-            if (_bodyModeResolved && _bodyModeId == key)
+            // The team mode of the running match is the SERVER's (rules) and the selection carries its
+            // own teamMode on the wire — neither is read from the catalog preview.
+            bool runTeamless = ModeRuntime.IsTeamless;
+            bool selTeamless = ModeSelection.IsTeamless;
+            if (_bodyModeResolved && _bodyModeId == key &&
+                _bodyModeRunTeamless == runTeamless && _bodyModeSelTeamless == selTeamless)
             {
+                teamless = _bodyModeTeamless;
                 return _bodyMode;
             }
 
@@ -861,18 +886,24 @@ namespace VortexArena.Core.Player
             // switch when the match starts.
             ModeDefinition running = ModeRuntime.FindDefinition();
             ModeDefinition body = running;
+            bool teamlessMode = runTeamless;
             if (running == null || running.IsLobbyProfile)
             {
                 ModeDefinition selected = ModeSelection.FindDefinition();
                 if (selected != null)
                 {
                     body = selected;
+                    teamlessMode = selTeamless;
                 }
             }
 
             _bodyModeId = key;
             _bodyMode = body;
+            _bodyModeTeamless = teamlessMode;
+            _bodyModeRunTeamless = runTeamless;
+            _bodyModeSelTeamless = selTeamless;
             _bodyModeResolved = true;
+            teamless = teamlessMode;
             return _bodyMode;
         }
 

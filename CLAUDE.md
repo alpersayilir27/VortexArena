@@ -39,6 +39,7 @@ Unity 6000.3.20f1, URP. VR build = player, Windows build = admin. Online haberle
 ## Repo üst düzey yerleşim (ayrıntı `Docs/Sistem-Ozeti.md` §2)
 
 `Assets/` (Unity) · `Server/` (.NET sunucu) · `launcher/` (operatör başlatıcısı) ·
+`blender/` (Blender kaynakları — proje klasöründeki README) ·
 `updater/` + `updater_uploader/` (Quest OTA) · `scripts/` (deploy/kurulum betikleri) ·
 `deploy/` (üretilen exe'ler, **git'e girmez**) · `dev-targets.json` (commit'li hedef kataloğu) ·
 `Docs/` · `plan/` · `.claude/rules/`.

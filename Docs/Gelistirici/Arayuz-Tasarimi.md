@@ -19,7 +19,7 @@ yükleme/bağlantı ekranları bunun dışındadır ve **elle düzenlenir**.
 |---|---|
 | `UiPolygonGraphic` | Köşe kesimli (chamfer) + yan eğimli (slant) konveks poligon tabanı; yarım düzlem kırpma ve üçgen fan yardımcıları burada |
 | `UiShape` | Temanın kutusu: dış çerçeve halkası + gradyan dolgu + dış/iç parıltı + 0,75 px kenar yumuşatma, **tek draw**. Akıcı API: `Chamfer` · `Slant` · `Fill` · `Outline` · `Glow` · `InnerGlow` · `Antialias` |
-| `UiStripes` | CSS `repeating-linear-gradient` karşılığı çapraz şeritler, poligona kırpılı (takım plakaları, canlı ihlal bandı) |
+| `UiStripes` | CSS `repeating-linear-gradient` karşılığı çapraz şeritler, poligona kırpılı (takım plakaları, canlı ihlal bandı); `Drift(sn)` = CSS `drift` keyframe’i: bir periyotluk sonsuz yavaş kayma, `Update` her kare meshi yeniler |
 | `UiSegmentBar` | Dilimli, eğik can çubuğu (`SetFill` · `SetFillColors` · `SetTrack` · `SetMetrics`) |
 | `UiButtonStyle` | Bir düğmenin TÜM görünümü: `SetKind(UiButtonKind)` · `SetInteractable` · `SetLabel` · `SetHold(0..1)`; parçaları `Bind(...)` bağlar |
 | `UiChip` | Rozet: `Set(text, UiChipKind, icon)`; genişliğini kendi ölçer |
@@ -36,10 +36,11 @@ partial durur (`.Assets` · `.PlayerRow` · `.Stats` · `.Preferences` · `.Hud`
 
 **Menü** — `Tools > VortexArena > UI > Girdap`: *Fontları ve asset kabını üret* · *Tüm prefabları
 üret* · *Yalnız `<Ekran>`*. Toplu üretimin sırası PlayerRow → StatsRow → StatsPanel →
-PreferencesPanel → Hud → MatchResult'tır; HUD, panelleri ve satır prefabını içine gömer.
+PreferencesPanel → Hud → MatchResult → PlayerHud'dur; HUD, panelleri ve satır prefabını içine gömer.
 
 **Üretilen prefablar** — `Assets/_Shared/App/Resources/UI/`: `AdminPlayerRow` · `AdminStatsRow` ·
-`AdminStatsPanel` · `AdminPreferencesPanel` · `AdminHud` · `MatchResultOverlay`. Builder prefabı
+`AdminStatsPanel` · `AdminPreferencesPanel` · `AdminHud` · `MatchResultOverlay` · `HealthHud` ·
+`DeathHud`. Builder prefabı
 **yerinde** düzenler: içeriği yükler, kendi ürettiği çocukları siler, yeniden kurar, alanları
 `SerializedObject` ile bağlar, kaydeder.
 
@@ -62,8 +63,7 @@ ayarları mevcut ikonlarla aynıdır (Sprite · Single · 100 ppu · sıkıştı
 başına bir HTML). Her ölçünün kaynağı orasıdır; plan maddesi açık olduğu sürece orada durur.
 
 **Girdap dışında kalan arayüz** (elle düzenlenen prefablar, hepsi
-`Assets/_Shared/App/Resources/UI/` altında): `HealthHud` (kafaya kilitli şerit: can + saat + durum
-+ takım skoru + tur sonucu) · `DeathHud` · `RoundNoticeHud` · `LoadingOverlayScreen`/`…World` ·
+`Assets/_Shared/App/Resources/UI/` altında): `RoundNoticeHud` · `LoadingOverlayScreen`/`…World` ·
 `ConnectionOverlayScreen`/`…World` · `AdminPlayerMarker`. Mod HUD'ları mod
 kutusundadır (`Assets/Modes/<Mod>/UI/<Mod>Hud.prefab`) ve içleri bilerek boştur: taşıdıkları şey
 yukarıdaki iç içe prefab örnekleridir. Cephane göstergesi silahın kendi üstündedir
@@ -143,6 +143,9 @@ kabı değiştiyse önce *Fontları ve asset kabını üret*).
 - ⚠️ **Parıltı yarıçapı atlas dolgusuyla sınırlıdır.** Underlay'in yumuşaklığı SDF yayılımını
   aşamaz: 286 px kelimede ~30 px halo çıkar, 48 px saatte birkaç px — CSS'in 24 px'i birebir
   gelmez, fontu yeniden üretmeden büyütülemez (bkz. "Var olan TMP font asset'i yeniden üretilmez").
+- ⚠️ **Kayan şerit editörde durur.** `UiStripes.Drift(sn)` fazı `Update`'te ilerletir; Play dışında
+  ve pasif nesnede şerit sabittir, hareket ancak oyunda görülür — editör önizlemesinden "animasyon
+  yok" sonucu çıkarılmaz. CSS karşılığı `drift` keyframe'i; süre iki tarafta aynı sayıdır.
 
 ## Renk ve yazı
 
@@ -209,3 +212,18 @@ kabı değiştiyse önce *Fontları ve asset kabını üret*).
   Kendi satırı vurgulanır, ayrılan oyuncunun satırı soluklaşır. ⚠️ Eski kolon metinleri (`Column0..5`
   + `Header0..5`) **bağlı ve çalışır durumda tutulur**: bir mod varyantı onların etrafına
   giydirilmişse `boardRowTemplate` alanını boşaltmak tabloyu kolonlara döndürür.
+- **HealthHud** (oyuncunun kafaya kilitli şeridi, `VortexArena.Core.UI`) — saat (`Clock`, süre
+  yokken kapalı) · can şeridi (`HpBar`, `HealthStrip`) · skor bandı (`RoundScore`, `TeamScorePanel`;
+  TUR çipi `RoundFrame` etiket boşken kapanır) · durum plakası (`Status`, `StatusPlate`) · tur
+  sonucu (`RoundResult`, `RoundResultBanner`). ⚠️ Builder **yerinde** düzenler ve `RoundScore` ile
+  `RoundResult` düğümlerini **korur**: beş mod HUD'ı bu prefabı iç içe örnekler, mod denetleyicileri
+  o iki düğüme bağlıdır ve Mole/Burger kendi metinlerini `RoundScore/Panel` altına ekler — düğüm
+  silinse referanslar ve eklenen çocuklar sessizce kaybolurdu. Üretim sonunda `Assets/Modes/**`
+  altındaki her `ModeHudBase` prefabının alanları yeniden bağlanır (`BindModeHuds`); Mole'da
+  `HpBar` kapatılıp band yukarı alınır ve vuruş sayaçları yeniden biçimlenir, Burger'da `HpBar` +
+  `RoundScore` kapatılıp modun `Score` plakası Girdap kabuğuna sokulur. Kaynak `oyuncu-hud.html`.
+- **DeathHud** (öldün kartı) — kırmızı vinyet + çentikli kart: MAÇ SÜRÜYOR etiketi, ÖLDÜN (beyaz →
+  kırmızı vertex gradyanı + hale), katil satırı (`Card/KillerLine`, `richText` açık — ad takım
+  mürekkebiyle `<noparse>` içinde gelir), durum plakası (`Card/StatusFrame`). Kart mod HUD
+  canvas'ında durur, şerit kafada: üst üste binmezler. CSS'teki `skewX(-7deg)` eğimi yoktur — TMP
+  italik eğimi font asset'inden gelir, metin başına verilemez.

@@ -29,7 +29,7 @@
     <div class="rowf"><em>Temel</em><button class="btn">NORMAL</button><button class="btn on">SEÇİLİ</button><button class="btn" disabled>PASİF</button></div>
     <div class="rowf"><em>Anlam</em><button class="btn go"><i data-ic="play"></i>BAŞLAT</button><button class="btn danger">OYUNDAN ÇIK</button><button class="btn confirm">EMİN? ÇIK</button></div>
     <div class="rowf"><em>Basılı tut</em><button class="btn sm t-bad">SIFIRLA</button><button class="btn sm hold" style="--p:.6">SİLİNİYOR</button><button class="btn sm t-good">SİLİNDİ</button></div>
-    <div class="rowf"><em>Satır içi</em><button class="btn sm">ÖLÇ</button><button class="btn sm t-good">×1.04</button><button class="btn sm t-bad">ÖLÇÜLEMEDİ</button><button class="btn sm confirm">EMİN?</button></div>
+    <div class="rowf"><em>Satır içi</em><button class="btn sm">ÖLÇ</button><button class="btn sm t-good">×1.04</button><button class="btn sm t-bad">HATA</button><button class="btn sm confirm">EMİN?</button></div>
     <div class="rowf"><em>Kalibre</em><button class="btn sm">KALİBRE</button><button class="btn sm on">YÜKLENİYOR</button><button class="btn sm t-good">TAMAM</button><button class="btn sm t-bad">HATA</button></div>
     <div class="rowf"><em>Seçiciler</em><div class="seg in" style="width:200px"><button class="btn on">KAPALI</button><button class="btn">AÇIK</button></div><kbd>Esc</kbd></div>
   </section>
@@ -115,7 +115,7 @@
     [base({ name: 'Ayşe', sel: true }), 'red'],
     [base({ hp: 34, state: 'DUVAR', st: 'bad', stIcon: 'warn', alert: true, ctrl: ['ok', 'warn'], body: 'warn' }), 'red'],
     [base({ name: 'Deniz', hp: 0, state: 'ÖLÜ 4 sn', st: 'dead', stIcon: 'skull', dead: true }), 'blue'],
-    [base({ name: 'Elif', hp: 100, state: 'BEKLİYOR', st: '', uncal: true }), 'blue'],
+    [base({ name: 'Elif', hp: 100, state: 'BEKLİYOR', st: '', uncal: true, btn: { rst: ['SİLİNİYOR', 'hold', '--p:.6'] } }), 'blue'],
     [base({ name: 'Emre', hp: 12, bat: 18, state: 'HAZIR', btn: { olc: ['×1.04', 't-good'], at: ['EMİN?', 'confirm'] } }), 'blue'],
   ];
   document.getElementById('cards').innerHTML = CARDS.map((c) => VA.pcard(c[0], c[1])).join('');

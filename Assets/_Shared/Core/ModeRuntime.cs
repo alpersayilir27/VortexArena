@@ -76,6 +76,17 @@ namespace VortexArena.Core
         /// RULE, never from <c>modeId</c>.</summary>
         public static bool LimitedReserve { get; private set; }
 
+        /// <summary>
+        /// Body seed of the STAGED SCENE (§5.3 <c>bodySeed</c>) — cosmetic, NOT a rule: the single
+        /// consumer is the teamless body split (<c>RemotePlayerSpawner</c>). 0 = unknown/old server,
+        /// which is still a valid seed (every client computes the same split from it).
+        /// <para>It lives here because its feed point and its refresh moment are the ones the rules
+        /// have (the same three messages, <see cref="ModeRuntimePump"/>). ⚠️ <c>rules_update</c> does
+        /// NOT carry it, so <see cref="Apply"/> must never touch it — a mid-match rule refresh would
+        /// otherwise zero it and swap everyone's body.</para>
+        /// </summary>
+        public static int BodySeed { get; private set; }
+
         /// <summary>Teamless-mode shortcut — so callers do not repeat the enum comparison.</summary>
         public static bool IsTeamless => Teams == ModeTeamMode.None;
 
@@ -163,6 +174,20 @@ namespace VortexArena.Core
                 mode.LimitedReserve);
         }
 
+        /// <summary>Applies the staged scene's body seed (§5.3). Raises <see cref="Changed"/> on a real
+        /// change so the drawn bodies are re-evaluated; the same value repeats on every message about
+        /// the scene.</summary>
+        public static void ApplyBodySeed(int seed)
+        {
+            if (seed == BodySeed)
+            {
+                return;
+            }
+
+            BodySeed = seed;
+            Changed?.Invoke();
+        }
+
         /// <summary>Catalog definition of the CURRENT mode; null when the mode is unknown.</summary>
         public static ModeDefinition FindDefinition()
         {
@@ -172,6 +197,8 @@ namespace VortexArena.Core
         /// <summary>Returns to the default (team-based TDM) — on returning to the open scene and on disconnect.</summary>
         public static void Reset(string modeId = "")
         {
+            // The seed belongs to the STAGED SCENE, so a lost session leaves none behind.
+            ApplyBodySeed(0);
             Set(modeId, ModeTeamMode.TwoTeams, ModeScoreKind.Team, false,
                 ModeReviveAnchor.OwnBase, ModeWeaponSource.WeaponCanvas, ArenaProtocol.RESPAWN_DELAY,
                 false, false, false);

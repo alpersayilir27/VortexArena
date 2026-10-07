@@ -43,6 +43,7 @@ namespace VortexArena.App.Editor
         static partial void BuildHud();
 
         static partial void BuildMatchResult();
+        static partial void BuildPlayerHud();
 
         [MenuItem("Tools/VortexArena/UI/Girdap/Tüm prefabları üret")]
         public static void BuildAll()
@@ -54,6 +55,7 @@ namespace VortexArena.App.Editor
             BuildPreferencesPanel();
             BuildHud();
             BuildMatchResult();
+            BuildPlayerHud();
             AssetDatabase.SaveAssets();
         }
 

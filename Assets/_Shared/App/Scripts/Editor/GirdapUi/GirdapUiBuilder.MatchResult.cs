@@ -174,7 +174,7 @@ namespace VortexArena.App.Editor
 
             UiStripes slabStripes = Stripes(slab, "Stripes");
             Stretch(slabStripes.rectTransform);
-            slabStripes.Stripes(-55f, 10f, 30f, new Color(1f, 1f, 1f, 0.04f));
+            slabStripes.Stripes(-55f, 10f, 30f, new Color(1f, 1f, 1f, 0.04f)).Drift(4f); // CSS: animation drift 4s
             slabStripes.ChamferTopLeft = ResultChamfer - 1f;
 
             UiImage underline = Image(slab, "Underline", null, Girdap.Good);
@@ -276,7 +276,7 @@ namespace VortexArena.App.Editor
 
             UiStripes redStripes = Stripes(redPlate.transform, "Stripes");
             Stretch(redStripes.rectTransform);
-            redStripes.Stripes(-55f, 6f, 17f, new Color(1f, 1f, 1f, 0.075f));
+            redStripes.Stripes(-55f, 6f, 17f, new Color(1f, 1f, 1f, 0.075f)).Drift(2.4f);
             redStripes.SlantLeft = slant;
 
             UiShape redScore = Shape(root, "RedScore");
@@ -298,7 +298,7 @@ namespace VortexArena.App.Editor
 
             UiStripes blueStripes = Stripes(bluePlate.transform, "Stripes");
             Stretch(blueStripes.rectTransform);
-            blueStripes.Stripes(-55f, 6f, 17f, new Color(1f, 1f, 1f, 0.075f));
+            blueStripes.Stripes(-55f, 6f, 17f, new Color(1f, 1f, 1f, 0.075f)).Drift(2.4f);
             blueStripes.SlantRight = slant;
 
             // Labels sit above the plates: claimed last so they are the top siblings.

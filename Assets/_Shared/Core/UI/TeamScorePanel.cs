@@ -27,6 +27,8 @@ namespace VortexArena.Core.UI
         [SerializeField] private GameObject content;
         [Tooltip("Opsiyonel üst satır (\"TUR 2\"). Tur kavramı olmayan mod bunu hiç yazmaz.")]
         [SerializeField] private TMP_Text roundText;
+        [Tooltip("Opsiyonel: TUR etiketinin plakası — etiket boşken kapanır.")]
+        [SerializeField] private GameObject roundFrame;
         [SerializeField] private TMP_Text redScoreText;
         [SerializeField] private TMP_Text blueScoreText;
 
@@ -34,7 +36,7 @@ namespace VortexArena.Core.UI
         {
             // The prefab's texts are placeholders for authoring; nothing real is shown until a mode
             // feeds it.
-            SetText(roundText, "");
+            ApplyRound("");
             SetScore(0, 0);
         }
 
@@ -58,15 +60,24 @@ namespace VortexArena.Core.UI
         /// <summary>The line above the score; empty clears it. The wording belongs to the mode.</summary>
         public void SetRoundLabel(string label)
         {
-            SetText(roundText, label ?? "");
+            ApplyRound(label ?? "");
         }
 
         /// <summary>Back to the lobby — the finished match's numbers must not survive into the next
         /// one.</summary>
         public void Clear()
         {
-            SetText(roundText, "");
+            ApplyRound("");
             SetScore(0, 0);
+        }
+
+        private void ApplyRound(string label)
+        {
+            SetText(roundText, label);
+            if (roundFrame != null)
+            {
+                roundFrame.SetActive(label.Length > 0);
+            }
         }
 
         private void ApplyVisibility()

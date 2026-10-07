@@ -260,7 +260,7 @@ namespace VortexArena.App.Editor
             stripes.SlantLeft = slantLeft;
             stripes.SlantRight = slantRight;
             // CSS `repeating-linear-gradient(-55deg, StripeInk 0 6px, transparent 6px 17px)`.
-            stripes.Stripes(-55f, 6f, 17f, Girdap.StripeInk);
+            stripes.Stripes(-55f, 6f, 17f, Girdap.StripeInk).Drift(2.4f); // CSS: animation drift 2.4s
 
             TextMeshProUGUI text = Text(plate.transform, "Label", label, GirdapFont.ChakraBold, 27f,
                 Color.white, TextAlignmentOptions.Center, 0.12f);

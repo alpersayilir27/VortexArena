@@ -183,6 +183,12 @@ public sealed class MatchDirector
     /// client ambience must not restart while the map stays the same.</summary>
     private DateTime _sceneStagedUtc = DateTime.UtcNow;
 
+    /// <summary>Cosmetic body seed of the staged scene (§5.3 <c>bodySeed</c>): the client picks the
+    /// teamless body from it. Redrawn with <see cref="_sceneStagedUtc"/> and nowhere else — a second
+    /// match on the same map must not reshuffle everyone's body.</summary>
+    /// <remarks>No rule reads it; the server never learns which body a player draws.</remarks>
+    private int _bodySeed = Random.Shared.Next();
+
     private float _timeRemaining;
     private int _scoreRed;
     private int _scoreBlue;
@@ -284,15 +290,18 @@ public sealed class MatchDirector
     }
 
     /// <summary>The ONLY writer of the staged scene: refreshes the staging stamp
-    /// (<see cref="_sceneStagedUtc"/>) only on a real change.</summary>
-    /// <remarks>Rewriting the same scene PRESERVES the stamp — a second match on the same map must not
-    /// restart the client's ambience.</remarks>
+    /// (<see cref="_sceneStagedUtc"/>) and the body seed (<see cref="_bodySeed"/>) only on a real
+    /// change.</summary>
+    /// <remarks>Rewriting the same scene PRESERVES both — a second match on the same map must not
+    /// restart the client's ambience nor reshuffle the bodies.</remarks>
     private void SetSceneLocked(string sceneName)
     {
         if (string.Equals(_sceneName, sceneName, StringComparison.Ordinal)) return;
 
         _sceneName = sceneName;
         _sceneStagedUtc = DateTime.UtcNow;
+        // Non-negative: the client mixes it as an unsigned value and the doc's example is a plain int.
+        _bodySeed = Random.Shared.Next();
     }
 
     /// <summary>Seconds since the current scene was staged (§5.3 <c>sceneElapsed</c>).</summary>
@@ -1314,6 +1323,7 @@ public sealed class MatchDirector
                     scoreLimit = _scoreLimit,
                     yourTeam = player.Team,
                     sceneElapsed = SceneElapsedLocked,
+                    bodySeed = _bodySeed,
                     rules = rulesInfo
                 };
                 outbox.Add(new Outgoing(connection, JsonUtil.Serialize(load), player.Name));
@@ -1331,6 +1341,7 @@ public sealed class MatchDirector
                 scoreLimit = _scoreLimit,
                 yourTeam = "",
                 sceneElapsed = SceneElapsedLocked,
+                bodySeed = _bodySeed,
                 rules = rulesInfo
             });
             foreach (var admin in _registry.Snapshot())
@@ -1849,6 +1860,7 @@ public sealed class MatchDirector
                 modeId = _modeId,
                 sceneName = _sceneName,
                 sceneElapsed = SceneElapsedLocked,
+                bodySeed = _bodySeed,
                 rules = _rules.ToInfo()
             }));
             QueueWorldStateLocked(outbox);
@@ -2677,6 +2689,7 @@ public sealed class MatchDirector
             modeId = _modeId,
             sceneName = _sceneName,
             sceneElapsed = SceneElapsedLocked,
+            bodySeed = _bodySeed,
             rules = _rules.ToInfo()
         };
         QueueBroadcastLocked(outbox, JsonUtil.Serialize(returnMsg));
@@ -2901,6 +2914,7 @@ public sealed class MatchDirector
         modeState = _modeState,
         sceneName = _sceneName,
         sceneElapsed = SceneElapsedLocked,
+        bodySeed = _bodySeed,
         timeRemaining = _timeRemaining,
         scoreRed = _scoreRed,
         scoreBlue = _scoreBlue,

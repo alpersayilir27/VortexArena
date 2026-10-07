@@ -6,7 +6,8 @@ namespace VortexArena.Core
 {
     /// <summary>
     /// The single feed point of <see cref="ModeRuntime"/>: it listens to <c>load_match</c> /
-    /// <c>welcome</c> and snaps back to the defaults on return-to-lobby and on disconnect.
+    /// <c>welcome</c> and snaps back to the defaults on return-to-lobby and on disconnect. The staged
+    /// scene's body seed (§5.3) rides the same three messages, so it is fed from here as well.
     /// <para>
     /// It does NOT live in the scene: <c>load_match</c> arrives BEFORE the scene is loaded, so it
     /// bootstraps itself with the <c>PlayerCombatState</c>/<c>ArenaClient</c> pattern
@@ -89,6 +90,8 @@ namespace VortexArena.Core
                 return;
             }
 
+            // Before the rules: Apply raises Changed, so one event covers the seed as well.
+            ModeRuntime.ApplyBodySeed(msg.bodySeed);
             ModeRuntime.Apply(msg.modeId, msg.rules);
         }
 
@@ -102,6 +105,7 @@ namespace VortexArena.Core
 
             // On a server idling in the lobby the mode is empty; in that case the default is already
             // the correct answer.
+            ModeRuntime.ApplyBodySeed(msg.match.bodySeed);
             ModeRuntime.Apply(msg.match.modeId, msg.match.rules);
         }
 
@@ -118,6 +122,7 @@ namespace VortexArena.Core
                 return;
             }
 
+            ModeRuntime.ApplyBodySeed(msg.bodySeed);
             ModeRuntime.Apply(msg.modeId, msg.rules);
         }
 

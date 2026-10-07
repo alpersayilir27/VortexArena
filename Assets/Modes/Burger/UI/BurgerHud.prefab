@@ -10,7 +10,7 @@ GameObject:
   m_Component:
   - component: {fileID: 6294971343334794156}
   - component: {fileID: 6189165643694195946}
-  - component: {fileID: 3946212527655678101}
+  - component: {fileID: 8072492107699387931}
   m_Layer: 0
   m_Name: Score
   m_TagString: Untagged
@@ -35,8 +35,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0, y: -25}
-  m_SizeDelta: {x: 620, y: 140}
+  m_AnchoredPosition: {x: 0, y: -0}
+  m_SizeDelta: {x: 560, y: 64}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &6189165643694195946
 CanvasRenderer:
@@ -46,7 +46,7 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1845708564868256721}
   m_CullTransparentMesh: 1
---- !u!114 &3946212527655678101
+--- !u!114 &8072492107699387931
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -55,27 +55,36 @@ MonoBehaviour:
   m_GameObject: {fileID: 1845708564868256721}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
+  m_Script: {fileID: 11500000, guid: 7d8886ab7f2a7564fb88e2b11fc090ea, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.UI.UiShape
   m_Material: {fileID: 0}
-  m_Color: {r: 0, g: 0, b: 0, a: 0.55}
+  m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_RaycastTarget: 0
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 0}
-  m_Type: 0
-  m_PreserveAspect: 0
-  m_FillCenter: 1
-  m_FillMethod: 4
-  m_FillAmount: 1
-  m_FillClockwise: 1
-  m_FillOrigin: 0
-  m_UseSpriteMesh: 0
-  m_PixelsPerUnitMultiplier: 1
+  chamferTopLeft: 10
+  chamferTopRight: 0
+  chamferBottomRight: 10
+  chamferBottomLeft: 0
+  slantLeft: 0
+  slantRight: 0
+  fillA: {r: 0.08627451, g: 0.1254902, b: 0.23529412, a: 0.97}
+  fillB: {r: 0.03137255, g: 0.047058824, b: 0.09411765, a: 0.97}
+  gradient: 1
+  gradientEnd: 1
+  outlineWidth: 1
+  outlineA: {r: 0.49019608, g: 0.8901961, b: 1, a: 0.55}
+  outlineB: {r: 0.6666667, g: 0.8039216, b: 1, a: 0.14}
+  glowWidth: 0
+  glowColor: {r: 0, g: 0, b: 0, a: 0}
+  glowOffset: {x: 0, y: 0}
+  innerGlowWidth: 0
+  innerGlowColor: {r: 0, g: 0, b: 0, a: 0}
+  antialias: 1
 --- !u!1 &3415840267267884003
 GameObject:
   m_ObjectHideFlags: 0
@@ -196,18 +205,21 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: VortexArena.Modes.Burger::VortexArena.Modes.Burger.BurgerClientController
   phaseText: {fileID: 0}
-  timeText: {fileID: 6808521353164294087}
-  timeFrame: {fileID: 9140021931184975545}
+  timeText: {fileID: 1981481943780088602}
+  timeFrame: {fileID: 1059147455804283744}
   scoreText: {fileID: 1022099022619408470}
   killFeedText: {fileID: 0}
   killFeedSeconds: 6
   killFeedMaxLines: 5
   healthText: {fileID: 0}
-  statusText: {fileID: 7918912997470842033}
+  statusText: {fileID: 0}
+  statusPlate: {fileID: 8317176341752619678}
   deathOverlay: {fileID: 0}
   deathKillerNameText: {fileID: 0}
   deathStatusText: {fileID: 0}
+  deathStatusPlate: {fileID: 0}
   healthFill: {fileID: 0}
+  healthStrip: {fileID: 1905697406784545259}
   selfStatsText: {fileID: 0}
   deathOverlaySeconds: 0
   centerNoticeRoot: {fileID: 0}
@@ -249,7 +261,7 @@ RectTransform:
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 1, y: 1}
   m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: -24, y: -12}
+  m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &2782173668502339052
 CanvasRenderer:
@@ -281,15 +293,15 @@ MonoBehaviour:
       m_Calls: []
   m_text: "SEN 0 \xB7 TOPLAM 0"
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
-  m_sharedMaterial: {fileID: 2100000, guid: 37957dd1ce0bc17479d9d5a432c845f1, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: 5a1f11a0f5acbeb4db1a2079b94695d2, type: 2}
+  m_sharedMaterial: {fileID: -3442796336324981609, guid: 5a1f11a0f5acbeb4db1a2079b94695d2, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
     rgba: 4294111986
-  m_fontColor: {r: 0.95, g: 0.95, b: 0.95, a: 1}
+  m_fontColor: {r: 0.91764706, g: 0.9490196, b: 1, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
   m_fontColorGradient:
@@ -306,8 +318,8 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 50
-  m_fontSizeBase: 50
+  m_fontSize: 26
+  m_fontSizeBase: 26
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
@@ -316,7 +328,7 @@ MonoBehaviour:
   m_HorizontalAlignment: 2
   m_VerticalAlignment: 512
   m_textAlignment: 65535
-  m_characterSpacing: 0
+  m_characterSpacing: 6
   m_characterHorizontalScale: 1
   m_wordSpacing: 0
   m_lineSpacing: 0
@@ -359,6 +371,10 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 4647684427740298490}
     m_Modifications:
+    - target: {fileID: 543385863658429457, guid: 5ff3c669afc37ee489adf83b1df0dc8f, type: 3}
+      propertyPath: m_AnchoredPosition.y
+      value: -62
+      objectReference: {fileID: 0}
     - target: {fileID: 695199490520228219, guid: 5ff3c669afc37ee489adf83b1df0dc8f, type: 3}
       propertyPath: m_AnchoredPosition.y
       value: -100
@@ -451,6 +467,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: HealthHud
       objectReference: {fileID: 0}
+    - target: {fileID: 5853153782435102969, guid: 5ff3c669afc37ee489adf83b1df0dc8f, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 7200069345772352812, guid: 5ff3c669afc37ee489adf83b1df0dc8f, type: 3}
       propertyPath: m_IsActive
       value: 0
@@ -463,35 +483,46 @@ PrefabInstance:
       addedObject: {fileID: 6294971343334794156}
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 5ff3c669afc37ee489adf83b1df0dc8f, type: 3}
+--- !u!1 &1059147455804283744 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 4814755121378703155, guid: 5ff3c669afc37ee489adf83b1df0dc8f, type: 3}
+  m_PrefabInstance: {fileID: 5504430886117715027}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &1905697406784545259 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 6201965812270140856, guid: 5ff3c669afc37ee489adf83b1df0dc8f, type: 3}
+  m_PrefabInstance: {fileID: 5504430886117715027}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4954decb9cbda9d41849076415c68fdd, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.UI.HealthStrip
+--- !u!114 &1981481943780088602 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 6276902900373452617, guid: 5ff3c669afc37ee489adf83b1df0dc8f, type: 3}
+  m_PrefabInstance: {fileID: 5504430886117715027}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f4688fdb7df04437aeb418b961361dc5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.TextMeshPro::TMPro.TextMeshProUGUI
 --- !u!224 &5967260090610652330 stripped
 RectTransform:
   m_CorrespondingSourceObject: {fileID: 2210244689067161849, guid: 5ff3c669afc37ee489adf83b1df0dc8f, type: 3}
   m_PrefabInstance: {fileID: 5504430886117715027}
   m_PrefabAsset: {fileID: 0}
---- !u!114 &6808521353164294087 stripped
+--- !u!114 &8317176341752619678 stripped
 MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 1305780708500384660, guid: 5ff3c669afc37ee489adf83b1df0dc8f, type: 3}
+  m_CorrespondingSourceObject: {fileID: 4543887293052522189, guid: 5ff3c669afc37ee489adf83b1df0dc8f, type: 3}
   m_PrefabInstance: {fileID: 5504430886117715027}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: f4688fdb7df04437aeb418b961361dc5, type: 3}
+  m_Script: {fileID: 11500000, guid: 21764b2dceeaa7a439091711cacb4f7c, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Unity.TextMeshPro::TMPro.TextMeshProUGUI
---- !u!114 &7918912997470842033 stripped
-MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 2415631238460408034, guid: 5ff3c669afc37ee489adf83b1df0dc8f, type: 3}
-  m_PrefabInstance: {fileID: 5504430886117715027}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: f4688fdb7df04437aeb418b961361dc5, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Unity.TextMeshPro::TMPro.TextMeshProUGUI
---- !u!1 &9140021931184975545 stripped
-GameObject:
-  m_CorrespondingSourceObject: {fileID: 3653627932031795946, guid: 5ff3c669afc37ee489adf83b1df0dc8f, type: 3}
-  m_PrefabInstance: {fileID: 5504430886117715027}
-  m_PrefabAsset: {fileID: 0}
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.UI.StatusPlate

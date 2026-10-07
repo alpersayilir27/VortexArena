@@ -25,6 +25,10 @@ namespace VortexArena.Core.UI
         [Tooltip("Açılıp kapanan içerik kökü — bileşenin KENDİ nesnesi olmamalı.")]
         [SerializeField] private GameObject content;
         [SerializeField] private TMP_Text label;
+        [Tooltip("Opsiyonel Girdap plaka: kenarı sonuç tonuna boyanır.")]
+        [SerializeField] private UiShape plate;
+        [Tooltip("Opsiyonel alt çizgi (3 px): sonuç tonuna boyanır.")]
+        [SerializeField] private UiShape underline;
         [Tooltip("Şeridin ekranda kalma süresi (sn).")]
         [SerializeField] private float visibleSeconds = 3f;
 
@@ -71,10 +75,27 @@ namespace VortexArena.Core.UI
                 return;
             }
 
+            Color tone = ColorOf(outcome);
             if (label != null)
             {
                 label.text = text;
-                label.color = ColorOf(outcome);
+                label.color = tone;
+                // CSS `text-shadow: 0 0 18px rgba(tone, .55)` — Underlay preset from the builder.
+                Color halo = tone;
+                halo.a = 0.55f;
+                label.fontMaterial.SetColor(ShaderUtilities.ID_UnderlayColor, halo);
+            }
+
+            if (plate != null)
+            {
+                Color edge = tone;
+                edge.a = 0.6f;
+                plate.Outline(1f, edge);
+            }
+
+            if (underline != null)
+            {
+                underline.Fill(tone);
             }
 
             // Restarted on every call: a second round result arriving while the first is still up must
