@@ -8,16 +8,17 @@ namespace VortexArena.Core.Arena
     /// Free-roam arena guard for a physical play space. The player moves 1:1 with their real body;
     /// this component watches the HMD position in the arena's local space and fades the screen —
     /// gently as the player nears the edge, to <b>full black</b> the moment they step outside —
-    /// plus shows a warning and pulses the controllers.
+    /// plus shows a warning and vibrates the controllers (a limited burst sequence per exit).
     /// Attach to an object positioned inside the arena, aligned with the arena's rotation.
     /// <para>
     /// <b>Being outside the area has the SAME presentation as being inside an obstacle</b>
-    /// (<c>ObstacleViolationProbe</c>): full fade + pulsing haptics + a warning text on top of the
+    /// (<c>ObstacleViolationProbe</c>): full fade + haptics + a warning text on top of the
     /// fade. Both are two faces of a single rule — <i>if the view is outside the playable area the
     /// screen closes</i> — and both go through the same two arbiters
     /// (<see cref="ScreenFade"/>, <see cref="ControllerHaptics"/>).
-    /// ⚠️ The difference is <b>in the penalty, not the presentation</b>: being out of bounds does
-    /// NOT COST HEALTH (§10.9), an obstacle does.
+    /// ⚠️ The difference is <b>in the penalty and the vibration length</b>: being out of bounds does
+    /// NOT COST HEALTH (§10.9), an obstacle does; the obstacle pulses for as long as contact lasts,
+    /// the boundary only bursts on exit (<see cref="ReportHaptics"/>).
     /// </para>
     /// <para>
     /// <b>The ONLY source of the arena size is <see cref="dimensionsJson"/></b> (the dimensions
@@ -78,6 +79,16 @@ namespace VortexArena.Core.Arena
 
         /// <summary>This component's source id in <see cref="ControllerHaptics"/>.</summary>
         private const string HapticSourceId = "boundary";
+
+        /// <summary>Bursts per exit, then silence — continuous vibration while outside drains the
+        /// controller battery.</summary>
+        private const int HapticBurstCount = 3;
+
+        private const float HapticBurstSeconds = 1f;
+        private const float HapticGapSeconds = 0.5f;
+
+        /// <summary>unscaledTime of the current exit; negative = inside (sequence disarmed).</summary>
+        private float hapticExitTime = -1f;
 
         /// <summary>
         /// The fade drawn once the boundary is crossed. ⚠️ <b>It is NOT tunable</b> — neither a
@@ -333,9 +344,14 @@ namespace VortexArena.Core.Arena
         }
 
         /// <summary>
-        /// Pulsing controller haptics while out of bounds — <b>through the same gate as the
-        /// fade</b>: a darkening screen on its own raises the question "what happened", the pulse
-        /// answers it with "you are outside the area, come back".
+        /// Controller haptics on leaving the area — <b>through the same gate as the fade</b>: a
+        /// darkening screen on its own raises the question "what happened", the vibration answers
+        /// it with "you are outside the area, come back".
+        /// <para>
+        /// Each exit plays <see cref="HapticBurstCount"/> bursts of <see cref="HapticBurstSeconds"/>,
+        /// then stays silent while still outside (the fade keeps warning). Re-entering cancels the
+        /// remaining bursts; the next exit starts a fresh sequence.
+        /// </para>
         /// <para>
         /// ⚠️ The gate is <b>the boundary itself, not the approach ramp</b>: the ramp is a warning
         /// and lets the player stay inside the area; the vibration is the response to a violation.
@@ -346,12 +362,26 @@ namespace VortexArena.Core.Arena
         /// is not called): obstacle violation asks for the same vibration and both can be true at
         /// the same time — the boundary also counts the scene's <see cref="ArenaObstacle"/>s as out
         /// of bounds. The arbiter (<see cref="ControllerHaptics"/>) applies exactly the same
-        /// contract as <see cref="ScreenFade"/>; the pulse's frequency and amplitude live there and
-        /// are not repeated here.
+        /// contract as <see cref="ScreenFade"/>; the amplitude lives there and is not repeated here.
+        /// ⚠️ Reported every frame (0 included) — the arbiter's heartbeat contract.
         /// </para>
         /// </summary>
-        private void ReportHaptics(bool outside) =>
-            ControllerHaptics.ReportPulse(HapticSourceId, outside);
+        private void ReportHaptics(bool outside)
+        {
+            float now = Time.unscaledTime;
+            if (!outside)
+                hapticExitTime = -1f; // re-entry cancels the rest and re-arms
+            else if (hapticExitTime < 0f)
+                hapticExitTime = now;
+
+            float elapsed = now - hapticExitTime;
+            float period = HapticBurstSeconds + HapticGapSeconds;
+            bool on = outside
+                      && elapsed < HapticBurstCount * period
+                      && Mathf.Repeat(elapsed, period) < HapticBurstSeconds;
+
+            ControllerHaptics.ReportSteady(HapticSourceId, on);
+        }
 
         /// <summary>
         /// Reports the boundary's fade request to <see cref="ScreenFade"/> and draws the

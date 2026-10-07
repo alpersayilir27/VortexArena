@@ -11,7 +11,7 @@ namespace VortexArena.Core.Editor
 {
     /// <summary>Weapon kit builder: produces/updates <c>WD_&lt;Name&gt;.asset</c>
     /// (WeaponDefinition), the bindings and VFX of existing <c>WPN_&lt;Name&gt;.prefab</c>s,
-    /// <c>FX_RemoteShot.prefab</c>, the front-grip indicator (<c>VA_GripSocket.prefab</c>) and
+    /// <c>FX_RemoteShot.prefab</c>, the proximity-socket art (<c>VA_GripSocket.prefab</c>) and
     /// <c>Resources/WeaponCatalog.asset</c>.
     /// <para>There is NO separate menu item: <c>Tools &gt; VortexArena &gt; Build &gt; Configure All
     /// Build Elements</c> runs <see cref="BuildAll"/> on every sync and its "Hazırlık" section shows
@@ -56,15 +56,15 @@ namespace VortexArena.Core.Editor
         /// (<see cref="ApplyWeaponFrameKit"/>). The tool only binds it, never creates it.</summary>
         private const string WeaponFramePrefabPath = PrefabDir + "/VA_WeaponFrame.prefab";
 
-        /// <summary>Art of the front-grip SOCKET — one prefab shared by all weapons, placed by
-        /// <c>Weapon</c> at the front-grip point (<c>WeaponCatalog.secondaryGripIndicatorPrefab</c>).
-        /// <para>⚠️ Contract: the prefab is designed 1 m ACROSS (Unity's sphere primitive) and
-        /// <c>Weapon</c> scales it to twice the acceptance radius, so the drawn sphere IS exactly the
-        /// acceptance volume. Binding visual and rule to different numbers would let a grip be
-        /// refused where the player is told they are inside.</para>
+        /// <summary>Art of the proximity SOCKET (<c>GripSocket</c>, <c>WristHolster</c>) — one prefab
+        /// bound by hand on each socket's <c>socketIndicatorPrefab</c> field. ⚠️ Not the weapon's
+        /// foregrip: that link has no socket and draws nothing.
+        /// <para>⚠️ Contract: the prefab is designed 1 m ACROSS (Unity's sphere primitive) and the
+        /// socket scales it to twice its accept radius, so the drawn sphere IS exactly the acceptance
+        /// volume. Binding visual and rule to different numbers would let a grab be refused where the
+        /// player is told they are inside.</para>
         /// <para>The tool creates the prefab ONLY if missing (<see cref="EnsureGripSocketPrefab"/>:
-        /// translucent light-blue sphere) and binds it to the catalog ONLY if the field is empty, so
-        /// neither an edited sphere nor a different prefab is overwritten.</para></summary>
+        /// translucent light-blue sphere), so an edited sphere is never overwritten.</para></summary>
         private const string GripSocketPrefabPath = PrefabDir + "/VA_GripSocket.prefab";
         private const string GripSocketMaterialDir = "Assets/_Shared/Materials";
         private const string GripSocketMaterialPath = GripSocketMaterialDir + "/M_GripSocket.mat";
@@ -876,15 +876,15 @@ namespace VortexArena.Core.Editor
             return true;
         }
 
-        /// <summary>Creates the front-grip socket prefab if missing (left alone if present): Unity's
+        /// <summary>Creates the proximity-socket prefab if missing (left alone if present): Unity's
         /// sphere primitive (1 m across — contract in <see cref="GripSocketPrefabPath"/>), no
         /// collider, translucent light-blue material.
-        /// <para>Why a prefab: the socket is ART and art belongs in a prefab — <c>Weapon</c> only
-        /// drives its position, scale (twice the acceptance radius) and alpha. The sphere is a
-        /// starting point: an artist can edit this prefab in place or bind a different one to the
-        /// catalog, as long as the 1 m contract holds.</para>
+        /// <para>Why a prefab: the socket is ART and art belongs in a prefab — <c>GripSocket</c> only
+        /// drives its position, scale (twice the accept radius) and alpha. The sphere is a starting
+        /// point: an artist can edit this prefab in place or bind a different one to the socket, as
+        /// long as the 1 m contract holds.</para>
         /// <para>⚠️ The collider is stripped here (primitives ship with one): the socket must not
-        /// catch fire rays or grabs. <c>Weapon</c> strips it again on the instance; keeping the
+        /// catch fire rays or grabs. <c>GripSocket</c> strips it again on the instance; keeping the
         /// source clean avoids "why is this checked twice".</para>
         /// <para>⚠️ The material is created as an ASSET (<see cref="GripSocketMaterialPath"/>), not
         /// via runtime <c>Shader.Find</c>: a shader no asset references is stripped from the build
@@ -1161,27 +1161,6 @@ namespace VortexArena.Core.Editor
                 else
                 {
                     Warn("WeaponCatalog: FX_RemoteShot.prefab yok — remoteShotFxPrefab olduğu gibi bırakıldı.");
-                }
-            }
-
-            // Front-grip indicator: bound ONLY when the field is empty, so an artist-bound prefab is
-            // never overwritten (this is how it differs from the FX field; see GripSocketPrefabPath).
-            var indicatorProp = so.FindProperty("secondaryGripIndicatorPrefab");
-            if (indicatorProp == null)
-            {
-                Warn("WeaponCatalog: 'secondaryGripIndicatorPrefab' alanı yok (sözleşme kayması?).");
-            }
-            else if (indicatorProp.objectReferenceValue == null)
-            {
-                var indicator = AssetDatabase.LoadAssetAtPath<GameObject>(GripSocketPrefabPath);
-                if (indicator != null)
-                {
-                    indicatorProp.objectReferenceValue = indicator;
-                }
-                else
-                {
-                    Warn("WeaponCatalog: VA_GripSocket.prefab yok — secondaryGripIndicatorPrefab boş " +
-                         "kaldı (ön kabza göstergesi çizilmez; tam kit koşusu üretir).");
                 }
             }
 
@@ -1640,8 +1619,8 @@ namespace VortexArena.Core.Editor
         /// root, and legacy grip leftovers are cleaned up.
         /// <para>⚠️ There is NO grab filter on the root and none is bound
         /// (<c>_interactorFilters</c> stays empty): the old socket gate component is gone — the
-        /// weapon is handed to the main hand, and the front grip's gate and indicator live in
-        /// <see cref="Weapon"/> itself (<c>IsHandOnSecondaryGrip</c>). The tool CLEARS the list every
+        /// weapon is handed to the main hand, and the front grip links on grip alone
+        /// (<c>WeaponGranter.ResolveSecondaryHand</c>). The tool CLEARS the list every
         /// run, because the missing entry left behind by the removed component throws in ISDK's
         /// <c>Start</c> check (<c>AssertCollectionItems</c>) and makes the weapon ungrabbable. For
         /// the same reason leftover missing scripts on the root are deleted.</para>

@@ -11,7 +11,9 @@ namespace VortexArena.Core.Combat
     /// <para>One hand: the item's rotation is the main controller's, its position is the grip record
     /// carried by that rotation. Two hands: start from the one-hand solution and turn the item's
     /// <i>main grip → foregrip</i> axis toward the second palm. The second hand does not MOVE the
-    /// item, it only AIMS it — the main grip point stays exactly on the main palm every frame.</para>
+    /// item, it only AIMS it — the main grip point stays exactly on the main palm every frame. The
+    /// aim never enters the cone around the player's own body (<see cref="BodyAvoidConeDegrees"/>):
+    /// the link has no distance gate, so the second hand may grip from anywhere.</para>
     /// <para>⚠️ HAND ROTATION NEVER ENTERS. The grip record carries POSITION only
     /// (<see cref="ItemGripPose"/>) and two-handed aiming reads only the second hand's POSITION —
     /// neither the second controller's rotation nor the wrist pose. Roll always comes from the main
@@ -62,6 +64,29 @@ namespace VortexArena.Core.Combat
         private const float AimBlendSeconds = 0.08f;
 
         /// <summary>
+        /// Half-angle (degrees) of the cone around the "toward the body" direction that the
+        /// two-handed aim may not enter: a target inside it is pushed back to the cone's edge.
+        /// <para>Why: the foregrip link has NO distance gate (<c>WeaponGranter.ResolveSecondaryHand</c>),
+        /// so the second hand can grip from anywhere — behind the main hand, against the chest —
+        /// and <see cref="Quaternion.FromToRotation"/> would turn the muzzle into the player. The
+        /// body direction is the main hand's HORIZONTAL direction to the head's vertical axis: it
+        /// needs no torso height and no skeleton, only the head pose both ends already have.</para>
+        /// <para>⚠️ This clamp is safe where <see cref="AimFadeOutAngleDegrees"/> says a clamp is not:
+        /// the pushed-back direction is BUILT from the body direction and a rotation axis, never
+        /// taken from a near-degenerate FromToRotation (<see cref="KeepOutOfBodyCone"/>).</para>
+        /// </summary>
+        private const float BodyAvoidConeDegrees = 45f;
+
+        /// <summary>Below this horizontal hand-to-head-axis distance (5 cm) the body direction is
+        /// undefined and the cone is skipped.</summary>
+        private const float MinBodyAxisSqr = 0.0025f;
+
+        /// <summary>Weight of the current weapon axis when choosing WHERE on the cone's edge a target
+        /// lands (<see cref="KeepOutOfBodyCone"/>). Small enough to be invisible away from the body
+        /// direction, large enough to decide the tie when the target points straight at it.</summary>
+        private const float ConeEdgeTieBreak = 0.02f;
+
+        /// <summary>
         /// Resolves the item's world pose.
         /// </summary>
         /// <param name="def">Item definition (source of the grip record); <c>null</c> sticks the
@@ -78,9 +103,15 @@ namespace VortexArena.Core.Combat
         /// twisted.</param>
         /// <param name="aimBlend">0..1 — the caller's smoothing; at 0 the result is the one-handed
         /// solution.</param>
+        /// <param name="hasBody">Is a head position available (<paramref name="bodyPosition"/>).
+        /// Without one the body cone is skipped; one-handed callers pass <c>false</c>.</param>
+        /// <param name="bodyPosition">Head world position — locally the centre eye anchor, remotely
+        /// the wire's head pose (<see cref="BodyAvoidConeDegrees"/>). ⚠️ Both ends MUST pass it:
+        /// the cone changes the pose, and a side without it would draw the weapon elsewhere.</param>
         public static void Solve(ItemDefinition def, bool primaryRight, bool secondaryRight,
                                  in Pose primaryPalm, bool hasSecondary,
                                  in Vector3 secondaryPalmPosition, float aimBlend,
+                                 bool hasBody, in Vector3 bodyPosition,
                                  out Vector3 itemPosition, out Quaternion itemRotation)
         {
             // The one-handed solution is ALWAYS computed and returned as-is when the two-handed
@@ -132,6 +163,20 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
+            // ⚠️ Reach is judged on the RAW target, the cone on what is actually aimed at: a hand
+            // held against the chest is "unreachable" and ignored, not pushed to the cone's edge.
+            // The pushed target is run through the band AGAIN: the edge point can land near
+            // anti-parallel to the axis, and that is exactly where FromToRotation must carry no weight.
+            if (hasBody)
+            {
+                to = KeepOutOfBodyCone(to, from, primaryPalm.position, bodyPosition);
+                reach = Mathf.Min(reach, ReachWeight(Vector3.Angle(from, to)));
+                if (reach <= 0f)
+                {
+                    return;
+                }
+            }
+
             Quaternion full = Quaternion.FromToRotation(from, to);
             Quaternion delta = Quaternion.Slerp(Quaternion.identity, full, blend * reach);
 
@@ -143,6 +188,46 @@ namespace VortexArena.Core.Combat
             // go). Identity check: with delta = identity this line is IDENTICAL to the one-handed
             // position above — PrimaryGripPosition is by definition −PrimaryGripPointOnItem.
             itemPosition = primaryPalm.position - itemRotation * gripPointOnItem;
+        }
+
+        /// <summary>
+        /// Pushes the aim target out of the body cone (<see cref="BodyAvoidConeDegrees"/>); returned
+        /// unchanged when already outside it or when the body direction is undefined.
+        /// <para>The edge point is the body direction rotated by the cone angle toward the target,
+        /// i.e. the nearest point of the edge in the plane of the two. Straight at the body that
+        /// plane is undefined and any point of the edge is "nearest": the tie-break toward the
+        /// current weapon axis decides it CONTINUOUSLY (a hard fallback would jump between edge
+        /// points as the hand jitters around the body direction). With that axis also on the body
+        /// direction the edge point above is taken — world up is always perpendicular to the
+        /// horizontal body direction.</para>
+        /// <para>⚠️ Every axis candidate is a cross product WITH the body direction, so the result
+        /// stays exactly on the cone — a mixed-in arbitrary axis would leave it.</para>
+        /// </summary>
+        private static Vector3 KeepOutOfBodyCone(in Vector3 to, in Vector3 from,
+                                                 in Vector3 handPosition, in Vector3 bodyPosition)
+        {
+            Vector3 toBody = bodyPosition - handPosition;
+            toBody.y = 0f;
+            if (toBody.sqrMagnitude < MinBodyAxisSqr)
+            {
+                return to;
+            }
+
+            if (Vector3.Angle(to, toBody) >= BodyAvoidConeDegrees)
+            {
+                return to;
+            }
+
+            Vector3 body = toBody.normalized;
+            Vector3 axis = Vector3.Cross(body, to.normalized) +
+                           ConeEdgeTieBreak * Vector3.Cross(body, from.normalized);
+            if (axis.sqrMagnitude < 1e-8f)
+            {
+                axis = Vector3.Cross(body, Vector3.up);
+            }
+
+            // Magnitude kept: FromToRotation ignores it, the MinReachSqr guard already passed.
+            return Quaternion.AngleAxis(BodyAvoidConeDegrees, axis.normalized) * body * to.magnitude;
         }
 
         /// <summary>

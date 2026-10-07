@@ -17,8 +17,9 @@ namespace VortexArena.Core
     /// base strips are visible depends on the selected mode — in a team mode (TDM/tournament) the
     /// strips are needed, in a teamless one (FFA) they are misleading. Since the active rule at that
     /// moment is the lobby profile, this information cannot be read from anywhere else. Consumers:
-    /// <c>Arena.BaseZoneVisibility</c> (team mode), the weapon gate (<see cref="IsKidsGame"/>) and
-    /// <c>RemoteAvatar</c> (the selected mode's player bodies, <see cref="FindDefinition"/>).
+    /// <c>Arena.BaseZoneVisibility</c> (team mode), the weapon gate (<see cref="IsKidsGame"/>,
+    /// <see cref="GrantsRandomWeapon"/>) and <c>RemoteAvatar</c> (the selected mode's player bodies,
+    /// <see cref="FindDefinition"/>).
     /// </para>
     /// <para>
     /// ⚠️ <b>No field without a consumer is added here</b>: the rest of the selection (map, duration,
@@ -52,6 +53,13 @@ namespace VortexArena.Core
         /// answers <c>false</c> — "unknown" must not disarm a competitive lobby.</para></summary>
         public static bool IsKidsGame { get; private set; }
 
+        /// <summary>Whether the selected mode hands out a random weapon
+        /// (<see cref="ModeWeaponSource.RandomGrant"/>, e.g. FFA). Consumer: the weapon gate — the
+        /// racks go while the arena is staged, not only at <c>start_match</c>.
+        /// <para>⚠️ Catalog-resolved like <see cref="IsKidsGame"/>; an unknown mode answers
+        /// <c>false</c> and keeps the racks.</para></summary>
+        public static bool GrantsRandomWeapon { get; private set; }
+
         /// <summary>Raised when the selection actually changes (SILENT on a repeat of the same value —
         /// the message can arrive on every connection and on every selection command).</summary>
         public static event Action Changed;
@@ -68,13 +76,7 @@ namespace VortexArena.Core
         /// is unknown. Content only (e.g. player bodies) — never a rule.</summary>
         public static ModeDefinition FindDefinition()
         {
-            if (!HasValue || string.IsNullOrEmpty(ModeId))
-            {
-                return null;
-            }
-
-            GameCatalog catalog = Resources.Load<GameCatalog>(CatalogResourceName);
-            return catalog != null ? catalog.FindMode(ModeId) : null;
+            return HasValue ? FindMode(ModeId) : null;
         }
 
         /// <summary>Connection lost / session ended: returns to "unknown" so the consumer falls back
@@ -89,14 +91,23 @@ namespace VortexArena.Core
             // The catalog is consulted only on an id CHANGE: selection_state repeats on every
             // connection and every operator command.
             bool sameMode = HasValue && modeId == ModeId;
-            bool kids = hasValue && (sameMode ? IsKidsGame : ResolveKids(modeId));
+            bool kids = IsKidsGame;
+            bool grants = GrantsRandomWeapon;
+            if (!sameMode)
+            {
+                ModeDefinition mode = hasValue ? FindMode(modeId) : null;
+                kids = mode != null && mode.GameType == GameType.Kids;
+                grants = mode != null && mode.Weapons == ModeWeaponSource.RandomGrant;
+            }
+
             bool changed = hasValue != HasValue || modeId != ModeId || teamless != IsTeamless ||
-                           kids != IsKidsGame;
+                           kids != IsKidsGame || grants != GrantsRandomWeapon;
 
             HasValue = hasValue;
             ModeId = modeId;
             IsTeamless = teamless;
             IsKidsGame = kids;
+            GrantsRandomWeapon = grants;
 
             if (changed)
             {
@@ -104,17 +115,16 @@ namespace VortexArena.Core
             }
         }
 
-        /// <summary>Family of the selected mode from the catalog (same asset the admin UI reads).</summary>
-        private static bool ResolveKids(string modeId)
+        /// <summary>Catalog definition of a mode id (same asset the admin UI reads).</summary>
+        private static ModeDefinition FindMode(string modeId)
         {
             if (string.IsNullOrEmpty(modeId))
             {
-                return false;
+                return null;
             }
 
             GameCatalog catalog = Resources.Load<GameCatalog>(CatalogResourceName);
-            ModeDefinition mode = catalog != null ? catalog.FindMode(modeId) : null;
-            return mode != null && mode.GameType == GameType.Kids;
+            return catalog != null ? catalog.FindMode(modeId) : null;
         }
     }
 }

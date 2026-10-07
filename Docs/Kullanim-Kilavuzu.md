@@ -274,8 +274,9 @@ duvarın içinde/yanlış yerde görüyor, kendisi "ben oraya nişan almadım" d
 kalibrasyonu bozulmuştur. **Maçı durdurmana gerek yok:**
 
 **Oyuncu başına kalibrasyon işi İSTATİSTİK panelindedir** (`I`), o oyuncunun satırında. Yan
-kolondaki oyuncu kartında kalibrasyon düğmesi **yoktur** — karttaki düğmeler POV, ÖLÇ, takım
-değiştirme ve oyuncuyu atmadır.
+kolondaki oyuncu kartında yalnız **SIFIRLA** vardır (POV, ÖLÇ, takım ve AT'ın yanında) —
+istatistik satırındakiyle **aynı düğmedir**: kısa bas / basılı tut aynı işi yapar. Kayıttan geri
+yükleyen **KALİBRE** yalnız İstatistik satırındadır.
 
 - [ ] **1.** `I` ile İSTATİSTİK panelini aç, o oyuncunun satırını bul.
 - [ ] **2.** Önce **KALİBRE**'ye bas: gözlükte kayıtlı olan hizalamayı geri yüklemeyi dener ve
@@ -300,6 +301,16 @@ değiştirme ve oyuncuyu atmadır.
 > hiçbir şey olmaz. Dolduğu anda yazı **yeşil SİLİNDİ**'ye döner — iş bitti demektir, parmağını
 > kaldırabilirsin. Ondan sonra o oyuncuda **KALİBRE** artık iş görmez, tek yol elle A/B'dir.
 
+**Satırda kırmızı "çapa kaydedilemedi (…)" yazıyorsa.** Oyuncu elle kalibre oldu, hizalaması
+tuttu — ama gözlük bunu **kalıcı olarak saklayamadı**. Ne anlama gelir:
+
+- Oyuncu bu oturumda normal oynar; **harita değişimi hizalamayı korur**, yeniden kalibre
+  ettirmen gerekmez.
+- Gözlükte **uygulama yeniden açılırsa** hizalama gider: o oyuncu elle A/B kalibrasyonunu
+  yeniden alır.
+- Aynı gözlükte sürekli görülüyorsa sebep **gözlük tarafındadır**, kalibrasyonu tekrarlamak
+  düzeltmez. Parantez içindeki kodu olduğu gibi teknik ekibe ilet.
+
 **Tek bir gözlüğün KAYDI bozuksa — SIFIRLA'yı BASILI TUT.** Oyuncu sıfırlamadan sonra yeniden
 kalibre oluyor ama aynı oyuncu tekrar tekrar kayıyorsa sorun hizalamada değil, o gözlükte
 **kayıtlı olan** çapadadır. O satırın **SIFIRLA** düğmesini **1 saniye basılı tut** — düğme
@@ -322,8 +333,8 @@ demektir. Dolmadan parmağını kaydırırsan iptal olur.
 
 ⚠️ **Toplu bir sıfırlama düğmesi YOKTUR** — ve aranmasın. Sıfırlamak oyuncuyu oyun dışı bırakır;
 tek tıkla salondaki herkesi aynı anda oyun dışı bırakacak bir düğme, bir yanlış tıklamayla maçın
-tamamını götürürdü. Sıfırlama bu yüzden **yalnız oyuncu başına**, İstatistik satırındaki
-**SIFIRLA** ile yapılır.
+tamamını götürürdü. Sıfırlama bu yüzden **yalnız oyuncu başına**, İstatistik satırındaki ya da
+yan kolondaki kartın **SIFIRLA**'sıyla yapılır.
 
 **Herkes birden kaymışsa sıra şudur:** (1) **TÜMÜNÜ KALİBRE ET** — kimseyi oyun dışı bırakmadan
 herkeste kayıtlı hizalamayı geri yüklemeyi dener; (2) düzelmeyen oyuncular için tek tek
@@ -356,7 +367,7 @@ kadar herkes **1,80 m** sayılır.
   oyuncuyu dik durdurup bas; yeni ölçü eskisinin yerine geçer.
 - Düğmenin etiketi ölçülen çarpanı gösterir (`×1.04` gibi) — ölçünün oturduğu anlamına gelir.
   Karakter o anda herkeste yeniden boyutlanır.
-- Ölçüm hiç yapılamazsa düğmede **ÖLÇÜLEMEDİ** yazar (eski değer olduğu gibi durur) ve ekranın
+- Ölçüm hiç yapılamazsa düğmede kırmızı **HATA** yazar (eski değer olduğu gibi durur) ve ekranın
   duyuru satırında sebebi görünür: *"kalibre yok"* → önce kalibrasyon; *"göz hizası okunamadı"* ya da
   *"gövde pozu yok"* → o gözlük ölçülemiyor. Aynı oyuncu başkalarının ekranında **donuk bir
   T-pozunda** duruyorsa teşhis kesindir → §4.4'teki bakım adımlarını uygula.
@@ -565,10 +576,13 @@ Yönetim ekranındaki dashboard'da elindeki kontroller:
 | **Oyundan çık** | Tercihler → **BAĞLANTI** sekmesindeki **OYUNDAN ÇIK** | Yönetim uygulamasını kapatır. Güvenlik için **iki kez** basmak gerekir (ilk basışta düğme "EMİN? ÇIK" olur). Sunucuyu ve maçı **kapatmaz** — o ayrı bir penceredir |
 
 **Oyuncu seçmek:** yandaki kolonda bir oyuncu kartına tıkla — seçili oyuncunun çerçevesi turuncu
-olur, zemindeki halkası büyür. `Tab` ile sıradakine geçersin. Karttaki dört düğme: **POV** (o
+olur, zemindeki halkası büyür. `Tab` ile sıradakine geçersin. Karttaki beş düğme: **POV** (o
 oyuncunun gözünden izle), **ÖLÇ** (boyunu ölç — §4.2), **MAVİ/KIRMIZI** (takımını değiştir),
-**AT** (bağlantıdan çıkar — güvenlik için **iki kez** basmak gerekir, ilk basışta düğme "EMİN?"
-olur). ⚠️ **Kartta kalibrasyon düğmesi yoktur** — o iş İSTATİSTİK panelindeki satırdadır (§4.1). ⚠️ **AT o gözlükteki oyunu kapatır** ve **satırı listeden siler**: oyuncu
+**SIFIRLA** (kalibrasyonu sıfırla — kısa bas hizalamayı düşürür, 1 sn basılı tut gözlükteki kaydı
+da siler; İstatistik satırındakiyle aynı düğme, §4.1), **AT** (bağlantıdan çıkar — güvenlik için
+**iki kez** basmak gerekir, ilk basışta düğme "EMİN?" olur). ⚠️ **SIFIRLA onay sormaz**, ilk
+basışta gider — AT'ın yanındadır, ona basarken dikkat. Kayıttan geri yükleyen **KALİBRE** kartta
+yoktur, İSTATİSTİK satırındadır. ⚠️ **AT o gözlükteki oyunu kapatır** ve **satırı listeden siler**: oyuncu
 birkaç saniye içinde Quest'in kendi menüsünde bulur kendini, geri dönmesi için oyunun elle yeniden
 açılması gerekir. Yani "AT" molaya çıkarmak için değil, o cihazı oturumdan çıkarmak içindir.
 Listede "ayrıldı" ya da "yeniden bağlanıyor" olarak kalmış bir satırı temizlemek için de AT kullanılır. Atmak yasaklamak
@@ -666,7 +680,7 @@ Sorun yaşandığında ilk bakılacak yer burasıdır ve sana üç şeyi ayırt 
 | Skor | Takım puanı (dost ateşi açıkken takım arkadaşını öldürmek takım puanı yazmaz, öldürene −1) | **Kişi başına puan**; her öldürme öldürene +1 | **Kazanılan tur sayısı** — öldürme puan yazmaz |
 | Kazanan | Puan limitine ilk ulaşan takım; süre biterse önde olan | Puan limitine ilk ulaşan **oyuncu**; süre biterse en yüksek puanlı. Tepede eşitlik varsa berabere | **4 tur** kazanan takım (en fazla 7 tur oynanır) |
 | Silah | Arenaya yerleştirilmiş silahlardan seçilir: oyuncu silaha ~2 metreye kadar yaklaşıp nişan alır, yan tuşa (grip) basınca silahın bir kopyası eline gelir. Silah yerinden kaybolmaz, sınırsız kez alınabilir. ⚠️ Silahların arenaya konması **haritayı yapan kişinin işidir** — konmamış bir arenada oyuncunun eline silah gelmez | Oyuncu kumandanın **yan tuşunu (grip) basılı tutunca** eline rastgele bir silah gelir; bıraktığında silah kaybolur, tekrar bastığında **başka** bir silah gelir | Takım Ölüm Maçı ile aynı (arenadaki silahlardan seçilir) |
-| Şarjör | Boşalınca kendiliğinden dolar | **Dolmaz** — oyuncu silahı bırakıp yenisini çeker | Her **tur başında** herkes tam dolu başlar |
+| Mermi | **Tükenmez** — şarjör boşalınca yenisi gelir, sayaç `30/∞` gibi görünür | **Tükenmez** (`30/∞`); oyuncu dilerse silahı bırakıp başka bir silah da çeker | **Sınırlı** — her silahın belli sayıda yedek şarjörü var, sayaç kalan yedeği gösterir; her **tur başında** herkes tam dolu başlar |
 | Ölünce | 5 saniye bekle, sonra **kendi renkli tabanına yürü** | Tabana gitmek yok: **5 saniye boyunca olduğun yerde kıpırdamadan dur** (1 metreden fazla yürürsen sayaç başa döner) | **Canlanma yok** — tur bitene kadar beklersin, yeni tur herkesi tam canla ayağa kaldırır |
 | Varsayılan süre / puan | 300 sn (5 dk) / 30 | 300 sn (5 dk) / 20 | 600 sn (10 dk) / **4 tur** |
 
@@ -1020,7 +1034,7 @@ ekranın alt ortasındaki **⏸ DURAKLAT** düğmesi (BAŞLAT ile BİTİR'in ara
 | Oyuncular birbirini yanlış yerde görüyor | Kalibrasyon yapılmadı ya da A–B ters alındı | Arenada **yeniden kalibrasyon** yaptır (Bölüm 4) |
 | Oyuncular birbirini **havada / yere gömülü** görüyor | Kalibrasyonda kumandanın **ucu yere değmemiş** (havada yakalanmış) | O oyuncuya kalibrasyonu tekrarlat; kumandayı nasıl tuttuğu önemli değil, **ucu yere değecek** (Bölüm 4). Herkeste aynı sorun varsa teknik ekibi ara |
 | Bir oyuncunun karakteri **olduğundan kısa/uzun** görünüyor | Kalibrasyondan 10 sn sonraki otomatik ölçüde oyuncu eğilmişti ya da gözlük kafasında değildi; ya da hiç kalibre olmadı (herkes 1,80 m sayılır) | Oyuncuyu dik durdurup satırındaki **ÖLÇ** düğmesine bas (§4.2) |
-| **ÖLÇ**'e bastın, düğmede **ÖLÇÜLEMEDİ** yazdı | Duyuru satırında sebebi yazar: oyuncu kalibresiz **ya da** o gözlük gövde takibi üretemiyor | "kalibre yok" ise önce kalibrasyon. Sebep "gövde pozu yok" ise §4.4'teki temizliği yap |
+| **ÖLÇ**'e bastın, düğmede **HATA** yazdı | Duyuru satırında sebebi yazar: oyuncu kalibresiz **ya da** o gözlük gövde takibi üretemiyor | "kalibre yok" ise önce kalibrasyon. Sebep "gövde pozu yok" ise §4.4'teki temizliği yap |
 | Bir oyuncu diğer ekranlarda **kolları yana açık, donuk** duruyor (T-poz) ama konumu doğru | O gözlükte gövde takibi arızalı — oyuncu görünmez kalmasın diye sistem onu bu şekilde çiziyor | **Önce birkaç saniye bekle:** gözlük takibi kendi kendine yeniden başlatmayı deniyor ve çoğu zaman kendiliğinden düzelir. Geçmezse İstatistik panelinde **GÖVDE YENİLE**, sonra §4.4'teki alan verisi temizliği + yeniden kalibre + **ÖLÇ**. Oyuncunun kendi ekranında belirti olmaz |
 | Bir oyuncunun **karakteri hiç görünmüyor** ama isim etiketi ve silahı doğru yerde duruyor | O gözlükten gövde bilgisi hiç gelmiyor. Sistem gövdeyi kafa ve el konumlarından çizmeye geçer, yani oyuncu görünür ve **vurulabilir** kalır — ama hareketleri sadeleşir (bacaklar oynamaz) | **Önce birkaç saniye bekle** (kendi kendine onarım). Geçmezse **GÖVDE YENİLE**. O da yetmezse §4.4'teki alan verisi temizliği; en son çare gözlüğü tamamen kapatıp açmak |
 | **KALİBRE** düğmesinin yazısı maviye döndü (zemin sapması) | Gözlüğün zemin tahmini ile gerçek zemin arasında büyük fark var (alan verisi bozulmuş) — ya da oyuncu kalibre ederken kumandanın ucunu yere değdirmemiş | Maça devam edebilirsin (kalibrasyon geçerli). Oyuncuya **kumandanın ucu iki noktada da zeminde olsun** deyip tekrar kalibre ettir; yine çıkıyorsa seans arasında §4.4'teki temizliği yap |
@@ -1104,13 +1118,15 @@ Kurulumda bırakılan **bilgi kartında** şunlar yazmalı; yoksa teknik ekipten
 │  Yan tuş (grip) basılı    →  Elinde rastgele silah       │
 │                              belirir; BIRAKINCA kaybolur │
 │                              tekrar bas = başka silah    │
-│  Şarjör bitti             →  Bırak, yenisini çek         │
-│                              (şarjör dolmaz)             │
+│  Şarjör bitti             →  Mermi bitmez, yenisi gelir  │
+│                              (sayaç 30/∞ yazar)          │
 │  Öldün                    →  YÜRÜME. Olduğun yerde       │
 │                              5 saniye kıpırdamadan dur   │
 ├──────────────────────────────────────────────────────────┤
 │  OYUNCUYA — "TURNUVA" MODUNDA                            │
 │                                                          │
+│  Mermi                    →  SINIRLI — yedek şarjörün    │
+│                              bitince dolduramazsın       │
 │  Öldün                    →  Tur bitene kadar izle,      │
 │                              canlanma yok                │
 │  Tur bitti                →  KENDİ RENGİNİN köşesine     │

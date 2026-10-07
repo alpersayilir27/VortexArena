@@ -16,8 +16,8 @@ namespace VortexArena.Core.Combat
         None,
 
         /// <summary>FFA's random weapon (§10.5 <c>weaponSource:"random"</c>): releasing grip
-        /// DESTROYS it, pressing again yields a new one. Reload closed, no reserve, always
-        /// one-handed.</summary>
+        /// DESTROYS it, pressing again yields a new one. No spare magazines of its own: reloads only
+        /// from an infinite reserve (§10.5 <c>limitedReserve:false</c>).</summary>
         Disposable,
 
         /// <summary>Weapon selected from a frame: releasing grip only HIDES it, the same instance

@@ -85,18 +85,6 @@ namespace VortexArena.Core.Combat
         private Weapon _stowedLeft;
         private Weapon _stowedRight;
 
-        /// <summary>Secondary-grip LATCH: which hand is bound to which weapon's front socket.
-        /// <para>⚠️ ESTABLISHING the link and MAINTAINING it are different rules, and this field is
-        /// that distinction. Establishing checks distance
-        /// (<see cref="Weapon.IsHandOnSecondaryGrip"/>, exactly what the socket sphere promises);
-        /// maintaining checks the grip button ONLY. A distance check on maintenance would break the
-        /// link while the player still holds grip: the two-handed solver does not MOVE the weapon
-        /// toward the second hand, it only aims (<see cref="ItemGripSolver"/>), so the socket-to-
-        /// controller gap equals |hand spacing − weapon grip spacing| and exceeds the ~0.10 m
-        /// acceptance radius as soon as the player extends or pulls in their arms.</para></summary>
-        private Weapon _secondaryLatchWeapon;
-        private OVRInput.Controller _secondaryLatchHand = OVRInput.Controller.None;
-
         private OVRCameraRig _rig;
         private float _nextRigScanAt;
         private bool _aliveSubscribed;
@@ -300,8 +288,8 @@ namespace VortexArena.Core.Combat
         /// nothing is stowed (the hand was empty, or the frame clone came back on its own).
         /// <para>⚠️ The stowed disposable weapon returns with a FULL magazine, because
         /// <see cref="Weapon.GrantTo"/> refills a Disposable grant by contract. That matches the source
-        /// itself: a disposable weapon has no reload, and releasing grip already yields a fresh full
-        /// one — only the random roll is skipped here.</para></summary>
+        /// itself: releasing grip already yields a fresh full one — only the random roll is skipped
+        /// here.</para></summary>
         public static bool RestoreStowed(OVRInput.Controller hand)
         {
             if (Instance == null ||
@@ -639,11 +627,17 @@ namespace VortexArena.Core.Combat
         /// scene (§10.7) — which is exactly the hole this closes.</para></summary>
         internal static bool IsKidsPlayground => IsFreePlayground && ModeSelection.IsKidsGame;
 
-        /// <summary>Scene racks must not be takeable: the mode hands weapons out, the mode has no
-        /// weapons at all (<see cref="ModeRuntime.IsWeaponless"/>), or this is a children's session
+        /// <summary>The arena is staged for a mode that hands out weapons (FFA): racks go during the
+        /// wait too and grip gives the lobby profile's random weapon, so the wait plays like the match.
+        /// <para>⚠️ Lobby profile only, same scope as <see cref="IsKidsPlayground"/>.</para></summary>
+        private static bool IsGrantPlayground => IsFreePlayground && ModeSelection.GrantsRandomWeapon;
+
+        /// <summary>Scene racks must not be takeable: the mode hands weapons out (running or
+        /// selected, <see cref="IsGrantPlayground"/>), the mode has no weapons at all
+        /// (<see cref="ModeRuntime.IsWeaponless"/>), or this is a children's session
         /// (<see cref="IsKidsPlayground"/>). The same sweep; only the reason differs.</summary>
         private static bool HidesSceneWeapons =>
-            ModeDistributesWeapons || ModeRuntime.IsWeaponless || IsKidsPlayground;
+            ModeDistributesWeapons || IsGrantPlayground || ModeRuntime.IsWeaponless || IsKidsPlayground;
 
         /// <summary>May the player hold a weapon right now: must be CALIBRATED and ALIVE.
         /// <para>⚠️ Death is a GATE, not only the one-shot sweep in <see cref="HandleAliveChanged"/>:
@@ -726,14 +720,16 @@ namespace VortexArena.Core.Combat
         /// <para>⚠️ Runs only when the rule demands it (<see cref="HidesSceneWeapons"/>): with a match
         /// SET UP, or in a weaponless mode. Staging an arena from the lobby keeps the lobby rule shape
         /// (<c>random</c>), so a gate of "is the source random" alone would hide the racks before
-        /// the match and leave the player with neither a weapon nor free fire — the whole point of
-        /// the lobby profile. In the free playground both paths stay open: pick from a rack, or get
-        /// a random loadout weapon.</para>
+        /// a rack-based match (TDM) and empty the free playground. There both paths stay open — pick
+        /// from a rack, or get a random loadout weapon — unless the SELECTED mode hands weapons out
+        /// itself (<see cref="IsGrantPlayground"/>).</para>
         /// <para>⚠️ Base zones are NOT here and are not added back — strip visibility depends on
         /// the team mode, not the weapon source, and belongs to
         /// <see cref="Arena.BaseZoneVisibility"/>.</para>
         /// <para>Granted weapons are EXEMPT (<see cref="Weapon.IsGranted"/>): the sweep looks for
-        /// <c>Weapon</c> components and a granted instance is one.</para></summary>
+        /// <c>Weapon</c> components and a granted instance is one.</para>
+        /// <para>Rack boards (<see cref="WeaponCanvas"/>) go too — hiding only their weapons would
+        /// leave an empty board standing at the base.</para></summary>
         private void SweepScene()
         {
             _swept = true;
@@ -749,6 +745,19 @@ namespace VortexArena.Core.Combat
 
                 weapon.gameObject.SetActive(false);
                 _hiddenObjects.Add(weapon.gameObject);
+            }
+
+            WeaponCanvas[] boards = FindObjectsByType<WeaponCanvas>(FindObjectsSortMode.None);
+            for (int i = 0; i < boards.Length; i++)
+            {
+                WeaponCanvas board = boards[i];
+                if (board == null || !board.gameObject.activeSelf)
+                {
+                    continue;
+                }
+
+                board.gameObject.SetActive(false);
+                _hiddenObjects.Add(board.gameObject);
             }
         }
 
@@ -772,8 +781,8 @@ namespace VortexArena.Core.Combat
 
         /// <summary>One frame of a hand's state: grip held → a weapon in hand, otherwise none.
         /// <para>⚠️ If the OTHER hand holds a TWO-HANDED weapon this hand gets NO second weapon; it
-        /// becomes the front-grip candidate (grip held + controller inside the socket). Otherwise
-        /// the player would hold two rifles in FFA with no way to steady either.</para></summary>
+        /// becomes the front-grip hand the moment it holds grip (<see cref="ResolveSecondaryHand"/>).
+        /// Otherwise the player would hold two rifles in FFA with no way to steady either.</para></summary>
         private void TickHand(OVRInput.Controller hand, Transform anchor, ref Weapon granted,
             Weapon otherHandWeapon)
         {
@@ -1013,40 +1022,27 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>One frame of the front-grip link: is this hand holding
-        /// <paramref name="weapon"/>'s secondary socket.
-        /// <para>Two separate rules: ESTABLISHING requires the controller inside the socket's
-        /// acceptance radius (<see cref="Weapon.IsHandOnSecondaryGrip"/> — the rule lives on the
-        /// weapon and the sphere is drawn with the same figure); MAINTAINING requires only that
-        /// grip stays pressed, with no distance or angle test.</para>
-        /// <para>⚠️ NEVER restore a distance gate on maintenance. The two-handed solver does not
-        /// move the weapon toward the second hand, it only aims (<see cref="ItemGripSolver"/>), so
-        /// the socket-to-controller gap equals |hand spacing − weapon grip spacing| and exceeds the
-        /// acceptance radius during normal aiming, leaning and turning — the link would break while
-        /// the player still holds grip.</para>
-        /// <para>The latch is bound to the weapon INSTANCE: destroying it and granting a new one
-        /// (release + press) drops the match, so the new weapon's front grip must be taken at the
-        /// socket again and the latch never leaks between weapons.</para></summary>
-        private OVRInput.Controller ResolveSecondaryHand(Weapon weapon, OVRInput.Controller hand, bool gripHeld)
+        /// <paramref name="weapon"/>'s foregrip.
+        /// <para>Grip held on an EMPTY hand is the whole rule — no distance to the foregrip, neither
+        /// to establish nor to maintain. The hand's visual seats on the foregrip and the weapon's
+        /// axis turns toward the controller (<see cref="ItemGripSolver"/>), so where the controller
+        /// actually is does not matter; what keeps the muzzle off the player is the solver's body
+        /// cone, not a gate here. "Empty" is the callers' guarantee: this runs only for the hand
+        /// OPPOSITE the one holding the two-handed weapon, and a hand carrying a throwable passes
+        /// <paramref name="gripHeld"/> as <c>false</c>.</para>
+        /// <para>⚠️ NEVER put a distance gate back, on either rule. The two-handed solver does not
+        /// move the weapon toward the second hand, it only aims, so the foregrip-to-controller gap
+        /// equals |hand spacing − weapon grip spacing| and exceeds any sane radius during normal
+        /// aiming, leaning and turning — a gate would refuse or break the link while the player
+        /// holds grip.</para>
+        /// <para>An unauthored foregrip keeps the link CLOSED (<see cref="Weapon.ForegripAuthored"/>):
+        /// that record falls on the item root next to the main hand, and the second hand would seat
+        /// on top of the first.</para></summary>
+        private static OVRInput.Controller ResolveSecondaryHand(Weapon weapon, OVRInput.Controller hand, bool gripHeld)
         {
-            bool latched = _secondaryLatchWeapon == weapon && _secondaryLatchHand == hand;
-            bool linked = gripHeld && weapon != null &&
-                          (latched || weapon.IsHandOnSecondaryGrip(hand));
-
-            if (linked)
-            {
-                _secondaryLatchWeapon = weapon;
-                _secondaryLatchHand = hand;
-                return hand;
-            }
-
-            // Only releases its OWN latch; another hand's or weapon's latch is not our business.
-            if (latched)
-            {
-                _secondaryLatchWeapon = null;
-                _secondaryLatchHand = OVRInput.Controller.None;
-            }
-
-            return OVRInput.Controller.None;
+            return gripHeld && weapon != null && weapon.ForegripAuthored
+                ? hand
+                : OVRInput.Controller.None;
         }
 
         private void ApplySelection(WeaponDefinition definition)
@@ -1068,7 +1064,7 @@ namespace VortexArena.Core.Combat
         /// <para>Clone count follows the selected weapon's hold mode. Two-handed (rifle): ONE clone
         /// per player — the first pressing hand wins, with both pressed the weapon stays in the
         /// hand that already holds it (else the right), so swapping does not flicker it between
-        /// hands; if the free hand's grip is on the front socket, that hand is the second hand.
+        /// hands; if the free hand holds grip, that hand is the second hand.
         /// One-handed (pistol): each hand gets its OWN clone — two instances, two magazines, and
         /// "the same weapon returns with the same ammo" applies per hand.</para>
         /// <para>⚠️ On death the clone is stowed but the SELECTION is KEPT: the revived player
@@ -1564,7 +1560,7 @@ namespace VortexArena.Core.Combat
         /// <summary>The hand's PALM pose (<see cref="ResolveHandAnchor"/> +
         /// <see cref="HandGripPivot"/>); <c>false</c> when the rig or hand cannot be resolved.
         /// <para>⚠️ The only place the palm point is computed; every consumer (canonical grip, frame
-        /// distance, front socket) goes through it. The palm is the anchor itself today and the grip
+        /// distance) goes through it. The palm is the anchor itself today and the grip
         /// record is in anchor space — a second path would put the offset in two places.</para>
         /// </summary>
         public static bool TryResolvePalm(OVRInput.Controller hand, out Pose palm)
@@ -1595,7 +1591,7 @@ namespace VortexArena.Core.Combat
             bool secondaryRight = !mainHandRight;
 
             ItemGripSolver.Solve(definition, mainHandRight, secondaryRight, palm, false, Vector3.zero,
-                0f, out position, out rotation);
+                0f, false, Vector3.zero, out position, out rotation);
         }
 
         /// <summary>Finds the active rig, retrying once a second. For the admin spectator the rig

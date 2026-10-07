@@ -4,40 +4,29 @@ using VortexArena.Core.Combat;
 
 namespace VortexArena.Core.UI
 {
-    /// <summary>
-    /// Silahın ÜSTÜNDEKİ cephane paneli: şarjördeki mermi + yedek şarjör sayısı, silahın kendi
-    /// dünya-uzayı canvas'ında (<c>AmmoCanvas</c>).
-    /// <para>
-    /// <b>Bileşen canvas'ın kendi kökünde durur</b>, <c>WPN_*</c> kökünde değil: <c>AmmoCanvas</c>
-    /// TEK bir prefab olarak bütün silahlara iç içe geçmiş örnek olarak giriyor, yani metin bağları
-    /// bir kez orada kurulur ve her silah onu hazır alır. Kökte olsaydı bağlar silah başına
-    /// kurulurdu (ya da <c>WeaponKitBuilder</c>'a bir adım daha eklenirdi) ve yeni bir silahta
-    /// sessizce boş kalırdı. Silahını <see cref="Component.GetComponentInParent{T}(bool)"/> ile
-    /// bulur — panelin nereye asıldığını bilmesi gerekmez.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Görünüm PREFABTAN gelir</b> (punto, konum, hizalama, ayraç, ikonlar, RENK): bu sınıf
-    /// yalnız iki metnin içeriğini yazar ve düşük mermide vurgu rengini sürer. Normal renk bile
-    /// koda gömülü DEĞİL, <see cref="Awake"/>'te prefabtan okunur — gömülü olsaydı panelin rengini
-    /// Inspector'dan değiştirmek ilk atışta sessizce geri alınırdı.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Ayraç ("/") ve ikonlar bu sınıfın işi DEĞİLDİR</b> ve kodda karşılıkları yoktur —
-    /// sabit metindirler, yeri prefabtır.
-    /// </para>
-    /// <para>
-    /// YALNIZ olaylarla yenilenir (<see cref="Weapon.AmmoChanged"/> ve reload/tutulma olayları),
-    /// kare başına iş yapmaz. Metinler <see cref="TMP_Text.SetText(string, float)"/> ile yazılır:
-    /// atış başına string üretmez.
-    /// </para>
-    /// </summary>
+    /// <summary>Ammo panel ON the weapon (magazine rounds + spare mags) in its own world-space canvas.
+    /// <para><b>Lives on the canvas root</b>, not on <c>WPN_*</c>: <c>AmmoCanvas</c> is ONE prefab
+    /// nested into every weapon, so the text bindings are set up once there. On the weapon root they
+    /// would be per-weapon and silently empty on a new one. Finds its weapon via
+    /// <see cref="Component.GetComponentInParent{T}(bool)"/>.</para>
+    /// <para>⚠️ <b>Shown ONLY while the weapon is held</b> (<see cref="Weapon.IsHeld"/>): an unheld
+    /// visible weapon is one frozen in a rack frame, and its ammo is not the player's. Hidden via the
+    /// <see cref="Canvas"/> component, NOT the GameObject — deactivating it would drop the event
+    /// subscriptions and the panel would never come back.</para>
+    /// <para>⚠️ <b>Look comes from the PREFAB</b> (size, position, alignment, divider, icons, COLOR):
+    /// this class writes only the two texts and drives the low-ammo highlight. The normal color is
+    /// read from the prefab in <see cref="Awake"/> — hardcoding it would silently revert an
+    /// Inspector color change on the first shot. Divider ("/") and icons are static prefab content
+    /// with no code counterpart.</para>
+    /// <para>Refreshed by events ONLY (<see cref="Weapon.AmmoChanged"/>, reload/held events), no
+    /// per-frame work; <see cref="TMP_Text.SetText(string, float)"/> allocates no string per shot.</para></summary>
     [RequireComponent(typeof(Canvas))]
     public class WeaponAmmoPanel : MonoBehaviour
     {
-        /// <summary>Bu değer ve altında mermi sayısı vurgu rengine döner.</summary>
+        /// <summary>At or below this ammo count the text turns to the highlight color.</summary>
         private const int LowAmmoThreshold = 5;
 
-        /// <summary>Düşük mermi/reload vurgusu.</summary>
+        /// <summary>Low ammo / reload highlight.</summary>
         private static readonly Color LowAmmoColor = new Color(1f, 0.32f, 0.26f);
 
         [Tooltip("Şarjördeki mermi. Konumu/puntosu/rengi prefabta ayarlanır.")]
@@ -48,13 +37,15 @@ namespace VortexArena.Core.UI
         [SerializeField] private TMP_Text magText;
 
         private Weapon _weapon;
+        private Canvas _canvas;
         private Color _normalColor = Color.white;
 
         private void Awake()
         {
-            // ⚠️ includeInactive: panel silahın modeli kapalıyken de (çerçeve klonu gizliyken)
-            // silahını bulabilmeli — bulamazsa bir daha hiç aramaz ve panel ölü kalırdı.
+            // ⚠️ includeInactive: the panel must find its weapon even while the model is off (frame
+            // clone hidden) — a miss is never retried and the panel would stay dead.
             _weapon = GetComponentInParent<Weapon>(true);
+            _canvas = GetComponent<Canvas>();
 
             if (ammoText != null)
             {
@@ -74,6 +65,9 @@ namespace VortexArena.Core.UI
             _weapon.ReloadCompleted += Refresh;
             _weapon.HeldChanged += HandleHeldChanged;
 
+            // The reserve rule can flip while the weapon is held (staging → match).
+            ModeRuntime.Changed += Refresh;
+
             Refresh();
         }
 
@@ -88,9 +82,10 @@ namespace VortexArena.Core.UI
             _weapon.ReloadStarted -= HandleReloadStarted;
             _weapon.ReloadCompleted -= Refresh;
             _weapon.HeldChanged -= HandleHeldChanged;
+            ModeRuntime.Changed -= Refresh;
         }
 
-        // Reload olayı süre taşıyor, tutulma olayı bayrak: ikisi de yalnız "tazele" demek.
+        // Reload carries a duration, held carries a flag: both only mean "refresh".
         private void HandleReloadStarted(float duration) => Refresh();
 
         private void HandleHeldChanged(bool held) => Refresh();
@@ -102,11 +97,18 @@ namespace VortexArena.Core.UI
                 return;
             }
 
+            bool held = _weapon.IsHeld;
+            _canvas.enabled = held;
+            if (!held)
+            {
+                return;
+            }
+
             WriteAmmo();
             WriteReserve();
         }
 
-        /// <summary>Şarjördeki mermi; reload sürerken sayı yerine bekleme işareti.</summary>
+        /// <summary>Magazine rounds; a waiting mark instead of the count while reloading.</summary>
         private void WriteAmmo()
         {
             if (ammoText == null)
@@ -125,15 +127,21 @@ namespace VortexArena.Core.UI
             ammoText.SetText("{0}", _weapon.CurrentAmmo);
         }
 
-        /// <summary>
-        /// Yedek gösterimi silahın rezerv kipine göre değişir: normal silahta kalan ŞARJÖR sayısı,
-        /// tek tek fişek dolduran silahta (<see cref="WeaponReserveMode.PoolRounds"/>) kalan FİŞEK
-        /// sayısı — havuzlu silahta şarjöre bölmek "0 yedek" derken elde 6 fişek olmasına yol açardı.
-        /// </summary>
+        /// <summary>"∞" under an infinite reserve (§10.5 <c>limitedReserve:false</c>); otherwise spare
+        /// MAGAZINES, or spare ROUNDS on a <see cref="WeaponReserveMode.PoolRounds"/> weapon —
+        /// dividing a round pool into mags would read "0 spare" with 6 rounds in hand.
+        /// <para>⚠️ "∞" is not in the static <c>LiberationSans SDF</c> atlas; it comes from the
+        /// dynamic fallback — keep that fallback on the font.</para></summary>
         private void WriteReserve()
         {
             if (magText == null)
             {
+                return;
+            }
+
+            if (_weapon.HasInfiniteReserve)
+            {
+                magText.SetText("∞");
                 return;
             }
 

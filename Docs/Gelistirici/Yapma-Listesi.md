@@ -391,6 +391,12 @@ Bileşeni kapatmak görsel taban şeridini ekranda bırakır. Gizlemen gerekiyor
 `IsPlayerInside` donar — açık sayılsaydı oyuncu bölgeye girse de hiç canlanamazdı (sunucuda
 kendiliğinden işleyen bir emniyet ağı yok; geriye kalan tek çare operatörün elle canlandırmasıdır).
 
+### ⛔ Silah panosu prefabını `WeaponCanvas` bileşeni olmadan yapma, sahnedeki örneği unpack etme
+
+Süpürme panoyu o işaretçi bileşenden bulur (`WeaponGranter`). Bileşen yoksa ya da unpack'te
+koptuysa silahı modun kendisi dağıttığı durumlarda silahları gizlenmiş **boş pano** tabanda ayakta
+kalır. Bileşen panonun **kökünde** durur, prefabdan gelir.
+
 ### ⛔ Taban bölgesinin boyutunu sayı alanıyla ayarlamaya çalışma
 
 `BaseZone`'da ölçü alanı YOKTUR: algılama alanı **altındaki şeridin kapladığı dikdörtgendir**
@@ -454,6 +460,16 @@ süzme içindir. Elle değiştirmek iki yerden kırar: obje gizlenmez, objede co
 sözleşmesi (engel ihlali, namlu engeli, patlama siperi) o obje için hata vermeden kalkar. Doğrusu:
 kapatan objeyi seç → `GameObject > VortexArena > Arena Roof`; damga collider'lı objenin layer'ına
 dokunmaz.
+
+### ⛔ Çatısı gövdeyle tek mesh olan modele `ArenaRoof` koyma
+
+Bileşen altındaki Renderer'ı **bütün olarak** gizler: çatı ile duvarlar aynı mesh'teyse admin kuş
+bakışında yapının tamamı kaybolur ve içi de görünmez. Doğrusu: çatıyı Blender'da ayrı mesh'e ayır,
+gövde mesh'ini değiştirip çatıyı kardeş bir kökün altına koy ve bileşeni yalnız o köke ekle. Paket
+FBX'inin kendisi yerinde değiştirilmez: ayrılmış kopya onun yanına, sahneye özel `_opt` mesh'ten
+ayrılan parçalar o sahnenin `Art/Optimized/Props/`'una yazılır. Kulübenin hazırı var: sahneye
+`ConstructionPropsBundle/base/base.fbx` değil **`BaseHut.prefab`** konur — `base.fbx` konursa
+çatı yeniden gövdeyle tek parça gelir.
 
 ### ⛔ Kat yüksekliğini elle yazma
 
@@ -737,6 +753,21 @@ Meta `HandSphereMap` prefabındaki `sphere` objeleri (yüzlerce, gölge açık) 
 sahnenin yükü sanma. **GameObject'ini kapatma** — script yalnız `activeSelf` küreleri okur, kapatılan
 küre kavrama haritasından düşer.
 
+### ⛔ Yerel elin görünümünü rig'in kemiklerine/hiyerarşisine dokunarak değiştirme
+
+Oyuncunun gördüğü el `VA_CameraRig` → `OVRHandVisualLeft/Right` altındaki **OpenXR dalının**
+SkinnedMeshRenderer'ıdır (`OpenXR{Left,Right}Hand/{Left,Right}Hand`); eldiven onun üstünde yalnız
+**mesh + materyal override'ıdır** (`_Shared/Avatars/TacticalGlove/`). Kemikler, nesne adları ve
+`HandVisual` alanları paketin olduğu gibi kalır: kavrama pozları eklem kimliğiyle, kumanda gizleyici
+tam adla bağlanır. Yeni bir el mesh'i:
+- paket mesh'inin (`OpenXR{Left,Right}Hand.fbx`) **bindpose'larını aynen taşır**, kemik ağırlıkları
+  SMR'ın `bones` sırasına **adla** eşlenir. Blender'dan gelen FBX'in mesh'i doğrudan atanırsa kemik
+  sırası ve bindpose farklıdır: hata çıkmaz, el parçalanmış çizilir;
+- OVR dalına (`OculusHand_L/R`) konmaz: ISDK OpenXR dalında derlenir ve OVR kökünü kapatır, değişiklik
+  hiç görünmez;
+- `quality` Bone4 kalır (gerekçe: `Docs/Sistem-Ozeti.md` §7 "Bilek 30 cm'den bakıldığında
+  `skinWeights` bir görsel ayar değil, DOĞRULUK ayarıdır").
+
 ### ⛔ `VenueSurvey` sahnesine elle bileşen koyma
 
 Ölçüm sahnesinde yalnız rig, ışık ve zemin durur; denetleyiciyi, rehber geometriyi ve etiketi
@@ -831,6 +862,17 @@ Eşyayı ele koyan her kod (yeni bir granter, moda özel bir "ele ver" bileşeni
 El ise kaydı her zaman okur (`HandGripPoser`): el ile eşya birbirine göre doğru görünür ama ikisi
 birlikte gerçek kumandadan kayar, bilek dönünce eşya görünmeyen kumandanın etrafında yay çizer.
 Uzak uç ortak çözücüyü kullandığı için diğer oyuncular doğru görür — hata yalnız tutanın gözündedir.
+
+### ⛔ Ön kabza bağına mesafe ya da kabul yarıçapı kapısı koyma
+
+İkinci el, öbür elde iki elli bir silah varken boş elin grip'i basılı tutulduğu an bağlanır; tek
+koşul ön kabza kaydının **yazılmış** olmasıdır (`Weapon.ForegripAuthored`). Ön kabzanın ikinci elin
+kumandasından uzaklığı *|ellerin arası − silahın kavrama arası|* kadardır ve normal nişanda her
+makul yarıçapı aşar — mesafeye bakan bir kapı bağı oyuncu tuşu bırakmadan koparır. Silahı oyuncunun
+kendisinden uzak tutan şey yarıçap değil **çözücünün gövde konisidir** (`ItemGripSolver`) ve ⚠️ koni
+**iki uçta da** uygulanır: tek uçta uygulanırsa aynı silah iki ekranda farklı duruşta görünür, bu
+yüzden her iki uç çözücüye bir kafa konumu vermek zorundadır. Silahlarda soket küresi de çizilmez
+(küre yakınlık soketlerine aittir). Uzun gerekçe: `Sistem-Ozeti.md` §7 Tuzaklar.
 
 ### ⛔ Mesafeli kavrama bileşenini "nasılsa filtreliyorum" diye prefabda bırakma
 

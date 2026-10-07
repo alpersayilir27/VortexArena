@@ -96,16 +96,9 @@ namespace VortexArena.Core.Combat
         [Tooltip("SOL elin kumanda anchor'ının ön kabzadaki pozu — yalnız TwoHand'de anlamlı.")]
         [SerializeField] private ItemGripPose secondaryGripLeft;
 
-        // ⚠️ NO [Range] — the same trap as the netItemId warning above: the Range drawer silently
-        // clamps to its own defaults AND dirties the asset, so every definition opened in the
-        // Inspector gets committed with a different radius. The lower bound is applied in the property.
-        // ⚠️ There is NO radius for the PRIMARY grip: the weapon arrives in the main hand by being
-        // granted/summoned, the player never has to move a hand onto it — a measure with no reader
-        // goes stale.
-        [Tooltip("Ön kabza SOKETİNİN yarıçapı (m): boş elin kumanda anchor'ı bu kürenin içindeyken grip'e " +
-                 "basılınca ikinci el ön kabzaya bağlanır; oyuncunun gördüğü küre de tam bu yarıçapla " +
-                 "çizilir (0.10 = 20 cm çap). Yalnız TwoHand'de anlamlı. Silah başına ayarlanır.")]
-        [SerializeField] private float secondaryGripRadius = 0.10f;
+        // ⚠️ There is NO acceptance radius for either grip: the weapon arrives in the main hand by
+        // being granted/summoned, and the second hand links on grip alone from wherever it is
+        // (WeaponGranter.ResolveSecondaryHand) — a measure with no reader goes stale.
 
         // ⚠️ No SEPARATE field for the finger pose, and none is added: the pose is PART of the grip
         // record (ItemGripPose.fingerJoints), i.e. it lives per slot. A separate field would keep "this
@@ -470,19 +463,6 @@ namespace VortexArena.Core.Combat
             InvalidateGripCache();
         }
 #endif
-
-        /// <summary>
-        /// Foregrip socket radius (metres): while an empty hand's controller ANCHOR is inside this
-        /// sphere, a grip press binds the second hand to the foregrip
-        /// (<c>Weapon.IsHandOnSecondaryGrip</c>) and the socket sphere the player sees is drawn with
-        /// exactly this radius (visual = acceptance volume) — meaningful only when
-        /// <see cref="IsTwoHanded"/>.
-        /// <para>⚠️ <b>The 1 cm floor must stay:</b> a zero (or negative) radius makes the foregrip
-        /// mathematically ungrabbable — in the field that shows up NOT as an error but as "the second
-        /// hand does not hold", which is expensive to diagnose. An unset/zeroed asset keeps working
-        /// thanks to it.</para>
-        /// </summary>
-        public float SecondaryGripRadius => Mathf.Max(0.01f, secondaryGripRadius);
 
         /// <summary>Colour of the tracer drawn for a remote shot.</summary>
         public Color TracerColor => tracerColor;

@@ -111,7 +111,7 @@ namespace VortexArena.Modes.Mole
             if (WeaponGranter.TryResolvePalm(hand, out Pose palm))
             {
                 ItemGripSolver.Solve(hammerDefinition, rightHand, !rightHand, palm, false, Vector3.zero,
-                    0f, out Vector3 position, out Quaternion rotation);
+                    0f, false, Vector3.zero, out Vector3 position, out Quaternion rotation);
                 instance.transform.SetPositionAndRotation(position, rotation);
             }
 

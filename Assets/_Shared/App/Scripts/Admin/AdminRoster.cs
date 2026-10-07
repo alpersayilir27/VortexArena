@@ -100,7 +100,7 @@ namespace VortexArena.App.Admin
         /// (the server always sends false for admins).</summary>
         public bool calibrated = true;
 
-        /// <summary>"manual" | "anchor" | "cloud" | "" — a free label, not validated.</summary>
+        /// <summary>"manual" | "anchor" | "session" | "cloud" | "" — a free label, not validated.</summary>
         public string calibrationSource = "";
 
         /// <summary>Floor offset from the last manual calibration (signed meters, §10.6);
@@ -121,9 +121,9 @@ namespace VortexArena.App.Admin
         /// ÖLÇ button shows an error instead of the scale; a successful measurement clears it.</summary>
         public string scaleError = "";
 
-        /// <summary>Failure reason of the last calibration RELOAD attempt; empty = fine (§5.3). A
-        /// successful calibration clears it; while set the row can explain why the reload failed
-        /// (the narrow button only carries "HATA").</summary>
+        /// <summary>Reason of the last calibration problem — reload attempt failed, or the anchor
+        /// could not be saved; empty = fine (§5.3). A successful calibration clears it; while set the
+        /// row can explain the cause (the narrow button only carries "HATA").</summary>
         public string calibrationError = "";
 
         /// <summary>Does the row need operator attention: a PLAYER and uncalibrated.</summary>

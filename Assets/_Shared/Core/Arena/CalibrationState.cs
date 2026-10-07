@@ -44,6 +44,11 @@ namespace VortexArena.Core.Arena
         private static bool _localCalibrated;
         private static string _source = "";
 
+        /// <summary>Why the device anchor could not be saved after an alignment ("" = no problem).
+        /// The alignment itself stands, so the server keeps the player calibrated — but nothing is
+        /// persisted, which the operator must see (§10.6).</summary>
+        private static string _anchorSaveError = "";
+
         /// <summary>Alignment state as the server knows it; uncalibrated players cannot fire, take
         /// damage or revive (§10.6 — all three server-authoritative, this is only the mirror). True
         /// when never connected, so server-less tests keep working.</summary>
@@ -54,7 +59,8 @@ namespace VortexArena.Core.Arena
         /// reopens it (§10.6).</summary>
         public static bool ManualAllowed => !_hasEverConnected || !_serverCalibrated;
 
-        /// <summary>Last reported source ("manual" | "anchor" | "cloud" | editor-only "dev" | "").</summary>
+        /// <summary>Last reported source ("manual" | "anchor" | "session" | "cloud" | editor-only
+        /// "dev" | "").</summary>
         public static string Source => _source;
 
         /// <summary>The server's calibration mode (<c>ArenaProtocol.CALIB_MODE_*</c>, §10.6); empty =
@@ -157,6 +163,58 @@ namespace VortexArena.Core.Arena
             client.Send(_reportMsg);
         }
 
+        /// <summary>The device anchor could not be saved after an alignment (§10.6). The alignment is
+        /// NOT dropped: it holds for this session (map changes ride on the session record), only
+        /// persistence is missing — so the operator learns it from the roster, not from a lost
+        /// alignment two scenes later.</summary>
+        public static void ReportAnchorSaveFailure(string reason)
+        {
+            _anchorSaveError = reason ?? "";
+            Debug.LogWarning($"[CalibrationState] Çapa kaydedilemedi — {_anchorSaveError}.");
+            Instance?.SendError(_anchorSaveError);
+        }
+
+        /// <summary>A later save succeeded → drop the reason and re-report the current state so the
+        /// roster chip clears (the server clears <c>calibrationError</c> on a successful
+        /// <c>set_calibration</c>, §5.3).</summary>
+        public static void ClearAnchorSaveFailure()
+        {
+            if (string.IsNullOrEmpty(_anchorSaveError))
+            {
+                return;
+            }
+
+            _anchorSaveError = "";
+            if (_localCalibrated)
+            {
+                Instance?.Report(true, _source);
+            }
+        }
+
+        /// <summary>Sends a reason as <c>set_calibration.error</c>: the server ignores the other
+        /// fields and keeps the stored calibration (§5.1), they are carried unchanged.
+        /// <para>⚠️ Same single-DTO trap as <see cref="Report"/>: the reason must be cleared on the
+        /// next successful report, which <see cref="Report"/> does.</para></summary>
+        private void SendError(string reason)
+        {
+            if (string.IsNullOrEmpty(reason))
+            {
+                return;
+            }
+
+            ArenaClient client = ArenaClient.Instance;
+            if (client == null || !client.IsConnected)
+            {
+                return; // server-less session: nobody to report to
+            }
+
+            _reportMsg.calibrated = _localCalibrated;
+            _reportMsg.source = _source ?? "";
+            _reportMsg.floorOffset = 0f;
+            _reportMsg.error = reason;
+            client.Send(_reportMsg);
+        }
+
         // ------------------------------------------------------------- server → headset
 
         private void HandleConnected(WelcomeMsg msg)
@@ -175,6 +233,10 @@ namespace VortexArena.Core.Arena
             {
                 Report(true, _source);
             }
+
+            // The server resets calibrationError on hello too, so an unsaved anchor must be
+            // re-announced — otherwise the row looks clean while nothing is persisted.
+            SendError(_anchorSaveError);
 
             Raise();
         }
@@ -199,6 +261,9 @@ namespace VortexArena.Core.Arena
             _localCalibrated = false;
             _serverCalibrated = false;
             _source = "";
+            // No re-send: the command already cleared the field on the server (§5.3), and the
+            // alignment the reason belonged to is gone in both modes.
+            _anchorSaveError = "";
 
             ArenaCalibrator.ApplyOperatorClear(keepSaved);
 

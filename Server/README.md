@@ -399,7 +399,7 @@ aynı ortak kanaldan (`set_selection` → `admin_state`) gider, böylece iki ope
 |---|---|---|---|
 | `tdm` | `Modes/TdmMode.cs` | Tümüyle varsayılan (`ModeRules.TeamDefault`): iki takım, takım skoru, kendi tabanında canlanma, sahnede duran silah, 5 sn gecikme | 300 sn / 30 |
 | `ffa` | `Modes/FfaMode.cs` | Takımsız, **herkes tek** (`Allies = false`) · bireysel skor · sabit durarak canlanma · silahı mod dağıtır · gecikme 0 | 300 sn / 20 |
-| `tournament` | `Modes/TournamentMode.cs` | TDM varsayılanından tek farkı: **canlanma yok** (`Revive = None`, gecikme 0). Tur tabanlı takım elemesi | 120 sn (**turun** süresi) / 4 tur (operatör **sınırsız** da seçebilir) |
+| `tournament` | `Modes/TournamentMode.cs` | TDM varsayılanından farkı: **canlanma yok** (`Revive = None`, gecikme 0) + **yedek mermi sınırlı** (`LimitedReserve = true`; yedek sınırını yazan tek mod). Tur tabanlı takım elemesi | 120 sn (**turun** süresi) / 4 tur (operatör **sınırsız** da seçebilir) |
 | `burger` | `Modes/BurgerMode.cs` | **Oyun tipi `kids`** · silah yok (`Weapons = None`, dolayısıyla hasar yok) · takımsız ama **tek ekip** (`Allies = true`: kırmızı/mavi yok, herkes birbirinin takım arkadaşı) · canlanma yok (gecikme 0) · ortak skor (`PlayerAndShared`) · denge `server.json → burger` | 600 sn / **sınırsız** (limit yok) |
 | `mole` | `Modes/MoleMode.cs` | **Oyun tipi `kids`** · silah yok (`Weapons = None`, dolayısıyla hasar yok) · **iki takım + takım skoru** · canlanma yok (gecikme 0) · köstebek yoğunluğu harita başına (`maps.json → moleDensity`; yazılmamışsa modun varsayılanı) | 300 sn / **sınırsız** (limit yok) |
 
@@ -454,7 +454,7 @@ aynı ortak kanaldan (`set_selection` → `admin_state`) gider, böylece iki ope
 1. `Modes/<Ad>Mode.cs` içinde `IGameMode` uygula.
 2. **`Rules`** döndür — modun şekli (`ModeRules`): `Teams` (takımlı/takımsız), `Scoring` (takım
    skoru / bireysel), `FriendlyFire`, `Revive` (kendi tabanı / sabit dur), `Weapons`,
-   `RespawnDelay`. Bugünkü TDM davranışı için `ModeRules.TeamDefault` tek satırdır; yalnız FARKLI
+   `LimitedReserve` (yedek mermi sınırlı mı — varsayılan `false` = sonsuz), `RespawnDelay`. Bugünkü TDM davranışı için `ModeRules.TeamDefault` tek satırdır; yalnız FARKLI
    olan alanı yaz. Bu kural `load_match.rules` ile istemciye gider (§10.5).
 3. **`IsMatchOver(d, out MatchOutcome outcome)`** — kazanan takım (`MatchOutcome.Team("red")`)
    **veya** kazanan oyuncu (`MatchOutcome.Player(id)`), berabere için `MatchOutcome.Draw`.

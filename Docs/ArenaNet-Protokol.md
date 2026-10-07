@@ -252,7 +252,7 @@ dizileri türün sözleşmesidir, protokol içeriklerini yorumlamaz.
 
 **`revive_request`** `{ "type":"revive_request" }` — ölü oyuncu, `respawn.delaySeconds` dolduktan **ve** modun canlanma şartını sağladıktan (taban bölgesine girme ya da sabit durma) sonra gönderir; sunucu koşulları doğrulayıp canlandırır (§10.4). Free-roam'da **yatay ışınlanma yoktur; kat geçişi yalnız dikey sanal ofsettir** (bkz. §10.6 "Kat modeli"), bu yüzden canlanma bir **konum değişimi değil, durum değişimidir**.
 
-**`set_calibration`** `{ "type":"set_calibration", "calibrated":true, "source":"manual", "floorOffset":0.07, "error":"" }` (yalnız player) — başlık **kendi** hizalama durumunu bildirir (§10.6). `source` ∈ `"manual"` (kumandada elle: A basılıyken B'ye çift basış) · `"anchor"` (kayıtlı `OVRSpatialAnchor`'dan geri yükleme) · `"dev"` (yalnız editör build'inin ürettiği etiket: dev hizalama, fiziksel hizalama yoktur — sunucu doğrulamaz, davranışı `manual` ile aynıdır) · `"cloud"` (ileride: paylaşılan uzamsal anchor). **`source` doğrulanmaz**, yalnız kaydedilip roster'da yayılır — `weaponId` gibi serbest etikettir, yeni bir kaynak eklemek sunucuda iş çıkarmaz. `calibrated:false` de gönderilebilir (başlık kendi hizalamasını geçersiz kıldıysa).
+**`set_calibration`** `{ "type":"set_calibration", "calibrated":true, "source":"manual", "floorOffset":0.07, "error":"" }` (yalnız player) — başlık **kendi** hizalama durumunu bildirir (§10.6). `source` ∈ `"manual"` (kumandada elle: A basılıyken B'ye çift basış) · `"anchor"` (kayıtlı `OVRSpatialAnchor`'dan geri yükleme) · `"session"` (oturum içi hizalama kaydından geri yükleme: çapa yokken ya da yüklenemezken harita değişimi ve operatörün yeniden yüklemesi — §10.6; telde hiçbir şey değişmez, **sürüm artmaz**) · `"dev"` (yalnız editör build'inin ürettiği etiket: dev hizalama, fiziksel hizalama yoktur — sunucu doğrulamaz, davranışı `manual` ile aynıdır) · `"cloud"` (ileride: paylaşılan uzamsal anchor). **`source` doğrulanmaz**, yalnız kaydedilip roster'da yayılır — `weaponId` gibi serbest etikettir, yeni bir kaynak eklemek sunucuda iş çıkarmaz. `calibrated:false` de gönderilebilir (başlık kendi hizalamasını geçersiz kıldıysa).
 
 `floorOffset` = elle kalibrasyonda kumanda ucunun, kayıtlı çapadan geri yüklemede çapanın
 **tracking-yerel yüksekliği** (metre, **işaretli**): sistemin zemin tahmininin gerçek zeminden
@@ -275,11 +275,14 @@ anlamsızdır). Sunucu değeri yorumlamaz: roster'a yazar
 (§10.6). ⚠️ **Bir kapı değildir** — sapma ne olursa olsun kalibrasyon kabul edilir; oyuncuyu
 savaş dışı bırakmak operatörün kararıdır.
 
-`error` = **hizalama yeniden yüklenemedi** (boş = sorun yok). Sözleşmesi `set_body_scale.error` ile
-birebir aynıdır: doluysa `calibrated`/`source`/`floorOffset` **YOK SAYILIR**, sunucudaki kayıtlı
-kalibrasyon **aynen durur** ve gerekçe roster'a yazılıp (`PlayerInfo.calibrationError`, §5.3)
-adminlere duyurulur. Bugünkü tek üreticisi operatörün `reload_calibration` komutudur (§5.2/§10.6):
-denemenin düştüğünü söyleyen kanal budur. ⚠️ **Doğrulanmayan serbest metindir** —
+`error` = **başlık tarafında bir kalibrasyon sorunu** (boş = sorun yok). Sözleşmesi
+`set_body_scale.error` ile birebir aynıdır: doluysa `calibrated`/`source`/`floorOffset` **YOK
+SAYILIR**, sunucudaki kayıtlı kalibrasyon **aynen durur** ve gerekçe roster'a yazılıp
+(`PlayerInfo.calibrationError`, §5.3) adminlere duyurulur. İki üreticisi vardır (§10.6):
+(1) operatörün `reload_calibration` komutu düştü (§5.2); (2) hizalama alındı ama **çapa cihaza
+kaydedilemedi** — hizalamanın hemen ardından gönderilir ve kayıtlı çapa yokken her yeniden
+bağlanışta tekrar gönderilir (sunucu `hello`'da alanı sıfırlar). ⚠️ **Doğrulanmayan serbest
+metindir** —
 `calibrationSource` ile aynı sözleşme: hata kodu listesi YOKTUR ve eklenmez, tek tüketicisi
 operatörün ekranıdır ve yeni bir başarısızlık türü sunucuda iş çıkarmamalıdır.
 
@@ -388,7 +391,7 @@ dosyasına yazar (`Server/README.md`), başka hiçbir şey okumaz:
   | Kip | Alan | Başlıkta ne olur | Sonrası |
   |---|---|---|---|
   | Hizalamayı geçersiz kıl | `keepSaved:true` | Hizalama düşer, yarım kalmış elle kalibrasyon sekansı silinir, elle kalibrasyon kapısı açılır. **Kayıtlı `OVRSpatialAnchor` ve UUID KORUNUR** | `reload_calibration` çalışır — operatör oyuncuyu kayıttan geri kurabilir |
-  | Cihaz kaydını da sil | `keepSaved:false` | Yukarıdakilerin hepsi + kayıtlı çapa cihazdan silinir, UUID kalıcı olarak silinir | `reload_calibration` "cihazda kayıtlı kalibrasyon yok" ile başarısız olur; oyuncu elle A/B sekansı almak zorundadır |
+  | Cihaz kaydını da sil | `keepSaved:false` | Yukarıdakilerin hepsi + kayıtlı çapa cihazdan silinir, UUID ve bellekteki oturum kaydı (§10.6) kalıcı olarak silinir | `reload_calibration` "cihazda kayıtlı kalibrasyon yok" ile başarısız olur; oyuncu elle A/B sekansı almak zorundadır |
 
   ⚠️ **Alanın YOKLUĞU `keepSaved:false` demektir** (sert kip). Gerekçe geri uyumluluktur: alanı
   tanımayan bir uç bugünkü davranışı sürdürür, sürpriz yapmaz — kural değerlerinin
@@ -442,8 +445,8 @@ Sunucu, `role != "admin"` bağlantıdan gelen admin komutunu loglayıp yok sayar
              "sceneName":"<Lobi>", "sceneElapsed":137.4,
              "timeRemaining":0, "scoreRed":0, "scoreBlue":0,
              "rules": { "teamMode":"two", "allies":false, "scoring":"team", "friendlyFire":false,
-                        "reviveAnchor":"base", "weaponSource":"weaponcanvas", "respawnDelay":5.0,
-                        "fireWhilePaused":true } } }
+                        "reviveAnchor":"base", "weaponSource":"weaponcanvas", "limitedReserve":false,
+                        "respawnDelay":5.0, "fireWhilePaused":true } } }
 ```
 **`match.sceneName` HER ZAMAN doludur ve istemcinin tek yönlendirme kaynağıdır** (§10.1): bağlanan
 istemci koşulsuz o sahneyi yükler. Sunucu açık sahnesini çözemiyorsa zaten **açılmaz** (§11) — boş
@@ -548,8 +551,10 @@ tek doğruluk kaynağıdır:** oyuncu kendi satırından kendi katını doğrula
 içinde gelmezse yerel kat geri alınır), diğer istemciler de uzak oyuncuyu izdüşüm hayaleti olarak mı
 çizeceklerini buradan bilir. `hello` · `load_match` · lobiye dönüş alanı `0`'a çeker.
 
-`calibrationError` = son **kayıtlı hizalamayı yeniden yükleme** denemesi başarısız olduysa gerekçesi,
-boş = sorun yok (§5.1/§10.6). ⚠️ **Başarılı bir kalibrasyon alanı temizler** (`scaleError` ile aynı
+`calibrationError` = başlığın bildirdiği son kalibrasyon sorununun gerekçesi, boş = sorun yok
+(§5.1/§10.6). İki anlamı vardır: **kayıtlı hizalamayı yeniden yükleme** denemesi düştü, ya da
+hizalama alındı ama **çapa cihaza kaydedilemedi** (hizalama bu oturumda geçerli, kalıcı değil).
+⚠️ **Başarılı bir kalibrasyon alanı temizler** (`scaleError` ile aynı
 gerekçe: bir kez başarısız olan oyuncunun satırında uyarı sonsuza kadar kalırdı ve operatör sorunun
 sürdüğünü sanardı); `clear_calibration` de sıfırlar.
 
@@ -699,8 +704,8 @@ yeniden yüklemeyi dener** ve sonucu bildirir (§10.6): başarıda normal bir
 ```json
 { "type":"rules_update", "modeId":"tdm",
   "rules": { "teamMode":"two", "allies":false, "scoring":"team", "friendlyFire":true,
-             "reviveAnchor":"base", "weaponSource":"weaponcanvas", "respawnDelay":5.0,
-             "fireWhilePaused":false } }
+             "reviveAnchor":"base", "weaponSource":"weaponcanvas", "limitedReserve":false,
+             "respawnDelay":5.0, "fireWhilePaused":false } }
 ```
 - Kurallar normalde `welcome` / `load_match` / `return_to_lobby` ile gelir, yani **maçın başında**.
   Maç ORTASINDA değişebilen bir kural (bugün tek örnek: dost ateşi anahtarı, §5.2) için taşıyıcı
@@ -1061,9 +1066,11 @@ Eşleme tablosu Unity tarafındadır (`ItemDefinition.netItemId`, katalog `NetIt
 
 ⚠️ **Bu, poz kanalının otoritesini değiştirmez:** atış yönü, `hit_report` ve hedef çözümü hâlâ ham el pozundan gelir (§6.4/§10.3). Ham poz **fiziksel ölçümdür** ve orada doğru olan odur; bilek yalnız **çizimin** referansıdır.
 
-⚠️ **Ön kabza yerelde bir kapıdır** (boş el yaklaşınca gösterge belirir, kabul yarıçapında grip'e basılınca ikinci el bağlanır — `Weapon.IsHandOnSecondaryGrip` + gösterge) ve **bu telde HİÇBİR ŞEY değiştirmez:** kapıyı da uzak çizimi de aynı yerel kaynaklar besler (etkin kavrama + `secondaryGrip`), yani kapı için ne yeni bir alan ne yeni bir mesaj vardır. Kapı bir **giriş koşuludur** (ikinci el nerede bağlanabilir), duruşun kaynağı değil. Buraya bir "kabul yarıçapı/gösterge durumu" alanı eklemek gerekmiyor ve eklenmemeli: yarıçap bir his ayarıdır, uzak taraf kavramanın nasıl başladığını değil yalnız SONUCUNU (hangi eşya, hangi el, kavrama bağlı mı) çizer.
+⚠️ **Ön kabza bağı tamamen yereldir ve telde HİÇBİR ŞEY değiştirmez:** öbür elde iki elli bir silah varken boş elin grip'i basılı tutuluyorsa ikinci el **anında** bağlanır — ne mesafe ne kabul yarıçapı kapısı vardır, ne kurarken ne sürdürürken (`WeaponGranter.ResolveSecondaryHand`); tek koşul silah tanımında ön kabza kaydının **yazılmış** olmasıdır (`Weapon.ForegripAuthored`). Bağı da uzak çizimi de aynı yerel kaynaklar besler (etkin kavrama + `secondaryGrip`), yani bunun için ne yeni bir alan ne yeni bir mesaj vardır. Buraya bir "mesafe/kabul yarıçapı durumu" alanı eklemek gerekmiyor ve eklenmemeli: uzak taraf kavramanın nasıl başladığını değil yalnız SONUCUNU (hangi eşya, hangi el, kavrama bağlı mı) çizer.
 
-**Çift ellide boş el:** `GRIP_LINKED` iken alıcı boş elin **GÖRSELİNİ** `secondaryGrip`'e **eşikli** (~25 cm) yapıştırır — eşyanın **kavrama noktası** yalnız ana elden çözülür, ikinci elin telden gelen konumu çözüme yalnız **nişan** olarak girer (eksen o avuca döner, `ItemGripSolver`); yani bayrağın anlamı "silah iki elle taşınır" değil "ikinci el silahı nişanlar ve görseli sokete yapışır"dır. Eşik güzellik ayarı değil **paket kaybı emniyetidir**: bayrağın kaybolduğu bayat tik penceresinde oyuncu silahı gerçekten bırakmışsa koşulsuz yapıştırma kolu arenanın öbür ucuna uzatırdı.
+⚠️ **Silahı oyuncudan uzak tutan şey çözücünün GÖVDE KONİSİDİR ve iki uçta da uygulanır.** Bağda mesafe kapısı olmadığı için ikinci el her yerden (ana elin arkasından, göğsün dibinden) bağlanabilir; koni olmasa `FromToRotation` namluyu oyuncunun kendisine çevirirdi. Koni için her iki uç çözücüye bir **kafa pozu** verir: yerelde merkez göz anchor'ı, uzakta telden gelen kafa pozunun konumu (`head`). ⚠️ **Bir uç kafa pozunu geçmezse aynı silah iki ekranda farklı duruşta çizilir** — koni duruşu değiştirir, yani iki ucun aynı girdiyle koşması zorunludur. Duruş yine telde gitmez: koni de çözücünün içinde, iki tarafta aynı sabitlerle yaşar.
+
+**Çift ellide boş el:** `GRIP_LINKED` iken alıcı boş elin **GÖRSELİNİ** `secondaryGrip`'e **eşikli** (~1 m) yapıştırır — eşyanın **kavrama noktası** yalnız ana elden çözülür, ikinci elin telden gelen konumu çözüme yalnız **nişan** olarak girer (eksen o avuca döner, `ItemGripSolver`); yani bayrağın anlamı "silah iki elle taşınır" değil "ikinci el silahı nişanlar ve görseli sokete yapışır"dır. Eşik güzellik ayarı değil **paket kaybı emniyetidir**: bayrağın kaybolduğu bayat tik penceresinde oyuncu silahı gerçekten bırakmışsa koşulsuz yapıştırma kolu arenanın öbür ucuna uzatırdı. ⚠️ **Eşik bir kabul yarıçapı DEĞİLDİR, daraltılmaz:** bağda mesafe kapısı olmadığı için bağlı el soketten meşru olarak kol boyu uzakta durabilir, dar eşik o eli sokette göstermez. Eşik yalnız **karaktersiz yedek yolu** etkiler — iskeletli uzak yolda bilek hedefi koşulsuz sokete gider.
 
 ### 6.7 `0x06 RttProbe` (istemci → sunucu, 1 Hz; echo ile döner)
 
@@ -1895,8 +1902,8 @@ yollar. Amaç tek: **istemci modun ne olduğunu TAHMİN ETMESİN.** Kural telden
 
 ```json
 "rules": { "teamMode":"two", "allies":false, "scoring":"team", "friendlyFire":false,
-           "reviveAnchor":"base", "weaponSource":"weaponcanvas", "respawnDelay":5.0,
-           "fireWhilePaused":false }
+           "reviveAnchor":"base", "weaponSource":"weaponcanvas", "limitedReserve":false,
+           "respawnDelay":5.0, "fireWhilePaused":false }
 ```
 
 | Alan | Değerler | Varsayılan | Anlamı |
@@ -1906,7 +1913,8 @@ yollar. Amaç tek: **istemci modun ne olduğunu TAHMİN ETMESİN.** Kural telden
 | `scoring` | `"team"` \| `"player"` \| `"shared"` | `"team"` | Skor kime yazılır: `match_state.scoreRed/scoreBlue` mi, `lobby_state → PlayerInfo.score` mü (§10.2), yoksa **ikisi birden** mi. `"shared"` = kooperatif: herkesin katkısı `PlayerInfo.score`'a, ortak toplam `scoreRed`'e yazılır ve `scoreBlue` **daima 0**'dır (takım yok, ikinci kanal ortak toplamın karşısına konacak bir şey taşımaz). Kazanan yoktur — bak aşağıdaki kazanan kuralı |
 | `friendlyFire` | `true` \| `false` | `false` | `false` = takım arkadaşı vurulamaz (§10.3, dost ateşi kapısı). Boş takım asla takım arkadaşı sayılmaz — **tek istisna `allies:true`**: orada her oyuncu diğerinin takım arkadaşı sayılır. ⚠️ **Bir mod kuralı DEĞİL, operatör anahtarıdır** — aşağı bak |
 | `reviveAnchor` | `"base"` \| `"standstill"` \| `"none"` | `"base"` | Canlanma şartı (§10.4/2). `"none"` = tur içinde canlanma yok; `revive_request` reddedilir ve kuralı delen bir operatör komutu YOKTUR — ölü oyuncuyu yalnız yeni tur canlandırır |
-| `weaponSource` | `"weaponcanvas"` \| `"random"` \| `"none"` | `"weaponcanvas"` | Silah nereden gelir: `"weaponcanvas"` = sahnedeki **çerçeveler** (silah çerçeveden ayrılmaz ve tükenmez; seçilen silah grip'e basılınca oyuncunun eline **klonlanır**), `"random"` = modun dağıtımı, `"none"` = **silah yok** (çerçeve gizlenir, hiçbir grant koşmaz, tetik sessizdir — **atılabilir eşya dahil**: o da aynı ateş kapısını okur, yani "ateşlenecek hiçbir şey yok" demektir). **Tümüyle istemci sunumu** — sunucuda karşılığı yok (§10.3: silah tablosu yoktur) |
+| `weaponSource` | `"weaponcanvas"` \| `"random"` \| `"none"` | `"weaponcanvas"` | Silah nereden gelir: `"weaponcanvas"` = sahnedeki **çerçeveler** (silah çerçeveden ayrılmaz ve tükenmez; seçilen silah grip'e basılınca oyuncunun eline **klonlanır**), `"random"` = modun dağıtımı (çerçeve **ve panosunun tamamı** gizlenir — süpürülmüş boş pano tabanda kalmasın), `"none"` = **silah yok** (çerçeve gizlenir, hiçbir grant koşmaz, tetik sessizdir — **atılabilir eşya dahil**: o da aynı ateş kapısını okur, yani "ateşlenecek hiçbir şey yok" demektir). **Tümüyle istemci sunumu** — sunucuda karşılığı yok (§10.3: silah tablosu yoktur) |
+| `limitedReserve` | `true` \| `false` | `false` | Yedek mermi sınırlı mı. `false` = **yedek SONSUZ**: gösterge `<şarjördeki>/∞`, şarjör değiştirmek her zaman mümkündür ve yeni şarjör hep dolu gelir — `WeaponReserveMode` yedekten düşmez (`DiscardMagazine`'de erken değiştirmede şarjörde kalan mermi yine yanar). `true` = yedek **SINIRLI**: silahın `WeaponDefinition.spareMagazines` kadar yedek şarjörü vardır, hesap `WeaponReserveMode`'a göre işler ve gösterge yedeği yazar. **Tümüyle istemci sunumu** — sunucuda silah/mermi tablosu yoktur (§10.3), kural yalnız taşınır; alan hiç gelmezse sonsuz yedek |
 | `respawnDelay` | saniye | `RESPAWN_DELAY` (5) | `respawn.delaySeconds` ve sunucudaki `revive_request` gecikme eşiği. **`0` geçerli bir değerdir** (anında canlanma) ve varsayılana çekilmez — alan hiç gönderilmezse DTO'nun kendi başlangıcı geçerli olduğu için "yazılmadı" ile "sıfır yazıldı" karışmaz |
 | `fireWhilePaused` | `true` \| `false` | `false` | Faz `playing` değilken silah ateşlenebilir mi. `true` = lobi gibi serbest atış alanı: namlu alevi/ses relay edilir (§10.3) ama **hasar yine yoktur** (`hit_report` kapısı `playing`). Bu alan sayesinde istemcide `if (modeId == "lobby")` zinciri doğmaz |
 
@@ -1945,13 +1953,17 @@ yollar. Amaç tek: **istemci modun ne olduğunu TAHMİN ETMESİN.** Kural telden
 **Kayıtlı modlar** (sunucuda `MatchDirector.RegisterModes()`; `start_match.modeId` bunlardan biri
 olmalı, tanınmayan `modeId` reddedilir):
 
-| `modId` | Ad | `teamMode` | `allies` | `scoring` | `reviveAnchor` | `weaponSource` | `respawnDelay` | `fireWhilePaused` | Varsayılan süre / limit |
-|---|---|---|---|---|---|---|---|---|---|
-| `tdm` | Takım Ölüm Maçı | `two` | — | `team` | `base` | `weaponcanvas` | `5` | `false` | 300 sn / 120 |
-| `ffa` | Herkes Tek | `none` | `false` | `player` | `standstill` | `random` | `0` | `false` | 300 sn / 120 |
-| `tournament` | Turnuva | `two` | — | `team` | **`none`** | `weaponcanvas` | `0` | `false` | 120 sn / 4 tur |
-| `burger` | Hamburgerci | `none` | **`true`** | `shared` | `none` | **`none`** | `0` | `false` | 600 sn / limitsiz |
-| `mole` | Köstebek Ezme | `two` | — | `team` | **`none`** | **`none`** | `0` | `false` | 300 sn / limitsiz |
+| `modId` | Ad | `teamMode` | `allies` | `scoring` | `reviveAnchor` | `weaponSource` | `limitedReserve` | `respawnDelay` | `fireWhilePaused` | Varsayılan süre / limit |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `tdm` | Takım Ölüm Maçı | `two` | — | `team` | `base` | `weaponcanvas` | `false` | `5` | `false` | 300 sn / 120 |
+| `ffa` | Herkes Tek | `none` | `false` | `player` | `standstill` | `random` | `false` | `0` | `false` | 300 sn / 120 |
+| `tournament` | Turnuva | `two` | — | `team` | **`none`** | `weaponcanvas` | **`true`** | `0` | `false` | 120 sn / 4 tur |
+| `burger` | Hamburgerci | `none` | **`true`** | `shared` | `none` | **`none`** | `false` | `0` | `false` | 600 sn / limitsiz |
+| `mole` | Köstebek Ezme | `two` | — | `team` | **`none`** | **`none`** | `false` | `0` | `false` | 300 sn / limitsiz |
+
+**Yedek sınırını yazan tek mod `tournament`'tır:** turnuva dışında hiçbir silahlı modda yedek
+sınırı yoktur (lobi profilleri dahil) — mermi saymak tur tabanlı elemenin kaynağıdır, serbest
+oynanan modda ise oyuncuyu silahsız bırakan bir ceza olurdu.
 
 `allies` sütunundaki `—` = **yok sayılır**: takımlı modda takım arkadaşlığını takım alanı belirler,
 kuralın söyleyeceği bir şey yoktur (telde yine `false` gider).
@@ -2228,13 +2240,14 @@ kuralın söyleyeceği bir şey yoktur (telde yine `false` gider).
 > | Biten turu kim kazandı, oyuncu nereden öğrenir? | Turu **kapatan** `match_state`'in `modeState`'i `roundend:<kazanan>:<n>`dir (§10.1) ve **operatör incelemesi boyunca orada durur**; ayrı bir mesaj YOKTUR — skor zaten aynı yayında güncel gidiyor ve ikinci bir gönderici doğurmaya değmez. ⚠️ **Maçı bitiren tur da yayınlar:** değer turu kapatan aynı tikte gönderilir — sonra ya inceleme sonundaki toplanma onu ezer ya da `match_end` gelir. Aksi hâlde maçı belirleyen tur, oyuncunun kazandığı söylenmeyen tek tur olurdu |
 > | Geri sayımda biri tabandan çıkarsa? | Geri sayım **iptal edilir**, faz `paused`/`mode`'a döner ve sayaç sıfırdan başlar. Kural "tabanda **bekle**"dir, "tabana uğra" değil. ⚠️ İptalin **istisnası yoktur**: geri sayım her koşulda geri alınabilir |
 > | Toplanma takılırsa ne olur? | Çıkış operatöründür: takılan oyuncuyu **atar** (`kick`), maçı o anki skorla bitirir (`end_match`) ya da sonuçsuz kaldırır (`abort_match`). Atılan/kopan oyuncu toplamdan düştüğü için kalanlar hazırsa tur o an başlar — sayım her tikte çevrimiçi oyunculardan yeniden yapılır. Bekleme uzarsa sunucu konsoluna 30 sn'de bir "toplanma bekleniyor (h/t) — tabanına dönmeyenler: …" satırı düşer; bu bir **teşhis** satırıdır, tur başlatmaz |
-> | Cephane? | Şarjör + yedek şarjör (`weaponSource:"weaponcanvas"`), **her tur başında herkes tam dolu** — istemci geri sayımda doldurur. Sunucunun bundan haberi yoktur (§10.3: silah tablosu yok) |
+> | Cephane? | Şarjör + yedek şarjör (`weaponSource:"weaponcanvas"`), **her tur başında herkes tam dolu** — istemci geri sayımda doldurur. **Yedeği sınırlı tek mod budur** (`limitedReserve:true`): yedek silahın `spareMagazines`'i kadardır, bitince şarjör değiştirme reddedilir. Sunucunun bundan haberi yoktur (§10.3: silah tablosu yok) |
 > | Taraflar yarıda değişir mi? | **Hayır, taraf değişimi (side swap) YOKTUR.** Free-roam'da taraf değiştirmek oyuncuların fiziksel olarak karşı tabana yürümesi demektir ve arena simetrik olmadığı sürece karşılığı da azdır. İstenirse ayrı bir iş olarak planlanır |
 
 > ⚠️ **`lobby` bu tabloda YOKTUR ve olmayacaktır.** Lobi bir **tür**dür ama `IGameMode` değildir
 > (§10.7): sunucuda kaydı olmadığı için `start_match{"lobby"}` "bilinmeyen mod" diye reddedilir —
 > yani lobi türü seçiliyken maç başlatılamaz. Kural şekli yine de tanımlıdır ve telde taşınır:
-> `fireWhilePaused:true` + `weaponSource:"random"`, geri kalanı varsayılan. Lobi `modeId`'si
+> `fireWhilePaused:true` + `weaponSource:"random"`, geri kalanı varsayılan — yani çocuk lobisi
+> dahil her lobi profilinde `limitedReserve:false`'tur (sonsuz yedek). Lobi `modeId`'si
 > istemcide silah loadout'unu, HUD'u ve ateş serbestliğini çözer.
 
 > `ffa` satırı kuralların somut örneğidir: **takım yok** (`team:""` gelir, `winnerPlayerId`
@@ -2305,9 +2318,12 @@ hiçbir ara aşamada bırakılmaz; sekansa baştan başlar.
   ⚠️ **Bu kapı uygulama ömrü kadar yaşar:** başlık yeniden başlatılırsa süreçle birlikte gider ve
   `saved_anchor` modunda hizalama açılışta geri yüklenir. Bu bir eksiklik değil, iki komut
   arasındaki farkın kendisidir — cihazdaki kaydı gerçekten yok etmek isteyen operatör sert kipi
-  kullanır.
-- `keepSaved:false` — *cihaz kaydını da sil*. Kayıtlı çapa cihazdan, UUID kalıcı olarak silinir;
-  o oyuncuda `reload_calibration` artık başarısız olur ve tek yol elle A/B sekansıdır.
+  kullanır. Bellekteki **oturum kaydı** da (aşağıda) korunur — onu otomatik kullanımdan alıkoyan
+  şey aynı kapıdır, `reload_calibration` ise yine çalışır.
+- `keepSaved:false` — *cihaz kaydını da sil*. Kayıtlı çapa cihazdan, UUID ve bellekteki **oturum
+  kaydı** kalıcı olarak silinir; o oyuncuda `reload_calibration` artık başarısız olur ve tek yol
+  elle A/B sekansıdır. Oturum kaydı da silinmek zorundadır: yoksa sonraki sahne onunla hizalanıp
+  operatörün kararını sessizce geri alırdı.
 
 Bunu üç yerde birden **koşulsuz** tutmak zorunludur, çünkü *yarım kalmış kalibrasyon* telde
 görünmez — A alınmış ama B alınmamış bir başlık henüz `set_calibration{true}` göndermemiştir, yani
@@ -2385,9 +2401,29 @@ geri yükler); `two_anchor`'da o UUID **hiç okunmaz**, oyuncu her açılışta 
 alır. **HARİTA DEĞİŞİMİNDEKİ geri yükleme moddan bağımsız koşar** (tek istisnası operatörün
 geçersiz kılmasıdır: `clear_calibration` sonrasında otomatik geri yükleme kapalıdır, yukarı bak) —
 o, oturum içinde
-bellekte duran çapayla yapılır ve `load_match`'in kalibrasyonu sıfırlamaması kuralının (yukarıda)
+bellekte duran kayıtla yapılır ve `load_match`'in kalibrasyonu sıfırlamaması kuralının (yukarıda)
 uygulanma biçimidir. İkisini tek anahtara bağlamak, `two_anchor` seçili bir işletmede her harita
 değişiminde tüm oyuncuları savaş dışı bırakırdı.
+
+**Oturum içi geri yüklemenin sırası: önce çapa, sonra oturum kaydı.** Oturum kaydı, hizalamanın
+referans pozunu **takip uzayında** (tracking space) tutan bellekteki bir kayıttır: fiziksel bir
+noktanın takip uzayı koordinatı oturumun her sahnesinde aynıdır, bu yüzden harita değişiminde
+yeniden hizalamaya yeter ve `source:"session"` ile bildirilir (§5.1). Varlık sebebi: çapası cihaza
+**kaydedilemeyen** bir hizalama yoksa her harita değişiminde kaybolurdu — oyuncu, elle kalibre
+olmuş olmasına rağmen ilk sahne değişiminde savaş dışı kalırdı.
+⚠️ **Oturum kaydı takip kökeninin kaymasını İZLEMEZ, çapa izler** — recenter/takip kopması sonrası
+yeniden hizalama yalnız çapayla yapılır. Bu yüzden oturum kaydı birincil yol değil, **yedektir**.
+⚠️ **Oturum kaydı uygulama ömrü kadar yaşar:** başlıkta uygulama yeniden açılırsa gider, yani
+açılıştaki hizalama için yine kayıtlı çapa ya da elle A/B gerekir.
+⚠️ **Çapa ile oturum kaydı daima AYNI kalibrasyonu anlatır — en yenisini.** Bu yüzden iki kural:
+- **Tamamlanan elle kalibrasyon önceki cihaz kaydının yerine geçer:** önceki çapa ve UUID o anda
+  silinir, yeni çapanın kaydı sonradan düşse bile. Yumuşak sıfırlama eski çapayı koruduğu için,
+  silinmeseydi kaydı düşen yeni kalibrasyonun yerine harita değişimi, `reload_calibration` ve
+  açılış **eski** hizalamayı yüklerdi.
+- **Geride kalmış bir kayıt denemesi atılır:** sert sıfırlamadan ya da yeni bir elle
+  kalibrasyondan önce başlamış bir kayıt sonradan biterse çapası silinir, UUID yazılmaz ve sonucu
+  (başarı da hata da) bildirilmez — yoksa silinmiş hizalamayı geri getirir ya da sıfırlanmış
+  oyuncunun satırına yanlış bir hata düşerdi.
 
 ⚠️ **Mod değişimi bağlı oyunculara YAYILMAZ** (§5.3): karar `welcome` anında verilmiştir, sonradan
 gönderilen bir bayrağın uygulanacağı bir an yoktur. Sahadaki karşılığı başlığı yeniden
@@ -2426,8 +2462,10 @@ başlatmadan / oyunu kesmeden toparlamaktır.
 başlatır, "hizalandım" işaretini yine **başlık** koyar (`set_calibration`). Otorite değişmez —
 yukarıdaki asimetrik yazar tablosu aynen geçerlidir.
 
-⚠️ **Kayıtlı çapa YOKSA deneme BAŞARISIZDIR ve öyle bildirilir** — hiç kalibre olunmamış ya da
-`clear_calibration` **sert kipte** (`keepSaved:false`) UUID'yi silmiş olabilir. Yumuşak kip kaydı
+⚠️ **Deneme yalnız ne kayıtlı çapa ne de oturum kaydı varken BAŞARISIZDIR ve öyle bildirilir** —
+hiç kalibre olunmamış ya da `clear_calibration` **sert kipte** (`keepSaved:false`) ikisini de
+silmiş olabilir. Çapa yoksa ya da yüklenemezse başlık oturum kaydını dener
+(`source:"session"`, yukarıda); ikisi de yoksa deneme düşer. Yumuşak kip kaydı
 koruduğu için günlük akış *hizalamayı geçersiz kıl → yeniden yükle*'dir ve orada bu başarısızlık
 görülmez. Sessizce başarılı sayılmaz: sunucunun hizalı sandığı ama fiilen kaymış bir oyuncuya ateş
 ve hasar açmak, bu sistemin önlemek için var olduğu durumdur.
@@ -2551,10 +2589,17 @@ yapar, yerini alır; operatör bunu tek tek anlatmak zorunda kalmaz.
 > `start_match` ile değişir.
 >
 > **Sonucu:** sahnelenen arena lobi profiliyle koşar (`weaponSource:"random"` + `fireWhilePaused`),
-> yani maç kurulana kadar **arenanın silah tezgâhları kullanılabilir kalır** — oyuncu bekleme
-> süresince silah alır ve serbest atış yapar. ⚠️ İstemci "mod silah dağıtıyor" durumunu `modeId`'den
-> değil bu **bileşimden** ayırır (§10.5): yalnız `random` = mod dağıtıyor (FFA, tezgâhlar gizlenir),
-> `random` + `fireWhilePaused` = serbest alan.
+> yani maç kurulana kadar oyuncu silah alır ve serbest atış yapar. ⚠️ İstemci "mod silah dağıtıyor"
+> durumunu `modeId`'den değil bu **bileşimden** ayırır (§10.5): yalnız `random` = mod dağıtıyor
+> (tezgâh **ve panosunun tamamı** gizlenir), `random` + `fireWhilePaused` = serbest alan.
+>
+> ⚠️ **Serbest alanda tezgâhın açık kalması SEÇİLİ moda bağlıdır.** Raf tabanlı bir mod
+> (`weaponSource:"weaponcanvas"`) seçiliyken tezgâh durur ve iki yol da açıktır (raftan seç /
+> grip'ten rastgele al). Silahı modun kendisi dağıtıyorsa (`random`) tezgâh ve panosu gizlenir,
+> silah yalnız grip'ten (lobi profilinin rastgele loadout'u) gelir: bekleme o modla aynı oynanır,
+> yoksa oyuncu maçta olmayan bir yoldan silah seçmeye alışırdı. Kapı çocuk kapısıyla aynı biçimde
+> kurulur (aşağıda): **yalnız lobi profili işlerken** okunur ve seçili modun silah kaynağı
+> **yerel katalogdan** çözülür — telde taşınmaz (§5.3).
 >
 > ⚠️ **Çocuk Oyunları istisnası:** sahnelenen haritanın `gameType`'ı `kids` ise lobi profili
 > `weaponSource:"none"` + `fireWhilePaused:false` taşır (çocuk lobi profili). Tezgâh gizlenir,
@@ -2685,7 +2730,7 @@ halkasını kırmızı yakıp söndürür.
 | **Kafa kabuğu** engele değiyor ama ceza eşiğinin altında | — | ✅ tam siyah + nabız | — |
 | **El** engelin içinde | — | — | ✅ tetik ölür |
 | **Silahın herhangi bir parçası** engele değiyor | — | — | ✅ tetik ölür |
-| **Kafa** alanın dışında | ✅ uyarı yazısı + `FLAG_OUT_OF_BOUNDS`; **can gitmez** | ✅ tam siyah + nabız (muhafazanın kendi karartması) | ✅ tetik ölür |
+| **Kafa** alanın dışında | ✅ uyarı yazısı + `FLAG_OUT_OF_BOUNDS`; **can gitmez** | ✅ tam siyah + çıkış anında 3 darbe (muhafazanın kendi karartması) | ✅ tetik ölür |
 | Kol / gövde / bacak | — | — | — |
 
 ⚠️ **Tablonun üç sütunu üç ayrı kapıdan geçer.** "Ceza" sütunu faz `playing` + canlı + kalibre +
@@ -2818,7 +2863,8 @@ tarafında ölçülür ve sunucuya bildirilmez:
   ⚠️ **Titreşimi isteyen İKİ kaynak var** (engel ihlali · alan dışı) ve ikisi aynı anda doğru
   olabilir; motoru doğrudan süren yoktur, ikisi de `ControllerHaptics` hakeminden geçer —
   `ScreenFade` ile birebir aynı sözleşme (kare başına bildirim, en yüksek genlik kazanır, susan
-  kaynak kendiliğinden düşer).
+  kaynak kendiliğinden düşer). ⚠️ **Nabız yalnız ENGELİN kalıbıdır:** muhafaza kendi çıkış
+  darbelerinin saatini kendi işletir (aşağıda, alan dışı), yani iki kaynağın kalıbı aynı değildir.
 - **Uyarı yazısı:** karartmanın üstünde nabız atarak "duvarın içindesin, oyun alanına dön" der.
   Karartmanın açıklaması olduğu için **onunla aynı kapıdadır**: faz ve canlılık sorulmaz.
 - **Can kaybının kırmızısı:** karartmanın **üstünde** ayrı bir katmandır. ⚠️ Karartma hakemine
@@ -2861,10 +2907,14 @@ zaten kapalı olduğu için **alanın dışına çıkıp içeri ateş etmek geri
 yoludur**. Ceza değil bir kapıdır: oyuncu içeri girdiği anda tetik geri gelir.
 
 **Arenanın DIŞ duvarları ve zemini CEZA sistemine GİRMEZ.** Dış sınırı istemci tarafındaki muhafaza
-ölçer (**tam karartma + nabız + uyarı + tetik kapanması, hasar yok**) ve sonucu yalnız bir bayrak
-olarak taşır. ⚠️ **Sunum engel ihlaliyle AYNIDIR, ayrım cezadadır:** ikisi de görüşü kapatır ve
-kumandayı titretir, ama can yalnız engelde erir. Sınırı geçen oyuncunun ekranı kademesiz olarak
+ölçer (**tam karartma + titreşim + uyarı + tetik kapanması, hasar yok**) ve sonucu yalnız bir bayrak
+olarak taşır. ⚠️ **Görüş sunumu engel ihlaliyle AYNIDIR, ayrım cezadadır:** ikisi de görüşü kapatır,
+ama can yalnız engelde erir. Sınırı geçen oyuncunun ekranı kademesiz olarak
 tam siyah olur (yaklaşma rampası sınıra kadar sürer; dışarıda ikinci bir rampa yoktur).
+⚠️ **Titreşim ise ayrışır:** alan dışı yalnız **çıkış anında** iki kumandaya 3 darbe verir (darbe
+başına 1 sn, aralarında 0,5 sn) ve sonra dışarıda kalındığı sürece susar — dışarıda süren titreşim
+kumanda pilini tüketir; engel teması ise temas boyunca nabız atar. İçeri girmek kalan darbeleri
+iptal eder, yeniden çıkmak diziyi baştan başlatır.
 Gerekçe yine kalibrasyondur: dış duvar oyuncunun her an dibinde olduğu için kayan bir hizalamada
 sürekli yalancı ihlal üretirdi — görünürlük buna dayanır, can eritme dayanmaz. Hangi geometrinin
 ihlal sayılacağı **sunucuya hiç bildirilmez** — o karar tümüyle sahne tarafındadır (`Obstacle`

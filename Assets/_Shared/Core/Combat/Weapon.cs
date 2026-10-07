@@ -31,21 +31,22 @@ namespace VortexArena.Core.Combat
     /// ArenaCombat is the only gate.</para>
     /// <para>No auto-reload on an empty magazine: reloading starts deliberately via
     /// <see cref="TryStartReload"/> (e.g. <see cref="WeaponReloadGesture"/>'s below-the-belt
-    /// gesture). Reserve accounting follows <see cref="WeaponReserveMode"/> and a reload completes
-    /// even if the weapon is dropped. This class does NOT play magazine sounds (WeaponAnimator
-    /// does).</para>
+    /// gesture). The reserve is INFINITE unless the mode limits it (§10.5 <c>limitedReserve</c>,
+    /// <see cref="HasInfiniteReserve"/>); a limited one follows <see cref="WeaponReserveMode"/>. A
+    /// reload completes even if the weapon is dropped. This class does NOT play magazine sounds
+    /// (WeaponAnimator does).</para>
     /// <para>SECOND HOLD PATH — a GRANTED weapon (<see cref="GrantTo"/>): held by telling a
     /// controller directly, with ISDK grabbing never involved. Two kinds
     /// (<see cref="WeaponGrantKind"/>): <b>Disposable</b> (§10.5 <c>weaponSource:"random"</c>) is
-    /// held by definition and has reload DISABLED; <b>Persistent</b> (selected from a
-    /// <see cref="WeaponFrame"/>) has reload and a reserve. In both cases the instance parks under
+    /// held by definition and has no spare magazines of its own — it reloads only from an infinite
+    /// reserve; <b>Persistent</b> (selected from a <see cref="WeaponFrame"/>) has reload and a
+    /// reserve. In both cases the instance parks under
     /// <see cref="WeaponGranter"/>'s DDOL root (NEVER as a child of the hand anchor) and its pose
     /// is driven every frame by the canonical grip; a second hand may take the front grip
     /// (<see cref="SecondaryHand"/>).</para>
-    /// <para>THE FRONT-GRIP gate and its indicator live in this class — there is no separate
-    /// component: <see cref="IsHandOnSecondaryGrip"/> is the single answer to "is this hand's
-    /// controller inside the socket", and <see cref="TickSecondaryGripIndicator"/> draws that same
-    /// sphere from the catalog prefab.</para></summary>
+    /// <para>THE FRONT GRIP has no gate and no indicator: the granter binds the empty hand the
+    /// moment it holds grip (<c>WeaponGranter.ResolveSecondaryHand</c>); this class only says
+    /// whether a foregrip record exists at all (<see cref="ForegripAuthored"/>).</para></summary>
     public class Weapon : MonoBehaviour, IItemHolder
     {
         // Analog trigger hysteresis: jitter around the threshold must not double-count a press.
@@ -139,7 +140,7 @@ namespace VortexArena.Core.Combat
         /// <summary>Is this the PERSISTENT frame clone (reload on, reserve, front grip allowed).</summary>
         public bool IsPersistentGrant => GrantKind == WeaponGrantKind.Persistent;
 
-        /// <summary>Is this FFA's DISPOSABLE random weapon (no reload, no reserve).</summary>
+        /// <summary>Is this FFA's DISPOSABLE random weapon (no spare magazines of its own).</summary>
         public bool IsDisposableGrant => GrantKind == WeaponGrantKind.Disposable;
 
         /// <summary>Held: a granted weapon is held BY DEFINITION, a scene weapon is tracked from
@@ -208,6 +209,12 @@ namespace VortexArena.Core.Combat
         public int ReserveRounds => reserveRounds;
 
         public int SpareMagazineCount => reserveRounds / Mathf.Max(1, MagazineSize);
+
+        /// <summary>Is the reserve infinite right now (§10.5 <c>limitedReserve:false</c>, every mode
+        /// but the tournament): reload never runs dry and nothing is deducted.
+        /// <para>Read LIVE from the rule: a weapon outlives rule changes (staging → match), and since
+        /// nothing is deducted meanwhile it enters a limited mode with its full reserve.</para></summary>
+        public bool HasInfiniteReserve => !ModeRuntime.LimitedReserve;
 
         public bool IsReloading { get; private set; }
 
@@ -397,7 +404,6 @@ namespace VortexArena.Core.Combat
             triggerHeld = false;
             burstShotsLeft = 0;
             burstAwaitsRelease = false;
-            HideIndicator();
             if (wasHeld)
                 HeldChanged?.Invoke(false);
 
@@ -463,18 +469,6 @@ namespace VortexArena.Core.Combat
         protected virtual void LateUpdate()
         {
             ApplyCanonicalGrip();
-            TickSecondaryGripIndicator();
-        }
-
-        protected virtual void OnDestroy()
-        {
-            // The indicator's material INSTANCE (renderer.material) dies with the weapon; leaving
-            // it would leak until the next scene change.
-            if (indicatorMaterial != null)
-            {
-                Destroy(indicatorMaterial);
-                indicatorMaterial = null;
-            }
         }
 
         // --------------------------------------------------------- canonical grip
@@ -541,8 +535,12 @@ namespace VortexArena.Core.Combat
             bool mainHandRight = HandGripPivot.IsRight(MainHand);
             bool secondaryRight = SecondaryHandIsRight(mainHandRight);
 
+            // The head feeds the solver's body cone; the remote side passes the wire's head pose
+            // (RemoteAvatar.ApplyGrip), so both ends keep the weapon off the player the same way.
+            bool hasHead = WeaponGranter.TryResolveHead(out Vector3 head);
+
             ItemGripSolver.Solve(definition, mainHandRight, secondaryRight, primaryPalm,
-                _hasLastSecondaryPalm, _lastSecondaryPalm, _aimBlend,
+                _hasLastSecondaryPalm, _lastSecondaryPalm, _aimBlend, hasHead, head,
                 out Vector3 position, out Quaternion rotation);
 
             transform.SetPositionAndRotation(position, rotation);
@@ -935,8 +933,9 @@ namespace VortexArena.Core.Combat
         /// <summary>GRANTS the weapon to a controller (called by <see cref="WeaponGranter"/>): it
         /// counts as held and ISDK grabbing is never involved.
         /// <para>Ammo behaviour splits by kind (<see cref="WeaponGrantKind"/>). <c>Disposable</c>:
-        /// starts with a full magazine, NO reserve (a spare counter would only lie to the HUD while
-        /// reload is off) and any in-progress reload is cancelled — every call is a new weapon.
+        /// starts with a full magazine, NO spare magazines of its own (it reloads only from an
+        /// infinite reserve, <see cref="HasInfiniteReserve"/>) and any in-progress reload is
+        /// cancelled — every call is a new weapon.
         /// <c>Persistent</c>: ammo is left UNTOUCHED and a running reload is not cancelled. The
         /// frame weapon is the ONE instance that hides and returns, which is exactly where "the
         /// same weapon comes back with the same ammo" comes from; refilling would open a
@@ -953,6 +952,7 @@ namespace VortexArena.Core.Combat
             // The second hand does not carry into a new hold: the weapon may have swapped hands
             // and the granter re-resolves the front grip next frame.
             _grantedSecondaryHand = OVRInput.Controller.None;
+            WarnIfForegripUnauthored();
 
             if (kind == WeaponGrantKind.Disposable)
             {
@@ -1023,16 +1023,18 @@ namespace VortexArena.Core.Combat
 
         // ------------------------------------------------------------------ reload
 
-        /// <summary>Tries to start a reload; true if it started. Rejected for: a Disposable granted
-        /// weapon (§10.5; a frame weapon HAS reload, driven by the below-the-belt gesture), already
-        /// reloading, no definition, full magazine, dead player, insufficient reserve (Discard: no
-        /// full magazine; Pool: empty). In Discard mode the magazine is dropped up front: the
-        /// trigger is dead for the duration and remaining rounds are BURNED. A STARTED reload plays
-        /// no sound here — WeaponAnimator owns the magazine audio timeline; only the empty-reserve
-        /// refusal cues (<see cref="CueReloadRejected"/>).</summary>
+        /// <summary>Tries to start a reload; true if it started. Rejected for: a Disposable grant under
+        /// a LIMITED reserve (§10.5 <c>limitedReserve</c>; it has no spare magazines of its own),
+        /// already reloading, no definition, full magazine, dead player, insufficient limited reserve
+        /// (Discard: no full magazine; Pool: empty). An infinite reserve never runs dry and is not
+        /// deducted. In Discard mode the magazine is dropped up front: the trigger is dead for the
+        /// duration and remaining rounds are BURNED. A STARTED reload plays no sound here —
+        /// WeaponAnimator owns the magazine audio timeline; only the empty-reserve refusal cues
+        /// (<see cref="CueReloadRejected"/>).</summary>
         public bool TryStartReload()
         {
-            if (IsDisposableGrant || IsReloading || definition == null)
+            bool infinite = HasInfiniteReserve;
+            if ((IsDisposableGrant && !infinite) || IsReloading || definition == null)
                 return false;
             if (CurrentAmmo >= definition.MagazineSize)
                 return false;
@@ -1041,18 +1043,22 @@ namespace VortexArena.Core.Combat
 
             if (definition.ReserveMode == WeaponReserveMode.DiscardMagazine)
             {
-                if (reserveRounds < definition.MagazineSize)
+                if (!infinite)
                 {
-                    CueReloadRejected();
-                    return false;
+                    if (reserveRounds < definition.MagazineSize)
+                    {
+                        CueReloadRejected();
+                        return false;
+                    }
+
+                    // The new magazine is deducted NOW.
+                    reserveRounds -= definition.MagazineSize;
                 }
 
-                // The new magazine is deducted NOW; rounds in the old one count as thrown away
-                // with it (the default product rule).
-                reserveRounds -= definition.MagazineSize;
+                // Rounds in the old magazine count as thrown away with it (the default product rule).
                 CurrentAmmo = 0;
             }
-            else if (reserveRounds <= 0)
+            else if (!infinite && reserveRounds <= 0)
             {
                 CueReloadRejected();
                 return false;
@@ -1100,9 +1106,9 @@ namespace VortexArena.Core.Combat
 
             if (definition != null)
             {
-                if (definition.ReserveMode == WeaponReserveMode.DiscardMagazine)
+                if (definition.ReserveMode == WeaponReserveMode.DiscardMagazine || HasInfiniteReserve)
                 {
-                    // The new magazine was already deducted when the reload started.
+                    // Discard: deducted when the reload started; infinite: nothing to deduct.
                     CurrentAmmo = definition.MagazineSize;
                 }
                 else
@@ -1120,8 +1126,8 @@ namespace VortexArena.Core.Combat
 
         /// <summary>Restores magazine and reserve to the definition's full values (revive refill).
         /// An in-progress reload is cancelled and <see cref="ReloadCompleted"/> is raised so
-        /// listeners close. A Disposable grant keeps reserve 0 (no reload in that mode); a frame
-        /// weapon returns with a full reserve.</summary>
+        /// listeners close. A Disposable grant keeps reserve 0 (no spare magazines of its own); a
+        /// frame weapon returns with a full reserve.</summary>
         public void RefillFull()
         {
             if (definition == null)
@@ -1212,282 +1218,37 @@ namespace VortexArena.Core.Combat
         // an interactor is WeaponGranter.ResolveController / ResolveControllerFromGameObject. It has
         // two consumers (this class, WeaponFrame) and copies drift.
 
-        // ------------------------------------------------- front grip: gate + indicator
+        // ------------------------------------------------------------ front grip
 
-        /// <summary>Distance at which the front-grip socket becomes VISIBLE (m, controller anchor
-        /// to socket centre) — a playtest value, identical on all weapons.
-        /// <para>⚠️ The acceptance radius is per weapon
-        /// (<see cref="ItemDefinition.SecondaryGripRadius"/>) and MAY exceed this constant, so the
-        /// effective visibility distance is <c>Mathf.Max(SecondaryGripHoverRadius, radius)</c> — a
-        /// larger radius would invert "visible first, grabbable second" and make the socket
-        /// useless.</para></summary>
-        private const float SecondaryGripHoverRadius = 0.30f;
+        /// <summary>Does the definition carry a foregrip record — the ONLY condition on the second
+        /// hand's link (<c>WeaponGranter.ResolveSecondaryHand</c>); distance to the foregrip never
+        /// matters, the hand grips from wherever it is.
+        /// <para>⚠️ Unauthored = NO link (<see cref="ItemDefinition.HasSecondaryGrip"/>): that record
+        /// falls to the item root, which on most weapons sits next to the main hand, so an open link
+        /// would seat the second hand on top of the first. <see cref="WarnIfForegripUnauthored"/>
+        /// reports it.</para></summary>
+        public bool ForegripAuthored => definition != null && definition.HasSecondaryGrip;
 
-        /// <summary>Socket alpha while approaching, and while the controller is inside (slightly
-        /// more solid to read as "you are in, press"; colour and size never change — the sphere IS
-        /// the acceptance volume).</summary>
-        private const float IndicatorHoverAlpha = 0.30f;
-        private const float IndicatorReadyAlpha = 0.50f;
-
-        private static readonly Color IndicatorColor = new Color(0.55f, 0.82f, 1f, 1f);
-
-        /// <summary>One warning per SESSION (not per weapon) when the socket prefab is missing.</summary>
-        private static bool indicatorPrefabWarned;
-
-        /// <summary>Definitions with no front-grip record — one warning per session each (weapons
-        /// are re-cloned on every grab, so a per-instance warning would spam).</summary>
+        /// <summary>Definitions already reported by <see cref="WarnIfForegripUnauthored"/> — one
+        /// warning per session each (weapons are re-cloned on every grab, so a per-instance warning
+        /// would spam).</summary>
         private static readonly HashSet<ItemDefinition> unauthoredSecondaryWarned = new HashSet<ItemDefinition>();
 
-        // This weapon's socket instance (lazy: born only when a hand approaches) and the surface
-        // whose alpha is driven: a material on a sphere prefab, the line colour on LineRenderer art.
-        private Transform indicator;
-        private LineRenderer indicatorLine;
-        private Material indicatorMaterial;
-
-        /// <summary>WORLD position of the front grip, from the <paramref name="rightHand"/> record
-        /// (records are per hand: the grip is not symmetric, so each controller lands somewhere
-        /// different). The record is the controller ANCHOR's pose relative to the item, so this is
-        /// where that hand's anchor will sit; the socket sphere is centred here.
-        /// <para>⚠️ Composed by hand, NOT via <see cref="Transform.TransformPoint"/>: the record is
-        /// in metres and <c>WPN_*</c> roots are 0.8-scaled, so TransformPoint would apply the scale
-        /// twice (<see cref="ItemGripPose"/>). The gate, the socket and <c>RemoteAvatar</c> all use
-        /// this same composition.</para>
-        /// <para>⚠️ Meaningful only while <see cref="ItemDefinition.HasSecondaryGrip"/>; with an
-        /// unauthored record this point is the item root.</para></summary>
-        public Vector3 SecondaryGripWorld(bool rightHand)
+        /// <summary>Logs once per definition when a TWO-HANDED weapon has no foregrip record. Not
+        /// silent on purpose: a content error whose only fix is the grip studio, and in the field
+        /// it would read as "the second hand will not hold".</summary>
+        private void WarnIfForegripUnauthored()
         {
-            return definition == null
-                ? transform.position
-                : transform.position + transform.rotation * definition.SecondaryGripPosition(rightHand);
-        }
-
-        /// <summary>Is this hand's controller ANCHOR inside the front-grip socket — the ESTABLISH
-        /// gate for the second hand.
-        /// <para>One rule, two readers: <see cref="WeaponGranter"/> binds the second hand from it
-        /// (grip pressed + this <c>true</c>) and the socket switches to its "inside" alpha from it.
-        /// Two separate measurements would let a grab be refused where the player is told "you are
-        /// in".</para>
-        /// <para>⚠️ The measured point is the controller ANCHOR (<see cref="TryResolveAnchor"/>) —
-        /// the SAME frame as the grip record (<see cref="ItemGripPose"/> is in anchor space).
-        /// Measuring the wrist would judge from centimetres away even with the controller exactly
-        /// where it was authored, and the player would feel "my hand is right there but it will not
-        /// hold".</para>
-        /// <para>⚠️ Establish gate only; MAINTAINING the link ignores distance (rationale in
-        /// <c>WeaponGranter.ResolveSecondaryHand</c>).</para>
-        /// <para>⚠️ With no authored front-grip record the gate is CLOSED
-        /// (<see cref="ItemDefinition.HasSecondaryGrip"/>): an unauthored record falls to the item
-        /// root, which on most weapons sits next to the main hand, so an open gate would "bind" the
-        /// second hand on top of the main one. <see cref="TickSecondaryGripIndicator"/> logs the
-        /// warning.</para></summary>
-        public bool IsHandOnSecondaryGrip(OVRInput.Controller hand)
-        {
-            if (definition == null || !definition.HasSecondaryGrip)
-            {
-                return false;
-            }
-
-            if (!TryResolveAnchor(hand, out Vector3 anchor))
-            {
-                return false;
-            }
-
-            float radius = definition.SecondaryGripRadius;
-            Vector3 socket = SecondaryGripWorld(HandGripPivot.IsRight(hand));
-            return (anchor - socket).sqrMagnitude <= radius * radius;
-        }
-
-        /// <summary>World position of the hand's controller anchor
-        /// (<see cref="WeaponGranter.ResolveHandAnchor"/>, the only rig discovery path);
-        /// <c>false</c> if the rig or hand cannot be resolved. Same frame as the grip record, or the
-        /// socket would say "outside" with the controller exactly where it was authored.</summary>
-        private static bool TryResolveAnchor(OVRInput.Controller hand, out Vector3 position)
-        {
-            Transform anchor = WeaponGranter.ResolveHandAnchor(hand);
-            if (anchor == null)
-            {
-                position = default;
-                return false;
-            }
-
-            position = anchor.position;
-            return true;
-        }
-
-        /// <summary>One frame of the front-grip socket: while the weapon is held, two-handed and
-        /// the second hand is not bound yet, the sphere appears as the FREE hand's controller
-        /// approaches, gets slightly more solid once the anchor is INSIDE ("press"), and disappears
-        /// once bound.
-        /// <para>The sphere IS the acceptance volume: the prefab is designed at 1 m diameter and
-        /// scaled here to twice the acceptance radius, so what the player sees and what
-        /// <see cref="IsHandOnSecondaryGrip"/> judges are the same thing. Separate numbers would
-        /// produce "I am inside but it will not hold".</para>
-        /// <para>The socket is for the FRONT grip only. The main grip has none: the weapon is born
-        /// in the main hand or selected from a frame, so the player never has to move a hand
-        /// there.</para>
-        /// <para>The art is a prefab (<see cref="WeaponCatalog.SecondaryGripIndicatorPrefab"/>,
-        /// shared by all weapons); this class only drives its position, scale and alpha. Without
-        /// the prefab nothing is drawn and one warning is logged — the gate still works.</para>
-        /// <para>⚠️ Never drawn on remote avatars, and nothing is needed for that:
-        /// <c>RemoteAvatar.SterilizeVisual</c> strips every MonoBehaviour (this class included)
-        /// from the copy.</para>
-        /// <para>⚠️ Called in <see cref="LateUpdate"/> AFTER <see cref="ApplyCanonicalGrip"/>:
-        /// measuring before this frame's pose is written lags one frame and the indicator looks
-        /// detached during fast movement.</para></summary>
-        private void TickSecondaryGripIndicator()
-        {
-            if (definition == null || !definition.IsTwoHanded || !IsHeld ||
-                SecondaryHand != OVRInput.Controller.None)
-            {
-                HideIndicator();
-                return;
-            }
-
-            if (!definition.HasSecondaryGrip)
-            {
-                // Unauthored front grip = NO front grip: the socket would be drawn at the item
-                // root, i.e. next to the main hand. Not silent — this is a content error whose only
-                // fix is the grip studio.
-                HideIndicator();
-                if (unauthoredSecondaryWarned.Add(definition))
-                {
-                    Debug.LogWarning($"[Weapon] '{definition.name}' iki elli ama ÖN KABZA KAYDI YAZILMAMIŞ — " +
-                                     "soket çizilmez, ikinci el bağlanmaz. Kavrama Pozu Stüdyosu'nda " +
-                                     "(WPN prefabı prefab kipinde) 'Ön Kabza Ellerini Oluştur' → yerleştir → " +
-                                     "Kaydet.", definition);
-                }
-
-                return;
-            }
-
-            OVRInput.Controller free = FreeHand();
-            if (free == OVRInput.Controller.None || !TryResolveAnchor(free, out Vector3 anchor))
-            {
-                // No rig (admin spectator, Editor session) or unresolved main hand: no hand to show.
-                HideIndicator();
-                return;
-            }
-
-            Vector3 socket = SecondaryGripWorld(HandGripPivot.IsRight(free));
-            float distance = Vector3.Distance(anchor, socket);
-            float radius = definition.SecondaryGripRadius;
-
-            if (distance > Mathf.Max(SecondaryGripHoverRadius, radius))
-            {
-                HideIndicator();
-                return;
-            }
-
-            if (!EnsureIndicator())
+            if (definition == null || !definition.IsTwoHanded || definition.HasSecondaryGrip)
             {
                 return;
             }
 
-            bool inside = distance <= radius;
-
-            indicator.gameObject.SetActive(true);
-            // Rotation follows the weapon: irrelevant for a sphere, meaningful for authored art.
-            indicator.SetPositionAndRotation(socket, transform.rotation);
-
-            // ⚠️ The scale is a WORLD measurement and IS the acceptance sphere: the prefab ships at
-            // 1 m diameter, so diameter = 2 × radius. The parent scale is undone because weapons are
-            // 0.8-scaled; a raw local scale would size the sphere differently per weapon.
-            float parentScale = Mathf.Max(1e-4f, transform.lossyScale.x);
-            indicator.localScale = Vector3.one * (2f * radius / parentScale);
-
-            Color color = IndicatorColor;
-            color.a = inside ? IndicatorReadyAlpha : IndicatorHoverAlpha;
-
-            if (indicatorLine != null)
+            if (unauthoredSecondaryWarned.Add(definition))
             {
-                indicatorLine.startColor = color;
-                indicatorLine.endColor = color;
-            }
-            else if (indicatorMaterial != null)
-            {
-                indicatorMaterial.color = color;
-            }
-        }
-
-        private OVRInput.Controller FreeHand()
-        {
-            switch (MainHand)
-            {
-                case OVRInput.Controller.LTouch: return OVRInput.Controller.RTouch;
-                case OVRInput.Controller.RTouch: return OVRInput.Controller.LTouch;
-                default: return OVRInput.Controller.None;
-            }
-        }
-
-        /// <summary>Instantiates the socket from the catalog prefab (once, under the weapon).
-        /// Physics is stripped: a leftover collider would catch both the shot ray and grabbing, so
-        /// the thing meant to help the player would ruin their aim.
-        /// <para>Alpha surface: the first Renderer's material INSTANCE, or a LineRenderer's colour
-        /// when there is no Renderer.</para></summary>
-        private bool EnsureIndicator()
-        {
-            if (indicator != null)
-            {
-                return true;
-            }
-
-            WeaponCatalog catalog = WeaponCatalog.Load();
-            GameObject prefab = catalog != null ? catalog.SecondaryGripIndicatorPrefab : null;
-            if (prefab == null)
-            {
-                if (!indicatorPrefabWarned)
-                {
-                    indicatorPrefabWarned = true;
-                    Debug.LogWarning("[Weapon] WeaponCatalog.secondaryGripIndicatorPrefab boş — ön kabza " +
-                                     "göstergesi çizilmeyecek (kavrama yine çalışır). " +
-                                     "Silah kiti koşusu (Tools > VortexArena > Build > Configure All " +
-                                     "Build Elements) göstergeyi üretip bağlar.");
-                }
-
-                return false;
-            }
-
-            GameObject instance = Instantiate(prefab, transform);
-            instance.name = "[GripSocket]";
-
-            Collider[] colliders = instance.GetComponentsInChildren<Collider>(true);
-            for (int i = 0; i < colliders.Length; i++)
-            {
-                Destroy(colliders[i]);
-            }
-
-            Rigidbody[] bodies = instance.GetComponentsInChildren<Rigidbody>(true);
-            for (int i = 0; i < bodies.Length; i++)
-            {
-                Destroy(bodies[i]);
-            }
-
-            indicator = instance.transform;
-            indicatorLine = instance.GetComponentInChildren<LineRenderer>(true);
-
-            if (indicatorLine == null)
-            {
-                // The material instance is taken ONCE here (.material allocates a new one per
-                // call). With no colour property this is skipped silently.
-                var renderer = instance.GetComponentInChildren<Renderer>(true);
-                if (renderer != null)
-                {
-                    Material material = renderer.material;
-                    if (material != null &&
-                        (material.HasProperty("_BaseColor") || material.HasProperty("_Color")))
-                    {
-                        indicatorMaterial = material;
-                    }
-                }
-            }
-
-            return true;
-        }
-
-        private void HideIndicator()
-        {
-            if (indicator != null && indicator.gameObject.activeSelf)
-            {
-                indicator.gameObject.SetActive(false);
+                Debug.LogWarning($"[Weapon] '{definition.name}' iki elli ama ÖN KABZA KAYDI YAZILMAMIŞ — " +
+                                 "ikinci el bağlanmaz. Kavrama Pozu Stüdyosu'nda (WPN prefabı prefab " +
+                                 "kipinde) 'Ön Kabza Ellerini Oluştur' → yerleştir → Kaydet.", definition);
             }
         }
 

@@ -96,6 +96,12 @@ public sealed record ModeRules
     /// <c>playing</c> (§10.3). This is the lobby profile's only difference.</remarks>
     public bool FireWhilePaused { get; init; }
 
+    /// <summary>Is the spare ammo limited to the weapon's spare magazines (§10.5
+    /// <c>limitedReserve</c>)? <c>false</c> = infinite reserve, the default for every mode.</summary>
+    /// <remarks>Entirely client presentation like <see cref="Weapons"/> — the server keeps no weapon
+    /// table (§10.3), it only carries the rule.</remarks>
+    public bool LimitedReserve { get; init; }
+
     /// <summary>Seconds a revived player takes no damage; <c>0</c> = no protection (§10.4) and the
     /// default, so modes that ignore it are unaffected.</summary>
     /// <remarks>⚠️ Not on the wire (absent from <see cref="ToInfo"/>): the client has no use for the
@@ -156,6 +162,7 @@ public sealed record ModeRules
             _ => "weaponcanvas"
         },
         respawnDelay = RespawnDelay,
-        fireWhilePaused = FireWhilePaused
+        fireWhilePaused = FireWhilePaused,
+        limitedReserve = LimitedReserve
     };
 }

@@ -103,7 +103,8 @@ namespace VortexArena.Core.Combat
 
         [Header("Cephane")]
         [SerializeField] private int magazineSize = 30;
-        [Tooltip("Başlangıçtaki yedek şarjör sayısı (rezerv = spareMagazines × magazineSize).")]
+        [Tooltip("Başlangıçtaki yedek şarjör sayısı (rezerv = spareMagazines × magazineSize). " +
+                 "YALNIZ yedeği sınırlı modda (limitedReserve, turnuva) işler; diğer modlarda yedek sonsuzdur.")]
         [SerializeField] private int spareMagazines = 2;
         [Tooltip("DiscardMagazine: erken reload'da şarjörde kalan YANAR (varsayılan ürün kuralı). " +
                  "PoolRounds: CS2 tarzı mermi havuzu, kayıp yok.")]
@@ -246,7 +247,7 @@ namespace VortexArena.Core.Combat
         /// <summary>Magazine capacity.</summary>
         public int MagazineSize => magazineSize;
 
-        /// <summary>Starting spare magazine count.</summary>
+        /// <summary>Starting spare magazine count; only matters under a limited reserve (§10.5).</summary>
         public int SpareMagazines => spareMagazines;
 
         /// <summary>Reserve accounting rule (see <see cref="WeaponReserveMode"/>).</summary>

@@ -50,6 +50,10 @@ Bir arena sahnesinin ağa bağlanması için sahnede bulunması gerekenler.
 > harita tasarlanırken elle yapılır. Silah `WPN_*` prefabının **ÖRNEĞİ** olarak konur
 > (kopyalanmaz, unpack edilmez); örnekleri bir `WeaponCanvas` prefabında toplayıp onu her sahneye
 > `BaseZone` gibi tek örnek olarak koymak yerleşimi tek yerden düzeltilebilir kılar.
+> ⚠️ **Pano kökü `WeaponCanvas` bileşenini taşır** (prefabdan gelir). Yeni bir pano prefabı
+> yaparsan bileşeni **köke** ekle ve sahnedeki örneği **unpack etme**: silahı modun kendisi
+> dağıttığı durumlarda süpürme panoyu bileşenden bulur — bulamazsa silahları gizlenmiş boş pano
+> tabanda ayakta kalır.
 > ⚠️ Hangi silahın duracağını **arena** belirler, `ModeDefinition.loadout` değil — moda silah
 > eklemek arenaları değiştirmez. `loadout` yalnız `random` modlarında (FFA, lobi) okunur.
 

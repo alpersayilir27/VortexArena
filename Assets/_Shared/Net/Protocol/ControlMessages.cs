@@ -122,7 +122,8 @@ namespace VortexArena.Protocol
     }
 
     /// The headset reporting its OWN alignment state (§10.6). Players only. <c>source</c> ∈ "manual" |
-    /// "anchor" | "cloud": a free, unvalidated label like weaponId, hence a string and not an enum.
+    /// "anchor" | "session" | "cloud": a free, unvalidated label like weaponId, hence a string and
+    /// not an enum.
     [Serializable]
     public class SetCalibrationMsg
     {
@@ -137,7 +138,8 @@ namespace VortexArena.Protocol
         /// accepted whatever the offset.</summary>
         public float floorOffset;
 
-        /// <summary>Why a saved alignment could NOT be reloaded; empty = fine. ⚠️ When set, the other
+        /// <summary>Why the headset has a calibration problem: a saved alignment could not be
+        /// reloaded, or the anchor could not be saved after an alignment; empty = fine. ⚠️ When set, the other
         /// three fields are IGNORED and the stored calibration is untouched — the reason only reaches
         /// admins and the roster (<see cref="PlayerInfo.calibrationError"/>). ⚠️ Free, unvalidated text:
         /// no error code list, a new failure kind must not create server work.</summary>
@@ -400,6 +402,10 @@ namespace VortexArena.Protocol
         /// firing range like the lobby: flash/sound relayed, ⚠️ still <b>no damage</b> (the
         /// <c>hit_report</c> gate is always <c>playing</c>, §10.3).</summary>
         public bool fireWhilePaused;
+
+        /// <summary>Is the spare ammo LIMITED to the weapon's spare magazines (§10.5)? <c>false</c> =
+        /// infinite reserve (HUD "30/∞") — purely client presentation; absent field = infinite.</summary>
+        public bool limitedReserve;
     }
 
     /// <summary>Match state (§10.1). <b>Four fields, four owners:</b> <c>modeId</c> what is played,
@@ -530,7 +536,8 @@ namespace VortexArena.Protocol
         /// CLEARS it, or one failure would leave a permanent warning on the row.</summary>
         public string scaleError = "";
 
-        /// <summary>Why the last saved-alignment reload failed; empty = fine (§10.6). ⚠️ A successful
+        /// <summary>Why the headset's last calibration attempt had a problem — reload failed, or the
+        /// anchor could not be saved; empty = fine (§10.6). ⚠️ A successful
         /// calibration CLEARS it (same reason as <see cref="scaleError"/>).</summary>
         public string calibrationError = "";
 

@@ -109,8 +109,11 @@ namespace VortexArena.Core.Player
         /// <summary>Snap radius of the empty hand to the foregrip while two-handed (m).
         /// <para>⚠️ A <b>packet-loss safety, not a cosmetic tweak</b> (§6.6): <c>FLAG_GRIP_LINKED</c> can
         /// be lost or stale on UDP, and an unconditional snap would stretch the arm across the arena in
-        /// the window where the weapon really was dropped. Beyond this radius the REAL pose wins.</para></summary>
-        private const float SecondaryGripSnapRadius = 0.25f;
+        /// the window where the weapon really was dropped. Beyond this radius the REAL pose wins.</para>
+        /// <para>An arm's length, NOT a few centimetres: the link has no distance gate, so a linked
+        /// hand legitimately sits wherever the player gripped — the weapon aims at it, it does not
+        /// slide to it. A tight radius would leave that hand floating off the socket.</para></summary>
+        private const float SecondaryGripSnapRadius = 1.0f;
 
         /// <summary>Draw items in a dead avatar's hands? <b>No</b> — a presentation decision with no wire
         /// counterpart: a weapon left in a dead hand reads as still threatening.</summary>
@@ -1708,7 +1711,7 @@ namespace VortexArena.Core.Player
             // §6.6: items are driven from the RAW hand pose, BEFORE the snap correction — an item's
             // place comes from the primary hand's physical pose.
             UpdateHeldItems(registry);
-            ApplyItemPoses(handLWorld, handRWorld);
+            ApplyItemPoses(handLWorld, handRWorld, headWorld.position);
 
             // Recoil runs AFTER the grip and does not race it: ApplyGrip writes the instance's ROOT world
             // pose, this curve the local TRS of its 'Model' CHILD (the local weapon uses the same pivot).
@@ -2197,7 +2200,7 @@ namespace VortexArena.Core.Player
         /// <para>⚠️ The item is never made a CHILD of the hand bone; its world pose is written. As a child
         /// the bone's scale and intermediate transforms would leak into the grip offset (in metres) and
         /// race the recoil curve.</para></summary>
-        private void ApplyItemPoses(in Pose handLWorld, in Pose handRWorld)
+        private void ApplyItemPoses(in Pose handLWorld, in Pose handRWorld, in Vector3 headPosition)
         {
             Pose palmL = HandGripPivot.Resolve(handLWorld, false);
             Pose palmR = HandGripPivot.Resolve(handRWorld, true);
@@ -2212,18 +2215,18 @@ namespace VortexArena.Core.Player
                 }
 
                 ApplyGrip(item, _shownPrimaryRight ? palmR : palmL, definition, _shownPrimaryRight,
-                    true, (_shownPrimaryRight ? palmL : palmR).position);
+                    true, (_shownPrimaryRight ? palmL : palmR).position, headPosition);
                 return;
             }
 
             if (_itemInstanceL != null && _itemDefL != null)
             {
-                ApplyGrip(_itemInstanceL, palmL, _itemDefL, false, false, Vector3.zero);
+                ApplyGrip(_itemInstanceL, palmL, _itemDefL, false, false, Vector3.zero, headPosition);
             }
 
             if (_itemInstanceR != null && _itemDefR != null)
             {
-                ApplyGrip(_itemInstanceR, palmR, _itemDefR, true, false, Vector3.zero);
+                ApplyGrip(_itemInstanceR, palmR, _itemDefR, true, false, Vector3.zero, headPosition);
             }
         }
 
@@ -2334,10 +2337,14 @@ namespace VortexArena.Core.Player
         /// secondary: the wrapping hand is by definition the opposite of the primary, and all that is
         /// needed from it is the palm POSITION.</para></summary>
         private static void ApplyGrip(Transform item, in Pose palm, ItemDefinition definition,
-            bool primaryRight, bool hasSecondary, in Vector3 secondaryPalmPosition)
+            bool primaryRight, bool hasSecondary, in Vector3 secondaryPalmPosition,
+            in Vector3 headPosition)
         {
+            // The wire's head pose feeds the solver's body cone — the local side passes its own
+            // centre eye (Weapon.ApplyCanonicalGrip); without it the two screens would disagree.
             ItemGripSolver.Solve(definition, primaryRight, !primaryRight, palm, hasSecondary,
-                secondaryPalmPosition, 1f, out Vector3 position, out Quaternion rotation);
+                secondaryPalmPosition, 1f, true, headPosition,
+                out Vector3 position, out Quaternion rotation);
 
             item.SetPositionAndRotation(position, rotation);
         }

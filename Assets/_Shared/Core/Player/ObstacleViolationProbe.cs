@@ -79,8 +79,8 @@ namespace VortexArena.Core.Player
         private const string FadeSourceId = "obstacle";
 
         /// <summary><see cref="ControllerHaptics"/> source id. ⚠️ Pulse frequency and amplitude live in the
-        /// arbiter, NOT here: overlapping with the second source wanting the same feel (the boundary
-        /// guard), two separate numbers would mean two separate phases.</summary>
+        /// arbiter, NOT here: the boundary guard shares the amplitude, and two separate numbers would
+        /// drift apart.</summary>
         private const string HapticSourceId = "obstacle";
 
         /// <summary>Minimum interval between rig searches when none is found (s).</summary>

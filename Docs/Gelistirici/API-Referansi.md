@@ -117,7 +117,8 @@ PlayerInfo      { int playerId; string name; string role; string team; bool read
 ```
 
 `ModeRulesInfo` maçın kural şeklini taşır (`teamMode` · `allies` · `scoring` · `friendlyFire` ·
-`reviveAnchor` · `weaponSource` · `respawnDelay` · `fireWhilePaused`); okuma noktası `ModeRuntime`,
+`reviveAnchor` · `weaponSource` · `limitedReserve` · `respawnDelay` · `fireWhilePaused`); okuma
+noktası `ModeRuntime`,
 alanların tam semantiği ArenaNet-Protokol.md mod kuralları bölümündedir. ⚠️ `allies` yalnız
 `teamMode:"none"`da okunur.
 
@@ -166,6 +167,7 @@ Kalıcı tekil, kendini önyükler (`Instance`). Sahneye koyma.
 | ✅ `FriendlyFire` | `bool` | ⚠️ Modun değil **operatörün** anahtarı: maç ORTASINDA değişebilir (`rules_update`), `Changed`'i dinle |
 | ✅ `Revive` | `ModeReviveAnchor` | `OwnBase` \| `StandStill` |
 | ✅ `Weapons` | `ModeWeaponSource` | `WeaponCanvas` (sahnede elle konmuş silah, çerçeveden seçilir, tükenmez) \| `RandomGrant` (mod dağıtır). ⚠️ Tek başına "kurulmuş maç var" demek değildir — aşağı bak |
+| ✅ `LimitedReserve` | `bool` | Yedek mermi sınırlı mı. `false` (varsayılan) = **sonsuz yedek**: gösterge `/∞`, şarjör değiştirme hep açık, yedek düşmez. `true` = yedek silahın `spareMagazines`'i kadar. Yalnız **sunum** kuralı; maç ORTASINDA değişebilir → göstergeyi `Changed` ile tazele |
 | ✅ `FireWhilePaused` | `bool` | Maç kurulmamışken ateş serbest mi (lobi profili). `RandomGrant` ile **birlikte** okunur: `random` + `FireWhilePaused` = serbest alan, yalnız `random` = mod silah dağıtıyor |
 | ✅ `RespawnDelay` | `float` | ⚠️ **`0` geçerlidir** (anında canlanma) |
 | ✅ `Changed` | olay | Kurallar değişti |
@@ -177,7 +179,8 @@ Kalıcı tekil, kendini önyükler (`Instance`). Sahneye koyma.
 > ⚠️ **Sahnelenen arena lobi profiliyle koşar** (operatör lobideyken bir arena seçtiğinde herkes o
 > arenaya geçer ama maç kurulmaz): orada `Weapons == RandomGrant`'tir. "Mod silah dağıtıyor mu"
 > sorusunun cevabı bu yüzden `Weapons == RandomGrant && !FireWhilePaused`'dur —
-> `Docs/ArenaNet-Protokol.md` §10.7.
+> `Docs/ArenaNet-Protokol.md` §10.7. ⚠️ Serbest alanda tezgâhın/panonun gizlenip gizlenmeyeceğini
+> **seçili mod** söyler (`ModeSelection.GrantsRandomWeapon`), koşan kural değil.
 
 > ⚠️ **Serialize edilen mod enum'larına yeni değer SONA eklenir.** Unity enum'ları sayısal indeksle
 > saklar; başa/ortaya ekleme sahnelerdeki tüm değerleri kaydırır. Aynı kural `Team` için de geçerli
@@ -215,10 +218,14 @@ Kalıcı tekil, kendini önyükler (`Instance`). Sahneye koyma.
 
 Fiziksel sınır uyarısını sürer: kenara `warnDistance` kala karartma quad'ında hafif bir rampa
 başlar (`warnFadeAlpha`), sınır aşıldığı **an** ekran kademesiz olarak **tam siyah** olur + uyarı
-yazısı belirir + kumandalar nabız atar. ⚠️ Sınır aşıldıktan sonra ikinci bir mesafe rampası (ve
+yazısı belirir + iki kumanda **çıkış başına 3 darbe** atar (darbe başına 1 sn düz titreşim,
+aralarında 0,5 sn; sonra dışarıda kalınsa da susar — dışarıda süren titreşim kumanda pilini
+tüketir). ⚠️ Sınır aşıldıktan sonra ikinci bir mesafe rampası (ve
 ayarlanabilir bir karartma tavanı) **YOKTUR**: alanın dışı, engelin içiyle aynı sorudur — yüzde
 birkaçlık saydamlık bile perdenin öbür yüzünü okunabilir bırakır ve dışarıdan içeri bakmak
-istismarın kendisidir. Titreşim `ControllerHaptics` hakeminden geçer, motor doğrudan sürülmez.
+istismarın kendisidir. İçeri girmek kalan darbeleri iptal eder, yeniden çıkmak diziyi baştan
+başlatır. Titreşim `ControllerHaptics` hakeminden geçer (`ReportSteady`, ortak darbe genliği),
+motor doğrudan sürülmez.
 Sahneye
 **`VA_ArenaBoundary`** prefabının örneği olarak konur ve sahnede **bir tane** olmalı. **Ağ koordinatlarının sıfırı bu bileşende DEĞİLDİR** (o dünya orijinidir): muhafazayı
 büyütmek/kaydırmak koordinatları oynatmaz.
@@ -343,7 +350,8 @@ Kalibrasyonun kendisi (iki nokta → 6DOF hizalama + `OVRSpatialAnchor` kalıcı
 akışıdır; burada yalnız kod yazarken önemli olan yan davranış: kayıtlı hizalaması **olmayan** bir
 başlıkta rig, kafası arenanın A-B ortasında ve A→B'ye bakar olacak biçimde **tahminen**
 yerleştirilir (yükseklik `uncalibratedHeadHeight`, varsayılan 1,8 m, zeminden). Tetikleyici iki
-durumdur: PlayerPrefs'te anchor UUID'si hiç yok, ya da geri yükleme tüm denemelerde düştü.
+durumdur: PlayerPrefs'te anchor UUID'si hiç yok, ya da geri yükleme tüm denemelerde düştü —
+**ikisinde de kullanılabilir bir oturum kaydı yoksa** (aşağıda).
 
 > ⚠️ **Bu bir kalibrasyon DEĞİLDİR** ve öyle raporlanmaz: yakalama sayacı artmaz, `Calibrated`
 > yayınlanmaz, anchor kaydedilmez, elle kalibrasyon kapısı açık kalır. Amacı görünürlüktür —
@@ -354,13 +362,25 @@ durumdur: PlayerPrefs'te anchor UUID'si hiç yok, ya da geri yükleme tüm denem
 > Koşmadığı durumlar: kayıtlı anchor geri yüklendiyse, oyuncu jeste başladıysa, operatör
 > sıfırladıysa, rig kökü kapalıysa (admin gözlemci) ve işaretçiler yok/aynıysa.
 
+**Oturum kaydı ve çapa kaydının sonucu:**
+
+| Üye | Tip | Açıklama |
+|---|---|---|
+| ✅ `ArenaCalibrator.SourceSession` | `const string` = `"session"` | `set_calibration.source` etiketi: hizalama bellekteki **oturum kaydından** geri yüklendi (çapa yok ya da yüklenemedi). Kayıt, hizalamanın referans pozunu **takip uzayında** tutar; harita değişiminde ve operatörün yeniden yüklemesinde kullanılır, uygulama kapanınca gider |
+| ✅ `CalibrationState.ReportAnchorSaveFailure(string reason)` | `static void` | Çapa oluşturulamadı/kaydedilemedi/zaman aşımına uğradı → gerekçeyi saklar, uyarı basar ve `set_calibration{error}` ile operatöre bildirir. Hizalama **geçersiz kılınmaz** |
+| ✅ `CalibrationState.ClearAnchorSaveFailure()` | `static void` | Kayıt sonradan tuttu → gerekçeyi düşürür ve satırın temizlenmesi için güncel durumu yeniden bildirir |
+
+> ⚠️ Çapa kaydı hizalamadan **ayrı bir adımdır ve kendi başına düşebilir** — bu yüzden sonucu
+> bildiren bir kanal (yukarıdaki iki çağrı) ve çapaya bağlı olmayan bir harita-değişimi yolu
+> (oturum kaydı) birlikte gerekir; gerekçe `Docs/Sistem-Ozeti.md` §7 "Tuzaklar".
+
 **Dev hizalama — yalnız editör:** kalibratörün editöre özel parçası `ArenaCalibrator.Dev.cs`'dir
 (sınıf `partial`, dosyanın tamamı `#if UNITY_EDITOR`). Ana dosya yalnız **gövdesiz `partial void`
 kancalar** taşır; build'e tek satır girmez.
 
 | Üye | Tip | Açıklama |
 |---|---|---|
-| ✅ `ArenaCalibrator.SourceDev` | `const string` = `"dev"` | `set_calibration.source` etiketi (`SourceManual`, `SourceAnchor` yanında) |
+| ✅ `ArenaCalibrator.SourceDev` | `const string` = `"dev"` | `set_calibration.source` etiketi (`SourceManual`, `SourceAnchor`, `SourceSession` yanında) |
 | ✅ `ArenaCalibrator.DevSkipRequested` | `static bool` | Dev penceresinin "Kalibrasyonu atla" seçimi; `DevSession.ApplySelection` yazar |
 | ✅ `ArenaCalibrator.IsDevAligned` | `static bool` | Dev hizalama şu an yürürlükte mi — çubukların ve `BodyScaleState`'in otomatik ölçüm atlamasının kapısı |
 
@@ -566,7 +586,8 @@ Oyuncu olmayan varlıklar: durumu sunucuda, sunumu sende. Kural
 | ✅ `ItemDefinition.GrabPath` | `DistanceGrab` · `ProximitySocket` · `WristHolster` · `None` | Eşya ele **nasıl gelir**. ⚠️ `DistanceGrab` değilse prefabda mesafeli kavrama bileşeni bulunmaz (`Yapma-Listesi`) |
 | ✅ `ItemDefinition.Instancing` / `IsWorldSingle` | `PerViewerClone` · `WorldSingle` | **Ne gelir:** her bakanın kendi kopyası mı, tek örnek mi. `WorldSingle`'da eşya baytı `0` kalır |
 | ✅ `ItemDefinition.ReleaseMode` | `Return` · `Physics` | Bırakılınca yerine mi oturur, serbest mi düşer |
-| ✅ `ItemDefinition.ShowGrabIndicator` | `true` (varsayılan) · `false` | Soketin gösterge küresi çizilsin mi. Serialize alan **tersten** (`hideGrabIndicator`) yazılır — yazılmamış alan `0` okunur ve `0` bugünkü davranış olmak zorunda. ⚠️ **Yalnız görseli** susturur: kabul yarıçapı ve alma kapısı aynı kalır |
+| ✅ `ItemDefinition.HasSecondaryGrip` / `Weapon.ForegripAuthored` | `true` · `false` | Ön kabza kaydı **yazılmış mı** — iki elli tutuşun TEK kapısı (`WeaponGranter.ResolveSecondaryHand` = `gripHeld && ForegripAuthored`). ⚠️ Mesafe/kabul yarıçapı yoktur ve eklenmez (`Yapma-Listesi`); yazılmamış kayıtta bağ kapalı kalır ve tanım başına bir uyarı düşer |
+| ✅ `ItemDefinition.ShowGrabIndicator` | `true` (varsayılan) · `false` | **Yakınlık soketinin** gösterge küresi çizilsin mi (silahın ön kabzası küre çizmez). Serialize alan **tersten** (`hideGrabIndicator`) yazılır — yazılmamış alan `0` okunur ve `0` bugünkü davranış olmak zorunda. ⚠️ **Yalnız görseli** susturur: kabul yarıçapı ve alma kapısı aynı kalır |
 
 `VortexArena.Core.Combat.GripSocket` — yakınlık kavrama soketi (eşyanın **nereden** alındığı).
 

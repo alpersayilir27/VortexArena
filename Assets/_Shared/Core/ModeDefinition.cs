@@ -55,6 +55,9 @@ namespace VortexArena.Core
                  "taraftır (ortak oyun), kapalıysa herkes tek başınadır (FFA). Gerçek maçta " +
                  "load_match.rules.allies kazanır.")]
         [SerializeField] private bool allies;
+        [Tooltip("Açıksa yedek mermi silahın yedek şarjör sayısıyla SINIRLIDIR; kapalıysa sonsuzdur " +
+                 "(gösterge 30/∞). Gerçek maçta load_match.rules.limitedReserve kazanır.")]
+        [SerializeField] private bool limitedReserve;
 
         [Header("İçerik")]
         [Tooltip("Bu modun oynanabildiği haritalar; boş bırakılırsa katalogdaki tüm uyumlu haritalar.")]
@@ -130,6 +133,9 @@ namespace VortexArena.Core
 
         /// <summary>Preview: weapon source.</summary>
         public ModeWeaponSource Weapons => weapons;
+
+        /// <summary>Preview: is the spare ammo limited (§10.5 <c>limitedReserve</c>)?</summary>
+        public bool LimitedReserve => limitedReserve;
 
         /// <summary>Preview: respawn delay (s). <b><c>0</c> is valid</b> (instant revive);
         /// on assets where the field was never entered the C# initializer (<c>RESPAWN_DELAY</c>) applies.</summary>

@@ -108,13 +108,16 @@ public sealed class TournamentMode : IGameMode
     /// <summary>The tournament rule shape.</summary>
     /// <remarks><c>Revive = None</c>: no revive within a round (§10.4). <c>RespawnDelay = 0</c> is its
     /// complement — a client countdown to a revive that never happens would be a lie.
+    /// <para><c>LimitedReserve</c>: the ONLY mode with a spare-magazine limit — ammo is part of the
+    /// round's tactics here; everywhere else the reserve is infinite (§10.5).</para>
     /// <para>Everything else is deliberately the default: two teams, team score, friendly fire off,
-    /// weapon standing in the scene (so magazine/reserve accounting works — reload is disabled under
-    /// <c>RandomGrant</c>).</para></remarks>
+    /// weapon standing in the scene (the persistent frame weapon keeps its magazine/reserve count
+    /// across releases; a <c>RandomGrant</c> weapon is rerolled with a fresh one).</para></remarks>
     public ModeRules Rules => new()
     {
         Revive = ReviveAnchor.None,
-        RespawnDelay = 0f
+        RespawnDelay = 0f,
+        LimitedReserve = true
     };
 
     /// <summary>The length (seconds) of the whole MATCH — rounds are not time-boxed.</summary>

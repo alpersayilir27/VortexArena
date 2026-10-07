@@ -42,8 +42,8 @@ namespace VortexArena.App.Admin
     /// anchor too — afterwards KALİBRE fails and the player must redo the A/B sequence by hand.
     /// Severity comes from press DURATION, never from picking the right neighbour: two separate
     /// buttons made the operator choose a severity before knowing they needed one, and put the
-    /// destructive one a mis-click away. The side card (<see cref="AdminPlayerRow"/>) carries no
-    /// calibration button; this row is the only place.
+    /// destructive one a mis-click away. The side card (<see cref="AdminPlayerRow"/>) carries the
+    /// same SIFIRLA with the same grammar — keep the two in step.
     /// </para>
     /// <para>
     /// ⚠️ <b>KALİBRE is the OPPOSITE action and stays its own button:</b> it <i>reloads</i>
@@ -183,7 +183,8 @@ namespace VortexArena.App.Admin
         [Header("İhlal defteri")]
         [SerializeField] private UiChip obstacleChip;
         [SerializeField] private UiChip outOfBoundsChip;
-        [Tooltip("Son kalibrasyon yükleme hatası — ihlal hücresinin sonunda kalır (§10.6).")]
+        [Tooltip("Son kalibrasyon sorunu (yükleme düştü ya da çapa kaydedilemedi) — ihlal " +
+                 "hücresinin sonunda kalır (§10.6).")]
         [SerializeField] private UiChip calibrationErrorChip;
         [Tooltip("İhlal yoksa yazılan tire; rozetler gizlenir.")]
         [SerializeField] private TextMeshProUGUI violationEmpty;

@@ -175,9 +175,12 @@ kabı değiştiyse önce *Fontları ve asset kabını üret*).
   bu prefaba **gömülüdür**, görünürlüğü `AdminSession.OpenPanel` sürer.
 - **AdminPlayerRow** (yan sütun kartı) — forma numarası plakası (takım gradyanı; `0` → boş), ad
   (takım mürekkebi) + `#playerId`, durum çipi, can sayısı + dilimli çubuk, telemetri satırı (K/D ·
-  gözlük pili · iki kumanda tiki · gövde ikonu) ve dört düğme: POV · ÖLÇ · takım (MAVİ/KIRMIZI) ·
-  AT (EMİN? onayı). Çerçeve önceliği: ihlal > seçim > kalibresiz > normal; yeniden bağlanan/ayrılan
-  kart soluklaşır. ⚠️ Kartta **kalibrasyon düğmesi yoktur** — o iş istatistik satırındadır.
+  gözlük pili · iki kumanda tiki · gövde ikonu) ve beş düğme: POV · ÖLÇ · takım (MAVİ/KIRMIZI) ·
+  SIFIRLA · AT (EMİN? onayı). Çerçeve önceliği: ihlal > seçim > kalibresiz > normal; yeniden
+  bağlanan/ayrılan kart soluklaşır. ⚠️ Karttaki SIFIRLA istatistik satırındakiyle **aynı komut ve
+  aynı dilbilgisidir** (`HoldButton`: kısa basış yumuşak, basılı tutma kaydı da siler) — biri
+  değişirse öteki de; KALİBRE (geri yükleme) yalnız istatistik satırındadır. ⚠️ Beş eşit sütun
+  düğme başına ~63 px bırakır: karttaki etiketler kısa tutulur (ölçüm hatası `HATA`).
   ⚠️ Kartın yalnız yüksekliği sabittir; genişliği sütundan gelir, bu yüzden her parça ya kenara
   çapalıdır ya `Bind`'da ölçülür.
 - **AdminStatsRow** — plaka · ad + `#playerId` · durum çipi · öldürme/ölüm/K-D/skor · pil ·

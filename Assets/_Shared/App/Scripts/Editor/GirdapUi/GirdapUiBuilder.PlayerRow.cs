@@ -85,8 +85,9 @@ namespace VortexArena.App.Editor
 
         private const float RowTeleIcon = 16f;
 
-        /// <summary>CSS <c>.pc-act</c>: four equal columns, 4 px gap, <c>.btn.sm</c> metrics.</summary>
-        private const int RowActColumns = 4;
+        /// <summary>CSS <c>.pc-act</c>: five equal columns, 4 px gap, <c>.btn.sm</c> metrics.
+        /// ⚠️ ~63 px per button at the 400 px column: longer labels overflow into neighbours.</summary>
+        private const int RowActColumns = 5;
 
         /// <inheritdoc cref="RowActColumns"/>
         private const float RowActGap = 4f;
@@ -175,11 +176,14 @@ namespace VortexArena.App.Editor
             UiButtonStyle pov = RowAction(act, "Pov", "POV", UiButtonKind.Normal, 0);
             UiButtonStyle measure = RowAction(act, "Measure", "ÖLÇ", UiButtonKind.Normal, 1);
             UiButtonStyle team = RowAction(act, "Team", "MAVİ", UiButtonKind.TextBlue, 2);
-            UiButtonStyle kick = RowAction(act, "Kick", "AT", UiButtonKind.TextBad, 3);
+            // Reset sits with AT at the far end, away from the frequently pressed POV/ÖLÇ.
+            UiButtonStyle reset = RowAction(act, "Reset", "SIFIRLA", UiButtonKind.TextBad, 3,
+                hold: true);
+            UiButtonStyle kick = RowAction(act, "Kick", "AT", UiButtonKind.TextBad, 4);
 
             row.EditorWire(surface, select, dim, plate, number, top, playerName, id, chip,
                 hpValue, bar, tele, kdCaption, kdValue, battery, batteryValue, ctrlLeft,
-                ctrlRight, bodyState, pov, measure, team, kick);
+                ctrlRight, bodyState, pov, measure, team, reset, kick);
 
             SaveAndUnload(root, RowPrefabName);
         }
@@ -299,16 +303,16 @@ namespace VortexArena.App.Editor
             return tick;
         }
 
-        /// <summary>One of the four <c>.btn.sm</c> actions, anchored to its grid column so the row
+        /// <summary>One of the <c>.btn.sm</c> actions, anchored to its grid column so the row
         /// follows the card's runtime width.</summary>
         private static UiButtonStyle RowAction(RectTransform parent, string name, string label,
-            UiButtonKind kind, int column)
+            UiButtonKind kind, int column, bool hold = false)
         {
             UiButtonStyle style = Button(parent, name, label, kind, 0f, 0f, 80f, RowActH,
-                fontSize: RowActFont, chamfer: RowActChamfer);
+                fontSize: RowActFont, chamfer: RowActChamfer, hold: hold);
 
-            // Equal columns with a 4 px gap, exact at any width: anchoring column i at
-            // i/4..(i+1)/4 needs +i px on the left and i - (gap × 3 / 4) px on the right.
+            // Equal columns with a gap, exact at any width: column i is anchored at i/n..(i+1)/n
+            // and its edges shifted so the n-1 gaps come out of the n columns evenly.
             float trim = RowActGap * (RowActColumns - 1) / RowActColumns;
             var rt = (RectTransform)style.transform;
             rt.anchorMin = new Vector2(column / (float)RowActColumns, 0.5f);

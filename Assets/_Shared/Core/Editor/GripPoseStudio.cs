@@ -1470,8 +1470,8 @@ namespace VortexArena.Core.Editor
 
         /// <summary>Sync run right after a save so the record becomes visible without opening
         /// <c>Configure All Build Elements</c> by hand.
-        /// <para>A weapon needs the whole weapon kit (<c>VA_GripSocket</c>, the WPN prefabs, the
-        /// catalog); any other item needs only the <c>netItemId</c> → definition catalog. ⚠️ The
+        /// <para>A weapon needs the whole weapon kit (the WPN prefabs, the catalog); any other item
+        /// needs only the <c>netItemId</c> → definition catalog. ⚠️ The
         /// weapon kit is NOT run for a non-weapon: it looks for the <c>WPN_*</c> contract and would
         /// report its absence as a problem.</para>
         /// <para>⚠️ The exception is swallowed and only logged (same reason as

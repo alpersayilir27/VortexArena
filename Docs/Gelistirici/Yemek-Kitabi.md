@@ -595,13 +595,13 @@ Ayarlanabilir bir "silah dönüşü" alanı da yoktur.
   olanlar VE çift elli olup ön kabzası yazılmamış olanlar (`Configure All Build Elements`
   penceresindeki Hazırlık satırı aynı listeyi gösterir).
 - Ön kabza noktası da stüdyoda, ön kabza elinin kumanda çerçevesiyle yazılır — Scene View'da ayrı bir
-  tutamak/gizmo YOKTUR (kayıt tek yerde yaşasın). Oyunda boş elin kumandası o noktaya yaklaşınca
-  beliren soket küresi (`WeaponCatalog.secondaryGripIndicatorPrefab`, `Weapon` sürer; yarıçapı
-  `WD_*`'daki `secondaryGripRadius`, varsayılan 20 cm çap) kaydın oyundaki yerini gösterir ve
-  kabul hacminin kendisidir: kumanda kürenin içindeyken grip ikinci eli bağlar. Küre kabzadan uzakta
-  çıkıyorsa kayıt o el için yanlış yazılmış demektir. **Ön kabza kaydı hiç yazılmamışsa** küre HİÇ
-  çıkmaz ve ikinci el bağlanmaz (`ItemDefinition.HasSecondaryGrip`; konsola tanım başına bir uyarı
-  gider) — yazılmamış kayıt eşyanın köküne düşerdi, o da ana elin dibidir.
+  tutamak/gizmo YOKTUR (kayıt tek yerde yaşasın). Kayıt iki şeyi söyler: ikinci elin **yapışacağı
+  yer** ve iki elli nişanın **ekseni** (*ana kavrama → ön kabza*). ⚠️ **Oyunda mesafe aranmaz ve
+  soket küresi ÇİZİLMEZ:** öbür elde iki elli silah varken boş elin grip'i basılı tutulduğu an ikinci
+  el bağlanır; kayıt yanlış yazılmışsa belirtisi "el tutmuyor" değil, ikinci elin kabzadan uzakta
+  durması ve silahın ekseninin oraya nişanlanmasıdır. **Ön kabza kaydı hiç yazılmamışsa** bağ KAPALI
+  kalır (`ItemDefinition.HasSecondaryGrip`; konsola tanım başına bir uyarı gider) — yazılmamış kayıt
+  eşyanın köküne düşerdi, o da ana elin dibidir.
 - ⚠️ Silah elde yatık görünüyorsa tek aday var: `Model`'in prefabtaki yerleşimi. Çerçevenin dönüşü
   kayda girmediği için silah tek elde kumandayla hizalıdır (iki elli tutuşta yalnız ekseni ikinci
   elin avucuna nişanlanır); yatıklık modelin kendi eksenlerinden gelir. **EL** yatık görünüyorsa
@@ -1052,6 +1052,11 @@ public sealed class BenimModum : IGameMode
 > ile sahadaki maç ayrışır — telde sunucu kazanır, yani yanlış olan editörde saklı kalır.
 > Alanın tel karşılığı: `Docs/ArenaNet-Protokol.md` mod kuralları bölümü.
 
+> **Yedek mermi varsayılan olarak SONSUZDUR** (`LimitedReserve = false`): gösterge `/∞` yazar ve
+> şarjör değiştirme hiç reddedilmez. Modun yedek sınırı olmasını istiyorsan `true` yaz — o zaman
+> yedek silahın `spareMagazines`'i kadardır. Bu da iki yere yazılır: sunucudaki `Rules` (otorite)
+> **ve** `ModeDefinition.limitedReserve` (sunucusuz önizleme), aynı değerle.
+
 **Unity** — `Assets/Modes/<Ad>/`:
 `Scripts/VortexArena.Modes.<Ad>.asmdef` (refs: Core, Net, Protocol) + `ModeHudBase` alt sınıfı +
 `UI/<Ad>Hud.prefab` + `Data/<Ad>.asset` (`ModeDefinition`). İsteğe bağlı: kendi temalı maç sonu
@@ -1497,7 +1502,11 @@ dekor yerleşimine ve **ışık bake'ine** bağlıdır — biri değişince yeni
 yoktur. Oyun alanındaki prop'ta zeminin altında kalan ve zemine oturan alt yüzler atılır;
 `MeshLodUtility` seviyesi yalnız yan yana görsel karşılaştırmadan geçen mesh'e konur: ayrık
 parçalı yığınlar (tuğla, briket), ince kafes/iskele ve makaralar sadeleştirmede dağılır, açıklıklı
-kabukta (büfe, kulübe) açıklığı kapatan üçgen oluşur.
+kabukta (büfe, kulübe) açıklığı kapatan üçgen oluşur. `ArenaRoof` altındaki çatı yüzeyi göz
+hizasının üstündeyse (oyuncu görmez, admin kuş bakışında gizli) oluklu levhası aynı UV'yle tek düz
+yüzeye indirilir; düz yüzey levhanın tepesine konur ki üstüne yerleşmiş eşya havada kalmasın. Göz
+hizasındaki duvar oluğu düzleştirilmez — doku derinliği taşımaz, düzleşen duvar boyalı levha gibi
+görünür.
 
 ⚠️ **Aydınlatma kurulumu ana haritada bir kez, bake her mekan sahnesinde.** Ana harita
 (`Assets/Maps/<Harita>/`) mekan sahnelerinin kopyalandığı kaynaktır: `VA_LightProbes`, `.lighting`
@@ -1580,6 +1589,9 @@ Fiziksel oda değişmedi: ölçü aynı, kalibrasyon bantları aynı yerde.
 | 3 | `VA_ArenaBoundary` örneğini oynatmak istediğin bölgenin üstüne **taşı ve döndür** (ölçek **1** kalır). Maket ve `anchor_a`/`anchor_b` onun altındadır, birlikte gelirler |
 | 4 | `BaseZone`'ları, silahları (`WPN_*` örnekleri / `VA_WeaponCanvas`) ve `ArenaObstacle`'ları **elle o bölgeye** yerleştir |
 
+- **Pano `VA_WeaponCanvas*` prefabının ÖRNEĞİ olarak konur, unpack edilmez** — kökündeki
+  `WeaponCanvas` bileşeni süpürmenin panoyu bulduğu tek işarettir; koparsa silahı modun kendisi
+  dağıttığı durumlarda boş pano tabanda kalır.
 - **Boyut dosyası mekanın AYNI dosyasıdır** (`Venues/<İşletme>/Data/<İşletme>_dimensions.json`):
   fiziksel oda değişmedi, ikinci bir ölçü dosyası açılmaz.
 - **Birden çok bölge oynatacaksan her bölge ayrı bir arena kutusudur** (kendi sahnesi + kendi
@@ -1661,7 +1673,7 @@ bir **admin** başlatmalıdır. Kurallar telde gelmezse (`rules == null`) `ModeD
 
 ### Sunucusuz sandbox — silah/namlu/ses denemenin kısa yolu
 
-Silah duruşu, namlu alevi, ön kabza göstergesi, ses gibi **tümüyle yerel** şeyleri denerken sunucu
+Silah duruşu, namlu alevi, ön kabza bağı, ses gibi **tümüyle yerel** şeyleri denerken sunucu
 açmak, admin'den harita seçmek ve elle kalibrasyon almak gerekmez:
 
 1. Test edeceğin arena (ya da mekan lobisi) sahnesini aç.

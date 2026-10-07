@@ -26,9 +26,9 @@ namespace VortexArena.Core.Combat
     [DisallowMultipleComponent]
     public sealed class GripSocket : MonoBehaviour
     {
-        /// <summary>Distance at which the socket becomes VISIBLE (m, controller anchor to socket) — the
-        /// same figure as the weapon's front-grip socket (<c>Weapon.SecondaryGripHoverRadius</c>): two
-        /// sockets appearing at different distances read as a bug, not as a feature.</summary>
+        /// <summary>Distance at which the socket becomes VISIBLE (m, controller anchor to socket) —
+        /// code-wide, so two sockets never appear at different distances (that reads as a bug, not
+        /// as a feature).</summary>
         private const float HoverRadius = 0.30f;
 
         /// <summary>Accept radius while the item is in FLIGHT (m). A hand cannot be timed onto a 12 cm

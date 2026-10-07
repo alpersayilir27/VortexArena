@@ -71,6 +71,11 @@ namespace VortexArena.Core
         /// </summary>
         public static bool Allies { get; private set; }
 
+        /// <summary>§10.5 <c>limitedReserve</c>: <c>true</c> = spare ammo is limited to the weapon's
+        /// spare magazines; <c>false</c> (default) = infinite reserve, HUD "30/∞". Read from the
+        /// RULE, never from <c>modeId</c>.</summary>
+        public static bool LimitedReserve { get; private set; }
+
         /// <summary>Teamless-mode shortcut — so callers do not repeat the enum comparison.</summary>
         public static bool IsTeamless => Teams == ModeTeamMode.None;
 
@@ -125,7 +130,8 @@ namespace VortexArena.Core
                 ParseWeapons(info.weaponSource),
                 info.respawnDelay,
                 info.fireWhilePaused,
-                info.allies);
+                info.allies,
+                info.limitedReserve);
         }
 
         /// <summary>
@@ -153,7 +159,8 @@ namespace VortexArena.Core
             // possible. Authority is still on the server (rules.fireWhilePaused); this is only the
             // fallback for a wire without rules.
             Set(modeId, mode.TeamMode, mode.Scoring, mode.FriendlyFire,
-                mode.Revive, mode.Weapons, mode.RespawnDelay, mode.IsLobbyProfile, mode.Allies);
+                mode.Revive, mode.Weapons, mode.RespawnDelay, mode.IsLobbyProfile, mode.Allies,
+                mode.LimitedReserve);
         }
 
         /// <summary>Catalog definition of the CURRENT mode; null when the mode is unknown.</summary>
@@ -167,14 +174,14 @@ namespace VortexArena.Core
         {
             Set(modeId, ModeTeamMode.TwoTeams, ModeScoreKind.Team, false,
                 ModeReviveAnchor.OwnBase, ModeWeaponSource.WeaponCanvas, ArenaProtocol.RESPAWN_DELAY,
-                false, false);
+                false, false, false);
         }
 
         // ---------------------------------------------------------------- internals
 
         private static void Set(string modeId, ModeTeamMode teams, ModeScoreKind scoring,
             bool friendlyFire, ModeReviveAnchor revive, ModeWeaponSource weapons, float respawnDelay,
-            bool fireWhilePaused, bool allies)
+            bool fireWhilePaused, bool allies, bool limitedReserve)
         {
             string id = modeId ?? "";
             // 0 is preserved (instant revive); only a meaningless negative is clamped.
@@ -183,6 +190,7 @@ namespace VortexArena.Core
             bool changed = id != ModeId || teams != Teams || scoring != Scoring ||
                            friendlyFire != FriendlyFire || revive != Revive || weapons != Weapons ||
                            fireWhilePaused != FireWhilePaused || allies != Allies ||
+                           limitedReserve != LimitedReserve ||
                            !Mathf.Approximately(delay, RespawnDelay);
 
             ModeId = id;
@@ -194,6 +202,7 @@ namespace VortexArena.Core
             RespawnDelay = delay;
             FireWhilePaused = fireWhilePaused;
             Allies = allies;
+            LimitedReserve = limitedReserve;
 
             if (changed)
             {

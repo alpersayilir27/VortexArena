@@ -111,6 +111,15 @@ namespace VortexArena.Core.Player
         }
 
         /// <summary>
+        /// <b>Steady</b> report at <see cref="PulseAmplitude"/> while <paramref name="active"/> is true —
+        /// for sources that shape their own on/off timing but keep the shared amplitude.
+        /// </summary>
+        /// <param name="sourceId">The source's fixed id.</param>
+        /// <param name="active">Whether the source wants vibration right now.</param>
+        public static void ReportSteady(string sourceId, bool active) =>
+            Report(sourceId, active ? PulseAmplitude : 0f);
+
+        /// <summary>
         /// <b>One-shot confirmation burst</b>: <paramref name="pulses"/> short pulses on both
         /// controllers (an EVENT notification like "you are in the right place" — not an ongoing state
         /// like the pulse).

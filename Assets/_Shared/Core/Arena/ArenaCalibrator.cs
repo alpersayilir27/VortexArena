@@ -21,7 +21,9 @@ namespace VortexArena.Core.Arena
     /// from the horizontal delta of the two captured points.</para>
     /// <para>Map changes do NOT reset calibration: the anchor UUID persists in PlayerPrefs, so the
     /// next scene's calibrator restores it and nobody respawns (Docs/ArenaNet-Protokol.md §10.4).
-    /// Precondition: every arena in a venue shares the same physical floor marks.</para>
+    /// With no loadable anchor the in-memory session record carries it instead
+    /// (<c>SourceSession</c>). Precondition: every arena in a venue shares the same physical floor
+    /// marks.</para>
     /// <para>Operator clear has two modes (<c>clear_calibration.keepSaved</c>, §5.2/§10.6) behind
     /// <see cref="ApplyOperatorClear"/>: soft keeps the device anchor and leans on
     /// <see cref="autoRestoreBlocked"/>, hard also drops anchor and UUID.</para>
@@ -129,6 +131,11 @@ namespace VortexArena.Core.Arena
         /// editor sandbox has no HMD and the camera must still land inside the arena.</summary>
         private const float PreAlignTrackingTimeout = 2f;
 
+        /// <summary>Watchdog for ONE anchor save attempt (s, realtime). ⚠️ A save that never returns
+        /// must still reach the operator: otherwise the row stays clean while nothing is persisted
+        /// and the next map change silently loses the alignment.</summary>
+        private const float AnchorSaveTimeoutSeconds = 15f;
+
         /// <summary>Minimum local head displacement (m², rig-relative) to count as tracked;
         /// CenterEyeAnchor stays at zero until HMD data arrives.</summary>
         private const float PreAlignHeadEpsilonSqr = 1e-4f;
@@ -141,8 +148,12 @@ namespace VortexArena.Core.Arena
         public const string SourceManual = "manual";
         public const string SourceAnchor = "anchor";
 
+        /// <summary>Restored from the in-memory session record — no anchor was available (§10.6).</summary>
+        public const string SourceSession = "session";
+
         /// <summary>Raised on the main thread when calibration completes; the argument is the
-        /// SOURCE (<see cref="SourceManual"/> / <see cref="SourceAnchor"/>, editor-only <c>"dev"</c>).
+        /// SOURCE (<see cref="SourceManual"/> / <see cref="SourceAnchor"/> /
+        /// <see cref="SourceSession"/>, editor-only <c>"dev"</c>).
         /// <c>CalibrationState</c> listens and sends <c>set_calibration</c> (§10.6). Pose sending
         /// does not depend on this.</summary>
         public static event Action<string> Calibrated;
@@ -166,6 +177,20 @@ namespace VortexArena.Core.Arena
         /// the app. Separate from the disk record because the map-change restore runs from here and
         /// is INDEPENDENT of calibration mode (<see cref="ResolveSavedUuid"/>).</summary>
         private static string sessionAnchorUuid;
+
+        /// <summary>Reference pose of the last alignment (floor point under marker A looking at B)
+        /// in TRACKING SPACE, with its valid flag. A physical point's tracking-space coordinates are
+        /// the same in every scene of the session (each scene brings its own rig), so this
+        /// reproduces the alignment on a map change when NO anchor could be saved (§10.6).
+        /// <para>⚠️ Only a fallback: it does NOT follow a tracking-origin shift, the anchor does. It
+        /// dies with the app, so a launch still needs the anchor or a manual A/B.</para></summary>
+        private static bool sessionPoseValid;
+        private static Vector3 sessionPosePosition;
+        private static Quaternion sessionPoseRotation = Quaternion.identity;
+
+        /// <summary>Bumped whenever the anchor record is dropped (hard clear, newer manual
+        /// calibration). A save that started under an older value is stale: discarded, not reported.</summary>
+        private static int anchorRecordEpoch;
 
         /// <summary>Operator invalidated the alignment → AUTOMATIC restore (scene start, map change) is off
         /// for the rest of this process. Pierced by the operator's own <c>reload_calibration</c>
@@ -198,6 +223,15 @@ namespace VortexArena.Core.Arena
         private bool forcedReloadRunning;
         private bool trackingEventsHooked;
         private bool realignQueued;
+
+        /// <summary>Anchor save attempt counter and in-flight flag. The watchdog carries its own
+        /// attempt number so a stale one never fires for a newer attempt.</summary>
+        private int anchorSaveAttempt;
+        private bool anchorSaveRunning;
+
+        /// <summary>Status of the last failed restore attempt — goes into the final warning, which
+        /// is the operator's only reading of WHY the anchor never loaded.</summary>
+        private string lastRestoreStatus = "";
         private Coroutine markerHideRoutine;
         private Coroutine headSettleRoutine;
 
@@ -253,6 +287,21 @@ namespace VortexArena.Core.Arena
             }
         }
 
+        /// <summary>Tracking space of the rig — the frame the session record is stored in. Falls back
+        /// to <see cref="RigRoot"/> with no <c>OVRCameraRig</c>. ⚠️ Not <c>Camera.main</c>: all three
+        /// rig eye cameras are tagged MainCamera.</summary>
+        private Transform TrackingSpace
+        {
+            get
+            {
+                if (cameraRig == null)
+                    cameraRig = FindFirstObjectByType<OVRCameraRig>();
+                if (cameraRig != null && cameraRig.trackingSpace != null)
+                    return cameraRig.trackingSpace;
+                return RigRoot;
+            }
+        }
+
         /// <summary>Arena floor height (world space), read off marker A. No offset math: by the
         /// single contract a marker's transform position already is the floor point.</summary>
         private float VirtualFloorY =>
@@ -279,12 +328,18 @@ namespace VortexArena.Core.Arena
                 return;
 
             string saved = ResolveSavedUuid();
+            bool trySessionRecord = string.IsNullOrEmpty(saved) && sessionPoseValid && !autoRestoreBlocked;
 
             // One line per scene start: "stayed uncalibrated" has three look-alike causes (no record,
             // mode gate, restore failed) and only this line separates the first two.
             Debug.Log($"ArenaCalibrator: sahne açılışı — kayıtlı kalibrasyon " +
                       $"{(string.IsNullOrEmpty(saved) ? "YOK" : saved)}, mod '{CalibrationState.Mode}', " +
-                      $"otomatik geri yükleme {(autoRestoreBlocked ? "KAPALI" : "açık")}.");
+                      $"otomatik geri yükleme {(autoRestoreBlocked ? "KAPALI" : "açık")}, oturum kaydı " +
+                      $"{(trySessionRecord ? "KULLANILIYOR" : sessionPoseValid ? "var" : "yok")}.");
+
+            // No anchor but an alignment from this session: reproduce it instead of guessing (§10.6).
+            if (trySessionRecord && TryApplySessionRecord())
+                return;
 
             // No saved alignment → no restore will run, so queue the pre-align immediately.
             if (string.IsNullOrEmpty(saved))
@@ -582,6 +637,11 @@ namespace VortexArena.Core.Arena
             AlignRig(capturedA, point);
             HideMarkersAfterConfirmation();
             RaiseCalibrated(SourceManual);
+            // ⚠️ The new calibration supersedes the old record NOW, not on a successful save: a soft
+            // clear keeps the old anchor, and if this save then failed, map change / reload / launch
+            // would restore that OLDER alignment over this one (§10.6).
+            if (ForgetSavedAnchor())
+                Debug.Log("ArenaCalibrator: önceki çapa kaydı yeni elle kalibrasyonla değiştirildi.");
             _ = CreateAndSaveAnchorAsync();
         }
 
@@ -599,7 +659,7 @@ namespace VortexArena.Core.Arena
 
         /// <summary>Measures and stores the floor offset. The threshold is a diagnostic, not a
         /// gate. <paramref name="source"/> names the call site in the log ("manuel" | "çapa" |
-        /// "çapa-yeniden").</summary>
+        /// "çapa-yeniden" | "oturum").</summary>
         private void MeasureFloorOffset(Vector3 floorPoint, string source)
         {
             LastFloorOffsetMeters = TrackingFloorOffset(floorPoint);
@@ -701,6 +761,7 @@ namespace VortexArena.Core.Arena
             float rise = virtualFloorY - physicalB.y;
             rig.position += Vector3.up * rise;
             ApplyFloorLift();
+            RecordSessionPose();
             DevAlignmentReplaced();
 
             CalibrationGeneration++;
@@ -734,6 +795,7 @@ namespace VortexArena.Core.Arena
             Vector3 target = new Vector3(virtualA.x, VirtualFloorY, virtualA.z);
             rig.position += target - anchorPos;
             ApplyFloorLift();
+            RecordSessionPose();
             DevAlignmentReplaced();
 
             CalibrationGeneration++;
@@ -1061,12 +1123,22 @@ namespace VortexArena.Core.Arena
         /// that window would erase nothing.</para></summary>
         private static void PurgeSavedAnchor()
         {
-            string uuidText = !string.IsNullOrEmpty(sessionAnchorUuid)
-                ? sessionAnchorUuid
-                : PlayerPrefs.GetString(AnchorUuidKey, string.Empty);
+            // ⚠️ The session pose goes too, else the next scene aligns from it and silently undoes
+            // the clear.
+            sessionPoseValid = false;
+            ForgetSavedAnchor();
 
-            // ⚠️ The session record goes too, else the next scene aligns from that anchor and
-            // silently undoes the clear.
+            Debug.Log("ArenaCalibrator: cihazdaki kalibrasyon kaydı silindi.");
+        }
+
+        /// <summary>Drops the anchor record (session + disk UUID, device anchor) and stales every
+        /// in-flight save. The session pose is NOT touched. <c>true</c> = a record existed.</summary>
+        private static bool ForgetSavedAnchor()
+        {
+            string uuidText = SavedUuidText();
+
+            // A save that started before this point would write back the record just dropped.
+            anchorRecordEpoch++;
             sessionAnchorUuid = null;
             PlayerPrefs.DeleteKey(AnchorUuidKey);
             // ⚠️ Save() is mandatory (symmetric with CreateAndSaveAnchorAsync): a delete kept only
@@ -1074,10 +1146,11 @@ namespace VortexArena.Core.Arena
             // headset restores its old alignment on the next launch.
             PlayerPrefs.Save();
 
-            if (Guid.TryParse(uuidText, out Guid uuid))
-                _ = EraseSavedAnchorAsync(uuid);
+            if (!Guid.TryParse(uuidText, out Guid uuid))
+                return false;
 
-            Debug.Log("ArenaCalibrator: cihazdaki kalibrasyon kaydı silindi.");
+            _ = EraseSavedAnchorAsync(uuid);
+            return true;
         }
 
         /// <summary>Single entry point for <c>clear_calibration</c> (§10.6).
@@ -1161,31 +1234,154 @@ namespace VortexArena.Core.Arena
             Calibrated?.Invoke(source);
         }
 
-        private async Task CreateAndSaveAnchorAsync()
+        /// <summary>Reference pose of the CURRENT alignment in world space: the floor point under
+        /// marker A looking along A→B. Single source for the saved anchor and the session record —
+        /// two copies of this formula would drift apart. <c>false</c> = markers unusable.</summary>
+        private bool TryGetReferencePose(out Vector3 position, out Quaternion rotation)
         {
+            position = Vector3.zero;
+            rotation = Quaternion.identity;
+            if (anchorA == null || anchorB == null)
+                return false;
+
+            Vector3 virtualA = anchorA.transform.position;
+            Vector3 forward = anchorB.transform.position - virtualA;
+            forward.y = 0f;
+            if (forward.sqrMagnitude < 1e-6f)
+                return false;
+
+            // ⚠️ The lift is ADDED: the pose must land on the PHYSICAL floor, and with a lifted rig
+            // that floor shows up at this world height. At VirtualFloorY it would sit one storey
+            // underground and every later restore would align to it.
+            position = new Vector3(virtualA.x, VirtualFloorY + FloorLiftMeters, virtualA.z);
+            rotation = Quaternion.LookRotation(forward.normalized, Vector3.up);
+            return true;
+        }
+
+        /// <summary>Stores the reference pose in tracking space (§10.6 session record). Called after
+        /// EVERY successful alignment, so the record always describes the alignment in force.</summary>
+        private void RecordSessionPose()
+        {
+            Transform space = TrackingSpace;
+            if (space == null || !TryGetReferencePose(out Vector3 pose, out Quaternion rotation))
+                return;
+
+            sessionPosePosition = space.InverseTransformPoint(pose);
+            sessionPoseRotation = Quaternion.Inverse(space.rotation) * rotation;
+            sessionPoseValid = true;
+        }
+
+        /// <summary>Reproduces the alignment from the session record: the stored tracking-space pose
+        /// is read back through THIS scene's tracking space and applied like an anchor pose (§10.6).
+        /// <c>false</c> = no usable record. Callers own the auto-restore gate.</summary>
+        private bool TryApplySessionRecord()
+        {
+            if (!sessionPoseValid || anchorA == null || anchorB == null)
+                return false;
+
+            Transform space = TrackingSpace;
+            if (space == null)
+                return false;
+
+            Vector3 pose = space.TransformPoint(sessionPosePosition);
+            Quaternion rotation = space.rotation * sessionPoseRotation;
+
+            // Measured BEFORE the move, same order as the anchor path (see TrackingFloorOffset): the
+            // pose sits on the physical floor, so its tracking-local height is today's floor drift.
+            MeasureFloorOffset(pose, "oturum");
+            AlignRigToAnchorPose(pose, rotation);
+            capturedCount = 2;
+            // Markers stay hidden: like the anchor restore this path is silent and runs on map change.
+            RaiseCalibrated(SourceSession);
+
+            // Relayed: the headset log is unreadable at the venue, so the operator reads the cause of
+            // a "session" source on the SERVER log.
+            const string line = "ArenaCalibrator: hizalama oturum kaydından geri yüklendi " +
+                                "(çapa yok ya da yüklenemedi).";
+            Debug.Log(line);
+            VortexArena.Net.ClientLogRelay.Report(line);
+
+            // The alignment stands but dies with the app: retry persistence right away.
+            _ = CreateAndSaveAnchorAsync(true);
+            return true;
+        }
+
+        /// <summary>Anchor UUID on record — session first, then disk; empty if none.</summary>
+        private static string SavedUuidText() =>
+            !string.IsNullOrEmpty(sessionAnchorUuid)
+                ? sessionAnchorUuid
+                : PlayerPrefs.GetString(AnchorUuidKey, string.Empty);
+
+        /// <summary>Creates the anchor for the current alignment and saves it on the device.
+        /// <paramref name="replaceStaleRecord"/> = this save supersedes a record that could not be
+        /// loaded; once it succeeds the old anchor is erased so orphans do not pile up.
+        /// <para>⚠️ EVERY failure branch reports to the operator: the alignment is already announced
+        /// as successful, so an unreported save failure leaves a clean row while nothing is
+        /// persisted.</para></summary>
+        private async Task CreateAndSaveAnchorAsync(bool replaceStaleRecord = false)
+        {
+            string stale = replaceStaleRecord ? SavedUuidText() : null;
+            int attempt = ++anchorSaveAttempt;
+            int epoch = anchorRecordEpoch;
+            anchorSaveRunning = true;
+            if (isActiveAndEnabled)
+                StartCoroutine(WatchAnchorSave(attempt, epoch));
+
             try
             {
-                Vector3 virtualA = anchorA.transform.position;
-                Vector3 forward = anchorB.transform.position - virtualA;
-                forward.y = 0f;
-                // ⚠️ The lift is ADDED: the anchor must land on the PHYSICAL floor, and with a lifted
-                // rig that floor shows up at this world height. Saved at VirtualFloorY it would sit
-                // one storey underground and every later restore would align to it.
-                Vector3 floorPoint = new Vector3(virtualA.x, VirtualFloorY + FloorLiftMeters, virtualA.z);
+                if (!TryGetReferencePose(out Vector3 floorPoint, out Quaternion rotation))
+                {
+                    CalibrationState.ReportAnchorSaveFailure("çapa oluşturulamadı");
+                    return;
+                }
 
                 var go = new GameObject("ArenaWorldAnchor");
-                go.transform.SetPositionAndRotation(floorPoint, Quaternion.LookRotation(forward.normalized, Vector3.up));
+                go.transform.SetPositionAndRotation(floorPoint, rotation);
                 var anchor = go.AddComponent<OVRSpatialAnchor>();
 
-                if (!await anchor.WhenCreatedAsync())
+                bool created = await anchor.WhenCreatedAsync();
+
+                // ⚠️ A destroyed calibrator means the scene changed and the unload took the anchor
+                // object with it: an abandoned attempt, NOT a device failure — report nothing.
+                if (this == null)
+                    return;
+
+                // Superseded (hard clear or a newer manual calibration): this anchor describes a
+                // dropped alignment — never let it become worldAnchor or the record (§10.6).
+                if (epoch != anchorRecordEpoch)
+                {
+                    if (go != null)
+                        Destroy(go);
+                    return;
+                }
+
+                if (!created)
                 {
                     Debug.LogWarning("ArenaCalibrator: spatial anchor creation failed.", this);
+                    CalibrationState.ReportAnchorSaveFailure("çapa oluşturulamadı");
                     Destroy(go);
                     return;
                 }
+
                 worldAnchor = anchor;
 
                 var save = await anchor.SaveAnchorAsync();
+                if (this == null)
+                    return;
+
+                if (epoch != anchorRecordEpoch)
+                {
+                    // Saved too late: erase it so the device does not keep a dropped alignment, and
+                    // keep tracking-disturbance realign off it.
+                    if (save.Success)
+                        _ = EraseSavedAnchorAsync(anchor.Uuid);
+                    if (worldAnchor == anchor)
+                        worldAnchor = null;
+                    if (go != null)
+                        Destroy(go);
+                    return;
+                }
+
                 if (save.Success)
                 {
                     // The disk record is always written even if the mode never reads it; the session
@@ -1193,17 +1389,50 @@ namespace VortexArena.Core.Arena
                     sessionAnchorUuid = anchor.Uuid.ToString();
                     PlayerPrefs.SetString(AnchorUuidKey, anchor.Uuid.ToString());
                     PlayerPrefs.Save();
-                    Debug.Log($"ArenaCalibrator: anchor saved ({anchor.Uuid}).");
+                    // Relayed: the venue calibration procedure reads this line off the SERVER log.
+                    string savedLine = $"ArenaCalibrator: çapa cihaza kaydedildi ({anchor.Uuid}).";
+                    Debug.Log(savedLine);
+                    VortexArena.Net.ClientLogRelay.Report(savedLine);
+                    CalibrationState.ClearAnchorSaveFailure();
+
+                    if (!string.IsNullOrEmpty(stale) && stale != sessionAnchorUuid &&
+                        Guid.TryParse(stale, out Guid staleUuid))
+                    {
+                        _ = EraseSavedAnchorAsync(staleUuid);
+                    }
                 }
                 else
                 {
                     Debug.LogWarning($"ArenaCalibrator: anchor save failed ({save.Status}).", this);
+                    CalibrationState.ReportAnchorSaveFailure($"çapa kaydedilemedi ({save.Status})");
                 }
             }
             catch (Exception e)
             {
                 Debug.LogException(e, this);
+                if (this != null && epoch == anchorRecordEpoch)
+                    CalibrationState.ReportAnchorSaveFailure($"çapa kaydı hata verdi ({e.GetType().Name})");
             }
+            finally
+            {
+                // Only the newest attempt owns the flag; an older one must not clear it.
+                if (attempt == anchorSaveAttempt)
+                    anchorSaveRunning = false;
+            }
+        }
+
+        /// <summary>Watchdog for one save attempt: a save that never returns is a failure the
+        /// operator must see. Dies with the scene, which is the abandoned case.</summary>
+        private IEnumerator WatchAnchorSave(int attempt, int epoch)
+        {
+            yield return new WaitForSecondsRealtime(AnchorSaveTimeoutSeconds);
+
+            // Finished, a newer attempt took over, or the record was dropped meanwhile.
+            if (attempt != anchorSaveAttempt || !anchorSaveRunning || epoch != anchorRecordEpoch)
+                yield break;
+
+            CalibrationState.ReportAnchorSaveFailure(
+                $"çapa kaydı {AnchorSaveTimeoutSeconds:F0} sn içinde tamamlanmadı");
         }
 
         /// <summary>The operator's <c>reload_calibration</c> (§10.6): reloads from the saved anchor and
@@ -1243,6 +1472,14 @@ namespace VortexArena.Core.Arena
             string saved = ResolveSavedUuid(true);
             if (string.IsNullOrEmpty(saved) || !Guid.TryParse(saved, out _))
             {
+                // No anchor, but the session record can still reproduce the alignment — a forced
+                // request pierces the auto-restore gate, same as the anchor path (§10.6).
+                if (TryApplySessionRecord())
+                {
+                    onResult?.Invoke("");
+                    return;
+                }
+
                 // Never silently "successful" (§10.6): the operator must know there is nothing to load.
                 onResult?.Invoke("cihazda kayıtlı kalibrasyon yok");
                 return;
@@ -1334,9 +1571,22 @@ namespace VortexArena.Core.Arena
             if (!forced && restoreAborted)
                 return;
 
+            // The anchor never loaded, but an alignment from this session can still be reproduced
+            // (§10.6). ⚠️ Tried BEFORE the warning below: that text sends the player to a manual
+            // calibration, which is wrong if the fallback holds. A forced request pierces the
+            // auto-restore gate, exactly like the anchor path.
+            if ((forced || !autoRestoreBlocked) && TryApplySessionRecord())
+            {
+                FinishForcedReload(forced, onResult, "");
+                return;
+            }
+
+            // Relayed as a warning: the last status is the operator's only reading of WHY the anchor
+            // never loaded.
             Debug.LogWarning(
                 $"ArenaCalibrator: kayıtlı kalibrasyon {RestoreAttempts} denemede geri " +
-                "yüklenemedi — sağ kumandada A basılıyken B'ye çift basarak ELLE kalibre edin " +
+                $"yüklenemedi (son durum: {(string.IsNullOrEmpty(lastRestoreStatus) ? "?" : lastRestoreStatus)}) " +
+                "— sağ kumandada A basılıyken B'ye çift basarak ELLE kalibre edin " +
                 "(o ana dek gönderilen " +
                 "pozlar arena ile örtüşmez).",
                 this);
@@ -1363,6 +1613,7 @@ namespace VortexArena.Core.Arena
                 if (this == null) return RestoreOutcome.Abandoned; // scene changed: this calibrator is done
                 if (!load.Success || unbound.Count == 0)
                 {
+                    lastRestoreStatus = load.Status.ToString();
                     Debug.Log($"ArenaCalibrator: kayıtlı anchor yüklenemedi ({load.Status}), deneme {attempt}.");
                     return RestoreOutcome.Retry;
                 }
@@ -1371,6 +1622,7 @@ namespace VortexArena.Core.Arena
                 if (!unboundAnchor.Localized && !await unboundAnchor.LocalizeAsync())
                 {
                     if (this == null) return RestoreOutcome.Abandoned;
+                    lastRestoreStatus = "localize edilemedi";
                     Debug.Log($"ArenaCalibrator: kayıtlı anchor localize edilemedi, deneme {attempt}.");
                     return RestoreOutcome.Retry;
                 }
@@ -1385,6 +1637,7 @@ namespace VortexArena.Core.Arena
 
                 if (!unboundAnchor.TryGetPose(out Pose pose))
                 {
+                    lastRestoreStatus = "poz okunamadı";
                     Debug.Log($"ArenaCalibrator: kayıtlı anchor pozu okunamadı, deneme {attempt}.");
                     return RestoreOutcome.Retry;
                 }
@@ -1410,6 +1663,7 @@ namespace VortexArena.Core.Arena
             }
             catch (Exception e)
             {
+                lastRestoreStatus = e.GetType().Name;
                 Debug.LogException(e, this);
                 return RestoreOutcome.Retry;
             }

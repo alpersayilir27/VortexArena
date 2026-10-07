@@ -315,7 +315,8 @@ public sealed class LobbyService
     /// <para>If the reported floor offset exceeds the threshold, the operator is warned (§10.6).
     /// ⚠️ The warning is NOT tied to a roster change: recalibrating with the same offset leaves the
     /// record untouched, yet the operator must hear the result of every manual calibration.</para>
-    /// <para>⚠️ A non-empty <c>error</c> means the saved alignment could NOT be reloaded:
+    /// <para>⚠️ A non-empty <c>error</c> means a calibration problem on the headset — the saved
+    /// alignment could NOT be reloaded, or the anchor could not be saved after an alignment:
     /// <c>calibrated</c>/<c>source</c>/<c>floorOffset</c> are IGNORED, the stored calibration stands,
     /// and the reason is written to the roster and announced to the operator (§10.6, exactly the
     /// <c>set_body_scale.error</c> contract).</para></summary>
@@ -328,7 +329,7 @@ public sealed class LobbyService
         if (error.Length > 0)
         {
             _registry.SetCalibrationError(state.PlayerId, error);
-            Console.WriteLine($"[Lobby] set_calibration: {state.Name} yeniden yüklenemedi — {error}.");
+            Console.WriteLine($"[Lobby] set_calibration: {state.Name} kalibrasyon sorunu bildirdi — {error}.");
             _ = BroadcastCalibrationResultAsync(state.PlayerId, false, error);
             // Not wrapped in Notice(): the actor is the player's headset, not an admin.
             _ = BroadcastAdminStateAsync($"⚠ Kalibrasyon {state.Name}: {error}");

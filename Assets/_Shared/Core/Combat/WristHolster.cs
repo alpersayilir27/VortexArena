@@ -442,7 +442,7 @@ namespace VortexArena.Core.Combat
             if (WeaponGranter.TryResolvePalm(OVRInput.Controller.RTouch, out Pose palm))
             {
                 ItemGripSolver.Solve(throwable, true, false, palm, false, Vector3.zero, 0f,
-                    out Vector3 position, out Quaternion rotation);
+                    false, Vector3.zero, out Vector3 position, out Quaternion rotation);
                 _heldItem.transform.SetPositionAndRotation(position, rotation);
             }
         }

@@ -681,7 +681,7 @@ namespace VortexArena.Core.Combat
         private void ApplyGrip(in Pose palm, bool rightHand)
         {
             ItemGripSolver.Solve(item, rightHand, !rightHand, palm, false, Vector3.zero, 0f,
-                out Vector3 position, out Quaternion rotation);
+                false, Vector3.zero, out Vector3 position, out Quaternion rotation);
 
             transform.SetPositionAndRotation(position, rotation);
         }
