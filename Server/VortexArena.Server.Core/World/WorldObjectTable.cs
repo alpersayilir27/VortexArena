@@ -440,9 +440,13 @@ public sealed class WorldObjectTable
     /// <summary>Creates a runtime object with a server-allocated id; false = unknown kind or the dynamic
     /// range is exhausted (reason for the console line).</summary>
     /// <remarks>A non-zero <paramref name="owner"/> makes the object BORN IN A HAND: the held bits are
-    /// written here, so no second "give it to them" step can leave it on the floor for a frame.</remarks>
+    /// written here, so no second "give it to them" step can leave it on the floor for a frame.
+    /// <para><paramref name="inHand"/> false puts the object straight into the FLIGHT window instead
+    /// (owned + <c>Awake</c>, §10.10): its owner's physics drops it and <c>object_rest</c> closes the
+    /// flight. ⚠️ An OWNERLESS object is kinematic on every headset and would hang in the air at its
+    /// spawn pose.</para></remarks>
     public bool TrySpawnLocked(string? kind, PoseData pose, int owner, bool rightHand, string? payload,
-        out NetObjectEntry entry, out string rejectReason)
+        bool inHand, out NetObjectEntry entry, out string rejectReason)
     {
         entry = null!;
         if (!_kinds.TryGet(kind, out var kindEntry))
@@ -464,9 +468,11 @@ public sealed class WorldObjectTable
             MaxHp = kindEntry.maxHp,
             Hp = kindEntry.maxHp,
             Owner = owner,
-            Flags = owner != 0
-                ? ArenaProtocol.OBJECT_FLAG_HELD | (rightHand ? ArenaProtocol.OBJECT_FLAG_HELD_RIGHT : 0)
-                : 0,
+            Flags = owner == 0
+                ? 0
+                : inHand
+                    ? ArenaProtocol.OBJECT_FLAG_HELD | (rightHand ? ArenaProtocol.OBJECT_FLAG_HELD_RIGHT : 0)
+                    : ArenaProtocol.OBJECT_FLAG_AWAKE,
             Dynamic = true,
             HasPose = true,
             Pose = WithValidRotation(pose),

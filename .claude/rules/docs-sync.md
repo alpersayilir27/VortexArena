@@ -17,7 +17,7 @@ tool'u, sunucu config'i) değişiklik **aynı commit'te** dokümana yazılır; s
 | Sunucu çalıştırma, CLI argümanı, config dosyası/alanı | `Server/README.md` |
 | İşletme kurulumu: donanım, ağ/firewall, kalibrasyon, smoke test adımı | `Docs/Isletme-Kurulum.md` |
 | Planlanmış bir işin kapsamı veya bitmesi | `plan/<faz>.md` (biten dosya **silinir**) + `plan/README.md` |
-| Yeni kalıcı çalışma kuralı | `.claude/rules/` (yalnız dört dosya: [[unity-erisim]] · [[is-akisi]] · [[docs-sync]] · [[kod-standartlari]]) + `CLAUDE.md`'de tek satır işaret |
+| Yeni kalıcı çalışma kuralı | `.claude/rules/` — konusu mevcut bir dosyaya uyuyorsa oraya, uymuyorsa yeni dosya açılır — + `CLAUDE.md`'de tek satır işaret |
 | Pahalıya öğrenilmiş tuzak | `Docs/Sistem-Ozeti.md` §7 |
 
 - **Sıra: doküman → kod.** Ağ davranışı değişecekse ÖNCE `ArenaNet-Protokol.md`, sonra iki taraf

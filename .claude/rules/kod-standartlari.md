@@ -34,6 +34,26 @@ sessizce yalan olur.
 - Global namespace'te tip YOK; serialize edilen ikincil tipler kendi dosyasında (`Team.cs` gibi).
 - Sahne adı = katalog anahtarı (`load_match` string'i) → birebir eşleşme.
 
+## Blender kaynakları (`blender/`)
+
+Betikle üretilen her Blender işi `blender/<Proje>/` altında **sıfırdan yeniden üretilebilir**
+durur; `.blend` tek başına kaynak sayılmaz, elle yapılan düzenleme betiğe yazılmadıkça kalıcı
+değildir.
+
+| Yer | İçerik |
+|---|---|
+| `blender/<Proje>/<Proje>.blend` | Çalışma dosyası |
+| `blender/<Proje>/scripts/` | Üretim betiklerinin **tamamı**: ortak yardımcı modül + obje başına bir betik (`<id>_<ad>.py`). Betik koşunca modeli kurar ve çıktısını yazar |
+| `blender/<Proje>/ref/` | Girdi referans görselleri, PNG (`<id>_<ad>_<görünüm>.png`; görünüm `front` · `left` · `back` · `right` · `sheet`) |
+| `blender/<Proje>/README.md` | Nasıl yeniden üretilir: hangi betik hangi sırayla koşar, çıktı nereye yazılır, ölçüler hangi sahne verisine bağlı |
+
+- ⚠️ **Çıktı (FBX, doku) yalnız `Assets/`'ta durur:** betik doğrudan oraya yazar, `blender/`
+  altında kopyası tutulmaz. `export/` · `renders/` · `*.blend1` · `__pycache__/` git'e girmez
+  (`blender/.gitignore`).
+- Dosya, obje ve koleksiyon adları ASCII'dir; Blender'daki obje adı FBX adıyla aynıdır
+  (`A4_Fridge` → `A4_Fridge.fbx`).
+- Önizleme render'ı geçicidir, repoya girmez.
+
 ## Serialize edilen veri
 
 - ⚠️ **Serialize edilen enum'a yeni değer SONA eklenir** (Unity sayısal indeks saklar):

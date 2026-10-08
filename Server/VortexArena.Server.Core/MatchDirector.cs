@@ -2406,13 +2406,18 @@ public sealed class MatchDirector
     /// are the mode and the kind's own rule.</para>
     /// <para>With <paramref name="owner"/> set the object is born DIRECTLY IN A HAND; there is no separate
     /// "hand it over" message, because the <c>object_spawn</c> body already carries <c>owner</c> +
-    /// <c>flags</c> — a second message would leave a frame showing the object on the floor.</para></remarks>
+    /// <c>flags</c> — a second message would leave a frame showing the object on the floor.</para>
+    /// <para><paramref name="inHand"/> false is the second owned shape: owned + <c>Awake</c>, i.e. born
+    /// in the FLIGHT window at <paramref name="pose"/> (§10.10) — the owner's physics drops it there and
+    /// its <c>object_rest</c> ends the ownership. ⚠️ Spawning such an object with NO owner leaves it
+    /// kinematic and hanging in the air.</para></remarks>
     public int SpawnObject(string kind, PoseData pose, int owner = 0, bool rightHand = false,
-        string? payload = null)
+        string? payload = null, bool inHand = true)
     {
         lock (_gate)
         {
-            if (!_objects.TrySpawnLocked(kind, pose, owner, rightHand, payload, out var entry, out var reason))
+            if (!_objects.TrySpawnLocked(kind, pose, owner, rightHand, payload, inHand, out var entry,
+                    out var reason))
             {
                 Console.WriteLine($"[world] object_spawn reddedildi ('{kind}'): {reason}.");
                 return 0;

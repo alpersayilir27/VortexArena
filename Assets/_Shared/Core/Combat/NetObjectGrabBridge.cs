@@ -436,6 +436,13 @@ namespace VortexArena.Core.Combat
             ControllerHaptics.ReportHand(HapticSource, _hapticRight, _hapticAmplitude);
         }
 
+        /// <summary>Releases as if the hand opened (published); no-op unless this headset holds it.</summary>
+        /// <remarks>For tethered props that must not leave their area.</remarks>
+        public void ForceRelease()
+        {
+            ReleaseLocal(true);
+        }
+
         /// <summary>Lets the object go locally.</summary>
         /// <param name="send">True on a real hand release (<c>object_release</c> goes out and the release
         /// axis is applied); false when the grab was UNDONE — the object belongs to someone else now and

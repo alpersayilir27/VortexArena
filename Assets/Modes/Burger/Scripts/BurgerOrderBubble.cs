@@ -89,6 +89,9 @@ namespace VortexArena.Modes.Burger
                 root = gameObject;
             }
 
+            // The customer stands behind the order window: depth-tested, the frame and the pass wall
+            // would hide the order. Offset 0 keeps it under the obstacle blackout (distance-sorted).
+            UiDrawOnTop.Apply(gameObject, 0);
             HideNotice();
         }
 

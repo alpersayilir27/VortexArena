@@ -57,7 +57,15 @@ public sealed class BurgerMode : IGameMode
     private const string BunBottom = "bun_bottom";
     private const string BunTop = "bun_top";
     private const string Patty = "patty";
+    private const string Sauce = "sauce";
+    private const string KetchupBottle = "ketchup_bottle";
     private const string DispenserPrefix = "dispenser_";
+
+    /// <summary>Shortest gap between two sauce layers from the SAME bottle (s).</summary>
+    /// <remarks>⚠️ The gate must be here: the squeezing client reports a continuous hit and its own
+    /// latency would turn one gesture into a pile of layers — and an extra sauce layer makes the order
+    /// be refused, so the cost is a wrong score, not a cosmetic one.</remarks>
+    private const float SquirtCooldownSeconds = 1.5f;
 
     /// <summary>What a dispenser may hand out; anything else is a content/export drift, not an
     /// ingredient.</summary>
@@ -86,6 +94,11 @@ public sealed class BurgerMode : IGameMode
     /// <summary>Customer netId → its slot, order and countdown.</summary>
     private readonly Dictionary<int, Customer> _customers = new();
 
+    /// <summary>Looks of the last despawned customers, kept out of the next pick (§10.5).</summary>
+    private readonly Queue<int> _recentLooks = new();
+
+    private const int RecentLookMemory = 2;
+
     /// <summary>Patty netId → seconds spent on the grill. Kept when the patty leaves the grill: it
     /// stays at its doneness and resumes if put back (§10.5).</summary>
     private readonly Dictionary<int, float> _cooking = new();
@@ -95,6 +108,9 @@ public sealed class BurgerMode : IGameMode
 
     /// <summary>Spawned ingredient netIds, OLDEST FIRST — the cleanup order.</summary>
     private readonly List<int> _ingredients = new();
+
+    /// <summary>Ketchup bottle netId → when its last sauce layer was born (UTC).</summary>
+    private readonly Dictionary<int, DateTime> _lastSquirt = new();
 
     public BurgerMode() : this(new BurgerSettings())
     {
@@ -147,6 +163,8 @@ public sealed class BurgerMode : IGameMode
         _cooking.Clear();
         _onGrill.Clear();
         _ingredients.Clear();
+        _lastSquirt.Clear();
+        _recentLooks.Clear();
         Array.Clear(_slotTaken, 0, _slotTaken.Length);
         _spawnTimer = _settings.customerIntervalStart;
         PushModeState(director);
@@ -311,9 +329,44 @@ public sealed class BurgerMode : IGameMode
                 return HandleGrill(director, netId, msg);
             case "serve" when kind == "board":
                 return HandleServe(director, playerId, msg);
+            case "squeeze" when kind == KetchupBottle:
+                // Nothing to write: the stream is cosmetic, so the event is RELAYED as it is. The
+                // owner + playing gates are the kind's own event rule (§10.10), not a mode check.
+                return false;
+            case "squirt" when kind == KetchupBottle:
+                return HandleSquirt(director, playerId, netId, msg);
             default:
                 return false;
         }
+    }
+
+    /// <summary>Ketchup squeezed onto a burger → one <c>sauce</c> layer at the reported point.</summary>
+    /// <remarks>Always returns true: a squirt is never relayed (the stream is already drawn on every
+    /// headset), so a refused one must stay silent too.
+    /// <para>The layer is born OWNED BY THE SQUEEZER and free (§10.10): an ownerless object is kinematic
+    /// everywhere and would hang in the air over the stack instead of settling onto it.</para></remarks>
+    private bool HandleSquirt(MatchDirector director, int playerId, int netId, ObjectEventMsg msg)
+    {
+        if (msg.i is not { Length: > 0 } || msg.f is not { Length: >= 3 }) return true;
+
+        var boardId = msg.i[0];
+        if (!director.TryReadObject(boardId, out var boardKind, out _, out _, out _, out _, out _)) return true;
+        if (boardKind != "board" && boardKind != "cutting_board")
+        {
+            Console.WriteLine($"[burger] sos hedefi tahta değil ('{boardKind}', netId {boardId}) — atlandı.");
+            return true;
+        }
+
+        for (var i = 0; i < 3; i++) if (!float.IsFinite(msg.f[i])) return true;
+
+        var now = DateTime.UtcNow;
+        if (_lastSquirt.TryGetValue(netId, out var last) &&
+            (now - last).TotalSeconds < SquirtCooldownSeconds) return true;
+        _lastSquirt[netId] = now;
+
+        var pose = new PoseData { px = msg.f[0], py = msg.f[1], pz = msg.f[2] };
+        Track(director, director.SpawnObject(Sauce, pose, playerId, inHand: false));
+        return true;
     }
 
     /// <summary>Dispenser → a fresh ingredient straight into the requesting hand.</summary>
@@ -541,13 +594,18 @@ public sealed class BurgerMode : IGameMode
             if (!taken) free.Add(look);
         }
 
-        return free.Count == 0 ? 0 : free[Random.Shared.Next(free.Count)];
+        // Prefer a face that did not just leave, so the same customer never walks straight back in.
+        var fresh = free.FindAll(look => !_recentLooks.Contains(look));
+        var pool = fresh.Count > 0 ? fresh : free;
+        return pool.Count == 0 ? 0 : pool[Random.Shared.Next(pool.Count)];
     }
 
     private void ReleaseCustomer(int netId, Customer customer)
     {
         _slotTaken[customer.Slot] = false;
         _customers.Remove(netId);
+        _recentLooks.Enqueue(customer.Look);
+        while (_recentLooks.Count > RecentLookMemory) _recentLooks.Dequeue();
     }
 
     private void PushModeState(MatchDirector director) => director.SetModeState(FormatModeState(_happy, _unhappy));

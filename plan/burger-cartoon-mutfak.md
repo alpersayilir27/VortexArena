@@ -2,11 +2,15 @@
 
 Burger modunun mutfağı, parça parça üretilen cartoon modellerle baştan giydirilir. Hedef görünüm
 sevimli, tıknaz, sıcak renkli bir mutfaktır: beyaz karo duvar, siyah-beyaz dama zemin, kırmızı
-tavan ve vurgular, ahşap alt dolaplar. Servis tarafı "ORDER" pencereli bir bankodur; müşteri
-bankonun arkasında durur, numaralı zil ve fiş rayı vardır. Akış: her obje GPT/Gemini ile **çok
-açıdan** çizilir, Tripo'nun *Çok Açılı Görsellerden 3D* girişiyle modele çevrilir. Ölçek, pivot,
-UV2, materyal, collider, prefab, yerleşim ve bake ajan tarafından (Blender MCP + Unity MCP)
-yapılır. Henüz **hiçbir şey üretilmedi**.
+tavan ve vurgular, ahşap alt dolaplar. Servis tarafı "SİPARİŞ" pencereli bir bankodur; müşteri
+bankonun arkasında durur, numaralı zil ve fiş rayı vardır.
+
+**Akış:** kullanıcı obje başına Gemini ile 2×2 dönüş sayfası (ön / sol / arka / sağ) üretir ve
+dosya yolunu verir; ajan görseli PNG'ye çevirir, objeyi Blender MCP ile modeller, önizlemeyi
+kullanıcının BurgerKit indirme klasörüne render eder, onay gelince Unity'ye alır ve sahneye
+koyar. Kaynak dosya `blender/BurgerKitchen/BurgerKitchen.blend`, betikler
+`blender/BurgerKitchen/scripts/` altındadır. Tripo kullanılmaz: çok açılı giriş abonelik ister,
+tek görselden gelen kalite yetersizdir.
 
 ## 0. Değişmez kurallar
 
@@ -17,11 +21,14 @@ yapılır. Henüz **hiçbir şey üretilmedi**.
   waypoint'leri korunur. Bir hacim taşınacaksa `Docs/Gelistirici/Yemek-Kitabi.md` "Bir oyun
   istasyonunu ikinci bir mekana kurmak" kurallarına uyulur: hacim görselin çocuğudur, kök
   `rot 0`/`scale 1` kalır.
+- **Yerine koyma yalnız renderer düzeyindedir:** eski objenin mesh'i/materyali değişir,
+  collider'ı ve oyun hacimleri olduğu gibi durur.
 - **Malzemeler değişmez:** köfte, ekmek, domates vb. bugünkü paketten gelir.
-- **Kabuk Tripo'dan gelmez.** Zemin, duvar, tavan ve uzun tezgâh gövdeleri düz geometriye
-  döşenen dokudur. Tripo büyük düz yüzeyi dalgalı üretir ve ölçüye uymaz.
-- **Tripo'nun kendi materyali ve dokusu sahneye girmez.** Her model Blender'dan FBX + ayrı doku
-  olarak geçer (`Yapma-Listesi.md` GLB maddesi).
+- **Kit paylaşılan materyallerle çizilir** (§8). Obje eklemek yeni materyal açmaz; renk farkı
+  palet UV'si ile verilir (§5).
+- **Kabuk doku işidir.** Zemin, duvar, tavan ve uzun tezgâh gövdeleri düz geometriye döşenen
+  dokudur; model olarak üretilmez.
+- **Her model Blender'dan FBX + ayrı doku olarak geçer** (`Yapma-Listesi.md` GLB maddesi).
 - **Gerçek zamanlı point/spot ışık yoktur.** Lambalar emissive materyal + bake ile çözülür.
 - **Collider'lar elle kurulur:** kutu collider, convex `MeshCollider` yok; gövde `Obstacle`,
   pervaz `Default` çocukta (`Yemek-Kitabi.md` aynı bölüm, 6. madde).
@@ -53,8 +60,9 @@ yapılır. Henüz **hiçbir şey üretilmedi**.
 ## 2. Yerleşim — bugünkü oyun hacimlerine göre
 
 Oda kabuğu 10 × 9 m, tavan 5,5 m. Oyun alanı ölçüsü `Data/<Mekan>_dimensions.json`'dadır.
-**Tezgâh çalışma yüzeyi bugün ~1,04 m**dir; bütün eşya hacimleri bu yüksekliğe göre kurulu
-(bkz. §9 karar 1).
+**Tezgâh çalışma yüzeyi 1,04 m**dir; bütün eşya hacimleri ve kitin tezgâh üstleri bu
+yüksekliğe göre kurulu. Alçaltmak (çocuk boyu) bütün hacimleri, soketleri ve tezgâhları birlikte
+kaydırmayı gerektirir.
 
 ```
                        KUZEY  — pişirme hattı
@@ -86,9 +94,9 @@ Bugünkü hacimlerin dünya konumu (x, z; metre):
 - **Kuzey — pişirme hattı:** iki ızgara bugünkü hacimlerin altında kalır. Üstte tek parça
   kırmızı davlumbaz (alt kenarı ~2,0 m), yanında dekor fritöz.
 - **Batı — servis alanı:** banko bugünkü yerinde, önü kırmızı panel + krom şerit. Her yuvanın
-  üstünde bir "ORDER" pencere modülü durur: iki dikme, üst tabela, fiş rayı. Önünde numaralı
+  üstünde bir "SİPARİŞ" pencere modülü durur: iki dikme, üst tabela, fiş rayı. Önünde numaralı
   zil ve 1-2-3 tabelası, üstünde sarı tepsi (servis tahtası). Müşteri koridoru ~0,75 m'dir,
-  koridorun arkasındaki duvar diner olarak giydirilir (bkz. §9 karar 3).
+  koridorun arkasındaki duvar diner olarak giydirilir (turkuaz alt panel + kırmızı şerit).
 - **Güney — malzeme duvarı:** 9 kap bugünkü soketlerinde. Her kabın üstünde tavandan inen
   renkli bir dağıtıcı tüpü ve malzeme ikon kartı.
 - **Orta — montaj adaları:** bugünkü masalar cartoon tezgâh olarak yeniden giydirilir.
@@ -97,30 +105,27 @@ Bugünkü hacimlerin dünya konumu (x, z; metre):
 
 ## 3. Üretim akışı — her obje için
 
-1. **Görsel üret** (§4). Ön görünüm zorunludur. Simetrik objede ön + sol yeter; arkası farklı
-   objede (buzdolabı, davlumbaz, kapı) arka da eklenir. Sağ yalnız asimetrik objede gerekir.
-2. **Görselleri kontrol et** (§4.6 listesi). Tutarsız görünüm Tripo'da bozuk mesh demektir;
-   kredi harcamadan önce elenir.
-3. **Tripo'da üret** (§5). Çok açılı giriş, ön + diğer görünümler.
-4. **Tripo'da incele** ve gerekiyorsa Retopo / Smart Low Poly ile yüz sayısını düşür
-   (hedef §6 tablosunda).
-5. **İndir.** GLB ya da FBX fark etmez, hepsi Blender'dan geçer. Dosya adı §7'deki gibi.
-6. **Ajana ver.** Ajan şunları yapar: Blender'da gerçek ölçüye ölçekleme, pivotu alt-orta
-   noktaya alma (duvar objesinde arka-alt-orta), ön yüzü +Z'ye çevirme, gerekirse azaltma, UV2
-   üretme, FBX + doku olarak kit klasörüne yazma. Unity'de materyal, collider, prefab, yerleşim,
-   static flag ve bake de ajandadır.
-7. **Toplu bake + bütçe ölçümü** her grup bitince bir kez yapılır (§8).
-
-> **Gerçek boyut Tripo'ya aktarılmaz.** Çok açılı görsel yalnız **oranı** (genişlik : derinlik :
-> yükseklik) doğru taşır; Tripo çıktısı keyfi ölçekte gelir. Mutlak ölçüyü Blender'da ajan
-> §6'daki ölçülere göre verir. Oranın doğru çıkması için görünümler **aynı ölçekte** ve aynı
-> taban çizgisinde olmalı. Promptta ölçüyü santimetreyle yazmak da oranı tutturmaya yardım eder.
+1. **Görsel** (§4): kullanıcı Gemini'de 2×2 dönüş sayfasını üretir ve dosya yolunu verir.
+   Basit biçimli objelerde görsel isteğe bağlıdır (§6 "Görsel" sütunu): ajan görünümü paletten
+   önerir, onay önizlemeden alınır.
+2. **Dönüştürme:** ajan `.jfif` görseli PNG'ye çevirir.
+3. **Model:** ajan Blender MCP ile modeller. Her obje `blender/BurgerKitchen/scripts/` altında
+   kendi betiğidir (`a1_griddle.py` gibi); ortak palet, kurucu yardımcılar, bake ve FBX dışa
+   aktarma `bk_common.py`'dedir. Gerçek ölçü, alt-orta pivot (duvar objesinde arka-alt-orta),
+   ön yüz +Z, UV2 burada verilir.
+4. **Önizleme:** ajan objeyi kullanıcının BurgerKit indirme klasörüne render eder (§7 ad).
+   Kullanıcı onaylar; onaylamazsa betik düzeltilir, yeniden render edilir.
+5. **Unity:** ajan FBX + dokuyu `Assets/Modes/Burger/KitchenKit/` altına alır (§7), materyal,
+   collider, prefab ve import ayarlarını kurar.
+6. **Sahneye koyma:** eski objenin **yalnız renderer'ı** değişir; collider'ı ve oyun hacimleri
+   yerinde kalır.
+7. **Işık:** sahneye konan dekor Static işaretlenir ve renderer'ı `Receive GI = Lightmaps` yapılır
+   (kit prefabı Light Probes ile gelir); ardından sahne bake edilir.
 
 ## 4. Görsel üretim — promptlar
 
-Promptlar İngilizcedir: görsel modelleri İngilizcede daha tutarlı çalışır. Her obje promptu şu
-bloklardan kurulur: **[STİL] + [OBJE] + [GÖRÜNÜM]**. Pilotta GPT ile Gemini denenir, **tüm kit
-için biri seçilir ve değiştirilmez**: iki modelin "cartoon"u birbirine benzemez.
+Promptlar İngilizcedir: görsel modelleri İngilizcede daha tutarlı çalışır. Her obje promptu
+**[STİL] + [OBJE] + [GÖRÜNÜM]** bloklarından kurulur; [OBJE] satırı §6'daki tanım ve ölçüdür.
 
 ### 4.1 [STİL] bloğu — her promptun başına, aynen
 
@@ -133,10 +138,10 @@ not mirror chrome. Palette: tomato red #D8342C, cream white #F5F0E6, warm wood
 #A8662F, steel #B8C4CE, charcoal #2B2B2B, mustard yellow #F4BE2C, diner teal #2FA49B.
 ```
 
-### 4.2 [GÖRÜNÜM] — yöntem A: tek görselde 2×2 dönüş sayfası (önerilen)
+### 4.2 [GÖRÜNÜM] — tek görselde 2×2 dönüş sayfası
 
-Dört görünüm tek üretimde çıktığı için obje görünümler arasında daha az değişir. Sonra görsel
-dört kareye kırpılır.
+Dört görünüm tek üretimde çıktığı için obje görünümler arasında daha az değişir. **2×2 ızgarada
+tam dört görünüm olur, başka hiçbir şey olmaz. Dört görünüm de aynı boyuttadır.**
 
 ```
 Show this single object as a 2x2 orthographic turnaround sheet on a pure white
@@ -151,46 +156,7 @@ shadows, no reflections, no floor, no text, no labels, no other objects.
 Square image, high resolution.
 ```
 
-### 4.3 [GÖRÜNÜM] — yöntem B: önce ön, sonra aynı görselden yan/arka
-
-Önce yalnız ön görünüm:
-
-```
-FRONT view only. Orthographic, camera perfectly level at the object's mid-height,
-object centered with about 10% empty margin on every side, pure white background,
-soft even studio light, no cast shadow, no reflections, no text, nothing else in
-the image. Square image.
-```
-
-Sonra ön görseli **ekleyerek** yan görünüm (arka için "rotate 180° / BACK view"):
-
-```
-This is the front view of an object. Generate the LEFT side view of exactly the
-same object: rotate it 90° so we see its left side, with its front facing the LEFT
-edge of the image. Keep identical colors, materials, proportions and details,
-identical scale, the same bottom line, the same white background and lighting.
-Orthographic, no perspective, no shadow, no text.
-```
-
-> ⚠️ **Sol / sağ yönü:** Tripo'da "Sol", objenin **kendi solu**dur. Bu yüzden sol görünümde
-> objenin önü **görselin soluna** bakar. Pilotta ilk model aynalanmış çıkarsa sol ile sağ
-> görselleri yer değiştirilir ve bu kural tüm kit için o yönde sabitlenir.
-
-### 4.4 [OBJE] satırı
-
-§6 tablosundaki İngilizce tanım, ölçüyle birlikte yazılır. Örnek (ızgara):
-
-```
-A chunky cartoon flat-top griddle station: red metal cabinet body with two small
-doors and big round knobs on the front, a thick black cast-iron cooking plate on top
-with a low steel splash rim on the back and sides, short stubby steel legs. About
-120 cm wide, 75 cm deep, 100 cm tall.
-```
-
-Birden çok renkte kullanılacak objede (dağıtıcı tüpü, zil) obje **beyaz/açık gri**
-üretilir. Unity'de materyal rengiyle boyanır; renkli üretilirse her renk için ayrı kredi gider.
-
-### 4.5 Düz dokular ve 2D tabelalar (Tripo'ya girmez)
+### 4.3 Düz dokular ve 2D tabelalar
 
 **Döşenen doku** (kare, 1024 px; prompt sonuna her zaman `seamless tileable texture, flat
 orthographic top-down, even lighting, no perspective, no shadows` eklenir):
@@ -214,190 +180,135 @@ orthographic top-down, even lighting, no perspective, no shadows` eklenir):
 | Malzeme ikonları ×9 | `cartoon icon of a [raw beef patty / sesame burger bun / tomato slice / lettuce leaf / cheese slice / bacon strip / onion ring / pickle slice / ketchup bottle], bold outline, flat colors, white rounded-square card, centered` |
 | Menü panosu | `cartoon diner menu board with burger and fries illustrations, chalkboard style, no readable text, landscape` |
 
-Okunması gereken yazı (ORDER, rakamlar) modelin dokusuna **gömülmez**: Tripo yazıyı bulanıklaştırır.
-Model düz panelle üretilir, yazı ayrı tabela olarak üstüne basılır.
+Okunması gereken yazı (SİPARİŞ, rakamlar) modelin dokusuna **gömülmez**: model düz panelle
+üretilir, yazı ayrı tabela olarak üstüne basılır.
 
-### 4.6 Tripo'ya göndermeden önce görsel kontrolü
+## 5. Palet ve tek materyal
 
-- Tüm görünümlerde **aynı obje** var mı? Kapak, düğme, ayak sayısını say.
-- Taban çizgisi ve yükseklik görünümler arasında aynı mı?
-- Perspektif yok mu? Ön görünümde üst yüz neredeyse hiç görünmemeli.
-- Arka plan düz beyaz mı? Gölge, zemin, el ya da ikinci obje var mı?
-- Işık düz mü? **Güçlü ışık-gölge dokuya pişer:** Tripo görseldeki gölgeyi renk sanar, Unity'nin
-  ışığı üstüne ikinci kez gölge koyar.
-- Kapılar ve çekmeceler kapalı mı? Cam varsa opak, renkli mi? Tripo saydamlığı üretemez.
-- Yüzen ya da çok ince parça (tel ızgara, ince sap) var mı? Varsa kalınlaştır ya da çıkar.
+Kitteki her obje tek materyali (`M_BK_Palette`, URP Lit, smoothness 0,15, metallic 0) ve tek
+paleti (`BK_Palette.png`) paylaşır. Quest'te bütün mutfak böylece tek materyal kalır.
 
-## 5. Tripo ayarları
-
-| Ayar | Değer | Neden |
-|---|---|---|
-| Giriş | *Çok Açılı Görsellerden 3D* — Ön (zorunlu) + Sol (+ Arka / Sağ gerekiyorsa) | Tek görselde arka ve derinlik tahmin edilir |
-| Kalite | HD Model, AI Model **H3.1** | — |
-| Parçalar Halinde Üret | **Kapalı** | Her parça ayrı mesh/materyal = fazladan draw call. Birleştirmeyi ajan yapar |
-| 8K Doku | **Kapalı** | Quest'te doku en fazla 1024'e iner, 8K boşa kredidir |
-| Üretim sonrası | Retopo / Smart Low Poly, hedef yüz sayısı §6'dan | Ham çıktı çok yoğundur |
-| Smart UV | İsteğe bağlı | UV2'yi ajan Unity/Blender'da zaten üretir |
-| Dışa aktarma | GLB ya da FBX, doku 2K yeterli | Blender'dan geçip FBX olarak girer |
-
-- **Kredi:** ekranda HD üretim **55 kredi** gösteriyor. Hesapta 200 kredi var, yani ~3 model.
-  Kitte Tripo'ya önerilen ~20 obje var (~1100+ kredi, retopo hariç). Bu yüzden §6'da her objeye
-  "önerilen kaynak" yazıldı: kutu biçimli ve içi boş basit objeler Blender'da ajan tarafından
-  bedavaya yapılır.
-- **İçi boş hazneler** (çöp kovası, malzeme kabı, tepsi): Tripo hazneyi sık sık doldurur.
-  Bunlar Blender'da yapılır. Tripo denenecekse görünüm hafif yukarıdan, içini gösteren tek
-  bir 3/4 görsel olur.
-- **Üretimden sonra Tripo'da kontrol:** objeyi çevir; alt yüzü, arkayı, simetriyi ve delikleri
-  kontrol et. Bozuksa yeniden üretmek yerine önce görseli düzelt.
+| Öğe | Karar |
+|---|---|
+| Doku | `BK_Palette.png`, 256 × 64; renk başına 16 px genişliğinde bir sütun |
+| Sütun içi | Dikey geçiş: alt koyu, **%60 yükseklikte temel renk**, üst açık |
+| UV | Her parça yüksekliğine göre sütunun içine yazılır — gölgelendirme UV'den gelir |
+| Sütun sırası | **Yalnız sona eklenir**; var olan sütun yer değiştirmez, yoksa üretilmiş UV'ler kayar |
+| Çok renkli obje | Parça parça farklı sütuna bakar; yeni materyal açılmaz |
 
 ## 6. Kit listesi
 
-**Rol:** *oyun* = mevcut ağ nesnesi ya da hacmin görseli değişir, hacim aynı kalır. *dekor* =
-yalnız görsel. **Kaynak:** T = Tripo, B = Blender (ajan), 2D = görsel + quad. **Öncelik:** P1
-pilot ve oyun parçaları, P2 mutfağın karakteri, P3 süs. Ölçüler G × D × Y metredir. Yüz ve doku
-sütunları Quest hedefidir.
+Hedefler Quest içindir; "Üçgen/adet" tek kopyanın bütçesidir. "Görsel" sütunu, 2×2 dönüş
+sayfasının gerekli mi olduğunu söyler.
 
-### A — Oyun parçaları (giydirme)
+**A (pişirme hattı) ve B (tezgâh, mobilya) sahnededir** — betikleri `blender/BurgerKitchen/scripts/`
+(`a*`, `b*`, `f5_trash_bin`). Bu objelerden kalan iş yalnız kapanıştaki static + bake ve saha
+doğrulamasıdır (§9).
 
-| ID | Obje | Ölçü | Görünüm | Yüz | Doku | Rol | Kaynak | Öncelik | [OBJE] tanımı |
-|---|---|---|---|---|---|---|---|---|---|
-| A1 | Izgara ×2 | 1,20 × 0,75 × 1,00 (plaka üstü ~1,00) | ön+sol+arka | 6k | 1024 | oyun | T | P1 | §4.4'teki örnek |
-| A2 | Malzeme kabı ×8 | 0,24 × 0,24 × 0,12 | — | 0,6k | 512 | oyun | B | P1 | (Blender: yuvarlak köşeli çelik kap, kalın kenar) |
-| A3 | Sos dağıtıcı şişe | 0,08 × 0,08 × 0,22 | ön+sol | 0,8k | 512 | oyun | T | P2 | `a chunky cartoon red ketchup squeeze bottle with a yellow pointed cap` |
-| A4 | Bıçak ×6 | 0,45 boy | ön (yassı yüz) + sol (kenardan) | 0,8k | 512 | oyun | T/B | P2 | `a chunky cartoon chef knife with a thick wide steel blade and a rounded warm wood handle with two rivets` |
-| A5 | Spatula ×6 | 0,41 boy | ön + sol | 0,8k | 512 | oyun | T/B | P2 | `a chunky cartoon burger spatula with a wide flat slotted steel blade and a red rounded handle` |
-| A6 | Servis tepsisi ×3 | 0,36 × 0,24 × 0,03 | — | 0,3k | 256 | oyun | B | P1 | (Blender: sarı, kalkık kenarlı tepsi) |
-| A7 | Kesme tahtası ×6 | 0,30 × 0,21 × 0,03 | — | 0,3k | 512 | oyun | B | P2 | (Blender: ahşap, sapında delik) |
-| A8 | Çöp kovası | 0,45 × 0,45 × 0,75, **ağzı açık** | — | 1,5k | 512 | oyun | B | P1 | (Blender: kırmızı pedallı kova, kapaksız) |
+### C — Doğu duvarı küçük cihazlar
 
-- A1'de **pişirme hacmi değişmez**: plakanın üstü hacmin içinde, ~1,00 m'de kalır. Gövdenin katı
-  kutusuna `CounterSurface` konur.
-- A4/A5 elde tutulur: sap konumu bugünkü `GripSocket`'e oturtulur, yoksa el pozu kayar. Ajan
-  hizalar.
-- A8 için hazne kuralları geçerlidir (`Yemek-Kitabi.md` istasyon bölümü, çöp kovası satırı):
-  taban kutusu haznenin görünen tabanının birkaç mm üstünde olur, kenar kutuları ağız
-  yüksekliğine kadar çıkar.
-- Bu nesneler `Modes/Burger/Prefabs/` altındaki **ortak** prefablardır. Değişiklik bu prefabları
-  kullanan **her** Burger arenasına yansır (bkz. §9 karar 4).
+**Sahnededir** (`c_appliances`: mikrodalga, tek gözlü ocak).
 
-### B — Pişirme hattı
+### D — Servis alanı
 
-| ID | Obje | Ölçü | Görünüm | Yüz | Doku | Kaynak | Öncelik | [OBJE] tanımı |
-|---|---|---|---|---|---|---|---|---|
-| B1 | Davlumbaz | 3,40 × 0,90 × 0,70, alt kenarı 2,0 m | ön+sol | 3k | 1024 | T | P1 | `a big chunky cartoon red kitchen exhaust hood with rounded corners, a light steel trim band along the bottom edge, three vent grilles on the underside front, and a short square duct on top` |
-| B2 | Fritöz | 0,50 × 0,75 × 1,04 + sepet | ön+sol | 4k | 1024 | T | P2 | `a chunky cartoon deep fryer: steel cabinet with a red front panel and a round dial, an oil well on top with two wire baskets hanging on the back rim` |
-| B3 | Kepçe askısı | 1,00 × 0,15 × 0,50 | ön+sol | 2k | 512 | T | P3 | `a cartoon wall-mounted steel utensil rail with hanging ladle, whisk, tongs and a frying pan` |
-| B4 | Boru ve kanal seti | modüler | — | — | — | B | P2 | (Blender: kalın kırmızı/gri borular, dirsekler) |
+**Sahnededir** (`d1_order_window` — 1-2-3 kartları dahil, `d2_bell`, `d4_door`). Zil ve ORDER
+penceresi dekordur. Kapı (`Furniture/DinerDoor`, `BurgerDinerDoor`) müşteri yaklaşınca yalnız
+görsel olarak açılır; arkasında duvar boşluğu ve kapalı giriş holü vardır (`g_shell.vestibule`,
+oyun alanı dışı), müşteri yolu `WP_0` holün içindedir ve `WP_1` kapının tam ortasından geçer
+(kanatların arasından). Müşteri bekleme noktaları (`CustomerAnchor`) pass duvarından 0,65 m
+geridedir (x −4,2): iri kafalı görünümler öne 0,5 m taşar.
 
-### C — Servis alanı
+### E — Malzeme duvarı
 
-| ID | Obje | Ölçü | Görünüm | Yüz | Doku | Kaynak | Öncelik | [OBJE] tanımı |
-|---|---|---|---|---|---|---|---|---|
-| C1 | ORDER pencere modülü ×3 | 2,00 × 0,30 × 1,40 (tezgâh üstünden) | ön+sol | 3k | 1024 | T | P1 | `a cartoon retro diner order-window frame: two chunky red posts with steel caps, a top header panel (plain blank red panel, no text), a horizontal steel ticket rail under the header with three blank paper order tickets clipped on it` |
-| C2 | Servis zili ×3 | Ø 0,12 × 0,10 | ön+sol | 0,6k | 512 | T | P1 | `a chunky cartoon service desk bell: shiny red dome on a round black base with a small steel push button on top` |
-| C3 | Banko gövdesi | yuvalar boyunca, ön yüz | — | — | — | B | P1 | (Blender: kırmızı panel, krom şerit, açık gri tezgâh üstü) |
-| C4 | Diner kapısı (müşteri girişi) | 1,00 × 0,10 × 2,10 | ön+arka | 2k | 1024 | T | P2 | `a cartoon retro diner swinging double door, red with a round porthole window in each leaf and steel kick plates` |
-| C5 | Diner kanepesi | 1,20 × 0,60 × 1,00 | ön+sol | 2,5k | 1024 | T | P3 | `a cartoon retro diner booth seat with teal and cream vinyl upholstery and a chrome trim` (yalnız §9 karar 3 "evet" ise) |
-| C6 | Kasa (yazar kasa) | 0,40 × 0,40 × 0,30 | ön+sol+arka | 1,5k | 512 | T | P3 | `a chunky cartoon retro cash register, red body with big round keys and a pop-up number display, cash drawer closed` |
+**Sahnededir** (`e1_dispenser`, `e2_ketchup`). Dağıtıcılar yalnız görünüm olarak Cook'd Up tarzı
+makinedir; alma mekaniği aynıdır, düğme yoktur. Sahnede her dağıtıcının `Sample_*` örnekleri
++0,066 m, `GripSocket`'i +0,074 m pede kaldırılmıştır (sahne override'ı; ortak `NO_dispenser_*`
+prefabları değişmedi) — model yeniden üretilirken ped yüksekliği (`PAD_TOP`) değişirse bu kaydırma
+da güncellenir.
 
-- C1'in dikmeleri yuva **sınırlarına** oturur (z ≈ 1,19 ve −0,86 civarı). Servis tahtası
-  ile slot hacmi arasına girmez.
-- C1 tabelasındaki "ORDER" ve zil önündeki 1-2-3, §4.5'teki 2D tabela olarak basılır.
-- Zil ve fiş rayı **dekordur**. Basınca çalan zil ya da sipariş tüpü yeni bir mekaniktir; ayrı
-  iştir (bkz. §9 karar 2).
+### F — Elde tutulanlar (ortak `NO_*` prefablar)
 
-### D — Malzeme duvarı
+**Sahnededir** (`f_handhelds`: bıçak, spatula, servis tepsisi, kesme tahtası; çöp kovası
+`f5_trash_bin`). Görsel ortak `NO_knife` / `NO_spatula` / `NO_board` / `NO_cutting_board`
+prefablarında `CartoonVisual` çocuğudur, eski `Visual`'ın yalnız renderer'ı kapalıdır — o
+prefabları kullanan **her** Burger arenası cartoon görünür. Model ölçüleri prefab kökünün yerel
+birimindedir (bıçak ve spatula kökü 1,5 ölçekli); sap eski görselin sapıyla aynı yerdedir, yoksa
+el pozu kayar.
 
-| ID | Obje | Ölçü | Görünüm | Yüz | Doku | Kaynak | Öncelik | [OBJE] tanımı |
-|---|---|---|---|---|---|---|---|---|
-| D1 | Malzeme rafı / tezgâhı | 9 kap boyunca, üst ~1,04 | — | — | — | B | P1 | (Blender: ahşap alt dolap + tezgâh) |
-| D2 | Dağıtıcı tüpü ×9 | Ø 0,25 × 1,20, alt ucu kabın ~0,4 m üstünde | ön+sol | 1,5k | 512 | T | P2 | `a chunky cartoon ingredient dispenser tube hanging from the ceiling: white cylindrical body with a clear-looking opaque light blue window strip, a ribbed collar and a round nozzle at the bottom` (beyaz üretilir, ajan malzemeye göre boyar) |
-| D3 | Malzeme ikon kartı ×9 | 0,20 × 0,20 | — | — | — | 2D | P2 | §4.5 |
+### G — Kabuk ve duvar detayları
 
-### E — Hazırlık ve genel dekor
+**Sahnededir** (`g_shell`: zemin, duvarlar, tavan, süpürgelik, korniş, batı duvarının diner paneli;
+`g_details`: 12 tavan lambası, menü panosu, poster). Görsel tavan 3,2 m'dir; 12 pişmiş spot
+3,05 m'ye indirilip gücü (3,05/4,85)² ile düşürülmüştür, davlumbaz bacası bu tavana göre kısadır.
+Her lamba kendi pişmiş spotunu taşır (`BK_G_CeilingLamp` içinde `Light`, 120° koni, yumuşak
+gölge): lamba taşınınca ışığı da gider, bake yeniden alınır. Dolgu ışığı tavanın hemen altındaki
+pişmiş alan ışıklarıdır (`Kitchen_Lights/Area_*`, mutfakta 2×2, dinerde 1; şiddet 1,2). Kapalı
+odaya gökyüzü ortam ışığı girmez; aydınlık, gölgesiz görünüm alan ışığından ve 3 sekmeden gelir —
+alan ışığı kaldırılırsa duvar üstleri ve dolap önleri kararır. Eski kabuğun
+collider'ları yerindedir.
 
-| ID | Obje | Ölçü | Görünüm | Yüz | Doku | Kaynak | Öncelik | [OBJE] tanımı |
-|---|---|---|---|---|---|---|---|---|
-| E1 | Buzdolabı | 1,20 × 0,75 × 2,00 | ön+sol+arka | 4k | 1024 | T | P1 | `a chunky cartoon double-door commercial refrigerator, light steel body with rounded edges, two tall doors with big chrome bar handles, a small red badge on top, closed doors` |
-| E2 | Lavabo ünitesi | 1,00 × 0,65 × 1,04 + musluk | ön+sol | 3k | 1024 | T | P2 | `a chunky cartoon kitchen sink cabinet: warm wood lower doors, light grey countertop with a deep steel sink basin and a tall curved goose-neck faucet` |
-| E3 | Tencere ve tava | 0,30 – 0,40 | ön+sol | 1k | 512 | T | P3 | `a chunky cartoon steel stock pot with two side handles and a lid` / `a chunky cartoon black frying pan with a red handle` |
-| E4 | Tabak yığını | Ø 0,25 × 0,20 | — | 0,5k | 256 | B | P3 | (Blender) |
-| E5 | Sebze kasası | 0,50 × 0,35 × 0,30 | ön+sol | 1,5k | 512 | T | P3 | `a cartoon wooden crate full of big round tomatoes and lettuce heads` |
-| E6 | Duvar rafı | 1,20 × 0,30 × 0,30 | — | — | — | B | P3 | (Blender: ahşap raf, çelik konsol) |
-| E7 | Duvar saati | Ø 0,40 | ön | 0,5k | 512 | T | P3 | `a cartoon retro red wall clock with big white face and black hands` |
-| E8 | Yangın söndürücü | Ø 0,18 × 0,55 | ön+sol | 0,8k | 512 | T | P3 | `a chunky cartoon red fire extinguisher with a black hose and a steel handle` |
+### Yerleşim A ve diner
 
-### F — Tavan
+**Sahnededir.** Ortada iki çalışma adası (`b7_island`, `Furniture/Islands/Island_1..2`: tek kutu
+collider, `Obstacle` layer, `CounterSurface`); eski orta mobilya (uzun masa, orta masa, 4 L ada)
+**pasif** (silinmedi). 6 kesme tahtası + 6 bıçak + 6 spatula adalarda, ada başına 3 istasyon.
+Üçüncü çöp kovası ada 1'in güney ucunda, tepsi rafı güneybatı köşesinde. Diner (`i_diner`,
+`Kitchen_Props/Diner`): oyun alanının dışında (x < −4,5), yalnız görüntü, collider yok; 3 loca,
+müzik kutusu, kapı güney diner duvarında; müşteri yolu kapıdan başlar (`WP_0..2` taşındı). Diner
+üstünde 3 pişmiş spot (`Kitchen_Lights/Spot_Diner_1..3`). Mutfakla diner arası duvardan duvara
+kapalıdır: SİPARİŞ çerçevesi ve servis bankoları ortada, uçlar ve çerçevenin üstü kabuğun "pass"
+duvarıdır (`g_shell.pass_wall`, x −3,55..−3,43); oyun alanında kalan iki ucu
+`Kitchen_Shell/PassWall_Colliders` (`Obstacle`) korur. Müşteri koridoru dinerin parçasıdır.
 
-| ID | Obje | Ölçü | Görünüm | Yüz | Doku | Kaynak | Öncelik | [OBJE] tanımı |
-|---|---|---|---|---|---|---|---|---|
-| F1 | Yuvarlak tavan lambası | Ø 0,50 × 0,12 | — | 0,4k | 256 | B | P1 | (Blender: krom çerçeve + emissive disk) |
-| F2 | Havalandırma kanalı | modüler | — | — | — | B | P3 | (Blender) |
+### H — Süs
 
-### G — Kabuk (Tripo yok)
+Saat ve yangın söndürücü doğu duvarında, neon "BURGER" kuzey duvarında **sahnededir**
+(`h_decor`; neon `M_BK_Glow`). Diner duvarlarında 4 çerçeveli poster (gece manzarası, patates,
+milkshake, "OPEN") `g_details.DINER_ART`, mutfakta 5 kırmızı çerçeveli poster (maskot, sebzeler,
+sosisli, ızgara, kola) `g_details.KITCHEN_ART` ile sahnededir. Etiket dokusunda 4 boş yer kalır;
+diner kapı köşesi (patenli garson) ve diner kuzey duvarı (dondurma) için görsel bekleniyor. Kalan isteğe bağlı süsler (kepçe askısı, duvar rafı + tencereler,
+sebze kasası, baharat şişeleri) seçilirse buraya yazılır.
 
-Zemin, duvar, tavan, süpürgelik, montaj adaları, banko ve raf gövdeleri Blender/ProBuilder
-geometrisidir. Üstlerine §4.5 dokuları döşenir. Kabuk prefaba girmez, sahnede kalır
-(`Yemek-Kitabi.md` istasyon bölümü, 1. madde). Zemin collider'ı kalın levhadır (aynı bölüm,
-7. madde).
+**Sahnedeki kit:** ~75k görünür üçgen; materyaller palet, etiket, karo, lamba, parlama, dolap
+ahşabı (+ ketçap efektleri). Tezgâhlar, adalar ve lavabo Cook'd Up stilindedir (`bk_cabinet.py`).
+Lambalar ve tablolar ayrı sahne objeleridir; konumları sahnede elle ayarlanır.
 
 ## 7. Teslim — dosya adı ve yer
 
-- **Görsel dosya adı:** `<ID>_<ad>_<görünüm>.png`, örnek `A1_griddle_front.png`,
-  `A1_griddle_left.png`. Kaynak görseller repoya **girmez** (PNG LFS'te değil, git şişer);
-  ortak bir klasörde tutulur.
-- **Tripo çıktısı:** `<ID>_<ad>.glb` (ya da `.fbx`) → `blender/BurgerKitchen/source/`. `.glb` ve
-  `.fbx` LFS'tedir.
+- **Kaynak görsel:** kullanıcı yolu verir, ajan PNG'ye çevirip `blender/BurgerKitchen/ref/`'e
+  koyar (LFS). Etiket dokusu (`BK_Decals.png`) bu dosyalardan yeniden kurulur.
+- **Blender:** `blender/BurgerKitchen/BurgerKitchen.blend`; betikler
+  `blender/BurgerKitchen/scripts/` (`bk_common.py` + obje başına bir betik).
+- **Önizleme render'ı:** `<ID>_<ad>_BLENDER.png`, kullanıcının BurgerKit indirme klasörüne.
 - **Unity'ye giren:** `Assets/Modes/Burger/KitchenKit/` altında `Models/` (FBX), `Textures/`,
   `Materials/`, `Prefabs/`. Kit yalnız Burger modunundur; `_Shared`'a girmez
   (`Yapma-Listesi.md` "`_Shared` mi, kutu mu" testi). Klasör ilk dosyayla açılır, boş klasör
   açılmaz.
 - **Ajanın yaptığı adımlar:**
   - Import ayarı: Scale 1, Generate Lightmap UVs açık, Read/Write kapalı.
-  - Doku: Android ASTC 6x6, büyük obje en fazla 1024, küçük obje 512.
-  - Materyal: URP Lit, yalnız albedo, smoothness ~0,15, metallic 0. Tripo'nun roughness ve
-    metal haritaları alınmaz: cartoon görünümü gerçekçiye çeker ve bellek yer.
+  - Palet dokusu: bilinear, mipmap kapalı (mip seviyesi sütunları birbirine karıştırır), Android
+    ASTC 6x6. UV sütunun ortasında durduğu için 16 px sütunda 6x6 blok komşu renge taşmaz.
+  - Materyal: tek `M_BK_Palette` (§5).
   - Collider ve layer, prefab, static flag, light probe, bake.
-- `blender/BurgerKitchen/README.md`, ilk model girdiğinde bu akışın kalıcı kaynağı olarak yazılır.
-  Bu plan dosyası iş bitince silinir.
+- Yeniden üretim akışının kalıcı kaynağı `blender/BurgerKitchen/README.md`'dir; bu plan dosyası
+  iş bitince silinir.
 
 ## 8. Bütçe (Quest 3)
 
-- **Kitin toplam görünür üçgen hedefi ~150k.** Sahne uyarı sınırı 1M'dir, ama dekor ucuz
+- **Kitin toplam görünür üçgen hedefi ~75k.** Sahne uyarı sınırı 1M'dir, ama dekor ucuz
   kalmalı; oyuncu avatarları ve efektler de bu bütçeden yer.
-- **Her Tripo modeli tek mesh + tek materyal.** SRP Batcher farklı materyalleri kaldırır, ama
-  "Parçalar halinde" çıktı obje başına 5-10 draw call'a çıkar.
-- **Tekrarlanan obje tek prefabdır** (kap ×8, zil ×3, tüp ×9). Renk farkı materyal
-  varyantıyla verilir, yeni mesh üretilmez.
+- **Kit altı paylaşılan materyalle çizilir:** palet (`M_BK_Palette`), etiketler (`M_BK_Decals`),
+  duvar karosu (`M_BK_Tiles`), lamba (`M_BK_Lamp`), parlama (`M_BK_Glow`), dolap ahşabı
+  (`M_BK_CabinetWood`) — obje eklemek yeni materyal açmaz.
+- **Tekrarlanan obje tek prefabdır** (zil ×3, çöp kovası ×3, tezgâhlar). Renk ya da ikon farkı
+  (dağıtıcılar) ayrı küçük mesh'tir, ayrı materyal değil.
 - **Lambalar emissive + bake.** Gerçek zamanlı ışık eklenmez. Davlumbaz altı ve servis
   penceresi ışığı lightmap'ten gelir.
 - **Kontrol:** her grup sonunda `Tools > VortexArena > Arena > Sahne Bütçesini Ölç` ve
   `Engel Hacimlerini Denetle`.
 
-## 9. Açık kararlar (kullanıcı)
+## 9. Sıra
 
-1. **Tezgâh yüksekliği:** bugün ~1,04 m, standart mutfakta 0,90 m. Hedef kitle çocuksa
-   alçaltmak mantıklıdır, ama bütün hacimler, soketler ve eşya konumları kayar. Öneri: bu turda
-   **1,04 kalır**, kit bu yüksekliğe göre üretilir.
-2. **Zil / sipariş tüpü** dekor mu kalsın, yoksa mekaniğe mi dönüşsün? Öneri: dekor. Mekanik
-   olursa protokol + sunucu işidir, önce `Docs/ArenaNet-Protokol.md`'ye yazılır.
-3. **Diner arka planı:** müşteri koridoru dar (~0,75 m). Seçenekler: (a) batı duvarı diner
-   dokusuyla giydirilir; (b) batı kabuk duvarı oyun alanı sınırının dışına itilir, arkada
-   kanepeli bir diner salonu görünür. (b) daha etkileyicidir, ama oyuncu sınırın ötesinde boş
-   alan görür ve gerçek duvara yürümeye heveslenebilir. Öneri: **(a)**.
-4. **Ortak prefablar:** A grubu (`NO_*`, `BurgerStation`) başka Burger arenalarında da
-   kullanılıyor. Öneri: hepsi cartoon'a geçer, tek görünüm olur. Alternatif: prefab varyantı, ama
-   o durumda iki bakım yolu oluşur.
-
-## 10. Sıra
-
-1. **Pilot (3 obje, ~165 kredi):** A1 ızgara (ön+sol+arka), C2 zil (ön+sol), E1 buzdolabı
-   (ön+sol+arka). Bu pilotla doğrulananlar: GPT mi Gemini mi, sol/sağ yönü, ölçek ve pivot akışı,
-   materyal görünümü. Ajan bu üçünü sahneye koyar, **stil onayı** alınır.
-2. **P1 (Blender kısmı ajanda, paralel):** kabuk dokuları + geometri, banko, raf, adalar, A2,
-   A6, A8, F1, C3, D1. Ardından B1 ve C1 Tripo'dan gelir.
-3. **P2:** A3-A5, A7, B2, B4, C4, D2-D3, E2.
-4. **P3:** kalan süsler, posterler, menü panosu.
-5. **Kapanış:** bake, bütçe ölçümü, engel denetimi, saha doğrulaması. Kalıcı bilgi
-   `blender/BurgerKitchen/README.md`'ye ve gerekiyorsa `Yemek-Kitabi.md`'ye yazılır; bu dosya
-   silinir.
+1. **Kalan süs:** diner kapı köşesine patenli garson, diner kuzey duvarına dondurma posteri
+   (görsel bekleniyor; etiket dokusunda yer var, §6 H). Eklenince dekor Static + bake (§3, 7. adım),
+   bu plan dosyası silinir.

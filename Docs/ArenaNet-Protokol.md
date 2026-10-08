@@ -2012,12 +2012,14 @@ kuralın söyleyeceği bir şey yoktur (telde yine `false` gider).
 > | `board` | `none` | `serve` (`anyone`) | — | — |
 > | `cutting_board` | `anyone` | — | — | — |
 > | `knife` · `spatula` | `anyone` | — | — | — |
+> | `ketchup_bottle` | `anyone` | `squeeze` (`owner`) · `squirt` (`owner`) | — | — |
 > | `customer` | `none` | — | `0` geliyor · `1` bekliyor · `2` mutlu · `3` mutsuz | `slot:<n>;r:<tarif>;v:<n>` |
 >
 > Olayların yükü: `take` → `i:[el]` (`0` sol, `1` sağ), sonucu **sahibi isteyen olan** yeni bir
 > malzeme objesidir. `cut` → yükü yok; sunucu bütünü despawn edip aynı pozda iki yarım doğurur.
 > `grill` → `i:[1]` ızgarada (sayaç işler) / `i:[0]` ızgaradan çıktı (sayaç durur). `serve` →
-> `i:[müşteri netId, malzeme netId'leri **alttan üste**]`.
+> `i:[müşteri netId, malzeme netId'leri **alttan üste**]`. `squeeze` → `f:[1]` sıkmaya başladı /
+> `f:[0]` bıraktı. `squirt` → `i:[tahta netId]` + `f:[x,y,z]` (arena uzayı, §3).
 >
 > **Pişme ilerlemesi köfte başınadır ve ızgaradan çıkınca SİLİNMEZ:** sayaç yalnız köfte ızgaradayken
 > **ve serbestken** işler; çıkınca köfte o anki aşamasında kalır, geri konunca kaldığı yerden devam
@@ -2119,6 +2121,33 @@ kuralın söyleyeceği bir şey yoktur (telde yine `false` gider).
 > olması** aranır; birinin elindeki ekmek kesilmez. Tek istisna `grill` `i:[0]`'dır (yukarıda:
 > "çıktı" bildirimi köfte zaten eldeyken varır).
 >
+> **Ketçap şişesinin iki olayı `owner` politikasındadır**, çünkü burada gönderen objenin sahibidir:
+> şişe elde tutulurken sıkılır. Her ikisinin faz kapısı `playing`'dir.
+>
+> **`squeeze` bir DURUM GEÇİŞİDİR, kozmetik gürültü değil** (§10.10 WS maddesi): sahip sıkmaya
+> başlayınca `f:[1]`, bıraktığında `f:[0]` gider ve sunucu olayı **relay eder** — durumu yazmaz.
+> Saniyede yirmi kez atılan bir efekt değil, akışın açılıp kapanmasıdır: kaybı, akışın karşı
+> tarafta hiç durmaması demektir, bu yüzden güvenilir kanaldadır. ⚠️ Akışın kendisi ve
+> damlaların çarptığı yerler **telde yoktur** — her istemci aynı el pozundan kendi simülasyonunu
+> koşar, kozmetik fark kabul edilir. Şişe bırakılınca ya da sahibi düşünce (`owner` sıfırlanır)
+> her istemci akışı **kendisi** kapatır; "kapat" olayının kaybı bu yüzden akışı sonsuza kadar
+> açık bırakamaz.
+>
+> **`squirt` SOS KATMANI doğurur, bu yüzden relay edilmez:** akış bir hamburger yığınına
+> kesintisiz sıkıldığında sahip istemci bir kez gönderir, sunucu dört kapıdan geçirir — gönderen
+> şişenin sahibi mi, faz `playing` mi, hedef `netId`'in türü `board` ya da `cutting_board` mı, aynı
+> şişenin son `squirt`'ünden beri **bekleme süresi** (1,5 sn) doldu mu. Geçerse verilen poza bir `sauce`
+> objesi doğar: **sahibi sıkan oyuncudur ve tutulmaz** (sahipli serbest doğuş, §10.10), yani
+> katmanı sıkanın başlığı düşürüp dinlendirir ve yığın onu bugünkü dinlenme yoluyla oturtur.
+> ⚠️ **Bekleme süresi şişe başınadır ve sunucudadır:** istemcinin kendi gecikmesi tek jestten
+> onlarca katman doğurabilirdi; sos katmanı siparişi reddettirebildiği için bu bir puan hatasına
+> dönerdi. Sipariş kuralı değişmez — sos isteğe bağlı bir katmandır, fazlası siparişi reddeder.
+>
+> Yeni tür ve olay adları **veridir** (`kinds[]`, §11), tel biçimi değişmez: `PROTOCOL_VERSION`
+> artmaz. Şişeyi tanımayan eski bir başlıkta sahne objesi hiç yoktur ve gelen `object_state` tek
+> satır loga döner — gözlükler, admin ve sunucu aynı turda dağıtıldığı için bu bir uyum kapısı
+> değildir.
+>
 > **Malzeme temizliği sayıyla yapılır, süreyle değil:** her `take` bir obje doğurur ve yalnız doğru
 > servis onları siler, yani yere düşenler birikir. Mod canlı malzeme sayısına bir tavan koyar; taşınca
 > en eski **SERBEST** malzeme `object_despawn` edilir. ⚠️ Elde olana asla dokunulmaz (oyuncunun
@@ -2140,8 +2169,9 @@ kuralın söyleyeceği bir şey yoktur (telde yine `false` gider).
 >
 > **Müşteri görünümü `s` alanının `v:<n>` anahtarıdır** ve seçimi sunucuya aittir: sunucu, **o anda
 > dünyada bulunan** müşterilerin (çıkışa yürüyenler dahil, çünkü despawn edilene kadar sahnededirler)
-> kullandığı görünümleri dışarıda bırakıp kalanlardan rastgele birini verir — bankoda aynı anda iki
-> özdeş müşteri durmaz. İstemci indeksi kendi görünüm dizisine `v % uzunluk` ile eşler; `v` yoksa ya da
+> kullandığı görünümleri **ve son iki despawn edilen müşterinin görünümünü** dışarıda bırakıp
+> kalanlardan rastgele birini verir — bankoda aynı anda iki özdeş müşteri durmaz ve az önce giden
+> müşteri aynı yüzle hemen geri gelmez (aday kalmazsa yalnız dünyadakiler dışlanır). İstemci indeksi kendi görünüm dizisine `v % uzunluk` ile eşler; `v` yoksa ya da
 > okunamıyorsa `slot`tan türetilmiş bir görünüme düşer (görünümsüz müşteri olmaz).
 > - ⚠️ **Görünüm sayısı iki uçta ELLE eşlenir:** sunucudaki görünüm sayısı sabiti ile istemci
 >   prefabındaki görünüm dizisinin uzunluğu birebir aynı olmalıdır. İstemcide daha az görünüm varsa
@@ -3182,6 +3212,13 @@ kavrama yerel olarak başlamaz; obje `Held` + kendi `playerId`'siyle geldiğinde
 üstlenilir. Üstlenilmezse obje sahibi görünen ama hiçbir elin sürmediği bir hâlde havada kalır. Bu
 yolda **`object_grab` gönderilmez** — o mesaj istemcinin *istemesidir*, burada sunucu çoktan karar
 vermiştir.
+
+Obje **sahipli ama tutulmadan** da doğabilir: `owner` dolu, `Held` **yok**, `Awake` var — yani obje
+doğuşta doğrudan **uçuş penceresindedir** (§6.12). Böylece poz kapısı sahibe açılır, obje onun
+fiziğiyle düşer ve duruşunu `object_rest` kapatır. ⚠️ **Sahipsiz doğan obje bunu yapamaz:** sahibi
+olmayan obje her başlıkta kinematiktir, doğduğu pozda havada asılı kalır — bir yüzeyin üstüne
+"bırakılan" obje (sıkılan sos katmanı) bu yüzden sahipli doğar. Sahibin seçimi modun işidir:
+doğuşu tetikleyen oyuncu, sonucu da kendi başlığında dinlendirir.
 
 ⚠️ **Geç katılanın `world_state`'i dinamik objeleri de taşır** ve istemci **dinamik aralıktaki**
 bilinmeyen bir kimliği doğuş sayar; **sahne aralığındaki** bilinmeyen kimlik ise "export ile sahne

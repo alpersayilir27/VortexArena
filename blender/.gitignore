@@ -1,5 +1,6 @@
 # Blender betiklerinin ürettiği ara çıktılar — kaynak .blend + betiktir, bunlar yeniden üretilir
 */export/
 */renders/
+*.blend1
 # eldiven betikleri birbirinin yardımcılarını modül olarak içe aktarır
 __pycache__/

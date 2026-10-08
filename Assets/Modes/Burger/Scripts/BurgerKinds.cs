@@ -33,6 +33,9 @@ namespace VortexArena.Modes.Burger
         public const string Spatula = "spatula";
         public const string Customer = "customer";
 
+        /// <summary>The bottle hanging from the ceiling cord; squeezing it paints ketchup.</summary>
+        public const string KetchupBottle = "ketchup_bottle";
+
         /// <summary>Dispenser kinds are <c>dispenser_&lt;ingredient&gt;</c>.</summary>
         public const string DispenserPrefix = "dispenser_";
 
@@ -42,6 +45,14 @@ namespace VortexArena.Modes.Burger
         public const string EventCut = "cut";
         public const string EventGrill = "grill";
         public const string EventServe = "serve";
+
+        /// <summary>Stream on/off state of a ketchup bottle: <c>f:[1]</c> / <c>f:[0]</c>. Relayed, so
+        /// the OWNER sends it and every other headset opens its own stream from it.</summary>
+        public const string EventSqueeze = "squeeze";
+
+        /// <summary>Ketchup held on a burger stack long enough: <c>i:[tahta netId]</c> +
+        /// <c>f:[x,y,z]</c> (arena space). The server spawns the sauce layer; not relayed.</summary>
+        public const string EventSquirt = "squirt";
 
         // ------------------------------------------------------------------- stages
 

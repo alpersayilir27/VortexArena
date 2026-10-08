@@ -63,6 +63,8 @@ Unity 6000.3.20f1, URP. VR build = player, Windows build = admin. Online haberle
 - **claude.ai'de artifact/Doc oluşturulmaz** — sayfa gerekiyorsa düz HTML/CSS/JS dosyası repoya
   ya da scratchpad'e. → `docs-sync.md`
 - **Kod yorumları İNGİLİZCE yazılır;** UI/log string'leri Türkçe kalır. → `kod-standartlari.md`
+- **Blender işi `blender/<Proje>/` altında yeniden üretilebilir durur** (`.blend` + `scripts/` +
+  `ref/` + README); FBX/doku çıktısı yalnız `Assets/`'ta. → `kod-standartlari.md`
 - **Değişiklikten önce `Yapma-Listesi.md`'ye bak** — bu projede tuzaklar hata vermez, sessizce
   yanlış çalışır.
 - **Yeni içerik yalnız `Yemek-Kitabi.md` reçetesiyle eklenir** — adım atlamanın bedeli
