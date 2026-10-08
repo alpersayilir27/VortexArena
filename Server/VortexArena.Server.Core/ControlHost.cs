@@ -1,4 +1,6 @@
 #nullable enable
+using System.Net;
+using System.Text;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -8,12 +10,18 @@ using VortexArena.Protocol;
 namespace VortexArena.Server.Core;
 
 /// <summary>Owner of the Kestrel lifecycle: the http://0.0.0.0:&lt;controlPort&gt;/ws WebSocket
-/// endpoint; one ClientConnection per connection (the cosmos ClassroomHost pattern).</summary>
+/// endpoint plus the launcher's HTTP endpoints (§13); one ClientConnection per connection (the
+/// cosmos ClassroomHost pattern).</summary>
 public sealed class ControlHost
 {
     private readonly PlayerRegistry _registry;
     private readonly LobbyService _lobby;
     private readonly MatchDirector _director;
+    private readonly MatchRecorder _recorder;
+
+    /// <summary>Runs the SAME shutdown path as Ctrl+C (§13).</summary>
+    private readonly Action _requestShutdown;
+
     private readonly int _port;
     private WebApplication? _app;
 
@@ -24,11 +32,14 @@ public sealed class ControlHost
     /// stops waiting, so shutdown never hangs.</summary>
     private static readonly TimeSpan DrainTimeout = TimeSpan.FromSeconds(2);
 
-    public ControlHost(PlayerRegistry registry, LobbyService lobby, MatchDirector director, int port)
+    public ControlHost(PlayerRegistry registry, LobbyService lobby, MatchDirector director,
+        MatchRecorder recorder, Action requestShutdown, int port)
     {
         _registry = registry;
         _lobby = lobby;
         _director = director;
+        _recorder = recorder;
+        _requestShutdown = requestShutdown;
         _port = port;
     }
 
@@ -56,8 +67,80 @@ public sealed class ControlHost
             await connection.RunAsync(linked.Token);
         });
 
+        // Launcher endpoints (§13): same port as the WS, loopback only.
+        app.MapGet(LauncherApi.STATUS_PATH, async context =>
+        {
+            if (!await AllowLoopbackAsync(context)) return;
+            await WriteStatusAsync(context, StatusCodes.Status200OK);
+        });
+
+        app.MapPost(LauncherApi.RECORDING_PATH, async context =>
+        {
+            if (!await AllowLoopbackAsync(context)) return;
+
+            using var reader = new StreamReader(context.Request.Body, Encoding.UTF8);
+            var request = JsonUtil.Deserialize<LauncherRecordingRequest>(await reader.ReadToEndAsync());
+            if (request == null)
+            {
+                context.Response.StatusCode = StatusCodes.Status400BadRequest;
+                return;
+            }
+
+            _director.SetRecording(request.on);
+            await WriteStatusAsync(context, StatusCodes.Status200OK);
+        });
+
+        app.MapPost(LauncherApi.SHUTDOWN_PATH, async context =>
+        {
+            if (!await AllowLoopbackAsync(context)) return;
+
+            // ⚠️ The answer goes out BEFORE the shutdown starts: the shutdown stops this very host and
+            // waits for open requests, so answering afterwards would make the request wait for itself
+            // (§13).
+            context.Response.StatusCode = StatusCodes.Status202Accepted;
+            await context.Response.CompleteAsync();
+            _requestShutdown();
+        });
+
         _app = app;
         await app.StartAsync();
+    }
+
+    /// <summary>Loopback gate (§13); a remote caller gets 403 and the handler stops.</summary>
+    /// <remarks>⚠️ The port is open to the game network — no device there may stop the server or touch
+    /// the recording.</remarks>
+    private static async Task<bool> AllowLoopbackAsync(HttpContext context)
+    {
+        var address = context.Connection.RemoteIpAddress;
+        // Kestrel reports an IPv4 client on a dual-stack socket as ::ffff:127.0.0.1.
+        if (address != null && address.IsIPv4MappedToIPv6) address = address.MapToIPv4();
+        if (address != null && IPAddress.IsLoopback(address)) return true;
+
+        context.Response.StatusCode = StatusCodes.Status403Forbidden;
+        await context.Response.CompleteAsync();
+        return false;
+    }
+
+    private async Task WriteStatusAsync(HttpContext context, int statusCode)
+    {
+        var match = _director.CurrentMatchInfo();
+        var connected = _registry.Snapshot();
+        var status = new LauncherStatus
+        {
+            protocolVersion = ArenaProtocol.PROTOCOL_VERSION,
+            venue = _director.VenueId,
+            phase = match.phase,
+            phaseReason = match.phaseReason,
+            modeId = match.modeId,
+            sceneName = match.sceneName,
+            playerCount = connected.Count(p => p.IsConnected && p.Role == "player"),
+            adminCount = connected.Count(p => p.IsConnected && p.Role == "admin"),
+            recording = _recorder.BuildStatus()
+        };
+
+        context.Response.StatusCode = statusCode;
+        context.Response.ContentType = "application/json; charset=utf-8";
+        await context.Response.WriteAsync(JsonUtil.Serialize(status), Encoding.UTF8);
     }
 
     /// <summary>Stops the host — ⚠️ connections first, host second.</summary>

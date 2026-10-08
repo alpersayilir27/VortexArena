@@ -1,0 +1,188 @@
+<UserControl x:Class="VortexArena.Launcher.Views.RecordingPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:VortexArena.Launcher.ViewModels">
+
+    <UserControl.Resources>
+        <DataTemplate x:Key="ReplayRowTemplate" DataType="{x:Type vm:ReplayRowViewModel}">
+            <Border Style="{StaticResource ListRow}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="150" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                        <TextBlock FontWeight="SemiBold" TextWrapping="NoWrap" Text="{Binding StartedText}" />
+                        <TextBlock Style="{StaticResource HintText}" TextWrapping="NoWrap" Text="{Binding DurationText}" />
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="1" Margin="14,0,0,0" VerticalAlignment="Center">
+                        <TextBlock TextWrapping="NoWrap" TextTrimming="CharacterEllipsis">
+                            <Run Text="{Binding SceneText, Mode=OneWay}" />
+                            <Run Text=" · " />
+                            <Run Text="{Binding ModeText, Mode=OneWay}" />
+                        </TextBlock>
+                        <TextBlock Style="{StaticResource HintText}" TextWrapping="NoWrap">
+                            <Run Text="{Binding PlayersText, Mode=OneWay}" />
+                            <Run Text=" · " />
+                            <Run Text="{Binding SizeText, Mode=OneWay}" />
+                            <Run Text=" · " />
+                            <Run Text="{Binding FileName, Mode=OneWay}" />
+                        </TextBlock>
+                        <TextBlock Style="{StaticResource HintText}"
+                                   Foreground="{StaticResource ErrorBrush}"
+                                   Text="{Binding ErrorText}"
+                                   Visibility="{Binding HasError, Converter={StaticResource BoolToVisibility}}" />
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Border Style="{StaticResource Badge}"
+                                Margin="0,0,10,0"
+                                Background="#33FF5F5F"
+                                Visibility="{Binding IsWriting, Converter={StaticResource BoolToVisibility}}">
+                            <TextBlock Style="{StaticResource BadgeText}"
+                                       Foreground="{StaticResource RecordBrush}"
+                                       Text="Kaydediliyor" />
+                        </Border>
+                        <Border Style="{StaticResource Badge}"
+                                Margin="0,0,10,0"
+                                Background="#33F2C14E"
+                                Visibility="{Binding ShowPartialBadge, Converter={StaticResource BoolToVisibility}}">
+                            <TextBlock Style="{StaticResource BadgeText}"
+                                       Foreground="{StaticResource WarningBrush}"
+                                       Text="Yarım" />
+                        </Border>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button Style="{StaticResource SmallOutlinedButton}"
+                                Margin="0,0,8,0"
+                                Command="{Binding WatchCommand}"
+                                IsEnabled="{Binding CanWatch}">
+                            <StackPanel Orientation="Horizontal">
+                                <Path Style="{StaticResource SmallIcon}"
+                                      Fill="{StaticResource PrimaryBrush}"
+                                      Stroke="{StaticResource PrimaryBrush}"
+                                      Width="12" Height="12"
+                                      Data="{StaticResource IconPlay}" />
+                                <TextBlock Margin="8,0,0,0" VerticalAlignment="Center"
+                                           Foreground="{StaticResource PrimaryBrush}"
+                                           Text="İzle" TextWrapping="NoWrap" />
+                            </StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource SmallOutlinedButton}"
+                                Content="Klasörde göster"
+                                Command="{Binding ShowInFolderCommand}" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <Grid Margin="28,24,28,20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0">
+            <TextBlock Style="{StaticResource TitleText}" Text="{Binding Title}" />
+            <TextBlock Style="{StaticResource HintText}" Margin="0,6,0,0" Text="{Binding Description}" />
+        </StackPanel>
+
+        <Grid Grid.Row="1" Margin="0,18,0,0"
+              Visibility="{Binding Message, Converter={StaticResource TextToVisibility}}">
+            <Border Style="{StaticResource ErrorStrip}"
+                    Visibility="{Binding MessageIsError, Converter={StaticResource BoolToVisibility}}">
+                <TextBlock Text="{Binding Message}" Foreground="{StaticResource ErrorBrush}" />
+            </Border>
+            <Border Style="{StaticResource InfoStrip}"
+                    Visibility="{Binding MessageIsError, Converter={StaticResource BoolToVisibility}, ConverterParameter=invert}">
+                <TextBlock Text="{Binding Message}" />
+            </Border>
+        </Grid>
+
+        <!-- anahtar -->
+        <Border Grid.Row="2" Style="{StaticResource Card}" Margin="0,18,0,16">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <Grid Grid.Column="0" Width="30" Height="30" VerticalAlignment="Center">
+                    <Ellipse Width="20" Height="20"
+                             Fill="{StaticResource RecordBrush}"
+                             Visibility="{Binding IsActive, Converter={StaticResource BoolToVisibility}}">
+                        <Ellipse.Triggers>
+                            <EventTrigger RoutedEvent="FrameworkElement.Loaded">
+                                <BeginStoryboard>
+                                    <Storyboard RepeatBehavior="Forever">
+                                        <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                         From="1" To="0.15" Duration="0:0:0.55"
+                                                         AutoReverse="True" />
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </EventTrigger>
+                        </Ellipse.Triggers>
+                    </Ellipse>
+                    <Ellipse Width="20" Height="20"
+                             Stroke="{StaticResource RecordBrush}" StrokeThickness="2" Fill="Transparent"
+                             Visibility="{Binding IsArmed, Converter={StaticResource BoolToVisibility}}" />
+                </Grid>
+
+                <StackPanel Grid.Column="1" Margin="14,0,0,0" VerticalAlignment="Center">
+                    <TextBlock Style="{StaticResource LabelText}" Text="MAÇ KAYDI" />
+                    <TextBlock FontSize="16" FontWeight="SemiBold" Text="{Binding StateText}" />
+                    <TextBlock Style="{StaticResource HintText}" Margin="0,6,0,0"
+                               Text="Sunucu her açılışta kayıt kapalı başlar." />
+                </StackPanel>
+
+                <Button Grid.Column="2"
+                        Style="{StaticResource FilledButton}"
+                        MinWidth="170"
+                        VerticalAlignment="Center"
+                        Content="{Binding ToggleText}"
+                        Command="{Binding ToggleCommand}" />
+            </Grid>
+        </Border>
+
+        <!-- liste başlığı -->
+        <Grid Grid.Row="3" Margin="0,0,0,10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                <TextBlock Style="{StaticResource SectionTitleText}" Text="Kayıtlar" />
+                <TextBlock Style="{StaticResource HintText}"
+                           TextWrapping="NoWrap"
+                           TextTrimming="CharacterEllipsis"
+                           Text="{Binding DirectoryText}"
+                           ToolTip="{Binding DirectoryText}" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                <Button Style="{StaticResource SmallOutlinedButton}"
+                        Margin="0,0,8,0"
+                        Content="Klasörü aç"
+                        Command="{Binding OpenFolderCommand}" />
+                <Button Style="{StaticResource SmallOutlinedButton}"
+                        Content="Yenile"
+                        Command="{Binding RefreshCommand}" />
+            </StackPanel>
+        </Grid>
+
+        <ScrollViewer Grid.Row="4" VerticalScrollBarVisibility="Auto">
+            <ItemsControl ItemsSource="{Binding Replays}" ItemTemplate="{StaticResource ReplayRowTemplate}" />
+        </ScrollViewer>
+    </Grid>
+</UserControl>

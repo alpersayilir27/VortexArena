@@ -416,7 +416,7 @@ namespace VortexArena.App.Admin
                     return -1f;
                 }
 
-                return Mathf.Max(0f, (Environment.TickCount - registry.LastSnapshotMs) / 1000f);
+                return Mathf.Max(0f, (NetClock.NowMs - registry.LastSnapshotMs) / 1000f);
             }
         }
 

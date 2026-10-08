@@ -96,6 +96,10 @@ sahne hata vermez, yalnızca **tamamen düz** görünür — arena sanatı ne ka
   yani tam tepeden 10° eğimli. Konumun görüntüye etkisi yoktur (yön yalnız rotasyondan gelir), ama
   ışığı arenanın üstünde tutmak sahne görünümünde onu bulunabilir kılar; 10°'lik eğim gölgeyi kısa
   tutar ve arena zemininde yön farkı yaratmaz.
+- **Gökyüzü materyali kitaplıktan gelir:** `Lighting > Environment > Skybox Material` =
+  `_Shared/World/Sky/` içindeki bir `M_Sky_*` (satıcı paketinin materyali ya da `Default-Skybox`
+  atanmaz). Ortam ışığı ve yansıma Skybox kaynaklıdır, yani gökyüzü **bake'ten önce** seçilir —
+  ekleme/değiştirme reçetesi [Yemek Kitabı 14.3](Yemek-Kitabi.md#143-gökyüzü-ekleme--değiştirme).
 - Işığın modu bake'e katılacaksa **Mixed** olur. `Realtime` ışık bake'e hiç girmez; `Baked` ışık da
   dinamik objeye (oyuncu avatarı, silah) hiç değmez — ikisini karıştırma.
 - **Karışık modun kipi `Shadowmask`tır** (`<SahneAdı>.lighting` → Mixed Lighting; çalışma anındaki

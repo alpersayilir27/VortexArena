@@ -416,6 +416,14 @@ namespace VortexArena.App.Admin
 
         private static bool Send<T>(T msg) where T : class
         {
+            if (AppSession.IsReplay)
+            {
+                // §12.4: playback has no server to request anything from. Gated at the single
+                // outbound point so no panel can leak a command.
+                SetStatus("Kayıt oynatılıyor; operatör komutları kapalı.");
+                return false;
+            }
+
             ArenaClient client = ArenaClient.Instance;
             if (client == null || !client.IsConnected)
             {

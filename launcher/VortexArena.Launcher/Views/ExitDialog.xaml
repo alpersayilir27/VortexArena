@@ -1,0 +1,40 @@
+<Window x:Class="VortexArena.Launcher.Views.ExitDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="VortexArena Launcher"
+        SizeToContent="Height"
+        Width="460"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner"
+        Background="{StaticResource BackgroundBrush}"
+        Foreground="{StaticResource OnSurfaceBrush}"
+        FontFamily="{StaticResource UiFont}">
+
+    <StackPanel Margin="24">
+        <TextBlock Style="{StaticResource SectionTitleText}" Text="Launcher kapatılsın mı?" />
+
+        <TextBlock Margin="0,10,0,0"
+                   Foreground="{StaticResource OnSurfaceVariantBrush}"
+                   Text="{Binding BodyText, RelativeSource={RelativeSource AncestorType=Window}}" />
+
+        <TextBlock Margin="0,10,0,0"
+                   Foreground="{StaticResource WarningBrush}"
+                   Text="Süren indirmeler yarıda kalır; başlamış bir gözlük kurulumu arka planda tamamlanır."
+                   Visibility="{Binding WorkWarningVisibility, RelativeSource={RelativeSource AncestorType=Window}}" />
+
+        <StackPanel Margin="0,22,0,0" HorizontalAlignment="Right" Orientation="Horizontal">
+            <Button Style="{StaticResource SmallOutlinedButton}"
+                    Margin="0,0,8,0"
+                    Content="Vazgeç"
+                    Click="OnCancel" />
+            <Button Style="{StaticResource SmallOutlinedButton}"
+                    Margin="0,0,8,0"
+                    Content="Açık bırak ve çık"
+                    Click="OnLeaveRunning" />
+            <Button Style="{StaticResource SmallFilledButton}"
+                    Content="Hepsini kapat ve çık"
+                    Click="OnCloseAll" />
+        </StackPanel>
+    </StackPanel>
+</Window>

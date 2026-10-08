@@ -151,6 +151,38 @@ işletmede USB yoktur, cihaza bağlanarak log okumak bir çalışma biçimi değ
 
 ---
 
+## Bitmiş bir maçı izleme (kayıt oynatma)
+
+Kayıt açıkken sunucu her maçı kendi klasöründeki `replays/` altına `.vxr` olarak yazar
+([ArenaNet-Protokol §12](../ArenaNet-Protokol.md)). Oynatma **ayrı bir rol değil, admin rolünün
+kipidir**: sunucuya bağlanılmaz, operatör komutları kapalıdır, izleyici kameraları açıktır.
+
+⚠️ **Kayıt sunucu açılışında kapalıdır** — dosya üretmek için önce açman gerekir:
+
+- **Launcher'dan:** *Kayıt* sayfası → **Kaydı başlat**. Geliştirme makinesinde launcher kök
+  klasörü exe'nin üstünde `deploy\` arar (`LauncherPaths`), yani `deploy\server` + `deploy\admin`
+  duruyorsa `dotnet run --project launcher/VortexArena.Launcher` ayarsız çalışır.
+- **Launcher olmadan**, çalışan sunucuya:
+  ```powershell
+  Invoke-RestMethod -Method Post -Uri http://127.0.0.1:47821/launcher/recording `
+    -ContentType application/json -Body '{"on":true}'
+  ```
+  Uç yalnız loopback'ten cevap verir ([ArenaNet-Protokol §13](../ArenaNet-Protokol.md)).
+
+- **Editörde:** rol `Admin` iken Dev penceresinde *Kayıt oynat* kutusunu işaretle, `.vxr` dosyasını
+  *Seç…* ile göster, Play'e bas.
+- **Build'de:** `VortexArena.exe --replay "<dosya>"` (admin build'in aynısı; `--server-ip`
+  gerekmez).
+
+Tuşlar: `Space` duraklat/sürdür · `←`/`→` 10 sn · `Shift+←`/`→` 60 sn · `↑`/`↓` hız (0,25–8×) ·
+`Home` başa. Kamera ve oyuncu seçimi canlı izleyicideki tuşlardır (1/2/3, Tab, F).
+
+> ⚠️ **Kayıt, onu alan sürümle oynatılır.** Oynatıcı yalnız kendi `PROTOCOL_VERSION`'ına eşit
+> kaydı açar; farklıysa iki sürümü yazıp reddeder — kayıt §5/§6 baytlarıdır ve tel düzeni sürüm
+> değişince kayar. Sahne geometrisi ve `netItemId` kataloğu kayıtta değil, oynatan build'dedir.
+
+---
+
 ## 6. Şimdi ne okumalı
 
 | Sıradaki | Neden |

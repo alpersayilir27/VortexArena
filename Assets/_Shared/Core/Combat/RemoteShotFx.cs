@@ -132,7 +132,7 @@ namespace VortexArena.Core.Combat
             public float LastEventTime;
         }
 
-        /// <summary>Event not yet due (playAtMs is on the Environment.TickCount axis).</summary>
+        /// <summary>Event not yet due (playAtMs is on the NetClock axis).</summary>
         private struct PendingShot
         {
             public RemoteFireEvent evt;
@@ -275,7 +275,7 @@ namespace VortexArena.Core.Combat
             }
 
             // TickCount difference via int subtraction: survives the ~24.9 day wrap.
-            int now = System.Environment.TickCount;
+            int now = NetClock.NowMs;
 
             int write = 0;
             for (int i = 0; i < count; i++)
@@ -327,7 +327,7 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
-            int now = System.Environment.TickCount;
+            int now = NetClock.NowMs;
 
             RemotePlayerRegistry registry = RemotePlayerRegistry.Instance;
             if (registry == null || !registry.TryGetPlaybackTimeMs(evt.serverTick, out int playAtMs))

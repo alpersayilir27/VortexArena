@@ -25,6 +25,16 @@ public sealed class ServerConfig
     /// the name must match a <c>sceneName</c> in <c>maps.json</c>.</remarks>
     public string lobbyScene = "";
 
+    /// <summary>Where the <c>.vxr</c> files go; empty = <c>replays/</c> next to the exe, a relative
+    /// path resolves against the exe folder too. <c>--replay-dir</c> overrides it.</summary>
+    /// <remarks>⚠️ Point it OUTSIDE the server folder to survive a redeploy — replacing the folder on
+    /// site takes the recordings with it.</remarks>
+    public string replayDir = "";
+
+    /// <summary>Recordings older than this are deleted at startup and after each close; <c>0</c> =
+    /// never delete.</summary>
+    public int replayKeepDays = 30;
+
     /// <summary>Hamburgerci balance (<c>burger</c> block); absent = the defaults in
     /// <see cref="BurgerSettings"/>.</summary>
     public BurgerSettings burger = new();

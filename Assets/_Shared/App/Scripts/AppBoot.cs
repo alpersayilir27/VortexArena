@@ -31,12 +31,16 @@ namespace VortexArena.App
         public const string ArgServerPort = "--server-port";
         public const string ArgRole = "--role";
 
+        /// <summary>Plays a match recording instead of connecting (§12.4); desktop only.</summary>
+        public const string ArgReplay = "--replay";
+
         private void Start()
         {
             // DevSession (editor only) may have written the role/address before Boot — do not overwrite.
             if (!AppSession.RoleResolved)
             {
-                AppSession.Role = ResolveRole();
+                // Replay forces admin: the spectator cameras + HUD it needs only exist there.
+                AppSession.Role = AppSession.IsReplay ? AppSession.RoleAdmin : ResolveRole();
                 AppSession.RoleResolved = true;
                 ResolveServerEndpoint();
             }
@@ -44,6 +48,7 @@ namespace VortexArena.App
             // The admin must not hold XR: on Standalone it auto-starts (needed for Link) and grabs
             // the idle HMD.
             AdminXrRelease.Apply();
+            QuestRenderSettings.Install();
 
             // One shell for every role: Lobby. The admin spectator follows the server from there.
             string sceneName = AppSession.SceneLobby;
@@ -91,7 +96,7 @@ namespace VortexArena.App
 
             if (string.IsNullOrWhiteSpace(ip))
             {
-                if (AppSession.Role == AppSession.RoleAdmin)
+                if (AppSession.Role == AppSession.RoleAdmin && !AppSession.IsReplay)
                 {
                     Debug.LogWarning(
                         $"[AppBoot] Admin rolünde '{ArgServerIp}' verilmedi. Bu build launcher'dan " +
@@ -105,6 +110,31 @@ namespace VortexArena.App
             AppSession.ServerPort = int.TryParse(FindArgValue(ArgServerPort), out int port) && port > 0
                 ? port
                 : ArenaProtocol.CONTROL_PORT;
+        }
+
+        /// <summary>
+        /// `--replay &lt;dosya&gt;` (see <see cref="AppSession.ReplayPath"/>). ⚠️ Read BEFORE the first
+        /// scene, not in <see cref="Start"/>: <c>AppSingletons</c> installs on AfterSceneLoad — earlier
+        /// than any Start — and must already know it is a replay session.
+        /// </summary>
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        private static void ResolveReplay()
+        {
+            // Not on Android: the headset is a player and a recording lives on the operator's PC.
+            if (Application.platform == RuntimePlatform.Android)
+            {
+                return;
+            }
+
+            // No argument = leave it alone: in the editor the dev window may have set a path.
+            string path = FindArgValue(ArgReplay);
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return;
+            }
+
+            AppSession.ReplayPath = path.Trim();
+            Debug.Log($"[AppBoot] Kayıt oynatma kipi: '{AppSession.ReplayPath}' (rol admin'e sabitlenecek).");
         }
 
         /// <summary>Reads a `--name value` pair from the command line; null when absent.</summary>

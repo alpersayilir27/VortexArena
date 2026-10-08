@@ -262,8 +262,14 @@ namespace VortexArena.App.Editor
                 DevSession.SkipCalibration = skipCalibration;
             }
 
-            // ---- target (meaningless in sandbox: nothing connects)
-            using (new EditorGUI.DisabledScope(DevSession.Sandbox))
+            // ---- match recording playback (admin role only)
+            if (DevSession.Role == AppSession.RoleAdmin && !DevSession.Sandbox)
+            {
+                DrawReplay();
+            }
+
+            // ---- target (meaningless in sandbox or playback: nothing connects)
+            using (new EditorGUI.DisabledScope(DevSession.Sandbox || DevSession.ReplayActive))
             {
                 DrawTarget();
             }
@@ -329,6 +335,73 @@ namespace VortexArena.App.Editor
                 MessageType.Info);
 
             EditorGUILayout.Space();
+        }
+
+        /// <summary>
+        /// Match recording playback (§12.4): no connection, operator commands off, spectator
+        /// cameras on. Admin role only — playback is a mode of that role.
+        /// <para>⚠️ <c>OpenFilePanel</c> is modal, unlike the rest of this window: it only opens on
+        /// an explicit button press and the path field stays editable, so CLI runs never hit it.</para>
+        /// </summary>
+        private void DrawReplay()
+        {
+            EditorGUI.BeginChangeCheck();
+            bool replay = EditorGUILayout.ToggleLeft(
+                new GUIContent("Kayıt oynat",
+                    "Sunucuya bağlanmaz: seçilen .vxr kaydı canlı admin yollarına geri beslenir"),
+                DevSession.Replay);
+            if (EditorGUI.EndChangeCheck())
+            {
+                DevSession.Replay = replay;
+            }
+
+            if (!DevSession.Replay)
+            {
+                return;
+            }
+
+            EditorGUI.indentLevel++;
+
+            EditorGUILayout.BeginHorizontal();
+            EditorGUI.BeginChangeCheck();
+            string path = EditorGUILayout.TextField(
+                new GUIContent("Kayıt dosyası", "Sunucunun replays/ klasöründeki .vxr dosyası"),
+                DevSession.ReplayPath);
+            if (EditorGUI.EndChangeCheck())
+            {
+                DevSession.ReplayPath = path;
+            }
+
+            if (GUILayout.Button("Seç…", GUILayout.Width(60f)))
+            {
+                string picked = EditorUtility.OpenFilePanel("Maç kaydı seç", DevSession.ReplayPath,
+                    ReplayFile.EXTENSION.TrimStart('.'));
+                if (!string.IsNullOrEmpty(picked))
+                {
+                    DevSession.ReplayPath = picked;
+                }
+            }
+
+            EditorGUILayout.EndHorizontal();
+
+            if (string.IsNullOrWhiteSpace(DevSession.ReplayPath))
+            {
+                EditorGUILayout.HelpBox("Dosya seçilmedi — oynatma uygulanmaz.", MessageType.Warning);
+            }
+            else if (!System.IO.File.Exists(DevSession.ReplayPath))
+            {
+                EditorGUILayout.HelpBox("Seçilen dosya bulunamadı.", MessageType.Warning);
+            }
+            else
+            {
+                EditorGUILayout.HelpBox(
+                    "Kayıt, onu alan sürümün protokol sürümüyle oynatılır; farklıysa oynatıcı " +
+                    "iki sürümü yazıp reddeder. Tuşlar: Space duraklat · ←/→ 10 sn · " +
+                    "Shift+←/→ 60 sn · ↑/↓ hız · Home başa.",
+                    MessageType.Info);
+            }
+
+            EditorGUI.indentLevel--;
         }
 
         /// <summary>Server target selection (a named target, or custom IP/Port).</summary>

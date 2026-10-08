@@ -10,11 +10,45 @@
     <AssemblyName>VortexArena.Launcher</AssemblyName>
     <AssemblyTitle>VortexArena Launcher</AssemblyTitle>
     <Product>VortexArena</Product>
-    <Version>1.0.0</Version>
-    <!-- Operatör makinesinde .NET kurulu olmayabilir; dağıtım self-contained yapılır
-         (scripts\deploy-launcher.bat). Trimming KAPALI: System.Text.Json yansıma
-         tabanlı serileştirme kullanıyor. -->
+    <Version>2.0.0</Version>
+  </PropertyGroup>
+
+  <!-- Single-file publish switch.
+
+       ⚠️ RuntimeIdentifier/SelfContained are CONDITIONAL on purpose: a self-contained,
+       RID-specific project cannot be referenced by the RID-less test project (NETSDK1150), so a
+       plain build/test stays framework-dependent and only scripts\deploy-launcher.bat turns this
+       on (-p:VortexSingleFile=true). Trimming stays OFF: System.Text.Json and WPF resolve types
+       through reflection. -->
+  <PropertyGroup Condition="'$(VortexSingleFile)' == 'true'">
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
     <PublishTrimmed>false</PublishTrimmed>
   </PropertyGroup>
+
+  <!-- Protocol sources shared with Unity and the server.
+
+       ⚠️ Linked file by file, NOT by glob: the launcher must compile exactly the DTOs and
+       constants it consumes, and a new protocol file must be a deliberate decision here. -->
+  <ItemGroup>
+    <Compile Include="..\..\Assets\_Shared\Net\Protocol\ArenaProtocol.cs" Link="Protocol\ArenaProtocol.cs" />
+    <Compile Include="..\..\Assets\_Shared\Net\Protocol\ReplayFile.cs" Link="Protocol\ReplayFile.cs" />
+    <Compile Include="..\..\Assets\_Shared\Net\Protocol\LauncherApi.cs" Link="Protocol\LauncherApi.cs" />
+  </ItemGroup>
+
+  <!-- Android platform-tools, embedded so no operator installs the SDK.
+       Unpacked at runtime by AdbService; NOTICE.txt ships with them (Apache 2.0). -->
+  <ItemGroup>
+    <None Remove="PlatformTools\**" />
+    <EmbeddedResource Include="PlatformTools\adb.exe" LogicalName="PlatformTools/adb.exe" />
+    <EmbeddedResource Include="PlatformTools\AdbWinApi.dll" LogicalName="PlatformTools/AdbWinApi.dll" />
+    <EmbeddedResource Include="PlatformTools\AdbWinUsbApi.dll" LogicalName="PlatformTools/AdbWinUsbApi.dll" />
+    <EmbeddedResource Include="PlatformTools\libwinpthread-1.dll" LogicalName="PlatformTools/libwinpthread-1.dll" />
+    <EmbeddedResource Include="PlatformTools\NOTICE.txt" LogicalName="PlatformTools/NOTICE.txt" />
+    <EmbeddedResource Include="PlatformTools\source.properties" LogicalName="PlatformTools/source.properties" />
+  </ItemGroup>
 
 </Project>

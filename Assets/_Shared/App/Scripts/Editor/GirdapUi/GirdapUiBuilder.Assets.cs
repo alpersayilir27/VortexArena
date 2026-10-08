@@ -31,6 +31,10 @@ namespace VortexArena.App.Editor
         {
             EnsureFolder(FontAssetDir);
 
+            // ⚠️ Before BuildContainer: the icon array is collected off the folder, so a png written
+            // afterwards would be missing from the container until the next run.
+            EnsureGirdapIcons();
+
             var fallback = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(FallbackFontPath);
             var fonts = new Dictionary<GirdapFont, TMP_FontAsset>();
 
@@ -40,6 +44,7 @@ namespace VortexArena.App.Editor
             }
 
             BuildContainer(fonts);
+            EnsureLokantaSprites();
             AssetDatabase.SaveAssets();
         }
 
@@ -98,18 +103,23 @@ namespace VortexArena.App.Editor
             return fa;
         }
 
-        // Saira ExtraBold needs a larger sample + padding: its heavy stems alias badly at 72/8.
+        // Heavy display faces (Saira ExtraBold, Fredoka) alias badly at 72/8 and need a larger
+        // sample + padding; body faces (Barlow, Nunito) fit a 512 atlas.
         private static void AtlasMetrics(GirdapFont role, out int pointSize, out int padding,
             out int atlas)
         {
             switch (role)
             {
                 case GirdapFont.SairaExtraBold:
+                case GirdapFont.FredokaBold:
+                case GirdapFont.FredokaSemiBold:
                     pointSize = 90;
                     padding = 9;
                     atlas = 1024;
                     break;
                 case GirdapFont.BarlowMedium:
+                case GirdapFont.NunitoExtraBold:
+                case GirdapFont.NunitoBold:
                     pointSize = 64;
                     padding = 7;
                     atlas = 512;
@@ -140,6 +150,10 @@ namespace VortexArena.App.Editor
             container.sairaBold = fonts[GirdapFont.SairaBold];
             container.sairaSemiBold = fonts[GirdapFont.SairaSemiBold];
             container.barlowMedium = fonts[GirdapFont.BarlowMedium];
+            container.fredokaBold = fonts[GirdapFont.FredokaBold];
+            container.fredokaSemiBold = fonts[GirdapFont.FredokaSemiBold];
+            container.nunitoExtraBold = fonts[GirdapFont.NunitoExtraBold];
+            container.nunitoBold = fonts[GirdapFont.NunitoBold];
 
             container.dots = LoadSprite("Dots_16.png");
             container.radial = LoadSprite("Radial_256.png");

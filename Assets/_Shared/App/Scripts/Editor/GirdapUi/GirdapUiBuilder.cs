@@ -56,6 +56,7 @@ namespace VortexArena.App.Editor
             BuildHud();
             BuildMatchResult();
             BuildPlayerHud();
+            BuildLokanta(); // after the shared strip: it replaces HealthHud inside BurgerHud
             AssetDatabase.SaveAssets();
         }
 
@@ -358,6 +359,10 @@ namespace VortexArena.App.Editor
                 case GirdapFont.SairaBold: return "SairaCondensed-Bold";
                 case GirdapFont.SairaSemiBold: return "SairaCondensed-SemiBold";
                 case GirdapFont.BarlowMedium: return "Barlow-Medium";
+                case GirdapFont.FredokaBold: return "Fredoka-Bold";
+                case GirdapFont.FredokaSemiBold: return "Fredoka-SemiBold";
+                case GirdapFont.NunitoExtraBold: return "Nunito-ExtraBold";
+                case GirdapFont.NunitoBold: return "Nunito-Bold";
                 default: return "ChakraPetch-Bold";
             }
         }

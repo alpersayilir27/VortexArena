@@ -151,7 +151,11 @@ namespace VortexArena.App.Admin
 
             // Venue background music from a folder on this PC. ⚠️ Admin role only — it reads a
             // Windows folder and plays on the operator's speakers; the headsets never hear it.
-            gameObject.AddComponent<AdminMusicPlayer>();
+            // Not in replay: the venue playlist belongs to the live session, not to the recording.
+            if (!AppSession.IsReplay)
+            {
+                gameObject.AddComponent<AdminMusicPlayer>();
+            }
 
             var cameraGo = new GameObject("[AdminSpectatorCamera]");
             cameraGo.transform.SetParent(transform, false);

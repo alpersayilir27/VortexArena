@@ -8,146 +8,146 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Chakra+Petch:wght@500;600;700&family=Saira+Condensed:wght@500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="tema.css">
+<link rel="stylesheet" href="asci.css">
 </head>
-<body>
+<body class="b">
 
-<p class="vcap"><b>Vardiya içi · şerit</b> — oyuncu HUD'ındaki başa kilitli şerit, can yerine vardiya bandı: EKİP skoru (ortak toplam, <code>match_state.scoreRed</code>), SEN (kendi katkın, <code>PlayerInfo.score</code>), mutlu / mutsuz müşteri (<code>modeState h:/u:</code>). Saat plakası VARDİYA etiketi taşır. Örnek: 2 dk 14 sn kaldı, ekip 120, sen 40, 7 mutlu 2 mutsuz.</p>
+<p class="vcap"><b>Çocukçu "lokanta" teması</b> — Köstebek maç sonu ekranındaki dil (kalın kontur, yuvarlak köşe, sert gölge, karikatür süsleme) lokanta motifleriyle; Girdap kiti yerine bu sayfadaki parça seti kullanılır. Yazı tipi Fredoka + Nunito. <b>Vardiya içi · şerit</b> — saat plakası VARDİYA kurdelesi taşır; band: EKİP (ortak skor) · skor · SEN · mutlu / mutsuz yüzler. Örnek: 2 dk 14 sn, ekip 120, sen 40, 7 mutlu 2 mutsuz.</p>
 <div class="frame"><div class="stage">
   <div class="vr"><div class="ph top">VR görüş alanı — yer tutucu</div></div>
-  <div class="vhud up">
-    <div class="vclock vp shift"><em>VARDİYA</em><span>02:14</span></div>
-    <div class="scorebug hud">
-      <div class="sb-team coop">EKİP</div>
-      <div class="sb-score">120</div>
-      <div class="sb-score sen"><em>SEN</em>40</div>
-      <div class="sb-cust"><span class="ok"><i data-ic="smile"></i>7</span><span class="no"><i data-ic="frown"></i>2</span></div>
+  <div class="bhud">
+    <div class="bclock bp"><span class="brib">VARDİYA</span>02:14</div>
+    <div class="bband bp">
+      <div class="bb-team">EKİP</div>
+      <div class="bb-score">120</div>
+      <div class="bb-sen"><em>SEN</em>40</div>
+      <div class="bb-cust"><span><i class="bface"></i>7</span><span><i class="bface sad"></i>2</span></div>
     </div>
   </div>
 </div></div>
 
-<p class="vcap"><b>Sipariş baloncuğu</b> — müşterinin üstünde, dünya uzayı 0,42 × 0,30 m, kameraya döner. Üstte SİPARİŞ başlığı ve sabır çubuğu (yeşil → sarı → kırmızı, kırmızıda yanıp söner); solda burger yığını alttan üste, sağda aynı sırayla malzeme listesi. Soldaki müşteri bekliyor; sağdakine yanlış servis yapıldı — ret gerekçesi 2,5 sn başlığın yerine kırmızı plakada, sipariş görünür kalır.</p>
+<p class="vcap"><b>Sipariş baloncuğu</b> — müşterinin üstünde konuşma balonu (kuyruk müşteriye bakar), 0,42 × 0,30 m. Başlıkta SİPARİŞ kurdelesi, sağda müşterinin yüzü + sabır çubuğu (yüz mutlu → düz → kızgın, çubuk yeşil → sarı → kırmızı). Solda burger yığını, sağda liste. Sağdaki balonda ret gerekçesi: kırmızı etiket 2,5 sn başlığa yapışır.</p>
 <div class="frame"><div class="stage">
   <div class="vr"><div class="ph top">VR görüş alanı — yer tutucu (müşteri üstü)</div></div>
-  <div class="obubs">
-    <section class="obub vp">
-      <div class="oh"><b><i data-ic="burger"></i>SİPARİŞ</b><span class="sp"></span><span class="sabir"><i data-ic="timer"></i><div class="hp"><i style="width:72%"></i></div></span></div>
+  <div class="bbubs">
+    <section class="bbub bp">
+      <div class="oh"><span class="brib"><i data-ic="burger"></i>SİPARİŞ</span><span class="sp"></span><span class="bpat"><i class="bface"></i><div class="bar"><i style="width:72%"></i></div></span></div>
       <div class="ob">
-        <div class="burger"><i class="ing bunb"></i><i class="ing patty"></i><i class="ing cheese"></i><i class="ing lettuce"></i><i class="ing tomato"></i><i class="ing bunt"></i></div>
-        <ul class="olist"><li><i class="ing bunb"></i>Alt ekmek</li><li><i class="ing patty"></i>Köfte</li><li><i class="ing cheese"></i>Peynir</li><li><i class="ing lettuce"></i>Marul</li><li><i class="ing tomato"></i>Domates</li><li><i class="ing bunt"></i>Üst ekmek</li></ul>
+        <div class="bstack"><i class="bing bunb"></i><i class="bing patty"></i><i class="bing cheese"></i><i class="bing lettuce"></i><i class="bing tomato"></i><i class="bing bunt"></i></div>
+        <ul class="blist"><li><i class="bing bunb"></i>Alt ekmek</li><li><i class="bing patty"></i>Köfte</li><li><i class="bing cheese"></i>Peynir</li><li><i class="bing lettuce"></i>Marul</li><li><i class="bing tomato"></i>Domates</li><li><i class="bing bunt"></i>Üst ekmek</li></ul>
       </div>
     </section>
-    <section class="obub vp">
-      <div class="oh"><b><i data-ic="burger"></i>SİPARİŞ</b><span class="sp"></span><span class="sabir warn"><i data-ic="timer"></i><div class="hp warn"><i style="width:38%"></i></div></span></div>
+    <section class="bbub bp">
+      <div class="oh"><span class="brib"><i data-ic="burger"></i>SİPARİŞ</span><span class="sp"></span><span class="bpat warn"><i class="bface meh"></i><div class="bar"><i style="width:38%"></i></div></span></div>
       <div class="ob">
-        <div class="burger"><i class="ing bunb"></i><i class="ing patty"></i><i class="ing bacon"></i><i class="ing patty"></i><i class="ing onion"></i><i class="ing pickle"></i><i class="ing bunt"></i></div>
-        <ul class="olist"><li><i class="ing bunb"></i>Alt ekmek</li><li><i class="ing patty"></i>Köfte</li><li><i class="ing bacon"></i>Pastırma</li><li><i class="ing patty"></i>Köfte</li><li><i class="ing onion"></i>Soğan</li><li><i class="ing pickle"></i>Turşu</li><li><i class="ing bunt"></i>Üst ekmek</li></ul>
+        <div class="bstack"><i class="bing bunb"></i><i class="bing patty"></i><i class="bing bacon"></i><i class="bing patty"></i><i class="bing onion"></i><i class="bing pickle"></i><i class="bing bunt"></i></div>
+        <ul class="blist"><li><i class="bing bunb"></i>Alt ekmek</li><li><i class="bing patty"></i>Köfte</li><li><i class="bing bacon"></i>Pastırma</li><li><i class="bing patty"></i>Köfte</li><li><i class="bing onion"></i>Soğan</li><li><i class="bing pickle"></i>Turşu</li><li><i class="bing bunt"></i>Üst ekmek</li></ul>
       </div>
-      <div class="rej"><i data-ic="warn"></i>Köfte pişmemiş</div>
+      <div class="bstick"><i data-ic="warn"></i>Köfte pişmemiş!</div>
     </section>
   </div>
 </div></div>
 
-<p class="vcap"><b>Köfte termometresi</b> — köftenin 10 cm üstünde, 5 × 10 cm, kameraya döner. Dilimli tüp dolar (çiğ pembe → pişmiş kahve), yeşil bölge "al" aralığıdır (20–40 sn); %87'den sonra kırmızı yanıp söner, 40 sn'de yanar. Izgaradayken alev ikonu.</p>
+<p class="vcap"><b>Köfte termometresi</b> — köftenin üstünde 5 × 10 cm klasik termometre: hazne + tüp, cıva çiğ pembe → pişmiş kahve; yeşil band "al" aralığı. Yanıyorken kart kızarır ve yanıp söner, yandığında kararır.</p>
 <div class="frame"><div class="stage">
   <div class="vr"><div class="ph top">VR görüş alanı — yer tutucu (köfte üstü)</div></div>
-  <div class="therms">
-    <div class="therm vp" style="--p:.3"><div class="gauge"><div class="tube"><i></i></div><div class="zone"></div></div><div class="st"><i data-ic="flame" class="flame"></i>ÇİĞ</div></div>
-    <div class="therm vp cooked" style="--p:.66"><div class="gauge"><div class="tube"><i></i></div><div class="zone"></div></div><div class="st"><i data-ic="check"></i>HAZIR</div></div>
-    <div class="therm vp hot" style="--p:.92"><div class="gauge"><div class="tube"><i></i></div><div class="zone"></div></div><div class="st"><i data-ic="warn"></i>YANIYOR</div></div>
-    <div class="therm vp burnt" style="--p:1"><div class="gauge"><div class="tube"><i></i></div><div class="zone"></div></div><div class="st"><i data-ic="x"></i>YANDI</div></div>
+  <div class="bths">
+    <div class="bth bp" style="--p:.3"><div class="gauge"><div class="tube"><i></i></div><div class="bulb"></div><div class="zone"></div></div><div class="st"><i data-ic="flame" class="flame"></i>ÇİĞ</div></div>
+    <div class="bth bp cooked" style="--p:.66"><div class="gauge"><div class="tube"><i></i></div><div class="bulb"></div><div class="zone"></div></div><div class="st"><i data-ic="check"></i>HAZIR!</div></div>
+    <div class="bth bp hot" style="--p:.92"><div class="gauge"><div class="tube"><i></i></div><div class="bulb"></div><div class="zone"></div></div><div class="st"><i data-ic="warn"></i>YANIYOR</div></div>
+    <div class="bth bp burnt" style="--p:1"><div class="gauge"><div class="tube"><i></i></div><div class="bulb"></div><div class="zone"></div></div><div class="st"><i data-ic="x"></i>YANDI</div></div>
   </div>
 </div></div>
 
-<p class="vcap"><b>Vardiya sonu · sonuç kartı</b> — kazanan yok; büyük sayı ekip skoru (amber ton), altında mutlu / mutsuz müşteri sayısı, SEN katkısı ve katkı sırası. Ekran operatör ilerletene kadar kalır.</p>
+<p class="vcap"><b>Vardiya sonu · sonuç kartı</b> — damalı krem kart, kurdele başlık, dev ekip skoru; altta mutlu / mutsuz müşteri, SEN katkısı ve sıra yıldızı. Köşelerde karikatür burger ve patates.</p>
 <div class="frame"><div class="stage">
   <div class="vr"><div class="ph">VR görüş alanı — yer tutucu</div></div>
-  <section class="rcard">
-    <div class="slab coop"><small>VARDİYA BİTTİ</small><b>120</b><em>EKİP SKORU</em></div>
-    <div class="rlow">
-      <p class="rwin">GÜNÜN HESABI · <span class="k">7 MUTLU</span> · 2 MUTSUZ MÜŞTERİ</p>
-      <div class="scorebug xl">
-        <div class="sb-team coop">SEN</div>
-        <div class="sb-score">40</div>
-        <div class="sb-score sen"><em>SIRA</em>1.</div>
-      </div>
+  <section class="bcard bp chk">
+    <div class="bart"><i class="bing bunb"></i><i class="bing patty"></i><i class="bing cheese"></i><i class="bing lettuce"></i><i class="bing tomato"></i><i class="bing bunt"></i></div>
+    <div class="bfries"><i style="left:34px"></i><i style="left:58px;bottom:78px"></i><i style="left:82px;bottom:72px"></i><i style="left:104px;bottom:66px"></i><div class="cup"></div></div>
+    <span class="brib lg title"><i data-ic="burger"></i>VARDİYA BİTTİ!</span>
+    <div class="bnum big">120</div>
+    <span class="brib must lbl">EKİP SKORU</span>
+    <div class="bres">
+      <div class="bpill"><i class="bface"></i>7<em>MUTLU</em></div>
+      <div class="bpill"><i class="bface sad"></i>2<em>MUTSUZ</em></div>
+      <div class="bpill sen"><em>SEN</em>40</div>
+      <div class="bstar"><span>1.<em>SIRA</em></span></div>
     </div>
   </section>
 </div></div>
 
-<p class="vcap"><b>Vardiya sonu · günün hesabı</b> — sonuç kartından sonra. Oyuncular katkıya göre sıralı, iki bloğa bölünmüş (koddaki gibi); tek sütun KATKI. Kendi satırın vurgulu.</p>
+<p class="vcap"><b>Vardiya sonu · günün hesabı</b> — katkıya göre sıralı iki blok; satırlar beyaz kart, sıra numarası sarı rozet, kendi satırın sarı ve SEN etiketli. KATKI sütununda sayı + minik burger (10 puan = 1 burger).</p>
 <div class="frame"><div class="stage">
   <div class="vr"><div class="ph">VR görüş alanı — yer tutucu</div></div>
-  <section class="rcard">
-    <header class="sc-head">
-      <h2>GÜNÜN HESABI</h2>
+  <section class="bsc bp chk">
+    <header class="head">
+      <span class="brib lg">GÜNÜN HESABI</span>
       <span class="sp"></span>
-      <p class="rwin">EKİP SKORU <span class="k">120</span></p>
-      <div class="scorebug md">
-        <div class="sb-team coop">SEN</div>
-        <div class="sb-score sen"><em>KATKI</em>40</div>
-        <div class="sb-cust"><span class="ok"><i data-ic="smile"></i>7</span><span class="no"><i data-ic="frown"></i>2</span></div>
-      </div>
+      <div class="bpill"><i class="bface"></i>7</div>
+      <div class="bpill"><i class="bface sad"></i>2</div>
+      <div class="bpill sen"><em>EKİP</em>120</div>
     </header>
-    <div class="sc-body" id="blocks"></div>
-    <footer class="sc-foot">
-      <div class="who coop">SEN</div>
+    <div class="body" id="blocks"></div>
+    <footer class="bfoot">
+      <div class="who">SEN</div>
       <div class="st"><em>KATKI</em><b>40</b></div>
-      <div class="st"><em>MUTLU</em><b>7</b></div>
-      <div class="st"><em>MUTSUZ</em><b>2</b></div>
+      <div class="st"><em>SIRA</em><b>1.</b></div>
+      <div class="st"><em>MUTLU</em><b><i class="bface"></i>7</b></div>
+      <div class="st"><em>MUTSUZ</em><b><i class="bface sad"></i>2</b></div>
       <div class="st"><em>EKİP SKORU</em><b>120</b></div>
     </footer>
   </section>
 </div></div>
 
-<p class="vcap"><b>Durum çeşitleri</b> — saat (normal / son 10 sn), band (vardiya başı / dolu), sabır çubuğu üç ton, koddaki beş ret gerekçesi, geri sayım (merkez bildirimi bağlı değilken durum plakasında).</p>
-<div class="frame"><div class="stage" data-h="900" style="background:#070B16">
+<p class="vcap"><b>Durum çeşitleri</b> — saat (normal / son 10 sn), band (vardiya başı / dolu), sabır üç kademe, koddaki beş ret gerekçesi, geri sayım plakası.</p>
+<div class="frame"><div class="stage" data-h="900" style="background:#FFF4DC">
   <div class="vgrid">
     <div class="g"><h4>Saat</h4>
-      <div class="vclock vp shift"><em>VARDİYA</em><span>09:58</span></div>
-      <div class="vclock vp shift last"><em>VARDİYA</em><span>00:07</span></div>
+      <div class="bclock bp"><span class="brib">VARDİYA</span>09:58</div>
+      <div class="bclock bp last"><span class="brib">VARDİYA</span>00:07</div>
     </div>
     <div class="g"><h4>Vardiya bandı</h4>
-      <div class="scorebug hud"><div class="sb-team coop">EKİP</div><div class="sb-score">0</div><div class="sb-score sen"><em>SEN</em>0</div><div class="sb-cust"><span class="ok"><i data-ic="smile"></i>0</span><span class="no"><i data-ic="frown"></i>0</span></div></div>
-      <div class="scorebug hud"><div class="sb-team coop">EKİP</div><div class="sb-score">460</div><div class="sb-score sen"><em>SEN</em>130</div><div class="sb-cust"><span class="ok"><i data-ic="smile"></i>31</span><span class="no"><i data-ic="frown"></i>15</span></div></div>
+      <div class="bband bp"><div class="bb-team">EKİP</div><div class="bb-score">0</div><div class="bb-sen"><em>SEN</em>0</div><div class="bb-cust"><span><i class="bface"></i>0</span><span><i class="bface sad"></i>0</span></div></div>
+      <div class="bband bp"><div class="bb-team">EKİP</div><div class="bb-score">460</div><div class="bb-sen"><em>SEN</em>130</div><div class="bb-cust"><span><i class="bface"></i>31</span><span><i class="bface sad"></i>15</span></div></div>
     </div>
-    <div class="g"><h4>Sabır çubuğu</h4>
-      <span class="sabir"><i data-ic="timer"></i><div class="hp"><i style="width:100%"></i></div></span>
-      <span class="sabir warn"><i data-ic="timer"></i><div class="hp warn"><i style="width:42%"></i></div></span>
-      <span class="sabir bad"><i data-ic="timer"></i><div class="hp bad"><i style="width:15%"></i></div></span>
+    <div class="g"><h4>Sabır</h4>
+      <span class="bpat"><i class="bface"></i><div class="bar"><i style="width:100%"></i></div></span>
+      <span class="bpat warn"><i class="bface meh"></i><div class="bar"><i style="width:42%"></i></div></span>
+      <span class="bpat bad"><i class="bface sad"></i><div class="bar"><i style="width:15%"></i></div></span>
     </div>
     <div class="g"><h4>Ret gerekçesi (BurgerServingBoard)</h4>
-      <div class="rej" style="width:380px"><i data-ic="warn"></i>Önce alt ekmek</div>
-      <div class="rej" style="width:380px"><i data-ic="warn"></i>En üste üst ekmek</div>
-      <div class="rej" style="width:380px"><i data-ic="warn"></i>Köfte pişmemiş</div>
-      <div class="rej" style="width:380px"><i data-ic="warn"></i>Köfte yanmış</div>
-      <div class="rej" style="width:380px"><i data-ic="warn"></i>Sipariş tutmadı</div>
+      <div class="bstick" style="position:static;width:360px;transform:none"><i data-ic="warn"></i>Önce alt ekmek!</div>
+      <div class="bstick" style="position:static;width:360px;transform:none"><i data-ic="warn"></i>En üste üst ekmek!</div>
+      <div class="bstick" style="position:static;width:360px;transform:none"><i data-ic="warn"></i>Köfte pişmemiş!</div>
+      <div class="bstick" style="position:static;width:360px;transform:none"><i data-ic="warn"></i>Köfte yanmış!</div>
+      <div class="bstick" style="position:static;width:360px;transform:none"><i data-ic="warn"></i>Sipariş tutmadı!</div>
     </div>
     <div class="g"><h4>Geri sayım · durum plakası</h4>
-      <div class="vstat vp"><i data-ic="timer"></i>3</div>
-      <div class="vstat vp"><i data-ic="timer"></i>Vardiya başlıyor — 3</div>
+      <div class="bstat bp"><i data-ic="timer"></i>3</div>
+      <div class="bstat bp"><i data-ic="timer"></i>Vardiya başlıyor — 3</div>
     </div>
   </div>
 </div></div>
 
 <script src="tema.js"></script>
 <script>
-  const { ic } = VA;
   const ME = 12; // Ayşe
-  // Contribution = served burgers x 10; sorted highest first, split in halves like the code.
   const ALL = [
     { id: 12, name: 'Ayşe', s: 40 }, { id: 3, name: 'Deniz', s: 30 }, { id: 7, name: 'Mehmet', s: 20 },
     { id: 5, name: 'Elif', s: 10 }, { id: 15, name: 'Can', s: 10 }, { id: 9, name: 'Kerem', s: 10 },
     { id: 18, name: 'Burak', s: 0 }, { id: 21, name: 'Ece', s: 0 }, { id: 11, name: 'Emre', s: 0 }, { id: 14, name: 'Zeynep', s: 0 },
   ].sort((a, b) => b.s - a.s);
   const half = Math.ceil(ALL.length / 2);
-  const block = (list, from) => `<div class="sc-team">
-      <div class="sc-th coop"><b>OYUNCULAR</b><span class="c">KATKI</span></div>
-      ${list.map((p, i) => `<div class="sc-row coop${p.id === ME ? ' me' : ''}">
+  const mini = (s) => s > 0 ? '<span class="mini"><i></i><i></i><i></i><i></i></span>' : '';
+  const block = (list, from) => `<div class="bcol">
+      <div class="bth-row"><span></span><span>OYUNCULAR</span><span class="c">KATKI</span></div>
+      ${list.map((p, i) => `<div class="brow${p.id === ME ? ' me' : ''}">
         <span class="rk">${from + i + 1}</span>
         <span class="nm">${p.name}${p.id === ME ? '<span class="tag">SEN</span>' : ''}<small>#${p.id}</small></span>
-        <span class="c lead">${p.s}</span>
+        <span class="c">${mini(p.s)}${p.s}</span>
       </div>`).join('')}
-      <p class="sc-sum">${list.length} oyuncu · ${list.reduce((a, p) => a + p.s, 0)} katkı</p>
+      <p class="bsum">${list.length} oyuncu · ${list.reduce((a, p) => a + p.s, 0)} katkı · ${list.reduce((a, p) => a + p.s, 0) / 10} burger</p>
     </div>`;
   document.getElementById('blocks').innerHTML = block(ALL.slice(0, half), 0) + block(ALL.slice(half), half);
 </script>

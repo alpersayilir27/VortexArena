@@ -1,12 +1,19 @@
 <Application x:Class="VortexArena.Launcher.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             StartupUri="MainWindow.xaml">
+             xmlns:infra="clr-namespace:VortexArena.Launcher.Infrastructure">
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
                 <ResourceDictionary Source="pack://application:,,,/Theme/Dark.xaml" />
+                <ResourceDictionary Source="pack://application:,,,/Theme/Icons.xaml" />
             </ResourceDictionary.MergedDictionaries>
+
+            <infra:BoolToVisibilityConverter x:Key="BoolToVisibility" />
+            <infra:InverseBooleanConverter x:Key="InverseBoolean" />
+            <infra:TextToVisibilityConverter x:Key="TextToVisibility" />
+            <infra:EqualsToVisibilityConverter x:Key="EqualsToVisibility" />
+            <infra:ResourceLookupConverter x:Key="ResourceLookup" />
         </ResourceDictionary>
     </Application.Resources>
 </Application>

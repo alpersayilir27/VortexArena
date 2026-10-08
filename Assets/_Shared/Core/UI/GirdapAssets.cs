@@ -23,6 +23,13 @@ namespace VortexArena.Core.UI
         public TMP_FontAsset sairaSemiBold;
         public TMP_FontAsset barlowMedium;
 
+        [Header("Fonts (Lokanta)")]
+        public TMP_FontAsset fredokaBold;
+
+        public TMP_FontAsset fredokaSemiBold;
+        public TMP_FontAsset nunitoExtraBold;
+        public TMP_FontAsset nunitoBold;
+
         [Header("Patterns")]
         public Sprite dots;
         public Sprite radial;
@@ -44,6 +51,10 @@ namespace VortexArena.Core.UI
                 case GirdapFont.SairaBold: return sairaBold;
                 case GirdapFont.SairaSemiBold: return sairaSemiBold;
                 case GirdapFont.BarlowMedium: return barlowMedium;
+                case GirdapFont.FredokaBold: return fredokaBold;
+                case GirdapFont.FredokaSemiBold: return fredokaSemiBold;
+                case GirdapFont.NunitoExtraBold: return nunitoExtraBold;
+                case GirdapFont.NunitoBold: return nunitoBold;
                 default: return null;
             }
         }

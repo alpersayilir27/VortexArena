@@ -7,9 +7,10 @@ title: Arayüz tasarımı — 2D'yi nerede bulurum, nasıl düzenlerim
 Projedeki tüm arayüz **uGUI**'dir: `Canvas` + `TextMeshPro`. **UI Toolkit kullanılmıyor** —
 projede tek bir `.uxml`/`.uss` yok, aramayın.
 
-Admin ekranları ile oyuncunun maç sonu ekranı **"Girdap" arayüz kitiyle koddan üretilir**: prefab
-bir çıktıdır, kaynak builder'dır. Oyuncunun görüş alanındaki HUD'lar, ölüm/bildirim ekranları ve
-yükleme/bağlantı ekranları bunun dışındadır ve **elle düzenlenir**.
+Admin ekranları, oyuncunun maç sonu ekranı, kafaya kilitli şerit, öldün kartı ve aşçı modunun
+lokanta arayüzü **koddan üretilir** (Girdap arayüz kiti): prefab bir çıktıdır, kaynak builder'dır.
+Bildirim, yükleme ve bağlantı ekranları bunun dışındadır ve **elle düzenlenir** ("Girdap dışında
+kalan arayüz").
 
 ## Nerede ne var
 
@@ -17,13 +18,14 @@ yükleme/bağlantı ekranları bunun dışındadır ve **elle düzenlenir**.
 
 | Tip | Ne yapar |
 |---|---|
-| `UiPolygonGraphic` | Köşe kesimli (chamfer) + yan eğimli (slant) konveks poligon tabanı; yarım düzlem kırpma ve üçgen fan yardımcıları burada |
-| `UiShape` | Temanın kutusu: dış çerçeve halkası + gradyan dolgu + dış/iç parıltı + 0,75 px kenar yumuşatma, **tek draw**. Akıcı API: `Chamfer` · `Slant` · `Fill` · `Outline` · `Glow` · `InnerGlow` · `Antialias` |
+| `UiPolygonGraphic` | Köşe kesimli (chamfer) + yan eğimli (slant) + **köşe başına yarıçaplı** (radius) konveks poligon tabanı; yarım düzlem kırpma ve üçgen fan yardımcıları burada. Yay iki kenara da teğettir; aynı köşede chamfer yarıçapı **ezer**, aynı kenardaki iki yarıçap yaylar kesişmesin diye küçültülür, üst üste düşen ardışık köşe noktaları atılır (yoksa sıfır uzunluklu kenar outline'da diken üretir) |
+| `UiShape` | Temanın kutusu: dış çerçeve halkası + gradyan dolgu + dış/iç parıltı + 0,75 px kenar yumuşatma, **tek draw**. Akıcı API: `Chamfer` · `Radius` · `Slant` · `Fill` · `Outline` · `Glow` · `InnerGlow` · `Antialias` |
 | `UiStripes` | CSS `repeating-linear-gradient` karşılığı çapraz şeritler, poligona kırpılı (takım plakaları, canlı ihlal bandı); `Drift(sn)` = CSS `drift` keyframe’i: bir periyotluk sonsuz yavaş kayma, `Update` her kare meshi yeniler |
 | `UiSegmentBar` | Dilimli, eğik can çubuğu (`SetFill` · `SetFillColors` · `SetTrack` · `SetMetrics`) |
 | `UiButtonStyle` | Bir düğmenin TÜM görünümü: `SetKind(UiButtonKind)` · `SetInteractable` · `SetLabel` · `SetHold(0..1)`; parçaları `Bind(...)` bağlar |
 | `UiChip` | Rozet: `Set(text, UiChipKind, icon)`; genişliğini kendi ölçer |
 | `Girdap` | Palet ve yardımcılar: `Hex` · `Rgba` · `TeamHi/TeamLo/TeamInk(team)` · `Spacing(em)` · `Upper` · `Font(GirdapFont)` · `Icon(name)` · `Assets` |
+| `Lokanta` | Aşçı modunun paleti ve ölçüleri (statik): mürekkep/krem/kâğıt yüzeyler, kırmızı-hardal-yeşil vurgular, malzeme dilimi renkleri, termometre cıvası, `Outline`/`Shadow`/`CardRadius` ve sabır eşikleri (`PatienceWarn`/`PatienceBad`). `Girdap` ile aynı kural: renk literali çağrı yerinde yazılmaz |
 | `GirdapAssets` | ScriptableObject kabı: TMP fontları + ikon sprite'ları |
 | `UiButtonKind` · `UiChipKind` · `UiGradientMode` · `GirdapFont` | Prefablara **serileşen** enum'lar |
 
@@ -32,15 +34,22 @@ yükleme/bağlantı ekranları bunun dışındadır ve **elle düzenlenir**.
 (`Node` · `Place`/`PlaceRight`/`PlaceTopCenter`/`PlaceMiddleLeft`/`PlaceBottom*` · `Stretch`/
 `StretchTop`/`StretchBottom`/`StretchLeft` · `Shape`/`ShapeBox` · `Stripes` · `SegmentBar` ·
 `Image` · `Icon` · `Text` · `Kbd` · `Button` · `Chip` · prefab kaydetme), ekran başına bir kardeş
-partial durur (`.Assets` · `.PlayerRow` · `.Stats` · `.Preferences` · `.Hud` · `.MatchResult`).
+partial durur (`.Assets` · `.PlayerRow` · `.Stats` · `.Preferences` · `.Hud` · `.MatchResult` ·
+`.PlayerHud`). Aşçı modunun lokanta teması kendi partial ailesindedir (`.Lokanta` ortak
+primitifler — `LkCard`/`LkPill`/`LkRibbon`/`LkFace`/`LkText`/`TextShadow`/`TextOutline`/`LkSprite`
+— ve `.LokantaHud` · `.LokantaBubble` · `.LokantaThermometer` · `.LokantaResult` · `.LokantaIcons`
++ sprite üreteci `LokantaSprites`).
 
 **Menü** — `Tools > VortexArena > UI > Girdap`: *Fontları ve asset kabını üret* · *Tüm prefabları
-üret* · *Yalnız `<Ekran>`*. Toplu üretimin sırası PlayerRow → StatsRow → StatsPanel →
-PreferencesPanel → Hud → MatchResult → PlayerHud'dur; HUD, panelleri ve satır prefabını içine gömer.
+üret* · *Lokanta sprite'larını üret* · *Yalnız `<Ekran>`* (aşçı tarafında *Yalnız Aşçı HUD* ·
+*… sipariş baloncuğu* · *… termometre* · *… sonuç ekranı*). Toplu üretimin sırası PlayerRow →
+StatsRow → StatsPanel → PreferencesPanel → Hud → MatchResult → PlayerHud → Lokanta'dır; HUD,
+panelleri ve satır prefabını içine gömer.
 
 **Üretilen prefablar** — `Assets/_Shared/App/Resources/UI/`: `AdminPlayerRow` · `AdminStatsRow` ·
 `AdminStatsPanel` · `AdminPreferencesPanel` · `AdminHud` · `MatchResultOverlay` · `HealthHud` ·
-`DeathHud`. Builder prefabı
+`DeathHud`; `Assets/Modes/Burger/UI/`: `BurgerHud` · `LokantaThermometer` ·
+`BurgerResultOverlay` (+ `NO_customer` prefabındaki `Bubble` alt ağacı). Builder prefabı
 **yerinde** düzenler: içeriği yükler, kendi ürettiği çocukları siler, yeniden kurar, alanları
 `SerializedObject` ile bağlar, kaydeder.
 
@@ -50,14 +59,18 @@ fontsuz/ikonsuz çizilir ve konsola tek seferlik hata düşer.
 
 **Fontlar** — kaynak TTF'ler `Assets/_Shared/App/UI/Fonts/`, menünün ürettiği TMP SDF asset'leri
 `Assets/_Shared/App/Resources/UI/Fonts/` (dinamik atlas; Türkçe glifler ve ayraçlar öne pişirilir).
-Aynı klasördeki `<Font> SDF Glow <renk>.mat` dosyaları metin parıltısı (CSS `text-shadow`)
-preset'leridir: builder `TextGlow(...)` ile üretir, elle düzenlenmez; silinirse bir sonraki
-üretimde geri gelir.
+Girdap ekranları Chakra/Saira/Barlow ailesindedir; Fredoka (başlık ve sayı) ile Nunito (küçük
+kapitaller) **yalnız lokanta temasındadır**. Aynı klasördeki `<Font> SDF Glow <renk>.mat` dosyaları
+metin parıltısı (CSS `text-shadow`), `<Font> Shadow <RRGGBBAA>.mat` / `<Font> Outline <RRGGBBAA>.mat`
+dosyaları lokantanın sert gölge/konturu için preset'tir: builder üretir, elle düzenlenmez;
+silinirse bir sonraki üretimde geri gelir.
 **İkonlar** — `Assets/_Shared/App/UI/Sprites/Ic_<Ad>.png`; kodda **çıplak adla** istenir
 (`Girdap.Icon("Skull")`). Kaynak çizim mockup'ın `tema.js` dosyasındaki 24×24 çizgi ikon
 haritasıdır (`P`, 2 px kalın, yuvarlak uçlu); Unity kopyası 64×64, beyaz + alfa PNG'dir ve import
 ayarları mevcut ikonlarla aynıdır (Sprite · Single · 100 ppu · sıkıştırmasız). Yeni ikon önce
 `tema.js`'e, sonra aynı geometriyle PNG'ye yazılır; kaba `Fontları ve asset kabını üret` toplar.
+Bir kısmı (`Ic_Flame` · `Ic_Check`) builder'ın kendi çizdiği PNG'dir (`EnsureGirdapIcons`, kap
+toplanmadan önce koşar) — dosyası silinirse bir sonraki üretimde geri gelir.
 
 **Mockup'lar** — `Docs/Gelistirici/Arayuz/` (ortak stil `tema.css`, parça kiti `kit.html`, ekran başına
 bir HTML; tarayıcıda çift tıkla açılır). Her ölçünün kaynağı orasıdır ve kalıcıdır: görsel değişiklik
@@ -67,7 +80,8 @@ bir HTML; tarayıcıda çift tıkla açılır). Her ölçünün kaynağı orası
 `Assets/_Shared/App/Resources/UI/` altında): `RoundNoticeHud` · `LoadingOverlayScreen`/`…World` ·
 `ConnectionOverlayScreen`/`…World` · `AdminPlayerMarker`. Mod HUD'ları mod
 kutusundadır (`Assets/Modes/<Mod>/UI/<Mod>Hud.prefab`) ve içleri bilerek boştur: taşıdıkları şey
-yukarıdaki iç içe prefab örnekleridir. Cephane göstergesi silahın kendi üstündedir
+yukarıdaki iç içe prefab örnekleridir — kendi şeridini builder'dan üreten mod bunun dışındadır
+("Aşçı (Burger) — lokanta teması"). Cephane göstergesi silahın kendi üstündedir
 (`Assets/_Shared/Arsenal/Prefabs/AmmoCanvas.prefab`). Bu grupta alan bağları, `onClick` boşluğu ve
 "metin yer tutucudur" kuralları geçerlidir → `Yapma-Listesi.md` "Sahne ve prefab".
 
@@ -98,12 +112,17 @@ kabı değiştiyse önce *Fontları ve asset kabını üret*).
 - **Yeni bir alan bağlanacaksa** bileşene `[SerializeField]` eklenir ve builder onu
   `SerializedObject` üstünden yazar — elle sürüklenen bağ ilk üretimde silinir.
 - **Satır yüksekliği koddan okunur:** `AdminPlayerRow.Height` · `AdminStatsRow.Height` ·
-  `AdminKillFeedRow.Height`/`NewHeight` · `AdminViolationFeedRow.Height`/`LiveHeight` ·
-  `MatchResultOverlay.RowHeight`/`RowGap`/`RowsTop`. Yerleşim bu sabitlerden türer; prefabtaki rect
-  ile sabit **birlikte** değişir.
-- **Mod varyantları tabandan miras alır.** `MatchResultOverlay` builder'ı varyantların ezdiği
-  düğümleri silmez, yeniden ebeveynler (`ResultKeptNodes`) — silinen bir düğüm varyantın
-  override'ını sarkıtır ve o modun sanatı kaybolur.
+  `AdminKillFeedRow.Height`/`NewHeight` · `AdminViolationFeedRow.Height`/`LiveHeight`. Yerleşim bu
+  sabitlerden türer; prefabtaki rect ile sabit **birlikte** değişir. Maç sonu tablosunun adımı
+  (`MatchResultOverlay`'in `rowHeight`/`rowGap`/`rowsTop` alanları) ise **prefabta serileşir**;
+  varsayılanları Girdap ölçüleridir, satır yerleşimini değiştiren bir tema onları builder'ından
+  yazar.
+- **Moda özel maç sonu ekranı iki yoldan birindedir** ve ikisi de aynı `MatchResultOverlay`
+  alanlarını bağlar: (a) `MatchResultOverlay.prefab`'ın **prefab varyantı** — sprite/renk/kelime
+  farkı; alan bağları tabandan miras gelir, builder varyantların ezdiği düğümleri silmez, yeniden
+  ebeveynler (`ResultKeptNodes`), silinen düğüm override'ı sarkıtır ve o modun sanatı kaybolur.
+  (b) Modun kendi `GirdapUiBuilder` partial'ından **sıfırdan üretilen** prefab — yerleşimi de
+  değişen temalar için; alanları ad üstünden bağlar. Elle kopya ikisinin de yerine geçmez.
 
 ## Tuzaklar
 
@@ -214,18 +233,61 @@ kabı değiştiyse önce *Fontları ve asset kabını üret*).
   Kendi satırı vurgulanır, ayrılan oyuncunun satırı soluklaşır. ⚠️ Eski kolon metinleri (`Column0..5`
   + `Header0..5`) **bağlı ve çalışır durumda tutulur**: bir mod varyantı onların etrafına
   giydirilmişse `boardRowTemplate` alanını boşaltmak tabloyu kolonlara döndürür.
+  **Görünümü veriden gelir:** satır ölçüleri, satır/kendi-satırı dolgu-kontur-mürekkep renkleri,
+  ko-op özet biçimi, sonuç tonuyla boyama ve ayrı ayrı yazılabilen ko-op/tablo metin hedefleri
+  bileşenin kendi alanlarıdır; varsayılanları Girdap görünümünü verir, bağlanmayan alan eski
+  birleşik metnin yazılmasına döner. Aşçı modunun ekranı bu alanları builder'dan doldurur
+  (`.LokantaResult`), bu yüzden `MatchResultOverlay` kodunda `modeId`'ye bakan bir dal yoktur.
 - **HealthHud** (oyuncunun kafaya kilitli şeridi, `VortexArena.Core.UI`) — saat (`Clock`, süre
   yokken kapalı) · can şeridi (`HpBar`, `HealthStrip`) · skor bandı (`RoundScore`, `TeamScorePanel`;
   TUR çipi `RoundFrame` etiket boşken kapanır) · durum plakası (`Status`, `StatusPlate`) · tur
   sonucu (`RoundResult`, `RoundResultBanner`). ⚠️ Builder **yerinde** düzenler ve `RoundScore` ile
-  `RoundResult` düğümlerini **korur**: beş mod HUD'ı bu prefabı iç içe örnekler, mod denetleyicileri
-  o iki düğüme bağlıdır ve Mole/Burger kendi metinlerini `RoundScore/Panel` altına ekler — düğüm
+  `RoundResult` düğümlerini **korur**: mod HUD'ları bu prefabı iç içe örnekler, mod denetleyicileri
+  o iki düğüme bağlıdır ve Mole kendi metinlerini `RoundScore/Panel` altına ekler — düğüm
   silinse referanslar ve eklenen çocuklar sessizce kaybolurdu. Üretim sonunda `Assets/Modes/**`
   altındaki her `ModeHudBase` prefabının alanları yeniden bağlanır (`BindModeHuds`); Mole'da
-  `HpBar` kapatılıp band yukarı alınır ve vuruş sayaçları yeniden biçimlenir, Burger'da `HpBar` +
-  `RoundScore` kapatılıp modun `Score` plakası Girdap kabuğuna sokulur. Kaynak `oyuncu-hud.html`.
+  `HpBar` kapatılıp band yukarı alınır ve vuruş sayaçları yeniden biçimlenir. ⚠️ **İçinde
+  `HealthHud` örneği olmayan mod prefabı bu geçişte ATLANIR** — şeritten çıkmanın tek yolu budur
+  (aşçı modu böyle çıkar ve kendi şeridini kurar). Kaynak `oyuncu-hud.html`.
 - **DeathHud** (öldün kartı) — kırmızı vinyet + çentikli kart: MAÇ SÜRÜYOR etiketi, ÖLDÜN (beyaz →
   kırmızı vertex gradyanı + hale), katil satırı (`Card/KillerLine`, `richText` açık — ad takım
   mürekkebiyle `<noparse>` içinde gelir), durum plakası (`Card/StatusFrame`). Kart mod HUD
   canvas'ında durur, şerit kafada: üst üste binmezler. CSS'teki `skewX(-7deg)` eğimi yoktur — TMP
   italik eğimi font asset'inden gelir, metin başına verilemez.
+
+## Aşçı (Burger) — lokanta teması
+
+Aşçı modunun arayüzü Girdap ekranlarıyla aynı kitten (`UiShape`/`UiPolygonGraphic`) çizilir ama
+**kendi paletini ve kendi fontlarını** kullanır: palet `Lokanta`, fontlar Fredoka (başlık/sayı) ve
+Nunito (küçük kapitaller). Girdap ekranları bu palete ve bu fontlara dokunmaz, tersi de geçerli.
+
+**Ölçünün kaynağı mockup'tır ve kalıcıdır:** `Docs/Gelistirici/Arayuz/asci.html` (+ kendi
+`asci.css`'i; gezinme `tema.css`/`tema.js` ile ortaktır) — oyuncu HUD'u için `oyuncu-hud.html` ne
+ise lokanta için odur. Kareleri: vardiya şeridi · sipariş baloncuğu · köfte termometresi · vardiya
+sonu kartı · günün hesabı tablosu · durumlar. Görsel değişiklik **önce mockup'ta** yapılır, sonra
+builder'a geçirilir.
+
+**Modun arayüz prefablarının hepsi builder çıktısıdır** (`Tools > VortexArena > UI > Girdap`; elle
+düzenleme bir sonraki üretimde kaybolur, Girdap prefablarıyla aynı kural):
+
+| Prefab | Menü | Ölçü |
+|---|---|---|
+| `Assets/Modes/Burger/UI/BurgerHud.prefab` (kökü `BurgerClientController`) | *Yalnız Aşçı HUD* | `LokantaStrip` 560×176 (kafaya kilitli; saat pili · ekip/sen/müşteri bandı · durum plakası) |
+| `Assets/Modes/Burger/Prefabs/NO_customer.prefab` → `Bubble` | *Yalnız Aşçı sipariş baloncuğu* | dünya uzayı 420×300, ölçek 0,001 |
+| `Assets/Modes/Burger/UI/LokantaThermometer.prefab` (`NO_patty` → `Thermometer` içine girer) | *Yalnız Aşçı termometre* | 100×200, ölçek 0,0005 |
+| `Assets/Modes/Burger/UI/BurgerResultOverlay.prefab` (kökü `MatchResultOverlay`) | *Yalnız Aşçı sonuç ekranı* | kart **1400×860** — kart sanatı bu orana göre çizilir |
+
+Modun sprite'ları (`Assets/Modes/Burger/UI/Sprites/`: yüz ifadeleri, yıldız, dama ve nokta
+desenleri) *Lokanta sprite'larını üret* ile doğar; desenli olanlar `Repeat` sarmalıdır. Girdap
+ikonlarından alev ve tik (`Ic_Flame` · `Ic_Check`) ortak kaba girer.
+
+⚠️ **Hangi değer prefabta, hangisi kodda:** çalışma anında yazılan her hedef (metin, dolgu,
+grafik, sprite, satır/dilim havuzları) bileşende `[SerializeField]` alandır ve bağlantıyı
+**builder** `SerializedObject` ile yazar — elle sürüklenen bağ ilk üretimde silinir. Prefabta
+yalnız **ölçü** yaşar: tüp boyu, baloncuk kartı, şerit genişliği; cıva ve yeşil bölge yüksekliklerini
+bileşen ebeveyn rect'inden okur, ikinci bir sayı kodda tutulmaz.
+
+⚠️ **Aşçı HUD'ı `HealthHud` örneği taşımaz** (canı yok): şeridini builder kurar, `BindModeHuds`
+geçişi de bu yüzden onu atlar. Tabandan yalnız saat/çerçeve/durum plakası alanları bağlanır;
+can/skor/müşteri sayacı gibi eski alanlar bilerek boştur — bağlı olmayan alan hata vermeden
+çizilmez.

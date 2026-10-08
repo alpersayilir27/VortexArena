@@ -31,6 +31,7 @@ Her reçetenin altında *neden böyle* kutusu var — orayı okumazsan çalış�
 | Burger müşterisine yeni görünüm (NPC karakteri) | [13.5](#135-burger-müşteri-görünümü-ekleme) |
 | Yeni arena eklemek | [14](#14-yeni-arena-eklemek) |
 | Hazır bir environment'ın içinde arena bölgesi kurmak | [14.1](#141-hazır-bir-environmentın-içinde-arena-bölgesi-kurmak) |
+| Gökyüzü ekleme / değiştirme | [14.3](#143-gökyüzü-ekleme--değiştirme) |
 | Gözlüksüz test (dev penceresi) | [15](#15-gözlüksüz-test-dev-penceresi) |
 | Bir konumu ağdan paylaşmak | [16](#16-bir-konumu-ağ-üzerinden-paylaşmak-arena-uzayı) |
 | Arena ölçüsünü girmek (boyut dosyası) | [17](#17-arena-ölçüsü-boyut-dosyası) |
@@ -993,7 +994,14 @@ prefabının altına **iç içe prefab** olarak koy, sonra alanları bağla: `he
 `statusPlate` → `Status`, `timeText` → `Clock/Time`, `timeFrame` → `Clock` (builder'ın bağ geçişi
 bunları da yazar). Bar kendi `HeadLockedHud`'uyla kafaya kilitlidir; HUD'da ayrıca bir can
 göstergesi **bulundurma** — aynı sayı iki yerde çizilirdi. Can kavramı olmayan modda `HpBar`
-örneğini kapat ve skor bandını onun yerine al (Mole/Burger'da builder bunu da yapar).
+örneğini kapat ve skor bandını onun yerine al (Mole'da builder bunu da yapar).
+
+**Şeridin tamamından çıkmak:** mod kendi kafaya kilitli şeridini çizecekse HUD prefabına `HealthHud`
+örneğini **hiç koymaz** — bağ geçişi (`BindModeHuds`) içinde `HealthHud` çocuğu olmayan prefabı
+atlar, yani Girdap şeridi ne örneklenir ne bağlanır. Karşılığında şeridi kendin kurmak zorundasın ve
+yeri **builder'ın bir partial'ıdır**, elle düzenlenen prefab değil (örnek: aşçı modunun lokanta
+şeridi → `Arayuz-Tasarimi.md`). Tabandan yine `timeText`/`timeFrame`/`statusPlate` gibi alanları
+bağlayabilirsin; bağlamadığın alan sessizce çizilmez.
 
 **Takım skoru / tur sonucu gerekiyorsa:** ikisi de aynı `HealthHud` örneğinin içinden gelir, yeni
 prefab koymana gerek yok — çünkü ikisi de barın **tek** `HeadLockedHud`'una biner (ikinci bir kafa
@@ -1220,17 +1228,31 @@ eşya dinlenmeye hiç varamaz ve kaybolur. Eşya prefablarının `Rigidbody`'si
 ## 13.2 Moda özel maç sonu ekranı
 
 Maç sonu ekranının **mantığı** ortaktır (kazanan, sıralama, hangi hücrenin çizileceği modun
-kuralından gelir); **görünümü** moda özel olabilir. Kod işi yoktur — iş bir prefab varyantı ve bir
-asset alanıdır. Varyantların yeri: `Assets/Modes/<Ad>/UI/<Ad>ResultOverlay.prefab`.
+kuralından gelir); **görünümü** moda özel olabilir. Yeri: `Assets/Modes/<Ad>/UI/<Ad>ResultOverlay.prefab`,
+bağlandığı alan `Data/<AD>.asset` → `resultScreenPrefab` (boş = genel ekran).
+
+**İki yol vardır, biri seçilir:**
+
+| | **Yol A — prefab varyantı** | **Yol B — builder partial'ı** |
+|---|---|---|
+| Ne zaman | sprite, renk, punto, kelime farkı — **yerleşim aynı** | yerleşim de başka (farklı kart, başka hücre düzeni, kendi teması) |
+| Kod işi | yok | modun `GirdapUiBuilder` partial'ı |
+| Alan bağları | tabandan **miras** | builder **ad üstünden** bağlar |
+
+⛔ **Üçüncü yol yok:** elle kopya (Ctrl+D) alan bağlarını o anki hâliyle dondurur — tabana sonradan
+eklenen öge ya da alan kopyaya inmez ve o modda **hata vermeden** çizilmez. Kökteki
+`MatchResultOverlay` bileşeni de kaldırılmaz ve bileşen koduna `modeId`'ye bakan bir dal
+**açılmaz**: görünüm veridir, alanlardan gelir.
 
 ⚠️ **Taban prefab koddan üretilir.** `Assets/_Shared/App/Resources/UI/MatchResultOverlay.prefab`'ın
 içeriğini `GirdapUiBuilder` yazar (`Tools > VortexArena > UI > Girdap > Yalnız MatchResult`);
 tabanda yapılacak her değişiklik builder'a yazılır → `Arayuz-Tasarimi.md`. Varyantın kendi
 override'ları Inspector'da yaşar, bu kuralın dışındadır.
 
+### Yol A — prefab varyantı
+
 **1. VARYANT oluştur, kopya değil.** Taban prefaba sağ tık → *Create > Prefab Variant* →
-`Assets/Modes/<Ad>/UI/<Ad>ResultOverlay.prefab`. ⚠️ Kopya (Ctrl+D) alan bağlarını dondurur: tabana
-sonradan eklenen öge/alan kopyaya inmez ve **hata vermeden** çizilmez.
+`Assets/Modes/<Ad>/UI/<Ad>ResultOverlay.prefab`.
 
 **2. Varyantta serbest olanlar:** iki kartın zemini (`ResultPanel/Card` ·
 `ScoreboardPanel/StatsPanel` — ikisinin `Image`'ı tabanda boş/saydam bırakılır, tam da varyant
@@ -1256,8 +1278,9 @@ kopyası `Modes/<Ad>/UI/Fonts/` altına alınır.
 
 **5. Tablonun şekli satır tabanlıdır:** takım başına bir blok (`Block0`/`Block1`), blok başlığı +
 `Rows` altında pasif satır şablonundan klonlanan oyuncu satırları, altta oyuncunun kendi şeridi.
-Varyant bunları giydirir; satır adımını **kod okur** (`MatchResultOverlay.RowHeight`/`RowGap`/
-`RowsTop`), yani satır yüksekliğini varyanttan büyütmek sıralamayı üst üste bindirir. Kuralın hep
+Varyant bunları giydirir; satır adımını **kök bileşen okur** (`rowHeight`/`rowGap`/`rowsTop`
+alanları), yani şablonun rect'ini varyanttan büyütmek — alanı değiştirmeden — sıralamayı üst üste
+bindirir. Kuralın hep
 gizlediği hücreler (silahsız modda öldürme/ölüm/K-D, ko-opta skor hücresinin başlığı) varyantta
 kapalı bırakılabilir — yalnız tasarım kolaylığıdır, açıp kapatmayı kod yapar.
 
@@ -1272,12 +1295,42 @@ Satır tabanlı tabloyu kullanan varyant bu alana dokunmaz.
 `UiDrawOnTop`'u uygular (ekran duvarın ve karartmanın üstünde çizilir) ve `HudFollow`'un duvar
 kaçınmasını kendisi açar; varyanta eklenen süsler kökün altında olduğu için devralır.
 
-⚠️ **Taban yeniden üretildikten sonra her varyant AÇILIP kontrol edilir.** Builder kendi ürettiği
-çocukları siler ve yeniden kurar; varyantın ezdiği düğümler korunur ama yeniden ebeveynlenir — yeri
-kayan ya da override'ı artık tutmayan bir süs hata vermeden yanlış yerde çizilir.
+⚠️ **Taban yeniden üretildikten sonra her varyant AÇILIP kontrol edilir** (yalnız bu yolda). Builder
+kendi ürettiği çocukları siler ve yeniden kurar; varyantın ezdiği düğümler korunur ama yeniden
+ebeveynlenir — yeri kayan ya da override'ı artık tutmayan bir süs hata vermeden yanlış yerde çizilir.
 
-**Test:** dev penceresinde bu modda bir maç bitir → sonuç kartı ve tablo temalı gelmeli; ardından
-başka bir modda maç bitir → genel ekran geri gelmeli (tekil moda göre kendini yeniden örnekler).
+### Yol B — modun kendi builder partial'ı
+
+Prefab sıfırdan üretilir, yani varyant zinciri hiç kurulmaz: görünüm kodda yaşar ve tabanın yeniden
+üretilmesi bu ekranı etkilemez. Aşçı modunun sonuç ekranı bu yolun örneğidir
+(`GirdapUiBuilder.LokantaResult.cs`).
+
+**1. Partial aç.** `Assets/_Shared/App/Scripts/Editor/GirdapUi/GirdapUiBuilder.<Mod>Result.cs`,
+`partial static class GirdapUiBuilder`. Ekranı kuran metodu `BuildAll`'ın çağırdığı yere ekle ve
+ayrıca **kendi menü öğesini** ver (`Tools > VortexArena > UI > Girdap > Yalnız <Mod> sonuç ekranı`)
+— tek ekranı yeniden kurmak tüm üretimi beklemesin.
+
+**2. Kök chrome'u tabandan aynen kur:** dünya uzayı `Canvas` + `HudFollow` + kökte
+`MatchResultOverlay` bileşeni. `sortingOrder`, `UiDrawOnTop` ve duvar kaçınma **yazılmaz** — kök
+bileşen onları açılışta kendisi uygular.
+
+**3. Alanları ADLA bağla.** Builder parçaları kurduktan sonra `SerializedObject` ile kökün
+alanlarına yazar: iki kartın düğümleri, satır şablonu ve blok dizileri, ko-op/tablo sayılarının
+metin hedefleri, satır ölçüleri ve satır/kendi-satırı renkleri. Bağlanmayan alan varsayılanında
+kalır (Girdap görünümü) ya da sessizce çizilmez — yeni bir alan eklendiğinde buraya da yazılır.
+
+**4. Var olan yolun ÜSTÜNE kaydet.** Prefab aynı dosya yoluna yazılır ki **GUID korunsun**:
+`resultScreenPrefab` referansı GUID'dir, yeni dosya üretmek bağı sessizce boşaltır ve o modda genel
+ekran gelir. Builder bağı üretimin sonunda **doğrular** ve kopmuşsa yeniden atar.
+
+**5. Bağla:** `Data/<AD>.asset` → **`resultScreenPrefab`**.
+
+⛔ Üretilen prefab **elle düzenlenmez** (her Girdap prefabı gibi): değişiklik partial'a yazılır,
+sonra o menü öğesi koşulur.
+
+**Test (iki yol için de):** dev penceresinde bu modda bir maç bitir → sonuç kartı ve tablo temalı
+gelmeli; ardından başka bir modda maç bitir → genel ekran geri gelmeli (tekil moda göre kendini
+yeniden örnekler).
 
 ---
 
@@ -1426,7 +1479,11 @@ Controller tek `stage` (int) parametresiyle sürülür: `1` → *Idle*, diğerle
 yürüme *in place*); üçüncü parti paketten kopyalanır, oraya referans verilmez.
 
 Sipariş balonu `NO_customer` → `Bubble`, mutsuz bulutu `NO_customer` → `UnhappyFx` sabit
-yüksekliktedir: yeni görünüm onlardan uzunsa balon ve bulut başına gömülür.
+yüksekliktedir: yeni görünüm onlardan uzunsa balon ve bulut başına gömülür. ⚠️ **Balonun içi
+builder çıktısıdır** (`Tools > VortexArena > UI > Girdap > Yalnız Aşçı sipariş baloncuğu`): yeni bir
+görünüm için balonun çocukları elle düzenlenmez, düzenleme bir sonraki üretimde kaybolur — görünüm
+değişikliği builder'ın lokanta partial'ına yazılır (`Arayuz-Tasarimi.md`). Balonun kendi yüksekliği
+prefabtaki rect'tir, onu taşımak serbesttir.
 
 **3. Bağla:** prefab `NO_customer` → `BurgerCustomer` → **`looks`** dizisine eklenir. Dizideki sıra
 `v` indeksinin sırasıdır; `lookRoot` boş bırakılırsa görünüm müşterinin kendisine çocuk olur.
@@ -1455,7 +1512,7 @@ Tek düğmeli bir sihirbaz **yoktur** (kaldırıldı). Akış altı adımdır ve
 | 2 | Ağ altyapısını koy | `Tools > VortexArena > Arena > Template Temellerini Yükle` |
 | 3 | Mekanın ölçü maketini + kalibrasyon işaretçilerini üret | `… > Arena > JSON'dan DimensionMesh Üret` |
 | 4 | Ölçü yanlışsa köşeleri düzelt, dosyaya geri yaz | ProBuilder + `… > Arena > DimensionMesh'i JSON'a Çevir` |
-| 5 | Environment sanatı (**dünya orijinine**, zemin y=0), hareketsiz dekora **static flag**, bake | elle + `… > Arena > Sahne Bütçesini Ölç` |
+| 5 | Environment sanatı (**dünya orijinine**, zemin y=0), hareketsiz dekora **static flag**, gökyüzü materyali, bake | elle + `… > Arena > Sahne Bütçesini Ölç` |
 | 6 | Tüm kayıtları yap | `… > Build > Configure All Build Elements` |
 
 **3. adımın boyut dosyası hazır olmalıdır.** Dosya elle yazılabilir (§17.2) ya da sahada kumandayla
@@ -1609,6 +1666,11 @@ veri dosyasını gösterir: kopya kendi occlusion bake'ini alana kadar başka ye
 verisiyle çalışır ([Yapma Listesi](Yapma-Listesi.md) — "Kopyalanan sahneyi kaynağın occlusion
 verisiyle bırakma").
 
+⚠️ **Gökyüzü bake'ten ÖNCE seçilir:** `Window > Rendering > Lighting > Environment > Skybox
+Material` = `_Shared/World/Sky/` içindeki bir `M_Sky_*`. Sahneler `Ambient = Skybox` kullanıyor,
+yani ortam ışığı ve varsayılan yansıma o materyalden bake edilir — sonradan değiştirilen gökyüzü
+sahneyi eski gökyüzünün ışığıyla bırakır. Ayrıntı → [Reçete 14.3](#143-gökyüzü-ekleme--değiştirme).
+
 ⚠️ **Ölçekleme yoktur ve eklenmez.** Her işletmenin alanı farklı ölçüde ve çoğu kare/dikdörtgen
 bile değil — orantılı ölçekleme elle düzeltilecek bir yalancı-doğru üretir.
 
@@ -1743,6 +1805,43 @@ değişimi **dikey sanal ofsettir** (`Docs/Sistem-Ozeti.md` §3.13, ağ tarafı
   tonunda bir **silüet** olarak düşer (ölü/kalibresiz hayaletten bilerek farklı görünür); gerçek
   gövde kendi katında vurulabilir kalır.
 - Sunucuda portal, sayaç ya da kilit **yoktur**: sunucu yalnız oyuncunun katını defter olarak tutar.
+
+---
+
+## 14.3 Gökyüzü ekleme / değiştirme
+
+Gökyüzü **sahne verisidir**: `MapDefinition`'da gökyüzü alanı yoktur, arena sahneleri tek kipte
+yüklendiği için oyuncunun gördüğü o sahnenin kendi `Skybox Material`'ıdır. Kitaplık
+`_Shared/World/Sky/`; shader `VortexArena/AnimatedSkybox`
+([Sistem Özeti](../Sistem-Ozeti.md) — `VortexArena/AnimatedSkybox`).
+
+> Adım atlamanın bedeli: **6. adım atlanırsa** sahne eski gökyüzünün ortam ışığıyla kalır (gökyüzü
+> yeni, ışık eski — hata çıkmaz); **2. adım atlanıp materyal sıfırdan kurulursa** gökyüzü kaynağı
+> keyword'ü kapalı kalır ve yanlış dal çizilir.
+
+| # | Yaptığın | Görmen gereken |
+|---|---|---|
+| 1 | Dokuyu hazırla: **cubemap** ya da **360° enlem-boylam panorama** | `Skybox/6 Sided` yerleşimi desteklenmez → altı görseli önce cubemap'e çevir. Satıcı paketi dışındaki doku `_Shared/World/Sky/Textures/`'a konur |
+| 2 | `_Shared/World/Sky/` içindeki bir `M_Sky_*`'ı Project penceresinde **çoğalt** (Ctrl+D), kaynak gökyüzü dokusunun adıyla adlandır | Bulut kurulumu ve `_SKYSOURCE_*` keyword'ü kopyayla gelir. ⚠️ Materyali sıfırdan kurma / betikle yazma — `Gökyüzü kaynağı` alanını yazmak keyword'ü açmaz ([Yapma Listesi](Yapma-Listesi.md) — "yalnız `_SkySource`'u yazma") |
+| 3 | `Gökyüzü kaynağı`nı seç ve dokuyu bağla; `Ton`/`Pozlama`/`Dönüş` ile temel görünümü oturt | Inspector keyword'ü seçimle birlikte set eder |
+| 4 | Buluta ve dönüşe konfor sınırları içinde dokun: `Dönüş hızı` dakikada birkaç derece, `Bulut opaklığı`/`Kapsama`/`Yumuşaklık`/`Rüzgâr` göze göre; `Ufuk sönümü` **düşürülmez** | Scene view'da hareket görünür (Play gerekmez). `Bulut opaklığı = 0` bulutu tümden kapatır. ⚠️ Bulutun ufka inmesi VR'da mide bulandırır; dokusuna güneş boyanmış gökyüzünde hızlı dönüş güneşi gölgelerin yönünden ayırır (paketin `_Sunless` çeşidi varsa onu kullan) |
+| 5 | Sahneyi aç: `Window > Rendering > Lighting > Environment > Skybox Material` = bu materyal | Scene view gökyüzü değişir. ⚠️ Satıcı paketinin (`ThirdPartyPackages/`) materyali ya da `Default-Skybox` **atanmaz** |
+| 6 | O sahneyi **yeniden bake et** (`Generate Lighting`) | Ortam ışığı ve yansıma yeni gökyüzünden gelir; bake edilmezse eski gökyüzünün ışığı kalır |
+| 7 | **Gözlükte** bak | ⚠️ Quest'te HDR kapalı: HDR dokusu 1'in üstünden kırpılır, parlaklık kararı monitörde verilemez |
+
+- `T_CloudNoise` bulutun kaynak dokusudur; yoksa ya da yenilenecekse
+  `Tools > VortexArena > Arena > Bulut Dokusu Üret` çalıştırılır (asset **yerinde** ezilir, materyal
+  bağları korunur). Tohum sabittir, her makinede aynı doku çıkar.
+- **Aynı harita birkaç mekana kopyalandıysa hepsi tek kitaplık materyalini paylaşır** — ayarı bir
+  kez yaparsın. Yalnız bir haritanın farklı görünmesi gerekiyorsa paylaşılan materyale dokunmak
+  yerine kitaplığa **yeni** bir materyal eklenir.
+- Var olan bir yerleşik gökyüzü materyalini (`Skybox/Cubemap`, `Skybox/Panoramic`) bu shader'a
+  çevirmek de geçerli bir yoldur: property adları aynı olduğu için doku/ton/pozlama/dönüş korunur
+  ve `Dönüş hızı = 0` + `Bulut opaklığı = 0` ile görüntü değişmez.
+
+> **Neden kod yok?** Hareketin tamamı shader'da `_Time`'dan gelir: kare başına CPU işi,
+> çalışma anında materyal kopyası ve sahneye konan bir bileşen yoktur — gökyüzü editörde de döner.
+> Gökyüzü opaklardan sonra çizildiği için yalnız **görünen** gökyüzü pikselleri ödenir.
 
 ---
 

@@ -37,7 +37,10 @@ internal static class Program
     /// so scripts/launcher can tell them apart.</summary>
     private static async Task<int> Main(string[] args)
     {
-        Console.OutputEncoding = Encoding.UTF8;
+        // ⚠️ Guarded: started by the launcher there is no console window and this throws IOException —
+        // the whole startup would die before the log file exists.
+        try { Console.OutputEncoding = Encoding.UTF8; }
+        catch (Exception) { /* no console: the log file carries UTF-8 of its own */ }
 
         // ⚠️ Stays BELOW OutputEncoding: setting the encoding replaces Console.Out and would drop the tee.
         // One file per run: a session can be carried out of the venue whole.
@@ -65,20 +68,32 @@ internal static class Program
         // session. An empty table leaves nothing to choose.
         var maps = SelectVenue(allMaps, ArgValue(args, "--venue") ?? config.venue);
 
+        // §12.5 folder order: --replay-dir > server.json → replayDir > replays/ next to the exe. The
+        // launcher passes its own folder, so a server redeploy does not take the recordings with it.
+        var replayDirArg = ArgValue(args, "--replay-dir");
+        if (!string.IsNullOrWhiteSpace(replayDirArg)) config.replayDir = replayDirArg;
+
         using var registry = new PlayerRegistry(Path.Combine(configDir, "devices.json"));
-        var director = new MatchDirector(registry, maps, config.lobbyScene, config.burger);
+        // §12: one recorder for the whole session; every producer writes into the same queue. Recording
+        // starts disarmed — the operator arms it from the launcher (§12.2).
+        var recorder = new MatchRecorder(config);
+        var director = new MatchDirector(registry, maps, config.lobbyScene, config.burger, recorder);
 
         // ⚠️ Fail-fast (§11): the server's open scene is the client's only routing source
         // (welcome.match.sceneName). If it cannot be resolved the configuration is already broken, and
         // opening silently with an empty scene would carry that error into the field.
         if (!ValidateLobbyScene(director.LobbyScene, maps, config.lobbyScene)) return 2;
-        var lobby = new LobbyService(registry, director);
-        var control = new ControlHost(registry, lobby, director, config.controlPort);
+        var lobby = new LobbyService(registry, director, recorder);
+        // ⚠️ Created before the host: POST /launcher/shutdown must run the SAME path as Ctrl+C (§13),
+        // and the host needs the trigger at construction time.
+        var quit = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var control = new ControlHost(registry, lobby, director, recorder,
+            () => quit.TrySetResult(), config.controlPort);
         var beacon = new BeaconService(config.beaconPort, config.controlPort, config.statePort);
         // director is mandatory: StateHost reads the 0x03 shot relay gate (phase +
         // rules.fireWhilePaused) lock-free via MatchDirector.ShotRelayOpen (§6.5/§10.3). As a settable
         // property, forgetting to wire it would silently drop the events.
-        var stateHost = new StateHost(registry, config.statePort, director);
+        var stateHost = new StateHost(registry, config.statePort, director, recorder);
 
         Console.WriteLine("VortexArena Sunucusu");
         Console.WriteLine($"  Mekan      : {config.venueName}");
@@ -90,6 +105,8 @@ internal static class Program
         Console.WriteLine($"  Haritalar  : {(maps.IsEmpty ? "yok (doğrulama kapalı)" : string.Join(", ", maps.SceneSummaries))}");
         Console.WriteLine($"  Lobi       : {DescribeLobby(director.LobbyScene, maps)}");
         Console.WriteLine("  Hasar      : istemci bildirir (silah tablosu ve hile denetimi yok)");
+        Console.WriteLine($"  Maç kaydı  : kapalı — launcher'dan açılır (klasör: {recorder.Directory})");
+        Console.WriteLine($"  Launcher   : http://127.0.0.1:{config.controlPort}/launcher/* (yalnız bu PC)");
         Console.WriteLine($"  Config     : {configDir}");
         Console.WriteLine($"  Günlük     : {logPath}");
 
@@ -130,7 +147,7 @@ internal static class Program
         lobby.Start(); // net_stats broadcast (admins only, 1 Hz)
         Console.WriteLine("Sunucu hazır. Çıkmak için Ctrl+C.");
 
-        // Shutdown order: telemetry (lobby) → tick (director) → UDP (stateHost) → beacon → control
+        // Shutdown order: telemetry (lobby) → tick (director) → UDP (stateHost) → recording → beacon → control
         // (close frame to clients) → registry. Each producer is silenced before the channel it writes
         // to is closed, so no loop can log or broadcast after "Kapandı.".
         async Task ShutdownAsync()
@@ -145,6 +162,10 @@ internal static class Program
                 await lobby.StopAsync();
                 await director.StopAsync();
                 await stateHost.StopAsync();
+                // §12.2: closed after the last producer is silenced, so the file ends with the last
+                // frame that actually went out. Bounded wait — the window-close budget is ~5 s total.
+                recorder.End(ReplayEndReason.Shutdown);
+                await recorder.StopAsync(TimeSpan.FromSeconds(2));
                 await beacon.StopAsync();
                 await control.StopAsync();
                 registry.Dispose();
@@ -156,12 +177,20 @@ internal static class Program
             }
         }
 
-        var quit = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        Console.CancelKeyPress += (_, e) =>
+        // ⚠️ Guarded: without a console window (launcher start) registering the handler can fail, and
+        // there is no Ctrl+C to catch there anyway — the launcher closes the server over §13.
+        try
         {
-            e.Cancel = true; // we close the process, not Windows
-            quit.TrySetResult();
-        };
+            Console.CancelKeyPress += (_, e) =>
+            {
+                e.Cancel = true; // we close the process, not Windows
+                quit.TrySetResult();
+            };
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[başlangıç] Ctrl+C dinlenemiyor ({ex.Message}) — konsol penceresi yok.");
+        }
         // Best effort for the paths that never reach the line after `await quit.Task`.
         AppDomain.CurrentDomain.ProcessExit += (_, _) => ShutdownAsync().GetAwaiter().GetResult();
         // Window close / logoff / system shutdown: Windows kills the process the moment the handler

@@ -1,4 +1,4 @@
-using VortexArena.Launcher;
+using VortexArena.Launcher.Services;
 using Xunit;
 
 namespace VortexArena.Launcher.Tests;

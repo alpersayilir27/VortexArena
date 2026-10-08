@@ -25,6 +25,13 @@ namespace VortexArena.Core.UI
         [SerializeField] private float chamferBottomRight;
         [SerializeField] private float chamferBottomLeft;
 
+        // Corner ROUNDING radius in px (0 = no arc). ⚠️ Ignored when the same corner has a chamfer:
+        // a 45° cut and an arc on one corner cannot both be the outline there.
+        [SerializeField] private float radiusTopLeft;
+        [SerializeField] private float radiusTopRight;
+        [SerializeField] private float radiusBottomRight;
+        [SerializeField] private float radiusBottomLeft;
+
         /// <summary>Side slant in px. ⚠️ Sign carries the direction: positive pulls the BOTTOM corner
         /// inward, negative pulls the TOP corner inward.</summary>
         [SerializeField] private float slantLeft;
@@ -57,6 +64,30 @@ namespace VortexArena.Core.UI
             set { chamferBottomLeft = value; SetVerticesDirty(); }
         }
 
+        public float RadiusTopLeft
+        {
+            get => radiusTopLeft;
+            set { radiusTopLeft = value; SetVerticesDirty(); }
+        }
+
+        public float RadiusTopRight
+        {
+            get => radiusTopRight;
+            set { radiusTopRight = value; SetVerticesDirty(); }
+        }
+
+        public float RadiusBottomRight
+        {
+            get => radiusBottomRight;
+            set { radiusBottomRight = value; SetVerticesDirty(); }
+        }
+
+        public float RadiusBottomLeft
+        {
+            get => radiusBottomLeft;
+            set { radiusBottomLeft = value; SetVerticesDirty(); }
+        }
+
         public float SlantLeft
         {
             get => slantLeft;
@@ -77,7 +108,7 @@ namespace VortexArena.Core.UI
         }
 
         /// <summary>
-        /// Builds the outline in local space: slant first, then corner chamfers.
+        /// Builds the outline in local space: slant first, then corner chamfers/arcs.
         /// Order is TL → TR → BR → BL (clockwise on screen).
         /// </summary>
         protected void BuildPolygon(Rect r, List<Vector2> result)
@@ -107,10 +138,49 @@ namespace VortexArena.Core.UI
                 tr.x += slantRight;
             }
 
-            AddCorner(result, tl, bl, tr, chamferTopLeft);
-            AddCorner(result, tr, tl, br, chamferTopRight);
-            AddCorner(result, br, tr, bl, chamferBottomRight);
-            AddCorner(result, bl, br, tl, chamferBottomLeft);
+            // Two radii on one edge may not add up past the edge: scale the pair down instead of
+            // letting the arcs cross (a crossed outline inverts the fill's winding).
+            float rTl = Mathf.Max(radiusTopLeft, 0f);
+            float rTr = Mathf.Max(radiusTopRight, 0f);
+            float rBr = Mathf.Max(radiusBottomRight, 0f);
+            float rBl = Mathf.Max(radiusBottomLeft, 0f);
+            ClampPair(ref rTl, ref rTr, r.width);
+            ClampPair(ref rBl, ref rBr, r.width);
+            ClampPair(ref rTl, ref rBl, r.height);
+            ClampPair(ref rTr, ref rBr, r.height);
+
+            AddCorner(result, tl, bl, tr, chamferTopLeft, rTl);
+            AddCorner(result, tr, tl, br, chamferTopRight, rTr);
+            AddCorner(result, br, tr, bl, chamferBottomRight, rBr);
+            AddCorner(result, bl, br, tl, chamferBottomLeft, rBl);
+            RemoveDuplicateVertices(result);
+        }
+
+        // A pill (radius = half the short edge) lands both arcs on the same side midpoint; a
+        // zero-length edge has no normal, so Offset would leave a spike in the border there.
+        private static void RemoveDuplicateVertices(List<Vector2> poly)
+        {
+            for (int i = poly.Count - 1; i >= 0 && poly.Count > 3; i--)
+            {
+                int prev = (i - 1 + poly.Count) % poly.Count;
+                if ((poly[i] - poly[prev]).sqrMagnitude < 1e-4f) // < 0.01 px apart
+                {
+                    poly.RemoveAt(i);
+                }
+            }
+        }
+
+        private static void ClampPair(ref float a, ref float b, float length)
+        {
+            float sum = a + b;
+            if (sum <= length || sum < Eps)
+            {
+                return;
+            }
+
+            float k = Mathf.Max(length, 0f) / sum;
+            a *= k;
+            b *= k;
         }
 
         /// <summary>Allocating overload — prefer the <see cref="List{T}"/> one on the render path.</summary>
@@ -122,18 +192,88 @@ namespace VortexArena.Core.UI
         }
 
         // Replaces a corner with two points `cut` px along each adjacent edge (capped at half the
-        // edge so two chamfers on one short edge cannot cross).
+        // edge so two chamfers on one short edge cannot cross), or with an arc when rounded.
         private static void AddCorner(List<Vector2> result, Vector2 v, Vector2 prev, Vector2 next,
-            float cut)
+            float cut, float radius)
         {
-            if (cut <= 0f)
+            if (cut > 0f)
             {
-                result.Add(v);
+                result.Add(v + Along(v, prev, cut));
+                result.Add(v + Along(v, next, cut));
                 return;
             }
 
-            result.Add(v + Along(v, prev, cut));
-            result.Add(v + Along(v, next, cut));
+            if (radius > Eps && AddArc(result, v, prev, next, radius))
+            {
+                return;
+            }
+
+            result.Add(v);
+        }
+
+        /// <summary>
+        /// Quarter-ish arc inscribed in the corner, tangent to both edges. False (nothing emitted)
+        /// for a degenerate corner so the caller can fall back to the sharp vertex.
+        /// </summary>
+        private static bool AddArc(List<Vector2> result, Vector2 v, Vector2 prev, Vector2 next,
+            float radius)
+        {
+            Vector2 u = prev - v;
+            Vector2 w = next - v;
+            float lu = u.magnitude;
+            float lw = w.magnitude;
+            if (lu < Eps || lw < Eps)
+            {
+                return false;
+            }
+
+            u /= lu;
+            w /= lw;
+
+            Vector2 bisector = u + w;
+            float lb = bisector.magnitude;
+            if (lb < Eps)
+            {
+                return false; // 180°: no corner to round
+            }
+
+            bisector /= lb;
+
+            float half = Mathf.Acos(Mathf.Clamp(Vector2.Dot(u, w), -1f, 1f)) * 0.5f;
+            float sinHalf = Mathf.Sin(half);
+            float tanHalf = Mathf.Tan(half);
+            if (sinHalf < Eps || tanHalf < Eps)
+            {
+                return false;
+            }
+
+            // Tangent distance for radius, capped at half of the shorter edge (same guard as the
+            // chamfer path), then the radius is recomputed from the capped distance.
+            float tangent = Mathf.Min(radius / tanHalf, Mathf.Min(lu, lw) * 0.5f);
+            float rr = tangent * tanHalf;
+            if (rr < Eps)
+            {
+                return false;
+            }
+
+            Vector2 center = v + bisector * (rr / sinHalf);
+            Vector2 a0 = v + u * tangent - center;
+            Vector2 a1 = v + w * tangent - center;
+            float start = Mathf.Atan2(a0.y, a0.x);
+            float end = Mathf.Atan2(a1.y, a1.x);
+
+            // Shortest sweep: a convex corner is always < 180°, so this picks the inside arc and
+            // keeps the polygon's winding direction.
+            float delta = Mathf.DeltaAngle(start * Mathf.Rad2Deg, end * Mathf.Rad2Deg) * Mathf.Deg2Rad;
+
+            int segments = Mathf.Clamp(Mathf.CeilToInt(radius / 3f), 4, 16);
+            for (int i = 0; i <= segments; i++)
+            {
+                float angle = start + delta * i / segments;
+                result.Add(center + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * rr);
+            }
+
+            return true;
         }
 
         private static Vector2 Along(Vector2 from, Vector2 to, float cut)

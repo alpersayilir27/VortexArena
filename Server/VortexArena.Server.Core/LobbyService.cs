@@ -65,10 +65,22 @@ public sealed class LobbyService
     /// and written only under <c>_selectionGate</c> (same lock as the other shared fields).</summary>
     private string _calibrationMode = ArenaProtocol.CALIB_MODE_TWO_ANCHOR;
 
-    public LobbyService(PlayerRegistry registry, MatchDirector director)
+    /// <summary>Match recording (§12); <see cref="MatchRecorder.Disabled"/> when unwired.</summary>
+    private readonly MatchRecorder _recorder;
+
+    public LobbyService(PlayerRegistry registry, MatchDirector director, MatchRecorder? recorder = null)
     {
         _registry = registry;
         _director = director;
+        _recorder = recorder ?? MatchRecorder.Disabled;
+        // §12.2: the state a late-joining admin would get opens every recording. These builders live
+        // here, so the recorder pulls them instead of the director reaching into this service.
+        _recorder.InitialStateProvider = () => new[]
+        {
+            BuildLobbyStateJson(),
+            BuildSelectionStateJson(),
+            BuildAdminStateJson("")
+        };
         // Initial selection = the open scene's initial value (§10.7): the venue's lobby map. If the
         // server cannot resolve the lobby it does not start at all (§11 fail-fast), so this is never
         // empty in practice.
@@ -518,14 +530,16 @@ public sealed class LobbyService
         try
         {
             var admins = _registry.ConnectedAdminConnections();
-            // Nobody watching, no serialization: the operator screen is the only consumer.
-            if (admins.Count == 0) return;
+            // Nobody watching, no serialization: the operator screen is the only consumer. ⚠️ An open
+            // recording counts as a watcher (§12.1).
+            if (admins.Count == 0 && !_recorder.IsRecording) return;
             var json = JsonUtil.Serialize(new CalibrationResultMsg
             {
                 playerId = playerId,
                 ok = ok,
                 error = error ?? ""
             });
+            _recorder.Text(json);
             foreach (var connection in admins)
                 await SendSafeAsync(connection, json, "(admin)");
         }
@@ -972,8 +986,9 @@ public sealed class LobbyService
         try
         {
             var connections = _registry.ConnectedConnections();
-            if (connections.Count == 0) return;
+            if (connections.Count == 0 && !_recorder.IsRecording) return;
             var json = BuildSelectionStateJson();
+            _recorder.Text(json);
             foreach (var connection in connections)
                 await SendSafeAsync(connection, json, "(selection)");
         }
@@ -1004,8 +1019,9 @@ public sealed class LobbyService
         try
         {
             var admins = _registry.ConnectedAdminConnections();
-            if (admins.Count == 0) return;
+            if (admins.Count == 0 && !_recorder.IsRecording) return;
             var json = BuildAdminStateJson(notice);
+            _recorder.Text(json);
             foreach (var connection in admins)
                 await SendSafeAsync(connection, json, "(admin)");
         }
@@ -1071,8 +1087,9 @@ public sealed class LobbyService
             {
                 var admins = _registry.ConnectedAdminConnections();
                 // Nobody watching, no serialization: the operator screen is telemetry's only
-                // consumer and producing it for nobody is a wasted packet.
-                if (admins.Count == 0) continue;
+                // consumer and producing it for nobody is a wasted packet. ⚠️ An open recording is a
+                // watcher too (§12.1).
+                if (admins.Count == 0 && !_recorder.IsRecording) continue;
 
                 entries.Clear();
                 foreach (var state in _registry.Snapshot())
@@ -1090,6 +1107,7 @@ public sealed class LobbyService
                 if (entries.Count == 0) continue;
 
                 var json = JsonUtil.Serialize(new NetStatsMsg { players = entries.ToArray() });
+                _recorder.Text(json);
                 foreach (var connection in admins)
                     await SendSafeAsync(connection, json, "(admin)");
             }
@@ -1186,6 +1204,7 @@ public sealed class LobbyService
                 players = snapshot.OrderBy(p => p.PlayerId).Select(p => p.ToPlayerInfo()).ToArray()
             };
             var json = JsonUtil.Serialize(msg);
+            _recorder.Text(json);
             foreach (var state in snapshot)
             {
                 var connection = state.Socket;

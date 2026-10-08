@@ -31,10 +31,17 @@ veya derlenmiş exe: `Server/VortexArena.Server.App/bin/Debug/net10.0/VortexAren
 İşletme dağıtımı için: `scripts\deploy-server.bat` → `deploy\server\VortexArena.Server.App.exe`
 (self-contained, .NET kurulumu gerekmez; `config/` yanında gider).
 
-> Sunucuyu **operatör launcher'ı da başlatabilir** (`--venue <mekan>` ile; bkz. `launcher/README.md`).
-> Unity admin uygulaması başlatmaz — yalnız çalışan bir sunucuya bağlanır. Launcher da sunucuyu
-> **kapatmaz**: sunucu maçın tek otoritesidir, ömrü operatör uygulamasının ömrüne bağlanmaz —
-> kapatma sunucunun kendi penceresinde Ctrl+C'dir.
+> Sunucuyu **operatör launcher'ı da başlatabilir** (bkz. `launcher/README.md`) ve launcher kontrol
+> uçlarıyla (aşağıdaki *Launcher kontrol uçları*) durdurabilir. Unity admin uygulaması başlatmaz —
+> yalnız çalışan bir sunucuya bağlanır. Launcher sunucuyu **konsol penceresi olmadan** başlatır;
+> o durumda tek çıktı `logs/server-*.log` günlük dosyasıdır.
+
+**Komut satırı argümanları** (`--anahtar değer`):
+
+| Argüman | Anlam |
+|---|---|
+| `--venue <mekan>` | Açılacak mekan; `server.json → venue`'yu ezer ve konsol sorusunu atlar (§11.1) |
+| `--replay-dir <yol>` | Maç kaydı klasörü; `server.json → replayDir`'i ezer, göreli yol exe klasörüne göre çözülür |
 
 Açılışta:
 - Kestrel `http://0.0.0.0:47821/ws` (WebSocket kontrol) dinler.
@@ -87,21 +94,66 @@ görünür.
 - Dosya açılamazsa sunucu tek satır uyarı basıp **dosyasız devam eder** — günlük hiçbir zaman
   sunucuyu durdurmaz.
 
+## Maç kayıtları (`.vxr`)
+
+Kayıt açıkken sunucu her maçı, bir admin'in o maçta aldığı WS metinlerinin ve giden UDP
+datagramlarının tek kopyasıyla bir dosyaya yazar; dosya **Unity'deki kayıt oynatıcısıyla** açılır.
+Biçim ve ne kaydedilip ne kaydedilmediği: `Docs/ArenaNet-Protokol.md` §12.
+
+- **Kayıt sunucu açılışında KAPALIDIR** ve operatör launcher'dan açıp kapatır; "hep kaydet"
+  ayarı yoktur. Açıkken **her maç kendi dosyasına** yazılır — lobiye dönüş dosyayı kapatır, kayıt
+  açık kalır.
+- **Maç ortasında açılırsa** dosya hemen açılır ve **geç katılan bir admin'in bildiğiyle** başlar:
+  o anki `load_match` + `world_state` + `match_state`. Öncesindeki öldürmeler kayıtta yoktur.
+  Lobide ya da `finished` fazında açılan kayıt dosyayı bir sonraki `start_match`'te açar.
+- **Yer:** `--replay-dir <yol>` > `server.json → replayDir` > exe'nin yanındaki `replays/` (göreli
+  yol da exe klasörüne göre çözülür). Klasör yoksa oluşturulur. Launcher sunucuyu kendi
+  klasöründeki `replays` ile başlatır.
+- **Ad:** `<yyyy-MM-dd_HH-mm-ss>_<SahneAdı>_<modId>.vxr` — sunucunun yerel saatiyle maçın açılış
+  anı; aynı ad varsa sonuna `_2`, `_3` eklenir.
+- **Sınırlar:** dosya `start_match` doğrulanınca (ya da maç ortasında kayıt açılınca) açılır;
+  lobiye dönüşte / sahne değişiminde / yeni bir `start_match`'te / kayıt kapatılınca / sunucu
+  kapanışında kapanır. Bir maç = bir dosya (turnuva turları aynı dosyadadır).
+- **Boyut:** oyuncu başına kabaca **2,2 kB/sn** → 12 oyunculu 10 dakikalık bir maç ~16 MB. Admin
+  bağlı olmasa da kayıt alınır.
+- **Saklama:** `replayKeepDays` günden eski `.vxr` dosyaları açılışta ve her kayıt kapanışında
+  silinir; `0` = hiç silme. Kayıt diske ayrı bir iş parçacığında yazılır — maç döngüsü beklemez.
+- Disk hatası sunucuyu durdurmaz: tek satır `[Kayıt] Yazılamadı: …` düşer ve o maçın kaydı
+  bırakılır. Sunucu çökerse dosya kapatılmamış kalır ama **yine oynatılır** (son tam kayda kadar).
+
+> ⚠️ **Kayıtlar sunucu klasöründe durursa bir dağıtımda gider.** `scripts\deploy-server.bat`
+> `deploy\server` klasörünü siler ve sahada sunucu klasörünü değiştirmek `replays/` dizinini de
+> götürür. Kayıtların kalmasını istiyorsanız `replayDir` sunucu klasörünün **dışını**
+> göstermelidir.
+
+## Launcher kontrol uçları
+
+Sunucu, WS ile **aynı portta** operatör launcher'ı için üç HTTP ucu açar: `GET /launcher/status`,
+`POST /launcher/recording`, `POST /launcher/shutdown`. Oyun istemcileri bunları kullanmaz.
+
+- **Yalnız loopback'ten kabul edilir;** başka bir adresten gelen istek `403` alır. Bu yüzden
+  launcher sunucuyla **aynı PC'de** durur.
+- `shutdown` cevabı (`202`) kapanıştan **önce** döner; kapanış Ctrl+C ile aynı yoldan koşar.
+- Yollar, gövdeler, `LauncherStatus` alanları ve gerekçeleri:
+  `Docs/ArenaNet-Protokol.md` → *Launcher kontrol uçları* bölümü.
+
 ## Kapanış
 
-Kapanışı **üç olay** tetikler ve üçü de aynı yoldan geçer (sıra ve süre aynı):
+Kapanışı **dört olay** tetikler ve hepsi aynı yoldan geçer (sıra ve süre aynı):
 
 - konsolda **Ctrl+C**,
 - **konsol penceresinin kapatılması** (ayrıca oturum kapatma / Windows kapanışı),
-- sürecin normal sonlanması (`ProcessExit`) — launcher'dan durdurma da buraya düşer.
+- launcher'ın `POST /launcher/shutdown` isteği,
+- sürecin normal sonlanması (`ProcessExit`).
 
 İkinci bir tetikleyici gelirse kapanış **yeniden koşmaz** (tek seferliktir).
 
 Servisler bu **sırayla** durdurulur; her adım bir öncekinin yazdığı kanalı kapatmadan önce onu
 susturur:
 
-`lobby` (net_stats telemetrisi) → `director` (maç tik'i) → `stateHost` (UDP state) → `beacon`
-→ `control` (istemcilere WebSocket close frame) → oyuncu kaydı (bağlantı zamanlayıcısı).
+`lobby` (net_stats telemetrisi) → `director` (maç tik'i) → `stateHost` (UDP state) → maç kaydı
+(`.vxr` dosyası kapatılır) → `beacon` → `control` (istemcilere WebSocket close frame) → oyuncu
+kaydı (bağlantı zamanlayıcısı).
 
 - Her servis, döngüsü gerçekten bitene kadar **beklenir**; tavan **servis başına 2 sn**. Tavan
   Windows'un konsol kapatma işleyicisine tanıdığı ~5 sn'ye göre seçilmiştir.
@@ -173,7 +225,8 @@ olmuştur ve dışarıdan hiçbir cihaz bağlanamaz.
 kurulumda genelde yalnız `venueName` ve (kiosk kurulumunda) `venue` değişir:
 ```json
 { "controlPort": 47821, "beaconPort": 47820, "statePort": 47822, "venueName": "Dev",
-  "tickHz": 20, "venue": "", "lobbyScene": "" }
+  "tickHz": 20, "venue": "", "lobbyScene": "",
+  "replayDir": "", "replayKeepDays": 30 }
 ```
 
 `venue` = **açılışta oynatılacak mekan** (§11.1). **Boş bırakılırsa sunucu açılırken konsolda
@@ -203,6 +256,11 @@ açar, o mekanın sahnesi ise istemcilerde yoktur ve `start_match` reddedilir.
 admin lobide durur: birbirlerini görürler, kalibrasyonlarını orada yaparlar, silah alıp
 hedeflere ateş edebilirler — birbirlerine hasar veremeden (`hit_report` yalnız `playing` fazında
 işlenir; ateş serbestliği lobi türünün kuralıdır, `rules.fireWhilePaused`).
+
+`replayDir` / `replayKeepDays` = **maç kaydı** (§12, yukarıdaki *Maç kayıtları* bölümü). Kaydı
+açma/kapama config'te değil launcher'dadır. `replayDir` boşsa kayıtlar exe'nin yanındaki `replays/`
+klasörüne gider (`--replay-dir` bu alanı ezer); `replayKeepDays` gün sayısı, `0` = hiç silme.
+Alanlar eski bir `server.json`'da yoksa varsayılanlar geçerlidir.
 
 `burger` = **Hamburgerci denge bloğu** (isteğe bağlı; blok yoksa aşağıdaki varsayılanlar geçerli):
 ```json

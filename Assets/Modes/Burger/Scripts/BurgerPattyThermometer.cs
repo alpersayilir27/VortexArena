@@ -1,5 +1,8 @@
 using System.Globalization;
+using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
+using VortexArena.Core.UI;
 using VortexArena.Net;
 
 namespace VortexArena.Modes.Burger
@@ -9,11 +12,14 @@ namespace VortexArena.Modes.Burger
     /// grill.
     /// <para>⚠️ The green window is the player's "take it off now" decision, so its edges must come from
     /// the server (<c>burger.cookSeconds/burnSeconds</c>) — hard-coding them on the client turns a tuned
-    /// shift into a lie the moment the config changes.</para></summary>
+    /// shift into a lie the moment the config changes.</para>
+    /// <para>⚠️ Two drawing paths on purpose: <see cref="uiRoot"/> (the Lokanta canvas) when the prefab
+    /// carries one, otherwise the old <see cref="gauge"/> renderer. The stage/progress maths is shared,
+    /// so the two can never disagree about doneness.</para></summary>
     [DisallowMultipleComponent]
     public sealed class BurgerPattyThermometer : MonoBehaviour
     {
-        [Tooltip("Göstergeyi çizen renderer (Quad). Boşsa bu objedeki renderer kullanılır.")]
+        [Tooltip("Göstergeyi çizen renderer (Quad). Arayüz kökü bağlıysa kullanılmaz.")]
         [SerializeField] private Renderer gauge;
 
         [Tooltip("Köfte merkezinin DÜNYA yukarısına göre yüksekliği (m).")]
@@ -31,12 +37,46 @@ namespace VortexArena.Modes.Burger
         [Tooltip("Eşikler henüz gelmemişken yeşil çizginin çizildiği yer (0-1).")]
         [SerializeField] private float fallbackCookMark = 0.5f;
 
+        // ------------------------------------------------------------ lokanta ui
+
+        [Tooltip("Arayüz göstergesinin kökü. Bağlıysa renderer yerine bu sürülür.")]
+        [SerializeField] private Transform uiRoot;
+
+        [Tooltip("Arayüzün sönümlemesi.")]
+        [SerializeField] private CanvasGroup uiGroup;
+
+        [Tooltip("Cıva sütunu (alta ankrajlı; yüksekliği doluluk oranı).")]
+        [SerializeField] private RectTransform mercury;
+
+        [SerializeField] private UiShape mercuryShape;
+
+        [Tooltip("Hazneye dökülen cıva (renk cıvayı izler).")]
+        [SerializeField] private UiShape bulbShape;
+
+        [Tooltip("Kartın zemini (duruma göre boyanır).")]
+        [SerializeField] private UiShape cardShape;
+
+        [Tooltip("Yeşil pencere bandı (pişti → yanmaya başladı aralığı).")]
+        [SerializeField] private RectTransform zone;
+
+        [SerializeField] private TMP_Text label;
+
+        [SerializeField] private Image icon;
+
+        [SerializeField] private Sprite iconFlame;
+        [SerializeField] private Sprite iconCheck;
+        [SerializeField] private Sprite iconWarn;
+        [SerializeField] private Sprite iconX;
+
         private static readonly int FillId = Shader.PropertyToID("_Fill");
         private static readonly int CookMarkId = Shader.PropertyToID("_CookMark");
         private static readonly int HeatId = Shader.PropertyToID("_Heat");
         private static readonly int WarnId = Shader.PropertyToID("_Warn");
         private static readonly int BurntId = Shader.PropertyToID("_Burnt");
         private static readonly int VisibilityId = Shader.PropertyToID("_Visibility");
+
+        /// <summary>Card blink rate over the warn threshold (Hz).</summary>
+        private const float BlinkHz = 2f;
 
         private NetObject _net;
         private MaterialPropertyBlock _block;
@@ -55,12 +95,17 @@ namespace VortexArena.Modes.Burger
         private float _visibility;
         private float _heat;
 
+        /// <summary>Last zone span written, so the band's rect is touched only when it moves.</summary>
+        private Vector2 _zoneSpan = new Vector2(-1f, -1f);
+
         private void Awake()
         {
             _net = GetComponentInParent<NetObject>();
             _block = new MaterialPropertyBlock();
 
-            if (gauge == null)
+            // ⚠️ Only the renderer path hunts for a Renderer: with a UI child bound, picking up some
+            // unrelated renderer on this object would push shader properties into the patty's own mesh.
+            if (gauge == null && uiRoot == null)
             {
                 gauge = GetComponent<Renderer>();
             }
@@ -81,6 +126,7 @@ namespace VortexArena.Modes.Burger
             _visibility = 0f;
             _heat = 0f;
             _lastCookingTime = float.NegativeInfinity;
+            _zoneSpan = new Vector2(-1f, -1f);
 
             _net.StateChanged += HandleStateChanged;
 
@@ -197,7 +243,212 @@ namespace VortexArena.Modes.Burger
             Push();
         }
 
+        // ------------------------------------------------------------------ shared
+
+        /// <summary>Doneness in gauge terms, shared by both drawing paths.</summary>
+        private void Measure(out float fill, out float cookMark, out bool warn, out bool burnt)
+        {
+            int stage = _net.Stage;
+
+            if (_hasTiming && _burn > 0f)
+            {
+                fill = Mathf.Clamp01(_progress / _burn);
+                cookMark = Mathf.Clamp01(_cook / _burn);
+            }
+            else
+            {
+                cookMark = Mathf.Clamp01(fallbackCookMark);
+                fill = stage == BurgerKinds.PattyBurnt
+                    ? 1f
+                    : stage == BurgerKinds.PattyCooked
+                        ? cookMark
+                        : 0f;
+            }
+
+            warn = _hasTiming && stage == BurgerKinds.PattyCooked &&
+                   _progress >= _cook + (_burn - _cook) * warnFraction;
+            burnt = stage == BurgerKinds.PattyBurnt;
+        }
+
         private void Push()
+        {
+            if (uiRoot != null)
+            {
+                PushUi();
+                return;
+            }
+
+            PushRenderer();
+        }
+
+        // ------------------------------------------------------------- lokanta ui
+
+        private void PushUi()
+        {
+            bool on = _visibility > 0f;
+            if (uiRoot.gameObject.activeSelf != on)
+            {
+                // A faded-out canvas still rebuilds and draws; patties are plentiful.
+                uiRoot.gameObject.SetActive(on);
+            }
+
+            if (!on)
+            {
+                return;
+            }
+
+            if (uiGroup != null)
+            {
+                uiGroup.alpha = Mathf.Clamp01(_visibility);
+            }
+
+            Measure(out float fill, out float cookMark, out bool warn, out bool burnt);
+            bool cooked = _net.Stage == BurgerKinds.PattyCooked;
+
+            Color mercuryA;
+            Color mercuryB;
+            Color card;
+            Color labelColor;
+            Sprite iconSprite;
+            Color iconColor;
+            string word;
+
+            if (burnt)
+            {
+                mercuryA = Lokanta.MercuryBurntA;
+                mercuryB = Lokanta.MercuryBurntB;
+                card = Lokanta.BurntCard;
+                labelColor = Fade(Lokanta.Ink, 0.7f);
+                iconSprite = iconX;
+                iconColor = Fade(Lokanta.Ink, 0.7f);
+                word = "YANDI";
+            }
+            else if (cooked && warn)
+            {
+                mercuryA = Lokanta.MercuryHotA;
+                mercuryB = Lokanta.MercuryHotB;
+                // 2 Hz blink: the only moving part, so the eye finds it without reading.
+                card = Mathf.Repeat(Time.unscaledTime * BlinkHz, 1f) < 0.5f
+                    ? Lokanta.HotCard
+                    : Lokanta.Cream;
+                labelColor = Lokanta.Red2;
+                iconSprite = iconWarn;
+                iconColor = Lokanta.Red2;
+                word = "YANIYOR";
+            }
+            else if (cooked)
+            {
+                mercuryA = Lokanta.MercuryCookedA;
+                mercuryB = Lokanta.MercuryCookedB;
+                card = Lokanta.Cream;
+                labelColor = Lokanta.Green2;
+                iconSprite = iconCheck;
+                iconColor = Lokanta.Green2;
+                word = "HAZIR!";
+            }
+            else
+            {
+                mercuryA = Lokanta.MercuryRawA;
+                mercuryB = Lokanta.MercuryRawB;
+                card = Lokanta.Cream;
+                labelColor = Lokanta.Ink;
+                // Raw shows the flame only while the meat is actually over fire.
+                iconSprite = _heat > 0.5f ? iconFlame : null;
+                iconColor = Lokanta.Flame;
+                word = "ÇİĞ";
+            }
+
+            if (mercuryShape != null)
+            {
+                mercuryShape.Fill(mercuryA, mercuryB, UiGradientMode.Vertical);
+            }
+
+            if (bulbShape != null)
+            {
+                bulbShape.Fill(mercuryB);
+            }
+
+            if (cardShape != null)
+            {
+                cardShape.Fill(card);
+            }
+
+            if (mercury != null)
+            {
+                float h = TrackHeight(mercury);
+                Vector2 size = mercury.sizeDelta;
+                size.y = h * fill;
+                mercury.sizeDelta = size;
+            }
+
+            WriteZone(cookMark);
+
+            if (label != null)
+            {
+                label.text = word;
+                label.color = labelColor;
+            }
+
+            if (icon != null)
+            {
+                bool show = iconSprite != null;
+                if (icon.enabled != show)
+                {
+                    icon.enabled = show;
+                }
+
+                if (show)
+                {
+                    icon.sprite = iconSprite;
+                    icon.color = iconColor;
+                }
+            }
+        }
+
+        /// <summary>Green window = cooked threshold → the moment the warning starts, both in gauge
+        /// units. ⚠️ Comes from the payload, never from a constant (see the class remark).</summary>
+        private void WriteZone(float cookMark)
+        {
+            if (zone == null)
+            {
+                return;
+            }
+
+            float top = _hasTiming && _burn > 0f
+                ? Mathf.Clamp01((_cook + (_burn - _cook) * warnFraction) / _burn)
+                : Mathf.Clamp01(cookMark + (1f - cookMark) * warnFraction);
+            var span = new Vector2(cookMark, Mathf.Max(top, cookMark));
+            if (span == _zoneSpan)
+            {
+                return;
+            }
+
+            _zoneSpan = span;
+
+            float h = TrackHeight(zone);
+            Vector2 size = zone.sizeDelta;
+            size.y = (span.y - span.x) * h;
+            zone.sizeDelta = size;
+            zone.anchoredPosition = new Vector2(zone.anchoredPosition.x, span.x * h);
+        }
+
+        /// <summary>Usable height of a bottom-anchored bar: read off the PARENT, so the one place the
+        /// tube's size lives is the generated prefab.</summary>
+        private static float TrackHeight(RectTransform bar)
+        {
+            var parent = bar.parent as RectTransform;
+            return parent != null ? parent.rect.height : bar.rect.height;
+        }
+
+        private static Color Fade(Color c, float alpha)
+        {
+            c.a *= alpha;
+            return c;
+        }
+
+        // ---------------------------------------------------------- renderer path
+
+        private void PushRenderer()
         {
             if (gauge == null)
             {
@@ -216,34 +467,14 @@ namespace VortexArena.Modes.Burger
                 return;
             }
 
-            int stage = _net.Stage;
-            float fill;
-            float cookMark;
-
-            if (_hasTiming && _burn > 0f)
-            {
-                fill = Mathf.Clamp01(_progress / _burn);
-                cookMark = Mathf.Clamp01(_cook / _burn);
-            }
-            else
-            {
-                cookMark = Mathf.Clamp01(fallbackCookMark);
-                fill = stage == BurgerKinds.PattyBurnt
-                    ? 1f
-                    : stage == BurgerKinds.PattyCooked
-                        ? cookMark
-                        : 0f;
-            }
-
-            bool warn = _hasTiming && stage == BurgerKinds.PattyCooked &&
-                        _progress >= _cook + (_burn - _cook) * warnFraction;
+            Measure(out float fill, out float cookMark, out bool warn, out bool burnt);
 
             gauge.GetPropertyBlock(_block);
             _block.SetFloat(FillId, fill);
             _block.SetFloat(CookMarkId, cookMark);
             _block.SetFloat(HeatId, _heat);
             _block.SetFloat(WarnId, warn ? 1f : 0f);
-            _block.SetFloat(BurntId, stage == BurgerKinds.PattyBurnt ? 1f : 0f);
+            _block.SetFloat(BurntId, burnt ? 1f : 0f);
             _block.SetFloat(VisibilityId, Mathf.Clamp01(_visibility));
             gauge.SetPropertyBlock(_block);
         }

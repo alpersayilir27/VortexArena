@@ -29,9 +29,9 @@ namespace VortexArena.Net
         public static RemoteSkeletonRegistry Instance { get; private set; }
 
         /// <summary>Sampling time shared by root and bones; pass one value to both per frame.</summary>
-        public static int RenderTickMs => Environment.TickCount - ArenaProtocol.INTERP_DELAY_MS;
+        public static int RenderTickMs => NetClock.NowMs - ArenaProtocol.INTERP_DELAY_MS;
 
-        /// <summary>One frame (recvMs = <c>Environment.TickCount</c>), decoded at ingest.</summary>
+        /// <summary>One frame (recvMs = <c>NetClock</c>), decoded at ingest.</summary>
         /// <remarks>Rotations live in the parallel <see cref="SkeletonEntryState.rotations"/> slot.</remarks>
         private struct SkeletonSample
         {
@@ -295,7 +295,7 @@ namespace VortexArena.Net
                 }
 
                 int newest = (state.nextIndex - 1 + RING_SIZE) % RING_SIZE;
-                return Environment.TickCount - state.ring[newest].recvMs;
+                return NetClock.NowMs - state.ring[newest].recvMs;
             }
         }
 

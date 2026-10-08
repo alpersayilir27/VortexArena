@@ -724,8 +724,8 @@ tabanda **değildir** (aşağıdaki nota bak).
 
 | Tip | Üye | Açıklama |
 |---|---|---|
-| `UiShape` | ✅ `Chamfer(c)` / `Chamfer(tl,tr,br,bl)` · `Slant(l,r)` · `Fill(c)` / `Fill(a,b,UiGradientMode,end)` · `Outline(w,a,b)` · `Glow(w,c,offset)` · `InnerGlow(w,c)` · `Antialias(bool)` | Akıcı API, hepsi `UiShape` döner. `OutlineWidth` okunur. `Glow`'un `w`'si CSS blur yarıçapıdır (σ = w/2) ve profil Gauss'tur: kalın şekil kenarında alfanın yarısını alır, 2 px çizgi soluk parlar — CSS `box-shadow` ile aynı |
-| `UiPolygonGraphic` | ⚠️ `ChamferTopLeft`…`ChamferBottomLeft` · `SlantLeft`/`SlantRight` · statik `SignedArea` · `Offset` · `ClipHalfPlane` · `Fan` · `Ring` | Taban; statikler kendi poligon grafiğini yazanlar için. ⚠️ Türev kendi `[RequireComponent(typeof(CanvasRenderer))]`'ını taşır |
+| `UiShape` | ✅ `Chamfer(c)` / `Chamfer(tl,tr,br,bl)` · `Radius(c)` / `Radius(tl,tr,br,bl)` · `Slant(l,r)` · `Fill(c)` / `Fill(a,b,UiGradientMode,end)` · `Outline(w,a,b)` · `Glow(w,c,offset)` · `InnerGlow(w,c)` · `Antialias(bool)` | Akıcı API, hepsi `UiShape` döner. `OutlineWidth` okunur. `Glow`'un `w`'si CSS blur yarıçapıdır (σ = w/2) ve profil Gauss'tur: kalın şekil kenarında alfanın yarısını alır, 2 px çizgi soluk parlar — CSS `box-shadow` ile aynı |
+| `UiPolygonGraphic` | ⚠️ `ChamferTopLeft`…`ChamferBottomLeft` · `RadiusTopLeft`…`RadiusBottomLeft` · `SlantLeft`/`SlantRight` · statik `SignedArea` · `Offset` · `ClipHalfPlane` · `Fan` · `Ring` | Taban; statikler kendi poligon grafiğini yazanlar için. Aynı köşede **chamfer yarıçapı ezer**; aynı kenardaki iki yarıçap yaylar kesişmesin diye küçültülür. ⚠️ Türev kendi `[RequireComponent(typeof(CanvasRenderer))]`'ını taşır |
 | `UiStripes` | ✅ `Stripes(angle, width, period, color)` · `AngleDeg` · `StripeWidth` · `Period` · `StripeColor` · `Drift(seconds)` · `DriftSeconds` | Poligona kırpılı çapraz şeritler |
 | `UiSegmentBar` | ✅ `SetFill(0..1)` · `SetFillColors(a,b)` · `SetTrack(c)` · `SetMetrics(segment, gap, skewDeg)` · `Fill` | Dilimli eğik çubuk (can, kumanda tiki) |
 | `HealthStrip` | ✅ `SetHp(hp, max)` | Oyuncu can şeridi: `UiSegmentBar` + sayı + CAN etiketi/ikonu; >%50 iyi · >%20 uyarı · altı kötü (sayıya kırmızı hale) — rengi taban değil bileşen bilir |
@@ -733,10 +733,13 @@ tabanda **değildir** (aşağıdaki nota bak).
 | `UiButtonStyle` | ✅ `SetKind(UiButtonKind)` · `SetInteractable(bool)` · `SetLabel(string)` · `SetHold(0..1)` · `Apply()` · `Kind` · `Interactable` · `TargetButton` · `Label` · `Shape` ⛔ `Bind(...)` | Düğmenin TÜM görünümü. ⚠️ Renk/zemin elle boyanmaz; `Bind` builder'ındır |
 | `UiChip` | ✅ `Set(text, UiChipKind, iconName = null)` · `Root` · `Label` · sabitler `Height`/`Padding`/`IconSize`/`IconGap` ⛔ `Bind(...)` | Rozet; genişliğini `Set` ölçüp yazar |
 | `Girdap` | ✅ `Hex(rgb[, a])` · `Rgba(r,g,b,a)` · `TeamHi/TeamLo/TeamInk(team)` · `Spacing(em)` · `Upper(s)` · `Font(GirdapFont)` · `Icon(name)` · `Assets` + palet alanları | **Statik.** Renk literali çağrı yerinde yazılmaz; `Upper` tr-TR'dir (`i → İ`) |
+| `Lokanta` | ✅ palet alanları + `Outline`/`Shadow`/`CardRadius` · `PatienceWarn`/`PatienceBad` | **Statik.** Aşçı modunun lokanta teması: yüzeyler, vurgular, malzeme dilimi ve termometre cıvası renkleri, kart ölçüleri, sabır eşikleri. `Girdap` ile aynı kural (literal çağrı yerinde yazılmaz); Girdap ekranları bu paleti kullanmaz |
 | `GirdapAssets` | ✅ `Font(GirdapFont)` · `Icon(name)` · `InvalidateIconLookup()` | `Resources/UI/Girdap.asset`; ikon çıplak adla istenir (`"Skull"` → `Ic_Skull`) |
 
 > ⚠️ `UiButtonKind` · `UiChipKind` · `UiGradientMode` · `GirdapFont` prefablara **serileşir** —
 > yeni değer sona eklenir (→ **[Yapma Listesi](Yapma-Listesi.md)**, "Serialize edilen veriler").
+> `GirdapFont` Girdap ekranlarının yazı rollerinin yanında lokanta temasının Fredoka/Nunito
+> rollerini de taşır; font asset'i yine `Girdap.Font(...)` ile çözülür.
 
 ---
 
@@ -771,12 +774,15 @@ tekildir, sahneye konmaz; çağrılacak bir metodu yoktur.
 | Üye | Açıklama |
 |---|---|
 | ✅ `ResourcePath` | `Resources` içindeki yol |
-| ⚠️ `RowHeight` · `RowGap` · `RowsTop` | Skor tablosu satır adımı — builder'ın şablonu ve çalışırken dizilen satırlar **aynı** sabitleri okur |
+| ⚠️ `rowHeight` · `rowGap` · `rowsTop` | Skor tablosu satır adımı — **serileşen** alanlar; builder'ın şablonu ve çalışırken dizilen satırlar aynı değerleri okur, varsayılanları genel ekranın ölçüsüdür |
 | ⚠️ `NameCellX` · `NameGap` | Ad hücresinin sol kenarı ve SEN çipinin boşluğu |
-| ⚠️ `BlockCount` | Tablo bloğu sayısı (takım başına bir blok; takımsız kipte tek sıralama ikiye bölünür) |
+| ⚠️ `BlockCount` | Tablo bloğu sayısı (takım başına bir blok; takımsız kipte tek sıralama ikiye bölünür — numaralandırma sağ kolonda kaldığı yerden sürer, eşitler aynı sırayı paylaşır, kendi kimliği bilinmiyorsa `-` yazılır) |
+| ⚠️ ko-op/tablo metin hedefleri | Ortak skor, mutlu/mutsuz, kendi skoru ve sıra **ayrı ayrı** yazılabilir; bağlanmayan hedefte eski birleşik dize yazılır |
+| ⚠️ satır derisi alanları | Satır ve kendi-satırının dolgu/kontur/hale/mürekkep renkleri, sol kolon alfası, ko-op özet biçimi, sonuç tonuyla başlık boyama, satır hücresi skor ikonu — varsayılanları Girdap görünümünü verir |
 
-> Moda özel görünüm bir **prefab varyantıdır** (`ModeDefinition.resultScreenPrefab`); mantık
-> değişmez — reçete: `Yemek-Kitabi.md` "Moda özel maç sonu ekranı".
+> Moda özel görünüm ya bir **prefab varyantı** ya modun **builder partial'ından üretilen** bir
+> prefabtır (`ModeDefinition.resultScreenPrefab`); mantık değişmez ve bileşen `modeId` bilmez —
+> reçete: `Yemek-Kitabi.md` "Moda özel maç sonu ekranı".
 
 ---
 

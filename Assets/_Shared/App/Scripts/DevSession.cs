@@ -84,6 +84,8 @@ namespace VortexArena.App
         public const string KeySandbox = Prefix + "Sandbox";
         public const string KeySandboxModeId = Prefix + "SandboxModeId";
         public const string KeySkipCalibration = Prefix + "SkipCalibration";
+        public const string KeyReplay = Prefix + "Replay";
+        public const string KeyReplayPath = Prefix + "ReplayPath";
 
         /// <summary>
         /// Sandbox's weapon source — the <c>ModeRulesInfo.weaponSource</c> wire value.
@@ -160,6 +162,26 @@ namespace VortexArena.App
             set => EditorPrefs.SetBool(KeySkipCalibration, value);
         }
 
+        /// <summary>Play a match recording instead of connecting (§12.4). Admin role only —
+        /// playback is a mode of that role, never a third one.</summary>
+        public static bool Replay
+        {
+            get => EditorPrefs.GetBool(KeyReplay, false);
+            set => EditorPrefs.SetBool(KeyReplay, value);
+        }
+
+        /// <summary>The selected <c>.vxr</c> file; empty = no playback even with the toggle on.</summary>
+        public static string ReplayPath
+        {
+            get => EditorPrefs.GetString(KeyReplayPath, "");
+            set => EditorPrefs.SetString(KeyReplayPath, value ?? "");
+        }
+
+        /// <summary>Is the playback selection complete (toggle on, admin role, file picked)?</summary>
+        public static bool ReplayActive =>
+            Replay && Role == AppSession.RoleAdmin && !Sandbox &&
+            !string.IsNullOrWhiteSpace(ReplayPath);
+
         /// <summary>modId applied in sandbox — <b>the loadout is found through it</b>
         /// (<c>GameCatalog.FindMode</c>); empty means no weapons.</summary>
         public static string SandboxModeId
@@ -181,6 +203,12 @@ namespace VortexArena.App
                     return $"{Role} · SANDBOX (sunucusuz) · {mode} · silah: sırayla · {start}{skip}";
                 }
 
+                if (ReplayActive)
+                {
+                    return $"{Role} · KAYIT OYNATMA · " +
+                           $"{System.IO.Path.GetFileName(ReplayPath)} · {start}{skip}";
+                }
+
                 string address = HasAddress ? $"{Ip}:{Port}" : "keşif (adres yok)";
                 return $"{Role} · {address} · {start}{skip}";
             }
@@ -197,6 +225,10 @@ namespace VortexArena.App
             // Written unconditionally and BEFORE the Enabled early-out: with domain reload off the
             // static outlives the previous Play, so the current selection must overwrite it.
             ArenaCalibrator.DevSkipRequested = Enabled && SkipCalibration;
+
+            // Same reason as above (domain reload off keeps the previous Play's value): playback
+            // gates everything through AppSession, so a stale path would silently kill the network.
+            AppSession.ReplayPath = Enabled && ReplayActive ? ReplayPath.Trim() : "";
 
             if (!Enabled)
             {
