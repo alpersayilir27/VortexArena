@@ -3516,7 +3516,7 @@ azalmaz.
 
 - **Açma/kapama yalnız çalışma zamanındadır** (`POST /launcher/recording`, §13); config alanı yoktur.
 - **Klasör:** `--replay-dir <yol>` > `server.json → replayDir` > exe yanında `replays/`; göreli yol
-  exe klasörüne göre çözülür. Launcher sunucuyu kendi klasöründeki `replays/` ile başlatır.
+  exe klasörüne göre çözülür. Launcher sunucuyu kendi kökündeki `replays/` ile başlatır.
   Gerekçe: sunucu klasörü yeniden dağıtılınca (klasör değiştirilince) içindeki kayıtlar da giderdi.
 - **Saklama:** `server.json → replayKeepDays` (varsayılan `30`; `0` = hiç silme). Sunucu açılışta ve
   her kayıt kapanınca süresi dolmuş `.vxr` dosyalarını siler.

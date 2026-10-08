@@ -44,6 +44,8 @@ public sealed class ServerPageViewModel : PageViewModel
     private readonly RelayCommand _stopCommand;
 
     private bool _transition;
+    private bool _serverPresent;
+    private bool _mapsPresent;
     private ServerRunState _runState = ServerRunState.Stopped;
     private VenueInfo? _selectedVenue;
     private VenueCatalog _catalog = VenueCatalog.Empty;
@@ -71,6 +73,8 @@ public sealed class ServerPageViewModel : PageViewModel
             ? context.Settings.ControlPortOverride.ToString(CultureInfo.InvariantCulture)
             : "";
 
+        _serverPresent = context.Paths.ServerExeExists;
+        _mapsPresent = context.Paths.ServerMapsJsonExists;
         ReloadVenues();
     }
 
@@ -127,10 +131,10 @@ public sealed class ServerPageViewModel : PageViewModel
 
     public bool VenuePickerEnabled => RunState == ServerRunState.Stopped;
 
-    /// <summary>Empty-state text when the deployment has no <c>server\</c> folder; empty when fine.</summary>
+    /// <summary>Empty-state text while <c>server\</c> has no server build; empty when fine.</summary>
     public string MissingServerMessage => Context.Paths.ServerExeExists
         ? ""
-        : $"server klasörü bulunamadı: {Context.Paths.ServerDir}";
+        : $"Sunucu yok. Sunucu build'ini (VortexArena.Server.App.exe + config) şu klasöre koyun: {Context.Paths.ServerDir}";
 
     public string CatalogProblem => _catalog.Problem ?? "";
 
@@ -220,9 +224,26 @@ public sealed class ServerPageViewModel : PageViewModel
 
     public override Task TickAsync()
     {
+        DetectServerBuild();
         PumpLog();
         UptimeText = Context.Server.Uptime is { } uptime ? Display.Clock(uptime) : "—";
         return Task.CompletedTask;
+    }
+
+    /// <summary>A build copied into (or removed from) <c>server\</c> applies without a restart.</summary>
+    private void DetectServerBuild()
+    {
+        var present = Context.Paths.ServerExeExists;
+        // Watched too: a copy in progress can land the exe before config\.
+        var maps = Context.Paths.ServerMapsJsonExists;
+        if (present == _serverPresent && maps == _mapsPresent) return;
+
+        _serverPresent = present;
+        _mapsPresent = maps;
+        Context.RefreshControlPort();
+        ReloadVenues();
+        OnPropertyChanged(nameof(CanStart));
+        _startCommand.RaiseCanExecuteChanged();
     }
 
     private void ShowStatusFields(LauncherStatus? status)

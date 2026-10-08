@@ -35,15 +35,16 @@ Bugün `status.fps` 5 sn'lik ortalamadır: tek bir 200 ms takılma da ısıl kı
 
 ## 3. Kod tarafı
 
-- [ ] **Silah örnekleri havuzlanmaz:** `WeaponGranter` silahı verişte `Instantiate`, geri alışta
-  `Destroy` eder; `RemoteAvatar` uzak oyuncunun elindeki eşyayı aynı şekilde kurar. Maç ortası
-  silah değişiminde takılma görünürse tür başına havuz.
-- [ ] **UDP alımı datagram başına bellek ayırır:** `UdpClient.ReceiveAsync` her pakette yeni dizi,
-  `UdpStateChannel.HandleDatagram` her pakette `MemoryStream` + `BinaryReader` kurar. Gönderim
-  tarafındaki gibi kalıcı tampon ve yeniden kullanılan okuyucu.
-- [ ] **Poz halkası taraması** (`RemotePlayerRegistry` örnekleme): en eski örnekten başlar; örnekleme
-  zamanı halkanın yeni ucuna yakın olduğundan tersten tarama işi kısaltır. Etkisi küçüktür, yalnız
-  profil gösterirse.
+- [ ] **Rastgele silah kipinde yerel silah havuzu:** `WeaponGranter.Grant` her grip basışında silahı
+  `Instantiate`, bırakışta `Destroy` eder (`WeaponGrantKind.Disposable`). Takılma §1'de görünürse
+  tanım başına serbest liste — ⚠️ `ThrowablePool`'un halkası değil (dolunca en eskiyi geri alır, yani
+  silahı elden çeker). Yeniden kullanımda `Weapon.Awake`'in kurduğu durum (cephane →
+  `RefillFull`) ve verişin kapattığı grab/fizik yolları yeniden kurulmalı.
+- [ ] **Durum paketini ayrıştırırken ayırma:** snapshot (`0x05`) her pakette üç dizi, iskelet
+  (`0x08`) oyuncu başına `ReadBytes` blob'u kurar. Önceden ayrılmış kazıma dizileri + sayaç ve
+  blob'u tampondan doğrudan çözme (`SkeletonWire.TryRead` ofset alıyor). ⚠️ Bu kod
+  `_Shared/Net/Protocol` altındadır ve sunucuya da derlenir: API değişikliği sunucu derlemesiyle
+  birlikte doğrulanır.
 
 ## 4. Dokümanlar (aynı commit)
 

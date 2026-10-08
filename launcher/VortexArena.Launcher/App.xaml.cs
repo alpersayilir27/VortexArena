@@ -26,6 +26,16 @@ public partial class App : Application
 
         if (!_guard.TryAcquire())
         {
+            // ⚠️ A copy from another folder must say so: silently raising the old window looks
+            // like this copy opened, with the old root.
+            var running = SingleInstanceGuard.RunningInstancePath();
+            if (!SameFile(running, Environment.ProcessPath))
+            {
+                Dialogs.Info(running is null
+                    ? "Başka bir launcher zaten açık; bu kopya açılmadı.\n\nBu kopyayı kullanmak için önce açık olanı kapatın."
+                    : $"Launcher zaten açık:\n{running}\n\nBu kopya açılmadı. Bu kopyayı kullanmak için önce açık olanı kapatın.");
+            }
+
             SingleInstanceGuard.SignalExistingInstance();
             Shutdown();
             return;
@@ -48,6 +58,20 @@ public partial class App : Application
         _model?.Dispose();
         _guard.Dispose();
         base.OnExit(e);
+    }
+
+    private static bool SameFile(string? a, string? b)
+    {
+        if (string.IsNullOrEmpty(a) || string.IsNullOrEmpty(b)) return false;
+        try
+        {
+            return string.Equals(
+                System.IO.Path.GetFullPath(a), System.IO.Path.GetFullPath(b), StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception)
+        {
+            return false;
+        }
     }
 
     private void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)

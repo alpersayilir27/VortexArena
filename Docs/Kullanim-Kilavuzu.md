@@ -113,9 +113,11 @@ Lobi       : <o mekanın lobi haritası>
 
 - [ ] Launcher zaten açık olmalı (Bölüm 1). Değilse masaüstündeki **VortexArena Launcher**
       kısayoluna çift tıkla.
-      (Kısayol yoksa: kurulum klasöründeki tek dosya **`VortexArena.Launcher.exe`**.)
+      (Kısayol yoksa: kurulum klasöründeki **`VortexArena.Launcher.exe`**.)
 - [ ] Sol menüden **Yönetim** sayfasını aç. Adres ve dosya yolu sorulmaz; sunucu başka bir
-      bilgisayardaysa adres **Gelişmiş** başlığının altındadır (bilgi kartındaki adresi oraya yaz).
+      bilgisayardaysa adres **Gelişmiş** başlığının altındadır (bilgi kartındaki adresi oraya yaz,
+      **Uygula**'ya bas). Bu adres hatırlanmaz: launcher her açılışta bu bilgisayarın adresiyle
+      (`127.0.0.1`) başlar.
 - [ ] **Başlat** düğmesine bas.
 - [ ] Oyun penceresi açılır ve **IP sormadan doğrudan yönetim ekranına** düşer.
 

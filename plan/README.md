@@ -13,7 +13,7 @@
 | **Burger mutfağı — cartoon kit**: mutfak, diner ve servis penceresi cartoon kitle sahnede, Static + bake'li. Kalan: diner için iki poster (görsel bekleniyor) | `burger-cartoon-mutfak.md` |
 | **Burger — asılı ketçap**: tavandan yaylı kordonla sarkan ketçap şişesi; tetikle sıkılan akış zemini, tezgâhları, oyuncuları (görüş kenarı + avatar lekesi, hasarsız) ve burgerleri kirletir; yığına sıkılan ketçap sunucuda `sauce` katmanı doğurur, duvardaki sos dağıtıcısı kalkar. Yeni kind `ketchup_bottle` + olaylar `squeeze`/`squirt`; `PROTOCOL_VERSION` artmaz ama yeni APK gerekir. Kod, doküman, Unity verisi ve sahne **bitti**; kalan: kavrama pozu ayarı, dağıtım ve saha doğrulaması | `burger-ketcap.md` |
 | **Arayüz yenileme — "Girdap" teması**: mockup'lar `Docs/Gelistirici/Arayuz/` altında durur (ortak stil `tema.css`, parça ve durumlar `kit.html`), ölçülerin kalıcı kaynağıdır. Admin HUD · istatistik · tercihler · oyuncunun maç sonu ekranı · oyuncu HUD'u (can şeridi · skor bandı · öldün kartı) · aşçı modunun lokanta arayüzü builder'dan üretiliyor (`Docs/Gelistirici/Arayuz-Tasarimi.md`). Kalan: (1) saha doğrulaması; (2) Mole'un sonuç ekranı (`Assets/Modes/Mole/UI/MoleResultOverlay.prefab`) hâlâ taban prefabın eski varyantı — gizli sütun override'ları, StatsPanel sprite override'ı ve metin altına düşen süslemeler çakışıyor; builder'dan üretilen yola taşınacak (`Yemek-Kitabi.md` "Moda özel maç sonu ekranı" yol B, örneği `BurgerResultOverlay`); (3) canlı ihlal çerçevesi (`AdminViolations.Of`) editör önizlemesinde test edilemiyor, sahada bakılacak | `../Docs/Gelistirici/Arayuz/admin-hud.html` |
-| **Performans**: önce cihaz telemetrisi (`status`'a isteğe bağlı en kötü kare · yavaş kare sayısı · pil sıcaklığı, sunucu eşik aşımını loglar; `PROTOCOL_VERSION` artmaz), sonra ölçüme bağlı 90 Hz ve shader/PSO ısınması, kod tarafında silah havuzu ve ayırmasız UDP alımı. Henüz **hiçbir şey yazılmadı** | `performans.md` |
+| **Performans**: önce cihaz telemetrisi (`status`'a isteğe bağlı en kötü kare · yavaş kare sayısı · pil sıcaklığı, sunucu eşik aşımını loglar; `PROTOCOL_VERSION` artmaz), sonra ölçüme bağlı 90 Hz ve shader/PSO ısınması, kod tarafında rastgele silah kipinde yerel havuz ve durum paketi ayrıştırmasında ayırmasızlık. Henüz **hiçbir şey yazılmadı** | `performans.md` |
 
 ## Dağıtım — protokol sürümü artınca
 
@@ -36,6 +36,9 @@ yazar); sebep sunucu konsoluna ve `admin_state.notice`'e yazılır.
 - Tracer rengi silah başına farklılaşmaz — hepsi aynı kalır (altyapı destekliyor, istenmiyor).
 - Çarpma efekti ve sesi yüzeye göre farklılaşmaz — her isabet `default` yüzeydir (altyapı
   destekliyor, anahtarı `SurfaceLibrary.definitions`; haritalara yüzey ataması yapılmaz).
+- Fırlatılan bombanın uzak vuruş kutularıyla çarpışma eşlemesi ve kırılan objenin efekti
+  değişmez: ikisi zaten kayıt ve havuz kullanır (`RemoteHitBox.Active`, `BlastFxPool`), sahne
+  taraması ya da `Instantiate` yoktur.
 - Quest gölge mesafesi kısaltılmaz: Shadowmask'ta statik geometri gerçek zamanlı gölge çizmez,
   gölgeyi yalnız oyuncu ve eşya düşürür; mesafeyi mekan köşegeninin altına çekmek alanın uzak
   ucunda oyuncu gölgesini keser, kazancı küçüktür.

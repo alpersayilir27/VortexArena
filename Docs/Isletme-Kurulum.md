@@ -226,11 +226,13 @@ Arena, her başlıkta **2 nokta** ile fiziksel alana hizalanır (`ArenaCalibrato
   - `scripts\deploy-server.bat` → `deploy\server\` (self-contained; işletme PC'sine .NET kurmak gerekmez)
   - `scripts\deploy-admin-game.bat` → `deploy\admin\` (**Unity editörü kapalı olmalı**)
   - `scripts\deploy-player-apk.bat` → `deploy\player\` (**Unity editörü kapalı olmalı** + Android Build Support modülü; açılışta **sürüm numarası** sorar, çıktı `game_v<sürüm>.apk`; platform değişen koşu 20-40 dk sürer)
-  - `scripts\deploy-launcher.bat` → `deploy\VortexArena.Launcher.exe` (**tek dosya**,
-    self-contained, `adb` içinde; tek ön koşul .NET 10 SDK)
-  - Klasörlerin **tamamını** kopyala — exe'ler tek başına çalışmaz. Launcher kendi klasörünü kök
-    sayar: operatör PC'sinde yerleşim `VortexArena.Launcher.exe` + yanında `server\` ve `admin\`
-    olmalıdır (`game_versions\` ile `replays\` klasörlerini launcher kendisi açar).
+  - `scripts\deploy-launcher.bat` → **saha paketi** `deploy\launcher\`: `VortexArena.Launcher.exe`
+    (**tek dosya**, self-contained, `adb` içinde; tek ön koşul .NET 10 SDK) + yanında boş
+    `server\`, `admin\`, `game_versions\`, `replays\`
+  - `deploy\server\` içeriğini `deploy\launcher\server\`'a, `deploy\admin\` içeriğini
+    `deploy\launcher\admin\`'e kopyala; sonra `deploy\launcher\` klasörünün **tamamını** operatör
+    PC'sine taşı — exe'ler tek başına çalışmaz. Launcher kendi klasörünü kök sayar; eksik
+    klasörleri açılışta boş olarak kendisi açar.
 - [ ] **Fon müziği klasörü** (isteğe bağlı): admin exe'sinin **yanına** `Muzik` adlı bir klasör aç
   ve işletmenin çalmasını istediği parçaları (`.mp3` · `.wav` · `.ogg`) içine koy. Admin panelinde
   *Tercihler → SES → Müzik çalar* bu klasörü okur; maç başlayınca listeden rastgele bir parça
@@ -300,7 +302,7 @@ Arena, her başlıkta **2 nokta** ile fiziksel alana hizalanır (`ArenaCalibrato
 
 Sırayla uygula; her madde geçmeden sonrakine geçme.
 
-- [ ] **1.** **Launcher** (`VortexArena.Launcher.exe`) açıldı; *Sunucu* sayfasında **doğru mekan** seçili ve sayfada "sunucu bulunamadı" uyarısı yok (exe yolu sorulmaz, kök exe'nin yanıdır).
+- [ ] **1.** **Launcher** (`VortexArena.Launcher.exe`) açıldı; *Sunucu* sayfasında **doğru mekan** seçili ve sayfada "sunucu bulunamadı" uyarısı yok (exe yolu sorulmaz, kök exe'nin klasörüdür).
 - [ ] **2.** *Sunucu* sayfasında **Başlat** → günlük bölmesinde `[Venue] '<Mekan>' yapılandırmadan seçildi` satırı ve açılış özeti doğru (Bölüm 5); durum satırında faz/sahne/oyuncu sayısı akıyor.
 - [ ] **3.** *Yönetim* sayfasında **Başlat** → admin uygulaması açıldı ve **IP sormadan** doğrudan **oyuncuların bulunduğu sahneye** düştü (bağlanma ekranında takılı kalmıyor); üstte ortada skor bandı ve altında **İSTATİSTİK** düğmesi, sol üstte **TERCİHLER**, sağ üstte kamera kipleri (**SERBEST** · **KUŞ BAKIŞI**), yanlarda takım kolonları, altta maç kontrol şeridi (**BAŞLAT · DURAKLAT · BİTİR · İPTAL**; çok katlı arenada sağında **KAT** düğmeleri) görünüyor.
 - [ ] **3b.** Launcher'ın *Versiyonlar* sayfasında bir gözlük USB ile bağlıyken listedeki sürüm **"Yüklü"** rozetiyle görünüyor; *Kayıt* sayfası açılıyor ve kayıt **kapalı** başlıyor.
@@ -341,8 +343,8 @@ Sırayla uygula; her madde geçmeden sonrakine geçme.
 | Ekranda **"SUNUCU BULUNAMADI"** yazıyor ("adres yok") | Cihazın elinde **hiç adres yok**. Gözlük: beacon gelmiyor ve kayıtlı IP de `arena.json` da yok. Admin: oyun **launcher'sız** (exe'ye çift tıklanarak) açılmış → `--server-ip` gelmemiş | Gözlük: lobide sağ kumandada **joystick'e 1 sn basılı tut** → gizli IP paneli → `IP:port` gir (kalıcı saklanır). Admin: uygulamayı **launcher'ın *Yönetim* sayfasından** başlat. Bu ekranda **"Yeniden Bağlan" devre dışıdır** — denenecek adres olmadığı için bilinçlidir |
 | Başlık sunucuyu bulamıyor / bağlanamıyor | Firewall'da engelle kuralı; AP'de **client isolation açık**; başlık farklı SSID/subnet'te; PC ağ profili "Genel" | `firewall-kur.cmd`'yi **yönetici** olarak çalıştır; AP'de isolation'ı kapat; SSID'yi kontrol et; ağ profilini **Özel** yap |
 | Başlık kendiliğinden bağlanmıyor, "sunucu aranıyor" | AP broadcast'i kesiyor / VLAN ayrımı → beacon gelmiyor | Lobide sağ kumandada **joystick'e 1 sn basılı tut** → gizli IP paneli → **IP:port** elle gir (beacon'ı ezer, kalıcı saklanır); kalıcı çözüm için `StreamingAssets/arena.json` + yeni APK |
-| Admin uygulaması "Sunucu adresi yok" diyor (3 sn sonra tam ekran **"SUNUCU BULUNAMADI"**) | Oyun launcher'sız (elle) açılmış — `--server-ip` gelmemiş | Oyunu **launcher'ın *Yönetim* sayfasından** başlat; sunucu adresi varsayılan `127.0.0.1`'dir, ayrı PC'deyse *Gelişmiş* altındaki adres doldurulur |
-| Launcher *Yönetim* sayfasında "admin bulunamadı" diyor | Launcher'ın yanındaki `admin\` klasörü silinmiş/taşınmış veya build alınmamış | `scripts\deploy-admin-game.bat` (editör kapalıyken) çalıştır, `admin\` klasörünü launcher exe'sinin yanına kopyala |
+| Admin uygulaması "Sunucu adresi yok" diyor (3 sn sonra tam ekran **"SUNUCU BULUNAMADI"**) | Oyun launcher'sız (elle) açılmış — `--server-ip` gelmemiş | Oyunu **launcher'ın *Yönetim* sayfasından** başlat; sunucu adresi her açılışta `127.0.0.1`'dir, ayrı PC'deyse *Gelişmiş* altındaki adres o oturum için doldurulur (kaydedilmez) |
+| Launcher *Yönetim* sayfasında "admin bulunamadı" diyor | Launcher exe'sinin yanındaki `admin\` klasörü boş, silinmiş/taşınmış veya build alınmamış | `scripts\deploy-admin-game.bat` (editör kapalıyken) çalıştır, `deploy\admin\` içeriğini launcher exe'sinin yanındaki `admin\` klasörüne kopyala |
 | Launcher **mekan seçilmeden** sunucuyu başlatmıyor | Bilinçli: mekansız başlatılsa sunucu **alfabetik ilk mekanı** sessizce açardı ve yanlış işletmenin arenaları yönetilirdi | *Sunucu* sayfasındaki listeden bu işletmeyi seç. Liste boşsa `server\config\maps.json` yok → Unity'de **Export Server Config** + yeniden dağıtım |
 | Admin harita seçicisinde **başka işletmenin arenaları** var / beklenen arena yok | Sunucu yanlış mekanla açılmış | Günlükteki `[Venue] …` satırını oku. *Sunucu* sayfasından **Durdur**, doğru mekanı seçip yeniden **Başlat** — **mekan çalışırken değişmez** |
 | *Versiyonlar* sayfasında gözlük görünmüyor ya da "izin bekleniyor" diyor | Gözlük USB'den takılı değil, geliştirici modu kapalı ya da USB hata ayıklama izni verilmemiş | Kabloyu tak, gözlüğü **tak** ve çıkan izin penceresinde **"Bu bilgisayardan her zaman izin ver"** işaretleyerek onayla |

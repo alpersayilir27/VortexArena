@@ -24,7 +24,8 @@ namespace VortexArena.Core.Player
     /// top (a shell), and is PRESENTATION only — the server decides who is protected.</para>
     /// <para><b>Held items</b> (§6.6): <c>itemL</c>/<c>itemR</c> are resolved via
     /// <see cref="NetItemCatalog"/> and driven from that hand's pose; instances are rebuilt only on
-    /// CHANGE. The instance is a visual, not a working weapon (<see cref="SterilizeVisual"/>).</para>
+    /// CHANGE and a released one is PARKED for reuse, not destroyed (<see cref="_itemCache"/>). The
+    /// instance is a visual, not a working weapon (<see cref="SterilizeVisual"/>).</para>
     /// <para>The drawn body is the default character mesh, the prefab RED team body, or — when the mode
     /// defines one (<c>ModeDefinition.BodyPrefab</c>) — a body built at runtime; ONE at a time, all
     /// driven from the same live skeleton by <see cref="SkeletonPoseMirror"/>.</para>
@@ -265,6 +266,12 @@ namespace VortexArena.Core.Player
         private Transform _itemInstanceL;
         private Transform _itemInstanceR;
         private MaterialPropertyBlock _itemTintBlock;
+
+        // Sterilised instances parked per definition instead of being destroyed: Instantiate +
+        // SterilizeVisual on every press AND release (summon/frame mode drops the byte to 0) hitches
+        // on Quest. A list per key — two hands may hold the same definition.
+        // ⚠️ Lives under this avatar's staging root, so it dies with the avatar.
+        private Dictionary<ItemDefinition, List<Transform>> _itemCache;
 
         // HoldMode ↔ GRIP_LINKED conflict is logged ONCE per state (at 20 Hz it would be a flood).
         private bool _holdModeMismatchWarned;
@@ -1972,15 +1979,20 @@ namespace VortexArena.Core.Player
             if (wantL != _shownItemL)
             {
                 _shownItemL = wantL;
+
+                // The OUTGOING definition is the cache key of the instance being released, so it is
+                // taken before the field is overwritten.
+                ItemDefinition releasedL = _itemDefL;
                 _itemDefL = Resolve(wantL);
-                RebuildItemInstance(ref _itemInstanceL, ref _recoilL, _itemDefL);
+                SwapItemInstance(ref _itemInstanceL, ref _recoilL, releasedL, _itemDefL);
             }
 
             if (wantR != _shownItemR)
             {
                 _shownItemR = wantR;
+                ItemDefinition releasedR = _itemDefR;
                 _itemDefR = Resolve(wantR);
-                RebuildItemInstance(ref _itemInstanceR, ref _recoilR, _itemDefR);
+                SwapItemInstance(ref _itemInstanceR, ref _recoilR, releasedR, _itemDefR);
             }
 
             _shownGripLinked = gripLinked;
@@ -2016,22 +2028,12 @@ namespace VortexArena.Core.Player
             return netItemId == 0 || _itemCatalog == null ? null : _itemCatalog.FindByNetItemId(netItemId);
         }
 
-        /// <summary>Rebuilds one hand's item instance. Called only on state change, so allocation is
-        /// legitimate here.</summary>
-        private void RebuildItemInstance(ref Transform instance, ref RecoilSlot recoil, ItemDefinition definition)
+        /// <summary>Swaps one hand's item: the outgoing instance is parked for reuse and the incoming
+        /// one is taken from the cache, built only on a first sight of that definition.</summary>
+        private void SwapItemInstance(ref Transform instance, ref RecoilSlot recoil,
+            ItemDefinition released, ItemDefinition definition)
         {
-            // Pivot and accumulated kick are reset: stale recoil would shake a rifle before its first
-            // shot.
-            recoil = default;
-
-            if (instance != null)
-            {
-                // Destroy is deferred to end of frame and that frame still DRAWS — disable first so a
-                // dropped item is not shown once more in a stale pose.
-                instance.gameObject.SetActive(false);
-                Destroy(instance.gameObject);
-                instance = null;
-            }
+            ParkItemInstance(ref instance, ref recoil, released);
 
             if (definition == null || definition.Prefab == null)
             {
@@ -2050,16 +2052,98 @@ namespace VortexArena.Core.Player
 
             EnsureItemRoots();
 
-            // Built under the inactive staging root → none of the prefab's Awakes run.
-            GameObject spawned = Instantiate(definition.Prefab, _itemStagingRoot);
-            SterilizeVisual(spawned);
+            if (!TryTakeParkedItem(definition, out instance))
+            {
+                // Built under the inactive staging root → none of the prefab's Awakes run.
+                GameObject spawned = Instantiate(definition.Prefab, _itemStagingRoot);
+                SterilizeVisual(spawned);
 
-            // Moved into the visible container after sterilisation.
-            spawned.transform.SetParent(_itemsRoot, false);
-            instance = spawned.transform;
+                // Moved into the visible container after sterilisation.
+                spawned.transform.SetParent(_itemsRoot, false);
+                instance = spawned.transform;
+            }
 
+            // Re-done for a reused instance too: the pivot is a different object per instance and the
+            // team colour may have changed while it was parked.
             CacheRecoilPivot(ref recoil, instance);
             TintHeldItem(instance, definition);
+        }
+
+        /// <summary>Parks the outgoing instance under the inactive staging root, keyed by the
+        /// definition it was built from.
+        /// <para>⚠️ <paramref name="released"/> is the OUTGOING definition, not the incoming one — with
+        /// the wrong key a rifle comes back as a pistol.</para></summary>
+        private void ParkItemInstance(ref Transform instance, ref RecoilSlot recoil, ItemDefinition released)
+        {
+            if (instance == null)
+            {
+                recoil = default;
+                return;
+            }
+
+            // The releasing frame still DRAWS — disable first so a dropped item is not shown once more
+            // in a stale pose.
+            instance.gameObject.SetActive(false);
+
+            // Recoil moves the Model pivot; parked mid-shake the instance would come back bent.
+            if (recoil.Pivot != null)
+            {
+                recoil.Pivot.localPosition = recoil.BasePosition;
+                recoil.Pivot.localRotation = recoil.BaseRotation;
+            }
+
+            // Pivot and accumulated kick are reset: stale recoil would shake a rifle before its first
+            // shot.
+            recoil = default;
+
+            if (released == null)
+            {
+                Destroy(instance.gameObject); // no key to park it under
+                instance = null;
+                return;
+            }
+
+            EnsureItemRoots();
+            instance.SetParent(_itemStagingRoot, false);
+
+            _itemCache ??= new Dictionary<ItemDefinition, List<Transform>>();
+            if (!_itemCache.TryGetValue(released, out List<Transform> parked))
+            {
+                parked = new List<Transform>();
+                _itemCache[released] = parked;
+            }
+
+            parked.Add(instance);
+            instance = null;
+        }
+
+        /// <summary>Takes a parked instance for this definition and makes it visible again.</summary>
+        private bool TryTakeParkedItem(ItemDefinition definition, out Transform instance)
+        {
+            instance = null;
+            if (_itemCache == null || !_itemCache.TryGetValue(definition, out List<Transform> parked))
+            {
+                return false;
+            }
+
+            while (parked.Count > 0)
+            {
+                int last = parked.Count - 1;
+                Transform candidate = parked[last];
+                parked.RemoveAt(last);
+
+                if (candidate == null)
+                {
+                    continue; // destroyed from elsewhere
+                }
+
+                candidate.SetParent(_itemsRoot, false);
+                candidate.gameObject.SetActive(true);
+                instance = candidate;
+                return true;
+            }
+
+            return false;
         }
 
         /// <summary>Holder's team colour on the item's opted-in children (<see cref="ItemDefinition.TeamTintChildren"/>).</summary>
@@ -2529,24 +2613,14 @@ namespace VortexArena.Core.Player
             }
         }
 
-        /// <summary>Clears instances and state (when the avatar is handed to another player).</summary>
+        /// <summary>Clears instances and state (when the avatar is handed to another player). The avatar
+        /// itself survives the handover, so instances are PARKED, not destroyed — the new owner's tint
+        /// is applied when one is taken back.</summary>
         private void ClearHeldItems()
         {
-            if (_itemInstanceL != null)
-            {
-                Destroy(_itemInstanceL.gameObject);
-                _itemInstanceL = null;
-            }
-
-            if (_itemInstanceR != null)
-            {
-                Destroy(_itemInstanceR.gameObject);
-                _itemInstanceR = null;
-            }
-
-            // Instances are gone: pivot references must go too.
-            _recoilL = default;
-            _recoilR = default;
+            // Parking also resets the recoil slots (pivot references included).
+            ParkItemInstance(ref _itemInstanceL, ref _recoilL, _itemDefL);
+            ParkItemInstance(ref _itemInstanceR, ref _recoilR, _itemDefR);
 
             _itemDefL = null;
             _itemDefR = null;
