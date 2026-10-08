@@ -30,7 +30,7 @@ build çıkar:
 |---|---|---|
 | **Android (Quest)** | `player` | Lobi → maç; oynar, poz gönderir, ateş eder |
 | **Windows** | `admin` | `--server-ip` ile açılır → **oyuncularla aynı sahneye** girer (gözlemci): 3 kamera kipi + sahne üstü yönetim HUD'ı (roster, mod+harita, start/abort, istatistik) |
-| **Windows** | launcher | `launcher/` — .NET 10 WPF operatör uygulaması, **tek exe**: sunucuyu `--venue` ile başlatıp kontrol ucundan durdurur, oyunu `--server-ip` ile açar, gözlüklere APK kurar, maç kaydını açıp kapatır. Exe yolları ayar değildir — yerleşim exe'nin yanıdır (`launcher/README.md`) |
+| **Windows** | launcher | `launcher/` — .NET 10 WPF operatör uygulaması, **tek exe**: sunucuyu `--venue` ile başlatıp kontrol ucundan durdurur, oyunu `--server-ip` ile açar, gözlüklere APK kurar, maç kaydını açıp kapatır. Exe yolları ayar değildir — kök exe'nin klasörüdür, `server\`/`admin\`/`game_versions\`/`replays\` yanındadır (`launcher/README.md`) |
 
 Üçüncü bileşen: **`Server/` — kendi .NET 10 konsol sunucumuz** (standalone exe, tamamen offline
 LAN). Mirror/NGO gibi hazır netcode **kullanılmıyor**; hem oyun kurallarının sunucuda koşması hem
@@ -124,10 +124,9 @@ D:\Games\vortexarena\
                              docs-setup.bat (doküman sitesini yeni PC'de bir kez kurar)
                              defender-exclusions.cmd + .ps1 (Defender dışlamaları; yeni PC'de
                              bir kez, yönetici — build/import süresi için)
-  deploy\                    ÜRETİLEN çalıştırılabilirler + sahaya olduğu gibi taşınan yerleşim:
-                             VortexArena.Launcher.exe (tek dosya) · admin\ · player\ · server\ ·
-                             updater\; game_versions\ ve replays\ klasörlerini launcher açar
-                             (git'e girmez)
+  deploy\                    ÜRETİLEN çalıştırılabilirler (git'e girmez): admin\ · player\ ·
+                             server\ · updater\ · launcher\ = sahaya olduğu gibi taşınan paket
+                             (tek exe + server\ · admin\ · game_versions\ · replays\)
   dev-targets.json           dev penceresinin adlandırılmış sunucu hedefleri (COMMIT'Lİ;
                              seçim EditorPrefs'te kişisel kalır — bkz. §6.2)
   Docs\                      dokumantasyon (docs-serve.bat bunu sunar)
@@ -1346,7 +1345,7 @@ göze doğru görünsün diye alçağa kurulmuş bir plaka operatörün kat gör
 |---|---|
 | `ArenaClient` | Kalıcı tekil; WS bağlantısı (arka plan Task + `ConcurrentQueue` → ana thread köprüsü), hello/welcome, status kalp atışı, otomatik reconnect. **Tüm mesaj gönderimi buradan.** ⚠️ Kopmayı sokete bırakmaz: `LinkWatchdogAsync` sunucudan son çerçevenin üstünden `HEARTBEAT_TIMEOUT` geçince soketi kendisi düşürür (girdisi sunucunun her `status`'a verdiği `heartbeat`, Protokol §8) ve bağlanma denemesi `CONNECT_TIMEOUT`, her gönderim `SEND_TIMEOUT` ile sınırlıdır — sessiz Wi-Fi ölümünde TCP hiç hata vermez (§7 "sessiz Wi-Fi ölümü"). ⚠️ İki zaman aşımı da iptal belirtecine BIRAKILMAZ, süre dolunca soket terk edilir (belirteci dinlemeyen bir uygulamada deneme/gönderim askıda kalır ve döngü bir daha denemez). ⚠️ **Soketin `Abort`/`Dispose`'u da, `ConnectAsync`/`CloseAsync`'in başlatılması da döngünün thread'inde YAPILMAZ** — ağ yokken Mono bu çağrıların içinde bloklar ve süre sınırı sırasını hiç alamaz; terk etme kendi thread'ine (`DiscardSocket`), başlatma `LongRunning` bir göreve verilir (§7 "kendi thread'inde soket kapatma"). Bu yüzden döngüde `using` de yoktur: blok sonundaki `Dispose` tam o kilitlenmeyi üretir. Gönderim kilidi bağlantıya özeldir (`Link` = soket + kendi kapısı) — eski soketin askıdaki gönderimi yeni bağlantının `hello`'sunu bekletemez. Teşhis için `ConnectAttempts` (son başarılı bağlantıdan beri kaçıncı deneme; bağlanınca 0) + `LastError` (son bağlanma hatası) — `ConnectionOverlay` bunları gösterir. `Disconnect()` otomatik yeniden denemeyi **durdurur** (dönüş yalnız açık `Connect` ile). `RejectedServerVersion` = son `version_mismatch`'teki sunucu sürümü (0 = yok; `welcome` ve `Connect` siler) — sürüm reddi atma değildir, yeniden deneme sürer ve `ConnectionOverlay` ile `LobbyController` "SÜRÜM UYUMSUZ" yazar |
 | `ServerDiscovery` | Beacon dinleme (Android'de MulticastLock), elle girilen adresin `PlayerPrefs`'e yazılması, `arena.json` fallback |
-| `UdpStateChannel` | UDP kaydı (`0x00`), 20 Hz poz + eşya gönderimi (`0x01`), snapshot alımı (`0x02` ve birleşik `0x05`), atış/atma olayı gönderimi (`SendFireEvent` → `0x03`, olay başına, hemen) ve olay bloğu alımı (`0x04`/`0x05`, **tek** `serverTick` halkasıyla kopya ayıklama) ve **sahip olunan objenin pozu** (`SendObjectPose` → `0x09`; aşağı yönü `0x05`'in obje bölümüdür ve `RemoteObjectRegistry`'ye akar). Ayrıca **ağ telemetrisini ölçer** (§6.7): 1 Hz RTT yoklaması (`0x06`) + snapshot varışlarından downlink jitter/kayıp; `SampleTelemetry` ile `ArenaClient`'a verir, o da `status`'a yazar. ⚠️ **Datagram işleme kendi `try/catch`'i içindedir** (§7): bozuk tek bir paket alım döngüsünü öldürürse istemci sessizce donar — durum kanalında doğrusu paketi düşürüp devam etmektir, eksiği sonraki tik kapatır |
+| `UdpStateChannel` | UDP kaydı (`0x00`), 20 Hz poz + eşya gönderimi (`0x01`), snapshot alımı (`0x02` ve birleşik `0x05`), atış/atma olayı gönderimi (`SendFireEvent` → `0x03`, olay başına, hemen) ve olay bloğu alımı (`0x04`/`0x05`, **tek** `serverTick` halkasıyla kopya ayıklama) ve **sahip olunan objenin pozu** (`SendObjectPose` → `0x09`; aşağı yönü `0x05`'in obje bölümüdür ve `RemoteObjectRegistry`'ye akar). Ayrıca **ağ telemetrisini ölçer** (§6.7): 1 Hz RTT yoklaması (`0x06`) + snapshot varışlarından downlink jitter/kayıp; `SampleTelemetry` ile `ArenaClient`'a verir, o da `status`'a yazar. ⚠️ **Datagram işleme kendi `try/catch`'i içindedir** (§7): bozuk tek bir paket alım döngüsünü öldürürse istemci sessizce donar — durum kanalında doğrusu paketi düşürüp devam etmektir, eksiği sonraki tik kapatır. **Alım, kendine ayrılmış bir arka plan thread'inde bloklayan `Receive` ile ÖN AYRILMIŞ tek bir tampona yapılır** ve okuyucu (`MemoryStream` + `BinaryReader`) ömür boyu aynıdır: datagram başına tampon + okuyucu üretmek Quest'te paket başına GC yüküdür. ⚠️ **Tampon ve okuyucu yalnız alım thread'ine aittir** (kayıt oynatma kendi okuyucusunu kurar) — paylaşılsaydı ikinci bir ayrıştırma akışın konumunu paket ortasında kaydırırdı. Tampon uzunluğu değil **datagramın uzunluğu** ayrıştırmaya girer; akışın uzunluğu paketle birebir kurulmazsa protokolün kısa-paket denetimleri önceki paketin baytlarını okur. ⚠️ `MemoryStream.SetLength` **büyürken aradaki baytları sıfırlar**: akış alımdan ÖNCE tam boya büyütülür, alımdan sonra yalnız küçültülür — sıra ters olursa bir öncekinden uzun her paketin kuyruğu sessizce silinir. Döngü `Stop()` soketi kapatınca kendi kendine çıkar, kimse onu beklemez |
 | `RemotePlayerRegistry` | Snapshot → oyuncu başına halka tampon → `GetInterpolatedPose`, `IsAlive`, `OnRemoteJoined/Left`; ayrıca **eşya durumu** `TryGetHeldItems` ve **ihlal durumu** `IsInObstacle`/`IsOutOfBounds` (son snapshot girdisinin bitinden; interpole edilmez — ayrık veri, son gelen geçerli) ve **`serverTick` → yerel oynatma zamanı** eşlemesi `TryGetPlaybackTimeMs` (§3.5b). ⚠️ Tik eşlemesi **global** bir halkada durur, oyuncu başına halkada değil: tik başına bir snapshot var ve hiç pozu olmayan bir oyuncunun olayı da zamanlanabilmeli. Damga `playerCount = 0` snapshot'ında da yazılır (o da meşru bir yayın) ve parçalanmış snapshot'ta yalnız İLK parçadan alınır |
 | `NetEvents` | **Statik olay merkezi** — sunucu mesajları buradan ana thread'de yayınlanır (`OnRemoteFireEvent` dahil) |
 | `ClientLogRelay` | Cihazın kendi log satırlarını sunucuya taşır (`client_log`, Protokol §5.1): `Application.logMessageReceived`'den **uyarı ve hata** seviyeleri kendiliğinden, kasıtlı bilgi satırları `Report(...)` ile. **Neden var:** oyuncu uygulaması gözlükte koşar ve işletmede USB yoktur — taşınmayan satır hiç okunmaz. Tavanlar burada: saniye başına satır sınırı, aynı satırın gönderilmeyip sayılması (`repeat`), dolunca **en eskiyi** düşüren kuyruk. Bağlantı kopukken satır atılmaz, kuyrukta bekler — kopukken üretilen satır en değerlisidir. ⚠️ Kendi içinde `Debug.*` **çağırmaz**: kendi hatası kendini tetikler ve döngü olurdu |
@@ -1933,6 +1932,13 @@ yarışmazlar; telde geri tepme diye bir alan yoktur ve eklenmeyecek, §6.4.
 ⚠️ **`WorldSingle` eşyada `RemoteAvatar` katalogdan KOPYA ÜRETMEZ:** o eşyanın telde eşya baytı yok
 (§3.6b), elde çizilen şey ağ nesnesinin kendi örneğidir — kopya da üretilseydi aynı elde iki obje
 görünürdü.
+**Elde çizilen eşya görselleri avatar başına `ItemDefinition` anahtarıyla ÖNBELLEKLENİR:** eşya
+elden çıkınca örnek yok edilmez, pasif hazırlık kökünün altına park edilir (dolayısıyla görünmez) ve
+aynı tanım tekrar gelince oradan alınıp takım rengiyle yeniden boyanır — basış/bırakış başına
+`Instantiate` + sterilizasyon gözlükte takılma üretirdi. ⚠️ **Bir tüketici elde tutulan eşyanın
+ÇOCUK transformunu eşya değişimleri boyunca saklayamaz** (örn. namlu düğümü): sakladığı düğüm park
+edilmiş bir örneğin olabilir. Önbellek anahtarı örneğin kökü olur, böylece eşya değişince önbellek
+kendiliğinden geçersizleşir (`RemoteShotFx`).
 **Kat silüeti ayrı bir KABUKTUR** (`FloorSilhouette`, §3.13): farklı kattaki oyuncunun gerçek
 gövdesi kendi katında normal ve **vurulabilir** kalır, izleyenin katına ise aynı kemikleri paylaşan
 ikinci bir `SkinnedMeshRenderer` (`AvatarGhost` materyali, `_FloorShift` = iki katın yükseklik farkı,
@@ -2427,10 +2433,15 @@ Ortak property adları (`_Tint`, `_Exposure`, `_Rotation`, `_Tex`, `_MainTex`) U
 materyalinin shader'ını buna çevirmek doku/ton/pozlama/dönüşü korur ve `Dönüş hızı = 0` +
 `Bulut opaklığı = 0` ile görüntü yerleşik shader'ınkiyle piksel piksel aynıdır.
 Hareketin tamamı `_Time`'dan GPU tarafında gelir: C# yok, kare başına CPU işi yok, çalışma anında
-materyal kopyası yok — Scene view'da da döner. `Dönüş hızı` (`_RotationSpeed`) **derece/dakika**dır;
+materyal kopyası yok. ⚠️ Editörde hareket Game view'da Play'de görünür; Scene view gökyüzünü
+yalnız efekt menüsünde **Always Refresh** açıkken her karede yeniden çizer, kapalıyken gökyüzü
+sabit görünür. `Dönüş hızı` (`_RotationSpeed`) **derece/dakika**dır;
 bulut tabakası `T_CloudNoise`'u iki ölçekte örnekler (yassı kubbe izdüşümü) ve `_CloudWind`
 (XY yön · Z dakikadaki uv hızı · W detay çarpanı), `_CloudCoverage`, `_CloudSoftness`,
-`_CloudOpacity` (0 = kapalı), `_CloudColor` ile ayarlanır. ⚠️ **Bulutlar ufka doğru söner**
+`_CloudOpacity` (0 = kapalı), `_CloudColor` ile ayarlanır. **Gözle görülen hareket bulut
+rüzgârıdır:** Z = 0.5 (ölçek 0.6'da 45° yükseklikte ~0.6°/sn, tepede ~1°/sn); dakikada ~1°'lik
+dönüş tek başına seçilmez, yalnız dokuya boyanmış bulutları yavaşça kaydırır. Z'yi ~0.2'nin altına
+indirmek gökyüzünü yeniden sabit gösterir. ⚠️ **Bulutlar ufka doğru söner**
 (`_CloudHorizonFade`) — bu bir görünüm tercihi değil **VR konfor şartıdır**: görüşün alt yarısını
 dolduran geniş ve hareketli bir alan mide bulandırır.
 Quest maliyeti: gökyüzü opaklardan SONRA çizilir, yani yalnız görünen gökyüzü pikselleri öder;
@@ -3174,7 +3185,7 @@ Dört bileşenin her biri kendi script'iyle `deploy/` altına üretilir:
 | `scripts\deploy-admin-game.bat` | Unity batch-mode Windows build (`PlayerBuildTool.BuildWindowsAdmin`); tenant menüsü ya da `--tenant <İşletme>` | `deploy\admin\VortexArena.exe` |
 | `scripts\deploy-player-apk.bat` | Unity batch-mode Android build (`PlayerBuildTool.BuildQuestPlayer`); tenant menüsü ya da `--tenant <İşletme>` | `deploy\player\game_v<sürüm>.apk` + `install_game.bat` |
 | `scripts\deploy-server.bat` | `dotnet publish -r win-x64 --self-contained` + `config/` kopyası | `deploy\server\VortexArena.Server.App.exe` |
-| `scripts\deploy-launcher.bat` | `dotnet publish -r win-x64 --self-contained -p:VortexSingleFile=true` | `deploy\VortexArena.Launcher.exe` (tek dosya, `adb` gömülü) |
+| `scripts\deploy-launcher.bat` | `dotnet publish -r win-x64 --self-contained -p:VortexSingleFile=true` | `deploy\launcher\VortexArena.Launcher.exe` (tek dosya, `adb` gömülü) + yanında `server\` · `admin\` · `game_versions\` · `replays\` (içerik korunur) |
 
 **İki Unity build'i tek sahne listesinden başlar.** Windows build'i admin, Android build'i Quest
 oyuncusudur; ikisi de Build Settings'teki etkin sahneleri kullanır. Liste platforma göre

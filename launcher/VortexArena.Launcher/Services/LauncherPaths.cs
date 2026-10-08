@@ -3,9 +3,9 @@ using System.IO;
 namespace VortexArena.Launcher.Services;
 
 /// <summary>
-/// The deployment layout, resolved once at startup. Everything the launcher drives lives under one
-/// root: <c>server\</c>, <c>admin\</c>, <c>game_versions\</c>, <c>replays\</c>.
-/// <para>⚠️ Exe paths are NOT settings any more. An operator who could point them anywhere could
+/// The deployment layout, resolved once at startup. Everything the launcher drives lives next to
+/// the exe: <c>server\</c>, <c>admin\</c>, <c>game_versions\</c>, <c>replays\</c>.
+/// <para>⚠️ Exe paths are NOT settings. An operator who could point them anywhere could
 /// also point them at a server whose <c>config\maps.json</c> belongs to another business.</para>
 /// </summary>
 public sealed class LauncherPaths
@@ -15,6 +15,9 @@ public sealed class LauncherPaths
 
     private const string ServerExeName = "VortexArena.Server.App.exe";
     private const string AdminExeName = "VortexArena.exe";
+
+    /// <summary>Package folder the deploy script fills: <c>deploy\launcher\</c>.</summary>
+    private const string DeployFolderName = "launcher";
 
     /// <summary>How many levels above the exe the development-layout search walks up.</summary>
     private const int SearchDepth = 6;
@@ -36,6 +39,8 @@ public sealed class LauncherPaths
 
     public string ServerConfigJson => Path.Combine(ServerDir, "config", "server.json");
 
+    public string ServerMapsJson => Path.Combine(ServerDir, "config", "maps.json");
+
     public string ServerLogsDir => Path.Combine(ServerDir, "logs");
 
     public string AdminDir => Path.Combine(Root, "admin");
@@ -50,31 +55,56 @@ public sealed class LauncherPaths
 
     public bool AdminExeExists => File.Exists(AdminExe);
 
+    public bool ServerMapsJsonExists => File.Exists(ServerMapsJson);
+
     /// <summary>
     /// Resolution order: <c>--root</c> → exe folder holding <c>server\</c>/<c>admin\</c> → first
-    /// <c>deploy\</c> with that layout up to <see cref="SearchDepth"/> levels above (so a repo
-    /// checkout works unconfigured) → exe folder.
+    /// <c>deploy\launcher\</c> with that layout up to <see cref="SearchDepth"/> levels above (repo
+    /// checkout, <c>dotnet run</c>) → exe folder.
     /// <para>⚠️ The exe folder comes from <see cref="AppContext.BaseDirectory"/>:
     /// <c>Assembly.Location</c> is EMPTY in a single-file build.</para>
     /// </summary>
     public static LauncherPaths Resolve(IReadOnlyList<string> args)
+        => Resolve(args, AppContext.BaseDirectory);
+
+    /// <summary>Same as <see cref="Resolve(IReadOnlyList{string})"/> with an explicit exe folder.</summary>
+    public static LauncherPaths Resolve(IReadOnlyList<string> args, string exeDir)
     {
         var explicitRoot = ReadRootArgument(args);
         if (explicitRoot != null) return new LauncherPaths(explicitRoot, ArgRoot);
 
-        var baseDir = TrimSeparator(AppContext.BaseDirectory);
+        var baseDir = TrimSeparator(exeDir);
 
         if (HasLayout(baseDir)) return new LauncherPaths(baseDir, "exe klasörü");
 
         var dir = baseDir;
         for (int i = 0; i < SearchDepth && !string.IsNullOrEmpty(dir); i++)
         {
-            var deploy = Path.Combine(dir, "deploy");
-            if (HasLayout(deploy)) return new LauncherPaths(deploy, "geliştirme: deploy\\");
+            var deployed = Path.Combine(dir, "deploy", DeployFolderName);
+            if (HasLayout(deployed)) return new LauncherPaths(deployed, "geliştirme: deploy\\launcher\\");
             dir = Path.GetDirectoryName(dir);
         }
 
-        return new LauncherPaths(baseDir, "exe klasörü (yerleşim bulunamadı)");
+        return new LauncherPaths(baseDir, "exe klasörü (yeni kurulum)");
+    }
+
+    /// <summary>
+    /// Creates the empty layout folders so the operator sees where each build goes.
+    /// <para>Best effort: an unwritable root still opens; pages show what is missing.</para>
+    /// </summary>
+    public void EnsureLayout()
+    {
+        foreach (var dir in new[] { ServerDir, AdminDir, GameVersionsDir, ReplaysDir })
+        {
+            try
+            {
+                Directory.CreateDirectory(dir);
+            }
+            catch (Exception)
+            {
+                // Read-only location; the missing-build messages cover it.
+            }
+        }
     }
 
     private static string? ReadRootArgument(IReadOnlyList<string> args)

@@ -103,6 +103,9 @@ namespace VortexArena.Net
         /// </summary>
         private const float SkeletonMinSendInterval = 0.9f / ArenaProtocol.SKELETON_RATE_HZ;
 
+        // Receive buffer size: one UDP datagram cannot exceed this, so no packet is ever truncated.
+        private const int ReceiveBufferSize = 65536;
+
         // ---- 0x04 batch receive (network thread) ----
         // Ring of the last processed ticks: a batch is identified by serverTick and at most one batch
         // is produced per tick (§6.5). The ring drops EXACT REPEATS only.
@@ -283,7 +286,17 @@ namespace VortexArena.Net
             CancellationToken token = _cts.Token;
             UdpClient udp = _udp;
 
-            _ = Task.Run(() => ReceiveLoopAsync(udp, token));
+            // ⚠️ A DEDICATED thread with a blocking Receive, not Task.Run + ReceiveAsync: the async
+            // path allocates a fresh byte[] plus BCL objects for every datagram, which is per-packet
+            // GC churn on Quest. Nothing joins it — Stop() closes the socket and the blocking call
+            // throws itself out of the loop.
+            var receiveThread = new Thread(() => ReceiveLoop(udp, token))
+            {
+                IsBackground = true,
+                Name = "UdpStateChannel.Receive"
+            };
+            receiveThread.Start();
+
             _ = Task.Run(() => SendHelloLoopAsync(udp, token));
         }
 
@@ -735,48 +748,64 @@ namespace VortexArena.Net
             }
         }
 
-        private async Task ReceiveLoopAsync(UdpClient udp, CancellationToken ct)
+        /// <summary>NETWORK THREAD: blocking receive into ONE preallocated buffer.
+        /// <para>⚠️ The buffer, stream and reader belong to THIS thread only (replay parses with its
+        /// own): shared, a second parse would clobber the stream position mid-packet.</para></summary>
+        private void ReceiveLoop(UdpClient udp, CancellationToken ct)
         {
-            try
-            {
-                while (!ct.IsCancellationRequested)
-                {
-                    UdpReceiveResult datagram = await udp.ReceiveAsync();
+            byte[] buffer = new byte[ReceiveBufferSize];
 
-                    // ⚠️ Per-datagram isolation: without this try, a corrupt/truncated packet throwing
-                    // during parse (BinaryReader throws EndOfStreamException at stream end) would fall
-                    // into the outer catch and KILL THE WHOLE RECEIVE LOOP — the client would silently
-                    // freeze, receiving no snapshot/skeleton again. Dropping one packet is correct: this
-                    // is a state channel and the next tick fills the gap.
-                    try
+            // Writable, non-expandable stream over the receive buffer; the per-datagram SetLength is
+            // what keeps the protocol's short-read checks honest (BinaryReader.ReadBytes is silent at
+            // an early end, it only sees the stream's length).
+            using (var stream = new MemoryStream(buffer, 0, buffer.Length, true))
+            using (var reader = new BinaryReader(stream))
+            {
+                try
+                {
+                    while (!ct.IsCancellationRequested)
                     {
-                        HandleDatagram(datagram.Buffer, NetClock.NowMs);
-                    }
-                    catch (Exception e)
-                    {
-                        if (!_datagramErrorWarned)
+                        // ⚠️ MemoryStream.SetLength zero-fills when it GROWS: grow back BEFORE the
+                        // receive writes, so the per-datagram SetLength is always a shrink — growing
+                        // after the receive would wipe the tail of any packet larger than the last.
+                        stream.SetLength(buffer.Length);
+                        int length = udp.Client.Receive(buffer, 0, buffer.Length, SocketFlags.None);
+
+                        // ⚠️ Per-datagram isolation: without this try, a corrupt/truncated packet
+                        // throwing during parse (the reader throws EndOfStreamException at stream end)
+                        // would fall into the outer catch and KILL THE WHOLE RECEIVE LOOP — the client
+                        // would silently freeze, receiving no snapshot/skeleton again. Dropping one
+                        // packet is correct: this is a state channel and the next tick fills the gap.
+                        try
                         {
-                            _datagramErrorWarned = true;
-                            Debug.LogWarning(
-                                $"[UdpStateChannel] Bozuk datagram düşürüldü: {e.Message}. " +
-                                "Bu uyarı bir kez basılır; alım sürüyor.");
+                            HandleDatagram(buffer, length, stream, reader, NetClock.NowMs);
+                        }
+                        catch (Exception e)
+                        {
+                            if (!_datagramErrorWarned)
+                            {
+                                _datagramErrorWarned = true;
+                                Debug.LogWarning(
+                                    $"[UdpStateChannel] Bozuk datagram düşürüldü: {e.Message}. " +
+                                    "Bu uyarı bir kez basılır; alım sürüyor.");
+                            }
                         }
                     }
                 }
-            }
-            catch (ObjectDisposedException)
-            {
-                // Stop() closed the socket — a normal exit.
-            }
-            catch (SocketException)
-            {
-                // Expected on shutdown; a reconnect builds a new channel.
-            }
-            catch (Exception e)
-            {
-                if (!ct.IsCancellationRequested)
+                catch (ObjectDisposedException)
                 {
-                    Debug.LogWarning($"[UdpStateChannel] UDP alım hatası: {e.Message}");
+                    // Stop() closed the socket — a normal exit.
+                }
+                catch (SocketException)
+                {
+                    // Expected on shutdown; a reconnect builds a new channel.
+                }
+                catch (Exception e)
+                {
+                    if (!ct.IsCancellationRequested)
+                    {
+                        Debug.LogWarning($"[UdpStateChannel] UDP alım hatası: {e.Message}");
+                    }
                 }
             }
         }
@@ -930,164 +959,190 @@ namespace VortexArena.Net
                 return;
             }
 
-            using (var reader = new BinaryReader(new MemoryStream(buffer)))
+            // Replay feeds whole records, so its reader is built per call — the live path reuses one
+            // (ReceiveLoop).
+            using (var stream = new MemoryStream(buffer))
+            using (var reader = new BinaryReader(stream))
             {
-                byte packetType = reader.ReadByte();
-                switch (packetType)
+                ParseDatagram(buffer, buffer.Length, reader, recvMs);
+            }
+        }
+
+        /// <summary>Live path: parses out of the receive thread's own buffer and reader.
+        /// <para>⚠️ <c>SetLength</c> must match the datagram EXACTLY: with the buffer's full length the
+        /// protocol's short-read checks would read stale bytes from the previous packet.</para></summary>
+        private void HandleDatagram(byte[] buffer, int length, MemoryStream stream, BinaryReader reader,
+            int recvMs)
+        {
+            if (buffer == null || length < 1)
+            {
+                return;
+            }
+
+            stream.SetLength(length); // always a shrink (see ReceiveLoop)
+            stream.Position = 0;
+            ParseDatagram(buffer, length, reader, recvMs);
+        }
+
+        /// <summary>The ONE implementation of the packet switch; <paramref name="length"/> is the
+        /// datagram's length, which is NOT the buffer's length on the live path.</summary>
+        private void ParseDatagram(byte[] buffer, int length, BinaryReader reader, int recvMs)
+        {
+            byte packetType = reader.ReadByte();
+            switch (packetType)
+            {
+                case UdpPacketType.UdpHello:
+                    if (length < UdpHello.SIZE)
+                    {
+                        return;
+                    }
+
+                    UdpHello ack = UdpHello.Read(reader);
+                    if (ack.playerId != _playerId || ack.udpToken != _udpToken || _acked)
+                    {
+                        return;
+                    }
+
+                    _acked = true;
+                    _mainThreadActions.Enqueue(() =>
+                    {
+                        Registered = true;
+                        Debug.Log("[UdpStateChannel] UDP kaydı tamamlandı (ack alındı).");
+                        OnRegistered?.Invoke();
+                    });
+                    break;
+
+                case UdpPacketType.Snapshot:
                 {
-                    case UdpPacketType.UdpHello:
-                        if (buffer.Length < UdpHello.SIZE)
-                        {
-                            return;
-                        }
-
-                        UdpHello ack = UdpHello.Read(reader);
-                        if (ack.playerId != _playerId || ack.udpToken != _udpToken || _acked)
-                        {
-                            return;
-                        }
-
-                        _acked = true;
-                        _mainThreadActions.Enqueue(() =>
-                        {
-                            Registered = true;
-                            Debug.Log("[UdpStateChannel] UDP kaydı tamamlandı (ack alındı).");
-                            OnRegistered?.Invoke();
-                        });
-                        break;
-
-                    case UdpPacketType.Snapshot:
+                    // 1(type) + 1(playerCount) + 4(serverTick) + n×88 — ignore a short packet.
+                    if (length < 6 || length < 6 + buffer[1] * SnapshotEntry.SIZE)
                     {
-                        // 1(type) + 1(playerCount) + 4(serverTick) + n×88 — ignore a short packet.
-                        if (buffer.Length < 6 || buffer.Length < 6 + buffer[1] * SnapshotEntry.SIZE)
-                        {
-                            return;
-                        }
-
-                        Snapshot snap = Snapshot.Read(reader);
-                        // §6.7: downlink jitter and loss are measured from THIS stream — no extra packets.
-                        TrackDownlink(snap.serverTick);
-                        // NETWORK THREAD: the registry ingests under a lock and publishes on the main thread.
-                        RemotePlayerRegistry.Instance?.IngestFromNetThread(snap, recvMs, _playerId);
-                        break;
+                        return;
                     }
 
-                    case UdpPacketType.RttProbe:
-                    {
-                        if (buffer.Length < RttProbe.SIZE)
-                        {
-                            return;
-                        }
-
-                        RttProbe echo = RttProbe.Read(reader);
-                        long nowTicks = _clock.ElapsedTicks;
-
-                        lock (_telemetryGate)
-                        {
-                            // Filter a stale/foreign echo: only the pending probe's nonce counts.
-                            if (!_probePending || echo.clientStamp != _probeNonce)
-                            {
-                                return;
-                            }
-
-                            _probePending = false;
-
-                            float rtt = TicksToMs(nowTicks - _probeSentTicks);
-                            // EWMA so one late echo does not jump the readout. The first measurement is
-                            // written directly, otherwise it would crawl up from -1 showing a wrong value.
-                            _rttMs = _rttMs < 0
-                                ? Mathf.RoundToInt(rtt)
-                                : Mathf.RoundToInt(_rttMs * 0.7f + rtt * 0.3f);
-                        }
-
-                        break;
-                    }
-
-                    case UdpPacketType.EventBatch:
-                    {
-                        // 1(type) + 1(count) + 4(serverTick) + n×9 — ignore a short packet.
-                        if (buffer.Length < 6 || buffer.Length < 6 + buffer[1] * FireEventEntry.SIZE)
-                        {
-                            return;
-                        }
-
-                        EventBatch batch = EventBatch.Read(reader);
-                        DispatchFireEvents(batch.serverTick, batch.events);
-                        break;
-                    }
-
-                    case UdpPacketType.SnapshotWithEvents:
-                    {
-                        // 1(type) + 1(playerCount) + 1(eventCount) + 1(objectCount) + 4(serverTick)
-                        // + n×88 + m×9 + k×30. ⚠️ objectCount is part of the LENGTH CHECK too (v18):
-                        // left out, a packet carrying object poses passes the check one section short
-                        // and the read runs off the end of the buffer.
-                        if (buffer.Length < SnapshotWithEvents.HEADER_SIZE
-                            || buffer.Length < SnapshotWithEvents.HEADER_SIZE
-                                               + buffer[1] * SnapshotEntry.SIZE
-                                               + buffer[2] * FireEventEntry.SIZE
-                                               + buffer[3] * ObjectPoseEntry.SIZE)
-                        {
-                            return;
-                        }
-
-                        SnapshotWithEvents combined = SnapshotWithEvents.Read(reader);
-
-                        // ⚠️ Downlink measurement MUST count 0x05 too (§6.7): otherwise loss reads 100%
-                        // the moment combining kicks in.
-                        TrackDownlink(combined.serverTick);
-
-                        // Snapshot block: identical handling to 0x02. Reapplying state on a repeated
-                        // tick (UDP may duplicate) is harmless — last one wins.
-                        RemotePlayerRegistry.Instance?.IngestFromNetThread(
-                            new Snapshot { serverTick = combined.serverTick, players = combined.players },
-                            recvMs, _playerId);
-
-                        // Event block: goes through the SAME code and the SAME tick ring as 0x04 (§6.8).
-                        DispatchFireEvents(combined.serverTick, combined.events);
-
-                        // Object block (§6.12): a state channel like the snapshot — no tick ring, a
-                        // repeated tick just rewrites the same pose (last one wins).
-                        RemoteObjectRegistry.Instance?.IngestFromNetThread(
-                            combined.objects, recvMs);
-                        break;
-                    }
-
-                    case UdpPacketType.SkeletonBatch:
-                    {
-                        // 1(type) + 1(count) + 4(serverTick) + variable entries. Because the entries are
-                        // variable length no exact lower bound past the header exists; require at least
-                        // one entry's fixed part and let Read's bounds check handle the rest (a
-                        // truncated blob comes back empty and the entry drops).
-                        if (buffer.Length < SkeletonBatch.HEADER_SIZE
-                            || (buffer[1] > 0 && buffer.Length < SkeletonBatch.HEADER_SIZE + SkeletonEntry.HEADER_SIZE))
-                        {
-                            return;
-                        }
-
-                        SkeletonBatch batch = SkeletonBatch.Read(reader);
-
-                        // ⚠️ NOT counted into downlink telemetry (§6.7): jitter/loss come from the 20 Hz
-                        // snapshot stream and this channel runs at a different cadence — mixing them
-                        // would corrupt the arrival interval and make the measurement lie.
-                        RemoteSkeletonRegistry registry = RemoteSkeletonRegistry.Instance;
-                        if (registry == null)
-                        {
-                            break;
-                        }
-
-                        for (int i = 0; i < batch.entries.Length; i++)
-                        {
-                            registry.IngestFromNetThread(batch.entries[i], recvMs, _playerId);
-                        }
-
-                        break;
-                    }
-
-                    default:
-                        // Unknown packet type — ignore.
-                        break;
+                    Snapshot snap = Snapshot.Read(reader);
+                    // §6.7: downlink jitter and loss are measured from THIS stream — no extra packets.
+                    TrackDownlink(snap.serverTick);
+                    // NETWORK THREAD: the registry ingests under a lock and publishes on the main thread.
+                    RemotePlayerRegistry.Instance?.IngestFromNetThread(snap, recvMs, _playerId);
+                    break;
                 }
+
+                case UdpPacketType.RttProbe:
+                {
+                    if (length < RttProbe.SIZE)
+                    {
+                        return;
+                    }
+
+                    RttProbe echo = RttProbe.Read(reader);
+                    long nowTicks = _clock.ElapsedTicks;
+
+                    lock (_telemetryGate)
+                    {
+                        // Filter a stale/foreign echo: only the pending probe's nonce counts.
+                        if (!_probePending || echo.clientStamp != _probeNonce)
+                        {
+                            return;
+                        }
+
+                        _probePending = false;
+
+                        float rtt = TicksToMs(nowTicks - _probeSentTicks);
+                        // EWMA so one late echo does not jump the readout. The first measurement is
+                        // written directly, otherwise it would crawl up from -1 showing a wrong value.
+                        _rttMs = _rttMs < 0
+                            ? Mathf.RoundToInt(rtt)
+                            : Mathf.RoundToInt(_rttMs * 0.7f + rtt * 0.3f);
+                    }
+
+                    break;
+                }
+
+                case UdpPacketType.EventBatch:
+                {
+                    // 1(type) + 1(count) + 4(serverTick) + n×9 — ignore a short packet.
+                    if (length < 6 || length < 6 + buffer[1] * FireEventEntry.SIZE)
+                    {
+                        return;
+                    }
+
+                    EventBatch batch = EventBatch.Read(reader);
+                    DispatchFireEvents(batch.serverTick, batch.events);
+                    break;
+                }
+
+                case UdpPacketType.SnapshotWithEvents:
+                {
+                    // 1(type) + 1(playerCount) + 1(eventCount) + 1(objectCount) + 4(serverTick)
+                    // + n×88 + m×9 + k×30. ⚠️ objectCount is part of the LENGTH CHECK too (v18):
+                    // left out, a packet carrying object poses passes the check one section short
+                    // and the read runs off the end of the buffer.
+                    if (length < SnapshotWithEvents.HEADER_SIZE
+                        || length < SnapshotWithEvents.HEADER_SIZE
+                                           + buffer[1] * SnapshotEntry.SIZE
+                                           + buffer[2] * FireEventEntry.SIZE
+                                           + buffer[3] * ObjectPoseEntry.SIZE)
+                    {
+                        return;
+                    }
+
+                    SnapshotWithEvents combined = SnapshotWithEvents.Read(reader);
+
+                    // ⚠️ Downlink measurement MUST count 0x05 too (§6.7): otherwise loss reads 100%
+                    // the moment combining kicks in.
+                    TrackDownlink(combined.serverTick);
+
+                    // Snapshot block: identical handling to 0x02. Reapplying state on a repeated
+                    // tick (UDP may duplicate) is harmless — last one wins.
+                    RemotePlayerRegistry.Instance?.IngestFromNetThread(
+                        new Snapshot { serverTick = combined.serverTick, players = combined.players },
+                        recvMs, _playerId);
+
+                    // Event block: goes through the SAME code and the SAME tick ring as 0x04 (§6.8).
+                    DispatchFireEvents(combined.serverTick, combined.events);
+
+                    // Object block (§6.12): a state channel like the snapshot — no tick ring, a
+                    // repeated tick just rewrites the same pose (last one wins).
+                    RemoteObjectRegistry.Instance?.IngestFromNetThread(
+                        combined.objects, recvMs);
+                    break;
+                }
+
+                case UdpPacketType.SkeletonBatch:
+                {
+                    // 1(type) + 1(count) + 4(serverTick) + variable entries. Because the entries are
+                    // variable length no exact lower bound past the header exists; require at least
+                    // one entry's fixed part and let Read's bounds check handle the rest (a
+                    // truncated blob comes back empty and the entry drops).
+                    if (length < SkeletonBatch.HEADER_SIZE
+                        || (buffer[1] > 0 && length < SkeletonBatch.HEADER_SIZE + SkeletonEntry.HEADER_SIZE))
+                    {
+                        return;
+                    }
+
+                    SkeletonBatch batch = SkeletonBatch.Read(reader);
+
+                    // ⚠️ NOT counted into downlink telemetry (§6.7): jitter/loss come from the 20 Hz
+                    // snapshot stream and this channel runs at a different cadence — mixing them
+                    // would corrupt the arrival interval and make the measurement lie.
+                    RemoteSkeletonRegistry registry = RemoteSkeletonRegistry.Instance;
+                    if (registry == null)
+                    {
+                        break;
+                    }
+
+                    for (int i = 0; i < batch.entries.Length; i++)
+                    {
+                        registry.IngestFromNetThread(batch.entries[i], recvMs, _playerId);
+                    }
+
+                    break;
+                }
+
+                default:
+                    // Unknown packet type — ignore.
+                    break;
             }
         }
     }

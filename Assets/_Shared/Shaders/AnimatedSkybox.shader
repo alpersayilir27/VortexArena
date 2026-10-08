@@ -31,7 +31,7 @@ Shader "VortexArena/AnimatedSkybox"
         _CloudScale ("Bulut ölçeği", Float) = 0.6
         _CloudDetailScale ("Detay ölçeği", Float) = 2.7
         _CloudCurvature ("Kubbe eğriliği", Range(0.05, 1)) = 0.25
-        _CloudWind ("Rüzgâr (XY yön, Z hız uv/dk, W detay hız çarpanı)", Vector) = (1, 0.35, 0.03, 1.6)
+        _CloudWind ("Rüzgâr (XY yön, Z hız uv/dk, W detay hız çarpanı)", Vector) = (1, 0.35, 0.5, 1.6)
         _CloudHorizonFade ("Ufukta sönme", Range(0.01, 1)) = 0.25
     }
 

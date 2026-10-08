@@ -167,7 +167,8 @@ public class LauncherSettingsTests
 
             Assert.Equal("VortexAntep", loaded.Venue);
             Assert.Equal(47999, loaded.ControlPortOverride);
-            Assert.Equal("192.168.1.50", loaded.ServerIp);
+            Assert.Equal(LauncherSettings.DefaultServerIp, loaded.ServerIp);
+            Assert.DoesNotContain("serverIp", File.ReadAllText(path));
             Assert.Equal("http://ornek/versions", loaded.VersionsUrl);
             Assert.Equal("http://ornek/files/", loaded.DownloadBaseUrl);
             Assert.Equal("1WMHH000", loaded.PreferredDeviceSerial);
@@ -182,8 +183,8 @@ public class LauncherSettingsTests
     [Fact]
     public void Yukle_EskiDosyadakiBilinmeyenAlanlarSorunCikarmaz()
     {
-        // An older settings.json carried serverExePath/adminExePath; those keys are gone and must
-        // not break loading.
+        // An older settings.json carried serverExePath/adminExePath/serverIp; those keys are gone
+        // and must not break loading. A stored serverIp is ignored: every launch starts on loopback.
         var path = Path.Combine(Path.GetTempPath(), $"va-launcher-{Guid.NewGuid():N}", "settings.json");
         try
         {
@@ -200,7 +201,7 @@ public class LauncherSettingsTests
 
             var loaded = LauncherSettings.Load(path);
 
-            Assert.Equal("192.168.1.7", loaded.ServerIp);
+            Assert.Equal(LauncherSettings.DefaultServerIp, loaded.ServerIp);
             Assert.Equal("VortexAntep", loaded.Venue);
             Assert.Equal(LauncherSettings.DefaultVersionsUrl, loaded.VersionsUrl);
         }

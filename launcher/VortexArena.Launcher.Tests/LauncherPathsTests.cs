@@ -34,6 +34,69 @@ public class LauncherPathsTests
     }
 
     [Fact]
+    public void KokExeKlasorudur_UstKlasordekiYerlesimeBakilmaz()
+    {
+        // Shipped layout: deploy\launcher\ holds the exe AND server\, admin\, game_versions\, replays\.
+        var root = Path.Combine(Path.GetTempPath(), $"va-root-{Guid.NewGuid():N}");
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(root, "server"));
+            var exeDir = Directory.CreateDirectory(Path.Combine(root, "launcher")).FullName;
+
+            var paths = LauncherPaths.Resolve([], exeDir + Path.DirectorySeparatorChar);
+
+            Assert.Equal(exeDir, paths.Root);
+            Assert.Equal(Path.Combine(exeDir, "replays"), paths.ReplaysDir);
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void YeniKurulumda_KlasorlerExeninYanindaAcilir()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"va-root-{Guid.NewGuid():N}");
+        try
+        {
+            var exeDir = Directory.CreateDirectory(Path.Combine(root, "launcher")).FullName;
+
+            var paths = LauncherPaths.Resolve([], exeDir);
+            paths.EnsureLayout();
+
+            Assert.Equal(exeDir, paths.Root);
+            Assert.True(Directory.Exists(Path.Combine(exeDir, "server")));
+            Assert.True(Directory.Exists(Path.Combine(exeDir, "admin")));
+            Assert.True(Directory.Exists(Path.Combine(exeDir, "game_versions")));
+            Assert.True(Directory.Exists(Path.Combine(exeDir, "replays")));
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void GelistirmeDerlemesi_DeployLauncherKlasorunuBulur()
+    {
+        // dotnet run: the exe sits in bin\...; the repo's deploy\launcher\ is found by walking up.
+        var repo = Path.Combine(Path.GetTempPath(), $"va-repo-{Guid.NewGuid():N}");
+        try
+        {
+            var deployed = Path.Combine(repo, "deploy", "launcher");
+            Directory.CreateDirectory(Path.Combine(deployed, "server"));
+            var exeDir = Directory.CreateDirectory(Path.Combine(repo, "launcher", "bin", "Debug")).FullName;
+
+            Assert.Equal(deployed, LauncherPaths.Resolve([], exeDir).Root);
+        }
+        finally
+        {
+            if (Directory.Exists(repo)) Directory.Delete(repo, recursive: true);
+        }
+    }
+
+    [Fact]
     public void KokArgumaniYoksaCozumDuser()
     {
         // Without --root the test host's own folder is used; only "something was resolved" matters.

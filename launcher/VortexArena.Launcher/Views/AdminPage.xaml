@@ -84,7 +84,7 @@
                     <Expander Header="Gelişmiş">
                         <StackPanel>
                             <TextBlock Style="{StaticResource HintText}"
-                                       Text="Sunucu bu bilgisayarda çalıştığı için adres normalde 127.0.0.1 kalır. Port sunucu sayfasındaki kaynaktan gelir." />
+                                       Text="Sunucu bu bilgisayarda çalıştığı için adres 127.0.0.1'dir. Değiştirilen adres yalnız bu oturumda geçerlidir; launcher her açılışta 127.0.0.1 ile başlar. Port sunucu sayfasındaki kaynaktan gelir." />
                             <TextBlock Style="{StaticResource LabelText}" Margin="0,12,0,4" Text="SUNUCU IP" />
                             <StackPanel Orientation="Horizontal">
                                 <TextBox Width="180" Text="{Binding IpText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />

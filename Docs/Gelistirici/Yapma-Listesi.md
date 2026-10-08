@@ -846,8 +846,11 @@ Unity'nin yerleşik skybox shader'ları gibi `CGPROGRAM` + `UnityCG` ile yazıl�
 
 `_CloudHorizonFade` bir görünüm ayarı değil **konfor ayarıdır**: görüşün alt yarısını dolduran
 geniş ve hareketli bir alan VR'da mide bulandırır — bulut tepede kalır, ufka doğru söner.
-`Dönüş hızı` **derece/dakika**dır ve dakikada birkaç derece mertebesinde tutulur; hareketi
-"görünür" yapmak tam olarak onu rahatsız edici yapmaktır.
+`Dönüş hızı` **derece/dakika**dır ve dakikada birkaç derece mertebesinde tutulur: bütün gökyüzünü
+döndürmek görüşün tamamını kaydırır ve dokuya boyanmış güneşi gölgelerin yönünden ayırır. Gözle
+görülen hareketin kaynağı **bulut rüzgârıdır** (`_CloudWind` Z, kitaplıkta 0.5 uv/dk); hareketi
+görünür yapmak için dönüş değil rüzgâr ayarlanır. Rüzgârı ~0.2'nin altına indirmek gökyüzünü
+sabit gösterir, belirgin biçimde yukarı çekmek bulutu hızlandırılmış çekim gibi akıtır.
 
 ### ⛔ Sahnenin gökyüzünü değiştirip yeniden bake etmeden bırakma
 

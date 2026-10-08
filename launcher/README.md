@@ -4,9 +4,10 @@
 budur: maç sunucusunu çalıştırır, yönetim uygulamasını başlatır, gözlüklere oyun sürümü kurar ve maç
 kaydını açıp kapatır.
 
-## Yerleşim — kök, exe'nin yanıdır
+## Yerleşim — kök, exe'nin klasörüdür
 
-Launcher ayarlardan yol sormaz; her şeyi **kök klasöre** göre bulur:
+Launcher ayarlardan yol sormaz; her şeyi **kök klasöre** göre bulur. Dağıtım paketi
+`deploy\launcher\`'dır: tek exe ve yanında dört klasör, sahaya olduğu gibi taşınır:
 
 ```
 <kök>\VortexArena.Launcher.exe
@@ -20,11 +21,17 @@ Kök çözüm sırası:
 
 1. `--root <klasör>` argümanı,
 2. exe'nin klasöründe `server\` ya da `admin\` varsa orası,
-3. geliştirme kolaylığı: exe'den yukarı en çok 6 seviye çıkıp `deploy\` altında bu yerleşimi bulan
-   ilk klasör,
+3. geliştirme kolaylığı (`dotnet run`): exe'den yukarı en çok 6 seviye çıkıp bu yerleşimi taşıyan
+   ilk `deploy\launcher\`,
 4. exe'nin klasörü.
 
-Eksik klasör sayfada net bir boş durum mesajıyla görünür (`server klasörü bulunamadı: <yol>`).
+Launcher açılışta kökte `server\`, `admin\`, `game_versions\` ve `replays\` klasörlerini **boş da
+olsa oluşturur**; build'ler sonradan içine kopyalanır. Build gelene kadar sayfa neyin nereye
+konacağını yazar (`Sunucu yok. … şu klasöre koyun: <yol>`); kopyalanan build launcher yeniden
+açılmadan görülür.
+
+Aynı anda **tek launcher** açılır. Başka bir klasördeki kopya açılmaz ve klasör de oluşturmaz;
+açık olanın yolunu gösterip kapanır. Aynı exe'ye yeniden tıklamak yalnız açık pencereyi öne getirir.
 
 > **Exe yolları ayar değildir.** Operatörün elle gösterdiği bir sunucu exe'si, başka bir işletmenin
 > `config\maps.json`'unu taşıyan bir dağıtım olabilirdi; kök tek kaynaktır.
@@ -107,10 +114,14 @@ sorun çıkarmaz).
 |---|---|
 | `venue` | Sunucuya `--venue` olarak geçen mekan |
 | `controlPortOverride` | Kontrol portu; `0` = `server\config\server.json → controlPort`, o da yoksa `47821` |
-| `serverIp` | Yönetim uygulamasının bağlandığı adres (varsayılan `127.0.0.1`) |
 | `versionsUrl` | Güncelleme sunucusunun sürüm listesi ucu |
 | `downloadBaseUrl` | APK indirme kök adresi |
 | `preferredDeviceSerial` | Son seçilen gözlük; tekrar takıldığında yine seçilir |
+
+Yönetim uygulamasının bağlandığı sunucu adresi **kaydedilmez**: her açılış `127.0.0.1` ile başlar,
+*Yönetim > Gelişmiş*'te değiştirilen adres yalnız o oturumda geçerlidir. Kaydedilen uzak bir adres
+her açılışta yönetimi sessizce başka bir makineye gönderirdi; eski dosyadaki `serverIp` anahtarı
+yok sayılır.
 
 `versionsUrl` / `downloadBaseUrl` ileride lisans backend'iyle değişecek; bu yüzden liste kaynağı
 `IVersionSource` arayüzünün arkasındadır.
@@ -146,11 +157,13 @@ sorun çıkarmaz).
 cd launcher
 dotnet build VortexArena.Launcher.sln
 dotnet test  VortexArena.Launcher.sln
-dotnet run --project VortexArena.Launcher          # kök: deploy\ altında aranır
+dotnet run --project VortexArena.Launcher          # kök: deploy\launcher\ aranır
 ```
 
-Dağıtım: repo kökünden `scripts\deploy-launcher.bat` → `deploy\VortexArena.Launcher.exe` (tek
-dosya, self-contained). Betik tek dosya anahtarını `-p:VortexSingleFile=true` ile açar;
+Dağıtım: repo kökünden `scripts\deploy-launcher.bat` → `deploy\launcher\VortexArena.Launcher.exe`
+(tek dosya, self-contained) + yanında boş `server\`, `admin\`, `game_versions\`, `replays\`. Betik
+yeniden koşunca yalnız exe'yi yeniler; bu dört klasörün içeriğine dokunmaz, klasördeki diğer her
+şeyi (eski çıktı) siler. Betik tek dosya anahtarını `-p:VortexSingleFile=true` ile açar;
 `RuntimeIdentifier`/`SelfContained` csproj'da **koşulludur**, çünkü RID'siz test projesi
 RID'li self-contained bir projeye referans veremez.
 

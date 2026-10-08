@@ -13,6 +13,9 @@ public static class Dialogs
     public static void Error(string message, string title = DefaultTitle)
         => Show(message, title, MessageBoxButton.OK, MessageBoxImage.Error);
 
+    public static void Info(string message, string title = DefaultTitle)
+        => Show(message, title, MessageBoxButton.OK, MessageBoxImage.Information);
+
     /// <summary>⚠️ Owner is passed only when a real window is up; an unshown owner throws.</summary>
     private static MessageBoxResult Show(
         string message, string title, MessageBoxButton buttons, MessageBoxImage icon)

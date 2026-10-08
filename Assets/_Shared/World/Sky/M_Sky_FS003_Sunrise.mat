@@ -52,7 +52,7 @@ Material:
     - _SkySource: 1
     m_Colors:
     - _CloudColor: {r: 1, g: 0.9, b: 0.8, a: 1}
-    - _CloudWind: {r: 1, g: 0.35, b: 0.12, a: 1.6}
+    - _CloudWind: {r: 1, g: 0.35, b: 0.5, a: 1.6}
     - _SkyGroundColor: {r: 0.35999998, g: 0.33999997, b: 0.31999996, a: 1}
     - _SkyHorizonColor: {r: 0.78, g: 0.85, b: 0.92, a: 1}
     - _SkyTopColor: {r: 0.34999996, g: 0.52, b: 0.8, a: 1}

@@ -47,10 +47,10 @@ public sealed class AdminPageViewModel : PageViewModel
 
     public string RunStateText => IsRunning ? "Çalışıyor" : "Kapalı";
 
-    /// <summary>Empty-state text when the deployment has no <c>admin\</c> folder.</summary>
+    /// <summary>Empty-state text while <c>admin\</c> has no admin build.</summary>
     public string MissingAdminMessage => Context.Paths.AdminExeExists
         ? ""
-        : $"admin klasörü bulunamadı: {Context.Paths.AdminDir}";
+        : $"Yönetim oyunu yok. Yönetim build'ini (VortexArena.exe + VortexArena_Data) şu klasöre koyun: {Context.Paths.AdminDir}";
 
     public string TargetText => $"{Context.Settings.ServerIp.Trim()}:{Context.ControlPort}";
 
@@ -83,6 +83,7 @@ public sealed class AdminPageViewModel : PageViewModel
         OnPropertyChanged(nameof(RunStateText));
         OnPropertyChanged(nameof(CanStart));
         OnPropertyChanged(nameof(CanStop));
+        OnPropertyChanged(nameof(MissingAdminMessage));
         OnPropertyChanged(nameof(TargetText));
         _startCommand.RaiseCanExecuteChanged();
         _stopCommand.RaiseCanExecuteChanged();
@@ -125,9 +126,9 @@ public sealed class AdminPageViewModel : PageViewModel
             return;
         }
 
+        // Not saved: the next launch starts on loopback again (LauncherSettings.ServerIp).
         Context.Settings.ServerIp = ip;
-        Context.SaveSettings();
         OnPropertyChanged(nameof(TargetText));
-        Inform($"Yönetim bundan sonra {TargetText} adresine bağlanacak.");
+        Inform($"Yönetim bu oturumda {TargetText} adresine bağlanacak; launcher yeniden açılınca {LauncherSettings.DefaultServerIp} olur.");
     }
 }

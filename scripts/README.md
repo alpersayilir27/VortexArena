@@ -2,15 +2,16 @@
 
 Dört bileşenin her biri kendi betiğiyle `deploy/` altına üretilir. Betikler **idempotent**:
 hedef klasörü silip yeniden yazarlar. İki istisna: `deploy\player\` sürümlü APK'lar yan yana
-durduğu için silinmez (yalnız aynı adlı dosya üzerine yazılır), launcher ise klasör değil
-`deploy\` kökünde **tek dosyadır** (`VortexArena.Launcher.exe`).
+durduğu için silinmez (yalnız aynı adlı dosya üzerine yazılır); `deploy\launcher\` saha paketidir:
+publish başarılı olunca exe yenilenir, `server\` · `admin\` · `game_versions\` · `replays\`
+klasörleri (yoksa boş açılır) ve içerikleri **korunur**, klasördeki diğer her şey silinir.
 
 | Betik | Kaynak | Çıktı | Ön koşul |
 |---|---|---|---|
 | `deploy-admin-game.bat` | Unity projesi (`Assets/`) | `deploy\admin\VortexArena.exe` | Unity Editor kapalı (betik zorlamaz) |
 | `deploy-player-apk.bat` | Unity projesi (`Assets/`) | `deploy\player\game_v<sürüm>.apk` + `install_game.bat`; sonda APK sunucudaki yayın ucuna POST'lanır (`updater_uploader/` — uç kapalıysa yalnız uyarı, build başarılı sayılır) | Unity Editor kapalı + **Android Build Support** modülü; başlangıçta sunucudaki yayınlanmış sürümler listelenir ve sürüm numarası sorulur |
 | `deploy-server.bat` | `Server/VortexArena.Server.App` | `deploy\server\VortexArena.Server.App.exe` | .NET 10 SDK |
-| `deploy-launcher.bat` | `launcher/VortexArena.Launcher` (WPF) | `deploy\VortexArena.Launcher.exe` (tek dosya, self-contained; `adb` içinde) | .NET 10 SDK + launcher kapalı |
+| `deploy-launcher.bat` | `launcher/VortexArena.Launcher` (WPF) | `deploy\launcher\VortexArena.Launcher.exe` (tek dosya, self-contained; `adb` içinde) + boş `server\` · `admin\` · `game_versions\` · `replays\` | .NET 10 SDK (çalışan launcher'ı betik kendisi kapatır) |
 | `deploy_android_updater.bat` | `updater/` (Kotlin Android) | `deploy\updater\VortexUpdater.apk` + `install_updater.bat` | Unity'nin **Android Build Support** modülü (JDK/Gradle oradan — editör açık olabilir, Unity başlatılmaz); Android SDK'sı `%LOCALAPPDATA%\VortexUpdaterSdk` köküne ilk koşuda iner → ilk koşu internet ister |
 | `docs-setup.bat` | — | `..\vortexarena-docs-site\` (repo DIŞI) | Node 22+, git, internet (yalnız kurulumda) |
 | `defender-exclusions.cmd` | `defender-exclusions.ps1` | Windows Defender dışlama listesi | **Yönetici** + Defender'ın etkin olması |
@@ -306,11 +307,14 @@ powershell -NoProfile -File scripts\lib\list-server-versions.ps1 -Url http://<su
   ayrı klasörlerde. Yani her platform kendi cache'ini bir kez ısıtır; **soğuk cache'te sürenin
   büyük kısmı shader varyantı derlemektir**. Buradan çıkan pratik sonuç: `Library/`'yi silme, ve
   aynı gün ikisi de gerekiyorsa **önce admin, sonra APK** al (APK platformu Android'de bırakır).
-- **Çalışan exe kendi çıktısını kilitler** (sunucuda klasörü, launcher'da tek dosyanın kendisini).
-  `deploy-server.bat` ve `deploy-launcher.bat` publish'e
-  girmeden önce `tasklist` ile kendi exe'sini arar (`VortexArena.Server.App.exe` /
-  `VortexArena.Launcher.exe`) ve çalışıyorsa adıyla durur — yoksa `rmdir` yarıda kalıp publish
-  anlamsız bir dosya izni hatası verirdi.
+- **Çalışan exe kendi çıktı klasörünü kilitler** (`deploy\server\`, `deploy\launcher\`).
+  `deploy-server.bat` publish'e girmeden önce `tasklist` ile `VortexArena.Server.App.exe`'yi arar
+  ve çalışıyorsa adıyla durur — yoksa `rmdir` yarıda kalıp publish anlamsız bir dosya izni hatası
+  verirdi. `deploy-launcher.bat` ise publish başarılı olduktan sonra çalışan her launcher'ı
+  (`VortexArena.Launcher.exe` ve doğrudan `deploy\launcher\`'dan açılmış her süreç) **kendisi
+  kapatır**; paketin `server\` / `admin\` klasöründen açılmış sunucu ve yönetim açık kalır,
+  launcher'a bağlı değildir. Klasörün kendisi silinmez, yalnız eski içeriği temizlenir: Explorer
+  ya da içinde duran bir terminal klasörü kilitler, `rmdir` o yüzden düşerdi.
 
 ## Betik yazarken üç tuzak (kanıtlanmış)
 

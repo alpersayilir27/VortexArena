@@ -11,7 +11,7 @@
 | **Maç kaydı ve video çıkarma**: operatör launcher'dan kaydı açınca sunucu her maçı admin'in aldığı akış olarak `.vxr` dosyasına kaydeder (`Docs/ArenaNet-Protokol.md` §12-13); admin build'in `--replay` oynatma kipi kaydı canlı izleyicinin parse yollarına besler; kamera seçenekleri POV · tepeden üçüncü şahıs · köşe kameraları (sahne işaretçisi, yoksa `ArenaBoundary`'den) · tepeden plan, kapsam tam maç · oyuncu/maç highlight'ı; MP4 sabit adımlı render + ffmpeg, launcher'ın Kayıt sayfasından; WebGL izleyici ileride. `PROTOCOL_VERSION` artmaz. Faz 1 (kayıt + oynatma çekirdeği + launcher'dan aç/kapa) kod ve doküman **bitti**, kalan: doğrulama; Faz 2-4 yazılmadı | `mac-kaydi.md` |
 | **Dev kalibre atlama + çubukla yürüme** (yalnız editör, Quest Link testi): Dev penceresindeki anahtar açıkken oyuncu mekanın A işaretinde, 1,80 m boy varsayımıyla ve `source:"dev"` ile kalibreli başlar; sol çubuk rig'i yatayda yürütür, sağ çubuk 30° döndürür. Kodun tamamı `#if UNITY_EDITOR` — build, sunucu ve `PROTOCOL_VERSION` değişmez; operatör sıfırlaması dev hizalamayı da düşürür; APK'ya taşınmaz. Kod ve doküman **bitti**. Kalan: doğrulama | `dev-kalibre-atlama.md` |
 | **Arayüz yenileme — "Girdap" teması**: mockup'lar `Docs/Gelistirici/Arayuz/` altında durur (ortak stil `tema.css`, parça ve durumlar `kit.html`), ölçülerin kalıcı kaynağıdır. Admin HUD · istatistik · tercihler · oyuncunun maç sonu ekranı · oyuncu HUD'u (can şeridi · skor bandı · öldün kartı) · aşçı modunun lokanta arayüzü builder'dan üretiliyor (`Docs/Gelistirici/Arayuz-Tasarimi.md`). Kalan: (1) saha doğrulaması; (2) Mole'un sonuç ekranı (`Assets/Modes/Mole/UI/MoleResultOverlay.prefab`) hâlâ taban prefabın eski varyantı — gizli sütun override'ları, StatsPanel sprite override'ı ve metin altına düşen süslemeler çakışıyor; builder'dan üretilen yola taşınacak (`Yemek-Kitabi.md` "Moda özel maç sonu ekranı" yol B, örneği `BurgerResultOverlay`); (3) canlı ihlal çerçevesi (`AdminViolations.Of`) editör önizlemesinde test edilemiyor, sahada bakılacak | `../Docs/Gelistirici/Arayuz/admin-hud.html` |
-| **Performans**: önce cihaz telemetrisi (`status`'a isteğe bağlı en kötü kare · yavaş kare sayısı · pil sıcaklığı, sunucu eşik aşımını loglar; `PROTOCOL_VERSION` artmaz), sonra ölçüme bağlı 90 Hz ve shader/PSO ısınması, kod tarafında silah havuzu ve ayırmasız UDP alımı. Henüz **hiçbir şey yazılmadı** | `performans.md` |
+| **Performans**: önce cihaz telemetrisi (`status`'a isteğe bağlı en kötü kare · yavaş kare sayısı · pil sıcaklığı, sunucu eşik aşımını loglar; `PROTOCOL_VERSION` artmaz), sonra ölçüme bağlı 90 Hz ve shader/PSO ısınması, kod tarafında rastgele silah kipinde yerel havuz ve durum paketi ayrıştırmasında ayırmasızlık. Henüz **hiçbir şey yazılmadı** | `performans.md` |
 
 ## Dağıtım — protokol sürümü artınca
 
@@ -34,6 +34,9 @@ yazar); sebep sunucu konsoluna ve `admin_state.notice`'e yazılır.
 - Tracer rengi silah başına farklılaşmaz — hepsi aynı kalır (altyapı destekliyor, istenmiyor).
 - Çarpma efekti ve sesi yüzeye göre farklılaşmaz — her isabet `default` yüzeydir (altyapı
   destekliyor, anahtarı `SurfaceLibrary.definitions`; haritalara yüzey ataması yapılmaz).
+- Fırlatılan bombanın uzak vuruş kutularıyla çarpışma eşlemesi ve kırılan objenin efekti
+  değişmez: ikisi zaten kayıt ve havuz kullanır (`RemoteHitBox.Active`, `BlastFxPool`), sahne
+  taraması ya da `Instantiate` yoktur.
 - Quest gölge mesafesi kısaltılmaz: Shadowmask'ta statik geometri gerçek zamanlı gölge çizmez,
   gölgeyi yalnız oyuncu ve eşya düşürür; mesafeyi mekan köşegeninin altına çekmek alanın uzak
   ucunda oyuncu gölgesini keser, kazancı küçüktür.

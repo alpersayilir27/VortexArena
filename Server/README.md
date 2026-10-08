@@ -108,7 +108,7 @@ Biçim ve ne kaydedilip ne kaydedilmediği: `Docs/ArenaNet-Protokol.md` §12.
   Lobide ya da `finished` fazında açılan kayıt dosyayı bir sonraki `start_match`'te açar.
 - **Yer:** `--replay-dir <yol>` > `server.json → replayDir` > exe'nin yanındaki `replays/` (göreli
   yol da exe klasörüne göre çözülür). Klasör yoksa oluşturulur. Launcher sunucuyu kendi
-  klasöründeki `replays` ile başlatır.
+  kökündeki `replays` ile başlatır (`server\`'ın kardeşi).
 - **Ad:** `<yyyy-MM-dd_HH-mm-ss>_<SahneAdı>_<modId>.vxr` — sunucunun yerel saatiyle maçın açılış
   anı; aynı ad varsa sonuna `_2`, `_3` eklenir.
 - **Sınırlar:** dosya `start_match` doğrulanınca (ya da maç ortasında kayıt açılınca) açılır;

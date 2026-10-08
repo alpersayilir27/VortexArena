@@ -25,6 +25,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public MainViewModel(IReadOnlyList<string> args)
     {
         var paths = LauncherPaths.Resolve(args);
+        paths.EnsureLayout();
         _context = new LauncherContext(paths, LauncherSettings.Load());
 
         ServerPage = new ServerPageViewModel(_context);

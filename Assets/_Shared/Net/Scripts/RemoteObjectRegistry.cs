@@ -150,26 +150,36 @@ namespace VortexArena.Net
                     return false;
                 }
 
-                int start = entry.nextIndex - entry.count;
-                if (start < 0)
+                // nextIndex points at the next EMPTY slot.
+                int idx = entry.nextIndex - 1;
+                if (idx < 0)
                 {
-                    start += RING_SIZE;
+                    idx += RING_SIZE;
                 }
 
-                // The ring is in chronological order: find the pair bracketing the sampling time.
+                // The ring is in chronological order and the sampling time sits near its NEWEST end
+                // (render delay vs 20 Hz ingest), so the bracketing pair is found scanning BACKWARD —
+                // forward walks almost the whole ring on every call. ⚠️ Wrap-safe int comparison.
                 for (int i = 0; i < entry.count; i++)
                 {
-                    PoseSample sample = entry.ring[(start + i) % RING_SIZE];
-                    if (renderMs - sample.recvMs >= 0)
+                    // recvMs is read on its own first — copying the whole sample per iteration costs
+                    // more than the scan itself.
+                    if (renderMs - entry.ring[idx].recvMs >= 0)
                     {
-                        before = sample;
+                        before = entry.ring[idx];
                         hasBefore = true;
-                    }
-                    else
-                    {
-                        after = sample;
-                        hasAfter = true;
                         break;
+                    }
+
+                    // Ahead of the sampling time: walking back, the LAST such sample assigned is the
+                    // one adjacent to `before`.
+                    after = entry.ring[idx];
+                    hasAfter = true;
+
+                    idx--;
+                    if (idx < 0)
+                    {
+                        idx += RING_SIZE;
                     }
                 }
             }

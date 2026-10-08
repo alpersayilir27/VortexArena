@@ -40,6 +40,9 @@ public sealed class LauncherSettings
     /// <summary>Server's replay output folder argument.</summary>
     public const string ArgReplayDir = "--replay-dir";
 
+    /// <summary>Launcher and server share the PC, so the admin build dials loopback.</summary>
+    public const string DefaultServerIp = "127.0.0.1";
+
     public const string DefaultVersionsUrl = "http://159.100.20.26:8091/versions";
 
     public const string DefaultDownloadBaseUrl = "http://159.100.20.26:8090/game_versions/";
@@ -53,9 +56,13 @@ public sealed class LauncherSettings
     [JsonPropertyName("controlPortOverride")]
     public int ControlPortOverride { get; set; }
 
-    /// <summary>Address the admin build dials. Loopback because launcher and server share the PC.</summary>
-    [JsonPropertyName("serverIp")]
-    public string ServerIp { get; set; } = "127.0.0.1";
+    /// <summary>
+    /// Address the admin build dials.
+    /// <para>⚠️ Session-only, never saved: a saved remote address would silently send the admin to
+    /// another machine on every launch.</para>
+    /// </summary>
+    [JsonIgnore]
+    public string ServerIp { get; set; } = DefaultServerIp;
 
     [JsonPropertyName("versionsUrl")]
     public string VersionsUrl { get; set; } = DefaultVersionsUrl;
@@ -110,7 +117,6 @@ public sealed class LauncherSettings
     /// <summary>Fills blanks left by an older settings file (its keys are a subset of today's).</summary>
     private LauncherSettings Normalized()
     {
-        if (string.IsNullOrWhiteSpace(ServerIp)) ServerIp = "127.0.0.1";
         if (string.IsNullOrWhiteSpace(VersionsUrl)) VersionsUrl = DefaultVersionsUrl;
         if (string.IsNullOrWhiteSpace(DownloadBaseUrl)) DownloadBaseUrl = DefaultDownloadBaseUrl;
         return this;

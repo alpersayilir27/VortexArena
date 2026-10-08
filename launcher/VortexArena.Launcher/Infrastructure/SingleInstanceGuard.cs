@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Threading;
 
 namespace VortexArena.Launcher.Infrastructure;
@@ -60,6 +61,35 @@ public sealed class SingleInstanceGuard : IDisposable
         catch (UnauthorizedAccessException)
         {
             return false;
+        }
+    }
+
+    /// <summary>Exe path of the launcher already running; null when it cannot be read.</summary>
+    public static string? RunningInstancePath()
+    {
+        using var self = Process.GetCurrentProcess();
+        var processes = Process.GetProcessesByName(self.ProcessName);
+        try
+        {
+            foreach (var process in processes)
+            {
+                if (process.Id == self.Id) continue;
+                try
+                {
+                    var path = process.MainModule?.FileName;
+                    if (!string.IsNullOrEmpty(path)) return path;
+                }
+                catch (Exception)
+                {
+                    // Elevated or exiting process: path unreadable.
+                }
+            }
+
+            return null;
+        }
+        finally
+        {
+            foreach (var process in processes) process.Dispose();
         }
     }
 
