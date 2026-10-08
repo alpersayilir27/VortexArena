@@ -73,6 +73,13 @@ namespace VortexArena.Net
                 return;
             }
 
+            if (ReplayMode.Active)
+            {
+                // §12.4: a replay opens no socket at all — listening for beacons would also make the
+                // lobby offer an address to connect to.
+                return;
+            }
+
             StartCoroutine(LoadStaticConfigRoutine());
 
             _cts = new CancellationTokenSource();

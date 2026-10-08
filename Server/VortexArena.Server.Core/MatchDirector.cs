@@ -266,11 +266,16 @@ public sealed class MatchDirector
     /// <summary>Hamburgerci balance (<c>server.json → burger</c>), already sanitized.</summary>
     private readonly BurgerSettings _burger;
 
+    /// <summary>Match recording (§12); <see cref="MatchRecorder.Disabled"/> when unwired, so no call
+    /// site needs a null check.</summary>
+    private readonly MatchRecorder _recorder;
+
     public MatchDirector(PlayerRegistry registry, MapTable maps, string lobbyScene = "",
-        BurgerSettings? burger = null)
+        BurgerSettings? burger = null, MatchRecorder? recorder = null)
     {
         _registry = registry;
         _maps = maps;
+        _recorder = recorder ?? MatchRecorder.Disabled;
         // Sanitized once here, not per match: a bad file must be reported at startup, not on the
         // operator's first shift.
         _burger = (burger ?? new BurgerSettings()).Sanitized();
@@ -591,6 +596,41 @@ public sealed class MatchDirector
     public bool IsTeamlessMatchSetUp()
     {
         lock (_gate) return _mode != null && _rules.Teams == TeamMode.None;
+    }
+
+    /// <summary>The operator's recording switch (§13). Arming during a running match opens the file at
+    /// once; from the lobby or <c>finished</c> it only arms and the next <c>start_match</c> opens it
+    /// (§12.2). Disarming closes the open file.</summary>
+    /// <remarks>⚠️ Lives here and not on the recorder: a mid-match file must start with the admin
+    /// <c>load_match</c> + <c>world_state</c> + <c>match_state</c>, and only the director can build
+    /// those consistently under <c>_gate</c>.</remarks>
+    public void SetRecording(bool on)
+    {
+        if (!on)
+        {
+            _recorder.Disarm();
+            return;
+        }
+
+        if (!_recorder.Arm()) return; // already armed (or unwired): nothing to open
+        // ⚠️ OUTSIDE _gate: this builder takes LobbyService's lock, and the lock order is
+        // _gate → recorder, never the reverse.
+        var initialTexts = _recorder.CaptureInitialState();
+
+        lock (_gate)
+        {
+            // Lobby / finished: only armed, the file waits for the next start_match (§12.2). Also skips
+            // a file a concurrent start_match opened in the meantime.
+            if (_mode == null || _phase == Phase.Finished || _recorder.IsRecording) return;
+
+            _recorder.Begin(BuildReplayMeta(_sceneName, _modeId, _roundSeconds, _scoreLimit,
+                ConnectedPlayersLocked()), initialTexts);
+            // ⚠️ A player loads the scene from a load_match, so the recording must open with one — the
+            // rest is what a late-joining admin would know (§12.2).
+            _recorder.Text(BuildAdminLoadMatchLocked());
+            if (_objects.Count > 0) _recorder.Text(BuildWorldStateJsonLocked());
+            _recorder.Text(JsonUtil.Serialize(BuildMatchStateLocked()));
+        }
     }
 
     /// <summary>welcome.match snapshot — used by the late-join sync (§5.3).</summary>
@@ -1004,7 +1044,9 @@ public sealed class MatchDirector
         // nobody — same rationale as the net_stats loop), but the edge state STILL advances. Otherwise an
         // admin connecting later would find a half-finished violation open forever, and the ledger's
         // duration would swallow that gap.
-        var anyAdmin = HasConnectedAdminLocked();
+        // ⚠️ Recording counts as an admin (§12.1): the operator screen being open must not decide what
+        // the file contains.
+        var anyAdmin = HasConnectedAdminLocked() || _recorder.IsRecording;
 
         foreach (var player in _registry.Snapshot())
         {
@@ -1276,6 +1318,13 @@ public sealed class MatchDirector
             ? Math.Clamp(countdownSeconds, ArenaProtocol.COUNTDOWN_SECONDS_MIN, ArenaProtocol.COUNTDOWN_SECONDS_MAX)
             : ArenaProtocol.COUNTDOWN_SECONDS;
 
+        // §12.2: opened after validation and BEFORE load_match, so the file starts with the lobby
+        // snapshot. ⚠️ OUTSIDE _gate — the initial-state builder takes LobbyService's own lock, and
+        // taking it under this one would close a lock cycle. An already open recording closes here.
+        if (_recorder.Armed)
+            _recorder.Begin(BuildReplayMeta(sceneName, mode.ModeId, appliedRound, appliedLimit, players),
+                _recorder.CaptureInitialState());
+
         lock (_gate)
         {
             if (_phase != Phase.Paused || _pauseReason != PauseReason.Lobby)
@@ -1333,17 +1382,8 @@ public sealed class MatchDirector
             // admins send no set_ready — the Loading gate counts only role=player connections
             // (ConnectedPlayersLocked). Rules go to admins too: team mode drives the admin UI's
             // one-column/two-column decision.
-            var adminLoad = JsonUtil.Serialize(new LoadMatchMsg
-            {
-                modeId = _modeId,
-                sceneName = _sceneName,
-                roundSeconds = _roundSeconds,
-                scoreLimit = _scoreLimit,
-                yourTeam = "",
-                sceneElapsed = SceneElapsedLocked,
-                bodySeed = _bodySeed,
-                rules = rulesInfo
-            });
+            var adminLoad = BuildAdminLoadMatchLocked();
+            _recorder.Text(adminLoad);
             foreach (var admin in _registry.Snapshot())
             {
                 if (!admin.IsConnected || admin.Role != "admin") continue;
@@ -1864,6 +1904,9 @@ public sealed class MatchDirector
                 rules = _rules.ToInfo()
             }));
             QueueWorldStateLocked(outbox);
+            // Staging from `finished` ends the match for the recording too (§12.2); a no-op when
+            // nothing is open.
+            _recorder.End(ReplayEndReason.Lobby);
         }
 
         Console.WriteLine($"[match] lobi sahnesi -> '{target}' (tüm istemciler yüklüyor).");
@@ -2701,6 +2744,10 @@ public sealed class MatchDirector
         // through the WHOLE `finished` phase is deliberate — players who left must appear in the
         // end-of-match table; clearing it on `match_end` would empty the table exactly as it is read.
         _participantCleanupPending = true;
+
+        // §12.2: AFTER the lobby return is queued, so the file's last frames are the ones that ended
+        // the match.
+        _recorder.End(ReplayEndReason.Lobby);
     }
 
     /// <summary>Called from outside the tick (mode IsMatchOver); a no-op if an abort slipped in.</summary>
@@ -2921,6 +2968,38 @@ public sealed class MatchDirector
         rules = _rules.ToInfo()
     };
 
+    /// <summary>The admin copy of <c>load_match</c> (§10.1): the same scene with no team. ⚠️ The only
+    /// recorded copy (§12.1) — the player copies differ from it just by <c>yourTeam</c>.</summary>
+    private string BuildAdminLoadMatchLocked() => JsonUtil.Serialize(new LoadMatchMsg
+    {
+        modeId = _modeId,
+        sceneName = _sceneName,
+        roundSeconds = _roundSeconds,
+        scoreLimit = _scoreLimit,
+        yourTeam = "",
+        sceneElapsed = SceneElapsedLocked,
+        bodySeed = _bodySeed,
+        rules = _rules.ToInfo()
+    });
+
+    /// <summary>Recording header (§12.3): the roster is the line-up at the moment the file opens.</summary>
+    private ReplayMeta BuildReplayMeta(string sceneName, string modeId, int roundSeconds, int scoreLimit,
+        IEnumerable<PlayerState> players) => new()
+    {
+        sceneName = sceneName,
+        modeId = modeId,
+        venue = VenueId,
+        roundSeconds = roundSeconds,
+        scoreLimit = scoreLimit,
+        players = players.Select(p => new ReplayRosterEntry
+        {
+            playerId = p.PlayerId,
+            name = p.Name,
+            number = p.Number,
+            team = p.Team
+        }).ToArray()
+    };
+
     private MatchStateMsg BuildMatchStateLocked() => new()
     {
         phase = PhaseWire(_phase),
@@ -2937,6 +3016,7 @@ public sealed class MatchDirector
     /// messages go to everyone by definition.</remarks>
     private void QueueBroadcastLocked(List<Outgoing> outbox, string json)
     {
+        _recorder.Text(json); // §12.1: one copy per message, not one per admin
         foreach (var player in _registry.Snapshot())
         {
             if (!player.IsConnected) continue;
@@ -2990,6 +3070,7 @@ public sealed class MatchDirector
     /// datagrams" (Docs/Sistem-Ozeti.md §3.12).</para></remarks>
     private void QueueHealthUpdateLocked(List<Outgoing> outbox, PlayerState subject, string json)
     {
+        _recorder.Text(json);
         foreach (var player in _registry.Snapshot())
         {
             if (!player.IsConnected) continue;
@@ -3005,6 +3086,7 @@ public sealed class MatchDirector
     /// players would multiply unread packets by the player count.</summary>
     private void QueueAdminBroadcastLocked(List<Outgoing> outbox, string json)
     {
+        _recorder.Text(json);
         foreach (var player in _registry.Snapshot())
         {
             if (!player.IsConnected || player.Role != "admin") continue;

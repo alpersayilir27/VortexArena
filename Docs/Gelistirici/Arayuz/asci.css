@@ -1,0 +1,181 @@
+/* ---------- aşçı (Burger): çocukçu "lokanta" teması ----------
+   Köstebek maç sonu ekranının çiftlik dili (kalın koyu kontur, yuvarlak köşe, sert gölge, karikatür
+   süsleme) burada lokanta motifleriyle: krem kart, kırmızı-beyaz damalı şerit, kurdele başlık,
+   karikatür burger / patates, yüz ifadeleri. Ölçüler: şerit 560,
+   baloncuk 420x300, termometre 100x200. Yazı: Fredoka (başlık/sayı) +
+   Nunito (gövde); Unity'de ikisi için TMP font varlığı üretilir. tema.css'in üstüne yüklenir. */
+@import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@600;700;800&display=swap');
+:root { --b-ink: #4A2410; --b-cream: #FFF4DC; --b-cream2: #FFE6B8; --b-paper: #FFFBF2; --b-red: #E8584F; --b-red2: #C9342C; --b-must: #F4B942; --b-must2: #E09A1B; --b-green: #5BB544; --b-green2: #3E8F2E; --b-sky: #5FA8E8; --ff: 'Fredoka', 'Chakra Petch', sans-serif; --fn: 'Nunito', 'Barlow', sans-serif; }
+.b { font-family: var(--fn); color: var(--b-ink); }
+.b .stage { color: var(--b-ink); }
+.b .vr { background: radial-gradient(ellipse at 50% 30%, #4A7EC2, #1E3660 72%); }
+.b .ph { color: rgba(255, 255, 255, .55); }
+
+/* kart: krem, kalın kontur, sert gölge; .chk damalı üst şerit */
+.bp { position: relative; background: var(--b-cream); border: 4px solid var(--b-ink); border-radius: 22px; box-shadow: 0 6px 0 var(--b-ink); }
+.bp.chk::before { content: ''; position: absolute; left: 10px; right: 10px; top: 10px; height: 22px; border-radius: 12px 12px 4px 4px; background: repeating-conic-gradient(var(--b-red) 0 25%, #FFF8EA 0 50%) 0 0 / 28px 28px; box-shadow: 0 3px 0 var(--b-must2); }
+
+/* kurdele başlık: kırmızı, içte sarı çizgi, kenarlarda nokta sırası */
+.brib { position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 10px; height: 44px; padding: 0 24px; border: 3px solid var(--b-ink); border-radius: 24px; background: linear-gradient(180deg, #F0675E, #C9342C); box-shadow: inset 0 0 0 3px var(--b-must), 0 4px 0 var(--b-ink); color: #FFF8EA; font: 700 20px/1 var(--ff); letter-spacing: .04em; text-shadow: 0 2px 0 rgba(0, 0, 0, .35); white-space: nowrap; }
+.brib::before, .brib::after { content: ''; position: absolute; left: 16px; right: 16px; height: 4px; background: radial-gradient(circle, #FFE9A6 1.7px, transparent 2.2px) 0 0 / 12px 4px; }
+.brib::before { top: 6px; }
+.brib::after { bottom: 6px; }
+.brib.must { background: linear-gradient(180deg, #FFD36A, #E09A1B); box-shadow: inset 0 0 0 3px #FFF1C4, 0 4px 0 var(--b-ink); color: var(--b-ink); text-shadow: none; }
+.brib.must::before, .brib.must::after { display: none; }
+.brib.green { background: linear-gradient(180deg, #7ACC60, #3E8F2E); box-shadow: inset 0 0 0 3px #CDEFB8, 0 4px 0 var(--b-ink); }
+.brib.lg { height: 64px; padding: 0 40px; border-radius: 32px; font-size: 36px; }
+.brib .ic { width: 1.1em; height: 1.1em; stroke-width: 2.4; }
+
+/* büyük sayı: beyaz dolgu, koyu kontur, sert gölge */
+.bnum { font: 700 1em/1 var(--ff); color: #fff; -webkit-text-stroke: .04em var(--b-ink); paint-order: stroke fill; text-shadow: 0 .06em 0 var(--b-ink); }
+.bnum.must { color: #FFD36A; }
+
+/* yüz ifadesi: 1em çapında, mutlu / mutsuz / düz */
+.bface { position: relative; display: inline-block; flex: none; width: 1em; height: 1em; box-sizing: border-box; border: .1em solid var(--b-ink); border-radius: 50%; background: radial-gradient(circle at 35% 30%, #FFE56A, #F4B942 70%); vertical-align: middle; }
+.bface::before { content: ''; position: absolute; left: 20%; right: 20%; top: 26%; height: 18%; background: radial-gradient(circle, var(--b-ink) 48%, transparent 54%) left / 38% 100% no-repeat, radial-gradient(circle, var(--b-ink) 48%, transparent 54%) right / 38% 100% no-repeat; }
+.bface::after { content: ''; position: absolute; left: 26%; width: 48%; bottom: 18%; height: 24%; box-sizing: border-box; border: .1em solid var(--b-ink); border-top: 0; border-left-color: transparent; border-right-color: transparent; border-radius: 0 0 50% 50% / 0 0 100% 100%; }
+.bface.sad { background: radial-gradient(circle at 35% 30%, #FFB0A6, #E8584F 70%); }
+.bface.sad::after { bottom: 10%; border-top: .1em solid var(--b-ink); border-bottom: 0; border-radius: 50% 50% 0 0 / 100% 100% 0 0; }
+.bface.meh { background: radial-gradient(circle at 35% 30%, #FFE6A6, #F0B860 70%); }
+.bface.meh::after { height: 0; bottom: 24%; border-radius: 0; border-left-color: var(--b-ink); border-right-color: var(--b-ink); border-width: 0 0 .1em 0; border-bottom: .1em solid var(--b-ink); }
+
+/* ---- HUD şeridi: saat + vardiya bandı (560) ---- */
+.bclock { display: inline-flex; align-items: center; gap: 12px; height: 46px; padding: 0 16px 0 8px; border-radius: 23px; font: 700 28px/1 var(--ff); font-variant-numeric: tabular-nums; }
+.bclock .brib { height: 30px; padding: 0 14px; font-size: 14px; box-shadow: inset 0 0 0 2px var(--b-must); }
+.bclock .brib::before, .bclock .brib::after { display: none; }
+.bclock.last { background: var(--b-red); color: #fff; animation: pulse 1s steps(2, jump-none) infinite; }
+.bclock.last .brib { background: var(--b-ink); box-shadow: none; }
+.bband { display: flex; width: 560px; height: 64px; overflow: hidden; }
+.bband > div { display: flex; align-items: center; justify-content: center; border-right: 3px solid var(--b-ink); }
+.bband > div:last-child { border-right: 0; }
+.bb-team { width: 150px; background: linear-gradient(180deg, #F0675E, #C9342C); color: #FFF8EA; font: 700 26px/1 var(--ff); letter-spacing: .04em; text-shadow: 0 2px 0 rgba(0, 0, 0, .35); }
+.bb-score { width: 110px; background: var(--b-paper); font: 700 40px/1 var(--ff); font-variant-numeric: tabular-nums; }
+.bb-sen { flex-direction: column; gap: 2px; width: 110px; background: var(--b-cream2); font: 700 30px/1 var(--ff); font-variant-numeric: tabular-nums; }
+.bb-sen em { font: 800 11px/1 var(--fn); font-style: normal; letter-spacing: .2em; opacity: .75; }
+.bb-cust { flex: 1; gap: 16px; background: var(--b-paper); font: 700 30px/1 var(--ff); font-variant-numeric: tabular-nums; }
+.bb-cust span { display: inline-flex; align-items: center; gap: 6px; }
+.bb-cust .bface { font-size: 28px; }
+.bstat { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 16px 0 12px; border-radius: 20px; background: var(--b-paper); font: 700 20px/1 var(--ff); }
+.bstat .ic { width: 20px; height: 20px; }
+.bhud { position: absolute; left: 50%; top: 560px; display: flex; flex-direction: column; align-items: center; gap: 14px; width: 560px; transform: translateX(-50%) scale(1.6); transform-origin: 50% 0; }
+
+/* ---- sipariş baloncuğu 420x300: konuşma kuyruğu aşağı (müşteriye) ---- */
+.bbub { display: grid; grid-template-rows: 44px 1fr; width: 420px; height: 300px; padding: 10px 14px 12px; }
+.bbub::after { content: ''; position: absolute; left: 50%; bottom: -24px; width: 30px; height: 30px; background: var(--b-cream); border: 4px solid var(--b-ink); border-top: 0; border-left: 0; border-radius: 0 0 6px 0; transform: translateX(-50%) rotate(45deg); box-shadow: 4px 4px 0 var(--b-ink); }
+.bbub .oh { display: flex; align-items: center; gap: 10px; }
+.bbub .oh .brib { height: 36px; padding: 0 16px; font-size: 17px; }
+.bbub .sp { flex: 1; }
+.bpat { display: inline-flex; align-items: center; gap: 8px; }
+.bpat .bface { font-size: 30px; }
+.bpat .bar { width: 104px; height: 16px; box-sizing: border-box; border: 3px solid var(--b-ink); border-radius: 10px; background: #fff; overflow: hidden; }
+.bpat .bar i { display: block; height: 100%; background: var(--b-green); }
+.bpat.warn .bar i { background: var(--b-must); }
+.bpat.bad .bar i { background: var(--b-red); }
+.bpat.bad { animation: pulse 1s steps(2, jump-none) infinite; }
+.bbub .ob { display: grid; grid-template-columns: 160px 1fr; gap: 0 12px; align-items: center; padding-top: 6px; }
+.bstack { display: flex; flex-direction: column-reverse; align-items: center; gap: 2px; }
+.bing { box-sizing: border-box; width: 140px; height: 14px; border: 3px solid var(--b-ink); border-radius: 5px; }
+.bing.bunb { height: 26px; border-radius: 5px 5px 15px 15px; background: linear-gradient(180deg, #F2BE6E, #D1903F); }
+.bing.bunt { position: relative; height: 36px; border-radius: 44px 44px 7px 7px; background: linear-gradient(180deg, #F7C877, #D79A48); }
+.bing.bunt::after { content: ''; position: absolute; left: 28px; right: 28px; top: 10px; height: 8px; background: radial-gradient(ellipse, #FFF1C2 2px, transparent 2.6px) 0 0 / 13px 8px; }
+.bing.patty { width: 150px; height: 20px; background: linear-gradient(180deg, #8A4E2E, #5A2E18); }
+.bing.cheese { width: 156px; height: 11px; background: linear-gradient(180deg, #FFD54A, #F0A81B); }
+.bing.lettuce { width: 158px; height: 14px; border-radius: 9px; background: linear-gradient(180deg, #86DC66, #4CAB3F); }
+.bing.tomato { height: 12px; background: linear-gradient(180deg, #F25A4C, #C7332A); }
+.bing.onion { height: 10px; background: linear-gradient(180deg, #F8EEFF, #D3BEE8); }
+.bing.pickle { width: 118px; height: 10px; background: linear-gradient(180deg, #A8D45E, #6B9C34); }
+.bing.bacon { width: 152px; height: 12px; background: repeating-linear-gradient(90deg, #B8463E 0 14px, #E58A7A 14px 20px); }
+.bing.sauce { width: 130px; height: 8px; background: linear-gradient(180deg, #FFA43B, #E07314); }
+.blist { display: flex; flex-direction: column-reverse; gap: 6px; }
+.blist li { display: flex; align-items: center; gap: 10px; list-style: none; font: 600 22px/1 var(--ff); white-space: nowrap; }
+.blist li .bing { flex: none; width: 18px; height: 18px; border-width: 2.5px; border-radius: 5px; }
+.blist li .bing::after { display: none; }
+.bstick { position: absolute; left: 10px; right: 10px; top: 4px; display: flex; align-items: center; gap: 10px; height: 50px; padding: 0 16px; border: 4px solid var(--b-ink); border-radius: 16px; background: var(--b-red); box-shadow: 0 5px 0 var(--b-ink); color: #fff; font: 700 24px/1 var(--ff); text-shadow: 0 2px 0 rgba(0, 0, 0, .35); transform: rotate(-2deg); }
+.bstick .ic { width: 26px; height: 26px; stroke-width: 2.4; }
+.bbubs { position: absolute; left: 50%; top: 50%; display: flex; gap: 56px; transform: translate(-50%, -50%) scale(1.9); }
+
+/* ---- köfte termometresi 100x200: klasik tüp + hazne, yeşil "al" bandı ---- */
+.bth { --p: .3; --m: linear-gradient(0deg, #E8A0A0, #F5C2C2); display: grid; grid-template-rows: 1fr 26px; gap: 6px; width: 100px; height: 200px; padding: 10px 10px 8px; border-radius: 30px; }
+.bth .gauge { position: relative; }
+.bth .tube { position: absolute; left: 22px; top: 2px; bottom: 30px; width: 26px; box-sizing: border-box; border: 3px solid var(--b-ink); border-radius: 13px 13px 0 0; border-bottom: 0; background: #fff; overflow: hidden; }
+.bth .tube i { position: absolute; left: 0; right: 0; bottom: 0; height: calc(var(--p) * 100%); background: var(--m); }
+.bth .bulb { position: absolute; left: 13px; bottom: 0; width: 44px; height: 44px; box-sizing: border-box; border: 3px solid var(--b-ink); border-radius: 50%; background: var(--m); }
+.bth .tube::after { content: ''; position: absolute; left: 4px; top: 6px; width: 4px; height: 70%; border-radius: 2px; background: rgba(255, 255, 255, .55); }
+.bth .zone { position: absolute; right: 2px; width: 14px; bottom: calc(30px + .5 * (100% - 32px)); height: calc(.37 * (100% - 32px)); box-sizing: border-box; border: 3px solid var(--b-ink); border-radius: 5px; background: var(--b-green); }
+.bth .st { display: flex; align-items: center; justify-content: center; gap: 5px; font: 700 14px/1 var(--ff); letter-spacing: .02em; white-space: nowrap; }
+.bth .st .ic { width: 16px; height: 16px; stroke-width: 2.6; }
+.bth.cooked { --m: linear-gradient(0deg, #5A2E18, #9A5A36); }
+.bth.cooked .st { color: var(--b-green2); }
+.bth.hot { --m: linear-gradient(0deg, #5A2E18, #D23A2E); background: #FFD9D4; animation: pulse .5s steps(2, jump-none) infinite; }
+.bth.hot .st { color: var(--b-red2); }
+.bth.burnt { --m: linear-gradient(0deg, #1A100A, #3A2418); background: #E6D8C4; }
+.bth.burnt .st { color: var(--b-ink); opacity: .7; }
+.bth .flame { color: #E8582E; }
+.bths { position: absolute; left: 50%; top: 50%; display: flex; align-items: flex-end; gap: 60px; transform: translate(-50%, -50%) scale(2.5); }
+
+/* ---- karikatür süsleme: burger ve patates (saf CSS) ---- */
+.bart { position: absolute; display: flex; flex-direction: column-reverse; align-items: center; gap: 3px; transform-origin: 50% 100%; }
+.bart .bing { width: 160px; }
+.bart .bing.patty { width: 172px; height: 26px; }
+.bart .bing.cheese { width: 178px; }
+.bart .bing.lettuce { width: 182px; height: 18px; }
+.bart .bing.bunb { height: 34px; }
+.bart .bing.bunt { height: 52px; border-radius: 60px 60px 8px 8px; }
+.bart .bing.bunt::after { left: 34px; right: 34px; top: 16px; height: 12px; background-size: 16px 12px; }
+.bfries { position: absolute; width: 150px; height: 170px; }
+.bfries i { position: absolute; bottom: 70px; width: 20px; height: 110px; box-sizing: border-box; border: 3px solid var(--b-ink); border-radius: 6px; background: linear-gradient(180deg, #FFE066, #F2B830); }
+.bfries .cup { position: absolute; left: 10px; right: 10px; bottom: 0; height: 100px; box-sizing: border-box; border: 4px solid var(--b-ink); border-radius: 8px 8px 16px 16px; background: repeating-linear-gradient(90deg, #E8584F 0 26px, #FFF8EA 26px 40px); clip-path: polygon(0 0, 100% 0, 92% 100%, 8% 100%); }
+
+/* ---- vardiya sonu kartı 1400x860 ---- */
+.bcard { position: absolute; left: 260px; top: 110px; display: flex; flex-direction: column; align-items: center; width: 1400px; height: 860px; box-sizing: border-box; padding: 54px 48px 36px; border-radius: 34px; border-width: 6px; box-shadow: 0 10px 0 var(--b-ink); }
+.bcard .bart { left: 70px; bottom: 60px; transform: rotate(-8deg) scale(1.3); }
+.bcard .bfries { right: 90px; bottom: 60px; transform: rotate(8deg) scale(1.3); }
+.bcard .title { margin-top: 10px; }
+.bcard .big { margin: 10px 0 0; font-size: 300px; }
+.bcard .lbl { margin-top: -6px; }
+.bres { display: flex; align-items: center; gap: 28px; margin-top: 38px; }
+.bpill { display: inline-flex; align-items: center; gap: 14px; height: 84px; padding: 0 30px; border: 4px solid var(--b-ink); border-radius: 42px; background: var(--b-paper); box-shadow: 0 5px 0 var(--b-ink); font: 700 48px/1 var(--ff); font-variant-numeric: tabular-nums; }
+.bpill .bface { font-size: 52px; }
+.bpill em { font: 800 15px/1 var(--fn); font-style: normal; letter-spacing: .18em; opacity: .75; }
+.bpill.sen { background: linear-gradient(180deg, #FFD36A, #F4B942); }
+.bstar { position: relative; display: grid; place-items: center; width: 150px; height: 150px; }
+.bstar::before { content: ''; position: absolute; inset: 0; background: var(--b-ink); clip-path: polygon(50% 0, 61% 22%, 85% 18%, 78% 41%, 100% 50%, 78% 59%, 85% 82%, 61% 78%, 50% 100%, 39% 78%, 15% 82%, 22% 59%, 0 50%, 22% 41%, 15% 18%, 39% 22%); }
+.bstar::after { content: ''; position: absolute; inset: 7px; background: linear-gradient(180deg, #FFD36A, #F0A81B); clip-path: polygon(50% 0, 61% 22%, 85% 18%, 78% 41%, 100% 50%, 78% 59%, 85% 82%, 61% 78%, 50% 100%, 39% 78%, 15% 82%, 22% 59%, 0 50%, 22% 41%, 15% 18%, 39% 22%); }
+.bstar span { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; font: 700 44px/1 var(--ff); }
+.bstar span em { font: 800 13px/1 var(--fn); font-style: normal; letter-spacing: .14em; }
+
+/* ---- günün hesabı ---- */
+.bsc { position: absolute; left: 260px; top: 110px; display: flex; flex-direction: column; width: 1400px; height: 860px; box-sizing: border-box; padding: 48px 40px 32px; border-radius: 34px; border-width: 6px; box-shadow: 0 10px 0 var(--b-ink); }
+.bsc .head { display: flex; align-items: center; gap: 22px; height: 70px; margin-bottom: 20px; }
+.bsc .head .sp { flex: 1; }
+.bsc .head .bpill { height: 64px; padding: 0 22px; font-size: 34px; }
+.bsc .head .bpill .bface { font-size: 38px; }
+.bsc .body { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 0 28px; align-content: start; }
+.bcol { display: flex; flex-direction: column; gap: 10px; }
+.bth-row, .brow { display: grid; grid-template-columns: 56px 1fr 150px; align-items: center; }
+.bth-row { height: 36px; padding: 0 16px; font: 800 14px/1 var(--fn); letter-spacing: .16em; opacity: .7; }
+.bth-row .c, .brow .c { text-align: right; }
+.brow { height: 66px; padding: 0 16px 0 10px; box-sizing: border-box; border: 3px solid var(--b-ink); border-radius: 18px; background: var(--b-paper); box-shadow: 0 4px 0 var(--b-ink); font: 700 30px/1 var(--ff); }
+.brow .rk { display: grid; place-items: center; width: 40px; height: 40px; border: 3px solid var(--b-ink); border-radius: 50%; background: var(--b-must); font-size: 20px; }
+.brow .nm { display: flex; align-items: center; gap: 10px; }
+.brow .nm small { font: 700 15px/1 var(--fn); opacity: .55; }
+.brow .tag { display: inline-grid; place-items: center; height: 26px; padding: 0 10px; border: 2.5px solid var(--b-ink); border-radius: 13px; background: var(--b-must); font: 800 13px/1 var(--fn); letter-spacing: .12em; }
+.brow .c { display: inline-flex; align-items: center; justify-content: flex-end; gap: 8px; font-size: 34px; font-variant-numeric: tabular-nums; }
+.brow .c .mini { display: inline-flex; flex-direction: column-reverse; gap: 1px; }
+.brow .c .mini i { width: 22px; height: 5px; border: 1.5px solid var(--b-ink); border-radius: 2px; background: #D1903F; }
+.brow .c .mini i:nth-child(2) { background: #5A2E18; }
+.brow .c .mini i:nth-child(3) { background: #4CAB3F; }
+.brow .c .mini i:nth-child(4) { border-radius: 8px 8px 2px 2px; height: 7px; background: #F2BE6E; }
+.brow.me { background: linear-gradient(180deg, #FFE28A, #F4B942); }
+.brow.left { opacity: .5; }
+.bsum { padding: 4px 6px 0; font: 700 18px/1 var(--fn); opacity: .6; }
+.bfoot { display: flex; align-items: center; gap: 0; height: 96px; margin-top: 18px; border: 4px solid var(--b-ink); border-radius: 24px; background: var(--b-paper); box-shadow: 0 5px 0 var(--b-ink); overflow: hidden; }
+.bfoot .who { align-self: stretch; display: grid; place-items: center; width: 200px; border-right: 4px solid var(--b-ink); background: linear-gradient(180deg, #FFD36A, #F4B942); font: 700 40px/1 var(--ff); }
+.bfoot .st { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.bfoot .st em { font: 800 14px/1 var(--fn); font-style: normal; letter-spacing: .2em; opacity: .7; }
+.bfoot .st b { display: inline-flex; align-items: center; gap: 8px; font: 700 42px/1 var(--ff); }
+.bfoot .st b .bface { font-size: 34px; }
+
+/* ---- durumlar ---- */
+.b .vgrid .g h4 { color: rgba(74, 36, 16, .7); }
+.b .vgrid { color: var(--b-ink); }

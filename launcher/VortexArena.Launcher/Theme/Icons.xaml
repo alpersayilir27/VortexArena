@@ -1,0 +1,65 @@
+<!--
+  Icon geometries, 24x24 grid, drawn as STROKES (Path.Stroke + StrokeThickness).
+
+  ⚠️ Deliberately geometry, not a font glyph: "Segoe Fluent Icons" is missing on older Windows and
+  the MDL2 fallback does not contain every code point we would need — a missing glyph renders as a
+  box and the operator sees a broken sidebar.
+-->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- Product mark: a V with a swirl. -->
+    <Geometry x:Key="IconLogo">M4,5 L12,21 L20,5 M6.5,9.5 C9.5,12.5 14.5,12.5 17.5,9.5</Geometry>
+
+    <!-- Server: two racks with activity lamps. -->
+    <Geometry x:Key="IconServer">M4,4 H20 V9.5 H4 Z M4,14.5 H20 V20 H4 Z M7,6.75 H9 M7,17.25 H9</Geometry>
+
+    <!-- Admin: desktop monitor on a stand. -->
+    <Geometry x:Key="IconAdmin">M3,5 H21 V16 H3 Z M9,20 H15 M12,16 V20</Geometry>
+
+    <!-- Versions: download arrow onto a tray. -->
+    <Geometry x:Key="IconVersions">M12,4 V15 M8,11 L12,15.2 L16,11 M5,19 H19</Geometry>
+
+    <!-- Recording: ring plus inner ring. -->
+    <GeometryGroup x:Key="IconRecording">
+        <EllipseGeometry Center="12,12" RadiusX="8" RadiusY="8" />
+        <EllipseGeometry Center="12,12" RadiusX="3.2" RadiusY="3.2" />
+    </GeometryGroup>
+
+    <!-- Cloud with a slash: we hold a copy the update server does not confirm. -->
+    <Geometry x:Key="IconCloudOff">M6.5,17 H16.5 C18.4,17 20,15.4 20,13.5 C20,11.6 18.4,10 16.5,10 C16.2,7.2 13.9,5 11,5 C8.7,5 6.8,6.4 5.9,8.4 C4.2,8.9 3,10.5 3,12.4 C3,14.9 5,17 6.5,17 Z M4,4 L20,20</Geometry>
+
+    <!-- Downloaded: arrow into a tray. -->
+    <Geometry x:Key="IconDownloaded">M12,4 V13 M8.5,9.5 L12,13.2 L15.5,9.5 M5,17 H19 V20 H5 Z</Geometry>
+
+    <!-- Headset: goggles. -->
+    <Geometry x:Key="IconHeadset">M3,9 H21 V15 H15 L12,13.2 L9,15 H3 Z</Geometry>
+
+    <!-- Folder. -->
+    <Geometry x:Key="IconFolder">M3,6 H10 L12,8.5 H21 V19 H3 Z</Geometry>
+
+    <!-- Refresh: circular arrow. -->
+    <Geometry x:Key="IconRefresh">M20,12 A8,8 0 1 1 14.5,4.5 M20,4 V10 H14.5</Geometry>
+
+    <!-- Play / watch. -->
+    <Geometry x:Key="IconPlay">M8,5 L18,12 L8,19 Z</Geometry>
+
+    <!-- Window icon: the product mark in accent on a dark rounded plate. -->
+    <DrawingImage x:Key="AppIcon">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="#FF121218">
+                    <GeometryDrawing.Geometry>
+                        <RectangleGeometry Rect="0,0,24,24" RadiusX="5" RadiusY="5" />
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Geometry="{StaticResource IconLogo}">
+                    <GeometryDrawing.Pen>
+                        <Pen Brush="#FFBEC2FF" Thickness="2" StartLineCap="Round" EndLineCap="Round" />
+                    </GeometryDrawing.Pen>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+</ResourceDictionary>

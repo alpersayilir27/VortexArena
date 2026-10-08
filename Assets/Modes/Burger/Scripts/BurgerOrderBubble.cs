@@ -1,34 +1,31 @@
-using System;
-using System.Collections.Generic;
 using System.Text;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+using VortexArena.Core.UI;
 
 namespace VortexArena.Modes.Burger
 {
     /// <summary>The order bubble above a customer: turns the wire recipe
-    /// (<c>bun_bottom,patty,cheese,bun_top</c>) into readable lines, draws the same order as coloured
-    /// slices and faces the player.
-    /// <para>⚠️ The slices are not decoration: the audience may not read yet, so the picture is the
-    /// order and the text is the caption.</para></summary>
+    /// (<c>bun_bottom,patty,cheese,bun_top</c>) into a stacked burger picture plus a readable list,
+    /// and faces the player.
+    /// <para>⚠️ The stack is not decoration: the audience may not read yet, so the picture is the
+    /// order and the list is the caption.</para></summary>
     [DisallowMultipleComponent]
     public sealed class BurgerOrderBubble : MonoBehaviour
     {
-        /// <summary>Recipe kind → slice colour. ⚠️ Kept in sync with the ingredient prefabs' own
-        /// materials by eye; a slice in the wrong colour teaches the child the wrong burger.</summary>
-        [Serializable]
-        private struct KindColor
-        {
-            public string kind;
-            public Color color;
-        }
+        /// <summary>How many ingredients the generated bubble can draw. A longer recipe is clipped —
+        /// the server's recipes are shorter than this by design (§10.5).</summary>
+        public const int Capacity = 7;
 
-        [Tooltip("Sipariş satırlarının yazıldığı metin.")]
+        [Tooltip("Sipariş satırlarının yazıldığı metin (yalnız satır yuvaları bağlı değilse).")]
         [SerializeField] private TMP_Text text;
 
-        [Tooltip("Geçici bildirim metni (red sebebi). Boşsa sipariş metninin yerine yazılır.")]
+        [Tooltip("Geçici bildirim metni (red sebebi).")]
         [SerializeField] private TMP_Text noticeText;
+
+        [Tooltip("Bildirim etiketinin kökü. Boşsa yalnız metin gösterilir.")]
+        [SerializeField] private GameObject noticeRoot;
 
         [Tooltip("Balonun döneceği baş. Boşsa ana kamera kullanılır.")]
         [SerializeField] private Transform head;
@@ -36,33 +33,50 @@ namespace VortexArena.Modes.Burger
         [Tooltip("Balonun kökü (gösterilip gizlenen obje). Boşsa bu obje kullanılır.")]
         [SerializeField] private GameObject root;
 
-        [Tooltip("Renkli dilimlerin dizildiği kök. Boşsa metnin yanında çalışma anında üretilir.")]
-        [SerializeField] private RectTransform sliceRoot;
+        [Tooltip("Soldaki burger yığınının dilimleri (alttan üste).")]
+        [SerializeField] private UiShape[] slabs;
 
-        [Tooltip("Bir dilimin boyutu (RectTransform birimi).")]
-        [SerializeField] private Vector2 sliceSize = new Vector2(0.12f, 0.025f);
+        [Tooltip("Dilimlerin çizgi katmanı (yalnız pastırma).")]
+        [SerializeField] private UiStripes[] slabStripes;
 
-        [Tooltip("Malzeme türlerinin dilim renkleri. Tabloda olmayan tür gri çizilir.")]
-        [SerializeField] private KindColor[] sliceColors = DefaultSliceColors();
+        [Tooltip("Dilimlerin susam katmanı (yalnız üst ekmek).")]
+        [SerializeField] private GameObject[] slabSesame;
 
-        [Tooltip("Sabır göstergesi (balon arka planı). Boşsa sipariş metninin rengi kullanılır.")]
-        [SerializeField] private Graphic patienceGraphic;
+        [Tooltip("Dilimler arası boşluk.")]
+        [SerializeField] private float slabGap = 2f;
 
-        [Tooltip("Sabır doluyken renk.")]
-        [SerializeField] private Color patienceFull = new Color(0.30f, 0.75f, 0.30f);
+        [Tooltip("Sağdaki liste satırları (alttan üste).")]
+        [SerializeField] private RectTransform[] listRows;
 
-        [Tooltip("Sabır biterken renk.")]
-        [SerializeField] private Color patienceEmpty = new Color(0.85f, 0.20f, 0.20f);
+        [Tooltip("Satır başındaki renk noktaları.")]
+        [SerializeField] private UiShape[] listDots;
 
-        private static readonly Color UnknownSliceColor = new Color(0.6f, 0.6f, 0.6f);
+        [Tooltip("Satır metinleri.")]
+        [SerializeField] private TMP_Text[] listLabels;
+
+        [Tooltip("Satır yüksekliği + boşluk.")]
+        [SerializeField] private float rowPitch = 28f;
+
+        [Tooltip("Sabır çubuğunun dolan parçası.")]
+        [SerializeField] private RectTransform patienceFill;
+
+        [Tooltip("Sabır çubuğunun rengini taşıyan şekil.")]
+        [SerializeField] private UiShape patienceShape;
+
+        [Tooltip("Sabır çubuğu tam dolu genişliği.")]
+        [SerializeField] private float patienceWidth = 104f;
+
+        [Tooltip("Müşterinin yüzü.")]
+        [SerializeField] private Image moodFace;
+
+        [SerializeField] private Sprite moodHappy;
+        [SerializeField] private Sprite moodMeh;
+        [SerializeField] private Sprite moodSad;
 
         private readonly StringBuilder _builder = new StringBuilder(64);
 
-        /// <summary>Slice pool: rebuilt on every order, so the images are reused rather than destroyed —
-        /// a customer arrives every few seconds and the churn would be per-order garbage.</summary>
-        private readonly List<Image> _slices = new List<Image>();
-
-        /// <summary>Last recipe shown — the notice borrows the text and this is what comes back.</summary>
+        /// <summary>Last recipe shown — the legacy single-text path borrows the label and this is what
+        /// comes back when the notice expires.</summary>
         private string _recipe = "";
 
         /// <summary>Unscaled deadline of the running notice; <c>0</c> = no notice.</summary>
@@ -75,33 +89,23 @@ namespace VortexArena.Modes.Burger
                 root = gameObject;
             }
 
-            if (noticeText != null)
-            {
-                noticeText.gameObject.SetActive(false);
-            }
-
-            if (sliceRoot == null)
-            {
-                sliceRoot = BuildSliceRoot();
-            }
+            HideNotice();
         }
 
         public void Show(string recipe)
         {
             _recipe = recipe;
             _noticeUntil = 0f;
+            HideNotice();
 
-            if (noticeText != null)
-            {
-                noticeText.gameObject.SetActive(false);
-            }
+            int used = BuildRows(recipe);
+            BuildStack(recipe);
 
-            if (text != null)
+            // Legacy fallback: an un-regenerated prefab has no row slots, only the one text block.
+            if (used < 0 && text != null)
             {
                 text.text = Format(recipe);
             }
-
-            BuildSlices(recipe);
 
             if (root != null)
             {
@@ -119,8 +123,8 @@ namespace VortexArena.Modes.Burger
             }
         }
 
-        /// <summary>Temporary line in this customer's bubble (why a serve was refused). Ignored while the
-        /// bubble is hidden — a customer who is not waiting has nothing to say.</summary>
+        /// <summary>Temporary sticker on this customer's bubble (why a serve was refused). Ignored while
+        /// the bubble is hidden — a customer who is not waiting has nothing to say.</summary>
         public void ShowNotice(string notice, float seconds)
         {
             if (root == null || !root.activeSelf || string.IsNullOrEmpty(notice))
@@ -133,6 +137,16 @@ namespace VortexArena.Modes.Burger
             if (noticeText != null)
             {
                 noticeText.text = notice;
+            }
+
+            if (noticeRoot != null)
+            {
+                noticeRoot.SetActive(true);
+                return;
+            }
+
+            if (noticeText != null)
+            {
                 noticeText.gameObject.SetActive(true);
                 return;
             }
@@ -148,17 +162,39 @@ namespace VortexArena.Modes.Burger
         /// (<see cref="BurgerKinds.CustomerPatienceSeconds"/>).</para></summary>
         public void SetPatience(float remaining01)
         {
-            Color color = Color.Lerp(patienceEmpty, patienceFull, Mathf.Clamp01(remaining01));
+            float p = Mathf.Clamp01(remaining01);
 
-            if (patienceGraphic != null)
+            if (patienceFill != null)
             {
-                patienceGraphic.color = color;
-                return;
+                Vector2 size = patienceFill.sizeDelta;
+                size.x = patienceWidth * p;
+                patienceFill.sizeDelta = size;
             }
 
-            if (text != null)
+            if (patienceShape != null)
             {
-                text.color = color;
+                patienceShape.Fill(p >= Lokanta.PatienceWarn
+                    ? Lokanta.Green
+                    : p >= Lokanta.PatienceBad ? Lokanta.Must : Lokanta.Red);
+            }
+
+            if (moodFace != null)
+            {
+                Sprite face = p >= Lokanta.PatienceWarn
+                    ? moodHappy
+                    : p >= Lokanta.PatienceBad ? moodMeh : moodSad;
+                if (face != null)
+                {
+                    moodFace.sprite = face;
+                }
+            }
+
+            // Legacy fallback: no bar and no face, so the order text itself carries the warning.
+            if (patienceFill == null && patienceShape == null && moodFace == null && text != null)
+            {
+                text.color = p >= Lokanta.PatienceWarn
+                    ? Lokanta.Ink
+                    : p >= Lokanta.PatienceBad ? Lokanta.Must2 : Lokanta.Red2;
             }
         }
 
@@ -176,16 +212,24 @@ namespace VortexArena.Modes.Burger
             }
 
             _noticeUntil = 0f;
+            HideNotice();
 
-            if (noticeText != null)
-            {
-                noticeText.gameObject.SetActive(false);
-                return;
-            }
-
-            if (text != null)
+            if (noticeRoot == null && noticeText == null && text != null)
             {
                 text.text = Format(_recipe);
+            }
+        }
+
+        private void HideNotice()
+        {
+            if (noticeRoot != null)
+            {
+                noticeRoot.SetActive(false);
+            }
+
+            if (noticeText != null && noticeRoot == null)
+            {
+                noticeText.gameObject.SetActive(false);
             }
         }
 
@@ -207,135 +251,238 @@ namespace VortexArena.Modes.Burger
             transform.rotation = Quaternion.LookRotation(transform.position - target.position, Vector3.up);
         }
 
-        // ------------------------------------------------------------------- slices
+        // -------------------------------------------------------------------- rows
 
-        /// <summary>Slices are drawn BOTTOM TO TOP, the same way the recipe reads and the same way the
-        /// burger is stacked on the board.</summary>
-        private void BuildSlices(string recipe)
+        /// <summary>Fills the list bottom→top, the same way the recipe reads and the burger is stacked.
+        /// Returns the used row count, or <c>-1</c> when no row slots are bound.</summary>
+        private int BuildRows(string recipe)
         {
-            if (sliceRoot == null)
+            if (listRows == null || listRows.Length == 0)
             {
-                return;
+                return -1;
             }
 
             int used = 0;
             if (!string.IsNullOrEmpty(recipe))
             {
                 string[] parts = recipe.Split(',');
-                for (int i = 0; i < parts.Length; i++)
+                for (int i = 0; i < parts.Length && used < listRows.Length; i++)
                 {
-                    string part = parts[i].Trim();
-                    if (part.Length == 0)
+                    string kind = parts[i].Trim();
+                    if (kind.Length == 0)
                     {
                         continue;
                     }
 
-                    Image slice = TakeSlice(used);
-                    slice.color = ResolveSliceColor(part);
+                    SlabStyle style = Style(kind);
+                    if (listDots != null && used < listDots.Length && listDots[used] != null)
+                    {
+                        listDots[used].Fill(style.A, style.B, UiGradientMode.Vertical);
+                    }
+
+                    if (listLabels != null && used < listLabels.Length && listLabels[used] != null)
+                    {
+                        listLabels[used].text = BurgerKinds.DisplayName(kind);
+                    }
+
                     used++;
                 }
             }
 
-            for (int i = used; i < _slices.Count; i++)
+            // Centred block: the mockup's list sits in the middle of the body column.
+            float total = used > 0 ? used * rowPitch - (rowPitch - RowHeight) : 0f;
+            for (int i = 0; i < listRows.Length; i++)
             {
-                if (_slices[i] != null)
+                RectTransform row = listRows[i];
+                if (row == null)
                 {
-                    _slices[i].gameObject.SetActive(false);
+                    continue;
+                }
+
+                bool on = i < used;
+                if (row.gameObject.activeSelf != on)
+                {
+                    row.gameObject.SetActive(on);
+                }
+
+                if (on)
+                {
+                    Vector2 pos = row.anchoredPosition;
+                    pos.y = -total * 0.5f + i * rowPitch + RowHeight * 0.5f;
+                    row.anchoredPosition = pos;
                 }
             }
+
+            return used;
         }
 
-        private Image TakeSlice(int index)
+        // ------------------------------------------------------------------- stack
+
+        private void BuildStack(string recipe)
         {
-            while (_slices.Count <= index)
+            if (slabs == null || slabs.Length == 0)
             {
-                _slices.Add(CreateSlice());
+                return;
             }
 
-            Image slice = _slices[index];
-            if (slice == null)
+            // Two passes: the stack is centred vertically, so the total height has to be known first.
+            int used = 0;
+            float total = 0f;
+            if (!string.IsNullOrEmpty(recipe))
             {
-                slice = CreateSlice();
-                _slices[index] = slice;
-            }
-
-            slice.transform.SetSiblingIndex(index);
-            slice.gameObject.SetActive(true);
-            return slice;
-        }
-
-        private Image CreateSlice()
-        {
-            var go = new GameObject("Dilim", typeof(RectTransform), typeof(Image), typeof(LayoutElement));
-            go.transform.SetParent(sliceRoot, false);
-
-            var element = go.GetComponent<LayoutElement>();
-            element.preferredWidth = sliceSize.x;
-            element.preferredHeight = sliceSize.y;
-
-            return go.GetComponent<Image>();
-        }
-
-        /// <summary>Runtime fallback root next to the text, so an unbound bubble still draws slices.</summary>
-        private RectTransform BuildSliceRoot()
-        {
-            Transform parent = text != null ? text.transform.parent : transform;
-
-            var go = new GameObject("Dilimler", typeof(RectTransform), typeof(VerticalLayoutGroup));
-            var rect = go.GetComponent<RectTransform>();
-            rect.SetParent(parent, false);
-            rect.sizeDelta = new Vector2(sliceSize.x, sliceSize.y * 6f);
-            rect.anchoredPosition = new Vector2(-sliceSize.x, 0f);
-
-            var layout = go.GetComponent<VerticalLayoutGroup>();
-            layout.childAlignment = TextAnchor.LowerCenter;
-            layout.childControlWidth = true;
-            layout.childControlHeight = true;
-            layout.childForceExpandWidth = false;
-            layout.childForceExpandHeight = false;
-            layout.spacing = sliceSize.y * 0.15f;
-
-            // First child at the BOTTOM: the recipe reads bottom to top.
-            layout.reverseArrangement = true;
-
-            return rect;
-        }
-
-        private Color ResolveSliceColor(string kind)
-        {
-            if (sliceColors != null)
-            {
-                for (int i = 0; i < sliceColors.Length; i++)
+                string[] parts = recipe.Split(',');
+                for (int i = 0; i < parts.Length && used < slabs.Length; i++)
                 {
-                    if (string.Equals(sliceColors[i].kind, kind, StringComparison.Ordinal))
+                    string kind = parts[i].Trim();
+                    if (kind.Length == 0)
                     {
-                        return sliceColors[i].color;
+                        continue;
                     }
+
+                    SlabStyle style = Style(kind);
+                    Apply(used, style);
+                    total += style.Height;
+                    used++;
                 }
             }
 
-            return UnknownSliceColor;
-        }
-
-        private static KindColor[] DefaultSliceColors()
-        {
-            return new[]
+            if (used > 1)
             {
-                new KindColor { kind = BurgerKinds.BunBottom, color = new Color(0.80f, 0.60f, 0.32f) },
-                new KindColor { kind = BurgerKinds.BunTop, color = new Color(0.86f, 0.66f, 0.36f) },
-                new KindColor { kind = BurgerKinds.Patty, color = new Color(0.42f, 0.24f, 0.12f) },
-                new KindColor { kind = BurgerKinds.Cheese, color = new Color(0.98f, 0.80f, 0.25f) },
-                new KindColor { kind = BurgerKinds.Bacon, color = new Color(0.70f, 0.30f, 0.25f) },
-                new KindColor { kind = BurgerKinds.Lettuce, color = new Color(0.42f, 0.72f, 0.32f) },
-                new KindColor { kind = BurgerKinds.Onion, color = new Color(0.90f, 0.85f, 0.92f) },
-                new KindColor { kind = BurgerKinds.Pickle, color = new Color(0.30f, 0.50f, 0.20f) },
-                new KindColor { kind = BurgerKinds.Tomato, color = new Color(0.85f, 0.22f, 0.20f) },
-                new KindColor { kind = BurgerKinds.Sauce, color = new Color(0.92f, 0.52f, 0.18f) }
-            };
+                total += slabGap * (used - 1);
+            }
+
+            float y = -total * 0.5f;
+            for (int i = 0; i < slabs.Length; i++)
+            {
+                UiShape slab = slabs[i];
+                if (slab == null)
+                {
+                    continue;
+                }
+
+                bool on = i < used;
+                if (slab.gameObject.activeSelf != on)
+                {
+                    slab.gameObject.SetActive(on);
+                }
+
+                if (!on)
+                {
+                    continue;
+                }
+
+                float h = slab.rectTransform.sizeDelta.y;
+                slab.rectTransform.anchoredPosition = new Vector2(0f, y + h * 0.5f);
+                y += h + slabGap;
+            }
         }
 
-        // ------------------------------------------------------------------- text
+        private void Apply(int index, SlabStyle style)
+        {
+            UiShape slab = slabs[index];
+            if (slab == null)
+            {
+                return;
+            }
 
+            slab.rectTransform.sizeDelta = new Vector2(style.Width, style.Height);
+            slab.Radius(style.RadiusTop, style.RadiusTop, style.RadiusBottom, style.RadiusBottom);
+            slab.Fill(style.A, style.B, UiGradientMode.Vertical);
+
+            if (slabStripes != null && index < slabStripes.Length && slabStripes[index] != null)
+            {
+                UiStripes stripes = slabStripes[index];
+                bool on = style.Extra == SlabExtra.Stripes;
+                if (stripes.gameObject.activeSelf != on)
+                {
+                    stripes.gameObject.SetActive(on);
+                }
+            }
+
+            if (slabSesame != null && index < slabSesame.Length && slabSesame[index] != null)
+            {
+                bool on = style.Extra == SlabExtra.Sesame;
+                if (slabSesame[index].activeSelf != on)
+                {
+                    slabSesame[index].SetActive(on);
+                }
+            }
+        }
+
+        // ------------------------------------------------------------- slab styles
+
+        private const float RowHeight = 22f;
+
+        private enum SlabExtra
+        {
+            None,
+            Sesame,
+            Stripes
+        }
+
+        /// <summary>One ingredient's slab geometry + gradient.
+        /// <para>⚠️ Sizes are the mockup's (<c>asci.css</c> <c>.bing.*</c>) and the colours come from
+        /// <see cref="Lokanta"/>: a slab measured by eye at a call site drifts from the picture the
+        /// child learns the burger from.</para></summary>
+        private readonly struct SlabStyle
+        {
+            public readonly float Width;
+            public readonly float Height;
+            public readonly float RadiusTop;
+            public readonly float RadiusBottom;
+            public readonly Color A;
+            public readonly Color B;
+            public readonly SlabExtra Extra;
+
+            public SlabStyle(float width, float height, float radiusTop, float radiusBottom,
+                Color a, Color b, SlabExtra extra = SlabExtra.None)
+            {
+                Width = width;
+                Height = height;
+                RadiusTop = radiusTop;
+                RadiusBottom = radiusBottom;
+                A = a;
+                B = b;
+                Extra = extra;
+            }
+        }
+
+        private static SlabStyle Style(string kind)
+        {
+            switch (kind)
+            {
+                case BurgerKinds.BunBottom:
+                    return new SlabStyle(140f, 26f, 5f, 15f, Lokanta.BunBottomA, Lokanta.BunBottomB);
+                case BurgerKinds.BunTop:
+                    return new SlabStyle(140f, 36f, 44f, 7f, Lokanta.BunTopA, Lokanta.BunTopB,
+                        SlabExtra.Sesame);
+                case BurgerKinds.Patty:
+                    return new SlabStyle(150f, 20f, 5f, 5f, Lokanta.PattyA, Lokanta.PattyB);
+                case BurgerKinds.Cheese:
+                    return new SlabStyle(156f, 11f, 5f, 5f, Lokanta.CheeseA, Lokanta.CheeseB);
+                case BurgerKinds.Lettuce:
+                    return new SlabStyle(158f, 14f, 9f, 9f, Lokanta.LettuceA, Lokanta.LettuceB);
+                case BurgerKinds.Tomato:
+                    return new SlabStyle(140f, 12f, 5f, 5f, Lokanta.TomatoA, Lokanta.TomatoB);
+                case BurgerKinds.Onion:
+                    return new SlabStyle(140f, 10f, 5f, 5f, Lokanta.OnionA, Lokanta.OnionB);
+                case BurgerKinds.Pickle:
+                    return new SlabStyle(118f, 10f, 5f, 5f, Lokanta.PickleA, Lokanta.PickleB);
+                case BurgerKinds.Bacon:
+                    return new SlabStyle(152f, 12f, 5f, 5f, Lokanta.BaconStripe, Lokanta.BaconStripe,
+                        SlabExtra.Stripes);
+                case BurgerKinds.Sauce:
+                    return new SlabStyle(130f, 8f, 5f, 5f, Lokanta.SauceA, Lokanta.SauceB);
+                default:
+                    // Unknown kind still gets a slab: the vocabulary can grow server-side and a missing
+                    // row would read as a shorter order.
+                    return new SlabStyle(140f, 14f, 5f, 5f, Lokanta.Cream2, Lokanta.Must2);
+            }
+        }
+
+        // -------------------------------------------------------------------- text
+
+        /// <summary>Legacy single-block caption, used only when no row slots are bound.</summary>
         private string Format(string recipe)
         {
             _builder.Clear();

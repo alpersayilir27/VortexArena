@@ -1,86 +1,157 @@
 # VortexArena.Launcher — operatör launcher'ı
 
-**.NET 10 / WPF** Windows masaüstü uygulaması. İşletmede operatörün açtığı tek program budur.
-İki iş yapar: **sunucuyu doğru mekanla** ve **yönetim oyununu doğru adresle** başlatmak.
+**.NET 10 / WPF** Windows masaüstü uygulaması, **tek exe**. İşletmede operatörün açtığı tek program
+budur: maç sunucusunu çalıştırır, yönetim uygulamasını başlatır, gözlüklere oyun sürümü kurar ve maç
+kaydını açıp kapatır.
+
+## Yerleşim — kök, exe'nin yanıdır
+
+Launcher ayarlardan yol sormaz; her şeyi **kök klasöre** göre bulur:
 
 ```
-launcher'da mekan seç ──►  VortexArena.Server.App.exe --venue <mekan>
-                                │
-                                └─ o oturumda YALNIZ o işletmenin haritaları oynatılabilir;
-                                   açılış sahnesi o mekanın lobisidir
-
-launcher'da IP yaz    ──►  VortexArena.exe --server-ip <ip> --server-port <port>
-                                │
-                                └─ AppBoot argümanı okur → AppSession → admin gözlemci
-                                   doğrudan bağlanır (IP SORULMAZ)
+<kök>\VortexArena.Launcher.exe
+<kök>\server\VortexArena.Server.App.exe   (+ config\, logs\)
+<kök>\admin\VortexArena.exe
+<kök>\game_versions\game_v<N>.apk
+<kök>\replays\*.vxr
 ```
 
-## Ne yapar / ne yapmaz
+Kök çözüm sırası:
 
-| Yapar | Yapmaz |
+1. `--root <klasör>` argümanı,
+2. exe'nin klasöründe `server\` ya da `admin\` varsa orası,
+3. geliştirme kolaylığı: exe'den yukarı en çok 6 seviye çıkıp `deploy\` altında bu yerleşimi bulan
+   ilk klasör,
+4. exe'nin klasörü.
+
+Eksik klasör sayfada net bir boş durum mesajıyla görünür (`server klasörü bulunamadı: <yol>`).
+
+> **Exe yolları ayar değildir.** Operatörün elle gösterdiği bir sunucu exe'si, başka bir işletmenin
+> `config\maps.json`'unu taşıyan bir dağıtım olabilirdi; kök tek kaynaktır.
+
+## Sayfalar
+
+| Sayfa | Ne yapar |
 |---|---|
-| Sunucuyu **mekan seçilmeden başlatmaz** (`--venue`) | Sunucuyu yönetmez/kapatmaz — kendi penceresinde Ctrl+C |
-| Mekan listesini sunucunun `config\maps.json`'undan okur | İkinci bir mekan kataloğu tutmaz |
-| Admin exe yolunu, IP/port'u ve mekanı kalıcı saklar | Maç yönetmez (mod/harita/start oyunun panelinde) |
-| Oyunu `--server-ip`/`--server-port` ile başlatır | Başlattığı süreçlerle ağ üzerinden konuşmaz (protokole hiç girmez) |
-| Başlatılan süreçleri izler (PID, çıkış kodu); oyunu durdurabilir | APK dağıtmaz |
+| **Sunucu** | Mekan seçimi, başlat/durdur, canlı durum (faz, mod, sahne, oyuncu/yönetim sayısı, çalışma süresi), günlük takibi |
+| **Yönetim** | Yönetim uygulamasını `--server-ip`/`--server-port` ile başlatır, durdurur |
+| **Versiyonlar** | Güncelleme sunucusundaki APK listesi, indirme, `adb` ile gözlüğe kurma, "Yüklü" rozeti |
+| **Kayıt** | Maç kaydını açıp kapatır; `.vxr` dosyalarını listeler, yönetim uygulamasında oynatır |
 
-> **Sunucuyu başlatmak isteğe bağlıdır.** Sunucu exe alanı boş bırakılırsa launcher yalnız yönetim
-> oyununu başlatır ve sunucu eskiden olduğu gibi elle çalıştırılır. Launcher'dan başlatılması
-> sadece `--venue`'nun **her seferinde** geçmesini garantiler.
+Kenar çubuğundaki işaretler: sunucu/yönetim çalışıyorsa yeşil play üçgeni, başlıyor/kapanıyorsa sarı
+nokta, kayıt dosyası açıkken yanıp sönen kırmızı nokta, kayıt açık ama lobide beklerken içi boş
+kırmızı halka, yetkili gözlük bağlıyken gözlük işareti.
 
 ## Neden mekan zorunlu
 
 Sunucu mekan verilmeden açılırsa sırayla şuna bakar: `--venue` → `server.json → venue` → tek mekan
 varsa o → konsolda sor. **Konsol etkileşimli değilse** (betik, servis, launcher) soru sorulamaz ve
 **alfabetik ilk mekan** sessizce açılır. Operatör bunu fark etmez; yanlış işletmenin arenalarını
-yönetmeye çalışır. Launcher bu yolu hiç bırakmaz: mekan seçilmeden **Sunucuyu Başlat** çalışmaz.
+yönetmeye çalışır. Launcher bu yolu hiç bırakmaz: mekan seçilmeden sunucu başlatılmaz.
 
-Mekan listesi launcher'a gömülü değildir — sunucu exe'sinin yanındaki `config\maps.json`'dan
-okunur (exe klasöründen başlayıp yukarı 6 seviye aranır). Yeni işletme eklendiğinde Unity'de
-`Tools > VortexArena > Server > Export Server Config` çalıştırmak yeter, launcher'da yapılacak iş yoktur.
-Lobisi olmayan bir mekan listede **kırmızı** görünür ve başlatılmaz: sunucu o mekanda açık sahne
-çözemeyip çıkış kodu 2 ile kapanırdı.
+Mekan listesi launcher'a gömülü değildir — `server\config\maps.json`'dan okunur (sunucu exe
+klasöründen başlayıp yukarı 6 seviye aranır). Yeni işletme eklendiğinde Unity'de
+`Tools > VortexArena > Server > Export Server Config` çalıştırmak yeter. Lobisi olmayan mekan
+listede uyarıyla görünür: sunucu o mekanda açık sahne çözemeyip **çıkış kodu 2** ile kapanır.
+
+## Sunucu kontrolü HTTP iledir, süreç takibiyle değil
+
+Launcher sunucuyla aynı PC'de durur ve kontrol portundaki loopback uçlarını kullanır:
+`GET /launcher/status`, `POST /launcher/recording`, `POST /launcher/shutdown`. Uçların sözleşmesi ve
+`LauncherStatus` alanları **tek doğruluk kaynağında**: `Docs/ArenaNet-Protokol.md`, "Launcher
+kontrol uçları" bölümü. DTO'lar paylaşılan `Assets/_Shared/Net/Protocol/LauncherApi.cs`'ten
+link'lenerek derlenir — launcher ikinci bir kopya tutmaz.
+
+- **"Çalışıyor" kararı `status` cevabıdır.** Launcher'dan önce ya da başka bir launcher örneğinden
+  başlatılmış sunucu da böylece görünür ve durdurulabilir.
+- Uç `404` dönerse sunucu eski sürümdür: sayfa "uyumsuz (eski sürüm)" der ve durdurmayı süreç
+  üzerinden yapar.
+- Durdurma önce temiz kapanıştır; 10 saniyede inmezse süreç ağacı öldürülür ve bu operatöre söylenir
+  (açık kayıt dosyası yarım kalabilir).
+- Sunucu başlatılırken **stdout yönlendirilmez**: launcher kapanınca kırık pipe sunucuyu düşürürdü.
+  Operatörün penceresi günlük dosyasıdır (`server\logs\server-*.log`, artımlı okunur).
+
+## Versiyonlar: paket adı sürüm başınadır
+
+APK adı `game_v<N>.apk`, Android paket adı `com.vortex.arenav<N>` (kaynak: Unity'deki
+`PlayerBuildTool`). Sürümler gözlükte **yan yana** yaşar; bu yüzden kurulum başka hiçbir sürümü
+silmez. Kurulum `adb install -r -g` ile yapılır.
+
+Tek istisna `INSTALL_FAILED_UPDATE_INCOMPATIBLE` (aynı paket farklı imzayla kurulmuş): launcher
+onay ister ve **yalnız o sürümün paketini** kaldırıp yeniden kurar.
+
+Liste satırları uzak ∪ yerel ∪ gözlükte kurulu sürümlerin birleşimidir. Yerelde olup güncelleme
+sunucusunda görünmeyen (ya da liste o an alınamayan) sürüm **üstü çizili bulut** ikonuyla işaretlenir.
+Liste alınamazsa sayfanın üstünde uyarı bandı çıkar ve 30 saniyede bir yeniden denenir.
+
+## adb gömülüdür
+
+`platform-tools` dosyaları (`adb.exe`, `AdbWinApi.dll`, `AdbWinUsbApi.dll`,
+`libwinpthread-1.dll`, `NOTICE.txt`, `source.properties`) exe'nin içine **EmbeddedResource** olarak
+girer ve çalışma anında
+`%LOCALAPPDATA%\VortexArena\launcher\platform-tools\<içerik özeti>\` altına çıkarılır. Klasör adının
+içerik özeti olmasının sebebi: çalışan bir adb sunucusu `adb.exe`'yi kilitler, yeni sürüm aynı
+dosyanın üstüne yazamaz.
+
+Android platform-tools **Apache License 2.0** altındadır; `NOTICE.txt` çıkarılan klasöre birlikte
+yazılır. Launcher kapanırken `adb kill-server` **yapılmaz** — makinedeki başka araçlar aynı sunucuyu
+kullanıyor olabilir.
+
+## Ayarlar
+
+`%APPDATA%\VortexArena\launcher\settings.json` — kullanıcı profilinde, exe'nin yanında DEĞİL: exe
+yeniden üretildiğinde oradaki dosya kaybolurdu. Bilinmeyen anahtarlar yok sayılır (eski dosyalar
+sorun çıkarmaz).
+
+| Anahtar | Anlam |
+|---|---|
+| `venue` | Sunucuya `--venue` olarak geçen mekan |
+| `controlPortOverride` | Kontrol portu; `0` = `server\config\server.json → controlPort`, o da yoksa `47821` |
+| `serverIp` | Yönetim uygulamasının bağlandığı adres (varsayılan `127.0.0.1`) |
+| `versionsUrl` | Güncelleme sunucusunun sürüm listesi ucu |
+| `downloadBaseUrl` | APK indirme kök adresi |
+| `preferredDeviceSerial` | Son seçilen gözlük; tekrar takıldığında yine seçilir |
+
+`versionsUrl` / `downloadBaseUrl` ileride lisans backend'iyle değişecek; bu yüzden liste kaynağı
+`IVersionSource` arayüzünün arkasındadır.
 
 ## Dosyalar
 
-| Dosya | Sorumluluk |
+| Yer | Sorumluluk |
 |---|---|
-| `VortexArena.Launcher/App.xaml(.cs)` | Uygulama kabuğu + tema birleştirme + yakalanmamış hata kutusu |
-| `VortexArena.Launcher/MainWindow.xaml(.cs)` | Tek ekran: 1 · Sunucu / 2 · Bağlantı / 3 · Yönetim oyunu |
-| `VortexArena.Launcher/LauncherConfig.cs` | Kalıcı ayarlar + doğrulama + `GameArguments`/`ServerArguments` |
-| `VortexArena.Launcher/VenueCatalog.cs` | `maps.json` → mekan listesi (harita sayısı, lobi var mı) |
-| `VortexArena.Launcher/Theme/Dark.xaml` | Karanlık tema paleti + kontrol şablonları |
-| `VortexArena.Launcher.Tests/` | Argüman sözleşmesi, doğrulama, `maps.json` ayrıştırma testleri |
+| `App.xaml(.cs)` | Uygulama kabuğu, tema birleştirme, tek örnek kilidi, yakalanmamış hata kutusu |
+| `MainWindow.xaml(.cs)` | Kenar çubuğu + sayfa barındırma, koyu başlık çubuğu, çıkış onayı |
+| `Views/` | Sayfa görünümleri (`ServerPage`, `AdminPage`, `VersionsPage`, `RecordingPage`) + `ExitDialog` |
+| `ViewModels/` | `MainViewModel` + sayfa başına bir view model + satır view model'leri |
+| `Services/` | `LauncherPaths`, `LauncherSettings`, `VenueCatalog`, `ServerController`, `ServerStatusClient`, `AdminController`, `LogTailer`, `AdbService`, `VersionSource`, `VersionCatalog`, `ReplayLibrary`, `GamePackage` |
+| `Infrastructure/` | Elle yazılmış MVVM parçaları (`ObservableObject`, `RelayCommand`), dönüştürücüler, tek örnek kilidi, Win32 çağrıları |
+| `Theme/Dark.xaml` · `Theme/Icons.xaml` | Palet + kontrol şablonları; ikon geometrileri |
+| `PlatformTools/` | Gömülen adb dosyaları |
+| `../VortexArena.Launcher.Tests/` | Argüman sözleşmesi, `maps.json`/sürüm listesi/`adb` çıktısı ayrıştırma, birleştirme ve rozet kararı testleri |
 
-> **Argüman adları sözleşmedir.** `--server-ip`/`--server-port` Unity'deki
-> `AppBoot.ArgServerIp`/`ArgServerPort` ile, `--venue` ise sunucudaki `Program.SelectVenue` ile
-> birebir aynı olmalıdır. Üçü de testte doğrulanır — birini değiştirirsen **iki tarafı birlikte**
-> değiştir.
+> **Argüman adları sözleşmedir.** `--server-ip`/`--server-port`/`--replay` Unity'deki `AppBoot` ile,
+> `--venue`/`--replay-dir` sunucuyla birebir aynı olmalıdır. Hepsi testte doğrulanır — birini
+> değiştirirsen **iki tarafı birlikte** değiştir.
 
-> **Dış UI paketi yoktur** (MaterialDesignInXamlToolkit vb.). Tema `Theme/Dark.xaml` içinde elle
-> yazılmıştır; sebep işletmede çoğu zaman internetsiz makinede derlenmesi — NuGet'ten çekilen bir
-> tema kütüphanesi dağıtım betiğini ağa bağımlı hâle getirirdi.
+> **Dış UI paketi ve NuGet bağımlılığı yoktur** (MaterialDesignInXamlToolkit, CommunityToolkit.Mvvm
+> vb.). Tema ve MVVM parçaları repoda elle yazılmıştır; sebep işletmede çoğu zaman internetsiz
+> makinede derlenmesi.
 
-## Geliştirme
+> **İkonlar font glifi değil, `Geometry`dir.** "Segoe Fluent Icons" eski Windows'ta yoktur ve MDL2
+> yedeği her kod noktasını taşımaz; eksik glif kutu olarak çizilir.
+
+## Derleme ve dağıtım
 
 ```powershell
 cd launcher
 dotnet build VortexArena.Launcher.sln
 dotnet test  VortexArena.Launcher.sln
-dotnet run --project VortexArena.Launcher
+dotnet run --project VortexArena.Launcher          # kök: deploy\ altında aranır
 ```
 
-Dağıtım build'i: repo kökünden `scripts\deploy-launcher.bat` → `deploy\launcher\`
-(self-contained; operatör PC'sine .NET kurmak gerekmez).
+Dağıtım: repo kökünden `scripts\deploy-launcher.bat` → `deploy\VortexArena.Launcher.exe` (tek
+dosya, self-contained). Betik tek dosya anahtarını `-p:VortexSingleFile=true` ile açar;
+`RuntimeIdentifier`/`SelfContained` csproj'da **koşulludur**, çünkü RID'siz test projesi
+RID'li self-contained bir projeye referans veremez.
 
-## Ön koşullar
-
-**.NET 10 SDK** (`dotnet` PATH'te) — tek ön koşul budur.
-
-## Ayarlar nerede saklanıyor?
-
-`%APPDATA%\VortexArena\launcher\settings.json` — kullanıcı profilinde, launcher klasörünün yanında
-DEĞİL: `deploy-launcher.bat` çıktı klasörünü silip yeniden ürettiği için oradaki bir dosya her
-dağıtımda kaybolurdu. Anahtarlar: `adminExePath`, `serverExePath`, `serverIp`, `serverPort`,
-`venue`.
+**Ön koşul:** .NET 10 SDK (`dotnet` PATH'te).

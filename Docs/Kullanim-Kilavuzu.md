@@ -9,11 +9,12 @@ okumana gerek yok.
 
 ---
 
-## Sistem üç parçadan oluşur
+## Sistemin parçaları
 
 | Parça | Nerede | Ne işe yarar |
 |---|---|---|
-| **Sunucu** | Sunucu bilgisayarında bir siyah konsol penceresi | Oyunun beyni. Canları, skoru, maçı o yönetir. **Her zaman ilk açılan, en son kapanan.** |
+| **Launcher** | Yönetim bilgisayarında, masaüstü kısayolu | Açtığın tek program. Sunucuyu ve yönetim ekranını buradan başlatır/durdurur, maç kaydını açar, gözlüklere sürüm kurarsın. |
+| **Sunucu** | Launcher'ın başlattığı, penceresiz çalışan program | Oyunun beyni. Canları, skoru, maçı o yönetir. **Her zaman ilk açılan, en son kapanan.** |
 | **Yönetim (Admin) ekranı** | Yönetim bilgisayarında bir pencere | Senin panelin: **oyuncuların içinde olduğu sahneyi canlı görürsün**, üstündeki menülerden harita/mod seçip maçı başlatırsın. |
 | **Gözlükler (Quest)** | Oyuncuların başında | Oyuncunun oynadığı yer. |
 
@@ -26,9 +27,9 @@ diğer ikisi hiçbir işe yaramaz.
 
 Deneyimli operatör için kısa liste — detaylar aşağıdaki bölümlerde.
 
-- [ ] **1.** Yönetim bilgisayarında **Launcher**'ı aç → **Sunucuyu Başlat** (siyah pencere açık kalsın).
-      *Sunucu ayrı bir bilgisayardaysa oradan elle başlat ve sorduğunda **mekanı seç**.*
-- [ ] **2.** Launcher'da **Yönetimi Başlat**.
+- [ ] **1.** Yönetim bilgisayarında **Launcher**'ı aç → sol menüden **Sunucu** → işletmeyi seç →
+      **Başlat**.
+- [ ] **2.** Sol menüden **Yönetim** → **Başlat**.
 - [ ] **3.** Gözlükleri aç, oyunu başlat → kendiliğinden bağlanırlar.
 - [ ] **4.** Yönetim ekranında oyuncuların listede göründüğünü doğrula.
 - [ ] **5.** Mod + harita seç → **Maçı Başlat**.
@@ -49,14 +50,19 @@ onu uygula (bilgi kartında yazar).
 ### 1.A Sunucu yönetim bilgisayarındaysa — Launcher'dan
 
 - [ ] Masaüstündeki **VortexArena Launcher** kısayoluna çift tıkla.
-- [ ] **1 · Sunucu** bölümünde listeden **işletmenin adını** seç (kurulumda seçili bırakılmış
-      olmalı; değiştirmen gerekmez).
-- [ ] **Sunucuyu Başlat**'a bas → siyah sunucu penceresi açılır.
+- [ ] Sol menüden **Sunucu** sayfasını aç; listeden **işletmenin adını** seç (kurulumda seçili
+      bırakılmış olmalı; değiştirmen gerekmez).
+- [ ] **Başlat**'a bas → sayfanın altındaki günlük akmaya başlar, üstteki durum satırında
+      "çalışıyor" ve maç bilgileri görünür. Sol menüdeki **Sunucu** satırında küçük bir **play
+      işareti** belirir: sunucu ayakta demektir.
 - [ ] Aşağıdaki **"Ne görmelisin"** listesini kontrol et.
+
+> **Sunucunun ayrı bir penceresi yoktur** — launcher'ın günlük bölmesi onun penceresidir.
+> Launcher'ı kapatman sunucuyu kapatmaz; kapatmak için **Durdur**'a basman gerekir.
 
 > Launcher mekanı sunucuya kendisi bildirir; sana soru sorulmaz. Bu yüzden **yanlış işletmenin
 > açılması mümkün değildir** — listede yanlış satır seçiliyse zaten gözle görürsün.
-> Mekan seçilmeden **Sunucuyu Başlat** çalışmaz; "Mekan seçilmedi" uyarısı görürsen listeden seç.
+> Mekan seçilmeden **Başlat** çalışmaz; uyarıyı görürsen listeden işletmeyi seç.
 
 ### 1.B Sunucu ayrı bir bilgisayardaysa — elle
 
@@ -78,7 +84,7 @@ Seçim [1-2]:
 
 ### Ne görmelisin (iki yolda da aynı)
 
-- [ ] Sunucu penceresinde şuna benzer bir liste:
+- [ ] Günlükte (ayrı başlatıldıysa sunucu penceresinde) şuna benzer bir liste:
 
 ```
 Mekan      : <İşletmenin adı>
@@ -89,7 +95,8 @@ Lobi       : <o mekanın lobi haritası>
 ```
 
 - [ ] **Bu üç satırı görüyorsan sistem hazırdır:** `Mekan`, `Modlar`, `Haritalar`.
-- [ ] **Pencereyi KAPATMA.** Küçültebilirsin, ama kapatırsan oyun durur. Seans boyunca açık kalır.
+- [ ] Sunucu seans boyunca çalışır. Elle açtıysan **penceresini KAPATMA** (küçültebilirsin);
+      launcher'dan açtıysan pencere yoktur, sunucu yalnız **Durdur** ile kapanır.
 
 **Dikkat edilecekler**
 
@@ -97,8 +104,8 @@ Lobi       : <o mekanın lobi haritası>
   **"İzin ver"e** bas. Yanlışlıkla "İptal" dendiyse teknik ekibi ara (güvenlik duvarı ayarı
   yeniden yapılmalı).
 - `Haritalar : yok` yazıyorsa maç başlatılamaz → teknik ekibi ara.
-- Sunucuyu kapatmak için pencereye tıklayıp **Ctrl + C** yap ya da pencereyi kapat.
-  Bunu **günün sonunda**, herkes çıktıktan sonra yap.
+- Sunucuyu kapatmak için launcher'ın **Sunucu** sayfasındaki **Durdur**'a bas (elle açtıysan
+  pencerede **Ctrl + C**). Bunu **günün sonunda**, herkes çıktıktan sonra yap.
 
 ---
 
@@ -106,13 +113,10 @@ Lobi       : <o mekanın lobi haritası>
 
 - [ ] Launcher zaten açık olmalı (Bölüm 1). Değilse masaüstündeki **VortexArena Launcher**
       kısayoluna çift tıkla.
-      (Kısayol yoksa: `deploy\launcher\` klasöründeki **`VortexArena.Launcher.exe`**.)
-- [ ] **2 · Bağlantı** bölümünde **Sunucu IP** kutusunda sunucu bilgisayarının adresi yazıyor
-      olmalı (ör. `192.168.1.10`). Yazmıyorsa bilgi kartındaki adresi yaz. **Port** kutusuna
-      dokunma (`47821` kalsın).
-- [ ] **3 · Yönetim oyunu** bölümündeki dosya yolu doluysa (`...\deploy\admin\VortexArena.exe`)
-      hazırsın. Boşsa **Gözat** ile o dosyayı bir kez seç — bir daha sormaz.
-- [ ] Büyük **Yönetimi Başlat** düğmesine bas.
+      (Kısayol yoksa: kurulum klasöründeki tek dosya **`VortexArena.Launcher.exe`**.)
+- [ ] Sol menüden **Yönetim** sayfasını aç. Adres ve dosya yolu sorulmaz; sunucu başka bir
+      bilgisayardaysa adres **Gelişmiş** başlığının altındadır (bilgi kartındaki adresi oraya yaz).
+- [ ] **Başlat** düğmesine bas.
 - [ ] Oyun penceresi açılır ve **IP sormadan doğrudan yönetim ekranına** düşer.
 
 > ⚠️ **Oyunun kendi exe dosyasına doğrudan çift tıklama.** Adres bilgisi launcher tarafından
@@ -124,18 +128,55 @@ Lobi       : <o mekanın lobi haritası>
 - Bağlantı kurulana kadar kısa bir "bağlanılıyor" yazısı.
 - Bağlantı yoksa birkaç saniye sonra turuncu şeritli bir **hata kartı** çıkar: hangi adrese
   bağlanmaya çalıştığını, kaç saniyedir denediğini yazar ve bir **Yeniden Bağlan** düğmesi
-  sunar. Bu kartı görüyorsan önce **sunucu penceresi açık mı** diye bak.
+  sunar. Bu kartı görüyorsan önce launcher'ın **Sunucu** sayfasına bakıp sunucunun çalıştığını
+  doğrula.
 - Her şey yolundaysa **oyuncuların bulunduğu sahne** açılır (lobide lobi, maçta arena) ve
   üstünde yönetim bilgileri görünür: ortada skor, yanlarda oyuncu listeleri, altta kamera
   seçenekleri. Ayrı bir "dashboard" ekranı yoktur; her şey bu canlı görüntünün üstündedir.
 
-**Launcher'daki diğer düğmeler**
+**Launcher'ın sol menüsü**
 
-- **Durdur:** launcher'dan başlattığın yönetim oyununu kapatır.
-- **Sunucuyu Başlat:** Bölüm 1'deki sunucuyu açar (mekanı listeden alır).
-- **Yenile:** mekan listesini sunucunun dosyalarından yeniden okur — yeni bir arena eklendikten
-  sonra liste eksik görünüyorsa buna bas.
-- Launcher sunucuyu **kapatmaz**. Kapatmak için sunucunun kendi siyah penceresinde **Ctrl + C**.
+- **Sunucu:** maç sunucusunu başlatır/durdurur, günlüğünü gösterir (Bölüm 1).
+- **Yönetim:** yönetim oyununu başlatır, **Durdur** onu kapatır.
+- **Versiyonlar:** gözlüklere oyun sürümü kurar (§2.1).
+- **Kayıt:** maç kaydını açar/kapatır, kayıtları listeler ve izletir (§2.2).
+
+Çalışan bir şeyin yanında menüde küçük bir **play işareti** durur: hangi parçaların ayakta
+olduğunu tek bakışta oradan görürsün.
+
+### 2.1 Gözlüğe oyun sürümü kurmak — **Versiyonlar**
+
+- [ ] Gözlüğü **USB kablosuyla** yönetim bilgisayarına tak ve gözlüğü **başına geçir**: ekranda
+      çıkan izin penceresinde **"Bu bilgisayardan her zaman izin ver"**i işaretleyip onayla.
+      Onaylamazsan launcher gözlüğü göremez.
+- [ ] Sol menüden **Versiyonlar** sayfasını aç. Üstte bağlı gözlük, altta sürüm listesi görünür.
+- [ ] Gözlükte **kurulu** olan sürümlerin yanında **"Yüklü"** rozeti vardır.
+- [ ] Kurmak istediğin sürüm bilgisayarda yoksa önce **İndir**, sonra **Cihaza yükle**'ye bas.
+- [ ] Kurulum **başka hiçbir sürümü silmez** — sürümler gözlükte yan yana durur, hangisini
+      açtığını uygulamanın adından (`VortexArena v<sürüm>`) anlarsın.
+
+> Bir satırın yanındaki **üstü çizili bulut** işareti: o sürüm bilgisayarda duruyor ama güncelleme
+> sunucusunda görünmüyor (ya da o an listeye ulaşılamadı). Kurulabilir, yalnız yeniden
+> indirilemez.
+
+> ⚠️ Bir maç sırasında aynı salondaki gözlükler **aynı sürümde** olmalıdır; karışık sürümde maç
+> başlamaz.
+
+### 2.2 Maç kaydı — **Kayıt**
+
+Kayıt, oynanan maçı sonradan izlemek için dosyaya yazar. **Sunucu her açılışta kayıt KAPALI
+başlar** — istiyorsan her seansta elle açarsın.
+
+- [ ] Sol menüden **Kayıt** sayfasını aç → **Kaydı başlat**. Açıkken menüde kırmızı bir nokta
+      durur.
+- [ ] Kayıt açık kaldığı sürece **her maç kendi dosyasına** yazılır; lobiye dönüldüğünde o maçın
+      dosyası kapanır, kayıt açık kalır.
+- [ ] **Kaydı durdur** ile kapatırsın. Günün sonunda kapatmayı unutursan sunucu kapanırken zaten
+      kapanır.
+- [ ] Alttaki listede kayıtlar tarih-saat, sahne, mod ve süreyle görünür; **İzle**'ye basınca
+      yönetim oyunu o kaydı oynatmak için açılır.
+
+> Maç ortasında kaydı açarsan dosya **o andan** başlar: öncesinde olan öldürmeler kayıtta olmaz.
 
 ---
 
@@ -813,8 +854,8 @@ maçı bitirmenin yolu **İPTAL**'dir (ikisi de aynı işi yapar).
 > BAŞLAT — düğme o zaman yeşile döner.
 
 **Maç başlamıyorsa** en sık iki sebep: (1) hiç bağlı oyuncu yok, (2) gözlüklerden birinde
-farklı/eski sürüm var. Sunucu penceresinde sebep tek satır olarak yazar; teknik ekibe o satırı
-ilet.
+farklı/eski sürüm var. Sebep launcher'ın **Sunucu** sayfasındaki günlüğe tek satır olarak düşer;
+teknik ekibe o satırı ilet.
 
 ### Çocuk Oyunları — Hamburgerci
 
@@ -1009,8 +1050,10 @@ ekranın alt ortasındaki **⏸ DURAKLAT** düğmesi (BAŞLAT ile BİTİR'in ara
 
 - [ ] **1.** Gözlüklerdeki uygulamayı kapat, gözlükleri şarja tak.
 - [ ] **2.** Yönetim oyununu kapat (Tercihler → **BAĞLANTI** → **OYUNDAN ÇIK**, pencereyi kapat veya launcher'da **Durdur**).
-- [ ] **3.** Launcher'ı kapat. *(Launcher'ı kapatmak sunucuyu kapatmaz — o ayrı bir penceredir.)*
-- [ ] **4.** **En son** sunucu penceresini kapat (Ctrl + C veya pencereyi kapat).
+- [ ] **3.** Kayıt açıksa **Kayıt** sayfasından **Kaydı durdur**.
+- [ ] **4.** **Sunucu** sayfasından **Durdur** (elle açılmış sunucuda: pencerede Ctrl + C).
+- [ ] **5.** **En son** launcher'ı kapat. *(Launcher'ı kapatmak sunucuyu kapatmaz; sunucuyu
+      Durdur'a basmadan kapatmış olmazsın.)*
 
 ---
 
@@ -1018,16 +1061,18 @@ ekranın alt ortasındaki **⏸ DURAKLAT** düğmesi (BAŞLAT ile BİTİR'in ara
 
 | Ne görüyorsun | Muhtemel sebep | Ne yapacaksın |
 |---|---|---|
-| Gözlükte "Sunucu bulunamadı" | Sunucu kapalı ya da gözlük sunucuyu bulamıyor | Önce sunucu penceresi açık mı bak. Açıksa: **sağ kumandada joystick'e 1 sn basılı tut** → adresi elle gir (Bölüm 3.2) |
+| Gözlükte "Sunucu bulunamadı" | Sunucu kapalı ya da gözlük sunucuyu bulamıyor | Önce launcher'ın **Sunucu** sayfasında sunucunun çalıştığını gör. Çalışıyorsa: **sağ kumandada joystick'e 1 sn basılı tut** → adresi elle gir (Bölüm 3.2) |
 | Gözlük yanlış Wi-Fi'de | Gözlük ev/misafir ağına bağlanmış | Gözlüğün Wi-Fi ayarından arenaya özel ağı seç |
-| Yönetim ekranı turuncu hata kartı gösteriyor | Sunucuya ulaşamıyor | Sunucu penceresi açık mı? Launcher'daki **Sunucu IP** doğru mu? Sonra **Yeniden Bağlan** |
+| Yönetim ekranı turuncu hata kartı gösteriyor | Sunucuya ulaşamıyor | Launcher'ın **Sunucu** sayfasında sunucu çalışıyor mu? Sunucu ayrı bilgisayardaysa **Yönetim > Gelişmiş** altındaki adres doğru mu? Sonra **Yeniden Bağlan** |
 | Yönetim ekranında arena görünüyor ama oyuncu yok | Henüz kimse bağlanmadı ya da gözlükler kalibre değil | Oyuncu listesi boşsa gözlükleri kontrol et (Bölüm 3). Liste doluysa ama halkalar yoksa **kalibrasyon** yaptır (Bölüm 4) |
 | POV kipinde ekran boş / oyuncunun gözünden görüntü gelmiyor | O gözlükten konum bilgisi gelmiyor (kalibre değil ya da ağ koptu) | O oyuncuya kalibrasyonu tekrar yaptır. Turuncu bağlantı hata kartı çıkıyorsa sorun ağdadır |
 | Fareyle bakış çevirmiyorum | Serbest kipte bakış **sağ tuş basılıyken** çalışır (imleç serbest kalsın diye) | Sağ üstteki **SERBEST** (ya da `2`) ile serbest kipe geç, sağ tuşu basılı tutarak fareyi oynat |
-| Yönetim ekranı "Sunucu adresi yok" diyor | Oyun launcher'sız, doğrudan açılmış | Oyunu kapat, **Launcher**'dan **Yönetimi Başlat** ile aç |
-| Launcher "Admin exe bulunamadı" diyor | Oyun dosyası taşınmış/silinmiş | Launcher > **3 · Yönetim oyunu > Gözat** ile `deploy\admin\VortexArena.exe` dosyasını yeniden seç. Dosya yoksa teknik ekibi ara |
-| Launcher "Mekan seçilmedi" diyor, sunucu açılmıyor | İşletme listede seçili değil | **1 · Sunucu** bölümündeki listeden işletmenin adına tıkla. Liste boşsa **Yenile**'ye bas; yine boşsa teknik ekibi ara |
-| Yönetim ekranında **başka bir işletmenin haritaları** çıkıyor | Sunucu yanlış mekanla açılmış | Sunucu penceresini kapat (Ctrl + C), Launcher'da doğru işletmeyi seçip **Sunucuyu Başlat**. Mekan sunucu çalışırken değişmez |
+| Yönetim ekranı "Sunucu adresi yok" diyor | Oyun launcher'sız, doğrudan açılmış | Oyunu kapat, launcher'ın **Yönetim** sayfasından **Başlat** ile aç |
+| Launcher "yönetim uygulaması bulunamadı" diyor | Kurulum klasöründeki `admin` klasörü taşınmış/silinmiş | Launcher dosyasının yanında `admin` klasörü durmalıdır; yoksa teknik ekibi ara |
+| Launcher mekan seçmeden sunucuyu açmıyor | İşletme listede seçili değil | **Sunucu** sayfasındaki listeden işletmenin adına tıkla. Liste boşsa teknik ekibi ara |
+| Yönetim ekranında **başka bir işletmenin haritaları** çıkıyor | Sunucu yanlış mekanla açılmış | **Sunucu** sayfasından **Durdur**, doğru işletmeyi seçip yeniden **Başlat**. Mekan sunucu çalışırken değişmez |
+| Launcher **Versiyonlar** sayfasında gözlük görünmüyor / "izin bekleniyor" yazıyor | Kablo takılı değil ya da gözlükteki izin onaylanmadı | USB kablosunu tak, gözlüğü başına geçir ve çıkan pencerede **"Bu bilgisayardan her zaman izin ver"**i işaretleyip onayla |
+| **Sunucu başlamıyor** ya da başlar başlamaz duruyor | Açılışta bir hata var | **Sunucu** sayfasındaki günlüğün son satırlarını oku; anlamıyorsan o satırları teknik ekibe ilet (günlük dosyaları kurulum klasöründe `server\logs\` altındadır) |
 | Oyuncu listede "yeniden bağlanıyor" düşüyor | Wi-Fi zayıf ya da gözlük uykuya geçmiş | Gözlüğü uyandır — geri gelince aynı satıra döner; 45 sn içinde dönmezse "ayrıldı" olur. Kapsama sorunu tekrarlıyorsa teknik ekibi ara |
 | **Birden bire HERKES takılmaya başladı** (tek oyuncu değil, hepsi) | Wi-Fi'ı oyun dışı bir şey doldurdu | **Önce İstatistikler panelini aç ve PING kolonuna bak** (aşağıda). Herkesinki yüksekse sırayla: 1) bir gözlükte **ekran yayını (cast/kayıt) açık mı** — en sık sebep budur, kapat. 2) Arena Wi-Fi'ına telefon/dizüstü bağlanmış mı, indirme mi var — çıkar. 3) Sunucu bilgisayarının **ağ kablosu takılı mı** — çıkmışsa tak. Düzelmezse teknik ekibi ara |
 | **Tek bir oyuncu** takılıyor, diğerleri normal | O gözlüğün Wi-Fi kapsaması zayıf | İstatistiklerde o satırın PING'i diğerlerinden belirgin yüksekse oyuncuyu alanın ortasına doğru yönlendir; sürekli tekrarlıyorsa teknik ekibi ara |
@@ -1045,8 +1090,8 @@ ekranın alt ortasındaki **⏸ DURAKLAT** düğmesi (BAŞLAT ile BİTİR'in ara
 | Turnuvada ekranda **"TOPLANMA 4/6"** yazıyor, yeni tur bir türlü başlamıyor | Bir ya da iki oyuncu kendi tabanına dönmedi (takıldı, koptu, oyundan çıktı) | Ekranda kimin eksik olduğunu bul: listedeki "yeniden bağlanıyor" / "ayrıldı" satırını ya da tabanına yürümeyen oyuncuyu **AT** ile çıkar → kalanlar hazırsa tur hemen başlar. Vazgeçtiysen **İPTAL**. Tur eksik oyuncuyla kendiliğinden başlamaz |
 | Turnuvada geri sayım başlıyor ama hep iptal oluyor | Biri sayım bitmeden tabanından çıkıyor | Oyunculara "sayım bitene kadar kendi renginin köşesinden çıkmayın" de |
 | Ölen oyuncu canlanmıyor | Kendi takımının tabanına girmemiş | Oyuncuya **kendi renginin köşesine yürümesini** söyle — **kendiliğinden canlanmaz**, mutlaka tabana girmeli. Elle canlandırma düğmesi yoktur; şartı yerine getiremiyorsa maçı **İPTAL** edip yeniden başlat (maç başında herkes canlı kalkar) |
-| Oyuncu tabana girdi ama yine canlanmıyor | Oyuncu kalibresiz ya da bir engelin/duvarın içinde duruyor | Satırı kırmızıysa önce kalibre olsun (Bölüm 4); halkası kırmızı yanıp sönüyorsa oyuncuya **engelin içinden çıkmasını** söyle. İkisi de değilse sunucu penceresindeki son satırı teknik ekibe ilet |
-| Maç başlamıyor | Bağlı oyuncu yok ya da bir gözlükte eski sürüm var | Listede oyuncu var mı bak; varsa sunucu penceresindeki son satırı teknik ekibe ilet |
+| Oyuncu tabana girdi ama yine canlanmıyor | Oyuncu kalibresiz ya da bir engelin/duvarın içinde duruyor | Satırı kırmızıysa önce kalibre olsun (Bölüm 4); halkası kırmızı yanıp sönüyorsa oyuncuya **engelin içinden çıkmasını** söyle. İkisi de değilse launcher'daki günlüğün son satırını teknik ekibe ilet |
+| Maç başlamıyor | Bağlı oyuncu yok ya da bir gözlükte eski sürüm var | Listede oyuncu var mı bak; varsa launcher'daki günlüğün son satırını teknik ekibe ilet |
 | Ses gelmiyor | Gözlüğün sesi kısık | Gözlüğün ses seviyesini aç |
 | Oyuncunun ekranı karardı, uyarı çıktı | Oyun alanının dışına çıkmış | Oyuncuya geri içeri girmesini söyle |
 | Bir oyuncu yanlış yerde görünüyor / "nişan aldığım yere gitmiyor" diyor | O gözlüğün kalibrasyonu kaymış | İstatistik panelinde önce **KALİBRE**'yi dene; tutmazsa **SIFIRLA**'ya basıp yeniden kalibre ettir (§4.1) |
@@ -1059,7 +1104,8 @@ ekranın alt ortasındaki **⏸ DURAKLAT** düğmesi (BAŞLAT ile BİTİR'in ara
 
 ## 9. Asla yapılmaması gerekenler
 
-- ❌ **Sunucu penceresini maç sırasında kapatma** — maç anında durur.
+- ❌ **Maç sırasında sunucuyu durdurma** (launcher'da **Durdur**, elle açılmışsa pencereyi
+  kapatma) — maç anında durur.
 - ❌ **Oyunun exe dosyasına doğrudan çift tıklama** — her zaman launcher'dan başlat.
 - ❌ **Zemindeki A / B bantlarını kaldırma veya kaydırma** — tüm kalibrasyon onlara bağlıdır.
 - ❌ **Yönetim panelini oyunculara bırakma** — maçı iptal edebilir, oyuncu atabilirler.

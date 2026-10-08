@@ -280,6 +280,13 @@ namespace VortexArena.App
                 return;
             }
 
+            if (AppSession.IsReplay)
+            {
+                // §12.4: a replay connects to nothing. Latched so the per-frame retry stops too.
+                _autoConnectDone = true;
+                return;
+            }
+
             // No address yet → retry the priority chain: the `ServerDiscovery` singleton can be
             // null in Start(), which would miss the arena.json fallback (PlayerPrefs is read
             // statically and never missed).

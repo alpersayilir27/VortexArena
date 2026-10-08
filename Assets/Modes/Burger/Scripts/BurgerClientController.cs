@@ -20,8 +20,24 @@ namespace VortexArena.Modes.Burger
     public class BurgerClientController : ModeHudBase
     {
         [Header("Hamburgerci — müşteri sayaçları")]
-        [Tooltip("Mutlu/mutsuz müşteri sayacı satırı. Atanmazsa çizilmez.")]
+        [Tooltip("Eski tek satırlık mutlu/mutsuz sayacı. Atanmazsa çizilmez.")]
         [SerializeField] private TMP_Text customerCountsText;
+
+        [Header("Lokanta şeridi")]
+        [Tooltip("Ekip skoru hücresi (LokantaStrip/Band/Shared/Value).")]
+        [SerializeField] private TMP_Text sharedScoreText;
+        [Tooltip("Kendi katkın hücresi (LokantaStrip/Band/Self/Value).")]
+        [SerializeField] private TMP_Text selfScoreText;
+        [Tooltip("Mutlu müşteri sayısı (LokantaStrip/Band/Customers/HappyCount).")]
+        [SerializeField] private TMP_Text happyCountText;
+        [Tooltip("Mutsuz müşteri sayısı (LokantaStrip/Band/Customers/UnhappyCount).")]
+        [SerializeField] private TMP_Text unhappyCountText;
+        [Tooltip("Son 10 saniyede açılan kırmızı saat plakası. Opsiyonel.")]
+        [SerializeField] private GameObject clockLastPlate;
+        [Tooltip("Saatteki VARDİYA kurdelesinin zemini — son 10 saniyede mürekkebe döner. Opsiyonel.")]
+        [SerializeField] private UiShape clockRibbonPlate;
+        [Tooltip("Saatin süre yazısı; rengi son 10 saniyede değişir. Boşsa taban timeText kullanılır.")]
+        [SerializeField] private TMP_Text clockTimeText;
 
         /// <summary>Own contribution from the last <c>lobby_state</c>; cached so the 1 Hz
         /// <c>match_state</c> can redraw the score line without a roster.</summary>
@@ -30,6 +46,16 @@ namespace VortexArena.Modes.Burger
         /// <summary>Shared total from the last <c>match_state</c>; cached so a roster refresh can
         /// redraw the same line.</summary>
         private int _sharedTotal;
+
+        /// <summary>Customer counters from the last <c>modeState</c>; cached so a roster refresh can
+        /// redraw the same cells.</summary>
+        private int _happy;
+
+        private int _unhappy;
+
+        /// <summary>Last applied last-10-seconds skin state; the colours are only written on a CHANGE
+        /// (<c>match_state</c> arrives at 1 Hz and TMP rebuilds its mesh on every colour write).</summary>
+        private bool _lastSeconds;
 
         /// <summary>The counter line is not the base's field, so clearing it on return to lobby lives
         /// here too (same pattern as FFA's standings line).</summary>
@@ -49,7 +75,11 @@ namespace VortexArena.Modes.Burger
         {
             _selfScore = 0;
             _sharedTotal = 0;
+            _happy = 0;
+            _unhappy = 0;
             SetText(customerCountsText, "");
+            ApplyLastSeconds(false);
+            BuildScoreLine();
         }
 
         protected override string ScoreLine(MatchStateMsg msg)
@@ -61,6 +91,7 @@ namespace VortexArena.Modes.Burger
         protected override string EndScoreLine(MatchEndMsg msg)
         {
             _sharedTotal = msg.scoreRed;
+            ApplyLastSeconds(false); // the shift is over: the clock must not stay in alarm red
             return BuildScoreLine();
         }
 
@@ -85,24 +116,71 @@ namespace VortexArena.Modes.Burger
             SetText(scoreText, BuildScoreLine());
         }
 
-        /// <summary>Feeds the customer counters from <c>modeState</c>.</summary>
+        /// <summary>Feeds the customer counters from <c>modeState</c> and the clock's last-10-s skin.</summary>
         protected override void OnMatchStateApplied(MatchStateMsg msg)
         {
-            if (customerCountsText == null)
-            {
-                return;
-            }
+            ParseCounts(msg.modeState, out _happy, out _unhappy);
+            SetText(customerCountsText, $"Mutlu müşteri {_happy} · Mutsuz müşteri {_unhappy}");
+            SetText(happyCountText, _happy.ToString());
+            SetText(unhappyCountText, _unhappy.ToString());
 
-            ParseCounts(msg.modeState, out int happy, out int unhappy);
-            SetText(customerCountsText, $"Mutlu müşteri {happy} · Mutsuz müşteri {unhappy}");
+            ApplyLastSeconds(msg.phase == ArenaProtocol.PHASE_PLAYING
+                             && msg.timeRemaining > 0f && msg.timeRemaining <= LastSecondsWindow);
         }
 
         // ---------------------------------------------------------------- internals
 
-        /// <summary>Two lines on purpose: one line does not fit the HUD's Score box at 50 pt.</summary>
+        /// <summary>Clock goes to alarm red inside this many seconds of the shift's end.</summary>
+        private const float LastSecondsWindow = 10f;
+
+        /// <summary>Writes every score cell and returns the LEGACY one-box line (kept for a prefab
+        /// that is still bound to <c>scoreText</c>).</summary>
         private string BuildScoreLine()
         {
+            SetText(sharedScoreText, _sharedTotal.ToString());
+            SetText(selfScoreText, _selfScore.ToString());
+            SetText(happyCountText, _happy.ToString());
+            SetText(unhappyCountText, _unhappy.ToString());
+
+            // Two lines on purpose: one line does not fit the old HUD's Score box at 50 pt.
             return $"SKOR: {_selfScore}\nEKİP SKORU: {_sharedTotal}";
+        }
+
+        /// <summary>Alarm skin of the clock; null-safe so an unbound prefab keeps working.</summary>
+        private void ApplyLastSeconds(bool last)
+        {
+            if (last == _lastSeconds)
+            {
+                return;
+            }
+
+            _lastSeconds = last;
+
+            if (clockLastPlate != null)
+            {
+                clockLastPlate.SetActive(last);
+            }
+
+            if (clockTimeText != null)
+            {
+                clockTimeText.color = last ? Lokanta.Light : Lokanta.Ink;
+            }
+
+            if (clockRibbonPlate == null)
+            {
+                return;
+            }
+
+            // The normal fill is re-applied rather than cached: the builder is the single source of
+            // the ribbon's gradient, and a cached colour would freeze the skin at first run.
+            if (last)
+            {
+                clockRibbonPlate.Fill(Lokanta.Ink);
+            }
+            else
+            {
+                clockRibbonPlate.Fill(Lokanta.RedHi, Lokanta.Red2, UiGradientMode.Vertical);
+            }
         }
 
         /// <summary><c>"h:3;u:1"</c> → 3 / 1.</summary>

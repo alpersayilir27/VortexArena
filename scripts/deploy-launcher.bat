@@ -2,28 +2,28 @@
 setlocal EnableDelayedExpansion
 rem =====================================================================
 rem  deploy-launcher.bat
-rem  VortexArena.Launcher (WPF, .NET 10) -> dotnet publish -> deploy\launcher\
+rem  VortexArena.Launcher (WPF, .NET 10) -> single-file exe -> deploy\
 rem
-rem  Kendine yeten (self-contained) TEK klasor uretir: operator PC'sine
-rem  .NET kurmak gerekmez. Klasorun TAMAMI tasinir, exe tek basina calismaz.
+rem  Produces ONE self-contained file: deploy\VortexArena.Launcher.exe.
+rem  No .NET install on the operator PC, no folder to carry around; adb
+rem  ships inside the exe.
 rem
-rem  On kosul: .NET 10 SDK (dotnet PATH'te). Baska hicbir sey gerekmez.
+rem  Prerequisite: .NET 10 SDK (dotnet on PATH). Nothing else.
 rem
-rem  Kullanim:
-rem    deploy-launcher.bat             cift tiklanabilir; sonda bekler
-rem    deploy-launcher.bat --no-pause  otomasyon; beklemeden cikar
-rem    (VORTEX_NO_PAUSE=1 ortam degiskeni de beklemeyi kapatir)
+rem  Usage:
+rem    deploy-launcher.bat             double-clickable; waits at the end
+rem    deploy-launcher.bat --no-pause  automation; exits without waiting
+rem    (VORTEX_NO_PAUSE=1 also disables the wait)
 rem
-rem  NOT: betik-ici degiskenler VA_ onekli. Sebep: bu degiskenler cocuk
-rem  sureclere miras kaliyor ve kisa genel adlar derleme zincirini kiriyor
-rem  (MSBuild ortam degiskenlerini global property olarak okuyor). Yeni
-rem  degisken eklerken VA_ onekini koru.
+rem  NOTE: script variables are VA_ prefixed. They are inherited by child
+rem  processes and short generic names break the build chain (MSBuild
+rem  reads environment variables as global properties). Keep the prefix.
 rem =====================================================================
 
-rem --- Cift tiklamada pencere kapanmasin -------------------------------
-rem  cmdcmdline, betik cift tiklanarak (veya "cmd /c betik" ile) baslatilinca
-rem  betigin adini icerir. Oyleyse sonda bekleriz; yoksa hata mesaji goz
-rem  kirpip kaybolur. Zaten acik bir konsoldan calistirilirsa beklemez.
+rem --- Keep the window open on a double click --------------------------
+rem  cmdcmdline contains the script name when started by double click
+rem  (or via "cmd /c script"). Then we wait at the end; otherwise an
+rem  error message would blink and vanish.
 set "VA_HOLD="
 set "VA_CL=%cmdcmdline%"
 if not "!VA_CL:%~nx0=!"=="!VA_CL!" set "VA_HOLD=1"
@@ -33,12 +33,14 @@ set "VA_RC=0"
 
 set "VA_REPO=%~dp0.."
 for %%I in ("%VA_REPO%") do set "VA_REPO=%%~fI"
-set "VA_OUT=%VA_REPO%\deploy\launcher"
+set "VA_ROOT=%VA_REPO%\deploy"
+set "VA_TMP=%VA_ROOT%\.launcher-publish"
+set "VA_EXE=%VA_ROOT%\VortexArena.Launcher.exe"
 set "VA_PROJ=%VA_REPO%\launcher\VortexArena.Launcher\VortexArena.Launcher.csproj"
 
-echo === VortexArena : launcher publish ===
+echo === VortexArena : launcher publish (tek dosya) ===
 echo   Proje : %VA_PROJ%
-echo   Hedef : %VA_OUT%
+echo   Hedef : %VA_EXE%
 echo.
 
 if not exist "%VA_PROJ%" (
@@ -55,32 +57,29 @@ if errorlevel 1 (
   goto :son
 )
 
-rem --- Launcher acik ise exe kilitli olur, publish yarida kalir ---------
+rem --- A running launcher locks its own exe -----------------------------
 tasklist /fi "imagename eq VortexArena.Launcher.exe" 2>nul | find /i "VortexArena.Launcher.exe" >nul
 if not errorlevel 1 (
-  echo [HATA] VortexArena.Launcher.exe calisiyor - cikti klasoru kilitli.
+  echo [HATA] VortexArena.Launcher.exe calisiyor - cikti kilitli.
   echo        Launcher'i kapatip tekrar deneyin.
   set "VA_RC=1"
   goto :son
 )
 
-rem --- Cikti klasorunu temizle -----------------------------------------
-if exist "%VA_OUT%" (
-  echo   Temizlik: eski cikti siliniyor...
-  rmdir /s /q "%VA_OUT%"
-)
-if exist "%VA_OUT%" (
-  echo [HATA] Eski cikti silinemedi: "%VA_OUT%"
+if not exist "%VA_ROOT%" mkdir "%VA_ROOT%" 2>nul
+
+rem --- Clean only the temporary publish folder --------------------------
+if exist "%VA_TMP%" rmdir /s /q "%VA_TMP%"
+if exist "%VA_TMP%" (
+  echo [HATA] Gecici klasor silinemedi: "%VA_TMP%"
   set "VA_RC=1"
   goto :son
 )
-mkdir "%VA_OUT%" 2>nul
 
-rem --- Publish ---------------------------------------------------------
 echo   Publish basliyor...
-dotnet publish "%VA_PROJ%" -c Release -r win-x64 --self-contained true ^
-  -p:PublishSingleFile=false ^
-  -o "%VA_OUT%"
+dotnet publish "%VA_PROJ%" -c Release ^
+  -p:VortexSingleFile=true ^
+  -o "%VA_TMP%"
 if errorlevel 1 (
   echo.
   echo [HATA] dotnet publish basarisiz.
@@ -89,20 +88,39 @@ if errorlevel 1 (
   goto :son
 )
 
-if not exist "%VA_OUT%\VortexArena.Launcher.exe" (
-  echo [HATA] Publish 0 dondu ama exe yok: "%VA_OUT%\VortexArena.Launcher.exe"
+if not exist "%VA_TMP%\VortexArena.Launcher.exe" (
+  echo [HATA] Publish 0 dondu ama exe yok: "%VA_TMP%\VortexArena.Launcher.exe"
   set "VA_RC=1"
   goto :son
 )
 
+copy /y "%VA_TMP%\VortexArena.Launcher.exe" "%VA_EXE%" >nul
+if errorlevel 1 (
+  echo [HATA] Exe kopyalanamadi: "%VA_EXE%"
+  set "VA_RC=1"
+  goto :son
+)
+
+rmdir /s /q "%VA_TMP%" 2>nul
+
 echo.
 echo === TAMAM ===
-echo   %VA_OUT%\VortexArena.Launcher.exe
-powershell -NoProfile -Command "$s=(Get-ChildItem '%VA_OUT%' -Recurse -File | Measure-Object -Sum Length).Sum/1MB; Write-Host ('  Boyut: {0:N1} MB (self-contained)' -f $s)"
+echo   %VA_EXE%
+powershell -NoProfile -Command "$s=(Get-Item '%VA_EXE%').Length/1MB; Write-Host ('  Boyut: {0:N1} MB (tek dosya, self-contained)' -f $s)"
 echo.
-echo   Klasorun TAMAMINI tasiyin - exe tek basina calismaz.
-echo   Operator ayarlari %%APPDATA%%\VortexArena\launcher\settings.json icinde
-echo   durur; bu klasor yeniden dagitilsa da ayarlar korunur.
+echo   Beklenen yerlesim (exe'nin yanindan okunur):
+echo     %VA_ROOT%\server\VortexArena.Server.App.exe
+echo     %VA_ROOT%\admin\VortexArena.exe
+echo     %VA_ROOT%\game_versions\   (APK'lar buraya iner)
+echo     %VA_ROOT%\replays\         (mac kayitlari)
+echo.
+echo   Operator ayarlari %%APPDATA%%\VortexArena\launcher\settings.json
+echo   icinde durur; exe yeniden uretilse de ayarlar korunur.
+
+if exist "%VA_ROOT%\launcher" (
+  echo.
+  echo   NOT: "%VA_ROOT%\launcher" klasoru artik kullanilmiyor, silebilirsiniz.
+)
 
 :son
 if not "%VA_RC%"=="0" (

@@ -319,6 +319,25 @@ namespace VortexArena.Net
             Registered = false;
         }
 
+        /// <summary>
+        /// Replay rewind: drops everything a re-fed stream would otherwise find "already seen".
+        /// No socket is involved — a replay channel never registers, so <see cref="Stop"/> has
+        /// nothing to close.
+        /// </summary>
+        internal void ResetForReplay()
+        {
+            // Same reason as in StartRegistration: without clearing the ring the re-fed ticks look
+            // like duplicates and every tracer/sound of the replayed stretch is dropped.
+            Array.Clear(_seenTicksValid, 0, _seenTicksValid.Length);
+            _seenTicksNext = 0;
+            _playerId = 0;
+
+            // Queued fire events belong to the stretch being discarded.
+            while (_mainThreadActions.TryDequeue(out Action _))
+            {
+            }
+        }
+
         private void Update()
         {
             while (_mainThreadActions.TryDequeue(out Action action))
@@ -731,7 +750,7 @@ namespace VortexArena.Net
                     // is a state channel and the next tick fills the gap.
                     try
                     {
-                        HandleDatagram(datagram.Buffer);
+                        HandleDatagram(datagram.Buffer, NetClock.NowMs);
                     }
                     catch (Exception e)
                     {
@@ -898,8 +917,13 @@ namespace VortexArena.Net
             }
         }
 
-        /// <summary>Runs on the network thread; events move to the main thread through the queue.</summary>
-        private void HandleDatagram(byte[] buffer)
+        /// <summary>
+        /// Takes one datagram exactly as the socket delivers it; events move to the main thread
+        /// through the queue. Live it runs on the network thread with the receive stamp; replay feeds
+        /// the same bytes with the playback clock (§12.4), which is why the stamp is a PARAMETER —
+        /// reading the clock in here would pin ingest to wall time.
+        /// </summary>
+        internal void HandleDatagram(byte[] buffer, int recvMs)
         {
             if (buffer == null || buffer.Length < 1)
             {
@@ -944,7 +968,7 @@ namespace VortexArena.Net
                         // §6.7: downlink jitter and loss are measured from THIS stream — no extra packets.
                         TrackDownlink(snap.serverTick);
                         // NETWORK THREAD: the registry ingests under a lock and publishes on the main thread.
-                        RemotePlayerRegistry.Instance?.IngestFromNetThread(snap, Environment.TickCount, _playerId);
+                        RemotePlayerRegistry.Instance?.IngestFromNetThread(snap, recvMs, _playerId);
                         break;
                     }
 
@@ -1017,7 +1041,7 @@ namespace VortexArena.Net
                         // tick (UDP may duplicate) is harmless — last one wins.
                         RemotePlayerRegistry.Instance?.IngestFromNetThread(
                             new Snapshot { serverTick = combined.serverTick, players = combined.players },
-                            Environment.TickCount, _playerId);
+                            recvMs, _playerId);
 
                         // Event block: goes through the SAME code and the SAME tick ring as 0x04 (§6.8).
                         DispatchFireEvents(combined.serverTick, combined.events);
@@ -1025,7 +1049,7 @@ namespace VortexArena.Net
                         // Object block (§6.12): a state channel like the snapshot — no tick ring, a
                         // repeated tick just rewrites the same pose (last one wins).
                         RemoteObjectRegistry.Instance?.IngestFromNetThread(
-                            combined.objects, Environment.TickCount);
+                            combined.objects, recvMs);
                         break;
                     }
 
@@ -1052,7 +1076,6 @@ namespace VortexArena.Net
                             break;
                         }
 
-                        int recvMs = Environment.TickCount;
                         for (int i = 0; i < batch.entries.Length; i++)
                         {
                             registry.IngestFromNetThread(batch.entries[i], recvMs, _playerId);

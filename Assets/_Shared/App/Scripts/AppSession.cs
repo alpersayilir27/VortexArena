@@ -33,5 +33,27 @@ namespace VortexArena.App
         /// <summary>Can the admin connect without asking the user for an address at all?</summary>
         public static bool HasServerEndpoint =>
             !string.IsNullOrEmpty(ServerIp) && ServerPort > 0;
+
+        private static string _replayPath = "";
+
+        /// <summary>
+        /// The <c>.vxr</c> file to play (`--replay`, or the dev window); empty = normal session.
+        /// <para>⚠️ Replay is a MODE OF THE ADMIN ROLE, not a third role: the code branches "not
+        /// admin ⇒ player", so a new role would silently enable the local rig, the player HUD and
+        /// the result screen.</para>
+        /// </summary>
+        public static string ReplayPath
+        {
+            get => _replayPath;
+            set
+            {
+                _replayPath = value ?? "";
+                // Net cannot read App, so the single decision point mirrors itself down.
+                Net.ReplayMode.Active = _replayPath.Length > 0;
+            }
+        }
+
+        /// <summary>Is this process playing a recording (no server, no operator commands)?</summary>
+        public static bool IsReplay => _replayPath.Length > 0;
     }
 }

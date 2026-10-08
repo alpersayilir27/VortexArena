@@ -18,6 +18,10 @@ MonoBehaviour:
   sairaBold: {fileID: 11400000, guid: 36aad55c33828fc4ebd7f6b71bf9f71c, type: 2}
   sairaSemiBold: {fileID: 11400000, guid: cb817c53729c44445878a96193f49279, type: 2}
   barlowMedium: {fileID: 11400000, guid: 3849d00768437a94896b172e035e5e2b, type: 2}
+  fredokaBold: {fileID: 11400000, guid: f4121167a0d0a434d96db705f0142000, type: 2}
+  fredokaSemiBold: {fileID: 11400000, guid: d09873d9e26971041a1d768923947710, type: 2}
+  nunitoExtraBold: {fileID: 11400000, guid: 681807d2c6f188f43bda4c82071a469b, type: 2}
+  nunitoBold: {fileID: 11400000, guid: 496f284e5f7d7b44abc8949793ac169e, type: 2}
   dots: {fileID: 21300000, guid: 3d0a7c2e5b6f4e1a9c8d7b6a5f4e3d2c, type: 3}
   radial: {fileID: 21300000, guid: 4e1b8d3f6c7a5f2b0d9e8c7b6a5f4e3d, type: 3}
   icons:
@@ -25,9 +29,11 @@ MonoBehaviour:
   - {fileID: 21300000, guid: ea9e1bb0f1934b238bc218fcde73e4f9, type: 3}
   - {fileID: 21300000, guid: 86e831988ee34584b0572c0d52731ec9, type: 3}
   - {fileID: 21300000, guid: cb7a6c90313a4996845f03a33a07fc38, type: 3}
+  - {fileID: 21300000, guid: a8d6b2c657f90534eb39fd9369a8eb9a, type: 3}
   - {fileID: 21300000, guid: 147e6a019c1e53b46a395139000d1591, type: 3}
   - {fileID: 21300000, guid: 842b9fc336b44606ac50a4755273c010, type: 3}
   - {fileID: 21300000, guid: cd1de4ab9f324307a30ac801ecf98ad3, type: 3}
+  - {fileID: 21300000, guid: 8c7e70041d14baf48bfb55bfdc791fbe, type: 3}
   - {fileID: 21300000, guid: 5671a2aaccec79b4ea21102d036e96f5, type: 3}
   - {fileID: 21300000, guid: 08fe1a32f69e499459107b77b75a46cb, type: 3}
   - {fileID: 21300000, guid: 5af757a8ffb679b4297fc1fb6ab08131, type: 3}

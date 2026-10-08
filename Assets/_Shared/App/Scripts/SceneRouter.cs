@@ -55,6 +55,10 @@ namespace VortexArena.App
         /// <summary>Scene currently loading asynchronously; empty when idle.</summary>
         private string _loadingScene = "";
 
+        /// <summary>Is a scene load running right now? Replay parks its clock on this (§12.4): the
+        /// recording must not stream into a scene that is not up yet.</summary>
+        public bool IsLoading => _loadingScene.Length > 0;
+
         /// <summary>Next scene requested mid-load (an async load cannot be cancelled).</summary>
         private string _queuedScene = "";
 

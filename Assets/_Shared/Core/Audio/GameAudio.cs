@@ -207,6 +207,12 @@ namespace VortexArena.Core.Audio
 
         private void PlayInternal(GameSoundId id, float volumeScale)
         {
+            // Replay seek: the skipped stretch must not replay its lines.
+            if (ReplayMode.Seeking)
+            {
+                return;
+            }
+
             GameSoundBank bank = GameSoundBank.Load();
             if (bank == null || _source == null)
             {

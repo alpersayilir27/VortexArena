@@ -20,6 +20,10 @@
     <Color x:Key="ErrorColor">#FFFFB4AB</Color>
     <Color x:Key="ErrorContainerColor">#FF5C1A15</Color>
     <Color x:Key="SuccessColor">#FF7FD69A</Color>
+    <Color x:Key="WarningColor">#FFF2C14E</Color>
+    <Color x:Key="RecordColor">#FFFF5F5F</Color>
+    <Color x:Key="SurfaceTopColor">#FF17171E</Color>
+    <Color x:Key="NavSelectedColor">#FF2A2A36</Color>
 
     <SolidColorBrush x:Key="BackgroundBrush" Color="{StaticResource BackgroundColor}" />
     <SolidColorBrush x:Key="SurfaceLowBrush" Color="{StaticResource SurfaceLowColor}" />
@@ -32,13 +36,19 @@
     <SolidColorBrush x:Key="ErrorBrush" Color="{StaticResource ErrorColor}" />
     <SolidColorBrush x:Key="ErrorContainerBrush" Color="{StaticResource ErrorContainerColor}" />
     <SolidColorBrush x:Key="SuccessBrush" Color="{StaticResource SuccessColor}" />
+    <SolidColorBrush x:Key="WarningBrush" Color="{StaticResource WarningColor}" />
+    <SolidColorBrush x:Key="RecordBrush" Color="{StaticResource RecordColor}" />
+    <SolidColorBrush x:Key="SurfaceTopBrush" Color="{StaticResource SurfaceTopColor}" />
+    <SolidColorBrush x:Key="NavSelectedBrush" Color="{StaticResource NavSelectedColor}" />
 
-    <FontFamily x:Key="IconFont">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
-    <FontFamily x:Key="MonoFont">Consolas, Courier New</FontFamily>
+    <FontFamily x:Key="UiFont">Segoe UI Variable Text, Segoe UI</FontFamily>
+    <FontFamily x:Key="MonoFont">Cascadia Mono, Consolas, Courier New</FontFamily>
 
     <!-- ═════════════════════════════════════════════════════════════ metinler ═══ -->
+    <!-- ⚠️ No Foreground here: an app-level implicit TextBlock style also hits the TextBlock a
+         button builds for its text and would override the button's own color. Windows set it. -->
     <Style TargetType="TextBlock">
-        <Setter Property="Foreground" Value="{StaticResource OnSurfaceBrush}" />
+        <Setter Property="FontFamily" Value="{StaticResource UiFont}" />
         <Setter Property="FontSize" Value="13" />
         <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
@@ -193,59 +203,369 @@
         </Setter>
     </Style>
 
-    <!-- ═════════════════════════════════════════════════ mekan listesi (ListBox) ═ -->
-    <Style x:Key="VenueListBox" TargetType="ListBox">
+    <!-- ══════════════════════════════════════════════════════════════ ikonlar ════ -->
+    <!-- Stroke tabanlı ikon; Data Theme/Icons.xaml'daki Geometry'lerden gelir. -->
+    <Style x:Key="Icon" TargetType="Path">
+        <Setter Property="Stroke" Value="{StaticResource OnSurfaceVariantBrush}" />
+        <Setter Property="StrokeThickness" Value="1.6" />
+        <Setter Property="StrokeLineJoin" Value="Round" />
+        <Setter Property="StrokeStartLineCap" Value="Round" />
+        <Setter Property="StrokeEndLineCap" Value="Round" />
+        <Setter Property="Fill" Value="Transparent" />
+        <Setter Property="Stretch" Value="Uniform" />
+        <Setter Property="Width" Value="20" />
+        <Setter Property="Height" Value="20" />
+        <Setter Property="SnapsToDevicePixels" Value="True" />
+    </Style>
+
+    <Style x:Key="SmallIcon" TargetType="Path" BasedOn="{StaticResource Icon}">
+        <Setter Property="Width" Value="16" />
+        <Setter Property="Height" Value="16" />
+        <Setter Property="StrokeThickness" Value="1.8" />
+    </Style>
+
+    <!-- ═══════════════════════════════════════════════════════ kenar çubuğu ═════ -->
+    <Style x:Key="NavButton" TargetType="Button">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{StaticResource OnSurfaceVariantBrush}" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="Margin" Value="8,2" />
+        <Setter Property="SnapsToDevicePixels" Value="True" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Grid>
+                        <Border x:Name="Root" Background="Transparent" CornerRadius="8" Padding="10,9">
+                            <ContentPresenter />
+                        </Border>
+                        <!-- Seçili göstergesi: sol kenarda accent şerit -->
+                        <Border x:Name="Stripe"
+                                Width="3"
+                                HorizontalAlignment="Left"
+                                Margin="0,8"
+                                CornerRadius="2"
+                                Background="{StaticResource PrimaryBrush}"
+                                Opacity="0" />
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Root" Property="Background" Value="{StaticResource SurfaceHighBrush}" />
+                        </Trigger>
+                        <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                            <Setter TargetName="Root" Property="Background" Value="{StaticResource NavSelectedBrush}" />
+                            <Setter TargetName="Stripe" Property="Opacity" Value="1" />
+                            <Setter Property="Foreground" Value="{StaticResource OnSurfaceBrush}" />
+                        </DataTrigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ═══════════════════════════════════════════════════════════ düğme: ufak ══ -->
+    <Style x:Key="SmallOutlinedButton" TargetType="Button" BasedOn="{StaticResource OutlinedButton}">
+        <Setter Property="Padding" Value="12,7" />
+        <Setter Property="FontSize" Value="12" />
+    </Style>
+
+    <Style x:Key="SmallFilledButton" TargetType="Button" BasedOn="{StaticResource FilledButton}">
+        <Setter Property="Padding" Value="14,7" />
+        <Setter Property="FontSize" Value="12" />
+    </Style>
+
+    <!-- ══════════════════════════════════════════════════════════════ rozetler ══ -->
+    <Style x:Key="Badge" TargetType="Border">
+        <Setter Property="CornerRadius" Value="999" />
+        <Setter Property="Padding" Value="8,3" />
+        <Setter Property="Background" Value="{StaticResource SurfaceHighBrush}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style x:Key="BadgeText" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+        <Setter Property="FontSize" Value="11" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="TextWrapping" Value="NoWrap" />
+    </Style>
+
+    <!-- ══════════════════════════════════════════════════════════════ uyarı bandı -->
+    <Style x:Key="WarningStrip" TargetType="Border">
+        <Setter Property="Background" Value="#33F2C14E" />
+        <Setter Property="BorderBrush" Value="{StaticResource WarningBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="Padding" Value="12,8" />
+        <Setter Property="Margin" Value="0,0,0,12" />
+    </Style>
+
+    <Style x:Key="InfoStrip" TargetType="Border">
         <Setter Property="Background" Value="{StaticResource SurfaceHighBrush}" />
         <Setter Property="BorderBrush" Value="{StaticResource OutlineBrush}" />
         <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="Padding" Value="12,8" />
+        <Setter Property="Margin" Value="0,0,0,12" />
+    </Style>
+
+    <Style x:Key="ErrorStrip" TargetType="Border">
+        <Setter Property="Background" Value="{StaticResource ErrorContainerBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource ErrorBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="Padding" Value="12,8" />
+        <Setter Property="Margin" Value="0,0,0,12" />
+    </Style>
+
+    <!-- ══════════════════════════════════════════════════════════════ ComboBox ══ -->
+    <!-- ⚠️ Elle şablon: varsayılan ComboBox açılır listesini sistem renkleriyle çizer,
+         karanlık temada okunmaz hale gelir. -->
+    <Style TargetType="ComboBoxItem">
         <Setter Property="Foreground" Value="{StaticResource OnSurfaceBrush}" />
-        <Setter Property="Padding" Value="4" />
-        <Setter Property="MaxHeight" Value="180" />
-        <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
+        <Setter Property="Padding" Value="10,7" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
         <Setter Property="Template">
             <Setter.Value>
-                <ControlTemplate TargetType="ListBox">
-                    <Border Background="{TemplateBinding Background}"
-                            BorderBrush="{TemplateBinding BorderBrush}"
-                            BorderThickness="{TemplateBinding BorderThickness}"
-                            CornerRadius="6">
-                        <ScrollViewer Margin="{TemplateBinding Padding}" Focusable="False">
-                            <ItemsPresenter />
-                        </ScrollViewer>
+                <ControlTemplate TargetType="ComboBoxItem">
+                    <Border x:Name="Root"
+                            Background="Transparent"
+                            CornerRadius="5"
+                            Margin="3,1"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Root" Property="Background" Value="{StaticResource SurfaceHighBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsHighlighted" Value="True">
+                            <Setter TargetName="Root" Property="Background" Value="{StaticResource SurfaceHighBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style TargetType="ComboBox">
+        <Setter Property="Background" Value="{StaticResource SurfaceHighBrush}" />
+        <Setter Property="Foreground" Value="{StaticResource OnSurfaceBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource OutlineBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="10,8" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ComboBox">
+                    <Grid>
+                        <ToggleButton x:Name="Toggle"
+                                      Focusable="False"
+                                      ClickMode="Press"
+                                      IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
+                            <ToggleButton.Template>
+                                <ControlTemplate TargetType="ToggleButton">
+                                    <Border x:Name="Shell"
+                                            Background="{StaticResource SurfaceHighBrush}"
+                                            BorderBrush="{StaticResource OutlineBrush}"
+                                            BorderThickness="1"
+                                            CornerRadius="6">
+                                        <Grid>
+                                            <Path HorizontalAlignment="Right"
+                                                  VerticalAlignment="Center"
+                                                  Margin="0,0,12,0"
+                                                  Width="10" Height="6"
+                                                  Stretch="Uniform"
+                                                  Fill="{StaticResource OnSurfaceVariantBrush}"
+                                                  Data="M0,0 L5,5 L10,0 Z" />
+                                        </Grid>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="Shell" Property="BorderBrush" Value="{StaticResource PrimaryBrush}" />
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </ToggleButton.Template>
+                        </ToggleButton>
+
+                        <ContentPresenter x:Name="ContentSite"
+                                          IsHitTestVisible="False"
+                                          Margin="12,8,32,8"
+                                          VerticalAlignment="Center"
+                                          HorizontalAlignment="Stretch"
+                                          Content="{TemplateBinding SelectionBoxItem}"
+                                          ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}" />
+
+                        <Popup x:Name="PART_Popup"
+                               AllowsTransparency="True"
+                               Placement="Bottom"
+                               PopupAnimation="Fade"
+                               Focusable="False"
+                               IsOpen="{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}}">
+                            <Border Background="{StaticResource SurfaceLowBrush}"
+                                    BorderBrush="{StaticResource OutlineBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="6"
+                                    Margin="0,4,0,0"
+                                    MinWidth="{TemplateBinding ActualWidth}"
+                                    MaxHeight="{TemplateBinding MaxDropDownHeight}">
+                                <ScrollViewer>
+                                    <ItemsPresenter />
+                                </ScrollViewer>
+                            </Border>
+                        </Popup>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.5" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ═════════════════════════════════════════════════════════ ProgressBar ════ -->
+    <Style TargetType="ProgressBar">
+        <Setter Property="Height" Value="6" />
+        <Setter Property="Background" Value="{StaticResource SurfaceHighBrush}" />
+        <Setter Property="Foreground" Value="{StaticResource PrimaryBrush}" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ProgressBar">
+                    <Border Background="{TemplateBinding Background}" CornerRadius="3">
+                        <Grid>
+                            <Rectangle x:Name="PART_Track" Fill="Transparent" />
+                            <Border x:Name="PART_Indicator"
+                                    HorizontalAlignment="Left"
+                                    Background="{TemplateBinding Foreground}"
+                                    CornerRadius="3" />
+                        </Grid>
                     </Border>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
     </Style>
 
-    <Style x:Key="VenueListItem" TargetType="ListBoxItem">
-        <Setter Property="Padding" Value="12,10" />
-        <Setter Property="Margin" Value="0,1" />
-        <Setter Property="Cursor" Value="Hand" />
-        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    <!-- ═══════════════════════════════════════════════════════════ Expander ═════ -->
+    <Style TargetType="Expander">
+        <Setter Property="Foreground" Value="{StaticResource OnSurfaceVariantBrush}" />
         <Setter Property="Template">
             <Setter.Value>
-                <ControlTemplate TargetType="ListBoxItem">
-                    <Border x:Name="Root"
-                            Background="Transparent"
-                            BorderBrush="Transparent"
-                            BorderThickness="1"
-                            CornerRadius="6"
-                            Padding="{TemplateBinding Padding}">
-                        <ContentPresenter />
-                    </Border>
+                <ControlTemplate TargetType="Expander">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <ToggleButton x:Name="Header"
+                                      Grid.Row="0"
+                                      Focusable="False"
+                                      Cursor="Hand"
+                                      HorizontalContentAlignment="Left"
+                                      IsChecked="{Binding IsExpanded, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
+                            <ToggleButton.Template>
+                                <ControlTemplate TargetType="ToggleButton">
+                                    <Border Background="Transparent" Padding="0,6">
+                                        <StackPanel Orientation="Horizontal">
+                                            <Path x:Name="Chevron"
+                                                  Width="9" Height="9"
+                                                  Margin="0,1,8,0"
+                                                  VerticalAlignment="Center"
+                                                  Stretch="Uniform"
+                                                  Fill="{StaticResource OnSurfaceVariantBrush}"
+                                                  Data="M0,0 L5,5 L0,10 Z"
+                                                  RenderTransformOrigin="0.5,0.5" />
+                                            <ContentPresenter VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsChecked" Value="True">
+                                            <Setter TargetName="Chevron" Property="RenderTransform">
+                                                <Setter.Value>
+                                                    <RotateTransform Angle="90" />
+                                                </Setter.Value>
+                                            </Setter>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </ToggleButton.Template>
+                            <ContentPresenter Content="{TemplateBinding Header}" />
+                        </ToggleButton>
+
+                        <ContentPresenter x:Name="Body" Grid.Row="1" Margin="17,8,0,0" Visibility="Collapsed" />
+                    </Grid>
                     <ControlTemplate.Triggers>
-                        <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Root" Property="Background" Value="{StaticResource SurfaceLowBrush}" />
-                        </Trigger>
-                        <Trigger Property="IsSelected" Value="True">
-                            <Setter TargetName="Root" Property="Background" Value="{StaticResource SurfaceLowBrush}" />
-                            <Setter TargetName="Root" Property="BorderBrush" Value="{StaticResource PrimaryBrush}" />
+                        <Trigger Property="IsExpanded" Value="True">
+                            <Setter TargetName="Body" Property="Visibility" Value="Visible" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
+    </Style>
+
+    <!-- ══════════════════════════════════════════════════════════════ ToolTip ═══ -->
+    <Style TargetType="ToolTip">
+        <Setter Property="Foreground" Value="{StaticResource OnSurfaceBrush}" />
+        <Setter Property="MaxWidth" Value="360" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ToolTip">
+                    <Border Background="{StaticResource SurfaceHighBrush}"
+                            BorderBrush="{StaticResource OutlineBrush}"
+                            BorderThickness="1"
+                            CornerRadius="6"
+                            Padding="10,7">
+                        <ContentPresenter />
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ═══════════════════════════════════════════════════════ günlük kutusu ═══ -->
+    <!-- ⚠️ Ayrı şablon: genel TextBox şablonu içeriği dikeyde ORTALIYOR, çok satırlı
+         günlükte metin ortadan başlar ve kaydırma bozulur. -->
+    <Style x:Key="LogTextBox" TargetType="TextBox">
+        <Setter Property="Background" Value="{StaticResource SurfaceHighBrush}" />
+        <Setter Property="Foreground" Value="{StaticResource OnSurfaceVariantBrush}" />
+        <Setter Property="FontFamily" Value="{StaticResource MonoFont}" />
+        <Setter Property="FontSize" Value="11.5" />
+        <Setter Property="IsReadOnly" Value="True" />
+        <Setter Property="BorderBrush" Value="{StaticResource OutlineBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="10,8" />
+        <Setter Property="TextWrapping" Value="NoWrap" />
+        <Setter Property="VerticalScrollBarVisibility" Value="Auto" />
+        <Setter Property="HorizontalScrollBarVisibility" Value="Auto" />
+        <Setter Property="SelectionBrush" Value="{StaticResource PrimaryBrush}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TextBox">
+                    <Border Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="6">
+                        <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}" />
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ══════════════════════════════════════════════════════ liste satırı ══════ -->
+    <Style x:Key="ListRow" TargetType="Border">
+        <Setter Property="Background" Value="{StaticResource SurfaceHighBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource OutlineBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Padding" Value="14,10" />
+        <Setter Property="Margin" Value="0,0,0,8" />
     </Style>
 
 </ResourceDictionary>

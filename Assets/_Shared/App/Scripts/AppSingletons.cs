@@ -41,7 +41,27 @@ namespace VortexArena.App
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Install()
         {
+            if (AppSession.IsReplay)
+            {
+                InstallReplaySingletons();
+                return;
+            }
+
             InstallNetworkSingletons();
+        }
+
+        /// <summary>
+        /// Playback session (§12.4): no server, so the connection card, the kick shutdown and the
+        /// log relay have nothing to report — the card would sit on screen for the whole recording.
+        /// Scene routing and the spectator stay: the recording drives them exactly as the server did.
+        /// </summary>
+        private static void InstallReplaySingletons()
+        {
+            LoadingOverlay.Install();
+            MatchResultOverlay.Install();
+            SceneRouter.Install();
+            Admin.AdminSpectator.Install();
+            ReplayController.Install();
         }
 
         /// <summary>

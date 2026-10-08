@@ -3284,7 +3284,7 @@ ya yazılmaz, yanlış yazılmaz; oyuncu istemcisinin ölçüm dışındaki hiç
 
 | Dosya | Kaynağı | Not |
 |---|---|---|
-| `server.json` | **Elle** | Portlar + `venueName` + `tickHz` + `venue` + `lobbyScene`; yoksa varsayılanlarla oluşturulur (§1 sabitleri). `venue` = açılışta seçilecek mekan (boş = konsolda sorulur). `lobbyScene` = lobi sahnesi (§10.7); **boş = seçilen mekanın lobi haritası otomatik bulunur**. ⚠️ Çözülemezse sunucu **açılmaz** (aşağı). |
+| `server.json` | **Elle** | Portlar + `venueName` + `tickHz` + `venue` + `lobbyScene` + maç kaydı klasörü ve saklaması (`replayDir` · `replayKeepDays`, §12.5); yoksa varsayılanlarla oluşturulur (§1 sabitleri). `venue` = açılışta seçilecek mekan (boş = konsolda sorulur). `lobbyScene` = lobi sahnesi (§10.7); **boş = seçilen mekanın lobi haritası otomatik bulunur**. ⚠️ Çözülemezse sunucu **açılmaz** (aşağı). |
 | `devices.json` | **Sunucu üretir** | `deviceId → { "name":"ertu", "number":7 }`; ilk bağlantıda ve `set_identity`'de yazılır (§2). Eski v1 biçimi (`deviceId → "ad"`) okunur — numara `0` sayılır — ve ilk yazımda yeni biçime yükseltilir. UTF-8, BOM'suz. |
 | `maps.json` | **Unity export** | `MapDefinition` SO'larından: `sceneName`, `venue`, `gameType`, `modes`, `moleDensity` (§10.1, §10.5, §11.1) + harita başına `objects[]` ve kökte `kinds[]` (§10.10). Arena ölçüsü YOKTUR — sunucu metre kullanmaz, ölçü istemcide sahnenin `ArenaBoundary`'sinde kalır. |
 
@@ -3375,3 +3375,148 @@ Seçimin üç sonucu:
 > ⚠️ **Mekan çalışırken DEĞİŞMEZ.** Başka bir mekana geçmek sunucuyu yeniden başlatmak demektir —
 > bilinçli: kalibrasyon, lobi ve harita listesi hep birlikte o fiziksel odaya aittir, maç ortasında
 > hepsini birden takas etmenin güvenli bir anlamı yok.
+
+## 12. Maç kaydı dosyası (`.vxr`)
+
+Sunucu her maçı, **bir admin'in o maçta aldığı her şeyi** zaman damgasıyla bir dosyaya yazar;
+oynatıcı bu kaydı canlı admin izleyicisinin parse yollarına geri besler. Kayıt **ayrı bir protokol
+değildir**: içindeki her kayıt §5'in WS JSON metni ya da §6'nın UDP datagramıdır, baytı baytına.
+Dosya kabuğu paylaşılan `ReplayFile` (`Assets/_Shared/Net/Protocol/ReplayFile.cs`) ile iki tarafta
+aynı kaynaktan derlenir. Kayıt teli değiştirmez — `PROTOCOL_VERSION` artmaz, gözlüğe yeni APK gitmez.
+
+### 12.1 Ne kaydedilir
+
+- **Admin'e giden her WS metni, tek kopya:** herkese giden yayınlar (`match_state`, `countdown`,
+  `kill_event`, `match_end`, `return_to_lobby`, `world_state`, `object_*`, `rules_update`), konunun
+  oyuncusu + adminlere giden `health_update`, yalnız adminlere gidenler (`violation`, `admin_state`,
+  `calibration_result`, `net_stats`), lobi yayınları (`lobby_state`, `selection_state`) ve
+  `load_match`'in **admin kopyası** (`yourTeam:""`).
+- **Giden her UDP datagramı, tek kopya:** `0x02`, `0x04`, `0x05`, `0x08`. Sunucu her tikte paketi
+  bir kez kurar ve her hedefe aynı baytları yollar (§6); kayıt o baytlardır.
+- **Kaydedilmeyenler:** kişiye özel cevaplar (`welcome`, `heartbeat`, `respawn`, `load_match`'in
+  oyuncu kopyası, `0x00` onayı, `0x06` yankısı) ve istemciden sunucuya gelen hiçbir şey. Yalnız
+  istemcide yaşayan şeyler (hasar hesabı §10.3, cephane, parmak pozu, kırık parça fiziği, ses) zaten
+  telde yoktur; oynatıcı onları canlı admin gibi olaylardan yeniden üretir.
+- ⚠️ **Admin bağlı olmasa da kayıt alınır:** sunucunun "admin yoksa kurma/gönderme" kapıları kayıt
+  açıkken kaydı bir admin sayar. Gerekçe: kayıt sonradan sorulan maç içindir; o maçta operatör
+  ekranının açık olup olmaması kaydın içeriğini belirlememeli.
+
+### 12.2 Ne zaman kaydedilir, dosya sınırları ve adı
+
+- **Kayıt isteğe bağlıdır ve sunucu her açılışta KAPALI başlar.** Operatör launcher'dan açar ve
+  kapatır (§13); kalıcı bir "hep kaydet" ayarı yoktur. Gerekçe: kayıt disk ve müşteri verisi
+  demektir — istenmeyen her maçı sessizce yazmak ikisini de gereksiz tüketir.
+- **Açıkken her maç ayrı bir dosyadır.** Kayıt lobiye dönüşte kapanan dosyayla birlikte kapanmaz:
+  operatör kapatana kadar sonraki her maç kendi dosyasına yazılır.
+- **Maç başında açılış:** `start_match` doğrulandıktan sonra, `load_match` kuyruğa girmeden önce. İlk
+  kayıtlar o anki `lobby_state` + `selection_state` + `admin_state`'tir (geç katılan bir admin'in
+  aldığı başlangıç durumu, `welcome` hariç); ardından `load_match` gelir.
+- **Maç ortasında açılış:** kayıt bir maç sürerken açılırsa dosya hemen açılır. İlk kayıtlar aynı
+  lobi durumu + o anki maçın **admin `load_match`'i** (`sceneElapsed` dolu) + `world_state` +
+  `match_state`'tir — oynatıcı sahneyi her zaman bir `load_match`'ten yükler. Lobi ya da `finished`
+  fazında açılan kayıt dosyayı bir sonraki `start_match`'te açar.
+  ⚠️ Ortadan açılan kayıt yalnız geç katılan bir admin'in bildiğini bilir: açılıştan önceki
+  öldürmeler kayıtta yoktur, can değerleri ilk `health_update`'e kadar bilinmez.
+- **Kapanış**, hangisi önce gelirse: lobiye dönüş, sahne seçimiyle lobiye geçiş, yeni bir
+  `start_match` (eskisi kapanır, yenisi açılır), operatörün kaydı kapatması, sunucu kapanışı. Son
+  kayıt `End`'dir.
+- **Bir maç = bir dosya.** Turnuva turları aynı dosyadadır — tur başına `load_match` gitmez (§10.5).
+- **Ad:** `<yyyy-MM-dd_HH-mm-ss>_<SahneAdı>_<modId>.vxr`, sunucunun yerel saatiyle açılış anı.
+  Aynı saniyede ikinci dosya `_2`, `_3` ekiyle açılır. Klasör kuralı §12.5.
+
+### 12.3 Biçim (binary, little-endian)
+
+**Başlık — 32 B sabit:**
+
+| Ofset | Tip | Alan | Anlam |
+|---|---|---|---|
+| 0 | 4 B | `magic` | ASCII `VXRP` |
+| 4 | u16 | `formatVersion` | `ReplayFile.FORMAT_VERSION` |
+| 6 | u16 | `protocolVersion` | Kaydı alan sunucunun `PROTOCOL_VERSION`'ı |
+| 8 | i64 | `startedUnixMs` | Açılış anı, UTC |
+| 16 | u32 | `durationMs` | Kapanışta yazılır; `0` = kapanmamış |
+| 20 | u32 | `recordCount` | Kapanışta yazılır |
+| 24 | u32 | `flags` | bit0 `FINALIZED`; kalanı rezerv |
+| 28 | u32 | `metaLength` | Hemen ardından gelen meta JSON'unun bayt sayısı |
+
+**Meta** — UTF-8 JSON, `ReplayMeta`: `{ sceneName, modeId, venue, roundSeconds, scoreLimit,
+players:[{ playerId, name, number, team }] }`. `players` açılış anındaki oyuncu kadrosudur (admin
+yok). Meta **listeleme içindir** (kayıt seçici dosyayı açmadan maçı tanır); oynatma durumu yalnız
+kayıtlardan kurar.
+
+**Kayıtlar** — dosya sonuna kadar art arda: `[u32 timeMs][u8 kind][u32 length][payload]`.
+`timeMs` açılıştan beri geçen monoton milisaniyedir (sunucunun monoton saati, duvar saati değil) ve
+azalmaz.
+
+| `kind` | Ad | Payload |
+|---|---|---|
+| `1` | `Text` | Admin'e giden WS metni, UTF-8 JSON (§5) |
+| `2` | `Datagram` | Giden UDP datagramı, gönderilen baytların aynısı (§6) |
+| `3` | `End` | Kapanış sebebi, UTF-8: `lobby` · `restart` · `stopped` (operatör kaydı kapattı) · `shutdown` |
+
+- ⚠️ **Kapanmamış dosya geçerlidir:** sunucu çökerse başlıkta `FINALIZED` yoktur ve son kayıt yarım
+  olabilir. Okuyucu yarım kuyruğu atar, öncesini oynatır, süreyi son tam kaydın zamanından alır.
+  Gerekçe: kayıt en çok beklenmedik biten maçta lazımdır.
+- ⚠️ **Payload üst sınırı `ReplayFile.MAX_PAYLOAD_BYTES`:** sınırı aşan uzunluk bozukluk sayılır ve
+  dosyanın sonu kabul edilir — bozuk bir uzunluk okuyucuyu dev bir ayırmaya sokmamalı.
+- Sıkıştırma yoktur; pozlar zaten quantize'dir (§6.2). Web'e taşınırsa sıkıştırma aktarımda (HTTP)
+  yapılır, dosya biçimi değişmez.
+
+### 12.4 Oynatma sözleşmesi
+
+- `Text` kaydı canlı bir WS mesajı gibi, `Datagram` kaydı canlı bir UDP alımı gibi işlenir; alım
+  zaman damgası kaydın `timeMs`'inden türeyen **oynatma saatidir** (interpolasyon `INTERP_DELAY_MS`
+  geriden okur, canlıdaki gibi). Oynatıcı ağa **hiçbir şey göndermez** ve bağlanmaz.
+- Oynatıcı yalnız kendi `PROTOCOL_VERSION`'ına **eşit** kaydı açar; farklıysa iki sürümü yazarak
+  reddeder. Gerekçe: kayıt §5/§6 baytlarıdır ve tel düzeni sürümler arasında değişir (§1) — eski
+  baytı yeni okuyucuyla açmak sessizce çöp poz üretir. `formatVersion` yalnız dosya kabuğunu
+  sürümler; okuyucu bilmediği kabuğu reddeder.
+- ⚠️ **İçerik de eşleşmelidir:** sahne geometrisi ve `netItemId` kataloğu kayıtta yoktur, oynatan
+  Unity build'inden okunur — kayıt, onu alan sürümün içeriğiyle oynatılır. Kalıcı kopya videodur;
+  ham kayıt sürüm geçince açılmaz.
+
+### 12.5 Klasör ve saklama
+
+- **Açma/kapama yalnız çalışma zamanındadır** (`POST /launcher/recording`, §13); config alanı yoktur.
+- **Klasör:** `--replay-dir <yol>` > `server.json → replayDir` > exe yanında `replays/`; göreli yol
+  exe klasörüne göre çözülür. Launcher sunucuyu kendi klasöründeki `replays/` ile başlatır.
+  Gerekçe: sunucu klasörü yeniden dağıtılınca (klasör değiştirilince) içindeki kayıtlar da giderdi.
+- **Saklama:** `server.json → replayKeepDays` (varsayılan `30`; `0` = hiç silme). Sunucu açılışta ve
+  her kayıt kapanınca süresi dolmuş `.vxr` dosyalarını siler.
+- Kayıt diske ayrı bir iş parçacığında yazılır; maç döngüsü ve snapshot döngüsü yalnız kuyruğa
+  ekler, diske hiç beklemez.
+
+## 13. Launcher kontrol uçları (HTTP, yalnız bu makineden)
+
+Sunucu, WS ile **aynı portta** (`CONTROL_PORT`) operatör launcher'ı için üç HTTP ucu açar. Oyun
+istemcileri bunları kullanmaz. DTO'lar ve yollar paylaşılan `LauncherApi`'dedir
+(`Assets/_Shared/Net/Protocol/LauncherApi.cs`); launcher da Protocol kaynaklarını derler.
+
+| Uç | Gövde | Cevap |
+|---|---|---|
+| `GET /launcher/status` | — | `200` + `LauncherStatus` |
+| `POST /launcher/recording` | `{ "on": true }` / `{ "on": false }` | `200` + yeni `LauncherStatus` |
+| `POST /launcher/shutdown` | — | `202` hemen; ardından Ctrl+C ile **aynı** kapanış yolu koşar |
+
+- ⚠️ **Yalnız loopback'ten kabul edilir;** başka adresten gelen istek `403` alır (IPv4-mapped
+  adres açılarak bakılır). Gerekçe: port oyun ağına açıktır ve o ağdaki hiçbir cihaz sunucuyu
+  kapatabilmemeli ya da kaydı değiştirebilmemeli. Launcher bu yüzden sunucuyla **aynı PC'de** durur.
+- **`shutdown` cevabı kapanıştan önce döner.** Kapanış WS host'unu da durdurur ve host açık
+  istekleri bekler; cevap kapanışın içinde beklenseydi istek kendi kapanışını bekleyip tavana
+  takılırdı.
+- **Çalışıyor mu kararı `status` cevabıdır, süreç takibi değil:** launcher'dan önce (ya da başka bir
+  launcher örneğinden) başlatılmış sunucu da böylece görünür ve durdurulabilir.
+
+**`LauncherStatus`:**
+
+| Alan | Anlam |
+|---|---|
+| `protocolVersion` | Sunucunun `PROTOCOL_VERSION`'ı |
+| `venue` | Açık mekan |
+| `phase` / `phaseReason` / `modeId` / `sceneName` | O anki maç durumu (`MatchInfo` ile aynı değerler, §5.3) |
+| `playerCount` / `adminCount` | Bağlı oyuncu / admin sayısı |
+| `recording.armed` | Operatör kaydı açtı mı |
+| `recording.active` | Şu an açık bir dosya var mı (açık ama lobide = `armed` ve `!active`) |
+| `recording.file` | Açık dosyanın adı (klasörsüz); yoksa boş |
+| `recording.elapsedMs` | Açık dosyanın başından beri geçen süre |
+| `recording.directory` | Kayıt klasörünün tam yolu |

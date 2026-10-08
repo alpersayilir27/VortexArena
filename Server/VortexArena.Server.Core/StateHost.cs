@@ -23,6 +23,9 @@ public sealed class StateHost
     /// <summary>Fire event relay gate (§6.5) — only <c>ShotRelayOpen</c> is read.</summary>
     private readonly MatchDirector _matchDirector;
 
+    /// <summary>Match recording (§12); <see cref="MatchRecorder.Disabled"/> when unwired.</summary>
+    private readonly MatchRecorder _recorder;
+
     /// <summary>Events that passed the relay gate: written by recv thread, read by the 20 Hz
     /// broadcast thread.
     /// <para><see cref="ConcurrentQueue{T}"/> instead of a lock: the recv path shares its thread
@@ -113,11 +116,13 @@ public sealed class StateHost
     /// <param name="matchDirector">Source of the shot relay gate (§6.5). <b>Why a ctor param:</b>
     /// the director is built BEFORE StateHost in <c>Program.cs</c>, so there is no cycle — a
     /// settable property would create the "forget the wiring, events silently vanish" trap.</param>
-    public StateHost(PlayerRegistry registry, int port, MatchDirector matchDirector)
+    public StateHost(PlayerRegistry registry, int port, MatchDirector matchDirector,
+        MatchRecorder? recorder = null)
     {
         _registry = registry;
         _port = port;
         _matchDirector = matchDirector;
+        _recorder = recorder ?? MatchRecorder.Disabled;
     }
 
     public void Start()
@@ -756,6 +761,11 @@ public sealed class StateHost
                 BuildPackets(entries, serverTick, packets);
             }
 
+            // §12.1: one copy of the bytes every target receives. Each packet is a fresh buffer, so it
+            // is handed over by reference.
+            if (_recorder.IsRecording)
+                foreach (var packet in packets) _recorder.Datagram(packet);
+
             // Send loop timed separately so the field can tell whether tick drift comes from this
             // sequential await chain or from thread scheduling.
             var sendStart = Stopwatch.GetTimestamp();
@@ -790,6 +800,7 @@ public sealed class StateHost
                 // pattern as ignoring its own pose in the snapshot). A per-target batch would mean N
                 // serializations per tick to save ~90 B/s per player.
                 var eventPacket = BuildEventPacket(eventBuffer, serverTick);
+                _recorder.Datagram(eventPacket);
                 foreach (var target in targets)
                 {
                     try
@@ -818,6 +829,8 @@ public sealed class StateHost
             if (skeletonEntries.Count > 0 && targets.Count > 0)
             {
                 BuildSkeletonPackets(skeletonEntries, serverTick, skeletonPackets);
+                if (_recorder.IsRecording)
+                    foreach (var packet in skeletonPackets) _recorder.Datagram(packet);
                 foreach (var packet in skeletonPackets)
                 {
                     foreach (var target in targets)

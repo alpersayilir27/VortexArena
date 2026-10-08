@@ -45,7 +45,7 @@ namespace VortexArena.Net
         public event Action<int> OnRemoteLeft;
 
         /// <summary>
-        /// A snapshot's tick→local timestamp (recvMs = Environment.TickCount).
+        /// A snapshot's tick→local timestamp (recvMs = NetClock.NowMs).
         /// <para>⚠️ <b>GLOBAL, not per player</b>: one snapshot per tick holds every player. On
         /// <see cref="RemoteEntry.ring"/> an event from a player with no pose (or absent that tick)
         /// could not be timed.</para>
@@ -57,7 +57,7 @@ namespace VortexArena.Net
             public bool valid;
         }
 
-        /// <summary>A single snapshot's pose sample (recvMs = Environment.TickCount).</summary>
+        /// <summary>A single snapshot's pose sample (recvMs = NetClock.NowMs).</summary>
         private struct PoseSample
         {
             public int recvMs;
@@ -109,7 +109,7 @@ namespace VortexArena.Net
         private volatile bool _localSpawnProtected;
         private volatile int _localFlagsRecvMs;
 
-        /// <summary>The Environment.TickCount value at which the last snapshot arrived
+        /// <summary>The NetClock value at which the last snapshot arrived
         /// (diagnostics).</summary>
         public int LastSnapshotMs
         {
@@ -245,7 +245,7 @@ namespace VortexArena.Net
         }
 
         /// <summary>
-        /// MAIN THREAD: the local time (Environment.TickCount axis) at which a server tick will be
+        /// MAIN THREAD: the local time (NetClock axis) at which a server tick will be
         /// played; false when unknown → the caller plays the event IMMEDIATELY.
         /// <para>Remote poses are drawn <c>INTERP_DELAY_MS</c> behind
         /// (<see cref="GetInterpolatedPose"/>), so a sample with <c>recvMs = R</c> is drawn at
@@ -293,7 +293,7 @@ namespace VortexArena.Net
         /// A <b>SHARED clock</b> (seconds) on the server's tick axis; false before the first snapshot.
         /// <para><b>Why:</b> the Movement SDK's network interface requires a network time on every
         /// client. The wire skeleton does NOT use it (it interpolates on receive stamps, §6.9);
-        /// <c>Environment.TickCount</c> is machine-specific.</para>
+        /// the local receive clock is machine-specific.</para>
         /// <para><b>Why no clock-sync packet:</b> <c>serverTick</c> is already the same number on every
         /// client — converted to seconds plus time since the last arrival. Error = one-way latency
         /// difference (a few ms on LAN). ⚠️ Not an <b>absolute</b> clock and no violation of §6.7: RTT
@@ -313,7 +313,7 @@ namespace VortexArena.Net
                     return false;
                 }
 
-                int sinceNewestMs = Environment.TickCount - _newestTickRecvMs;
+                int sinceNewestMs = NetClock.NowMs - _newestTickRecvMs;
                 double ms = (double)_newestTick * MS_PER_SNAPSHOT + sinceNewestMs;
                 seconds = (float)(ms / 1000.0);
                 return true;
@@ -326,7 +326,7 @@ namespace VortexArena.Net
             _leftScratch.Clear();
 
             // TickCount differences via int subtraction — robust against the ~24.9 day wraparound.
-            int now = Environment.TickCount;
+            int now = NetClock.NowMs;
 
             lock (_gate)
             {
@@ -369,7 +369,7 @@ namespace VortexArena.Net
         /// <para>⚠️ A reader that only asks for the interpolated pose cannot tell a live channel from one
         /// that stopped: samples stay in the ring and are clamped to the nearest end, so a dead channel
         /// keeps answering with its last pose. Anything that DRIVES bones from it has to know (§6.11).</para>
-        /// <para>Same clock as <c>recvMs</c> (<c>Environment.TickCount</c>) → a RECEIVE age, network
+        /// <para>Same clock as <c>recvMs</c> (<c>NetClock</c>) → a RECEIVE age, network
         /// silence included, which is exactly the fault being detected.</para></summary>
         public int GetPoseAgeMs(int playerId)
         {
@@ -380,7 +380,7 @@ namespace VortexArena.Net
                     return -1;
                 }
 
-                return Environment.TickCount - entry.lastRecvMs;
+                return NetClock.NowMs - entry.lastRecvMs;
             }
         }
 
@@ -395,7 +395,7 @@ namespace VortexArena.Net
             handL = Pose.identity;
             handR = Pose.identity;
 
-            int renderMs = Environment.TickCount - ArenaProtocol.INTERP_DELAY_MS;
+            int renderMs = NetClock.NowMs - ArenaProtocol.INTERP_DELAY_MS;
 
             PoseSample before = default;
             PoseSample after = default;
@@ -572,7 +572,7 @@ namespace VortexArena.Net
         /// over".</para>
         /// </summary>
         public bool IsLocalSpawnProtected =>
-            _localSpawnProtected && Environment.TickCount - _localFlagsRecvMs <= LOCAL_FLAG_STALE_MS;
+            _localSpawnProtected && NetClock.NowMs - _localFlagsRecvMs <= LOCAL_FLAG_STALE_MS;
 
         /// <summary>
         /// §6.6: the player's <b>last known</b> item state. False when the player is unknown.

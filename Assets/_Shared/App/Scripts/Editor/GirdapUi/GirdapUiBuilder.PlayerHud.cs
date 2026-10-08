@@ -425,26 +425,25 @@ namespace VortexArena.App.Editor
             var so = new SerializedObject(hud);
             Transform strip = root.transform.Find(StripPrefab);
             Transform death = root.transform.Find(DeathPrefab);
-            string mode = hud.GetType().Name; // mode assemblies are not referenced from here
-
-            if (strip != null)
+            if (strip == null)
             {
-                HudSet(so, "timeText", VhudFind<TextMeshProUGUI>(strip, "Clock/Time"));
-                HudSet(so, "timeFrame", VhudFind<Transform>(strip, "Clock")?.gameObject);
-                HudSet(so, "healthText", null); // HealthStrip writes the bare number itself
-                HudSet(so, "healthFill", null);
-                HudSet(so, "healthStrip", VhudFind<HealthStrip>(strip, "HpBar"));
-                HudSet(so, "statusText", null);
-                HudSet(so, "statusPlate", VhudFind<StatusPlate>(strip, "Status"));
+                // A mode HUD that carries its own skin (Burger → LokantaStrip) has no shared strip to
+                // rebind; its bindings belong to its own builder, so leave them alone.
+                return;
+            }
 
-                if (mode == "MoleClientController")
-                {
-                    BindMoleStrip(strip);
-                }
-                else if (mode == "BurgerClientController")
-                {
-                    BindBurgerStrip(strip);
-                }
+            HudSet(so, "timeText", VhudFind<TextMeshProUGUI>(strip, "Clock/Time"));
+            HudSet(so, "timeFrame", VhudFind<Transform>(strip, "Clock")?.gameObject);
+            HudSet(so, "healthText", null); // HealthStrip writes the bare number itself
+            HudSet(so, "healthFill", null);
+            HudSet(so, "healthStrip", VhudFind<HealthStrip>(strip, "HpBar"));
+            HudSet(so, "statusText", null);
+            HudSet(so, "statusPlate", VhudFind<StatusPlate>(strip, "Status"));
+
+            // mode assemblies are not referenced from here
+            if (hud.GetType().Name == "MoleClientController")
+            {
+                BindMoleStrip(strip);
             }
 
             if (death != null)
@@ -474,45 +473,6 @@ namespace VortexArena.App.Editor
             if (status != null)
             {
                 PlaceCenter(status, 0f, hitsY + 12f + StripGap + StatusH * 0.5f, StripW, StatusH);
-            }
-        }
-
-        /// <summary>Burger: no health, no teams — the mode's own score plate takes the bar's slot.</summary>
-        private static void BindBurgerStrip(Transform strip)
-        {
-            VhudSetActive(strip, "HpBar", false);
-            VhudSetActive(strip, "RoundScore", false);
-            RectTransform plate = VhudFind<RectTransform>(strip, "Score");
-            if (plate != null)
-            {
-                PlaceCenter(plate, 0f, 0f, StripW, HpBarH);
-                var image = plate.GetComponent<UiImage>();
-                if (image != null)
-                {
-                    Object.DestroyImmediate(image);
-                }
-
-                var shape = plate.GetComponent<UiShape>();
-                if (shape == null)
-                {
-                    shape = plate.gameObject.AddComponent<UiShape>();
-                    shape.raycastTarget = false;
-                }
-
-                shape.Chamfer(10f).Outline(1f, PhBdA, PhBdB)
-                    .Fill(Girdap.PlateA, Girdap.PlateB, UiGradientMode.Vertical);
-                var value = VhudFind<TextMeshProUGUI>(plate, "Value");
-                if (value != null)
-                {
-                    VhudRestyle(value, GirdapFont.ChakraBold, 26f, Girdap.Text, TextAlignmentOptions.Center, 0.06f);
-                    Stretch(value.rectTransform);
-                }
-            }
-
-            RectTransform status = VhudFind<RectTransform>(strip, "Status");
-            if (status != null)
-            {
-                PlaceCenter(status, 0f, HpBarH * 0.5f + StripGap + StatusH * 0.5f, StripW, StatusH);
             }
         }
 

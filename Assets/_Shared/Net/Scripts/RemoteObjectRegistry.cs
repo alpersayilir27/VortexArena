@@ -12,7 +12,7 @@ namespace VortexArena.Net
     /// scene/game knowledge.
     /// <para>⚠️ A SEPARATE registry from <see cref="RemotePlayerRegistry"/> (an object is not a player,
     /// it has no join/leave and no state bits) but deliberately on the SAME clock
-    /// (<c>Environment.TickCount</c> + the same interp delay): a held object hangs off a hand drawn from
+    /// (<c>NetClock</c> + the same interp delay): a held object hangs off a hand drawn from
     /// the player registry, and two time bases would separate the two.</para>
     /// <para>⚠️ Poses only stream during the FLIGHT WINDOW (awake and not held, between
     /// <c>object_release</c> and <c>object_rest</c>). When the stream stops, the entry goes stale and the
@@ -136,7 +136,7 @@ namespace VortexArena.Net
                 return false;
             }
 
-            int renderMs = Environment.TickCount - ArenaProtocol.INTERP_DELAY_MS;
+            int renderMs = NetClock.NowMs - ArenaProtocol.INTERP_DELAY_MS;
 
             PoseSample before = default;
             PoseSample after = default;
@@ -201,14 +201,14 @@ namespace VortexArena.Net
             {
                 return _entries.TryGetValue(netId, out ObjectEntry entry) &&
                        entry.count > 0 &&
-                       Environment.TickCount - entry.lastRecvMs <= STALE_TIMEOUT_MS;
+                       NetClock.NowMs - entry.lastRecvMs <= STALE_TIMEOUT_MS;
             }
         }
 
         private void Update()
         {
             // TickCount differences via int subtraction — robust against the ~24.9 day wraparound.
-            int now = Environment.TickCount;
+            int now = NetClock.NowMs;
 
             _staleScratch.Clear();
 

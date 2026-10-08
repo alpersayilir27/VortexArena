@@ -391,10 +391,16 @@ yanlış oyuncuya komut gönderir.
 
 ### ⛔ Moda özel maç sonu ekranını `MatchResultOverlay.prefab`'ın KOPYASI olarak yapma
 
-Moda özel görünüm, tabanın **varyantı** olur (`ModeDefinition.resultScreenPrefab`'a bağlanır).
-Kopya, alan bağlarını o anki hâliyle dondurur: tabana sonradan eklenen bir öge ya da alan kopyaya
-inmez ve o modda **hata vermeden** çizilmez. Aynı sebeple varyantın kökündeki `MatchResultOverlay`
-bileşeni kaldırılmaz, `modeId`'ye bakan bir görünüm dalı da kodda açılmaz — görünüm veridir.
+Moda özel görünüm (`ModeDefinition.resultScreenPrefab`) **iki yoldan biri** olur: tabanın **prefab
+varyantı** (sprite/renk/kelime farkı; alan bağları tabandan miras gelir) ya da modun kendi
+`GirdapUiBuilder` partial'ından **sıfırdan üretilen** prefab (yerleşim de değişiyorsa; builder aynı
+alanları ad üstünden bağlar ve prefabı var olan yolun üstüne kaydeder, yoksa `resultScreenPrefab`
+GUID'i kopar).
+
+Elle kopya ikisinin de yerine geçmez: alan bağlarını o anki hâliyle dondurur — tabana sonradan
+eklenen bir öge ya da alan kopyaya inmez ve o modda **hata vermeden** çizilmez. Her iki yolda da
+kökteki `MatchResultOverlay` bileşeni kaldırılmaz ve `modeId`'ye bakan bir görünüm dalı kodda
+açılmaz — görünüm veridir, bileşenin alanlarından gelir.
 → reçete: **[Yemek Kitabı 13.2](Yemek-Kitabi.md#132-moda-özel-maç-sonu-ekranı)**
 
 ### ⛔ `BaseZone`'u gizlemek için yalnız bileşeni kapatma
@@ -818,6 +824,54 @@ sahne yüklenmez ve oyuncu bir şey olmadığını görür. Listeye elle konur v
 
 ---
 
+## Gökyüzü
+
+### ⛔ Sahneye satıcı paketinin ya da Unity'nin `Default-Skybox` materyalini atama
+
+Gökyüzü materyali **kitaplıktan** seçilir: `_Shared/World/Sky/M_Sky_*.mat`
+(`VortexArena/AnimatedSkybox`). Satıcı materyali animasyonsuzdur ve sahneyi
+`ThirdPartyPackages/` klasörüne bağımlı kılar; `Default-Skybox` ise hiçbir arenanın görünümü
+değildir. Farklı bir görünüm gerekiyorsa sahnedeki materyal değiştirilmez, kitaplığa **yeni** bir
+materyal eklenir — aynı haritayı kullanan bütün mekanlar tek materyali paylaşır, yani ayar bir kez
+yapılır. Reçete → [Yemek Kitabı](Yemek-Kitabi.md).
+
+### ⛔ Gökyüzünü Shader Graph ile yazma
+
+URP, `RenderSettings.skybox`'ı **eski (legacy) skybox yolundan** çizer: URP Unlit Shader Graph
+gökyüzü materyali olarak resmen desteklenmez ve Quest standalone build'de yüzlerin kaybolduğu
+bilinen bir hatası vardır — editörde doğru görünür, gözlükte eksik çizilir. Gökyüzü shader'ı
+Unity'nin yerleşik skybox shader'ları gibi `CGPROGRAM` + `UnityCG` ile yazılır.
+
+### ⛔ Bulutu ufka indirme, dönüş hızını dakikada birkaç dereceden yukarı çekme
+
+`_CloudHorizonFade` bir görünüm ayarı değil **konfor ayarıdır**: görüşün alt yarısını dolduran
+geniş ve hareketli bir alan VR'da mide bulandırır — bulut tepede kalır, ufka doğru söner.
+`Dönüş hızı` **derece/dakika**dır ve dakikada birkaç derece mertebesinde tutulur; hareketi
+"görünür" yapmak tam olarak onu rahatsız edici yapmaktır.
+
+### ⛔ Sahnenin gökyüzünü değiştirip yeniden bake etmeden bırakma
+
+Sahneler `Ambient = Skybox` ve yansıma kaynağı Skybox kullanır: ortam ışığı ve varsayılan yansıma
+gökyüzünden bake edilmiş veridir. Bake edilmezse sahne **ESKİ** gökyüzünün ortam ışığıyla kalır;
+hata çıkmaz, yalnız gökyüzü ile sahnenin ışığı birbirini tutmaz. Toon shader'ları ortam/dolaylı
+ışık koluna bağlıdır → "Yamalı satıcı dosyasını paketi yeniden içe aktararak EZME".
+⚠️ Karar gözlükte verilir: Quest'te HDR kapalıdır, HDR gökyüzü dokusu başlıkta 1'in üstünden
+kırpılır.
+
+### ⛔ Gökyüzü materyalini betikle kurarken yalnız `_SkySource`'u yazma
+
+Unity'de enum property'nin shader keyword'ünü **yalnız Inspector** set eder. Koddan ya da bir
+araçtan yazılan materyalde float değişir, `_SKYSOURCE_*` kapalı kalır ve gökyüzü sessizce cubemap
+dalını çizer — `EnableKeyword` ile seçilen dal açılıp **diğerleri kapatılmak** zorundadır. En
+güvenli yol betik değil, Project penceresinde var olan bir `M_Sky_*`'ı **çoğaltmaktır**.
+
+### ⚠️ Güneşi dokusuna boyanmış gökyüzünü hızlı döndürme
+
+Dönüş boyalı güneşi yönlü ışığın (gölgelerin) yönünden ayırır: gölgeler bir yerden, parlak güneş
+başka bir yerden gelir. Ya hız çok düşük tutulur ya da paketin `_Sunless` çeşidi kullanılır.
+
+---
+
 ## Kod ve assembly düzeni
 
 ### ⛔ Namespace'i asmdef adından ayırma, tipi global namespace'te bırakma
@@ -1108,6 +1162,14 @@ kapalı cross-fade'de LOD geçişi yumuşamaz.
 hangi çarpanın açık kaldığı ise `Logs/shadercompiler-*.log`. Gerekçe: `Docs/Sistem-Ozeti.md`,
 "Tuzaklar".
 
+### ⛔ Quest çözünürlüğünü `Mobile_RPAsset.renderScale` ile ayarlamaya çalışma
+
+Cihazda çözünürlüğü OVRManager **dinamik çözünürlüğü** sürer: açılışta `renderScale`'i ve
+`eyeTextureResolutionScale`'i üst sınırla ezer, sonra ölçeği GPU yüküne göre alt-üst sınır arasında
+kaydırır. Asset'teki değeri düşürmek cihazda **hiçbir şeyi değiştirmez** (yalnız editör/Link'te
+etkilidir); çözünürlük ayarının tek yeri rig'deki OVRManager'ın dinamik çözünürlük sınırlarıdır.
+Foveation da asset'te değil koddadır (`QuestRenderSettings`): SDK varsayılanı kapalıdır.
+
 ### ⚠️ Build/import "sebepsiz" yavaşsa önce Defender dışlamalarına bak
 
 Yeni bilgisayarda `scripts\defender-exclusions.cmd` (yönetici) bir kez çalıştırılır. Gerçek zamanlı
@@ -1127,6 +1189,28 @@ Details`; `git pull` sonrası Burst yeniden derledikçe tekrarlar. Aynı politik
 `Get-WinEvent -LogName Microsoft-Windows-CodeIntegrity/Operational -MaxEvents 20`.
 ⚠️ Gerçek zamanlı korumayı kapatmak uyarıyı susturur, sebebi gizler. SAC'ı kapatmak çözer ama
 **geri açılamaz** (Windows yeniden kurmak gerekir).
+
+---
+
+## Operatör launcher'ı
+
+### ⛔ Launcher kontrol uçlarını loopback dışına açma
+
+`/launcher/status` · `/launcher/recording` · `/launcher/shutdown` WS ile **aynı porttadır** ve o
+port oyun ağına açıktır: loopback kapısı kalkarsa ağdaki herhangi bir cihaz sunucuyu kapatabilir.
+Sözleşme: `Docs/ArenaNet-Protokol.md` → *Launcher kontrol uçları*.
+
+### ⛔ Launcher'ın başlattığı sunucunun çıktısını boruya yönlendirme
+
+`RedirectStandardOutput` açılırsa launcher kapandığında kırık boru sunucuyu düşürür; okunmayan bir
+boru dolunca da sunucu yazarken kilitlenir. Operatörün penceresi günlük **dosyasıdır**
+(`server\logs\server-*.log`, artımlı okunur).
+
+### ⛔ Launcher'a APK kurarken başka paketi kaldıran yol ekleme
+
+Her sürümün kendi paket adı (`com.vortex.arenav<N>`) tam da sürümler gözlükte **yan yana**
+yaşasın diye var; kurulum `adb install -r -g` ile yapılır. Tek istisna aynı sürümün imza
+çakışmasıdır: operatör onayıyla **yalnız o paket** kaldırılır.
 
 ---
 

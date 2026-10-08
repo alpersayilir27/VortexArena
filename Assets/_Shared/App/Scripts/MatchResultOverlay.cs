@@ -66,7 +66,8 @@ namespace VortexArena.App
         public const string ResourcePath = "UI/MatchResultOverlay";
 
         // Row metrics (tema.css `.sc-row` / `.sc-team`). Shared with the prefab builder so the
-        // template and the runtime stride can never drift apart.
+        // template and the runtime stride can never drift apart. ⚠️ These are the DEFAULTS of the
+        // serialized fields below — a skin with other row sizes (Lokanta) writes those instead.
         public const float RowHeight = 76f;
         public const float RowGap = 6f;
 
@@ -167,9 +168,10 @@ namespace VortexArena.App
         [SerializeField] private GameObject boardRowTemplate;
 
         [Header("Skor tablosu — alt bant")]
-        [Tooltip("Dört istatistik kutusu (ÖLDÜRME · ÖLÜM · K/D · SKOR).")]
+        [Tooltip("İstatistik kutuları (ÖLDÜRME · ÖLÜM · K/D · SKOR).")]
         [SerializeField] private GameObject footStatsGroup;
-        [Tooltip("Kutuların değerleri — ÖLDÜRME, ÖLÜM, K/D, SKOR sırasında.")]
+        [Tooltip("Kutuların değerleri — ÖLDÜRME, ÖLÜM, K/D, SKOR sırasında; ko-op derisinde beş " +
+                 "kutu olur (KATKI, SIRA, MUTLU, MUTSUZ, EKİP SKORU).")]
         [SerializeField] private TextMeshProUGUI[] footStatValues = new TextMeshProUGUI[4];
         [Tooltip("\"SEN\" plakası — oyuncunun takım rengini alır.")]
         [SerializeField] private UiShape footWhoPlate;
@@ -186,7 +188,58 @@ namespace VortexArena.App
                  "adlandırılamaz (K/D başlıkları ikon olduğu için boş bırakılabilir).")]
         [SerializeField] private TextMeshProUGUI[] boardColumnHeaders = new TextMeshProUGUI[ColumnOrder.Length];
 
+        [Header("Ko-op metin hedefleri (deri; boşsa eski birleşik satırlar çizer)")]
+        [Tooltip("Sonuç kartındaki büyük ortak skor.")]
+        [SerializeField] private TextMeshProUGUI coopSharedScoreText;
+        [SerializeField] private TextMeshProUGUI coopHappyText;
+        [SerializeField] private TextMeshProUGUI coopUnhappyText;
+        [Tooltip("Oyuncunun kendi katkısı.")]
+        [SerializeField] private TextMeshProUGUI coopSelfScoreText;
+        [Tooltip("Oyuncunun sırası (\"1.\").")]
+        [SerializeField] private TextMeshProUGUI coopRankText;
+        [SerializeField] private TextMeshProUGUI boardHappyText;
+        [SerializeField] private TextMeshProUGUI boardUnhappyText;
+        [SerializeField] private TextMeshProUGUI boardSharedScoreText;
+        [SerializeField] private TextMeshProUGUI boardSelfScoreText;
+        [SerializeField] private TextMeshProUGUI boardRankText;
+
+        [Header("Satır derisi (varsayılanlar = Girdap teması)")]
+        [SerializeField] private float rowHeight = RowHeight;
+        [SerializeField] private float rowGap = RowGap;
+        [SerializeField] private float rowsTop = RowsTop;
+
+        [Tooltip("Normal satırın dolgusu — havuzdan gelen satır buraya GERİ boyanır, yoksa bir " +
+                 "önceki maçta \"benim\" olan satır vurgulu kalır.")]
+        [SerializeField] private Color rowFillA = Girdap.Hex(0xAACDFF, 0.095f);
+        [SerializeField] private Color rowFillB = Girdap.Hex(0xAACDFF, 0.03f);
+        [SerializeField] private Color rowOutline = Girdap.Acc;
+        [SerializeField] private float rowOutlineWidth;
+        [SerializeField] private Color rowTextColor = Girdap.Text;
+        [Tooltip("Sıra numarası ve \"#id\" rengi.")]
+        [SerializeField] private Color rowSmallColor = Girdap.Faint;
+        [SerializeField] private Color rowRankColor = Girdap.Faint;
+
+        [Tooltip("Oyuncunun kendi satırı.")]
+        [SerializeField] private Color ownRowFillA = Girdap.Hex(0x7DE3FF, 0.36f);
+        [SerializeField] private Color ownRowFillB = Girdap.Hex(0x7DE3FF, 0.10f);
+        [SerializeField] private Color ownRowOutline = Girdap.Acc;
+        [SerializeField] private float ownRowOutlineWidth = 2f;
+        [SerializeField] private Color ownRowGlow = Girdap.Hex(0x7DE3FF, 0.26f);
+        [SerializeField] private float ownRowGlowWidth = 28f;
+        [SerializeField] private Color ownRowTextColor = Color.white;
+        [SerializeField] private Color ownRowSmallColor = Girdap.AccHi;
+        [SerializeField] private Color ownRowRankColor = Girdap.AccHi;
+
+        [Tooltip("Maçtan ayrılmış oyuncunun satır alfası.")]
+        [SerializeField] private float leftRowAlpha = 0.45f;
+
         [Header("Kelimeler ve renkler (mod varyantı ezer)")]
+        [Tooltip("Kapalıyken sonuç başlığının rengine/parıltısına dokunulmaz — derinin kendi " +
+                 "kurdelesi kazandın/kaybettin tonunu taşımaz.")]
+        [SerializeField] private bool tintTitleByOutcome = true;
+        [Tooltip("Ko-op blok özeti: {0} oyuncu, {1} katkı toplamı, {2} katkı/10. Boşsa müşteri " +
+                 "sayıları yazılır (eski satır).")]
+        [SerializeField] private string coopBlockSummaryFormat = "";
         [SerializeField] private string wonTitle = "KAZANDIN";
         [SerializeField] private string lostTitle = "KAYBETTİN";
         [SerializeField] private string drawTitle = "BERABERE";
@@ -246,6 +299,9 @@ namespace VortexArena.App
             public TextMeshProUGUI Small;
             public TextMeshProUGUI Score;
 
+            /// <summary>Optional icon next to the score (skin); hidden while the score is 0.</summary>
+            public UiImage ScoreIcon;
+
             /// <summary>K · D · K/D — the cells the kids' modes drop.</summary>
             public readonly TextMeshProUGUI[] Combat = new TextMeshProUGUI[3];
 
@@ -260,7 +316,8 @@ namespace VortexArena.App
                     Rank = Find<TextMeshProUGUI>(t, "Rank"),
                     Name = Find<TextMeshProUGUI>(t, "Name"),
                     Small = Find<TextMeshProUGUI>(t, "Small"),
-                    Score = Find<TextMeshProUGUI>(t, "Score")
+                    Score = Find<TextMeshProUGUI>(t, "Score"),
+                    ScoreIcon = Find<UiImage>(t, "ScoreIcon")
                 };
 
                 Transform tag = t.Find("Tag");
@@ -510,6 +567,7 @@ namespace VortexArena.App
 
                 SetText(resultWinnerText, $"EKİP SKORU {msg.scoreRed}");
                 SetScoreLine(CoopResultLines(), msg);
+                RefreshCoopCard(msg);
             }
             else
             {
@@ -532,10 +590,12 @@ namespace VortexArena.App
         /// Result word's tone (won / lost / draw). ⚠️ The word is a GRADIENT (white → tone), so the
         /// tone must not be written to <c>color</c>: that multiplies the gradient and the white top
         /// half would turn green/red too.
+        /// ⚠️ With <see cref="tintTitleByOutcome"/> off the word is left ALONE, material included: a
+        /// skin whose title is a painted ribbon would lose it to the instanced font material.
         /// </summary>
         private void ApplyResultTone(Color tone)
         {
-            if (resultTitleText != null)
+            if (resultTitleText != null && tintTitleByOutcome)
             {
                 resultTitleText.color = Color.white;
                 resultTitleText.enableVertexGradient = true;
@@ -573,6 +633,56 @@ namespace VortexArena.App
             {
                 resultSlabRuleRight.Fill(tone, fade, UiGradientMode.Horizontal);
             }
+        }
+
+        /// <summary>Co-op result card's separate number targets (skin). The composite strings above
+        /// stay written, so a prefab with none of these bound is unaffected.</summary>
+        private void RefreshCoopCard(MatchEndMsg msg)
+        {
+            SetText(coopSharedScoreText, (msg != null ? msg.scoreRed : 0).ToString());
+
+            Admin.AdminModeState.TryCustomerCounts(_modeState, out int happy, out int unhappy);
+            SetText(coopHappyText, happy.ToString());
+            SetText(coopUnhappyText, unhappy.ToString());
+
+            PlayerInfo self = FindSelf();
+            SetText(coopSelfScoreText, self != null ? self.score.ToString() : "0");
+
+            if (coopRankText != null)
+            {
+                // The card opens before the scoreboard is ever refreshed, so the ranking is built
+                // here too; it only reads the roster, which is already in.
+                RankPlayers();
+                coopRankText.text = RankLine();
+            }
+        }
+
+        /// <summary>Local player's 1-based place in <see cref="_ranked"/>; equal scores share the
+        /// better rank. "-" while the own id is unknown — an invented "1." would read as a win.</summary>
+        private string RankLine()
+        {
+            int self = ArenaCombat.LocalPlayerId;
+            int index = -1;
+            for (int i = 0; self != 0 && i < _ranked.Count; i++)
+            {
+                if (_ranked[i].playerId == self)
+                {
+                    index = i;
+                    break;
+                }
+            }
+
+            if (index < 0)
+            {
+                return "-";
+            }
+
+            while (index > 0 && _ranked[index - 1].score == _ranked[index].score)
+            {
+                index--;
+            }
+
+            return $"{index + 1}.";
         }
 
         /// <summary>Team-scored modes read the score off the plate (two team names + two numbers);
@@ -637,7 +747,23 @@ namespace VortexArena.App
             RefreshHeadline();
             RefreshTeamSummary();
             RefreshMatchSummary();
+            RefreshCoopBoard();
             RefreshTable();
+        }
+
+        /// <summary>Scoreboard head's co-op numbers (skin). Same null-safe contract as
+        /// <see cref="RefreshCoopCard"/>.</summary>
+        private void RefreshCoopBoard()
+        {
+            SetText(boardSharedScoreText, (_lastEnd != null ? _lastEnd.scoreRed : 0).ToString());
+
+            Admin.AdminModeState.TryCustomerCounts(_modeState, out int happy, out int unhappy);
+            SetText(boardHappyText, happy.ToString());
+            SetText(boardUnhappyText, unhappy.ToString());
+
+            PlayerInfo self = FindSelf();
+            SetText(boardSelfScoreText, self != null ? self.score.ToString() : "0");
+            SetText(boardRankText, RankLine());
         }
 
         /// <summary>
@@ -868,12 +994,16 @@ namespace VortexArena.App
                         : b == 0 ? "KIRMIZI TAKIM" : "MAVİ TAKIM";
                 }
 
+                // Teamless blocks are two halves of ONE ranking: numbering continues on the right.
+
+                int rankBase = teamless && b > 0 ? _blocks[0].Count : 0;
+
                 for (int i = 0; i < list.Count; i++)
                 {
                     Row row = RowAt(b, i);
                     if (row != null)
                     {
-                        FillRow(row, list[i], i + 1, self, hideCombat);
+                        FillRow(row, list[i], rankBase + i + 1, self, hideCombat);
                     }
                 }
 
@@ -905,7 +1035,7 @@ namespace VortexArena.App
                 clone.name = $"Row{pool.Count}";
 
                 var rt = (RectTransform)clone.transform;
-                rt.anchoredPosition = new Vector2(0f, -(pool.Count * (RowHeight + RowGap)));
+                rt.anchoredPosition = new Vector2(0f, -(pool.Count * (rowHeight + rowGap)));
                 pool.Add(Row.Bind(clone));
             }
 
@@ -923,32 +1053,32 @@ namespace VortexArena.App
             {
                 // Departed row: dimmed as a whole — the text stand-in for Counter-Strike's
                 // disconnected icon is the "· ayrıldı" suffix below.
-                row.Group.alpha = left ? 0.45f : 1f;
+                row.Group.alpha = left ? leftRowAlpha : 1f;
             }
 
             if (row.Bg != null)
             {
+                // ⚠️ The normal style is REPAINTED, not just skipped: rows are pooled, so last
+                // match's own row would stay highlighted for whoever lands on it next.
                 if (mine)
                 {
-                    row.Bg.Fill(Girdap.Hex(0x7DE3FF, 0.36f), Girdap.Hex(0x7DE3FF, 0.10f),
-                            UiGradientMode.Horizontal)
-                        .Outline(2f, Girdap.Acc)
-                        .InnerGlow(28f, Girdap.Hex(0x7DE3FF, 0.26f));
+                    row.Bg.Fill(ownRowFillA, ownRowFillB, UiGradientMode.Horizontal)
+                        .Outline(ownRowOutlineWidth, ownRowOutline)
+                        .InnerGlow(ownRowGlowWidth, ownRowGlow);
                 }
                 else
                 {
-                    row.Bg.Fill(Girdap.Hex(0xAACDFF, 0.095f), Girdap.Hex(0xAACDFF, 0.03f),
-                            UiGradientMode.Horizontal)
-                        .Outline(0f, Girdap.Acc)
-                        .InnerGlow(0f, Girdap.Acc);
+                    row.Bg.Fill(rowFillA, rowFillB, UiGradientMode.Horizontal)
+                        .Outline(rowOutlineWidth, rowOutline)
+                        .InnerGlow(0f, ownRowGlow);
                 }
             }
 
-            Color faint = mine ? Girdap.AccHi : Girdap.Faint;
-            Color lead = mine ? Color.white : Girdap.Text;
+            Color faint = mine ? ownRowSmallColor : rowSmallColor;
+            Color lead = mine ? ownRowTextColor : rowTextColor;
             Color sub = mine ? Girdap.AccHi : Girdap.Muted;
 
-            SetCell(row.Rank, rank.ToString(), faint);
+            SetCell(row.Rank, rank.ToString(), mine ? ownRowRankColor : rowRankColor);
             SetCell(row.Name, SafeName(info.name), lead);
             SetCell(row.Small, left ? $"#{info.playerId} · ayrıldı" : $"#{info.playerId}", faint);
             SetCell(row.Score, RawCellText(info, 2), lead);
@@ -962,6 +1092,12 @@ namespace VortexArena.App
             if (row.Tag != null)
             {
                 row.Tag.gameObject.SetActive(mine);
+            }
+
+            if (row.ScoreIcon != null)
+            {
+                // A burger icon next to a 0 reads as "one burger, zero points".
+                row.ScoreIcon.gameObject.SetActive(info.score > 0);
             }
 
             LayoutNameCell(row, mine);
@@ -1155,7 +1291,7 @@ namespace VortexArena.App
                 {
                     RectTransform rt = target.rectTransform;
                     rt.anchoredPosition = new Vector2(rt.anchoredPosition.x,
-                        -(RowsTop + list.Count * (RowHeight + RowGap) + 4f));
+                        -(rowsTop + list.Count * (rowHeight + rowGap) + 4f));
                 }
             }
         }
@@ -1169,6 +1305,18 @@ namespace VortexArena.App
 
             if (ModeRuntime.IsCoop)
             {
+                if (!string.IsNullOrEmpty(coopBlockSummaryFormat))
+                {
+                    int contribution = 0;
+                    for (int i = 0; i < list.Count; i++)
+                    {
+                        contribution += list[i].score;
+                    }
+
+                    return string.Format(coopBlockSummaryFormat, list.Count, contribution,
+                        contribution / 10);
+                }
+
                 // Neither "canlı" nor kills belong here: nobody dies and nobody shoots in a co-op
                 // shift — the customers are the only thing that happened.
                 string customers = CustomerLine();
@@ -1198,17 +1346,30 @@ namespace VortexArena.App
             return $"{list.Count} oyuncu · {kills} öldürme · {deaths} ölüm";
         }
 
-        /// <summary>Card's bottom band: the player's own numbers. The four boxes only hold combat
-        /// stats, so the modes without them fall back to the single summary line.</summary>
+        /// <summary>Card's bottom band: the player's own numbers. The four combat boxes are only
+        /// filled where kills exist; a five-box skin carries the co-op set instead, and a mode with
+        /// neither falls back to the single summary line.</summary>
         private void RefreshMatchSummary()
         {
             PlayerInfo self = FindSelf();
-            bool boxes = self != null && !ModeRuntime.HidesCombatStats && footStatValues != null &&
-                         footStatValues.Length >= 4;
+            int cells = footStatValues != null ? footStatValues.Length : 0;
+            bool coopBoxes = self != null && ModeRuntime.IsCoop && cells >= 5;
+            bool boxes = coopBoxes ||
+                         (self != null && !ModeRuntime.HidesCombatStats && cells >= 4);
 
             SetPanel(footStatsGroup, boxes);
 
-            if (boxes)
+            if (coopBoxes)
+            {
+                // KATKI · SIRA · MUTLU · MUTSUZ · EKİP SKORU (labels are static in the prefab).
+                Admin.AdminModeState.TryCustomerCounts(_modeState, out int happy, out int unhappy);
+                SetText(footStatValues[0], self.score.ToString());
+                SetText(footStatValues[1], RankLine());
+                SetText(footStatValues[2], happy.ToString());
+                SetText(footStatValues[3], unhappy.ToString());
+                SetText(footStatValues[4], (_lastEnd != null ? _lastEnd.scoreRed : 0).ToString());
+            }
+            else if (boxes)
             {
                 SetText(footStatValues[0], self.kills.ToString());
                 SetText(footStatValues[1], self.deaths.ToString());

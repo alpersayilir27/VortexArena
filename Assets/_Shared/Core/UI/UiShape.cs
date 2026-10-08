@@ -75,6 +75,22 @@ namespace VortexArena.Core.UI
             return Chamfer(c, 0f, c, 0f);
         }
 
+        /// <summary>Per-corner rounding in px, TL → TR → BR → BL.</summary>
+        public UiShape Radius(float tl, float tr, float br, float bl)
+        {
+            RadiusTopLeft = tl;
+            RadiusTopRight = tr;
+            RadiusBottomRight = br;
+            RadiusBottomLeft = bl;
+            return this;
+        }
+
+        /// <summary>CSS <c>border-radius</c>: the same rounding on all four corners.</summary>
+        public UiShape Radius(float all)
+        {
+            return Radius(all, all, all, all);
+        }
+
         public UiShape Slant(float left, float right)
         {
             SlantLeft = left;

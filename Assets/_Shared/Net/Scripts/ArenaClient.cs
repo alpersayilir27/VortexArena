@@ -78,6 +78,11 @@ namespace VortexArena.Net
 
         private readonly ConcurrentQueue<Action> _mainThreadActions = new ConcurrentQueue<Action>();
 
+        /// <summary>The pure message cases; publishing goes through the main-thread queue here.
+        /// ⚠️ Built in Awake, not inline: a field initializer cannot capture another instance
+        /// field.</summary>
+        private NetMessageDispatcher _dispatcher;
+
         /// <summary>One socket + its own send gate. ⚠️ Paired on purpose: a send stuck on a dead
         /// socket must not hold the gate the NEXT connection's hello waits on — a new link gets a
         /// new gate, the stale send keeps the old one.</summary>
@@ -149,6 +154,8 @@ namespace VortexArena.Net
             }
 
             Instance = this;
+
+            _dispatcher = new NetMessageDispatcher(action => _mainThreadActions.Enqueue(action));
 
             UdpChannel = gameObject.AddComponent<UdpStateChannel>();
             Remotes = gameObject.AddComponent<RemotePlayerRegistry>();
@@ -228,6 +235,14 @@ namespace VortexArena.Net
         /// <summary>Connects to the given address; closes a previous connection/loop if there is one.</summary>
         public void Connect(string ip, int port, string role)
         {
+            if (ReplayMode.Active)
+            {
+                // §12.4: a replay never reaches the network. The guard is here and not at the call
+                // sites so a future caller cannot reopen the socket by accident.
+                Debug.Log("[ArenaClient] Kayıt oynatma kipi: sunucuya bağlanılmadı.");
+                return;
+            }
+
             if (string.IsNullOrWhiteSpace(ip) || port <= 0)
             {
                 Debug.LogWarning($"[ArenaClient] Geçersiz adres: '{ip}:{port}'; bağlanılmadı.");
@@ -593,200 +608,6 @@ namespace VortexArena.Net
                         HandleWelcome(JsonUtility.FromJson<WelcomeMsg>(json));
                         break;
 
-                    case MessageTypes.LobbyState:
-                    {
-                        LobbyStateMsg msg = JsonUtility.FromJson<LobbyStateMsg>(json);
-                        // §5.3: an old snapshot must NOT overwrite a newer one. A second safety net even
-                        // though the server broadcasts from one publisher; the symptom of a stale roster
-                        // would be "a kicked player still listed as online".
-                        if (msg == null || msg.version <= _lastRosterVersion)
-                        {
-                            break;
-                        }
-
-                        _lastRosterVersion = msg.version;
-                        _mainThreadActions.Enqueue(() => NetEvents.RaiseLobbyState(msg));
-                        break;
-                    }
-
-                    case MessageTypes.LoadMatch:
-                    {
-                        LoadMatchMsg msg = JsonUtility.FromJson<LoadMatchMsg>(json);
-                        _mainThreadActions.Enqueue(() => NetEvents.RaiseLoadMatch(msg));
-                        break;
-                    }
-
-                    case MessageTypes.Countdown:
-                    {
-                        CountdownMsg msg = JsonUtility.FromJson<CountdownMsg>(json);
-                        _mainThreadActions.Enqueue(() => NetEvents.RaiseCountdown(msg));
-                        break;
-                    }
-
-                    case MessageTypes.MatchState:
-                    {
-                        MatchStateMsg msg = JsonUtility.FromJson<MatchStateMsg>(json);
-                        _mainThreadActions.Enqueue(() => NetEvents.RaiseMatchState(msg));
-                        break;
-                    }
-
-                    case MessageTypes.HealthUpdate:
-                    {
-                        HealthUpdateMsg msg = JsonUtility.FromJson<HealthUpdateMsg>(json);
-                        _mainThreadActions.Enqueue(() => NetEvents.RaiseHealthUpdate(msg));
-                        break;
-                    }
-
-                    case MessageTypes.KillEvent:
-                    {
-                        KillEventMsg msg = JsonUtility.FromJson<KillEventMsg>(json);
-                        _mainThreadActions.Enqueue(() => NetEvents.RaiseKillEvent(msg));
-                        break;
-                    }
-
-                    case MessageTypes.Respawn:
-                    {
-                        RespawnMsg msg = JsonUtility.FromJson<RespawnMsg>(json);
-                        _mainThreadActions.Enqueue(() => NetEvents.RaiseRespawn(msg));
-                        break;
-                    }
-
-                    case MessageTypes.MatchEnd:
-                    {
-                        MatchEndMsg msg = JsonUtility.FromJson<MatchEndMsg>(json);
-                        _mainThreadActions.Enqueue(() => NetEvents.RaiseMatchEnd(msg));
-                        break;
-                    }
-
-                    case MessageTypes.ObjectState:
-                    {
-                        ObjectStateMsg msg = JsonUtility.FromJson<ObjectStateMsg>(json);
-                        _mainThreadActions.Enqueue(() => NetEvents.RaiseObjectState(msg));
-                        break;
-                    }
-
-                    case MessageTypes.ObjectSpawn:
-                    {
-                        // Same body as object_state (§5.3) — only the TYPE separates a spawn from a
-                        // drifted id, so it must not be merged into the case above.
-                        ObjectStateMsg msg = JsonUtility.FromJson<ObjectStateMsg>(json);
-                        _mainThreadActions.Enqueue(() => NetEvents.RaiseObjectSpawn(msg));
-                        break;
-                    }
-
-                    case MessageTypes.ObjectDespawn:
-                    {
-                        ObjectDespawnMsg msg = JsonUtility.FromJson<ObjectDespawnMsg>(json);
-                        _mainThreadActions.Enqueue(() => NetEvents.RaiseObjectDespawn(msg));
-                        break;
-                    }
-
-                    case MessageTypes.ObjectEvent:
-                    {
-                        ObjectEventMsg msg = JsonUtility.FromJson<ObjectEventMsg>(json);
-                        _mainThreadActions.Enqueue(() => NetEvents.RaiseObjectEvent(msg));
-                        break;
-                    }
-
-                    case MessageTypes.WorldState:
-                    {
-                        WorldStateMsg msg = JsonUtility.FromJson<WorldStateMsg>(json);
-                        _mainThreadActions.Enqueue(() => NetEvents.RaiseWorldState(msg));
-                        break;
-                    }
-
-                    case MessageTypes.ReturnToLobby:
-                    {
-                        ReturnToLobbyMsg msg = JsonUtility.FromJson<ReturnToLobbyMsg>(json);
-                        _mainThreadActions.Enqueue(() => NetEvents.RaiseReturnToLobby(msg));
-                        break;
-                    }
-
-                    // v4: `shot_fired` was REMOVED — shots/throws ride UDP 0x03/0x04 (§6.4/6.5) and are
-                    // published by UdpStateChannel. This type never arrives on WS.
-
-                    case MessageTypes.MeasureBodyScale:
-                    {
-                        // Sent to players only (§10.8); no listener on admin. The measurement reads the
-                        // rig/character, so it needs the Unity API → main thread.
-                        _mainThreadActions.Enqueue(NetEvents.RaiseMeasureBodyScale);
-                        break;
-                    }
-
-                    case MessageTypes.RestartBodyTracking:
-                    {
-                        // Sent to players only (§6.11); no listener on admin. The repair toggles a
-                        // MonoBehaviour and calls OVRPlugin → main thread.
-                        _mainThreadActions.Enqueue(NetEvents.RaiseRestartBodyTracking);
-                        break;
-                    }
-
-                    case MessageTypes.ClearCalibration:
-                    {
-                        // The operator reset calibration (§10.6). Players only; no `playerId` (the target
-                        // is this connection) but `keepSaved` does ride: soft keeps the device anchor,
-                        // hard deletes it; a missing field reads `false` = hard. ⚠️ The roster's
-                        // `calibrated` field is NOT consulted — in a half-finished calibration it is
-                        // already `false`, so the reset has no visible delta there (§5.3). Touches
-                        // scene/anchor → main thread.
-                        ClearCalibrationMsg msg = JsonUtility.FromJson<ClearCalibrationMsg>(json);
-                        bool keepSaved = msg != null && msg.keepSaved;
-                        _mainThreadActions.Enqueue(() => NetEvents.RaiseClearCalibration(keepSaved));
-                        break;
-                    }
-
-                    case MessageTypes.ReloadCalibration:
-                    {
-                        // The operator asked for an alignment reload from the saved anchor (§10.6).
-                        // Players only, fieldless: the target is this connection. An uncalibrated target
-                        // is NOT skipped — that is exactly who the command is for. Touches anchor/rig →
-                        // main thread.
-                        _mainThreadActions.Enqueue(NetEvents.RaiseReloadCalibration);
-                        break;
-                    }
-
-                    case MessageTypes.CalibrationResult:
-                    {
-                        // Admin connections only; on a player there is no listener.
-                        CalibrationResultMsg msg = JsonUtility.FromJson<CalibrationResultMsg>(json);
-                        _mainThreadActions.Enqueue(() => NetEvents.RaiseCalibrationResult(msg));
-                        break;
-                    }
-
-                    case MessageTypes.VenueSurveyResult:
-                    {
-                        // Only the player who uploaded gets one (§10.11); elsewhere no listener.
-                        VenueSurveyResultMsg msg = JsonUtility.FromJson<VenueSurveyResultMsg>(json);
-                        _mainThreadActions.Enqueue(() => NetEvents.RaiseVenueSurveyResult(msg));
-                        break;
-                    }
-
-                    case MessageTypes.AdminState:
-                    {
-                        // Admin connections only; on a player there is no listener.
-                        AdminStateMsg msg = JsonUtility.FromJson<AdminStateMsg>(json);
-                        _mainThreadActions.Enqueue(() => NetEvents.RaiseAdminState(msg));
-                        break;
-                    }
-
-                    case MessageTypes.RulesUpdate:
-                    {
-                        // Goes to everyone (§5.3). Unlike SelectionState this IS a real rule: the running
-                        // match's shape changed (today only the friendly-fire switch) → ModeRuntime.
-                        RulesUpdateMsg msg = JsonUtility.FromJson<RulesUpdateMsg>(json);
-                        _mainThreadActions.Enqueue(() => NetEvents.RaiseRulesUpdate(msg));
-                        break;
-                    }
-
-                    case MessageTypes.SelectionState:
-                    {
-                        // Goes to everyone (§5.3). Presentation info, NOT a rule — never applied to
-                        // ModeRuntime; written to ModeSelection (base strips).
-                        SelectionStateMsg msg = JsonUtility.FromJson<SelectionStateMsg>(json);
-                        _mainThreadActions.Enqueue(() => NetEvents.RaiseSelectionState(msg));
-                        break;
-                    }
-
                     case MessageTypes.Heartbeat:
                         // Payload-less by design: its arrival already refreshed the link watchdog.
                         break;
@@ -797,22 +618,6 @@ namespace VortexArena.Net
                         // contaminate it. status needs the Unity API → main thread.
                         _mainThreadActions.Enqueue(() => TrySendText(BuildStatusJson()));
                         break;
-
-                    case MessageTypes.NetStats:
-                    {
-                        // Admin connections only; on a player there is no listener.
-                        NetStatsMsg msg = JsonUtility.FromJson<NetStatsMsg>(json);
-                        _mainThreadActions.Enqueue(() => NetEvents.RaiseNetStats(msg));
-                        break;
-                    }
-
-                    case MessageTypes.Violation:
-                    {
-                        // Admin connections only; on a player there is no listener.
-                        ViolationMsg msg = JsonUtility.FromJson<ViolationMsg>(json);
-                        _mainThreadActions.Enqueue(() => NetEvents.RaiseViolation(msg));
-                        break;
-                    }
 
                     case MessageTypes.Kicked:
                         HandleKicked(JsonUtility.FromJson<KickedMsg>(json));
@@ -830,8 +635,13 @@ namespace VortexArena.Net
                     }
 
                     default:
-                        // Unknown type → log and ignore (forward version compatibility).
-                        Debug.Log($"[ArenaClient] Bilinmeyen mesaj tipi '{envelope.type}' yok sayıldı.");
+                        // Every other type is a PURE case — the dispatcher replay shares (§12.4).
+                        if (!_dispatcher.TryDispatch(envelope.type, json))
+                        {
+                            // Unknown type → log and ignore (forward version compatibility).
+                            Debug.Log($"[ArenaClient] Bilinmeyen mesaj tipi '{envelope.type}' yok sayıldı.");
+                        }
+
                         break;
                 }
             }
@@ -877,7 +687,7 @@ namespace VortexArena.Net
             // New session = new version axis. Reset ON THE NETWORK THREAD (not queued): the lobby_state
             // following this welcome is handled on the network thread too, and waiting for the queue
             // would make the first roster look like an "old version" and get dropped.
-            _lastRosterVersion = 0;
+            _dispatcher.ResetRosterVersion();
 
             _mainThreadActions.Enqueue(() =>
             {
@@ -898,11 +708,6 @@ namespace VortexArena.Net
         }
 
         // --------------------------------------------------------- state &amp; status
-
-        /// <summary>The last APPLIED <c>lobby_state.version</c> (§5.3); net thread writes (guard), main
-        /// thread reads (status) → volatile. Reset to 0 on every welcome: a restarted server counts
-        /// versions from 0 again and without the reset the client would drop every roster as old.</summary>
-        private volatile int _lastRosterVersion;
 
         private IEnumerator StatusLoop()
         {
@@ -970,7 +775,7 @@ namespace VortexArena.Net
                 body = _body,
                 fps = _lastFps,
                 // §5.1 reconciliation: if we fell behind, the server sends the full roster to US only.
-                rosterVersion = _lastRosterVersion
+                rosterVersion = _dispatcher.LastRosterVersion
             };
 
             // §6.7: the CLIENT measures net telemetry and reports it with status (no extra channel —
