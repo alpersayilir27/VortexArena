@@ -1,1741 +1,319 @@
-using System;
-using System.Collections.Generic;
-using Oculus.Interaction.HandGrab.Visuals;
-using Oculus.Interaction.Input;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using VortexArena.Core.Combat;
-using VortexArena.Core.Player;
+using VortexArena.Core.GripCapture;
 
 namespace VortexArena.Core.Editor
 {
-    /// <summary><c>Tools &gt; VortexArena &gt; Items &gt; Kavrama Pozu Stüdyosu</c> — a bench for
-    /// authoring how an item sits in the hand WITHOUT putting on a headset. It exists for feedback
-    /// time: a grip is not a number with one right value but the answer to "does the palm touch the
-    /// grip, does the index finger reach the trigger", and asking that via an APK build took minutes
-    /// per attempt.
-    /// <para>Flow: open the item's prefab in PREFAB MODE → the window picks up the stage →
-    /// <b>Elleri Oluştur</b> → controller roots appear (controller model + ghost hand beneath) → MOVE
-    /// the roots onto the grips, SEAT the hand model on its controller (move + rotate — the item
-    /// does not follow), then RIG the fingers per item (pick a joint in the window's finger list,
-    /// rotate it in Scene View) → optionally <b>Karşı Ele Aynala</b> → <b>Kaydet</b>.</para>
-    /// <para>⚠️ There are no finger PRESETS: the pose is authored bone by bone for THIS item,
-    /// because a shared "trigger/wrap" table cannot fit grips whose geometry differs — on some
-    /// weapons it left the fingers inside the body. The record holds the joints
-    /// (<see cref="HandJointRotation"/>); the only shared pose left is the idle hand.</para>
-    /// <para>⚠️ The root the user drags is the CONTROLLER (anchor) frame: <c>[VA El_*]</c> represents
-    /// where <c>OVRCameraRig.left/rightHandAnchor</c> sits on the item, and the record is that
-    /// root's POSITION relative to the item (<see cref="ItemGripPose"/>: anchor space, no rotation).
-    /// In game the item is ALWAYS aligned with the controller, so the roots are kept aligned
-    /// (<see cref="KeepRootsAligned"/>) and only MOVED.</para>
-    /// <para>Two children hang under the root. The Quest 3 controller model is LOCKED at identity —
-    /// exactly how it sits under the anchor in game, so it is the alignment reference. The ISDK ghost
-    /// hand is AUTHORABLE: its local pose is where the hand model sits on that controller, it is
-    /// saved per item per hand (<see cref="CaptureWrist"/>), and a slot that has none falls back to
-    /// the shared definition (<see cref="ItemGripAuthority.ResolveAnchorToWrist(bool)"/> —
-    /// <see cref="ApplyGhostOffset"/>). ⚠️ Whatever ends up there is the SAME value the game locks the
-    /// real wrist to, which is what makes the bench and the headset show the same hand; the studio
-    /// must not compute one of its own.</para>
-    /// <para>⚠️ Moving/rotating the ghost NEVER moves the item — that is the whole point of keeping
-    /// it a separate child: some items are held from the side, some from below, while the item's
-    /// own placement on the controller must stay put.</para>
-    /// <para>⚠️ If the record carried a rotation, anyone rotating the root would skew the item off
-    /// the controller in game. The front grip carries none either: the second hand's controller is
-    /// taken as item-aligned and the synthetic wrist locks its delta beyond it.</para>
-    /// <para>⚠️ Hands never go INSIDE the prefab: each is a separate ROOT object of the prefab stage
-    /// scene (<see cref="HideFlags.DontSave"/>), because prefab mode writes only the tree under
-    /// <c>prefabContentsRoot</c>. Parented under the prefab, the first save would embed a hand model
-    /// in the item and it would float in the arena.</para>
-    /// <para>⚠️ NOTHING is written into the prefab contents (pose node, hand rig, marker): the record
-    /// lives only in the definition asset. A second description in the prefab would raise "which one
-    /// applies" for everyone who opens it.</para>
-    /// <para>⚠️ No dialogs (same reason as <c>WeaponKitBuilder</c>): a modal blocks Unity's main
-    /// thread and times out under CLI/pipeline. Results go to <see cref="Debug.Log"/>.</para>
+    /// <summary><c>Tools &gt; VortexArena &gt; Items &gt; Kavrama Pozu Stüdyosu</c> — the editor side
+    /// of grip capture: picks the item, opens the capture scene, and keeps the records afterwards
+    /// (mirror, delete, make one-handed).
+    /// <para>Flow: pick the item → <b>Yakalama sahnesini aç</b> → Play with the headset (Quest Link)
+    /// and capture each grip with the hand holding the item → leaving Play writes the records into
+    /// the definition.</para>
+    /// <para>⚠️ The grip itself is NOT authored here and no bench comes back: whether the palm
+    /// touches the grip and the index finger reaches the trigger is only answerable with a tracked
+    /// hand, and a mouse-posed ghost hand answered it wrong.</para>
+    /// <para>⚠️ The target lives in EditorPrefs (<see cref="GripCaptureSettings"/>), shared with the
+    /// capture scene's Inspector — two selections would raise "which item is being captured".</para>
+    /// <para>⚠️ No dialogs in the write paths (same reason as <c>WeaponKitBuilder</c>): a modal
+    /// blocks Unity's main thread and times out under CLI. Results go to <see cref="Debug.Log"/>;
+    /// the only confirm is dropping a pending capture, which is destructive.</para>
     /// </summary>
     internal sealed class GripPoseStudio : EditorWindow
     {
-        internal const string LOG = "[GripPoseStudio]";
+        /// <summary>How long the on-disk buffer snapshot shown in the GUI stays valid (s) —
+        /// re-reading the file on every repaint (10/s in Play) would be pure waste.</summary>
+        private const double BufferRefreshSeconds = 0.5d;
 
-        /// <summary>Name prefix of the hand roots. ⚠️ The name is a KEY: hands live in the SCENE,
-        /// not the window (a domain reload clears both window and fields), and are found again by
-        /// name. The brackets keep them apart from the user's own objects.</summary>
-        internal const string HAND_ROOT_PREFIX = "[VA El_";
+        private GripCaptureBuffer _buffer;
+        private double _bufferTime;
 
-        /// <summary>ISDK hand model provider for the <b>OpenXR</b> skeleton.
-        /// <para>⚠️ The path is hardcoded and ISDK's <c>HandGhostProviderUtils</c> is NOT used: that
-        /// class lives in the <c>Oculus.Interaction.Editor</c> asmdef, and referencing it would bind
-        /// this tool to ISDK's editor assembly — a link that breaks on package upgrades and the core
-        /// never needs.</para></summary>
-        private const string GHOST_PROVIDER_PATH_OPENXR =
-            "Packages/com.meta.xr.sdk.interaction/Runtime/Prefabs/HandGrab/OpenXRGhostProvider.asset";
-
-        /// <summary>Same provider for the <b>OVR</b> skeleton.</summary>
-        private const string GHOST_PROVIDER_PATH_OVR =
-            "Packages/com.meta.xr.sdk.interaction/Runtime/Prefabs/HandGrab/GhostProvider.asset";
-
-        /// <summary>Source of the CONTROLLER MODEL placed under the root: Meta core SDK's controller
-        /// prefab and its Quest 3 (Touch Plus) models. In game it sits at identity under the anchor
-        /// (<c>OVRControllerHelper</c> applies no offset), so the bench places it at identity too —
-        /// what you see is exactly the tracked controller, and the weapon aligns to it.</summary>
-        private const string CONTROLLER_PREFAB_PATH = "Packages/com.meta.xr.sdk.core/Prefabs/OVRControllerPrefab.prefab";
-        private const string CONTROLLER_MODEL_RIGHT = "MetaQuestTouchPlus_Right";
-        private const string CONTROLLER_MODEL_LEFT = "MetaQuestTouchPlus_Left";
-
-        /// <summary>Names of the two visual children under the root (identity, for re-finding).</summary>
-        private const string GHOST_NAME = "Hand";
-        private const string CONTROLLER_NAME = "Controller";
-
-        /// <summary>Warn only once when the controller model is missing.</summary>
-        private static bool _controllerModelWarned;
-
-        /// <summary>Name keys for the grip node (case-insensitive, tried IN ORDER). ⚠️ Order matters:
-        /// the more SPECIFIC key comes first, or a broad one (<c>guard</c>) grabs the wrong part —
-        /// which is why <c>guard</c> is last in the front-grip list.</summary>
-        private static readonly string[] GRIP_KEYS = { "pistolgrip", "grip", "handle" };
-
-        /// <summary>Name keys for the front-grip node (the forward hand in a two-handed hold).</summary>
-        private static readonly string[] FOREGRIP_KEYS =
-            { "handguard", "barrelguard", "foregrip", "forend", "guard" };
-
-        /// <summary>Finger names in <c>HandFinger</c> order — the order
-        /// <c>FingersMetadata.FINGER_TO_JOINTS</c> is indexed by.</summary>
-        private static readonly string[] FINGER_LABELS =
-            { "Başparmak", "İşaret", "Orta", "Yüzük", "Serçe" };
-
-        /// <summary>Target picked while no stage is open (only used by "open prefab").</summary>
-        [SerializeField] private GameObject _prefab;
-
-        /// <summary>Definition picked BY HAND — only used when the prefab does not resolve to exactly
-        /// one definition (⚠️ two definitions pointing at the same prefab: writing to "the first one"
-        /// would put the grip on the wrong asset and nobody would notice).</summary>
-        [SerializeField] private ItemDefinition _definitionOverride;
-
-        /// <summary>Were there LIVE hands last frame — for the "hands disappeared" notice.
-        /// ⚠️ Not serialized: it only describes a frame-to-frame delta, and persisting it would warn
-        /// on every startup after a domain reload (hands are <c>DontSave</c> and die there).</summary>
-        [NonSerialized] private bool _handsSeen;
-
-        /// <summary>Hands vanished for a reason outside the window — the notice stays until they are
-        /// rebuilt.</summary>
-        [NonSerialized] private bool _handsLost;
-
-        private static HandGhostProvider _ghostProvider;
-
-        /// <summary>Path of the loaded provider — shown in the diagnostic line.</summary>
-        private static string _ghostProviderPath;
-
-        /// <summary>Warn only once when no provider is found. ⚠️ This path can run from
-        /// <c>OnGUI</c> every frame, so without the flag a missing asset would flood the
-        /// console.</summary>
-        private static bool _ghostProviderWarned;
-
-        /// <summary>How long a reverse prefab→definition lookup stays valid (s).</summary>
-        private const double LookupRefreshSeconds = 2d;
-
-        /// <summary>Prefab asset path the cached reverse lookup answers for.</summary>
-        private static string _lookupPath;
-
-        /// <summary>Cached reverse lookup result; <c>null</c> when none or ambiguous.</summary>
-        private static ItemDefinition _lookupDefinition;
-
-        /// <summary>More than one definition points at <see cref="_lookupPath"/>.</summary>
-        private static bool _lookupAmbiguous;
-
-        /// <summary>When the cache was built (<c>EditorApplication.timeSinceStartup</c>).</summary>
-        private static double _lookupTime;
-
-        // ---------------------------------------------------------------------------- window
-
-        // Lives under Items, not Weapons: the bench now authors the grip of ANY item. Kit/catalog
-        // sync still runs inside Configure All Build Elements; the studio stays in the menu because
-        // a grip is authored by eye.
+        // Lives under Items, not Weapons: any item's grip is captured here.
         [MenuItem("Tools/VortexArena/Items/Kavrama Pozu Stüdyosu", false, 20)]
-        private static void Open()
+        internal static void Open()
         {
             GripPoseStudio window = GetWindow<GripPoseStudio>();
-            window.titleContent = new GUIContent("Kavrama Tezgâhı");
-            window.minSize = new Vector2(340f, 360f);
+            window.titleContent = new GUIContent("Kavrama Stüdyosu");
+            window.minSize = new Vector2(340f, 300f);
             window.Show();
         }
 
-        /// <summary>Cleanup hooks are installed independently of the window.
-        /// <para>⚠️ They cannot hang off the window's <c>OnEnable</c>: the user can close the window
-        /// and keep working in prefab mode, leaving the hands behind. They are
-        /// <see cref="HideFlags.DontSave"/> so they never hit disk, but they would sit in the middle
-        /// of a running game as two hand models.</para></summary>
-        [InitializeOnLoadMethod]
-        private static void InstallCleanupHooks()
-        {
-            PrefabStage.prefabStageClosing += stage => DestroyHands(stage.scene);
-            // Clicking the ghost mesh in Scene View selects the CHILD, but the thing to drag is the
-            // controller root. Selection is redirected so the handles appear on the root — moving a
-            // child does NOT change the record and would produce "I saved but nothing changed".
-            Selection.selectionChanged += RedirectSelectionToHandRoot;
-            EditorApplication.playModeStateChanged += change =>
-            {
-                if (change == PlayModeStateChange.ExitingEditMode)
-                {
-                    DestroyAllHands();
-                }
-            };
-            // ⚠️ While SAVING prefab mode (Auto Save included) Unity flips EVERY extra root in the
-            // preview scene to HideAndDontSave, whatever its starting flags. HideInHierarchy drops
-            // the hand out of the hierarchy while it keeps living and rendering, and NotEditable
-            // locks it on top. The flip runs at several points in the save flow and delayCall does
-            // not fire while the editor is unfocused, so a one-shot event hook is not enough: the
-            // guard lives in update and restores the hands every tick (writing only when needed).
-            EditorApplication.update += RestoreHandFlags;
-            // ⚠️ Cleanup applies ONLY to the opened scene (not DestroyAllHands): a sweep that also
-            // hit the open stage would delete the hands ourselves while its contents reload. The
-            // open stage's own scene is cleaned in prefabStageClosing.
-            EditorSceneManager.sceneOpened += (scene, mode) =>
-            {
-                // ⚠️ Do not trust the stage reference to exclude the preview scene (its scene field
-                // can be stale for a moment while contents reload), nor assume its path is empty:
-                // a preview scene's path is the PREFAB'S ASSET PATH. A genuinely opened scene is
-                // always a .unity file — that is the distinguishing property.
-                PrefabStage stage = CurrentStage();
-                bool previewScene = string.IsNullOrEmpty(scene.path) ||
-                                    scene.path.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase) ||
-                                    (stage != null && stage.scene == scene);
-                if (previewScene)
-                {
-                    return;
-                }
-
-                DestroyHands(scene);
-            };
-        }
-
-        /// <summary>Moves a selection that landed on a hand's CHILD (ghost mesh, controller model) up
-        /// to the controller root — the only transform whose POSE gets recorded (rationale in
-        /// <see cref="InstallCleanupHooks"/>).
-        /// <para>⚠️ Two things under the root are AUTHORED and the selection stays on them: the
-        /// riggable finger joints (rotated bone by bone) and the ghost hand's own root — the hand
-        /// model's seat on the controller, which differs per grip (some weapons are held from the
-        /// side, some from below). Both are read back at save time
-        /// (<see cref="CaptureFingers"/> / <see cref="CaptureWrist"/>). Everything else — the
-        /// controller model, the ghost's meshes — is still bounced, so "dragged thing == recorded
-        /// thing" holds for the placement too.</para></summary>
-        private static void RedirectSelectionToHandRoot()
-        {
-            GameObject active = Selection.activeGameObject;
-            if (active == null || active.GetComponent<GripHandAuthoring>() != null)
-            {
-                return;
-            }
-
-            var owner = active.GetComponentInParent<GripHandAuthoring>();
-            if (owner == null || IsAuthoredNode(owner, active.transform))
-            {
-                return;
-            }
-
-            Selection.activeGameObject = owner.gameObject;
-        }
-
-        /// <summary>Is this transform one of the hand's authored nodes — a riggable finger joint or
-        /// the ghost hand's root.</summary>
-        private static bool IsAuthoredNode(GripHandAuthoring hand, Transform candidate)
-        {
-            GameObject ghost = GhostOf(hand);
-            if (ghost != null && ghost.transform == candidate)
-            {
-                return true;
-            }
-
-            List<HandJointMap> joints = hand.DrivableJoints();
-            for (int i = 0; i < joints.Count; i++)
-            {
-                if (joints[i].transform == candidate)
-                {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        /// <summary>Restores hands that Unity's prefab save hid (rationale in
-        /// <see cref="InstallCleanupHooks"/>) and keeps the roots item-aligned
-        /// (<see cref="KeepRootsAligned"/>). Runs every editor tick, so it must stay cheap: it never
-        /// writes to an intact hand and only repaints the hierarchy when it actually fixed
-        /// something.</summary>
-        private static void RestoreHandFlags()
-        {
-            PrefabStage stage = CurrentStage();
-            if (stage == null)
-            {
-                return;
-            }
-
-            List<GripHandAuthoring> hands = FindHands(stage.scene);
-            Transform itemRoot = StageItemRoot(stage);
-            if (itemRoot != null)
-            {
-                KeepRootsAligned(itemRoot, hands);
-            }
-
-            bool restored = false;
-            for (int i = 0; i < hands.Count; i++)
-            {
-                if (hands[i] == null)
-                {
-                    continue;
-                }
-
-                GameObject go = hands[i].gameObject;
-                if ((go.hideFlags & (HideFlags.HideInHierarchy | HideFlags.NotEditable)) == 0)
-                {
-                    continue;
-                }
-
-                MarkDontSave(hands[i]);
-                HideIsdkComponents(GhostOf(hands[i]));
-                // If the flip reached component flags too, keep the two components the user needs
-                // (Transform + the authoring component) unlocked and visible in the Inspector.
-                hands[i].hideFlags &= ~(HideFlags.HideInInspector | HideFlags.NotEditable);
-                hands[i].transform.hideFlags &= ~(HideFlags.HideInInspector | HideFlags.NotEditable);
-                restored = true;
-            }
-
-            if (restored)
-            {
-                EditorApplication.RepaintHierarchyWindow();
-            }
-        }
-
-        /// <summary>Auto-fills the target from the Project window: an item prefab that resolves to a
-        /// definition, or the definition asset itself (its prefab is the bench target).</summary>
+        /// <summary>Auto-fills the target from the Project window: a definition asset, or an item
+        /// prefab that resolves to exactly one definition.</summary>
         private void OnSelectionChange()
         {
-            GameObject candidate = Selection.activeGameObject;
-            if (candidate != null && PrefabUtility.IsPartOfPrefabAsset(candidate) &&
-                ResolveDefinition(candidate, out _) != null)
+            if (EditorApplication.isPlaying)
             {
-                _prefab = candidate;
+                return;
             }
-            else if (Selection.activeObject is ItemDefinition selected && selected.Prefab != null)
+
+            if (Selection.activeObject is ItemDefinition selected)
             {
-                _prefab = selected.Prefab;
+                GripCaptureSettings.SaveTarget(selected);
+            }
+            else if (Selection.activeGameObject != null)
+            {
+                ItemDefinition resolved = GripRecordOps.ResolveDefinition(
+                    Selection.activeGameObject, out bool ambiguous);
+                if (resolved != null && !ambiguous)
+                {
+                    GripCaptureSettings.SaveTarget(resolved);
+                }
             }
 
             Repaint();
+        }
+
+        /// <summary>Keeps the Play-mode capture list live (the buffer grows on disk, not in the
+        /// editor's object graph, so nothing else repaints the window).</summary>
+        private void OnInspectorUpdate()
+        {
+            if (EditorApplication.isPlaying)
+            {
+                Repaint();
+            }
         }
 
         // ------------------------------------------------------------------------------ GUI
 
         private void OnGUI()
         {
-            EditorGUILayout.LabelField("Kavrama Tezgâhı", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField("Kavrama Stüdyosu", EditorStyles.boldLabel);
+
+            ItemDefinition target = GripCaptureSettings.LoadTarget();
+            using (new EditorGUI.DisabledScope(EditorApplication.isPlaying))
+            {
+                var picked = (ItemDefinition)EditorGUILayout.ObjectField(
+                    "Eşya", target, typeof(ItemDefinition), false);
+                if (picked != target)
+                {
+                    GripCaptureSettings.SaveTarget(picked);
+                    target = picked;
+                }
+            }
 
             if (EditorApplication.isPlaying)
             {
-                EditorGUILayout.HelpBox(
-                    "Play kipinde kavrama yazılmaz — kayıt diske AssetDatabase ile iniyor ve Play " +
-                    "oturumunda yazılan her değer bir sonraki domain reload'da belirsizleşir.",
-                    MessageType.Info);
+                DrawPlayGui();
                 return;
             }
 
-            PrefabStage stage = CurrentStage();
-            Transform itemRoot = StageItemRoot(stage);
-
-            if (itemRoot == null)
-            {
-                DrawNoStageGui();
-                return;
-            }
-
-            DrawStageGui(stage, itemRoot);
-        }
-
-        /// <summary>With prefab mode closed there is one job: open the target in prefab mode.
-        /// <para>⚠️ The old scene-based bench does not come back: hand placement is measured against
-        /// the item, and prefab mode already provides that reference (the prefab root) at the
-        /// item's own scale. A second copy of the item in a scene would blur which instance the
-        /// record was taken from.</para></summary>
-        private void DrawNoStageGui()
-        {
-            _prefab = (GameObject)EditorGUILayout.ObjectField(
-                "Eşya prefabı", _prefab, typeof(GameObject), false);
-
-            bool usable = _prefab != null && ResolveDefinition(_prefab, out _) != null;
-
-            using (new EditorGUI.DisabledScope(!usable))
-            {
-                if (GUILayout.Button("Prefabı Prefab Kipinde Aç", GUILayout.Height(26f)))
-                {
-                    AssetDatabase.OpenAsset(_prefab);
-                }
-            }
-
-            if (_prefab == null)
+            if (target == null)
             {
                 EditorGUILayout.HelpBox(
-                    "Hedef yok: proje penceresinden bir eşya prefabı ya da eşya tanımı seç (ya da " +
-                    "yukarıdaki alana sürükle), sonra prefab kipinde aç.",
+                    "Hedef yok: proje penceresinden bir eşya tanımı (ya da tanımı çözülen bir eşya " +
+                    "prefabı) seç, veya yukarıdaki alana sürükle.",
                     MessageType.Info);
-            }
-            else if (!usable)
-            {
-                EditorGUILayout.HelpBox(
-                    "Bu prefabı gösteren bir eşya tanımı yok — tanımın Prefab alanı bu prefabı " +
-                    "göstermeli (silahlarda Weapon bileşenindeki tanım da yeter).",
-                    MessageType.Warning);
-            }
-
-            EditorGUILayout.HelpBox(
-                "Akış: prefabı prefab kipinde aç → Elleri Oluştur → kumanda köklerini kabzalara oturt " +
-                "→ el modelini kumandanın üstünde yerleştir (taşı/çevir — eşya kımıldamaz) → " +
-                "parmakları bu eşyaya göre rigle (eklemi listeden seç, Scene View'da çevir) → " +
-                "(istersen) Aynala → Kaydet.",
-                MessageType.None);
-        }
-
-        private void DrawStageGui(PrefabStage stage, Transform itemRoot)
-        {
-            ItemDefinition definition = ResolveDefinition(itemRoot.gameObject, out bool ambiguous);
-
-            EditorGUILayout.LabelField("Hedef", itemRoot.name);
-
-            // The definition is SHOWN, not just used: until now the bench wrote to whatever the
-            // Weapon component pointed at, with no way to see which asset that was.
-            if (definition != null)
-            {
-                using (new EditorGUI.DisabledScope(true))
-                {
-                    EditorGUILayout.ObjectField("Eşya tanımı", definition, typeof(ItemDefinition), false);
-                }
             }
             else
             {
-                _definitionOverride = (ItemDefinition)EditorGUILayout.ObjectField(
-                    "Eşya tanımı", _definitionOverride, typeof(ItemDefinition), false);
-                definition = MatchingOverride(_definitionOverride, itemRoot);
+                DrawRecordsGui(target);
             }
 
-            // ⚠️ The most specific complaint first, and every box disappears once a valid definition
-            // is picked by hand: the pick IS the answer, and a warning that survives being satisfied
-            // reads as unsolvable.
-            if (definition == null && _definitionOverride != null)
-            {
-                EditorGUILayout.HelpBox(
-                    "Seçilen tanımın Prefab alanı bu prefabı göstermiyor — kavrama yanlış asset'e " +
-                    "yazılırdı, yazılmadı.",
-                    MessageType.Warning);
-            }
-            else if (definition == null && ambiguous)
-            {
-                EditorGUILayout.HelpBox(
-                    "Bu prefabı gösteren birden çok eşya tanımı var — hangisine yazılacağı belirsiz. " +
-                    "Yazılacak tanımı yukarıdan elle seç.",
-                    MessageType.Warning);
-            }
-            else if (definition == null)
-            {
-                EditorGUILayout.HelpBox(
-                    "Bu prefabı gösteren eşya tanımı bulunamadı — kavrama alanları yazılamaz. " +
-                    "Tanımın Prefab alanı bu prefabı göstermeli (ya da yukarıdan elle seç).",
-                    MessageType.Warning);
-            }
-
-            if (definition == null)
-            {
-                return;
-            }
-
-            List<GripHandAuthoring> hands = FindHands(stage.scene);
-            int live = CountLive(hands);
+            DrawPendingGui(target);
 
             EditorGUILayout.Space();
-            using (new EditorGUILayout.HorizontalScope())
-            {
-                if (GUILayout.Button("Ana Kabza Ellerini Oluştur", GUILayout.Height(24f)))
-                {
-                    CreateHandPair(stage, itemRoot, definition, GripSocketKind.Primary);
-                }
-
-                using (new EditorGUI.DisabledScope(!definition.IsTwoHanded))
-                {
-                    if (GUILayout.Button("Ön Kabza Ellerini Oluştur", GUILayout.Height(24f)))
-                    {
-                        CreateHandPair(stage, itemRoot, definition, GripSocketKind.Secondary);
-                    }
-                }
-            }
-
-            DrawHandList(definition, hands);
-
-            // ⚠️ State updates ONLY on the Layout event: OnGUI runs at least twice per frame
-            // (Layout + Repaint) and drawing a DIFFERENT number of controls in the two passes breaks
-            // Unity's layout matching. A stable flag draws the box identically in both.
-            if (Event.current.type == EventType.Layout)
-            {
-                if (live > 0)
-                {
-                    _handsSeen = true;
-                    _handsLost = false;
-                }
-                else if (_handsSeen)
-                {
-                    _handsSeen = false;
-                    _handsLost = true;
-                }
-            }
-
-            if (_handsLost)
-            {
-                // Last-resort notice: hands were on the bench and vanished for a reason outside the
-                // window (a save that reloads the stage contents). Staying silent would read as
-                // "the tool lost my hands"; the fix is one button and an authored grip restores the
-                // hand to the same place.
-                EditorGUILayout.HelpBox(
-                    "Eller tezgâhtan kalktı (prefab kipi içeriği yeniden yüklenmiş olabilir). " +
-                    "Yeniden oluştur: kavraması yazılmış bir eşyada eller kayıttan aynı yere gelir.",
-                    MessageType.Info);
-            }
-
-            EditorGUILayout.Space();
-            using (new EditorGUILayout.HorizontalScope())
-            {
-                using (new EditorGUI.DisabledScope(live == 0))
-                {
-                    if (GUILayout.Button("Kaydet", GUILayout.Height(26f)))
-                    {
-                        SaveHands(itemRoot, definition, hands);
-                    }
-
-                    if (GUILayout.Button("Elleri Temizle", GUILayout.Height(26f)))
-                    {
-                        DestroyHands(stage.scene);
-                        Debug.Log($"{LOG} Eller silindi (kaydedilmemiş değişiklikler atıldı).");
-                    }
-                }
-            }
+            EditorGUILayout.HelpBox(GripSlotGui.UsageText, MessageType.None);
         }
 
-        private void DrawHandList(ItemDefinition definition, List<GripHandAuthoring> hands)
+        private void DrawRecordsGui(ItemDefinition target)
         {
-            EditorGUILayout.Space();
-            EditorGUILayout.LabelField("Tezgâhtaki eller", EditorStyles.boldLabel);
-
-            if (CountLive(hands) == 0)
+            if (target.Prefab == null)
             {
-                EditorGUILayout.LabelField("(yok — yukarıdan oluştur)", EditorStyles.miniLabel);
-                return;
+                EditorGUILayout.HelpBox(
+                    "Bu eşya tanımının Prefab alanı boş — yakalama sahnesinde gösterilecek eşya yok.",
+                    MessageType.Warning);
             }
 
-            // Which hand's finger rig to expand: the one the current selection belongs to (the root
-            // itself or one of its bones). ⚠️ The picker is drawn for ONE hand only — four hands ×
-            // five fingers would push the save button off the window.
-            GameObject active = Selection.activeGameObject;
-            GripHandAuthoring focused = active != null
-                ? active.GetComponentInParent<GripHandAuthoring>()
-                : null;
+            EditorGUILayout.Space();
+            GripSlotGui.DrawSlots(target, (kind, rightHand) =>
+                GripRecordOps.ClearSlot(target, kind, rightHand));
 
-            for (int i = 0; i < hands.Count; i++)
+            EditorGUILayout.Space();
+            for (int k = 0; k < GripSlotGui.Kinds.Length; k++)
             {
-                GripHandAuthoring hand = hands[i];
-                if (hand == null)
-                {
-                    continue;
-                }
-
+                GripSocketKind kind = GripSlotGui.Kinds[k];
+                EditorGUILayout.LabelField(GripSlotGui.KindLabel(kind), EditorStyles.miniBoldLabel);
                 using (new EditorGUILayout.HorizontalScope())
                 {
-                    EditorGUILayout.LabelField(
-                        $"{hand.Kind} · {(hand.RightHand ? "sağ" : "sol")}",
-                        GUILayout.Width(140f));
-
-                    // Two selectable things, two different answers: the controller root places the
-                    // ITEM, the hand model places the HAND on that controller. The buttons exist
-                    // because a click in Scene View always lands on the root (the meshes bounce
-                    // there), so the hand model would otherwise be reachable only via the hierarchy.
-                    if (GUILayout.Button(new GUIContent("Kumanda",
-                            "Kumanda kökü — eşyanın kumandaya göre yeri buradan yazılır (yalnız taşı).")))
+                    using (new EditorGUI.DisabledScope(!target.HasGrip(kind, true)))
                     {
-                        Selection.activeGameObject = hand.gameObject;
-                        SceneView.lastActiveSceneView?.FrameSelected();
-                    }
-
-                    GameObject ghost = GhostOf(hand);
-                    using (new EditorGUI.DisabledScope(ghost == null))
-                    {
-                        if (GUILayout.Button(new GUIContent("El Modeli",
-                                "Hayalet el — elin kumanda üstündeki yeri ve AÇISI (taşı + çevir). " +
-                                "Eşyanın duruşunu değiştirmez.")))
+                        if (GUILayout.Button("Sağ → Sol aynala"))
                         {
-                            Selection.activeGameObject = ghost;
-                            SceneView.lastActiveSceneView?.FrameSelected();
+                            GripRecordOps.Mirror(target, kind, true);
                         }
                     }
 
-                    if (GUILayout.Button(new GUIContent("Kopya Al",
-                            "Bu elin görselini (kumanda üstündeki yerleşimi + parmak rigi) başka " +
-                            "bir eşyadan aynen alır. Eşyanın kumandaya göre yerine DOKUNMAZ.")))
+                    using (new EditorGUI.DisabledScope(!target.HasGrip(kind, false)))
                     {
-                        ShowCopyMenu(hand, definition, GUILayoutUtility.GetLastRect());
+                        if (GUILayout.Button("Sol → Sağ aynala"))
+                        {
+                            GripRecordOps.Mirror(target, kind, false);
+                        }
                     }
                 }
+            }
 
-                if (hand == focused)
-                {
-                    DrawFingerRig(hand);
-                }
+            EditorGUILayout.Space();
+            if (GUILayout.Button("2. kavramayı sil (tek kavramalı yap)"))
+            {
+                GripRecordOps.MakeOneHanded(target);
+            }
+
+            EditorGUILayout.Space();
+            if (GUILayout.Button("Yakalama sahnesini aç", GUILayout.Height(26f)))
+            {
+                OpenCaptureScene();
             }
         }
 
-        // -------------------------------------------------------------------- copy from item
-
-        /// <summary>Drops down the list of items this hand's LOOK can be copied from.
-        /// <para>⚠️ Only definitions that have <b>this very slot</b> (same grip point, same hand)
-        /// authored are listed, and an item whose record holds neither a seat nor a finger rig is
-        /// left out too: an entry that copies nothing would read as "I picked it and nothing
-        /// happened". A slot with no source at all shows a disabled line instead of an empty
-        /// menu — an empty dropdown looks like a broken button.</para>
-        /// <para>⚠️ The current item is excluded: "copy from myself" would silently mean "revert
-        /// to the last save", which is a different operation and not what the button says.</para></summary>
-        private static void ShowCopyMenu(GripHandAuthoring hand, ItemDefinition current, Rect from)
+        /// <summary>In Play the window only reports: the records are written when Play exits.</summary>
+        private void DrawPlayGui()
         {
-            if (hand == null)
+            EditorGUILayout.HelpBox("Yakalama sürüyor — Play'den çıkınca eşyaya yazılır.",
+                MessageType.Info);
+
+            GripCaptureBuffer buffer = CachedBuffer();
+            if (buffer == null || buffer.entries.Count == 0)
+            {
+                EditorGUILayout.LabelField("Henüz kayıt yok.");
+                return;
+            }
+
+            for (int i = 0; i < buffer.entries.Count; i++)
+            {
+                GripCaptureEntry entry = buffer.entries[i];
+                int joints = entry.pose.HasFingers ? entry.pose.fingerJoints.Length : 0;
+                EditorGUILayout.LabelField(GripSlotGui.SlotLabel(entry.kind, entry.rightHand),
+                    $"✔ {joints} eklem");
+            }
+        }
+
+        /// <summary>A buffer left on disk (crash, or an item that could not be resolved) — applied
+        /// or dropped BY HAND, never silently (it may be days old).</summary>
+        private void DrawPendingGui(ItemDefinition target)
+        {
+            if (!GripCaptureBuffer.Exists)
             {
                 return;
             }
 
-            GripSocketKind kind = hand.Kind;
-            bool rightHand = hand.RightHand;
-            List<ItemDefinition> sources = CollectCopySources(kind, rightHand, current);
-
-            var menu = new GenericMenu();
-            if (sources.Count == 0)
-            {
-                menu.AddDisabledItem(new GUIContent(
-                    $"(bu eli yazılmış başka eşya yok: {kind} · {(rightHand ? "sağ" : "sol")})"));
-                menu.DropDown(from);
-                return;
-            }
-
-            for (int i = 0; i < sources.Count; i++)
-            {
-                ItemDefinition source = sources[i];
-                ItemGripPose grip = source.GetGrip(kind, rightHand);
-
-                // The suffix says what the source actually carries, so nobody copies a "default
-                // seat" or an "idle hand" by accident and then hunts for the difference.
-                string suffix = grip.HasWrist
-                    ? (grip.HasFingers ? "" : " · parmakları riglenmemiş")
-                    : " · yerleşimi yazılmamış";
-
-                menu.AddItem(new GUIContent(source.name + suffix), false,
-                    () => CopyHandFrom(hand, source));
-            }
-
-            menu.DropDown(from);
-        }
-
-        /// <summary>Every definition on disk whose <paramref name="kind"/>/<paramref name="rightHand"/>
-        /// slot is authored AND holds something to copy, sorted by asset name.
-        /// <para>⚠️ <c>t:ItemDefinition</c> (not <c>t:WeaponDefinition</c>): the record lives on the
-        /// base, so a throwable authored the same way is a valid source — the hand does not care
-        /// what the item does.</para>
-        /// <para>⚠️ <see cref="ItemDefinition.HasGrip"/>, never <c>GetGrip</c>, decides membership:
-        /// the read path falls back to the OTHER hand, so a weapon with only a right hand written
-        /// would show up as a left-hand source and hand over a mirrored-looking pose.</para></summary>
-        private static List<ItemDefinition> CollectCopySources(GripSocketKind kind, bool rightHand,
-            ItemDefinition exclude)
-        {
-            var result = new List<ItemDefinition>();
-            string[] guids = AssetDatabase.FindAssets("t:ItemDefinition");
-
-            for (int i = 0; i < guids.Length; i++)
-            {
-                string path = AssetDatabase.GUIDToAssetPath(guids[i]);
-                var definition = AssetDatabase.LoadAssetAtPath<ItemDefinition>(path);
-                if (definition == null || definition == exclude ||
-                    !definition.HasGrip(kind, rightHand))
-                {
-                    continue;
-                }
-
-                ItemGripPose grip = definition.GetGrip(kind, rightHand);
-                if (!grip.HasWrist && !grip.HasFingers)
-                {
-                    continue;
-                }
-
-                result.Add(definition);
-            }
-
-            result.Sort((a, b) => string.CompareOrdinal(a.name, b.name));
-            return result;
-        }
-
-        /// <summary>Copies the source's LOOK for this slot onto the bench hand: the hand model's
-        /// seat on the controller + the rigged finger joints.
-        /// <para>⚠️ The controller root is NOT touched. That root is where the ITEM sits on the
-        /// controller and it is this item's own geometry — taking it from another item would
-        /// move the item in the hand, and the tell in game ("it comes in crooked") is far
-        /// from the button that caused it.</para>
-        /// <para>⚠️ BOTH halves are written, even when the source has only one: the copy makes this
-        /// hand exactly that item's hand, so a source with no seat re-seats to the shared default
-        /// (the menu labels say which half is missing). Half-copying would leave a hand that
-        /// matches neither item.</para>
-        /// <para>⚠️ Nothing goes to disk here — the bench is what changed, and <b>Kaydet</b> stays
-        /// the single writer (<see cref="SaveHands"/>).</para></summary>
-        private static void CopyHandFrom(GripHandAuthoring hand, ItemDefinition source)
-        {
-            // The menu fires after the GUI event, so both ends can be gone by now (a hand destroyed
-            // in the meantime, an asset deleted) — that is a no-op, not an error.
-            if (hand == null || source == null)
+            GripCaptureBuffer buffer = CachedBuffer();
+            if (buffer == null)
             {
                 return;
             }
 
-            ItemGripPose grip = source.GetGrip(hand.Kind, hand.RightHand);
-            ApplyGhostOffset(hand, grip);
-            hand.ApplyPose(grip.fingerJoints);
+            string itemName = ItemNameOf(buffer, target);
+            EditorGUILayout.Space();
+            EditorGUILayout.HelpBox(
+                $"Uygulanmamış yakalama: {itemName} · {buffer.entries.Count} kayıt",
+                MessageType.Warning);
 
-            Debug.Log($"{LOG} {hand.Kind}/{(hand.RightHand ? "sağ" : "sol")} elin görseli " +
-                      $"'{source.name}' kaydından kopyalandı (yerleşim + parmaklar). Eşyanın " +
-                      "kumandaya göre yeri değişmedi — kalıcı olması için Kaydet.", source);
-
-            SceneView.RepaintAll();
-            NotifyHandsChanged();
-        }
-
-        /// <summary>Finger rig picker for ONE hand: a button per riggable joint that selects the bone
-        /// and switches the Scene View to the rotate tool.
-        /// <para>⚠️ It lives in the WINDOW, not the hand's Inspector: selecting a joint replaces the
-        /// Inspector with that bone's Transform, so an Inspector-side picker would close itself on
-        /// the first click and there would be no way to reach the second joint.</para>
-        /// <para>⚠️ It only SELECTS — no numeric field, no slider. The pose lives in the bones and is
-        /// read back from them at save time (<see cref="CaptureFingers"/>); a second numeric
-        /// description of the same rotation would raise "which one is current".</para></summary>
-        private static void DrawFingerRig(GripHandAuthoring hand)
-        {
-            List<HandJointMap> drivable = hand.DrivableJoints();
-
-            using (new EditorGUI.IndentLevelScope())
-            {
-                if (drivable.Count == 0)
-                {
-                    EditorGUILayout.LabelField(
-                        "(hayalet elin eklemleri okunamadı — eli yeniden oluştur)",
-                        EditorStyles.miniLabel);
-                    return;
-                }
-
-                EditorGUILayout.LabelField(
-                    "Parmak rigi — eklemi seç, Scene View'da çevir (kayda o hâli girer)",
-                    EditorStyles.miniLabel);
-
-                HandJointId[][] fingers = FingersMetadata.FINGER_TO_JOINTS;
-                for (int finger = 0; finger < fingers.Length && finger < FINGER_LABELS.Length; finger++)
-                {
-                    DrawFingerRow(FINGER_LABELS[finger], fingers[finger], drivable);
-                }
-
-                using (new EditorGUILayout.HorizontalScope())
-                {
-                    if (GUILayout.Button(new GUIContent("Parmakları Sıfırla",
-                            "Parmakları boş elin duruşuna döndürür.")))
-                    {
-                        // null = no record → idle hand pose.
-                        hand.ApplyPose(null);
-                        SceneView.RepaintAll();
-                    }
-
-                    if (GUILayout.Button(new GUIContent("El Yerleşimini Sıfırla",
-                            "El modelini kumandanın üstündeki paylaşılan varsayılan yerine " +
-                            "döndürür (eşyanın duruşuna dokunmaz).")))
-                    {
-                        // default record = "no seat authored" → shared definition.
-                        ApplyGhostOffset(hand, default);
-                        SceneView.RepaintAll();
-                    }
-                }
-            }
-        }
-
-        /// <summary>One finger's row: its name plus a numbered button per riggable joint (1 =
-        /// closest to the wrist). Metacarpals never show up — they are not riggable.</summary>
-        private static void DrawFingerRow(string label, HandJointId[] chain,
-            List<HandJointMap> drivable)
-        {
             using (new EditorGUILayout.HorizontalScope())
             {
-                EditorGUILayout.LabelField(label, GUILayout.Width(90f));
-
-                int shown = 0;
-                for (int j = 0; chain != null && j < chain.Length; j++)
+                if (GUILayout.Button("Uygula"))
                 {
-                    HandJointMap map = FindMap(drivable, chain[j]);
-                    if (map == null)
-                    {
-                        continue;
-                    }
-
-                    shown++;
-                    bool selected = Selection.activeGameObject == map.transform.gameObject;
-                    Color previous = GUI.backgroundColor;
-                    if (selected)
-                    {
-                        GUI.backgroundColor = new Color(0.45f, 0.75f, 1f);
-                    }
-
-                    var content = new GUIContent(shown.ToString(), chain[j].ToString());
-                    if (GUILayout.Button(content, EditorStyles.miniButton, GUILayout.Width(26f)))
-                    {
-                        Selection.activeGameObject = map.transform.gameObject;
-                        // ⚠️ Switch to the rotate tool: a bone dragged with the move tool tears the
-                        // hand apart, and the record carries rotations only.
-                        Tools.current = Tool.Rotate;
-                        Tools.pivotRotation = PivotRotation.Local;
-                        SceneView.RepaintAll();
-                    }
-
-                    GUI.backgroundColor = previous;
+                    GripCaptureApplier.Apply();
+                    _bufferTime = 0d;
                 }
 
-                if (shown == 0)
+                if (GUILayout.Button("Sil") &&
+                    EditorUtility.DisplayDialog("Yakalamayı sil",
+                        $"'{itemName}' için uygulanmamış {buffer.entries.Count} kayıt silinecek. " +
+                        "Geri alınamaz.", "Sil", "Vazgeç"))
                 {
-                    EditorGUILayout.LabelField("(eklem yok)", EditorStyles.miniLabel);
-                }
-
-                GUILayout.FlexibleSpace();
-            }
-        }
-
-        /// <summary>The joint map for one id in a hand's riggable set; <c>null</c> if it has none
-        /// (a metacarpal, or a joint the branch does not expose).</summary>
-        private static HandJointMap FindMap(List<HandJointMap> drivable, HandJointId id)
-        {
-            for (int i = 0; i < drivable.Count; i++)
-            {
-                if (drivable[i].id == id)
-                {
-                    return drivable[i];
-                }
-            }
-
-            return null;
-        }
-
-        // ⚠️ No live dump of the values to be saved, deliberately, and none is added back: the
-        // bench's answer is read by eye (does the hand wrap the grip), not as numbers — a
-        // position/angle list took space and was a second description nobody used. The record itself
-        // is visible in WD_*.asset's Inspector.
-
-        // ----------------------------------------------------------------- stage / hands
-
-        private static PrefabStage CurrentStage()
-        {
-            return PrefabStageUtility.GetCurrentPrefabStage();
-        }
-
-        /// <summary>Root of the prefab open in prefab mode. ⚠️ No definition check here: this runs
-        /// every editor tick (<see cref="RestoreHandFlags"/>) and a project-wide asset scan per tick
-        /// would be a real cost — the definition is resolved once in the GUI. Hands only exist in a
-        /// stage the bench opened, so aligning to any open stage's root is harmless.</summary>
-        private static Transform StageItemRoot(PrefabStage stage)
-        {
-            GameObject root = stage != null ? stage.prefabContentsRoot : null;
-            return root != null ? root.transform : null;
-        }
-
-        internal static string HandRootName(GripSocketKind kind, bool rightHand)
-        {
-            return $"{HAND_ROOT_PREFIX}{kind}_{(rightHand ? "R" : "L")}]";
-        }
-
-        private static List<GripHandAuthoring> FindHands(Scene scene)
-        {
-            var found = new List<GripHandAuthoring>();
-            if (!scene.IsValid() || !scene.isLoaded)
-            {
-                return found;
-            }
-
-            GameObject[] roots = scene.GetRootGameObjects();
-            for (int i = 0; i < roots.Length; i++)
-            {
-                if (roots[i] == null || !roots[i].name.StartsWith(HAND_ROOT_PREFIX))
-                {
-                    continue;
-                }
-
-                var authoring = roots[i].GetComponent<GripHandAuthoring>();
-                if (authoring != null)
-                {
-                    found.Add(authoring);
-                }
-            }
-
-            return found;
-        }
-
-        /// <summary>Number of LIVE hands in the list. ⚠️ <c>Count</c> is not enough: the list is
-        /// gathered at frame start and its objects can be destroyed before the frame ends, which
-        /// would leave the save button enabled over an empty list.</summary>
-        private static int CountLive(List<GripHandAuthoring> hands)
-        {
-            int live = 0;
-            for (int i = 0; i < hands.Count; i++)
-            {
-                if (hands[i] != null)
-                {
-                    live++;
-                }
-            }
-
-            return live;
-        }
-
-        private static GripHandAuthoring FindHand(List<GripHandAuthoring> hands, GripSocketKind kind,
-            bool rightHand)
-        {
-            for (int i = 0; i < hands.Count; i++)
-            {
-                if (hands[i] != null && hands[i].Kind == kind && hands[i].RightHand == rightHand)
-                {
-                    return hands[i];
-                }
-            }
-
-            return null;
-        }
-
-        private static void DestroyHands(Scene scene)
-        {
-            List<GripHandAuthoring> hands = FindHands(scene);
-            for (int i = 0; i < hands.Count; i++)
-            {
-                if (hands[i] != null)
-                {
-                    DestroyImmediate(hands[i].gameObject);
-                }
-            }
-
-            SceneView.RepaintAll();
-        }
-
-        /// <summary>Destroys hands in every open scene, prefab mode included.</summary>
-        private static void DestroyAllHands()
-        {
-            PrefabStage stage = CurrentStage();
-            if (stage != null)
-            {
-                DestroyHands(stage.scene);
-            }
-
-            for (int s = 0; s < SceneManager.sceneCount; s++)
-            {
-                DestroyHands(SceneManager.GetSceneAt(s));
-            }
-        }
-
-        // --------------------------------------------------------------- building hands
-
-        private static void CreateHandPair(PrefabStage stage, Transform itemRoot,
-            ItemDefinition definition, GripSocketKind kind)
-        {
-            // ⚠️ Both hands are attempted INDEPENDENTLY: letting a failed right hand also skip the
-            // left would look like "the left hand is never added" and hide the real error. Each
-            // failure already logs its own line.
-            GripHandAuthoring right = EnsureHand(stage, itemRoot, definition, kind, true);
-            GripHandAuthoring left = EnsureHand(stage, itemRoot, definition, kind, false);
-
-            GripHandAuthoring focus = right != null ? right : left;
-            if (focus != null)
-            {
-                Selection.activeGameObject = focus.gameObject;
-                SceneView.lastActiveSceneView?.FrameSelected();
-            }
-
-            NotifyHandsChanged();
-        }
-
-        /// <summary>Tells open studio windows that the hands changed.
-        /// <para>⚠️ <c>GetWindow</c> is NOT used: it opens a new window when none exists and steals
-        /// focus — build/mirror can be triggered from the Scene view, where a focus jump would break
-        /// the user's drag.</para></summary>
-        private static void NotifyHandsChanged()
-        {
-            GripPoseStudio[] windows = Resources.FindObjectsOfTypeAll<GripPoseStudio>();
-            for (int i = 0; i < windows.Length; i++)
-            {
-                windows[i].Repaint();
-            }
-        }
-
-        /// <summary>Builds the hand for one grip point (returns the existing one if present).
-        /// <para>⚠️ The root is the CONTROLLER frame and the ghost hand is its CHILD; BOTH are part of
-        /// the record and mean different things: the root's item-local position decides where the
-        /// ITEM sits on the controller (<see cref="AnchorInItem"/>), the ghost's local pose decides
-        /// where the HAND MODEL sits on that controller (<see cref="CaptureWrist"/>). Every other
-        /// child is a pure visual and a click on it is redirected to the root
-        /// (<see cref="RedirectSelectionToHandRoot"/>).</para>
-        /// <para>⚠️ Local scale is pinned to 1: the hand is a scene root, not under the prefab, so
-        /// the item's own scale (0.8 on <c>WPN_*</c> roots) never leaks into it — otherwise "does the
-        /// palm wrap the grip" would be answered at a 25% wrong ratio, which is the tool's whole
-        /// job.</para></summary>
-        private static GripHandAuthoring EnsureHand(PrefabStage stage, Transform itemRoot,
-            ItemDefinition definition, GripSocketKind kind, bool rightHand)
-        {
-            GripHandAuthoring existing = FindHand(FindHands(stage.scene), kind, rightHand);
-            if (existing != null)
-            {
-                // A hand hidden by Unity's save side effect returns to the hierarchy here, so
-                // "Elleri Oluştur" also revives lost hands.
-                EnsureControllerModel(existing.gameObject, existing.RightHand);
-                MarkDontSave(existing);
-                HideIsdkComponents(GhostOf(existing));
-                // ⚠️ Neither the finger rig NOR the ghost's seat is re-applied here: an existing hand
-                // may be mid-edit, and resetting it to the on-disk pose would read as "I adjust it and
-                // it keeps snapping back". A hand that has left the bench comes back through the
-                // branch below, which does apply the record.
-                return existing;
-            }
-
-            if (!TryGetGhostProvider(out HandGhostProvider provider))
-            {
-                return null;
-            }
-
-            Handedness handedness = rightHand ? Handedness.Right : Handedness.Left;
-            HandGhost prototype = provider.GetHand(handedness);
-            if (prototype == null)
-            {
-                Debug.LogWarning($"{LOG} El sağlayıcısında {handedness} el yok — el kurulamadı.");
-                return null;
-            }
-
-            var root = new GameObject(HandRootName(kind, rightHand));
-            SceneManager.MoveGameObjectToScene(root, stage.scene);
-            root.transform.localScale = Vector3.one;
-
-            var authoring = root.AddComponent<GripHandAuthoring>();
-            if (authoring == null)
-            {
-                // ⚠️ Never leave a half-built hand: FindHands cannot see a component-less root (the
-                // identity lives in the component), so it is neither listed nor cleanable and lingers
-                // as an orphan until the next stage/Play transition. Destroying it immediately never
-                // creates that ghost.
-                DestroyImmediate(root);
-                Debug.LogError($"{LOG} {kind}/{(rightHand ? "sağ" : "sol")} el kurulamadı: " +
-                               "GripHandAuthoring eklenemedi. Sınıf RUNTIME asmdef'inde " +
-                               "(VortexArena.Core, #if UNITY_EDITOR sarmalında) olmalı — Unity " +
-                               "editör asmdef'inde derlenen bir MonoBehaviour'ı AddComponent ile " +
-                               "kabul etmez ve null döner.");
-                return null;
-            }
-
-            // Ghost hand: child of the root, seated at this slot's own anchor→wrist offset — or at
-            // the shared definition when the slot has none yet (ApplyGhostOffset).
-            HandGhost ghost = Instantiate(prototype, root.transform);
-            GameObject handGo = ghost.gameObject;
-            handGo.name = GHOST_NAME;
-            handGo.transform.localScale = Vector3.one;
-
-            HandPuppet puppet = ghost.GetComponent<HandPuppet>();
-
-            ItemGripPose recorded = definition.GetGrip(kind, rightHand);
-
-            authoring.Resolve(puppet, kind, rightHand);
-            ApplyGhostOffset(authoring, recorded);
-            EnsureControllerModel(root, rightHand);
-
-            // The root is placed directly, not via the puppet's SetRootPose (that writes the ghost's
-            // own transform, but the ghost is a child with a fixed local offset).
-            // ⚠️ The finger pose goes through the puppet, NOT ISDK's HandGhost.SetPose: SetPose wants
-            // a HandPose object whose joint array would be a second finger source — the only source
-            // is the record itself (and an empty record means the idle hand).
-            Pose start = ResolveStartPose(itemRoot, definition, kind, rightHand);
-            root.transform.SetPositionAndRotation(start.position, start.rotation);
-
-            authoring.ApplyPose(recorded.fingerJoints);
-            HideIsdkComponents(handGo);
-            MarkDontSave(authoring);
-            NotifyHandsChanged();
-            return authoring;
-        }
-
-        /// <summary>The hand's ISDK ghost object (child of the root); <c>null</c> if absent.</summary>
-        private static GameObject GhostOf(GripHandAuthoring hand)
-        {
-            if (hand == null)
-            {
-                return null;
-            }
-
-            var ghost = hand.GetComponentInChildren<HandGhost>(true);
-            return ghost != null ? ghost.gameObject : null;
-        }
-
-        /// <summary>Seats the ghost hand under the controller root at the offset the game will lock
-        /// the real wrist to: the record's own seat if this slot has one, otherwise the shared
-        /// definition (<c>ItemGripAuthority.ResolveAnchorToWrist</c>).
-        /// <para>⚠️ <b>The bench must not compute an offset of its own.</b> Bench and game agreeing is
-        /// not a coincidence to be maintained by two matching formulas — it is the single value both
-        /// read. The studio used to estimate this itself (an anatomical guess composed from
-        /// <c>HandGripConvention.AnchorBasis</c>) and it landed ~70° off around the finger axis, so
-        /// the ghost came out visibly rolled while the controller model beside it was exact.</para>
-        /// <para>⚠️ Called ONLY while building a hand (and by the explicit reset button) — never on a
-        /// hand already on the bench. The ghost's seat is authored by dragging that very object, so
-        /// re-seating it every tick would read as "I move the hand and it keeps snapping back"; this
-        /// is the same rule the finger rig follows.</para></summary>
-        private static void ApplyGhostOffset(GripHandAuthoring hand, in ItemGripPose recorded)
-        {
-            if (hand == null)
-            {
-                return;
-            }
-
-            SeatGhost(hand, ItemGripAuthority.ResolveAnchorToWrist(recorded, hand.RightHand));
-        }
-
-        /// <summary>Writes a seat straight onto the ghost (the mirror and the reset button reach the
-        /// ghost through here). ⚠️ Scale is pinned to 1: the seat is in metres and a scaled ghost
-        /// would answer "does the palm wrap the grip" at the wrong ratio.</summary>
-        private static void SeatGhost(GripHandAuthoring hand, in Pose offset)
-        {
-            GameObject ghost = GhostOf(hand);
-            if (ghost == null)
-            {
-                return;
-            }
-
-            ghost.transform.localPosition = offset.position;
-            ghost.transform.localRotation = offset.rotation;
-            ghost.transform.localScale = Vector3.one;
-        }
-
-        /// <summary>Reads the hand model's seat on the controller off the bench, in the form the
-        /// record stores (the ghost's LOCAL pose under the controller root).
-        /// <para>⚠️ Local, and the root's scale is pinned to 1, so this is plain metres — the same
-        /// space <c>HandGripPoser</c> composes onto the anchor. Falls back to the shared definition
-        /// when the ghost is missing, so a half-built hand cannot write a zero pose that would draw
-        /// the hand inside the controller.</para></summary>
-        private static Pose CaptureWrist(GripHandAuthoring hand)
-        {
-            GameObject ghost = GhostOf(hand);
-            if (ghost == null)
-            {
-                return ItemGripAuthority.ResolveAnchorToWrist(hand != null && hand.RightHand);
-            }
-
-            return new Pose(ghost.transform.localPosition, ghost.transform.localRotation);
-        }
-
-        /// <summary>Places the Quest 3 controller model under the root (if missing) at identity: that
-        /// is exactly how it sits under the anchor in game, making it the REAL alignment reference —
-        /// unlike the ghost hand, which may be drawn from an estimate.
-        /// <para>The model's <c>Animator</c> is stripped (button animation is meaningless here);
-        /// mesh and scale stay as in the prefab. If not found it warns once and the hand is still
-        /// built.</para></summary>
-        private static void EnsureControllerModel(GameObject root, bool rightHand)
-        {
-            if (root == null || root.transform.Find(CONTROLLER_NAME) != null)
-            {
-                return;
-            }
-
-            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(CONTROLLER_PREFAB_PATH);
-            Transform source = prefab != null
-                ? prefab.transform.Find(rightHand ? CONTROLLER_MODEL_RIGHT : CONTROLLER_MODEL_LEFT)
-                : null;
-            if (source == null)
-            {
-                if (!_controllerModelWarned)
-                {
-                    _controllerModelWarned = true;
-                    Debug.LogWarning($"{LOG} Kumanda modeli bulunamadı ('{CONTROLLER_PREFAB_PATH}' → " +
-                                     $"{CONTROLLER_MODEL_RIGHT}/{CONTROLLER_MODEL_LEFT}); kök yalnız gizmo ve " +
-                                     "hayalet elle çizilir.");
-                }
-
-                return;
-            }
-
-            GameObject model = Instantiate(source.gameObject, root.transform);
-            model.name = CONTROLLER_NAME;
-            model.transform.localPosition = source.localPosition;
-            model.transform.localRotation = source.localRotation;
-            model.transform.localScale = source.localScale;
-
-            var animator = model.GetComponent<Animator>();
-            if (animator != null)
-            {
-                DestroyImmediate(animator);
-            }
-        }
-
-        /// <summary>Starting pose of the controller root — position from three sources IN ORDER:
-        /// (1) the record in the definition, (2) roughly the centre of the grip part, (3) slightly
-        /// above the item. Rotation is ALWAYS the item's (the record carries none).
-        /// <para>⚠️ (1) is the exact inverse of the record: "build hands → touch nothing → save"
-        /// must not change the stored value. If that identity breaks, one of the space directions is
-        /// flipped and the only places to look are <see cref="AnchorInItem"/> and this
-        /// recomposition.</para>
-        /// <para>⚠️ The composition is UNSCALED (no <c>TransformPoint</c>): the record is in METRES
-        /// and <c>WPN_*</c> roots are 0.8 scaled, so a scaled composition puts the root 1/0.8 too far
-        /// from the item.</para></summary>
-        private static Pose ResolveStartPose(Transform itemRoot, ItemDefinition definition,
-            GripSocketKind kind, bool rightHand)
-        {
-            if (definition.HasGrip(kind, rightHand))
-            {
-                Vector3 local = definition.GetGrip(kind, rightHand).position;
-                return new Pose(itemRoot.position + itemRoot.rotation * local, itemRoot.rotation);
-            }
-
-            // No cache needed: this scan runs ONCE per grip point while building a hand.
-            Renderer part = SearchGripPart(itemRoot,
-                kind == GripSocketKind.Primary ? GRIP_KEYS : FOREGRIP_KEYS);
-
-            Vector3 position = part != null
-                ? part.bounds.center
-                : itemRoot.position + Vector3.up * 0.1f;
-
-            return new Pose(position, itemRoot.rotation);
-        }
-
-        /// <summary>Local POSITION of the controller root relative to the item — the ONLY way the
-        /// record's ANCHOR half is computed (<see cref="ItemGripPose"/>: anchor space, no rotation;
-        /// the hand half comes from <see cref="CaptureWrist"/>).
-        /// <para>⚠️ <see cref="Transform.InverseTransformPoint"/> is NOT used: the record is in
-        /// METRES and must not be shrunk by the item's visual scale (0.8 on <c>WPN_*</c> roots). The
-        /// recomposition in <see cref="ResolveStartPose"/> mirrors this, keeping both ends on one
-        /// contract.</para></summary>
-        private static Vector3 AnchorInItem(Transform itemRoot, Transform handRoot)
-        {
-            return Quaternion.Inverse(itemRoot.rotation) * (handRoot.position - itemRoot.position);
-        }
-
-        /// <summary>Keeps the roots item-aligned: the record carries no rotation, so rotating a
-        /// root has no in-game meaning and it is snapped back, keeping bench and game in sync. Runs
-        /// every editor tick and writes only to a root that drifted.</summary>
-        private static void KeepRootsAligned(Transform itemRoot, List<GripHandAuthoring> hands)
-        {
-            for (int i = 0; i < hands.Count; i++)
-            {
-                GripHandAuthoring hand = hands[i];
-                if (hand == null)
-                {
-                    continue;
-                }
-
-                if (Quaternion.Angle(hand.transform.rotation, itemRoot.rotation) > 0.01f)
-                {
-                    hand.transform.rotation = itemRoot.rotation;
+                    GripCaptureBuffer.Delete();
+                    _bufferTime = 0d;
                 }
             }
         }
 
-        /// <summary>⚠️ <see cref="HideFlags.DontSave"/> is written across the whole subtree so no
-        /// hand part reaches the file on a prefab save; the flag is per GameObject, the root alone
-        /// is not enough.
-        /// <para>Everything BELOW the root also gets <see cref="HideFlags.NotEditable"/> — EXCEPT the
-        /// two AUTHORED nodes: the ghost hand's root (its seat on the controller) and the riggable
-        /// finger joints. The controller model and the ghost's meshes are pure visuals while the
-        /// record is the root's pose, so dragging one of THOSE would produce "I saved but nothing
-        /// changed"; the ghost root and the finger bones are the opposite case — they ARE the
-        /// record's hand half and must stay selectable, movable and rotatable.</para></summary>
-        private static void MarkDontSave(GripHandAuthoring hand)
+        private static string ItemNameOf(GripCaptureBuffer buffer, ItemDefinition target)
         {
-            if (hand == null)
+            string path = AssetDatabase.GUIDToAssetPath(buffer.definitionGuid ?? "");
+            var def = string.IsNullOrEmpty(path)
+                ? null
+                : AssetDatabase.LoadAssetAtPath<ItemDefinition>(path);
+            if (def != null)
             {
-                return;
+                return def.name;
             }
 
-            GameObject root = hand.gameObject;
-            var editable = new HashSet<Transform>();
-
-            GameObject ghost = GhostOf(hand);
-            if (ghost != null)
-            {
-                editable.Add(ghost.transform);
-            }
-
-            List<HandJointMap> joints = hand.DrivableJoints();
-            for (int i = 0; i < joints.Count; i++)
-            {
-                editable.Add(joints[i].transform);
-            }
-
-            Transform[] all = root.GetComponentsInChildren<Transform>(true);
-            for (int i = 0; i < all.Length; i++)
-            {
-                Transform node = all[i];
-                bool open = node.gameObject == root || editable.Contains(node);
-                node.gameObject.hideFlags = open
-                    ? HideFlags.DontSave
-                    : HideFlags.DontSave | HideFlags.NotEditable;
-
-                if (open)
-                {
-                    // Unity's save-time flip can also land on the COMPONENT flags; a joint whose
-                    // Transform stays NotEditable is selectable but its handles do nothing.
-                    node.hideFlags &= ~(HideFlags.HideInInspector | HideFlags.NotEditable);
-                }
-            }
+            return target != null ? target.name : "(eşya bulunamadı)";
         }
 
-        /// <summary>Hides the ISDK components (<c>HandGhost</c>, <c>HandPuppet</c> …) on the ghost
-        /// object from the Inspector so the user sees only Transform +
-        /// <see cref="GripHandAuthoring"/> instead of a hundred-line Joint Maps list. Silent on
-        /// <c>null</c>.
-        /// <para>⚠️ Hiding is VISUAL only: the components stay, and the <c>_puppet</c> reference and
-        /// ISDK's pose application keep working. Deleting them would break the hand.</para></summary>
-        private static void HideIsdkComponents(GameObject root)
+        private GripCaptureBuffer CachedBuffer()
         {
-            if (root == null)
+            if (EditorApplication.timeSinceStartup - _bufferTime > BufferRefreshSeconds)
             {
-                return;
+                _buffer = GripCaptureBuffer.Load();
+                _bufferTime = EditorApplication.timeSinceStartup;
             }
 
-            Component[] components = root.GetComponents<Component>();
-            for (int i = 0; i < components.Length; i++)
-            {
-                Component component = components[i];
-                if (component == null || component is Transform || component is GripHandAuthoring)
-                {
-                    continue;
-                }
-
-                component.hideFlags |= HideFlags.HideInInspector;
-            }
+            return _buffer;
         }
 
-        // ------------------------------------------------------------------- mirroring
+        // ------------------------------------------------------------------- capture scene
 
-        /// <summary>Mirrors a hand's placement to the OPPOSITE hand (across the item-space YZ plane),
-        /// building it if missing. The finger rig is COPIED joint by joint: ISDK's left and right
-        /// ghosts share one joint convention, so the same local rotations produce the mirrored pose —
-        /// which is why that half is a copy and not a negation.
-        /// <para>The hand model's SEAT is genuinely reflected, because it lives in the controller
-        /// root's frame and that frame is item-aligned on both hands:
-        /// <c>p=(x,y,z) → (−x,y,z)</c> and <c>q=(x,y,z,w) → (x,−y,−z,w)</c> (reflection across the
-        /// plane whose normal is X). Identity maps to identity, so a hand that was never re-seated
-        /// mirrors to the same default.</para>
-        /// <para>⚠️ ISDK's <c>MirrorHandGrabPose</c> is NOT used: with no surface to mirror against
-        /// (a <c>Grabbable</c> collider) it applies an arbitrary "best guess" rotation, and this
-        /// bench has no surface at all. The maths here is two verifiable lines.</para>
-        /// <para>⚠️ Mirroring is a STARTING POINT, not the final word: a grip is roughly symmetric
-        /// in the sagittal plane but trigger, magazine and charging handle are one-sided.</para>
-        /// </summary>
-        internal static bool MirrorToOpposite(GripHandAuthoring source)
-        {
-            if (source == null)
-            {
-                return false;
-            }
-
-            PrefabStage stage = CurrentStage();
-            Transform itemRoot = StageItemRoot(stage);
-            if (itemRoot == null)
-            {
-                Debug.LogWarning($"{LOG} Aynalama için prefab kipi açık olmalı (referans eşyanın " +
-                                 "kökü).");
-                return false;
-            }
-
-            ItemDefinition definition = ResolveDefinition(itemRoot.gameObject, out _);
-            if (definition == null)
-            {
-                return false;
-            }
-
-            Vector3 local = AnchorInItem(itemRoot, source.transform);
-            var mirroredPosition = new Vector3(-local.x, local.y, local.z);
-
-            Pose wrist = CaptureWrist(source);
-            var mirroredWrist = new Pose(
-                new Vector3(-wrist.position.x, wrist.position.y, wrist.position.z),
-                new Quaternion(wrist.rotation.x, -wrist.rotation.y, -wrist.rotation.z,
-                    wrist.rotation.w));
-
-            GripHandAuthoring opposite = EnsureHand(stage, itemRoot, definition,
-                source.Kind, !source.RightHand);
-            if (opposite == null)
-            {
-                return false;
-            }
-
-            opposite.transform.SetPositionAndRotation(
-                itemRoot.position + itemRoot.rotation * mirroredPosition,
-                itemRoot.rotation);
-            opposite.transform.localScale = Vector3.one;
-            SeatGhost(opposite, mirroredWrist);
-            opposite.ApplyPose(CaptureFingers(source));
-
-            Selection.activeGameObject = opposite.gameObject;
-            SceneView.RepaintAll();
-            NotifyHandsChanged();
-            return true;
-        }
-
-        // ----------------------------------------------------------------------- saving
-
-        /// <summary>Turns the bench placement into persistent data: for every live hand, the
-        /// controller root's item-local position + the ghost hand's seat on that controller + its
-        /// riggable finger joints → <c>WD_*.asset</c>.
-        /// <para>⚠️ This is the ONLY writer of the hand half (seat + finger rig) — the hand's own
-        /// Inspector has no save button (<see cref="GripHandAuthoringEditor"/>). Whatever the bench
-        /// looks like at this moment is what lands on disk, so there is no "which of the two is
-        /// current" question.</para>
-        /// <para>⚠️ Nothing is written into the prefab contents and the prefab is not saved: the
-        /// record lives only in the definition, and the hands are separate stage-scene roots anyway.</para>
-        /// <para>⚠️ Never writes in Play mode: the record goes to disk via <c>AssetDatabase</c> and a
-        /// value written during Play becomes ambiguous at the next domain reload.</para>
-        /// <para>A successful write also runs the matching sync (<see cref="RunPostSaveSync"/>): the
-        /// record is not a product on its own — the socket indicator, the WPN prefabs and the item
-        /// catalog derive from it, and leaving that to a second tool made "I saved but nothing
-        /// changed in game" a silent step.</para></summary>
-        private static bool SaveHands(Transform itemRoot, ItemDefinition definition,
-            List<GripHandAuthoring> hands)
+        /// <summary>Opens the capture scene, creating it on first use, and selects its root so the
+        /// Inspector shows the item picker.
+        /// <para>⚠️ The scene is NOT a committed fixture built by hand: it holds a single root with
+        /// the session component, and everything else (the item, the hands) is spawned at runtime —
+        /// a hand-built scene would be a second description of the setup.</para></summary>
+        internal static void OpenCaptureScene()
         {
             if (EditorApplication.isPlaying)
             {
-                Debug.LogWarning($"{LOG} Play kipinde kavrama yazılmaz.");
-                return false;
+                Debug.LogWarning($"{GripRecordOps.LOG} Play kipinde sahne açılmaz.");
+                return;
             }
 
-            Undo.RecordObject(definition, "Kavrama pozunu yaz");
-
-            int written = 0;
-            for (int i = 0; i < hands.Count; i++)
+            if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo())
             {
-                // Dead entries are skipped silently: the list can go stale within the frame, and an
-                // error line would send the user hunting for a hand that no longer exists.
-                GripHandAuthoring hand = hands[i];
-                if (hand == null)
-                {
-                    continue;
-                }
-
-                Vector3 local = AnchorInItem(itemRoot, hand.transform);
-                definition.EditorSetGrip(hand.Kind, hand.RightHand, local, CaptureWrist(hand),
-                    CaptureFingers(hand));
-                written++;
+                return;
             }
 
-            if (written == 0)
+            if (AssetDatabase.LoadAssetAtPath<SceneAsset>(GripCaptureSettings.ScenePath) == null)
             {
-                Debug.LogWarning($"{LOG} Tezgâhta el yok — hiçbir şey yazılmadı.");
-                return false;
+                CreateCaptureScene();
+            }
+            else
+            {
+                EditorSceneManager.OpenScene(GripCaptureSettings.ScenePath);
             }
 
-            EditorUtility.SetDirty(definition);
-            AssetDatabase.SaveAssets();
-
-            Debug.Log($"{LOG} '{itemRoot.name}' kavraması yazıldı: {written} el → " +
-                      $"{definition.name}.asset", definition);
-
-            // ⚠️ delayCall: the kit rewrites the WPN prefab on disk and the open prefab stage
-            // reloads its contents. In the MIDDLE of OnGUI the window would keep drawing a destroyed
-            // itemRoot (MissingReferenceException) — the sync runs after the frame ends.
-            EditorApplication.delayCall += () => RunPostSaveSync(definition);
-            return true;
-        }
-
-        /// <summary>Reads the hand's riggable finger joints off the ghost skeleton, in the form the
-        /// record stores (joint NAME + local rotation — <see cref="HandJointRotation"/>).
-        /// <para>⚠️ The rotation taken is <c>HandJointMap.TrackedRotation</c>, i.e. the bone's local
-        /// rotation with the map's own <c>RotationOffset</c> UNDONE. That is the space
-        /// <c>HandPuppet.SetJointRotations</c> and <c>SyntheticHand.OverrideAllJoints</c> both
-        /// consume; storing the raw <c>localRotation</c> would apply the offset a second time on the
-        /// way back and the bench pose would not reproduce in game.</para>
-        /// <para>⚠️ Metacarpals are excluded (<see cref="HandPoseLibrary.IsDrivable"/>) — rationale in
-        /// <see cref="HandPoseLibrary"/>. Returns an empty array when the ghost has no puppet, which
-        /// the record reads as "not rigged" and the hand falls back to the idle pose.</para></summary>
-        private static HandJointRotation[] CaptureFingers(GripHandAuthoring hand)
-        {
-            List<HandJointMap> joints = hand != null
-                ? hand.DrivableJoints()
-                : new List<HandJointMap>();
-
-            var captured = new HandJointRotation[joints.Count];
-            for (int i = 0; i < joints.Count; i++)
+            var session = Object.FindFirstObjectByType<GripCaptureSession>();
+            if (session != null)
             {
-                captured[i] = HandJointRotation.From(
-                    joints[i].id.ToString(), joints[i].TrackedRotation);
+                Selection.activeGameObject = session.gameObject;
             }
-
-            return captured;
-        }
-
-        /// <summary>Sync run right after a save so the record becomes visible without opening
-        /// <c>Configure All Build Elements</c> by hand.
-        /// <para>A weapon needs the whole weapon kit (the WPN prefabs, the catalog); any other item
-        /// needs only the <c>netItemId</c> → definition catalog. ⚠️ The
-        /// weapon kit is NOT run for a non-weapon: it looks for the <c>WPN_*</c> contract and would
-        /// report its absence as a problem.</para>
-        /// <para>⚠️ The exception is swallowed and only logged (same reason as
-        /// <c>BuildElementsConfigurator.SyncWeaponKit</c>): a slip in the sync must not make an
-        /// already-written record look like a failed save.</para>
-        /// <para>⚠️ The bench empties on the weapon path: the kit rewrites the open prefab, the stage
-        /// reloads its contents and the <c>DontSave</c> hand roots die with it. Not a loss — the
-        /// record is on disk and <i>Elleri Oluştur</i> brings the hands back to the same place.</para>
-        /// <para>⚠️ No dialog and no progress bar: a modal blocks Unity's main thread and times out
-        /// under CLI.</para></summary>
-        private static void RunPostSaveSync(ItemDefinition definition)
-        {
-            try
+            else
             {
-                if (definition is WeaponDefinition)
-                {
-                    WeaponKitBuilder.BuildAll();
-                    return;
-                }
-
-                Debug.Log($"{LOG} Eşya kataloğu eşitlendi — {NetItemIdGuard.Rebuild()}");
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"{LOG} Kavrama kaydı yazıldı ama eşitleme hata verdi — kayıt diskte, " +
-                               "eşitleme yapılmadı (Tools > VortexArena > Build > Configure All " +
-                               "Build Elements > Hepsini Çalıştır ile tekrar dene): " + e);
+                Debug.LogWarning($"{GripRecordOps.LOG} Yakalama sahnesinde oturum kökü yok — " +
+                                 "sahneyi silip yeniden açtırabilirsin.");
             }
         }
 
-        /// <summary>Which definition does this prefab's grip get written to — the bench's real target.
-        /// <para>Order: (1) a component that carries the definition on the prefab
-        /// (<see cref="IItemHolder"/>), (2) reverse lookup — the definition whose <c>Prefab</c> field
-        /// points at this prefab. (1) comes first so a weapon resolves exactly as it did before, even
-        /// if its definition's own prefab field is empty.</para>
-        /// <para>⚠️ Two definitions pointing at the same prefab is NOT resolved silently: the caller
-        /// gets <c>null</c> + <paramref name="ambiguous"/> and must ask the user. "Take the first"
-        /// would write the grip onto the wrong asset with no tell.</para></summary>
-        private static ItemDefinition ResolveDefinition(GameObject root, out bool ambiguous)
+        private static void CreateCaptureScene()
         {
-            ambiguous = false;
-            if (root == null)
-            {
-                return null;
-            }
+            Scene scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
-            var holder = root.GetComponent<IItemHolder>();
-            if (holder != null && holder.Definition != null)
-            {
-                return holder.Definition;
-            }
+            var lightGo = new GameObject("Directional Light");
+            Light light = lightGo.AddComponent<Light>();
+            light.type = LightType.Directional;
+            light.intensity = 1f;
+            lightGo.transform.rotation = Quaternion.Euler(50f, -30f, 0f);
 
-            return DefinitionForPrefab(PrefabAssetPath(root), out ambiguous);
-        }
+            var root = new GameObject("[Kavrama Yakalama]");
+            root.AddComponent<GripCaptureSession>();
 
-        /// <summary>Asset path of the prefab this object belongs to: the open stage's asset while in
-        /// prefab mode, the asset itself in the Project window. Empty for a plain scene object.</summary>
-        private static string PrefabAssetPath(GameObject root)
-        {
-            PrefabStage stage = PrefabStageUtility.GetPrefabStage(root);
-            if (stage != null)
-            {
-                return stage.assetPath;
-            }
-
-            return AssetDatabase.GetAssetPath(root);
-        }
-
-        /// <summary>Definitions whose <c>Prefab</c> points at <paramref name="assetPath"/>, cached.
-        /// <para>⚠️ Cached because it is asked from <c>OnGUI</c> (twice per frame): a project-wide
-        /// <c>FindAssets</c> per repaint is pure waste. The cache expires on a timer so a definition
-        /// created while the window is open shows up on its own — the alternative, invalidating on
-        /// asset events, is a second contract for one scan of a dozen assets.</para></summary>
-        private static ItemDefinition DefinitionForPrefab(string assetPath, out bool ambiguous)
-        {
-            if (string.IsNullOrEmpty(assetPath))
-            {
-                ambiguous = false;
-                return null;
-            }
-
-            if (assetPath != _lookupPath ||
-                EditorApplication.timeSinceStartup - _lookupTime > LookupRefreshSeconds)
-            {
-                RebuildLookup(assetPath);
-            }
-
-            ambiguous = _lookupAmbiguous;
-            return _lookupDefinition;
-        }
-
-        private static void RebuildLookup(string assetPath)
-        {
-            _lookupPath = assetPath;
-            _lookupTime = EditorApplication.timeSinceStartup;
-            _lookupDefinition = null;
-            _lookupAmbiguous = false;
-
-            string[] guids = AssetDatabase.FindAssets("t:ItemDefinition");
-            for (int i = 0; i < guids.Length; i++)
-            {
-                var definition = AssetDatabase.LoadAssetAtPath<ItemDefinition>(
-                    AssetDatabase.GUIDToAssetPath(guids[i]));
-                if (definition == null || definition.Prefab == null)
-                {
-                    continue;
-                }
-
-                if (!string.Equals(AssetDatabase.GetAssetPath(definition.Prefab), assetPath,
-                        StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                if (_lookupDefinition != null)
-                {
-                    _lookupAmbiguous = true;
-                    _lookupDefinition = null;
-                    return;
-                }
-
-                _lookupDefinition = definition;
-            }
-        }
-
-        /// <summary>The hand-picked definition, but only when it really belongs to this prefab.
-        /// ⚠️ Without the check the override becomes a way to write one item's grip onto another
-        /// item's asset — the exact silent failure the ambiguity guard exists for.</summary>
-        private static ItemDefinition MatchingOverride(ItemDefinition candidate, Transform itemRoot)
-        {
-            if (candidate == null || candidate.Prefab == null)
-            {
-                return null;
-            }
-
-            return string.Equals(AssetDatabase.GetAssetPath(candidate.Prefab),
-                PrefabAssetPath(itemRoot.gameObject), StringComparison.OrdinalIgnoreCase)
-                ? candidate
-                : null;
-        }
-
-        // -------------------------------------------------------------------- hand branch
-
-        /// <summary>Which ISDK hand branch was compiled — detected from the EXISTENCE of an enum
-        /// member: <c>HandJointId.HandPalm</c> only exists in the OpenXR branch's table.
-        /// <para>⚠️ Why a probe and not <c>#if</c>: <c>ISDK_OPENXR_HAND</c> is produced by the
-        /// package's own asmdef via <c>versionDefines</c> and is defined ONLY in that assembly, so
-        /// in our compilation it is always false and every <c>#if</c> line would silently pick the
-        /// wrong branch. The enum member instead comes from the active branch's type.</para>
-        /// </summary>
-        private static bool IsOpenXrHandBranch =>
-            Enum.IsDefined(typeof(HandJointId), "HandPalm");
-
-        /// <summary>Loads the model provider for the active hand branch, falling back to the other.
-        /// ⚠️ The provider belongs to a BRANCH: pairing an OpenXR skeleton with the OVR model
-        /// deforms the hand (joint count and order differ).</summary>
-        private static bool TryGetGhostProvider(out HandGhostProvider provider)
-        {
-            string wanted = IsOpenXrHandBranch
-                ? GHOST_PROVIDER_PATH_OPENXR
-                : GHOST_PROVIDER_PATH_OVR;
-
-            if (_ghostProvider == null || _ghostProviderPath != wanted)
-            {
-                _ghostProvider = AssetDatabase.LoadAssetAtPath<HandGhostProvider>(wanted);
-                _ghostProviderPath = wanted;
-
-                if (_ghostProvider == null)
-                {
-                    string fallback = wanted == GHOST_PROVIDER_PATH_OPENXR
-                        ? GHOST_PROVIDER_PATH_OVR
-                        : GHOST_PROVIDER_PATH_OPENXR;
-
-                    _ghostProvider = AssetDatabase.LoadAssetAtPath<HandGhostProvider>(fallback);
-                    if (_ghostProvider != null)
-                    {
-                        _ghostProviderPath = fallback;
-                    }
-                }
-            }
-
-            provider = _ghostProvider;
-            if (provider != null)
-            {
-                _ghostProviderWarned = false;
-                return true;
-            }
-
-            if (!_ghostProviderWarned)
-            {
-                _ghostProviderWarned = true;
-                Debug.LogWarning($"{LOG} ISDK el sağlayıcısı iki dalda da bulunamadı " +
-                                 $"({GHOST_PROVIDER_PATH_OPENXR} / {GHOST_PROVIDER_PATH_OVR}) — " +
-                                 "paket sürümü değiştiyse yolları bu dosyadaki sabitlerden güncelle.");
-            }
-
-            return false;
-        }
-
-        // ⚠️ No window line showing which branch's provider loaded, and none is added back: it was
-        // read every run and changed no decision. A wrong branch is not silent either —
-        // TryGetGhostProvider warns when neither branch resolves, and a hand that does not match the
-        // skeleton is visible anyway.
-
-        // ------------------------------------------------------------------- part search
-
-        /// <summary>First <see cref="Renderer"/> in the item's subtree whose name contains one of
-        /// the keys, tried IN ORDER (specific keys come first).
-        /// <para>Only consumer is <see cref="ResolveStartPose"/>: on an item with no record, the
-        /// rough centre of the grip / front-grip part decides where the hand opens. On a non-weapon
-        /// item no match is expected — it falls back to the root +10 cm, which is harmless.</para></summary>
-        private static Renderer SearchGripPart(Transform itemRoot, string[] keywords)
-        {
-            Renderer found = null;
-            for (int i = 0; i < keywords.Length && found == null; i++)
-            {
-                found = SearchPartRenderer(itemRoot, keywords[i]);
-            }
-
-            return found;
-        }
-
-        /// <summary>Depth-first search by name, skipping branches flagged by
-        /// <see cref="IsPartSearchNoise"/>.</summary>
-        private static Renderer SearchPartRenderer(Transform node, string keyword)
-        {
-            if (IsPartSearchNoise(node))
-            {
-                return null;
-            }
-
-            if (node.name.ToLowerInvariant().Contains(keyword))
-            {
-                var renderer = node.GetComponent<Renderer>();
-                if (renderer != null)
-                {
-                    return renderer;
-                }
-            }
-
-            for (int i = 0; i < node.childCount; i++)
-            {
-                Renderer hit = SearchPartRenderer(node.GetChild(i), keyword);
-                if (hit != null)
-                {
-                    return hit;
-                }
-            }
-
-            return null;
-        }
-
-        /// <summary>Branches the part search must skip: leftover hand models and the grab frame.
-        /// ⚠️ Without this filter the tool can mistake WHAT IT BUILT for a grip — those subtrees also
-        /// carry Renderers whose names collide with the search keys, so a new hand would open on top
-        /// of its own old one.</summary>
-        private static bool IsPartSearchNoise(Transform node)
-        {
-            if (node.name == ItemHandRig.RootNodeName || node.name.StartsWith(HAND_ROOT_PREFIX))
-            {
-                return true;
-            }
-
-            return node.GetComponent<WeaponFrame>() != null;
+            EditorSceneManager.SaveScene(scene, GripCaptureSettings.ScenePath);
+            Debug.Log($"{GripRecordOps.LOG} Yakalama sahnesi oluşturuldu: " +
+                      GripCaptureSettings.ScenePath);
         }
     }
 }

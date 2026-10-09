@@ -59,6 +59,20 @@ konumundan türetir — elle yol ekleme, gerekiyorsa `-ExtraPath` geç. Geri alm
 > *Windows Güvenliği → Uygulama ve tarayıcı denetimi → Akıllı Uygulama Denetimi*, ⚠️ **geri
 > açılamaz**.
 
+### Quest Link'te el izleme (kavrama yakalama)
+
+Yalnız **kavrama yakalama** için gereklidir (`Tools > VortexArena > Items > Kavrama Pozu Stüdyosu`);
+oyunun kendisi editörde bu ayar olmadan da çalışır. Araç yakalanacak eli **el izlemesinden** okuduğu
+için PC'deki Play'in izlenen ele erişmesi şarttır:
+
+- Gözlük **Meta Quest Link** ile PC'ye bağlı (kablo ya da Air Link).
+- Gözlükte **el izleme açık** (Quest ayarları).
+- PC'deki **Link uygulamasında geliştirici çalışma zamanı özellikleri** etkin — bu açık olmadan
+  izlenen el PC uygulamasına hiç gelmez, belirti "el hiç görünmüyor / kayıt reddediliyor"dur.
+
+Projede ayrıca yapılacak bir şey yoktur: OpenXR Standalone ayarlarında `MetaXRFeature` ve el izleme
+desteği (*Controllers and Hands*) zaten etkin — yakalama için proje ayarı değiştirme.
+
 ---
 
 ## 2. MCP sunucularının kaydı

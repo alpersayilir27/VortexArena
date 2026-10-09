@@ -80,7 +80,8 @@ namespace VortexArena.Core.Combat
         // the controller.
         // ⚠️ The record is PER HAND: grips are not symmetric, so the two controllers land on different
         // places of the item — one record mirrored would push the left hand inside the weapon.
-        // ⚠️ Records are authored in the studio (editor), not captured with the headset.
+        // ⚠️ Records are captured with the headset in the grip capture scene (Play), then written
+        // here by the editor on Play exit.
         // The RADII here are not part of the pose but a GATE size: they say where a grip is accepted,
         // not how the item sits in the hand.
         [Header("Kavrama (kanonik)")]
@@ -353,8 +354,8 @@ namespace VortexArena.Core.Combat
         /// open the socket sphere would appear over the main hand, the second hand could not hold "the
         /// grip", and it would show up not as an error but as "the indicator is in the wrong place".
         /// Hence an unauthored foregrip <b>does not exist</b>: no socket is drawn, no second hand binds,
-        /// and <c>Weapon</c> warns once. The only place records are authored is the studio
-        /// (<c>Kavrama Pozu Stüdyosu</c>).</para>
+        /// and <c>Weapon</c> warns once. Records come from the grip capture tool
+        /// (<c>Kavrama Pozu Stüdyosu</c> → capture scene).</para>
         /// </summary>
         public bool HasSecondaryGrip =>
             IsTwoHanded && (secondaryGripRight.IsAuthored || secondaryGripLeft.IsAuthored);
@@ -449,6 +450,18 @@ namespace VortexArena.Core.Combat
             {
                 primaryGripLeft = empty;
             }
+        }
+
+        /// <summary>
+        /// Sets the hold mode — the capture tool's write gate.
+        /// <para>⚠️ Belongs with the grip writes: a secondary grip captured while the item is still
+        /// <c>OneHand</c> is never read (<see cref="HasSecondaryGrip"/> gates on the mode), so the
+        /// two values must change together.</para>
+        /// </summary>
+        public void EditorSetHoldMode(ItemHoldMode mode)
+        {
+            holdMode = mode;
+            InvalidateGripCache();
         }
 
         /// <summary>

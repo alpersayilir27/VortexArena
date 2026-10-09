@@ -3,6 +3,7 @@
     "rootNamespace": "VortexArena.Core.Editor",
     "references": [
         "VortexArena.Core",
+        "VortexArena.Core.GripCapture",
         "VortexArena.Net",
         "VortexArena.Net.Editor",
         "VortexArena.Protocol",

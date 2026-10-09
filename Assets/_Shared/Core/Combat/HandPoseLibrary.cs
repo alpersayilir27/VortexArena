@@ -267,6 +267,12 @@ namespace VortexArena.Core.Combat
             return IdleCache[hand] ??= BuildProfile(HandPoseProfile.Idle, rightHand);
         }
 
+        /// <summary>A NEW copy of the open (bind) hand in <see cref="FingersMetadata.HAND_JOINT_IDS"/> order.</summary>
+        public static Quaternion[] BindJointRotations(bool rightHand)
+        {
+            return Copy(Bind(rightHand));
+        }
+
         // --------------------------------------------------------- rigged pose
 
         /// <summary>

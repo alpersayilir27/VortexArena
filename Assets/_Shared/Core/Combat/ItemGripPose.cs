@@ -12,20 +12,20 @@ namespace VortexArena.Core.Combat
     /// <para>⚠️ The ANCHOR record (<see cref="position"/>) carries NO ROTATION and none is added:
     /// the item's rotation is always the main controller's (<see cref="ItemGripSolver"/>), the field
     /// only says WHERE on the item the controller sits. A rotation here would let anyone rotating
-    /// the studio root deviate the weapon from the controller in game — symptom "the weapon comes
+    /// the captured item deviate the weapon from the controller in game — symptom "the weapon comes
     /// out wrong depending on hand position", expensive to diagnose. Same for the foregrip.</para>
     /// <para>⚠️ The wrist rotation (<see cref="wristRotation"/>) is not an exception but a DIFFERENT
     /// thing: how the hand model sits on the controller, not where the item goes. Deliberately
     /// separate — the weapon stays controller-aligned while the hand may sit sideways/below.
     /// Changing these fields does NOT affect the item pose; single reader
     /// <c>ItemGripAuthority.ResolveAnchorToWrist</c>.</para>
-    /// <para>Authored in the editor studio (controller root seated on the grip), not captured with
-    /// the headset. Space is the ANCHOR — the same space the solver and the wire use, so no delta
-    /// is needed and a rig-less spectator draws the weapon exactly as the player does.</para>
+    /// <para>Captured with the headset in Play (the tracked hand holding the item), then written
+    /// here when Play exits. Space is the ANCHOR — the same space the solver and the wire use, so no
+    /// delta is needed and a rig-less spectator draws the weapon exactly as the player does.</para>
     /// <para>⚠️ <see cref="position"/> is METRES, NOT scaled by the item's visual scale.
     /// Recomposition is always <c>item.position + item.rotation * position</c>, never
     /// <c>TransformPoint</c>: <c>WPN_*</c> roots are 0.8, so TransformPoint applies the scale twice
-    /// and the hand floats beside the weapon. The studio writes it the same symmetric way.</para>
+    /// and the hand floats beside the weapon. Capture writes it the same symmetric way.</para>
     /// </summary>
     [Serializable]
     public struct ItemGripPose
@@ -40,12 +40,12 @@ namespace VortexArena.Core.Combat
                  "zaman kumandayla hizalıdır.")]
         public Vector3 position;
 
-        // ⚠️ The finger pose is RIGGED, not selected: joints rotated by hand in the studio, per
-        // weapon. No shared "squeeze/grip" table — grip geometry differs and a shared table left
-        // fingers inside the body on some weapons.
-        // ⚠️ May be EMPTY: position authored but fingers not rigged yet is valid; that hand stays
-        // in the idle pose (HandPoseLibrary.IdleJointRotations).
-        [Tooltip("Bu slotta elin riglenmiş parmak duruşu — eklem başına yerel dönüş. Boş = riglenmemiş " +
+        // ⚠️ The finger pose is CAPTURED per weapon from the tracked hand, not selected. No shared
+        // "squeeze/grip" table — grip geometry differs and a shared table left fingers inside the
+        // body on some weapons.
+        // ⚠️ May be EMPTY: position authored but no fingers captured is valid; that hand stays in
+        // the idle pose (HandPoseLibrary.IdleJointRotations).
+        [Tooltip("Bu slotta elin parmak duruşu — eklem başına yerel dönüş. Boş = yakalanmamış " +
                  "(el boşta duruşunda kalır).")]
         public HandJointRotation[] fingerJoints;
 
@@ -83,7 +83,7 @@ namespace VortexArena.Core.Combat
         public Pose Wrist => new Pose(wristPosition, wristRotation);
 
         /// <summary>
-        /// Builds a record from a studio-authored position + hand placement + finger pose.
+        /// Builds a record from a captured position + hand placement + finger pose.
         /// </summary>
         /// <param name="anchorInItem">Controller anchor local to the ITEM — metres, unscaled (see
         /// class warning).</param>

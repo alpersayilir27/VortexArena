@@ -1,0 +1,23 @@
+{
+    "name": "VortexArena.Core.GripCapture",
+    "rootNamespace": "VortexArena.Core.GripCapture",
+    "references": [
+        "VortexArena.Core",
+        "VortexArena.Net",
+        "Oculus.VR",
+        "Oculus.Interaction",
+        "Oculus.Interaction.OVR",
+        "Unity.TextMeshPro"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_EDITOR"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

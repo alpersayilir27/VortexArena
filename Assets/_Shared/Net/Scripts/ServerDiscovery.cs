@@ -73,10 +73,10 @@ namespace VortexArena.Net
                 return;
             }
 
-            if (ReplayMode.Active)
+            // §12.4: a replay opens no socket at all — listening for beacons would also make the
+            // lobby offer an address to connect to. Same for an authoring tool's Play.
+            if (ReplayMode.Active || AuthoringSession.Active)
             {
-                // §12.4: a replay opens no socket at all — listening for beacons would also make the
-                // lobby offer an address to connect to.
                 return;
             }
 

@@ -3,6 +3,7 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEditor.ShortcutManagement;
 using UnityEngine;
+using VortexArena.Net;
 
 namespace VortexArena.App.Editor
 {
@@ -32,10 +33,40 @@ namespace VortexArena.App.Editor
 
         private static void OnPlayModeStateChanged(PlayModeStateChange change)
         {
-            if (change == PlayModeStateChange.ExitingEditMode)
+            if (change != PlayModeStateChange.ExitingEditMode)
             {
-                ApplyPlayModeStartScene();
+                return;
             }
+
+            // ⚠️ Written UNCONDITIONALLY (false included): the flag survives the domain reload, so a
+            // stale "true" from a previous authoring Play would mute the next real session.
+            bool authoring = IsAuthoringScene();
+            SessionState.SetBool(AuthoringSession.EditorStateKey, authoring);
+
+            if (authoring)
+            {
+                EditorSceneManager.playModeStartScene = null;
+                Debug.Log("[DevBootstrap] Yazım oturumu — Play açık sahneden başlıyor (Boot atlandı).");
+                return;
+            }
+
+            ApplyPlayModeStartScene();
+        }
+
+        /// <summary>Does the active scene carry an authoring-tool root
+        /// (<see cref="IAuthoringSession"/>) — e.g. the grip capture scene.</summary>
+        private static bool IsAuthoringScene()
+        {
+            GameObject[] roots = EditorSceneManager.GetActiveScene().GetRootGameObjects();
+            for (int i = 0; i < roots.Length; i++)
+            {
+                if (roots[i].GetComponent<IAuthoringSession>() != null)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         /// <summary>

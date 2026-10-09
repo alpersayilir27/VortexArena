@@ -251,6 +251,12 @@ namespace VortexArena.Core.Combat
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
         {
+            // The grip capture tool poses the hands itself; a poser would fight it for the wrist.
+            if (Net.AuthoringSession.Active)
+            {
+                return;
+            }
+
             if (Instance != null)
             {
                 return;
@@ -650,7 +656,7 @@ namespace VortexArena.Core.Combat
 
             Debug.LogWarning($"[HandGripPoser] '{itemName}' eşyasının " +
                              $"'{kind}' kavraması {(rightHand ? "SAĞ" : "SOL")} el için " +
-                             "stüdyoda YAZILMAMIŞ; el idle duruşunda kalıyor.");
+                             "YAZILMAMIŞ; el idle duruşunda kalıyor.");
         }
     }
 }

@@ -105,9 +105,8 @@ namespace VortexArena.Core.Editor
         /// <summary>Name of the leftover grip-pose node tree inside a prefab — dead data, deleted
         /// (<see cref="RemoveLegacyGripPoseNodes"/>).
         /// <para>⚠️ The constant lives HERE because this cleanup is its only reader: nothing produces
-        /// or consumes the node. Moving it to runtime would put a name nobody reads in shared code.
-        /// (The studio hand prefix is the opposite — its PRODUCER is alive, so it is defined at
-        /// <see cref="GripPoseStudio.HAND_ROOT_PREFIX"/>.)</para></summary>
+        /// or consumes the node. Moving it to runtime would put a name nobody reads in shared
+        /// code.</para></summary>
         private const string LegacyGripPoseRootName = "GripPoses";
 
         /// <summary>Casing families: <c>WeaponSpec.CasingFamily</c> → (casing prefab to build, pack
@@ -1720,7 +1719,6 @@ namespace VortexArena.Core.Editor
             RemoveLegacySocketNodes(root, ctx);
             RemoveLegacyHandNodes(root, ctx);
             RemoveLegacyGripPoseNodes(root, ctx);
-            RemoveStudioHandNodes(root, ctx);
             NoteIfUnbaked(definition, ctx);
         }
 
@@ -1756,12 +1754,12 @@ namespace VortexArena.Core.Editor
                 Object.DestroyImmediate(node.gameObject, true);
                 _legacyNodesRemoved++;
                 Debug.Log(Log + ctx + ": eski '" + nodeName + "' işaretçisi silindi — kavrama " +
-                          "stüdyoda WD_*.asset'e yazılır, prefabta işaretçi durmaz.");
+                          "WD_*.asset'e yazılır, prefabta işaretçi durmaz.");
             }
         }
 
         /// <summary>Deletes the leftover <c>Hands/Hand_*</c> tree inside a prefab — DEAD DATA. The
-        /// grip comes from the studio-authored pose in <c>WD_*.asset</c>, not from a hand model in
+        /// grip comes from the captured pose in <c>WD_*.asset</c>, not from a hand model in
         /// the prefab; nothing reads that rig.
         /// <para>⚠️ Never left in place: (1) if enabled it appears as a hand floating in the arena
         /// (the weapon also sits in the scene and in the remote avatar's hand); (2) a surviving copy
@@ -1797,30 +1795,6 @@ namespace VortexArena.Core.Editor
             _legacyNodesRemoved++;
             Debug.Log(Log + ctx + ": eski '" + LegacyGripPoseRootName + "' poz düğümü silindi — " +
                       "kavrama WD_*.asset'e yazılır, prefabta poz durmaz.");
-        }
-
-        /// <summary>Deletes an authoring hand that accidentally ended up inside the prefab.
-        /// ⚠️ These hands are separate roots of the prefab stage scene and never hit disk — but they
-        /// can be dragged under the prefab in the Hierarchy, at which point the hand model enters the
-        /// prefab and floats in the arena.</summary>
-        private static void RemoveStudioHandNodes(GameObject root, string ctx)
-        {
-            Transform[] all = root.GetComponentsInChildren<Transform>(true);
-            for (int i = all.Length - 1; i >= 0; i--)
-            {
-                Transform node = all[i];
-                if (node == null || node == root.transform ||
-                    !node.name.StartsWith(GripPoseStudio.HAND_ROOT_PREFIX))
-                {
-                    continue;
-                }
-
-                string nodeName = node.name;
-                Object.DestroyImmediate(node.gameObject, true);
-                _legacyNodesRemoved++;
-                Debug.Log(Log + ctx + ": prefabın içinde kalmış authoring eli ('" + nodeName +
-                          "') silindi — o eller prefaba KONMAZ, sahnenin ayrı kökleridir.");
-            }
         }
 
         /// <summary>Adds a weapon with a missing grip to the end-of-run report.
@@ -1960,8 +1934,8 @@ namespace VortexArena.Core.Editor
                              "kabza yazılmamış): " + string.Join(", ", _unbakedWeapons) +
                              ". Ana kabza yoksa oyuncunun eli silaha sarılmaz (idle kalır); ön kabza " +
                              "yoksa soket çizilmez ve ikinci el bağlanmaz. Düzeltme: Tools > VortexArena > " +
-                             "Weapons > Kavrama Pozu Stüdyosu → WPN_* prefabını prefab kipinde aç → " +
-                             "Ana Kabza + Ön Kabza Ellerini Oluştur → yerleştir → Kaydet.");
+                             "Items > Kavrama Pozu Stüdyosu → silahı seç → yakalama sahnesini aç → " +
+                             "Play'de başlıkla kavramaları yakala.");
         }
 
         /// <summary>Removes a root component by full type name (silent if absent).</summary>

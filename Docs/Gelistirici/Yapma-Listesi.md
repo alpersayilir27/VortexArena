@@ -945,7 +945,23 @@ birbirinden geçer.
 
 Ağ nesnesi ele **kanonik kavrama poziyle** bağlanır ve duruş telde gitmez: iki uç aynı kaydı okur.
 Serbest kavrama (elin objeye değdiği yerden tutmak) her istemcide farklı bir ofset demektir ve obje
-uzak başlıkta elin yanında durur. Kavrama stüdyoda yazılır, çalışma anında ölçülmez.
+uzak başlıkta elin yanında durur. Kavrama **kavrama stüdyosuyla kaydedilir** (yakalama sahnesinde,
+yazım oturumunda) — oyun oynanırken ölçülmez.
+
+### ⛔ Yakalama sahnesine oyun rig'ini ya da oyun tekillerini koyma
+
+Kavrama yakalama sahnesi kendi minimal OVR rig'ini çalışma anında kurar. İçine `VA_CameraRig` ya da
+App tekilleri konursa oyunun el poz sürücüsü (`HandGripPoser`) eli kayda kilitler ve çok kipli
+giriş (eş zamanlı el + kumanda) kapanır: yakalanacak izlenen el kalmaz, araç sessizce kendi
+hayaletini kaydeder. Aynı sebeple o Play bir **yazım oturumudur** (`AuthoringSession`) — bağlantı,
+keşif ve rol/adres uygulaması kapalıdır.
+
+### ⛔ `ItemDefinition`'ın kavrama alanlarını Play sırasında yazma
+
+Play'de `AssetDatabase` ile yazılan değer bir sonraki domain reload'da belirsizleşir — kayıt ya
+geri alınamaz hâlde kalır ya da sessizce kaybolur. Yakalananlar önce makineye özel tampona
+(`Library/VortexArena/GripCapture.json`) düşer, asset'e yazım Play'den **çıkışta** Undo ile ve
+kaydetme sonrası eşitlemeyle (silahta silah kiti, diğerinde kimlik bekçisi) yapılır.
 
 ### ⛔ Eşyayı ele sıfır ofsetle takma
 

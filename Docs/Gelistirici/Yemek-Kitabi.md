@@ -509,22 +509,19 @@ Okunabilir alanlar: `ModeId`, `Teams`, `Allies`, `Scoring`, `FriendlyFire`, `Rev
 
 ## 11.0 Bir silahın kavramasını YAZMAK
 
-Kavrama **stüdyoda, gözlük takmadan yazılır**: **kumanda çerçevesini** Scene View'da silahın
-kabzasına oturtur, **el modelini** o kumandanın üstüne yerleştirir ve elin **parmaklarını o silaha
-göre riglersin**; araç üçünü de (`çerçevenin silaha göre konumu` · `elin çerçeveye göre pozu` ·
-`parmak eklemlerinin dönüşleri`) `WD_*.asset`'e yazar. Çerçevenin altında iki çocuk durur:
-**Quest 3 kumanda modeli** — **kilitli**, oyunda anchor'ın altında tam böyle durur, yani hizanın
-referansıdır (çerçeveyi, kumanda kabzada gerçekte tutulduğu yere gelecek biçimde taşı) — ve **ISDK
-hayalet eli**, ki o **düzenlenebilir**: taşınır ve **çevrilir**. Prefaba hiçbir şey yazılmaz —
-kavramanın tek yeri `WD_*`'tır.
+Kavrama **gözlük takılarak, yakalama sahnesinde Play'de yakalanır**: silahı bir elindeki kumandanın
+çubuğuyla çevirirsin, **öteki el boştur ve el izlemeyle görünür**; o eli kabzaya nasıl koyduysan
+düğmeye basınca kayıt o olur. Araç üçünü de (`anchor'ın silaha göre konumu` · `elin anchor'a göre
+pozu` · `parmak eklemlerinin dönüşleri`) `WD_*.asset`'e yazar — `ItemDefinition`'ın dört
+`ItemGripPose` alanı (1./2. kavrama × sağ/sol; silahta 1. kavrama = ana kabza, 2. = ön kabza).
+Prefaba hiçbir şey yazılmaz — kavramanın tek yeri `WD_*`'tır.
 
-⚠️ **Silahı hiçbir elin dönüşü çevirmez; ÇERÇEVENİN dönüşü kayda girmez.** Çerçeve bu yüzden yalnız
-**taşınır** — çevirirsen araç onu silahla hizalı hâline geri alır, çünkü dönüşün oyunda karşılığı
-yoktur. **Elin dönüşü bunun istisnası değil, başka bir şeyidir:** el modelini çevirmek silahı
-kımıldatmaz, yalnız elin kumanda üstündeki açısını yazar (kimi kabza yandan, kimi alttan tutulur).
+⚠️ **Silahı hiçbir elin dönüşü çevirmez; kayıtta anchor DÖNÜŞÜ yoktur.** Oyunda silah her zaman
+kumandanın baktığı yere bakar; kayıt yalnız anchor'ın silaha göre **konumunu** taşır. **Elin dönüşü
+bunun istisnası değil, başka bir şeyidir:** elin bileğini çevirmek silahı kımıldatmaz, yalnız elin kumanda üstündeki açısını yazar (kimi kabza yandan, kimi alttan tutulur).
 Ana elde eşya kumandaya asılır.
 
-⚠️ **Silah ele gelince el modeli SİLAHIN çerçevesine geçer** (iki elde de): tezgâhta yazdığın
+⚠️ **Silah ele gelince el SİLAHIN çerçevesine geçer** (iki elde de): kayıttaki
 yerleşim, tutulduğu sürece silaha göre korunur. Bu yüzden oyuncu silahı ön kabzadan çevirdiğinde
 arka el de onunla döner — el kumandaya kilitli kalsaydı silah elin dışına çıkardı. Tek elli tutuşta
 fark yoktur (silahın dönüşü zaten kumandanınkidir); elin KONUMU her durumda kumandada kalır.
@@ -533,70 +530,71 @@ silahın *ana kavrama → ön kabza* **ekseni o elin avuç KONUMUNA nişanlanır
 doğru kaymaz (ana kavrama noktası ana avuçta kalır) ve o elin DÖNÜŞÜ hiçbir yoldan silaha geçmez.
 Ayarlanabilir bir "silah dönüşü" alanı da yoktur.
 
-**Akış (prefab kipinde, Play gerekmez):**
+**Akış (gözlükle, Quest Link üzerinden Play):**
 
-1. `Tools > VortexArena > Items > Kavrama Pozu Stüdyosu` ile pencereyi aç.
-2. `_Shared/Arsenal/Prefabs/WPN_*.prefab`'ı **prefab kipinde** aç (Project'te çift tık). Pencere
-   stage'i kendiliğinden tanır.
-3. **Ana Kabza Ellerini Oluştur** (iki elli silahta ayrıca **Ön Kabza Ellerini Oluştur**) → sağ ve
-   sol kumanda çerçeveleri (ve çocukları olan hayalet eller) sahnede belirir. Kayıt zaten varsa
-   çerçeveler **o kayıttan** doğar; yoksa kabza parçasının üstüne makul bir başlangıçla konur.
-4. Çerçeveleri Scene View'da **taşı** (gizmo'daki mavi ok kumandanın ilerisidir; hayalet elin ya da
-   kumanda modelinin mesh'ine tıklamak da çerçeveyi seçer — Scene View'daki tıklama her zaman
-   çerçeveye düşer): kumanda kabzada gerçekte tutulduğu gibi dursun.
-5. **El modelini o kumandanın üstüne yerleştir.** Penceredeki **El Modeli** düğmesi (ya da
-   hiyerarşideki `Hand` objesi) hayalet eli seçer; onu **taşı ve ÇEVİR** — avuç kabzaya otursun,
-   işaret parmağı tetiğe ulaşsın. Silah kımıldamaz: bu kayıt yalnız elin nerede/hangi açıda
-   çizileceğini söyler ve **silah + el başına** yazılır (ön kabza yandan da alttan da tutulabilir).
-   **El Yerleşimini Sıfırla** paylaşılan varsayılana döndürür.
-6. **Parmakları o silaha göre rigle.** Eli seç (ya da penceredeki *Kumanda*) → pencerede o elin altında
-   **parmak rigi** listesi açılır: parmak başına numaralı düğmeler, `1` bileğe en yakın boğum.
-   Düğmeye basmak o kemiği seçer ve Scene View'ı döndürme aracına alır (`Pivot: Local`); kemiği
-   çevir, avuç kabzaya otursun, işaret parmağı tetiğe değsin. **Parmakları Sıfırla** boş elin
-   duruşuna döndürür. Riglenmemiş el boşta duruşunda kalır — hazır bir "sıkma/kabza" preset'i
-   YOKTUR. Oyunda gördüğün el tezgâhtaki elin aynısıdır, hiçbir parmak kumandadan/el izlemesinden
-   oynamaz; silahı alınca el boşta duruşundan bu duruşa yumuşakça kapanır, bırakınca geri açılır.
-   Elin **yerleşimi** de (5. adımda yazdığın açı/konum) aynı sürede kayarak gelir — silaha bir anda
-   geçmez. Geçişin süresi tek bir yerdedir: `HandPoseLibrary.TransitionSeconds`.
-7. İstersen **Karşı Ele Aynala** ile öteki eli başlat, sonra elle düzelt.
-8. **Kaydet** (stüdyo penceresinden; elin Inspector'ında kaydet düğmesi yoktur) → yaşayan **her el**
-   `WD_*.asset`'e yazılır (Undo'lu) ve **silah kiti kendiliğinden eşitlenir** — `Configure All Build
-   Elements`'e ayrıca gitmen gerekmez. Kit açık prefabı yeniden yazdığı için
-   tezgâhtaki eller kalkabilir: kayıt diskte olduğundan **Elleri Oluştur** onları aynı yere geri
-   getirir. **Elleri Temizle** tezgâhı elle toplar.
+1. `Tools > VortexArena > Items > Kavrama Pozu Stüdyosu` → **Kavrama Stüdyosu** penceresi.
+2. **Hedef eşyayı seç:** pencereden, yakalama sahnesinin Inspector'ından, ya da Project'te eşyanın
+   tanımını (`WD_*`) veya prefabını (`WPN_*`) seçip penceredeki seçim düğmesine basarak. Prefabtan
+   tanıma çözüm prefab kökündeki `IItemHolder`, yoksa `Prefab` alanı o prefab olan tanımdır; aynı
+   prefabı birden çok tanım kullanıyorsa tanımı **elle** seç. Seçim makineye yazılır (EditorPrefs),
+   sahneye değil — eşya seçmek commit'li bir sahne dosyasını kirletmez.
+3. **Yakalama sahnesini aç** (penceredeki düğme) → kök objesi `[Kavrama Yakalama]` olan editör-içi
+   sahne.
+4. Gözlüğü Quest Link'e bağla ve **Play'e bas.** Dev penceresi "Boot'tan" derken de Play bu sahneden
+   başlar; bu Play bir **yazım oturumudur** — sunucuya bağlanılmaz, keşif yapılmaz, App
+   tekilleri/overlay'leri kurulmaz, rol/adres uygulanmaz, `HandGripPoser` devreye girmez. Araç kendi
+   minimal OVR rig'ini çalışma anında kurar.
+5. Silahın **görsel kopyası** (script'siz, fiziksiz) başın ~40 cm önünde asılı durur. **Bir elinde
+   kumanda, öteki el boş** kalır — kaydedilen o boş eldir. Her iki kumandanın **çubuğu** silahı
+   çevirir (sola/sağa yatay, yukarı/aşağı eğim), **çubuğa tıklamak** silahı yeniden önüne alır.
+6. Boş eli silahı tutacağın gibi kabzaya koy ve kumandadaki düğmeye bas: `X`/`A` = **1. kavrama**,
+   `Y`/`B` = **2. kavrama**. ⚠️ **Basılan kumanda KARŞI eli kaydeder** — sol kumandadaki düğme sağ
+   eli, sağ kumandadaki sol eli. Kayıt olduysa kısa titreşim gelir ve o el silahın üstünde yarı
+   saydam bir hayalet olarak **donar**; el izlenmiyorsa ya da güven düşükse çift titreşim + HUD'da
+   kırmızı satır (kayıt yok). Aynı düğmeye yine basmak o slotu üzerine yazar. Dünya panelinde
+   slotların durumu, çıkış tahmini, izleme/temas durumu ve yardım yazılıdır.
+7. Hayalet **kumanda modeline** bak: elinde doğal duruyorsa kavrama oyunda da doğal görünür.
+   Durmuyorsa silahı çubukla çevir ve yeniden yakala.
+8. **Play'den çık** → yakalananlar `WD_*`'a yazılır (Undo'lu) ve **silah kiti kendiliğinden
+   eşitlenir** (`Configure All Build Elements`'e ayrıca gitmen gerekmez).
+9. Yazılan kayıtları pencere gösterir: slot başına **Sil**, kavrama başına **Sağ → Sol aynala** /
+   **Sol → Sağ aynala**, ve **2. kavramayı sil (tek kavramalı yap)**. Aynalama veri üstünde çalışır,
+   Play gerektirmez.
 
+- ⚠️ **Oturum kuralı — tek bir kavramayı düzeltmeye girilen oturum ötekini SİLER.** Play'den
+  çıkıldığında: yalnız 1. kavrama yakalanmışsa eşya **tek kavramalı** olur ve iki 2. kavrama kaydı
+  da silinir; 2. kavrama yakalanmışsa eşya **çift kavramalı** olur; hiçbir şey yakalanmamışsa
+  kayıtlar olduğu gibi kalır. Yakalanan kavramanın yakalanmayan **eli** eski kaydını korur (öteki
+  eli aynalayarak doldur). Yani çift elli bir silahın yalnız ana kabzasını düzeltmeye girdiysen **ön
+  kabzayı da yakalamak zorundasın**; HUD çıkıştan önce bunu kırmızıyla söyler.
+- ⚠️ **Yakalananlar Play sırasında asset'e YAZILMAZ.** Her yakalama anında
+  `Library/VortexArena/GripCapture.json`'a (makineye özel) düşer, asset'e yazım Play'den çıkışta
+  olur — Play'de yazılan bir değer bir sonraki domain reload'da belirsizleşirdi. Çökme olursa
+  tampon dosyası kalır ve pencerede **Uygula** / **Sil** ile ele alınır; editör açılışında
+  kendiliğinden uygulanmaz (günler sonra sessizce bir eşyayı ezerdi).
+- ⚠️ **BAŞKA bir eşyanın tamponu duruyorsa yakalama kapalıdır** — önce pencereden uygula ya da sil.
+- ⚠️ **Parmak duruşu sayıyla/slider'la ayarlanmaz; yakalanır.** Kayda giren şey o anda izlenen
+  elin kendisidir (canlı veri kayıt biçimine çevrilir, sonra oyunun kayıtları okuduğu yoldan ISDK
+  hayaletine uygulanır — gördüğün el kaydın kendisidir). Aynı duruşu ikinci kez sayı olarak yazacak
+  bir alan yoktur ve eklenmez ("hangisi geçerli" sorusunu doğururdu).
+- **Parmaklar silahın yüzeyinde durur:** parmak başına, bilekten uca doğru her eklem açık duruştan
+  izlenen duruşa doğru, kemik kapsülü silaha değene kadar kapatılır; kayda giren bu kırpılmış
+  duruştur. Elin collider'ı kemik kapsülleridir. Avucun silahın **içinde** kalması yalnız uyarılır
+  — düzeltmesi silahı çubukla çevirmektir.
+- ⚠️ **Metakarpallar (avuç içindeki ilk kemikler) kayda tek tek girmez.** İşaret/orta/yüzük
+  proksimalleri **bilek uzayında** yazılır (metakarpal × proksimal): sentetik el kaydı böyle
+  bekliyor, ham yerel dönüş kopyalanırsa parmak kökleri kayar.
 - ⚠️ **Aynalama yalnız BAŞLANGIÇTIR**, son söz değil: kabza simetrik değildir (tetik, şarjör, kurma
   kolu tek taraftadır) ve kayıt el başınadır. Bir eli hiç yazmazsan oyun onu öteki elin kaydına
   düşürür — çalışır ama o el yanlış tutar.
-- ⚠️ **Eller prefabın İÇİNE sürüklenmez.** Her el, stage sahnesinin ayrı bir kök objesidir
-  (`[VA El_*]`, diske yazılmaz). Prefabın altına asılan bir el ilk kaydetmede silahın içine girer ve
-  arenada **havada el** olarak çizilir; silah kiti koşusu böyle bir kaçağı siler.
-- Eller Play'e girerken, prefab kipi kapanınca ya da sahne değişince kendiliğinden silinir. Play
-  kipinde kayıt yazılmaz.
-- ⚠️ **Parmak duruşu slider'la/sayıyla ayarlanmaz — kemik çevrilir.** Kayda giren şey kemiklerin
-  Kaydet anındaki hâlidir; aynı duruşu ikinci kez sayı olarak yazacak bir alan yoktur ve
-  eklenmez ("hangisi geçerli" sorusunu doğururdu). Tezgâhta gördüğün parmak duruşu oyundaki
-  sentetik elde birebir tekrarlanır.
-- ⚠️ **Metakarpallar (avuç içindeki ilk kemikler) listede YOKTUR ve riglenmez.** Bilekle birlikte
-  hareket ederler ve sentetik el proksimal eklemleri bilek uzayında beklediği için onları çevirmek
-  tezgâhta doğru, oyunda kaymış bir el üretirdi.
-- ⚠️ **Aynalama parmakları da el yerleşimini de taşır**: parmaklar kopyalanır (sol/sağ hayalet el
-  aynı eklem sözleşmesini paylaşır), el yerleşimi ise gerçekten aynalanır (x tersine döner, dönüş
-  Y/Z ekseninde ters işaretlenir). Yine başlangıçtır, kabzanın tek taraflı parçaları elle
-  düzeltilir.
-- **Aynı el başka bir silahta zaten yazılıysa: Kopya Al.** El satırındaki üçüncü düğme, o elin
-  **görselini** — kumanda üstündeki yerleşim + parmak rigi — seçtiğin silahtan aynen alır, yani 5.
-  ve 6. adımı tekrar etmen gerekmez. ⚠️ **Silahın kumandaya göre yeri kopyalanmaz** (4. adım her
-  silahın kendi geometrisidir; başka silahtan almak silahı elde kaydırırdı). Listede yalnız **aynı
-  kavrama noktasının aynı eli** yazılmış silahlar çıkar — sağ el için sol el kaydı kaynak olmaz —
-  ve hiç yoksa menü boş açılmaz, kapalı bir satır gösterir. Kaydın iki yarısı da yazılır: kaynağın
-  yerleşimi ya da parmakları eksikse o yarı paylaşılan varsayılana döner (menü satırı hangisinin
-  eksik olduğunu söyler). Kopya diske inmez — kalıcı olması için **Kaydet**.
+- **Aynalama hem yerleşimi hem parmakları taşır:** konum ve bilek konumunun X'i tersine döner,
+  bilek dönüşü Y/Z ekseninde ters işaretlenir, parmaklar kopyalanır (sol/sağ hayalet el aynı eklem
+  sözleşmesini paylaşır).
 - Kavraması yazılmamış silahta el boşta duruşunda kalır + konsola oturum başına bir uyarı gider;
   silah kiti koşusu da sonunda **"kavraması EKSİK silahlar"**ı listeler — ana kabzası yazılmamış
   olanlar VE çift elli olup ön kabzası yazılmamış olanlar (`Configure All Build Elements`
   penceresindeki Hazırlık satırı aynı listeyi gösterir).
-- Ön kabza noktası da stüdyoda, ön kabza elinin kumanda çerçevesiyle yazılır — Scene View'da ayrı bir
+- Ön kabza noktası da aynı yolla, 2. kavrama yakalanarak yazılır — Scene View'da ayrı bir
   tutamak/gizmo YOKTUR (kayıt tek yerde yaşasın). Kayıt iki şeyi söyler: ikinci elin **yapışacağı
   yer** ve iki elli nişanın **ekseni** (*ana kavrama → ön kabza*). ⚠️ **Oyunda mesafe aranmaz ve
   soket küresi ÇİZİLMEZ:** öbür elde iki elli silah varken boş elin grip'i basılı tutulduğu an ikinci
@@ -604,32 +602,36 @@ Ayarlanabilir bir "silah dönüşü" alanı da yoktur.
   durması ve silahın ekseninin oraya nişanlanmasıdır. **Ön kabza kaydı hiç yazılmamışsa** bağ KAPALI
   kalır (`ItemDefinition.HasSecondaryGrip`; konsola tanım başına bir uyarı gider) — yazılmamış kayıt
   eşyanın köküne düşerdi, o da ana elin dibidir.
-- ⚠️ Silah elde yatık görünüyorsa tek aday var: `Model`'in prefabtaki yerleşimi. Çerçevenin dönüşü
-  kayda girmediği için silah tek elde kumandayla hizalıdır (iki elli tutuşta yalnız ekseni ikinci
+- ⚠️ Silah elde yatık görünüyorsa tek aday var: `Model`'in prefabtaki yerleşimi. Kayıtta anchor
+  dönüşü olmadığı için silah tek elde kumandayla hizalıdır (iki elli tutuşta yalnız ekseni ikinci
   elin avucuna nişanlanır); yatıklık modelin kendi eksenlerinden gelir. **EL** yatık görünüyorsa
-  aday başkadır: o slotun el yerleşimi (stüdyoda `Hand`'i çevirerek düzeltilir).
+  aday başkadır: o slotun kaydı — yakalarken silahı çubukla doğru açıya getirmek, hayalet kumanda
+  elde doğal durana kadar.
 - **Admin ekranı ayrı bir teşhis yeri değildir:** kayıt telde giden el poz uzayında olduğu için
   rig'i olmayan izleyici uzak silahları oyuncuyla birebir aynı çizer. Silah adminde yanlış
   duruyorsa oyuncuda da yanlıştır.
-- **Tezgâhtaki el ile oyundaki el AYNIDIR ve bu kurgu gereğidir:** elin bileği oyunda her karede
-  kumandaya kilitleniyor ve kilidin ofseti tezgâhtaki hayalet elin **aynı** kaydıdır — kavraması
-  yazılmış slotta senin yerleştirdiğin poz, yazılmamışta paylaşılan varsayılan
-  (`HandPoseLibrary.AnchorToWrist` — avuç merkezi kumandanın üstünde, dönüş kimlik). Yani Meta'nın
-  kumandadan sentezlediği "doğal" el pozu devrede değil; ölçülecek/yapıştırılacak bir sabit de yok.
-  ⚠️ Elin kumandaya göre eğimi **koda anatomik bir tahmin olarak yazılmaz** — bir kez denendi ve
-  parmak ekseni etrafında ~70° saptı; o eğim gözle, silah başına tezgâhta verilir.
+- **Yakalanan el ile oyundaki el AYNIDIR ve bu kurgu gereğidir:** elin bileği oyunda her karede
+  kumandaya kilitleniyor ve kilidin ofseti kayıttaki bileğin **aynısıdır** — kavraması yazılmış
+  slotta yakaladığın poz, yazılmamışta paylaşılan varsayılan (`HandPoseLibrary.AnchorToWrist` —
+  avuç merkezi kumandanın üstünde, dönüş kimlik). Yani Meta'nın kumandadan sentezlediği "doğal" el
+  pozu devrede değil; ölçülecek/yapıştırılacak bir sabit de yok. ⚠️ Elin kumandaya göre eğimi
+  **koda anatomik bir tahmin olarak yazılmaz** — anatomik tahmin parmak ekseni etrafında onlarca
+  derece sapar; o eğim silah başına, gerçek elle yakalanarak verilir.
+- ⚠️ **Yakalama sahnesine oyun rig'i (`VA_CameraRig`) ya da oyun tekilleri konmaz** — oyunun el
+  poz sürücüsü eli kayda kilitler ve çok kipli (eş zamanlı el + kumanda) giriş kapanır, yani
+  yakalanacak izlenen el kalmaz. Araç kendi rig'ini kurar.
 
 ### Başkalarının gördüğü el (uzak avatarın parmakları)
 
 Parmaklar telde gitmez (`Docs/ArenaNet-Protokol.md` §6.9), yani uzak avatarın parmakları
-**sentezlenir**: eşya tutan elde **o slot için riglediğin duruş** (`WD_*`'ta yazılı olan), boş elde
-`RemoteAvatar.prefab` → `idleHandPose` (boşsa `HandPoseProfile.Idle`). Yani stüdyoda riglediğin
+**sentezlenir**: eşya tutan elde **o slot için yakaladığın duruş** (`WD_*`'ta yazılı olan), boş elde
+`RemoteAvatar.prefab` → `idleHandPose` (boşsa `HandPoseProfile.Idle`). Yani stüdyoda yakaladığın
 duruş yalnız senin elini değil, herkesin gördüğü eli de sürer — elle tutulan dünya objesinde de
 (§11.5): bayt gitmese de uzak el, objenin kendi kavrama kaydıyla ona oturur.
 
 ⚠️ **Uzaktaki el KABACA çizilir ve bu bilinçlidir.** Uzak avatarın eli humanoid (Mixamo) bir
 rig'dir; ISDK eklem dönüşleri ona doğrudan yazılamaz (iki iskeletin kemik eksenleri aynı değil).
-Köprü, riglediğin duruştan **ölçülen** parmak başına kapanma oranıdır — yani uzakta parmakların
+Köprü, yakaladığın duruştan **ölçülen** parmak başına kapanma oranıdır — yani uzakta parmakların
 "ne kadar kapalı" olduğu doğrudur, kemik kemik ince ayar değil. İnce ayarın tüketicisi zaten
 oyuncunun kendi eli: uzak oyuncunun eli metrelerce öteden görülüyor.
 
@@ -719,12 +721,13 @@ büyür (`Sistem-Ozeti` §7 "atılabilir avatarla çarpışmaz"); sıfır sekme 
 top verir. Yuvarlanmayı durduran şey materyal değil `Throwable`'ın ilk temasta yükselttiği sönümdür
 — prefabda yüksek `angularDamping` YAZMA, uçuştaki fırılı da söndürür.
 
-**3. Kavrama.** `Tools > VortexArena > Items > Kavrama Pozu Stüdyosu` ile **ana kabza** kaydını yaz
-(tek elli — ön kabza yok). Yazılmazsa eşya elde idle parmaklarla ve yanlış açıyla durur; uzak
+**3. Kavrama.** `Tools > VortexArena > Items > Kavrama Pozu Stüdyosu` ile **1. kavramayı** yakala
+(atılabilir tek kavramalıdır — yalnız `X`/`A`, 2. kavrama yok); öteki el için **aynala**, sonra
+gerekiyorsa onu da yakala. Yazılmazsa eşya elde idle parmaklarla ve yanlış açıyla durur; uzak
 oyuncuların gördüğü de odur.
 ⚠️ **Önce tanımın `prefab` alanını bağla:** atılabilirin prefabında tanımı taşıyan bir bileşen
 yoktur (`Throwable` tanımını çalışma zamanında `Arm`'da alır), stüdyo hedef tanımı **ters aramayla**
-bulur — `prefab` alanı boşsa prefab stüdyoda açılır ama yazılacak asset bulunamaz.
+bulur — `prefab` alanı boşsa prefabı seçmek hedefi bulmaz, tanımı elle seçmen gerekir.
 
 **4. Katalog.** `NetItemCatalog`'a ekle → `Configure All Build Elements` (kimlik bekçisi çakışmayı
 burada yakalar).
@@ -879,8 +882,9 @@ export'u koştur.
 | Bırakma (`ReleaseMode`) | `Physics` ya da `Return` | Serbest düşsün mü, yerine mi otursun |
 
 ⚠️ **Her tutulan prefabın KENDİ tanımı olur; iki prefab tek tanımı paylaşmaz.** Kavrama pozu
-tanımın üstünde yaşar ve stüdyo yalnız tanımın `Prefab` alanındaki prefabı tanır: paylaşılan
-tanımda öteki prefablar stüdyoda "tanım bulunamadı" der, yazılan tek poz da hepsine uygulanır.
+tanımın üstünde yaşar ve stüdyo prefabtan tanıma yalnız `Prefab` alanı üstünden iner: paylaşılan
+tanımda öteki prefablar hedefi bulmaz (tanımı elle seçmek gerekir) ve yazılan tek poz hepsine
+uygulanır.
 Benzer bir objeden başlarken tanımı Unity içinde kopyala (yeni GUID) ve `Prefab` alanını değiştir.
 
 ⚠️ **Alma yolu `DistanceGrab` DEĞİLSE prefabda mesafeli kavrama bileşeni BULUNMAMALIDIR**
@@ -895,8 +899,8 @@ söyler, elin nasıl duracağını **söylemez**; o bir sonraki adımdır. Yarı
 hacmidir; uçuşta soket koddaki `GripSocket.CatchRadius`'a kendiliğinden büyür ve kareyi süpürür —
 yakalanabilirlik için prefab yarıçapını büyütme.
 
-**4. Kavramayı stüdyoda yaz.** `Tools > VortexArena > Items > Kavrama Pozu Stüdyosu` ile ana kabza
-kaydını yaz. ⚠️ **Kavrama pozu SABİT olmak zorundadır:** obje ele kanonik pozla bağlanır, serbest
+**4. Kavramayı stüdyoda yakala.** `Tools > VortexArena > Items > Kavrama Pozu Stüdyosu` ile
+**1. kavramayı** yakala (dünya objesi tek kavramalıdır — yalnız `X`/`A`); öteki eli aynala. ⚠️ **Kavrama pozu SABİT olmak zorundadır:** obje ele kanonik pozla bağlanır, serbest
 kavrama her istemcide farklı bir ofset demektir ve obje uzak başlıkta elin yanında durur.
 
 **5. Köprüyü bağla.** Objenin köküne `NetObjectGrabBridge` ekle ve **eşya tanımını ata** (soket boş

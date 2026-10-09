@@ -235,11 +235,18 @@ namespace VortexArena.Net
         /// <summary>Connects to the given address; closes a previous connection/loop if there is one.</summary>
         public void Connect(string ip, int port, string role)
         {
+            // §12.4: a replay never reaches the network, and neither does an authoring tool's Play.
+            // The guard is here and not at the call sites so a future caller cannot reopen the
+            // socket by accident.
             if (ReplayMode.Active)
             {
-                // §12.4: a replay never reaches the network. The guard is here and not at the call
-                // sites so a future caller cannot reopen the socket by accident.
                 Debug.Log("[ArenaClient] Kayıt oynatma kipi: sunucuya bağlanılmadı.");
+                return;
+            }
+
+            if (AuthoringSession.Active)
+            {
+                Debug.Log("[ArenaClient] Yazım oturumu: sunucuya bağlanılmadı.");
                 return;
             }
 

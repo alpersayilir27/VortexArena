@@ -222,6 +222,19 @@ namespace VortexArena.App
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void ApplySelection()
         {
+            // An authoring tool's Play (grip capture) is not a game session: no role, no address, no
+            // XR release. The flag comes from the editor's ExitingEditMode hook via SessionState,
+            // because the scene's own Awake runs AFTER this.
+            if (UnityEditor.SessionState.GetBool(AuthoringSession.EditorStateKey, false))
+            {
+                AuthoringSession.Active = true;
+                ArenaCalibrator.DevSkipRequested = false;
+                AppSession.ReplayPath = "";
+                Debug.Log("[DevSession] Yazım oturumu (kavrama yakalama) — rol, adres ve XR " +
+                          "bırakma uygulanmadı.");
+                return;
+            }
+
             // Written unconditionally and BEFORE the Enabled early-out: with domain reload off the
             // static outlives the previous Play, so the current selection must overwrite it.
             ArenaCalibrator.DevSkipRequested = Enabled && SkipCalibration;
@@ -288,6 +301,11 @@ namespace VortexArena.App
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void ScheduleArenaSceneSetup()
         {
+            if (AuthoringSession.Active)
+            {
+                return;
+            }
+
             if (!Enabled)
             {
                 return;

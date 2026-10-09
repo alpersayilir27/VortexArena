@@ -1247,8 +1247,8 @@ namespace VortexArena.Core.Combat
             if (unauthoredSecondaryWarned.Add(definition))
             {
                 Debug.LogWarning($"[Weapon] '{definition.name}' iki elli ama ÖN KABZA KAYDI YAZILMAMIŞ — " +
-                                 "ikinci el bağlanmaz. Kavrama Pozu Stüdyosu'nda (WPN prefabı prefab " +
-                                 "kipinde) 'Ön Kabza Ellerini Oluştur' → yerleştir → Kaydet.", definition);
+                                 "ikinci el bağlanmaz. Kavrama Pozu Stüdyosu'nda silahı seç → " +
+                                 "yakalama sahnesini aç → Play'de 2. kavramayı yakala.", definition);
             }
         }
 

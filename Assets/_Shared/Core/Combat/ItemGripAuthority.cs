@@ -9,7 +9,7 @@ namespace VortexArena.Core.Combat
     /// solver (<see cref="ItemGripSolver"/>) and the wire (§6.6) use — so no delta is measured for
     /// the weapon's pose, and a rig-less spectator draws it exactly as the player does.</para>
     /// <para>The delta is needed only for the HAND VISUAL and THREE sides read it: the synthetic
-    /// wrist lock (<c>HandGripPoser</c>), the studio ghost hand (<c>GripPoseStudio</c>) and the
+    /// wrist lock (<c>HandGripPoser</c>), the grip capture session (<c>GripCaptureSession</c>) and the
     /// remote avatar's wrist (<c>RemoteAvatar.TryResolveGripWrist</c>). ⚠️ Skipping it on the remote
     /// end = "the same weapon held two ways on two screens".</para>
     /// <para>⚠️ The delta is DEFINED, not measured (<see cref="HandPoseLibrary.AnchorToWrist"/>);
@@ -30,7 +30,7 @@ namespace VortexArena.Core.Combat
         /// <summary>
         /// Anchor→ISDK-wrist delta (anchor space, metres); single source
         /// <see cref="HandPoseLibrary.AnchorToWrist"/>.
-        /// <para>⚠️ Looks redundant but stays: two readers (local wrist lock, studio) share one
+        /// <para>⚠️ Looks redundant but stays: two readers (local wrist lock, capture) share one
         /// gate, so neither is forgotten if the offset's definition changes.</para>
         /// </summary>
         public static Pose ResolveAnchorToWrist(bool rightHand)

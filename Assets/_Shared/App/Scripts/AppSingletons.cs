@@ -31,9 +31,9 @@ namespace VortexArena.App
     /// </para>
     ///
     /// <para>
-    /// Every session type installs the same list today, hence the unconditional gate; a future
-    /// server-less type adds its condition <b>here</b>, not in the singletons. The role is certain
-    /// at this point (<c>DevSession</c>/<c>AppBoot</c> write it in <c>BeforeSceneLoad</c>).
+    /// A session type's condition belongs <b>here</b>, not in the singletons (playback installs a
+    /// shorter list, an authoring tool's Play installs none). The role is certain at this point
+    /// (<c>DevSession</c>/<c>AppBoot</c> write it in <c>BeforeSceneLoad</c>).
     /// </para>
     /// </summary>
     internal static class AppSingletons
@@ -41,6 +41,12 @@ namespace VortexArena.App
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Install()
         {
+            // An authoring tool's Play is not a session: no overlay, no relay, nothing to route.
+            if (Net.AuthoringSession.Active)
+            {
+                return;
+            }
+
             if (AppSession.IsReplay)
             {
                 InstallReplaySingletons();
