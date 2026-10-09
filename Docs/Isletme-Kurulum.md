@@ -124,12 +124,12 @@ Arena, her başlıkta **2 nokta** ile fiziksel alana hizalanır (`ArenaCalibrato
 **Başlıkta kalibrasyon prosedürü** (operatörün her başlıkta yapacağı):
 
 1. Arena sahnesindeyken sağ kumandayı **A** işaretinin üzerine, **yere 90° dik** tutup **ucunu zemine değdir**. Bu duruş her iki noktada da aynı olmalı — zemin yüksekliği bu ölçümden çıkar.
-2. Sağ kumandada **A tuşunu basılı tutarken B tuşuna 1 saniye içinde iki kez bas** — **kısa titreşim (0,3 sn)** = A noktası alındı. Basılı tutma süresi yoktur; ucu zemine değdirdiğin anda kombinasyonu yap.
+2. Sağ kumandada **A tuşunu basılı tutarken B tuşuna bir kez bas** — **kısa titreşim (0,3 sn)** = A noktası alındı. Basılı tutma süresi yoktur; ucu zemine değdirdiğin anda kombinasyonu yap.
 3. Aynısını **B** işaretinde yap — **uzun titreşim (1 sn)** + iki çapa birden belirip **1 saniye sonra kaybolur** = B alındı ve arena hizalandı.
 4. Hata sinyalleri (ikisinde de ikinci çapa hiç belirmez):
    - **Üç kısa titreşim** = iki nokta arasındaki mesafe boyut dosyasındaki `calibration.a`–`calibration.b` mesafesine uymuyor (±%20 dışında); bant ölçüsünü kontrol et, B'yi tekrar al.
    - **Tek titreşim (0,6 sn)** = iki noktanın ölçülen zemin yüksekliği 10 cm'den fazla ayrışıyor; bir noktada kumandanın ucu zemine değmemiş (ya da zemin eğimli). Tekrar al.
-5. Kalibrasyon başlıkta kaydedilir (uzamsal anchor) ve sonraki açılışta **otomatik geri yüklenir**. Yeniden kalibre etmek için kombinasyonu tekrarla — kalibrasyon sıfırdan başlar.
+5. Kalibrasyon başlıkta kaydedilir (uzamsal anchor) ve sonraki açılışta **otomatik geri yüklenir** — kalibre modu varsayılanı budur (ESKİ KALİBRE); operatör 2 ÇAPA'yı seçtiği kurulumda her açılışta elle kalibrasyon gerekir (`Docs/Kullanim-Kilavuzu.md`). Yeniden kalibre etmek için kombinasyonu tekrarla — kalibrasyon sıfırdan başlar.
 6. **Her başlıkta kaydı doğrula:** elle kalibrasyonun ardından sunucu konsolunda `ArenaCalibrator: çapa cihaza kaydedildi (…)` satırı görünmelidir. Yerine `çapa kaydedilemedi (…)` görürsen o başlık kalibrasyonunu **kalıcı tutamıyor**: oyuncu o oturumda oynar ve harita değişimi hizalamayı korur, ama uygulama yeniden açılınca elle kalibrasyon gerekir. Aynı başlıkta tekrarlıyorsa sebep gözlük tarafındadır; parantez içindeki kodu teslim notuna yaz.
 
 > **Kumandayı nasıl tutacağın önemli DEĞİL:** ölçülen nokta kumanda pivotunun sabit bir miktar **altıdır** ve bu ofset dünyaya göre uygulanır — eğik tutmak, çevirmek, gözlüğün nereye baktığı sonucu değiştirmez. Tek koşul **kumandanın ucunun zemin işaretine değmesidir**.
@@ -227,8 +227,8 @@ Arena, her başlıkta **2 nokta** ile fiziksel alana hizalanır (`ArenaCalibrato
   - `scripts\deploy-admin-game.bat` → `deploy\admin\` (**Unity editörü kapalı olmalı**)
   - `scripts\deploy-player-apk.bat` → `deploy\player\` (**Unity editörü kapalı olmalı** + Android Build Support modülü; açılışta **sürüm numarası** sorar, çıktı `game_v<sürüm>.apk`; platform değişen koşu 20-40 dk sürer)
   - `scripts\deploy-launcher.bat` → **saha paketi** `deploy\launcher\`: `VortexArena.Launcher.exe`
-    (**tek dosya**, self-contained, `adb` içinde; tek ön koşul .NET 10 SDK) + yanında boş
-    `server\`, `admin\`, `game_versions\`, `replays\`
+    (**tek dosya**, self-contained; ön koşul .NET 10 SDK) + yanında boş
+    `server\`, `admin\`, `game_versions\`, `replays\` ve gözlüğe kurulum için `platform-tools\` (adb)
   - `deploy\server\` içeriğini `deploy\launcher\server\`'a, `deploy\admin\` içeriğini
     `deploy\launcher\admin\`'e kopyala; sonra `deploy\launcher\` klasörünün **tamamını** operatör
     PC'sine taşı — exe'ler tek başına çalışmaz. Launcher kendi klasörünü kök sayar; eksik
@@ -327,7 +327,7 @@ Sırayla uygula; her madde geçmeden sonrakine geçme.
 
 **Teslim paketi (işletmede kalacaklar)**
 
-- [ ] Operatör PC'sinde tek klasör: `VortexArena.Launcher.exe` + yanında `server\` (exe + `config/server.json`, `maps.json`, `devices.json` + `firewall-kur.cmd`) ve `admin\`; masaüstünde **launcher** kısayolu. Operatör yalnız launcher'ı açar — sunucu ve admin exe'lerine doğrudan tıklanmaz (admin'e adres gelmez).
+- [ ] Operatör PC'sinde tek klasör: `VortexArena.Launcher.exe` + yanında `server\` (exe + `config/server.json`, `maps.json`, `devices.json` + `firewall-kur.cmd`), `admin\` ve `platform-tools\` (adb); masaüstünde **launcher** kısayolu. Operatör yalnız launcher'ı açar — sunucu ve admin exe'lerine doğrudan tıklanmaz (admin'e adres gelmez).
 - [ ] Launcher'da **mekan** bir kez seçildi, *Sunucu* ve *Yönetim* sayfalarındaki **Başlat** ile doğrulandı; ayarlar `%APPDATA%\VortexArena\launcher\settings.json` içinde kalıcı saklanır (exe yeniden dağıtılsa da korunur).
 - [ ] Gözlüklere sürüm kurulacaksa **USB kablosu** işletmede bırakıldı; *Versiyonlar* sayfasının sürüm listesini alabilmesi için o PC'nin güncelleme sunucusuna erişimi var (erişim yoksa yalnız yerelde duran APK'lar görünür).
 - [ ] Bilgi kartı: SSID + Wi-Fi parolası, sunucu statik **IP:port** (`…:47821`), arena **sahne adı**, A–B zemin işaretleri arası **mesafe**, APK sürümü + kurulum tarihi.
@@ -347,6 +347,7 @@ Sırayla uygula; her madde geçmeden sonrakine geçme.
 | Launcher *Yönetim* sayfasında "admin bulunamadı" diyor | Launcher exe'sinin yanındaki `admin\` klasörü boş, silinmiş/taşınmış veya build alınmamış | `scripts\deploy-admin-game.bat` (editör kapalıyken) çalıştır, `deploy\admin\` içeriğini launcher exe'sinin yanındaki `admin\` klasörüne kopyala |
 | Launcher **mekan seçilmeden** sunucuyu başlatmıyor | Bilinçli: mekansız başlatılsa sunucu **alfabetik ilk mekanı** sessizce açardı ve yanlış işletmenin arenaları yönetilirdi | *Sunucu* sayfasındaki listeden bu işletmeyi seç. Liste boşsa `server\config\maps.json` yok → Unity'de **Export Server Config** + yeniden dağıtım |
 | Admin harita seçicisinde **başka işletmenin arenaları** var / beklenen arena yok | Sunucu yanlış mekanla açılmış | Günlükteki `[Venue] …` satırını oku. *Sunucu* sayfasından **Durdur**, doğru mekanı seçip yeniden **Başlat** — **mekan çalışırken değişmez** |
+| *Versiyonlar* sayfası "adb yok" diyor | Launcher exe'sinin yanındaki `platform-tools\` klasörü eksik ya da taşınmamış | Ofiste `scripts\deploy-launcher.bat`'ı yeniden çalıştır ya da paketteki `platform-tools\` klasörünü exe'nin yanına kopyala; launcher'ı yeniden açmak gerekmez |
 | *Versiyonlar* sayfasında gözlük görünmüyor ya da "izin bekleniyor" diyor | Gözlük USB'den takılı değil, geliştirici modu kapalı ya da USB hata ayıklama izni verilmemiş | Kabloyu tak, gözlüğü **tak** ve çıkan izin penceresinde **"Bu bilgisayardan her zaman izin ver"** işaretleyerek onayla |
 | Sunucu başlar başlamaz duruyor (**çıkış kodu 2**) | Açık sahne çözülemedi: seçilen mekanda lobi haritası yok, ya da `maps.json` eksik/bayat | O mekanın `Lobby` kutusunu ekle (`supportedModeIds = ["lobby"]`), Unity'de **Export Server Config** çalıştır, sunucuyu yeniden dağıt. Launcher listesinde lobisiz mekanlar **kırmızı** görünür |
 | Bağlanıyor ama roster'da "yeniden bağlanıyor" düşüyor (45 sn dönmezse "ayrıldı") | 15 sn boyunca status gelmedi (Wi-Fi zayıf, başlık uykuya geçti) | AP kapsamasını/kanalı kontrol et; başlıkta uyku süresini uzat. Cihaz geri gelince aynı satıra oturur |

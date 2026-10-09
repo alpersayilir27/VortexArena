@@ -7,8 +7,8 @@ title: Arayüz tasarımı — 2D'yi nerede bulurum, nasıl düzenlerim
 Projedeki tüm arayüz **uGUI**'dir: `Canvas` + `TextMeshPro`. **UI Toolkit kullanılmıyor** —
 projede tek bir `.uxml`/`.uss` yok, aramayın.
 
-Admin ekranları, oyuncunun maç sonu ekranı, kafaya kilitli şerit, öldün kartı ve aşçı modunun
-lokanta arayüzü **koddan üretilir** (Girdap arayüz kiti): prefab bir çıktıdır, kaynak builder'dır.
+Admin ekranları, oyuncunun maç sonu ekranı, kafaya kilitli şerit, öldün kartı, kalibrasyon kartı
+ve aşçı modunun lokanta arayüzü **koddan üretilir** (Girdap arayüz kiti): prefab bir çıktıdır, kaynak builder'dır.
 Bildirim, yükleme ve bağlantı ekranları bunun dışındadır ve **elle düzenlenir** ("Girdap dışında
 kalan arayüz").
 
@@ -35,20 +35,20 @@ kalan arayüz").
 `StretchTop`/`StretchBottom`/`StretchLeft` · `Shape`/`ShapeBox` · `Stripes` · `SegmentBar` ·
 `Image` · `Icon` · `Text` · `Kbd` · `Button` · `Chip` · prefab kaydetme), ekran başına bir kardeş
 partial durur (`.Assets` · `.PlayerRow` · `.Stats` · `.Preferences` · `.Hud` · `.MatchResult` ·
-`.PlayerHud`). Aşçı modunun lokanta teması kendi partial ailesindedir (`.Lokanta` ortak
+`.PlayerHud` · `.Calibration`). Aşçı modunun lokanta teması kendi partial ailesindedir (`.Lokanta` ortak
 primitifler — `LkCard`/`LkPill`/`LkRibbon`/`LkFace`/`LkText`/`TextShadow`/`TextOutline`/`LkSprite`
 — ve `.LokantaHud` · `.LokantaBubble` · `.LokantaThermometer` · `.LokantaResult` · `.LokantaIcons`
 + sprite üreteci `LokantaSprites`).
 
 **Menü** — `Tools > VortexArena > UI > Girdap`: *Fontları ve asset kabını üret* · *Tüm prefabları
-üret* · *Lokanta sprite'larını üret* · *Yalnız `<Ekran>`* (aşçı tarafında *Yalnız Aşçı HUD* ·
-*… sipariş baloncuğu* · *… termometre* · *… sonuç ekranı*). Toplu üretimin sırası PlayerRow →
-StatsRow → StatsPanel → PreferencesPanel → Hud → MatchResult → PlayerHud → Lokanta'dır; HUD,
-panelleri ve satır prefabını içine gömer.
+üret* · *Lokanta sprite'larını üret* · *Yalnız `<Ekran>`* (*Yalnız Kalibrasyon* dahil; aşçı
+tarafında *Yalnız Aşçı HUD* · *… sipariş baloncuğu* · *… termometre* · *… sonuç ekranı*). Toplu
+üretimin sırası PlayerRow → StatsRow → StatsPanel → PreferencesPanel → Hud → MatchResult →
+Kalibrasyon → PlayerHud → Lokanta'dır; HUD, panelleri ve satır prefabını içine gömer.
 
 **Üretilen prefablar** — `Assets/_Shared/App/Resources/UI/`: `AdminPlayerRow` · `AdminStatsRow` ·
 `AdminStatsPanel` · `AdminPreferencesPanel` · `AdminHud` · `MatchResultOverlay` · `HealthHud` ·
-`DeathHud`; `Assets/Modes/Burger/UI/`: `BurgerHud` · `LokantaThermometer` ·
+`DeathHud` · `CalibrationOverlay`; `Assets/Modes/Burger/UI/`: `BurgerHud` · `LokantaThermometer` ·
 `BurgerResultOverlay` (+ `NO_customer` prefabındaki `Bubble` alt ağacı). Builder prefabı
 **yerinde** düzenler: içeriği yükler, kendi ürettiği çocukları siler, yeniden kurar, alanları
 `SerializedObject` ile bağlar, kaydeder.
@@ -224,6 +224,9 @@ kabı değiştiyse önce *Fontları ve asset kabını üret*).
 - **AdminPreferencesPanel** — sekmeler MAÇ · GÖRÜNÜM · BAĞLANTI · SES (aktif sekme
   `UiButtonKind.SegOn`, diğerleri `Tab`); içerik dropdown'lar (liste şablonundan klonlanır), iki
   durumlu anahtarlar (KAPALI/AÇIK), adımlayıcılar ve kalibrasyon kipi düğmeleri. Esc kapatır.
+  ⚠️ Kalibrasyon kipinde **ESKİ KALİBRE tek tıkla, 2 ÇAPA yalnız 3 sn basılı tutmayla** seçilir
+  (`HoldButton`, tap geri çağrısı boş): basılı tutmanın burada **ilerleme göstergesi yoktur** —
+  SIFIRLA'nın yürüyen zemini bir onay dilidir, bu kapı ise yalnız kazara tıklamayı keser.
 - **MatchResultOverlay** (oyuncunun maç sonu ekranı, `VortexArena.App`) — prefab kökü dünya uzayı
   `Canvas` + `HudFollow`; derinlikten bağımsız çizim (`UiDrawOnTop`) ve duvar kaçınması **koddan**
   gelir, prefabta ayarlanmaz. Önce **sonuç kartı**: MAÇ SONUCU şeridi, sonuç kelimesi (vertex gradyanı
@@ -254,6 +257,12 @@ kabı değiştiyse önce *Fontları ve asset kabını üret*).
   mürekkebiyle `<noparse>` içinde gelir), durum plakası (`Card/StatusFrame`). Kart mod HUD
   canvas'ında durur, şerit kafada: üst üste binmezler. CSS'teki `skewX(-7deg)` eğimi yoktur — TMP
   italik eğimi font asset'inden gelir, metin başına verilemez.
+- **CalibrationOverlay** (oyuncunun kalibrasyon kartı, `VortexArena.App`) — prefab kökü dünya
+  uzayı `Canvas` + `HudFollow`; derinlikten bağımsız çizim (`UiDrawOnTop`, sıra ofseti 40) ve duvar
+  kaçınması **koddan** gelir, prefabta ayarlanmaz. Kart: üstte KALİBRASYON etiketi (iki yanında ton
+  çizgileri), ortada ikon + başlık satırı (hizalaması koddan ortalanır), altta ton çizgisi ve
+  kayan şeritler; kartın altında ipucu için ayrı bir `StatusPlate`. Ton iki hâldedir — uyarı ve
+  yeşil. Kaynak `oyuncu-hud.html`.
 
 ## Aşçı (Burger) — lokanta teması
 

@@ -43,6 +43,9 @@ namespace VortexArena.App.Editor
         static partial void BuildHud();
 
         static partial void BuildMatchResult();
+
+        static partial void BuildCalibration();
+
         static partial void BuildPlayerHud();
 
         [MenuItem("Tools/VortexArena/UI/Girdap/Tüm prefabları üret")]
@@ -55,6 +58,7 @@ namespace VortexArena.App.Editor
             BuildPreferencesPanel();
             BuildHud();
             BuildMatchResult();
+            BuildCalibration();
             BuildPlayerHud();
             BuildLokanta(); // after the shared strip: it replaces HealthHud inside BurgerHud
             AssetDatabase.SaveAssets();

@@ -2393,6 +2393,12 @@ namespace VortexArena.Core.Player
                 item = rightHand ? _itemInstanceR : _itemInstanceL;
                 definition = rightHand ? _itemDefR : _itemDefL;
                 kind = GripSocketKind.Primary;
+
+                // A world object has no byte (§6.6); its bridge reports it instead.
+                if (definition == null)
+                {
+                    RemoteWorldHolds.TryGet(PlayerId, rightHand, out item, out definition);
+                }
             }
 
             return definition != null;

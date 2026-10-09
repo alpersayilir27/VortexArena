@@ -275,9 +275,8 @@ harita değişimi kalibrasyonu bozmaz. (Maç sırasında da aynı adımlarla yen
 
 - [ ] **1.** Oyuncu sağ kumandanın **ucunu** zemindeki **A** bandına değdirir. ⚠️ **Nasıl tuttuğu
       önemli değil** (dik, eğik, yan — fark etmez); önemli olan **ucun yere değmesidir**.
-- [ ] **2.** Sağ kumandada **A tuşunu basılı tutarken B tuşuna hızlıca iki kez basar**
-      (iki basış arası 1 saniyeyi geçmemeli) → **kısa titreşim** = A noktası alındı ve
-      zeminde A çapası belirir. Basılı tutma/bekleme yoktur.
+- [ ] **2.** Sağ kumandada **A tuşunu basılı tutarken B tuşuna bir kez basar** → **kısa titreşim**
+      = A noktası alındı ve zeminde A çapası belirir. Basılı tutma/bekleme yoktur.
 - [ ] **3.** Aynısını zemindeki **B** bandında yapar → **uzun titreşim** (~1 sn) + **iki çapa da
       belirip bir saniye sonra kaybolur** = tamam, arena hizalandı. Bekleme yoktur, oyuncu
       doğrulup devam edebilir.
@@ -290,9 +289,9 @@ harita değişimi kalibrasyonu bozmaz. (Maç sırasında da aynı adımlarla yen
 
 **Bilmen gerekenler**
 
-- **Uygulama her açıldığında kalibrasyon baştan alınır** — kutudan çıkan ayar budur. Gözlükte
-  saklanan eski hizalamanın açılışta geri yüklenmesini istiyorsan **kalibre modunu** değiştirirsin
-  (§4.3).
+- **Uygulama açılırken gözlükte saklanan eski hizalama geri yüklenir** — kutudan çıkan ayar budur
+  (ESKİ KALİBRE). Her açılışta kalibrasyonun baştan alınmasını istiyorsan **kalibre modunu**
+  2 ÇAPA'ya alırsın (§4.3).
 - **Oyun içinde kalibrasyon korunur:** harita değişse de, maç bitip lobiye dönülse de oyuncu
   yeniden kalibre olmaz. Kalibre modu yalnız **uygulamanın ilk açılışını** ilgilendirir.
 - ⚠️ **Kalibrasyon bir kez alındıktan sonra oyuncu kumandayla onu değiştiremez.** Kombinasyonu
@@ -330,7 +329,10 @@ yükleyen **KALİBRE** yalnız İstatistik satırındadır.
       olur, yan kolondaki kartı kırmızı çerçeveye döner ve kolonun başlığında "N KALİBRESİZ" yazar.
 - [ ] **4.** O andan itibaren oyuncu **ateş edemez, vurulamaz ve ölürse canlanmaz**;
       diğer oyuncuların ekranında **avatarı yanıp söner** (kimin sorunlu olduğu belli olsun).
-      Kendi ekranında "Kalibrasyon gerekli — sağ kumandada A basılıyken B×2" yazar.
+      Kendi ekranında her şeyin önünde duran bir kart belirir: **"Lütfen kalibre alınız"** ve
+      altında ne yapacağı ("Sağ kumandada A basılıyken B'ye bas"). İlk noktayı alınca kart
+      **"1. kalibre alındı. 2.si bekleniyor"** olur, iş bitince **"Kalibre başarıyla alındı"**
+      yazıp 2 saniye sonra kaybolur.
 - [ ] **5.** Oyuncu §4'teki adımlarla **yeniden kalibre olur** (artık kombinasyon açıktır).
       Bitince satır kendiliğinden düzelir.
 - [ ] **6.** Oyuncu **kaldığı yerden devam eder** — canı, öldürme sayısı ve skoru sıfırlanmaz.
@@ -437,13 +439,19 @@ seçersin:** TERCİHLER > **KALİBRASYON** bölümündeki üç düğme.
 
 | Düğme | Ne olur | Ne zaman seçilir |
 |---|---|---|
-| **2 ÇAPA** *(varsayılan)* | Uygulama her açıldığında eski kayıt **kullanılmaz**; oyuncu kumandayla A ve B noktalarını yeniden alır | **Güvenli seçim, açık bırak.** Bina çok katlıysa, gözlükler başka odalarda da kullanılıyorsa ya da hizalama sorunları yaşanıyorsa mutlaka bu |
-| **ESKİ KALİBRE** | Uygulama açılırken gözlükteki son kalibrasyon geri yüklenir; oyuncu hiçbir şey yapmadan hazır gelir | Tek katlı, hep aynı odada oynatılan, sorunsuz çalışan bir kurulumda seansı hızlandırır |
+| **2 ÇAPA** *(düğmeyi 3 saniye basılı tut)* | Uygulama her açıldığında eski kayıt **kullanılmaz**; oyuncu kumandayla A ve B noktalarını yeniden alır | Bina çok katlıysa, gözlükler başka odalarda da kullanılıyorsa ya da hizalama sorunları yaşanıyorsa bunu seç |
+| **ESKİ KALİBRE** *(varsayılan)* | Uygulama açılırken gözlükteki son kalibrasyon geri yüklenir; oyuncu hiçbir şey yapmadan hazır gelir | Tek katlı, hep aynı odada oynatılan, sorunsuz çalışan bir kurulumda seansı hızlandırır — kutudan çıkan ayar budur |
 | **ÇAPA BULUTU** | Bugün **hiçbir şey yapmaz** — ileride kullanılmak üzere ayrılmış bir seçenek | Seçme |
 
 **Bilmen gerekenler**
 
 - Ayar **sunucuda** durur: tüm yönetim ekranları aynı değeri gösterir, birinden değiştirmen yeter.
+  Sunucu yeniden başlatılınca ayar **ESKİ KALİBRE**'ye döner.
+- ⚠️ **2 ÇAPA'ya tek tıkla geçilmez:** düğmeye bir kez basmak hiçbir şey yapmaz, düğmeyi
+  **3 saniye bırakmadan basılı tutman** gerekir. Basılı tutarken ekranda bir şey değişmez (ne
+  çubuk ne yazı); süre dolduğunda mod seçilir ve düğme yanar. Parmağın düğmeden kayarsa baştan
+  başlarsın. **ESKİ KALİBRE** tek tıkla seçilir. Sebep: 2 ÇAPA her seansta tüm oyunculara elle
+  kalibrasyon zorunluluğu getirir, o yüzden kazara basılmaz.
 - ⚠️ **ESKİ KALİBRE seçiliyken:** hizalamayı geçersiz kıldığın bir gözlükte uygulama kapatılıp
   yeniden açılırsa kayıt geri yüklenir ve oyuncu yine eski hizalamasıyla gelir. Kaydın kendisinin
   yanlış olduğundan eminsen kaydı sil (§4.1): sıfırlama düğmesini **1 saniye basılı tut** — tek
@@ -454,7 +462,8 @@ seçersin:** TERCİHLER > **KALİBRASYON** bölümündeki üç düğme.
 - Mod ne olursa olsun **oyun içinde kalibrasyon korunur** — harita değiştirmek kimseyi yeniden
   kalibre ettirmez. Seçim yalnız "uygulama açılırken eski kayda güvenilsin mi" sorusudur.
 - **ESKİ KALİBRE'de bir oyuncu yanlış yerde başlarsa** çözüm bellidir: İstatistik panelinde o
-  satırın **SIFIRLA**'sına bas, elle yeniden kalibre olsun (§4.1). Bu tekrarlıyorsa modu **2 ÇAPA**'ya al.
+  satırın **SIFIRLA**'sına bas, elle yeniden kalibre olsun (§4.1). Bu tekrarlıyorsa modu
+  **2 ÇAPA**'ya al (düğmeyi 3 saniye basılı tut).
 
 ### 4.4 Bakım — gözlüğün kendi alan verisini temizlemek
 
@@ -1085,7 +1094,8 @@ ekranın alt ortasındaki **⏸ DURAKLAT** düğmesi (BAŞLAT ile BİTİR'in ara
 | Bir oyuncu diğer ekranlarda **kolları yana açık, donuk** duruyor (T-poz) ama konumu doğru | O gözlükte gövde takibi arızalı — oyuncu görünmez kalmasın diye sistem onu bu şekilde çiziyor | **Önce birkaç saniye bekle:** gözlük takibi kendi kendine yeniden başlatmayı deniyor ve çoğu zaman kendiliğinden düzelir. Geçmezse İstatistik panelinde **GÖVDE YENİLE**, sonra §4.4'teki alan verisi temizliği + yeniden kalibre + **ÖLÇ**. Oyuncunun kendi ekranında belirti olmaz |
 | Bir oyuncunun **karakteri hiç görünmüyor** ama isim etiketi ve silahı doğru yerde duruyor | O gözlükten gövde bilgisi hiç gelmiyor. Sistem gövdeyi kafa ve el konumlarından çizmeye geçer, yani oyuncu görünür ve **vurulabilir** kalır — ama hareketleri sadeleşir (bacaklar oynamaz) | **Önce birkaç saniye bekle** (kendi kendine onarım). Geçmezse **GÖVDE YENİLE**. O da yetmezse §4.4'teki alan verisi temizliği; en son çare gözlüğü tamamen kapatıp açmak |
 | **KALİBRE** düğmesinin yazısı maviye döndü (zemin sapması) | Gözlüğün zemin tahmini ile gerçek zemin arasında büyük fark var (alan verisi bozulmuş) — ya da oyuncu kalibre ederken kumandanın ucunu yere değdirmemiş | Maça devam edebilirsin (kalibrasyon geçerli). Oyuncuya **kumandanın ucu iki noktada da zeminde olsun** deyip tekrar kalibre ettir; yine çıkıyorsa seans arasında §4.4'teki temizliği yap |
-| Oyuncular uygulamayı her açtığında yeniden kalibre olmak zorunda kalıyor | Kalibre modu **2 ÇAPA** (varsayılan) | Beklenen davranış. Tek katlı, sorunsuz bir kurulumda hızlandırmak istersen TERCİHLER > MAÇ > KALİBRASYON > **ESKİ KALİBRE** (§4.3) |
+| Oyuncular uygulamayı her açtığında yeniden kalibre olmak zorunda kalıyor | Kalibre modu **2 ÇAPA** seçili | Tek katlı, sorunsuz bir kurulumda hızlandırmak istersen TERCİHLER > MAÇ > KALİBRASYON > **ESKİ KALİBRE** (varsayılan, §4.3) |
+| **2 ÇAPA** düğmesine basıyorsun ama mod değişmiyor | Düğme tek tıkla çalışmaz | Düğmeyi **3 saniye bırakmadan basılı tut**; basılı tutarken ekranda bir şey değişmez, süre dolunca mod seçilir (§4.3) |
 | Kalibre modunu değiştirdin ama hiçbir şey değişmedi | Gözlükler ayarı yalnız **bağlanırken** okur | O gözlüklerde uygulamayı kapatıp yeniden aç; modu bundan sonra seans başında seç (§4.3) |
 | Oyun ortasında arena birden kaydı | Gözlüğün konum takibi sıfırlandı | Genelde kendiliğinden düzelir. Düzelmezse o oyuncuya kalibrasyonu tekrarlat |
 | Ateş ediyor ama can azalmıyor | Aynı takımdalar (dost ateşi kapalı) ya da maç henüz başlamadı | Takımları kontrol et; geri sayım bitmiş mi bak. Takım arkadaşlarının birbirini vurabilmesini istiyorsan Tercihler → MAÇ → **Dost ateşi**'ni aç |
@@ -1141,7 +1151,7 @@ Kurulumda bırakılan **bilgi kartında** şunlar yazmalı; yoksa teknik ekipten
 │  JOYSTICK'e bas, 1 sn tut →  Gizli IP paneli (aç/kapat)  │
 │                              (lobide, bağlanamayınca)    │
 │                                                          │
-│  A BASILIYKEN B'ye 2 KEZ  →  Kalibrasyon noktası al      │
+│  A BASILIYKEN B'ye BAS    →  Kalibrasyon noktası al      │
 │  (kumandanın UCU yere         kısa titr. = A alındı      │
 │   değecek; nasıl tuttuğun     UZUN titr. = B alındı, tamam│
 │   önemli değil)              3 titreşim = mesafe yanlış, │

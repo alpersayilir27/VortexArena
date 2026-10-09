@@ -16,11 +16,11 @@ namespace VortexArena.Core.Arena
     /// (§10.7). Falls back to <see cref="ModeRuntime"/> when the server reports no selection.
     /// </para>
     /// <para>
-    /// X-ray: while the local player is DEAD, a second material slot (<c>M_BaseZoneXRay</c>,
-    /// <c>ZTest Greater</c> ghost + additive boost on the visible strip) is added to their OWN
-    /// team's strip so the revive point is visible through decor. Never for a living player, never for the enemy base, never for
-    /// <see cref="Team.Neutral"/>. Team color is read from the strip's own material — no second
-    /// color definition.
+    /// X-ray: a second material slot (<c>M_BaseZoneXRay</c>, <c>ZTest Greater</c> ghost + additive
+    /// boost on the visible strip) is added to the local player's OWN team strip so the base is
+    /// visible through decor — full strength while DEAD, <see cref="AliveIntensity"/> while alive.
+    /// Never for the enemy base, never for <see cref="Team.Neutral"/>. Team color is read from the
+    /// strip's own material — no second color definition.
     /// </para>
     /// <para>
     /// ⚠️ Unrelated to the weapon source: this used to ride on <c>WeaponGranter</c>'s
@@ -42,8 +42,14 @@ namespace VortexArena.Core.Arena
         /// build and the strip draws pink on Quest.</summary>
         private const string XRayMaterialResource = "M_BaseZoneXRay";
 
+        /// <summary>Living player's x-ray as a fraction of the dead look; scales the material's
+        /// <c>_Alpha</c> and <c>_OverlayStrength</c>, which stay the single tuning point.</summary>
+        private const float AliveIntensity = 0.2f;
+
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
         private static readonly int ColorId = Shader.PropertyToID("_Color");
+        private static readonly int AlphaId = Shader.PropertyToID("_Alpha");
+        private static readonly int OverlayStrengthId = Shader.PropertyToID("_OverlayStrength");
 
         private static BaseZoneVisibility _instance;
 
@@ -240,16 +246,14 @@ namespace VortexArena.Core.Arena
 
         // ------------------------------------------------------------------------- x-ray
 
-        /// <summary>Adds the through-wall draw slot to the local player's own team strips; only
-        /// meaningful while they are DEAD.</summary>
+        /// <summary>Adds the through-wall draw slot to the local player's own team strips; dimmed to
+        /// <see cref="AliveIntensity"/> while they are alive.</summary>
         private void ApplyXRay()
         {
             // ⚠️ Instance may be null — bootstrap order can put this before PlayerCombatState. Treat
             // as alive (its own initial value); LocalAliveChanged re-runs Apply() once it exists.
-            if (PlayerCombatState.Instance == null || PlayerCombatState.Instance.IsAlive)
-            {
-                return;
-            }
+            bool alive = PlayerCombatState.Instance == null || PlayerCombatState.Instance.IsAlive;
+            float intensity = alive ? AliveIntensity : 1f;
 
             Team local = ArenaCombat.LocalTeam;
             if (local == Team.Neutral)
@@ -285,7 +289,7 @@ namespace VortexArena.Core.Arena
                     Renderer[] renderers = child.GetComponentsInChildren<Renderer>(true);
                     for (int r = 0; r < renderers.Length; r++)
                     {
-                        AddXRaySlot(renderers[r], shared);
+                        AddXRaySlot(renderers[r], shared, intensity);
                     }
                 }
             }
@@ -294,7 +298,7 @@ namespace VortexArena.Core.Arena
         /// <summary>Adds a second material to the renderer: the same mesh again with inverted depth
         /// test. ⚠️ The <c>renderer.materials</c> getter is NOT used — it would clone the existing
         /// team material and cut its link to the shared one.</summary>
-        private void AddXRaySlot(Renderer renderer, Material shared)
+        private void AddXRaySlot(Renderer renderer, Material shared, float intensity)
         {
             if (renderer == null)
             {
@@ -323,6 +327,8 @@ namespace VortexArena.Core.Arena
 
             var ghost = new Material(shared) { name = shared.name + " (runtime)" };
             CopyTeamColor(_materialScratch.Count > 0 ? _materialScratch[0] : null, ghost);
+            ghost.SetFloat(AlphaId, ghost.GetFloat(AlphaId) * intensity);
+            ghost.SetFloat(OverlayStrengthId, ghost.GetFloat(OverlayStrengthId) * intensity);
 
             _materialScratch.Add(ghost);
             renderer.sharedMaterials = _materialScratch.ToArray();

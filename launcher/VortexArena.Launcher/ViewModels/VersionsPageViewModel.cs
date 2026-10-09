@@ -23,6 +23,9 @@ public sealed class VersionsPageViewModel : PageViewModel
 
     private const int ListRetryTicks = 30;
 
+    /// <summary>A platform-tools folder copied in later is picked up without a restart.</summary>
+    private const int AdbRetryTicks = 5;
+
     private readonly Dictionary<int, VersionRowViewModel> _rowsByVersion = [];
     private readonly RelayCommand _refreshCommand;
 
@@ -161,10 +164,11 @@ public sealed class VersionsPageViewModel : PageViewModel
         // The APK list does not depend on adb: a headset-less PC must still show what is published.
         if (_tick == 1) await RefreshListAsync().ConfigureAwait(true);
 
-        if (!_adbReady && _adbError.Length == 0)
+        if (!_adbReady && (_adbError.Length == 0 || _tick % AdbRetryTicks == 0))
         {
             var error = await Context.Adb.EnsureReadyAsync(CancellationToken.None).ConfigureAwait(true);
-            if (error is null) _adbReady = true; else _adbError = error;
+            _adbReady = error is null;
+            _adbError = error ?? "";
             OnPropertyChanged(nameof(DeviceStateText));
         }
 

@@ -26,7 +26,7 @@ public sealed class MoleMode : IGameMode
     /// <summary>How long a mole stays up and hittable. ⚠️ The client's rise animation plays INSIDE this
     /// window (§10.5): an animation longer than the window would still show a mole the server has
     /// already taken down.</summary>
-    private const float MoleUpSeconds = 3.5f;
+    private const float MoleUpSeconds = 4.5f;
 
     /// <summary>Gap between pop ATTEMPTS at density 1; an attempt is skipped while the cap is full.</summary>
     /// <remarks>⚠️ THIS is what fills the field, not the cap: a mole stands for

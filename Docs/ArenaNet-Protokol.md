@@ -38,7 +38,7 @@ Tümü paylaşılan `ArenaProtocol` statik sınıfında tanımlanır (`Assets/_S
 | `OBJECT_GRAB_CONFIRM_SECONDS` | `1.0` | İyimser kavramanın (`object_grab`) kendisini sahip + `Held` gösteren bir `object_state` ile onaylanması için istemcinin beklediği süre (§10.10). Dolunca yerel kavrama geri alınır: sessiz red (elde olan obje, eski sunucu) başka hiçbir mesajla gelmez; süre olmasaydı el, objeyi hiç tutmadığı hâlde dolu kalırdı |
 | `OBJECT_MAX_ENTRIES_PER_PACKET` | `16` | Tek `0x05` datagramının obje bölümüne yazılan en fazla girdi (§6.8). 8 + 16×34 + 16×12 = 744 B bütçeye sığar ama olay bölümü aynı bütçeyi paylaşır — gerçek kapı yine boyut kapısıdır (`COMBINED_MAX_BYTES`); bu sayı `objectCount`'un `u8` olmasının tavanı ve bir emniyettir |
 | `PLAYER_NUMBER_MIN` / `PLAYER_NUMBER_MAX` | `1` / `99` | Forma numarası aralığı (§2). `0` = atanmamış ve aralığın dışındadır. Numara **tüm kayıtlı cihazlar** arasında benzersizdir |
-| `CALIB_MODE_TWO_ANCHOR` / `CALIB_MODE_SAVED_ANCHOR` / `CALIB_MODE_ANCHOR_CLOUD` | `"two_anchor"` / `"saved_anchor"` / `"anchor_cloud"` | Kalibre modunun geçerli değerleri (§5.2/§10.6). Sunucu açılış varsayılanı `two_anchor`. ⚠️ `anchor_cloud` **rezervdir** — sunucu kabul etmez, loglayıp durumu değiştirmez; bilinmeyen/boş değer de aynı şekilde reddedilir (sessizce varsayılana düşmez: mod bir operatör kararıdır, tahmin edilmez) |
+| `CALIB_MODE_TWO_ANCHOR` / `CALIB_MODE_SAVED_ANCHOR` / `CALIB_MODE_ANCHOR_CLOUD` | `"two_anchor"` / `"saved_anchor"` / `"anchor_cloud"` | Kalibre modunun geçerli değerleri (§5.2/§10.6). Sunucu açılış varsayılanı `saved_anchor`. ⚠️ `anchor_cloud` **rezervdir** — sunucu kabul etmez, loglayıp durumu değiştirmez; bilinmeyen/boş değer de aynı şekilde reddedilir (sessizce varsayılana düşmez: mod bir operatör kararıdır, tahmin edilmez) |
 | `CALIB_FLOOR_WARN_METERS` | `0.5` | Kalibrasyonda bildirilen zemin sapmasının (`set_calibration.floorOffset`) mutlak değeri bunu aşarsa sunucu adminlere duyuru basar (§10.6). Bir kapı değil **teşhis eşiğidir**: kalibrasyon yine kabul edilir, operatör gözlükte alan verisi temizliğine yönlendirilir |
 | `MAX_FLOOR_INDEX` | `7` | Bir oyuncunun bildirebileceği en yüksek kat indeksi (`set_floor`, §10.6 "Kat modeli"). Kat sayısı haritanın verisidir, sunucu onu bilmez; bu yüzden sabit bir **aralık kapısıdır**, harita başına doğrulama değil — bozuk bir istemci roster'a anlamsız bir kat yazamasın |
 | `FLOOR_CONFIRM_SECONDS` | `1` sn | İstemcinin gönderdiği `set_floor`'un kendi roster satırında yankılanmasını bekleme süresi (§10.6 "Kat modeli"). Dolarsa yerel kat geri alınır: tek doğruluk kaynağı roster'dır, yoksa istemci kendini reddedilmiş bir katta sanır ve herkes onu başka katta çizer |
@@ -252,7 +252,7 @@ dizileri türün sözleşmesidir, protokol içeriklerini yorumlamaz.
 
 **`revive_request`** `{ "type":"revive_request" }` — ölü oyuncu, `respawn.delaySeconds` dolduktan **ve** modun canlanma şartını sağladıktan (taban bölgesine girme ya da sabit durma) sonra gönderir; sunucu koşulları doğrulayıp canlandırır (§10.4). Free-roam'da **yatay ışınlanma yoktur; kat geçişi yalnız dikey sanal ofsettir** (bkz. §10.6 "Kat modeli"), bu yüzden canlanma bir **konum değişimi değil, durum değişimidir**.
 
-**`set_calibration`** `{ "type":"set_calibration", "calibrated":true, "source":"manual", "floorOffset":0.07, "error":"" }` (yalnız player) — başlık **kendi** hizalama durumunu bildirir (§10.6). `source` ∈ `"manual"` (kumandada elle: A basılıyken B'ye çift basış) · `"anchor"` (kayıtlı `OVRSpatialAnchor`'dan geri yükleme) · `"session"` (oturum içi hizalama kaydından geri yükleme: çapa yokken ya da yüklenemezken harita değişimi ve operatörün yeniden yüklemesi — §10.6; telde hiçbir şey değişmez, **sürüm artmaz**) · `"dev"` (yalnız editör build'inin ürettiği etiket: dev hizalama, fiziksel hizalama yoktur — sunucu doğrulamaz, davranışı `manual` ile aynıdır) · `"cloud"` (ileride: paylaşılan uzamsal anchor). **`source` doğrulanmaz**, yalnız kaydedilip roster'da yayılır — `weaponId` gibi serbest etikettir, yeni bir kaynak eklemek sunucuda iş çıkarmaz. `calibrated:false` de gönderilebilir (başlık kendi hizalamasını geçersiz kıldıysa).
+**`set_calibration`** `{ "type":"set_calibration", "calibrated":true, "source":"manual", "floorOffset":0.07, "error":"" }` (yalnız player) — başlık **kendi** hizalama durumunu bildirir (§10.6). `source` ∈ `"manual"` (kumandada elle: A basılıyken B'ye basış) · `"anchor"` (kayıtlı `OVRSpatialAnchor`'dan geri yükleme) · `"session"` (oturum içi hizalama kaydından geri yükleme: çapa yokken ya da yüklenemezken harita değişimi ve operatörün yeniden yüklemesi — §10.6; telde hiçbir şey değişmez, **sürüm artmaz**) · `"dev"` (yalnız editör build'inin ürettiği etiket: dev hizalama, fiziksel hizalama yoktur — sunucu doğrulamaz, davranışı `manual` ile aynıdır) · `"cloud"` (ileride: paylaşılan uzamsal anchor). **`source` doğrulanmaz**, yalnız kaydedilip roster'da yayılır — `weaponId` gibi serbest etikettir, yeni bir kaynak eklemek sunucuda iş çıkarmaz. `calibrated:false` de gönderilebilir (başlık kendi hizalamasını geçersiz kıldıysa).
 
 `floorOffset` = elle kalibrasyonda kumanda ucunun, kayıtlı çapadan geri yüklemede çapanın
 **tracking-yerel yüksekliği** (metre, **işaretli**): sistemin zemin tahmininin gerçek zeminden
@@ -370,13 +370,13 @@ dosyasına yazar (`Server/README.md`), başka hiçbir şey okumaz:
 - **`set_calibration_mode`** `{ "type":"set_calibration_mode", "mode":"two_anchor" }` — oyuncu
   başlıklarının **açılışta nasıl hizalanacağı** (§10.6). `set_friendly_fire` ile aynı sınıftadır:
   **anlık bir komuttur**, `set_selection`'a binmez, seçim kilidine girmez ve koşan maçta da
-  değiştirilebilir. Değer sunucuda yaşar (açılışta `CALIB_MODE_TWO_ANCHOR`) ve `admin_state` ile
+  değiştirilebilir. Değer sunucuda yaşar (açılışta `CALIB_MODE_SAVED_ANCHOR`) ve `admin_state` ile
   tüm adminlere yayılır.
 
   | `mode` | Anlam |
   |---|---|
   | `"two_anchor"` | Oyuncu her uygulama açılışında elle 2 çapa kalibrasyonu alır; diskteki çapa UUID'si **hiç okunmaz** |
-  | `"saved_anchor"` | Başlık açılışta kayıtlı `OVRSpatialAnchor`'dan hizalamayı geri yükler |
+  | `"saved_anchor"` | Başlık açılışta kayıtlı `OVRSpatialAnchor`'dan hizalamayı geri yükler — **sunucu varsayılanı** |
   | `"anchor_cloud"` | **Rezerve** — sunucu KABUL ETMEZ (loglar, durum değişmez); arayüzde de pasiftir |
 
   ⚠️ **Bilinmeyen/boş değer REDDEDİLİR** (loglanır, durum değişmez) — kural değerlerinin
@@ -440,7 +440,7 @@ Sunucu, `role != "admin"` bağlantıdan gelen admin komutunu loglayıp yok sayar
 **`welcome`** — hello yanıtı:
 ```json
 { "type":"welcome", "protocolVersion":3, "playerId":3, "udpToken":123456789,
-  "calibrationMode":"two_anchor",
+  "calibrationMode":"saved_anchor",
   "match": { "phase":"paused", "phaseReason":"lobby", "modeId":"lobby", "modeState":"",
              "sceneName":"<Lobi>", "sceneElapsed":137.4, "bodySeed":1740352119,
              "timeRemaining":0, "scoreRed":0, "scoreBlue":0,
@@ -673,7 +673,7 @@ yeniden yüklemeyi dener** ve sonucu bildirir (§10.6): başarıda normal bir
 { "type":"admin_state", "modeId":"tdm", "sceneName":"<Arena>",
   "venueId":"<Mekan>", "venueScenes":["<Arena>","<Arena2>","<Lobi>"],
   "roundSeconds":600, "scoreLimit":30, "countdownSeconds":10, "friendlyFire":false,
-  "calibrationMode":"two_anchor",
+  "calibrationMode":"saved_anchor",
   "notice":"Ofis-PC: harita -> <Arena>", "adminCount":2 }
 ```
 - Gönderim anları: admin `hello` yanıtında (welcome'dan hemen sonra, geç katılan admin senkron başlasın), her `set_selection`'da, her admin komutunda (`start_match`/`abort_match`/`pause_match`/`resume_match`/`mode_continue`/`return_to_lobby`/`kick`/`set_team`/`set_friendly_fire`/`set_calibration_mode`), oyuncunun bildirdiği
@@ -1053,9 +1053,12 @@ Alanlar §6.4 ile birebir aynı; `seq` **taşınmaz** (sunucu kopyayı zaten ay�
 
 ⚠️ **Elde bir AĞ NESNESİ varsa bu bayt `0` kalır** (§10.10): o objeyi uzak taraf `object_state`'ten
 gelen kendi örneğiyle çizer. Baytı da doldurmak aynı elde iki obje çizdirir — biri ağ nesnesi, biri
-katalogdan üretilmiş kopya. **Parmaklar yine kavrama kaydından gelir** ama yolu bu bayt değildir:
-alıcının elinde objenin **kendi örneği** vardır ve kavrama kaydını o örnek taşır. Aynı bilgiyi hem
-bayta hem obje durumuna koymak iki doğruluk kaynağı olurdu ve ikisi gecikmede ayrışırdı.
+katalogdan üretilmiş kopya. **Çizilen el (parmaklar + bilek) yine kavrama kaydıyla objeye oturur**
+ama yolu bu bayt değildir: alıcının elinde objenin **kendi örneği** vardır ve kavrama kaydını o örnek
+taşır — "kim, hangi elle" bilgisi `object_state.owner` + `OBJECT_FLAG_HELD_RIGHT`'tan gelir (§10.10).
+Aynı bilgiyi hem bayta hem obje durumuna koymak iki doğruluk kaynağı olurdu ve ikisi gecikmede
+ayrışırdı. ⚠️ El objeye oturtulmazsa obje doğru yerde, el ise gövde takibinin bileğinde kalır ve
+uzak ekranda obje **elden kaymış** görünür — silahtaki "eşya elin ilerisinde" belirtisinin aynısı.
 
 ⚠️ Bu yüzden **`WorldSingle` bir eşyaya `netItemId` VERİLMEZ** ve editör bekçisi onu kimlik ararken
 atlar: sözleşme gereği hiç gönderilmeyecek bir sayı, kataloğa da erişilemeyecek bir satır yazardı.
@@ -1077,7 +1080,7 @@ Eşleme tablosu Unity tarafındadır (`ItemDefinition.netItemId`, katalog `NetIt
 
 **Duruş telde gitmez.** Eşyanın ele göre duruşu her istemcinin **kendi APK'sındaki** eşya verisinden gelir: el başına yazılmış kavrama kaydından (`ItemGripPose` — **kumanda anchor'ının** eşyaya göre yerel KONUMU; ⚠️ **kaydın bu yarısında DÖNÜŞ YOKTUR**, eşyayı hiçbir elin dönüşü çevirmez. Kaydın el yarısı — el modelinin kumanda üstündeki yerleşimi ve parmak rigi — yalnız **yerel görseldir**, eşyanın duruşuna girmez). Kayıt telde giden el pozuyla **aynı uzaydadır**, yani `ItemGripSolver` onu doğrudan okur (`ItemDefinition.PrimaryGripPosition`); ön kabza kaydı (`secondaryGrip`) hem ikinci elin GÖRSELİNİN yapışacağı yeri söyler hem de iki elli nişanın eksenini tanımlar. **İki uç aynı çözücüyü koşar**, dolayısıyla iki elle tutulan eşyada ikinci elin telden gelen **KONUMU** da çözüme girer (`FLAG_GRIP_LINKED` + o elin pozu; uzak uçta nişan ağırlığı sabit 1'dir, yumuşatma zaten telin interpolasyonundan gelir) — eşya ikinci ele doğru KAYMAZ, yalnız ekseni oraya döner ve o elin DÖNÜŞÜ hiçbir yoldan hesaba girmez. ⚠️ **Kavrama kaydı tel formatını DEĞİŞTİRMEZ:** iki uç aynı `WD_*`'ı okur ve arada çevrilecek bir şey yoktur — rig'i olmayan izleyici (admin) de eşyayı oyuncuyla birebir aynı çizer. Ön koşulu **kanonik kavramadır**: her eşyanın eline denk gelen noktası sabittir (serbest kavrama = keyfi ofset = uzak tarafta yanlış duruş). Aynı sebeple namlu yönü de telde gitmez — `muzzle` çocuğu prefabdadır.
 
-⚠️ **Uzak uçta eşyanın KONUMU çizilen bilekten okunur, telden gelen el pozundan değil** (dönüş yine telden gelir). Sebep iki poz kanalının **iki ayrı sensörden** doğmasıdır: `handL`/`handR` kumandanın pozudur, çizilen el ise iskelet blob'undaki **body tracking** bileğidir. İkisinin çakışması ancak modelin kol uzunluğu oyuncununkine eşitse mümkündür — ve bu proje gövde oranlarını **bilerek kalibre etmez** (§10.8: `Calibrate()` blob'un eklem sıkıştırmasını bozardı). Yani model prefab oranlarını taşır: kol uzandıkça (nişan alan oyuncu) modelin eli kumandaya yetişemez ve fark açılır, kol büküldükçe kapanır. Eşya ham el pozunda bırakılırsa aynı oyuncu bazı duruşlarda silahı elinde, bazılarında havada tutuyor görünür. Konumu çizilen bileğe bağlamak bu farkı **tanım gereği** sıfırlar ve takım gövdesinin ayrı kol uzunluğunu da kendiliğinden kapsar. ⚠️ **Dönüş çizilen bileğe TAŞINMAZ:** kavrama kumanda anchor'ı çerçevesinde çözülüyor, humanoid bileğin bind eksenine geçmek tüm silahların duruşunu bir anda geçersiz kılardı — ayrışan şey erişim, yönelim değil.
+⚠️ **Uzak uçta eşya telden gelen el (kumanda) pozundan çözülür, EL eşyaya taşınır — tersi değil.** İki poz kanalı **iki ayrı sensörden** doğar: `handL`/`handR` kumandanın pozudur, çizilen el ise iskelet blob'undaki **body tracking** bileğidir. İkisi ancak modelin kol uzunluğu oyuncununkine eşitse çakışır — ve bu proje gövde oranlarını **bilerek kalibre etmez** (§10.8: `Calibrate()` blob'un eklem sıkıştırmasını bozardı); kol uzandıkça fark açılır. Bu farkı alıcı kapatır: eşya tutan elin kolu IK ile kavrama kaydının bileğine çözülür (`RemoteHandPoser`), takım gövdesi de aynı kemik rotasyonlarını kopyaladığı için kendiliğinden kapsanır. ⚠️ **Eşya çizilen bileğe TAŞINMAZ:** iki retarget bileği kumandalarına simetrik değildir (sol/sağ farkı doğar) ve eşya oyuncunun nişan aldığı yerden kayar. Bu bağın tetiği eşya baytı ya da — bayt `0` iken — elde tutulan ağ nesnesidir (yukarıda); bağ kurulmayan elde eşya doğru yerde, el ondan kopuk çizilir.
 
 ⚠️ **Bu, poz kanalının otoritesini değiştirmez:** atış yönü, `hit_report` ve hedef çözümü hâlâ ham el pozundan gelir (§6.4/§10.3). Ham poz **fiziksel ölçümdür** ve orada doğru olan odur; bilek yalnız **çizimin** referansıdır.
 
@@ -2358,7 +2361,7 @@ hasar açılırdı — bu sistemin önlemek için var olduğu durumun ta kendisi
 ⚠️ **Sıfırlama KOŞULSUZDUR: oyuncunun hangi aşamada olduğuna bakılmaz.** Koşulsuzluk iki kipte de
 geçerlidir. `clear_calibration` sunucudaki boole'yi `false` yapmakla kalmaz, hedef başlığa **komut
 olarak** iletilir (§5.2/§5.3) ve başlık her hâlükârda iki şeyi siler: hizalamayı ve **elle
-kalibrasyon sekansının ara durumunu** (alınmış A noktası, beklenen B, çift basış sayacı). Oyuncu
+kalibrasyon sekansının ara durumunu** (alınmış A noktası, beklenen B). Oyuncu
 hiçbir ara aşamada bırakılmaz; sekansa baştan başlar.
 
 **Kayıtlı çapanın akıbetini `keepSaved` belirler** (§5.2) ve iki kip arasındaki tek fark budur:
@@ -2410,7 +2413,7 @@ tuş basışı **eski A noktasıyla** kalibrasyonu tamamlayabilir.
 **İstemci tarafı** (protokolün zorunlu kıldığı değil, beklenen davranış): kalibresizken tetik
 kilitlenir, **eldeki silah alınır ve yenisi alınamaz**, uzak avatar **hayalete döner** (yarı
 saydam, turuncu nabız) ve vuruş kutuları kapanır, kumandada elle kalibrasyon
-(A basılıyken B'ye çift basış) **açılır**. Kalibreli durumdayken bu jest **kilitlidir** — oyuncu
+(A basılıyken B'ye basış) **açılır**. Kalibreli durumdayken bu jest **kilitlidir** — oyuncu
 kendi hizalamasını kazara bozamaz,
 kapıyı yalnız operatör açar.
 
@@ -2450,8 +2453,8 @@ koyabilmesi ve parlayan avatarın hareket ettiğini görebilmesi için pozun ak�
 hizalanacağını seçer; değer sunucuda yaşar ve `welcome.calibrationMode` ile taşınır (§5.3).
 
 ⚠️ **Modun kapıladığı TEK şey, uygulama açılışındaki diskten çapa geri yüklemesidir.**
-`saved_anchor` bugünkü davranıştır (başlık kayıtlı `OVRSpatialAnchor` UUID'sini okur ve hizalamayı
-geri yükler); `two_anchor`'da o UUID **hiç okunmaz**, oyuncu her açılışta elle 2 çapa kalibrasyonu
+`saved_anchor` (sunucu varsayılanı) başlığın kayıtlı `OVRSpatialAnchor` UUID'sini okuyup hizalamayı
+geri yüklemesidir; `two_anchor`'da o UUID **hiç okunmaz**, oyuncu her açılışta elle 2 çapa kalibrasyonu
 alır. **HARİTA DEĞİŞİMİNDEKİ geri yükleme moddan bağımsız koşar** (tek istisnası operatörün
 geçersiz kılmasıdır: `clear_calibration` sonrasında otomatik geri yükleme kapalıdır, yukarı bak) —
 o, oturum içinde

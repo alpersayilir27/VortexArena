@@ -4,10 +4,11 @@ Bu klasörün içeriği **`scripts/deploy-*.bat` tarafından üretilir ve git'e 
 (`.gitignore`). Elle dosya koymayın; bir sonraki deploy siler (`player/` silinmez, orada sürümlü
 APK'lar birikir).
 
-**Sahaya olduğu gibi taşınan paket `deploy\launcher\`'dır**: launcher'ın tek exe'si ve yanında dört
-klasör. Launcher kendi klasörünü kök sayar (`launcher/README.md`). `deploy-launcher.bat` klasörleri
-boş açar; `deploy\server\` ve `deploy\admin\` çıktıları paketin `server\` ve `admin\` klasörlerine
-kopyalanır. Betik yeniden koşunca yalnız exe yenilenir, klasörlerin içeriği korunur.
+**Sahaya olduğu gibi taşınan paket `deploy\launcher\`'dır**: launcher'ın tek exe'si, yanında dört
+klasör ve `platform-tools\` (adb). Launcher kendi klasörünü kök sayar (`launcher/README.md`).
+`deploy-launcher.bat` dört klasörü boş açar ve `platform-tools\`'u repo kökünden kopyalar;
+`deploy\server\` ve `deploy\admin\` çıktıları paketin `server\` ve `admin\` klasörlerine kopyalanır.
+Betik yeniden koşunca exe ve `platform-tools\` yenilenir, dört klasörün içeriği korunur.
 
 ```
 deploy\launcher\VortexArena.Launcher.exe
@@ -15,6 +16,7 @@ deploy\launcher\server\VortexArena.Server.App.exe   (+ config\, logs\)
 deploy\launcher\admin\VortexArena.exe
 deploy\launcher\game_versions\   (indirilen APK'lar)
 deploy\launcher\replays\         (maç kayıtları)
+deploy\launcher\platform-tools\  (adb; repo kökündeki platform-tools\'tan)
 ```
 
 | Çıktı | Üreten | İçerik | Nasıl çalıştırılır |
@@ -22,7 +24,7 @@ deploy\launcher\replays\         (maç kayıtları)
 | `admin/` | `scripts/deploy-admin-game.bat` | Unity Windows yönetim build'i (`VortexArena.exe` + `VortexArena_Data/`) | **Launcher başlatır** — elle çalıştırılırsa sunucu adresi olmaz |
 | `player/` | `scripts/deploy-player-apk.bat` | Unity Android oyuncu build'leri (`game_v<sürüm>.apk` + `install_game.bat`) — sürümler yan yana durur, klasör build'de silinmez | Gözlüğe kurulur — `install_game.bat` (adb) bulduğu sürümleri listeler, hangisinin kurulacağını sorar |
 | `server/` | `scripts/deploy-server.bat` | Self-contained .NET 10 sunucu (`VortexArena.Server.App.exe` + `config/`) | **Launcher başlatır** (mekanı `--venue` ile geçer) ya da elle çift tıkla |
-| `launcher/` | `scripts/deploy-launcher.bat` | **Saha paketi**: operatör launcher'ı **tek dosya** `VortexArena.Launcher.exe` (self-contained .NET 10 WPF, `adb` gömülü) + `server/` · `admin/` · `game_versions/` · `replays/` (betik boş açar, içeriğe dokunmaz) | Operatör çift tıklar; sunucuyu, yönetimi, APK kurulumunu ve maç kaydını buradan yönetir |
+| `launcher/` | `scripts/deploy-launcher.bat` | **Saha paketi**: operatör launcher'ı **tek dosya** `VortexArena.Launcher.exe` (self-contained .NET 10 WPF) + `server/` · `admin/` · `game_versions/` · `replays/` (betik boş açar, içeriğe dokunmaz) + `platform-tools/` (adb, repodan her koşuda yenilenir) | Operatör çift tıklar; sunucuyu, yönetimi, APK kurulumunu ve maç kaydını buradan yönetir |
 | `updater/` | `scripts/deploy_android_updater.bat` | Quest OTA updater (`VortexUpdater.apk` + `install_updater.bat`) | Gözlüğe **bir kez** kurulur — `install_updater.bat` (adb); sonrası USB'siz: oyun APK'sı IIS'ten indirilip kurulur (`updater/README.md`) |
 
 ## İşletmeye kurulum sırası
@@ -30,7 +32,7 @@ deploy\launcher\replays\         (maç kayıtları)
 1. `scripts\deploy-launcher.bat`, `scripts\deploy-server.bat`, `scripts\deploy-admin-game.bat` →
    `deploy\server\` içeriğini `deploy\launcher\server\`'a, `deploy\admin\` içeriğini
    `deploy\launcher\admin\`'e kopyala → `deploy\launcher\` klasörünü **tamamıyla** operatör PC'sine
-   taşı. Exe'ler tek başına çalışmaz; launcher exe'si dört klasörün yanında durmalıdır.
+   taşı. Exe'ler tek başına çalışmaz; launcher exe'si paketteki klasörlerin yanında durmalıdır.
    Launcher sunucuyu kendi makinesinden kontrol eder, ikisi **aynı PC'dedir**.
 2. O PC'de bir kez: `server\firewall-kur.cmd` → sağ tık → **yönetici olarak çalıştır**.
 3. `scripts\deploy-player-apk.bat` (sürüm numarasını sorar) → gözlükleri USB ile bağla (geliştirici

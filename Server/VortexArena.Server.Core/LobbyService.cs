@@ -63,7 +63,7 @@ public sealed class LobbyService
     /// <summary>Calibration mode (§5.2/§10.6) — <b>effective state, not a selection</b>: same class
     /// as friendly fire, it bypasses the selection lock and can change during a running match. Read
     /// and written only under <c>_selectionGate</c> (same lock as the other shared fields).</summary>
-    private string _calibrationMode = ArenaProtocol.CALIB_MODE_TWO_ANCHOR;
+    private string _calibrationMode = ArenaProtocol.CALIB_MODE_SAVED_ANCHOR;
 
     /// <summary>Match recording (§12); <see cref="MatchRecorder.Disabled"/> when unwired.</summary>
     private readonly MatchRecorder _recorder;

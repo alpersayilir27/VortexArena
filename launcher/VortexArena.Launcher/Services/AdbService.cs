@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using System.IO;
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -32,65 +31,25 @@ public sealed record AdbResult(int ExitCode, string StdOut, string StdErr, bool 
 }
 
 /// <summary>
-/// adb wrapper. The platform-tools binaries ship INSIDE the launcher exe (embedded resources) and
-/// are unpacked on first use, so no operator ever installs the Android SDK.
-/// <para>⚠️ Unpack folder is keyed by a content hash: a running adb server keeps <c>adb.exe</c>
-/// locked, so a new build must land in a NEW folder instead of overwriting the busy file.</para>
+/// adb wrapper. adb runs from the package's <c>platform-tools\</c> folder, so no operator ever
+/// installs the Android SDK.
 /// <para>⚠️ The adb server is never killed on exit — other tools on the PC may be using it.</para>
 /// </summary>
-public sealed class AdbService
+public sealed class AdbService(string adbExe)
 {
     public static readonly TimeSpan ShortTimeout = TimeSpan.FromSeconds(10);
 
     /// <summary>Installing a ~1 GB APK over USB takes minutes.</summary>
     public static readonly TimeSpan InstallTimeout = TimeSpan.FromMinutes(5);
 
-    /// <summary>Logical names of the embedded platform-tools files (csproj keeps them in sync).</summary>
-    private static readonly string[] Resources =
-    [
-        "PlatformTools/adb.exe",
-        "PlatformTools/AdbWinApi.dll",
-        "PlatformTools/AdbWinUsbApi.dll",
-        "PlatformTools/libwinpthread-1.dll",
-        "PlatformTools/NOTICE.txt",
-        "PlatformTools/source.properties",
-    ];
-
     private static readonly Regex PackageLine = new(
         @"^package:com\.vortex\.arenav(\d+)$", RegexOptions.Compiled);
 
-    private readonly SemaphoreSlim _extractLock = new(1, 1);
-    private string? _adbPath;
-
-    /// <summary>Full path of the unpacked adb; null until <see cref="EnsureReadyAsync"/> succeeded.</summary>
-    public string? AdbPath => _adbPath;
-
-    /// <summary>Unpacks adb and starts its server. Returns the operator-facing error, or null.</summary>
+    /// <summary>Checks adb is in place and starts its server. Returns the operator-facing error, or null.</summary>
     public async Task<string?> EnsureReadyAsync(CancellationToken ct)
     {
-        if (_adbPath is not null) return null;
-
-        await _extractLock.WaitAsync(ct).ConfigureAwait(false);
-        try
-        {
-            if (_adbPath is not null) return null;
-
-            string path;
-            try
-            {
-                path = await Task.Run(Extract, ct).ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                return $"adb başlatılamadı: {ex.Message}";
-            }
-
-            _adbPath = path;
-        }
-        finally
-        {
-            _extractLock.Release();
-        }
+        if (!File.Exists(adbExe))
+            return $"adb yok. platform-tools klasörünü şuraya koyun: {Path.GetDirectoryName(adbExe)}";
 
         var start = await RunAsync(["start-server"], ShortTimeout, ct).ConfigureAwait(false);
         if (start.TimedOut) return "adb başlatılamadı: start-server zaman aşımına uğradı.";
@@ -128,11 +87,9 @@ public sealed class AdbService
     public async Task<AdbResult> RunAsync(
         IReadOnlyList<string> arguments, TimeSpan timeout, CancellationToken ct)
     {
-        if (_adbPath is null) return new AdbResult(-1, "", "adb hazır değil.", false);
-
         var info = new ProcessStartInfo
         {
-            FileName = _adbPath,
+            FileName = adbExe,
             UseShellExecute = false,
             CreateNoWindow = true,
             RedirectStandardOutput = true,
@@ -190,41 +147,6 @@ public sealed class AdbService
         {
             // Already gone.
         }
-    }
-
-    // ------------------------------------------------------------------- unpacking
-
-    private static string Extract()
-    {
-        var assembly = typeof(AdbService).Assembly;
-        var stamp = HashResource(assembly, Resources[0]);
-        var target = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "VortexArena", "launcher", "platform-tools", stamp);
-
-        Directory.CreateDirectory(target);
-
-        foreach (var resource in Resources)
-        {
-            using var source = assembly.GetManifestResourceStream(resource)
-                ?? throw new FileNotFoundException($"Gömülü adb dosyası yok: {resource}");
-
-            var file = Path.Combine(target, resource[(resource.LastIndexOf('/') + 1)..]);
-            if (File.Exists(file) && new FileInfo(file).Length == source.Length) continue;
-
-            using var output = new FileStream(file, FileMode.Create, FileAccess.Write, FileShare.None);
-            source.CopyTo(output);
-        }
-
-        return Path.Combine(target, "adb.exe");
-    }
-
-    private static string HashResource(System.Reflection.Assembly assembly, string resource)
-    {
-        using var stream = assembly.GetManifestResourceStream(resource)
-            ?? throw new FileNotFoundException($"Gömülü adb dosyası yok: {resource}");
-
-        return Convert.ToHexString(SHA256.HashData(stream))[..12].ToLowerInvariant();
     }
 
     // --------------------------------------------------------------------- parsers

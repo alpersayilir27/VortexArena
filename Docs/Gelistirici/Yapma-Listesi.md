@@ -379,10 +379,12 @@ Aynı sebeple prefabı `Resources/` klasöründen **çıkarma**: sahneye konmuyo
 
 Prefablarda bilerek boştur; davranış çalışırken koddan bağlanır (`WireButtons` / `Initialize`).
 Geri çağrıların çoğu **koşulludur** — `AT`'ın iki adımlı onayı, `SIFIRLA`'nın kısa basış/basılı
-tutma ayrımı, maç sürerken kilitlenen mod/harita satırları, faza göre komut değiştiren
+tutma ayrımı, kalibrasyon bölümündeki `2 ÇAPA`'nın 3 sn basılı tutma kapısı, maç sürerken
+kilitlenen mod/harita satırları, faza göre komut değiştiren
 DURAKLAT/DEVAM. Inspector'dan eklenen kalıcı bir kayıt bu koşulları **atlar**: oyuncu kartındaki
 `AT` düğmesi "EMİN?" adımını geçip doğrudan atardı, `SIFIRLA` ise basış süresine bakmadan hem
-yumuşak sıfırlamayı hem kayıt silmeyi gönderirdi.
+yumuşak sıfırlamayı hem kayıt silmeyi gönderirdi, `2 ÇAPA` da tek tıkla kalibre modunu
+değiştirirdi.
 
 Ayrıca hedef statik değildir — satır her `Bind`'da başka bir oyuncuya bağlanır; kalıcı bir kayıt
 yanlış oyuncuya komut gönderir.
@@ -436,7 +438,7 @@ değil, herkesin arenanın her yerinde canlanmasıdır.
 Şeridin Renderer'ında **`Dynamic Occlusion` kapalıdır** (`VA_BaseZone` prefabında böyle gelir) ve
 şerit **`Occludee Static` işaretlenmez**. Occlusion bake'li sahnede duvarın ardında kalan renderer
 **bütünüyle** elenir; duvar-arkası çizim (x-ray) aynı renderer'ın ikinci slotu olduğu için onunla
-gider ve ölen oyuncu canlanma noktasını göremez. Bake'siz sahnede hiçbir belirti çıkmaz — hata
+gider ve oyuncu tabanını duvar arkasından göremez. Bake'siz sahnede hiçbir belirti çıkmaz — hata
 ancak o haritaya occlusion bake alındığında görünür. `BaseZoneVisibility` slotu eklerken
 `Dynamic Occlusion`'ı kendisi de kapatır; static işaretli şeridi kurtaramaz (o, bake verisine
 girmiştir).

@@ -474,11 +474,25 @@ kbd { display: inline-grid; place-items: center; min-width: 22px; height: 22px; 
 .dcard small { display: flex; align-items: center; gap: 16px; color: var(--text); font: 600 14px/1 var(--fx); letter-spacing: .5em; opacity: .8; }
 .dcard small::before, .dcard small::after { content: ''; width: 90px; height: 2px; background: linear-gradient(90deg, transparent, rgb(var(--k))); }
 .dcard small::after { transform: scaleX(-1); }
-.dcard b { padding: 0 20px; background: linear-gradient(180deg, #fff 28%, rgb(var(--k)) 92%); -webkit-background-clip: text; background-clip: text; color: transparent; font: 800 120px/1.1 var(--fd); letter-spacing: .01em; transform: skewX(-7deg); filter: drop-shadow(0 0 24px rgba(var(--k), .55)); } /* 1.1: Ö/Ü noktaları kutunun dışında kalıp text-clip ile kesilmesin */
+.dcard b { padding: 0 20px; background: linear-gradient(180deg, #fff 28%, rgb(var(--k)) 92%); -webkit-background-clip: text; background-clip: text; color: transparent; font: 800 144px/1.1 var(--fd); letter-spacing: .01em; transform: skewX(-7deg); filter: drop-shadow(0 0 24px rgba(var(--k), .55)); } /* 1.1: Ö/Ü noktaları kutunun dışında kalıp text-clip ile kesilmesin */
 .dline { color: var(--text); font: 600 22px/1.2 var(--fx); letter-spacing: .02em; text-align: center; }
 .dline .red { color: var(--red-ink); }
 .dline .blue { color: var(--blue-ink); }
 .dline .ic { width: 22px; height: 22px; vertical-align: -4px; margin-right: 4px; }
+
+/* kalibrasyon kartı (CalibrationOverlay): dünya uzayında 0,0006 ölçek, 1,2 m önde, göz hizasının
+   biraz altında; her şeyin üstüne çizilir, yani duvar/karartma/vinyet onu örtemez.
+   .ccol konumu ve 1,6x büyütmeyi taşır (.vhud deseni), kart ile ipucu plakası akışta durur. */
+.ccol { position: absolute; left: 50%; top: 520px; display: flex; flex-direction: column; align-items: center; gap: 12px; transform: translateX(-50%) scale(1.6); transform-origin: 50% 0; }
+.ccard { --k: 255, 197, 61; --c: 14px; --bd: linear-gradient(180deg, rgba(var(--k), .65), rgba(170, 205, 255, .14)); --bg: linear-gradient(180deg, #141424, #080A1A); width: 720px; height: 124px; box-shadow: inset 0 -3px 0 rgb(var(--k)); }
+.ccard.ok { --k: 62, 230, 160; }
+.ccard .cstripes { position: absolute; inset: 0 0 0 -38px; background: repeating-linear-gradient(-55deg, rgba(255, 255, 255, .035) 0 10px, transparent 10px 30px); animation: drift 4s linear infinite; --dx: 36.62px; pointer-events: none; }
+.ccard small { position: absolute; left: 50%; top: 18px; transform: translateX(-50%); display: flex; align-items: center; gap: 16px; color: var(--text); font: 600 14px/1 var(--fx); letter-spacing: .5em; opacity: .8; white-space: nowrap; }
+.ccard small::before, .ccard small::after { content: ''; width: 90px; height: 2px; background: linear-gradient(90deg, transparent, rgb(var(--k))); }
+.ccard small::after { transform: scaleX(-1); }
+.ccard .crow { position: absolute; left: 50%; top: 76px; transform: translate(-50%, -50%); display: flex; align-items: center; gap: 12px; color: rgb(var(--k)); font: 700 40px/1 var(--fd); white-space: nowrap; }
+.ccard .crow .ic { width: 34px; height: 34px; }
+.chint { --c: 6px; --bd: rgba(255, 197, 61, .45); --bg: linear-gradient(180deg, rgba(22, 32, 60, .97), rgba(8, 12, 24, .97)); display: inline-flex; align-items: center; justify-content: center; height: 40px; padding: 0 16px; max-width: 720px; color: var(--warn); font: 600 20px/1 var(--fx); letter-spacing: .02em; white-space: nowrap; }
 
 /* durum çeşitleri sayfası: parçaları düz zeminde yan yana gösterir */
 .vgrid { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 36px 48px; padding: 36px 48px; zoom: 1.4; }

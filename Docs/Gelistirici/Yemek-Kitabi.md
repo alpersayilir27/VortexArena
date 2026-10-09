@@ -624,7 +624,8 @@ Ayarlanabilir bir "silah dönüşü" alanı da yoktur.
 Parmaklar telde gitmez (`Docs/ArenaNet-Protokol.md` §6.9), yani uzak avatarın parmakları
 **sentezlenir**: eşya tutan elde **o slot için riglediğin duruş** (`WD_*`'ta yazılı olan), boş elde
 `RemoteAvatar.prefab` → `idleHandPose` (boşsa `HandPoseProfile.Idle`). Yani stüdyoda riglediğin
-duruş yalnız senin elini değil, herkesin gördüğü eli de sürer.
+duruş yalnız senin elini değil, herkesin gördüğü eli de sürer — elle tutulan dünya objesinde de
+(§11.5): bayt gitmese de uzak el, objenin kendi kavrama kaydıyla ona oturur.
 
 ⚠️ **Uzaktaki el KABACA çizilir ve bu bilinçlidir.** Uzak avatarın eli humanoid (Mixamo) bir
 rig'dir; ISDK eklem dönüşleri ona doğrudan yazılamaz (iki iskeletin kemik eksenleri aynı değil).

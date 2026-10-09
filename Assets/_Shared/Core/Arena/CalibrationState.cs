@@ -54,7 +54,13 @@ namespace VortexArena.Core.Arena
         /// when never connected, so server-less tests keep working.</summary>
         public static bool IsCalibrated => !_hasEverConnected || _serverCalibrated;
 
-        /// <summary>Is the MANUAL controller gesture (hold A, double-tap B) open. Closed while
+        /// <summary>Player-facing reading for the calibration prompt: <see cref="IsCalibrated"/> OR
+        /// this headset's own alignment. ⚠️ Gameplay gates stay on <see cref="IsCalibrated"/>; this
+        /// only keeps the prompt from flashing while the server flag lags (reconnect resets it on
+        /// <c>hello</c>, the B tap waits for the <c>lobby_state</c> echo).</summary>
+        public static bool AppearsCalibrated => IsCalibrated || _localCalibrated;
+
+        /// <summary>Is the MANUAL controller gesture (hold A, tap B) open. Closed while
         /// calibrated so the player cannot break their own alignment by accident — only the operator
         /// reopens it (§10.6).</summary>
         public static bool ManualAllowed => !_hasEverConnected || !_serverCalibrated;
@@ -269,9 +275,9 @@ namespace VortexArena.Core.Arena
 
             Debug.Log(keepSaved
                 ? "[CalibrationState] Operatör hizalamayı geçersiz kıldı — cihazdaki kayıt duruyor, " +
-                  "yeniden yüklenebilir ya da elle kalibre edilebilir (A basılıyken B×2)."
+                  "yeniden yüklenebilir ya da elle kalibre edilebilir (A basılıyken B)."
                 : "[CalibrationState] Operatör kalibrasyonu sıfırladı ve cihaz kaydını sildi — " +
-                  "yeniden kalibre edin (A basılıyken B×2).");
+                  "yeniden kalibre edin (A basılıyken B).");
             Raise();
         }
 

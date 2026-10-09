@@ -7,7 +7,7 @@ kaydını açıp kapatır.
 ## Yerleşim — kök, exe'nin klasörüdür
 
 Launcher ayarlardan yol sormaz; her şeyi **kök klasöre** göre bulur. Dağıtım paketi
-`deploy\launcher\`'dır: tek exe ve yanında dört klasör, sahaya olduğu gibi taşınır:
+`deploy\launcher\`'dır: tek exe, yanında dört klasör ve `platform-tools\`; sahaya olduğu gibi taşınır:
 
 ```
 <kök>\VortexArena.Launcher.exe
@@ -15,6 +15,7 @@ Launcher ayarlardan yol sormaz; her şeyi **kök klasöre** göre bulur. Dağıt
 <kök>\admin\VortexArena.exe
 <kök>\game_versions\game_v<N>.apk
 <kök>\replays\*.vxr
+<kök>\platform-tools\adb.exe              (+ dll'ler; deploy betiği doldurur)
 ```
 
 Kök çözüm sırası:
@@ -91,17 +92,23 @@ Liste satırları uzak ∪ yerel ∪ gözlükte kurulu sürümlerin birleşimidi
 sunucusunda görünmeyen (ya da liste o an alınamayan) sürüm **üstü çizili bulut** ikonuyla işaretlenir.
 Liste alınamazsa sayfanın üstünde uyarı bandı çıkar ve 30 saniyede bir yeniden denenir.
 
-## adb gömülüdür
+## adb paketteki `platform-tools\`'tan çalışır
 
-`platform-tools` dosyaları (`adb.exe`, `AdbWinApi.dll`, `AdbWinUsbApi.dll`,
-`libwinpthread-1.dll`, `NOTICE.txt`, `source.properties`) exe'nin içine **EmbeddedResource** olarak
-girer ve çalışma anında
-`%LOCALAPPDATA%\VortexArena\launcher\platform-tools\<içerik özeti>\` altına çıkarılır. Klasör adının
-içerik özeti olmasının sebebi: çalışan bir adb sunucusu `adb.exe`'yi kilitler, yeni sürüm aynı
-dosyanın üstüne yazamaz.
+Launcher adb'yi kökteki `platform-tools\adb.exe`'den çalıştırır; operatör Android SDK kurmaz.
+Kaynağı repo kökündeki `platform-tools/`'dur (`adb.exe`, `AdbWinApi.dll`, `AdbWinUsbApi.dll`,
+`libwinpthread-1.dll`, `NOTICE.txt`, `source.properties`); `scripts\deploy-launcher.bat` onu her
+koşuda pakete aynalar. adb exe'ye **gömülmez**: repoda tek kopya durur ve paketteki klasör launcher'ın
+gerçekten kullandığı kopyadır. adb sürümünü yükseltmek = repo kökündeki dosyaları değiştirmek.
 
-Android platform-tools **Apache License 2.0** altındadır; `NOTICE.txt` çıkarılan klasöre birlikte
-yazılır. Launcher kapanırken `adb kill-server` **yapılmaz** — makinedeki başka araçlar aynı sunucuyu
+- Klasör yoksa *Versiyonlar* sayfası nereye konacağını yazar; kopyalanan klasör launcher yeniden
+  açılmadan görülür. Launcher açılışta bu klasörü **oluşturmaz** — boş bir `platform-tools\` işe yaramaz.
+- Çalışan adb sunucusu `adb.exe`'yi kilitler: betik kopyalamadan önce yalnız paketin
+  `platform-tools\` klasöründen başlamış adb'yi kapatır; sonraki adb çağrısı onu yeniden başlatır.
+- `.exe`/`.dll` Git LFS'tedir. LFS çekilmemiş klonda `adb.exe` ~130 baytlık işaretçidir ve ancak
+  sahada ilk gözlük takılınca patlar; betik bunu görüp durur (`git lfs pull`).
+
+Android platform-tools **Apache License 2.0** altındadır; `NOTICE.txt` klasörle birlikte dağıtılır.
+Launcher kapanırken `adb kill-server` **yapılmaz** — makinedeki başka araçlar aynı sunucuyu
 kullanıyor olabilir.
 
 ## Ayarlar
@@ -137,7 +144,7 @@ yok sayılır.
 | `Services/` | `LauncherPaths`, `LauncherSettings`, `VenueCatalog`, `ServerController`, `ServerStatusClient`, `AdminController`, `LogTailer`, `AdbService`, `VersionSource`, `VersionCatalog`, `ReplayLibrary`, `GamePackage` |
 | `Infrastructure/` | Elle yazılmış MVVM parçaları (`ObservableObject`, `RelayCommand`), dönüştürücüler, tek örnek kilidi, Win32 çağrıları |
 | `Theme/Dark.xaml` · `Theme/Icons.xaml` | Palet + kontrol şablonları; ikon geometrileri |
-| `PlatformTools/` | Gömülen adb dosyaları |
+| `../../platform-tools/` | Pakete kopyalanan adb dosyaları (repo kökü) |
 | `../VortexArena.Launcher.Tests/` | Argüman sözleşmesi, `maps.json`/sürüm listesi/`adb` çıktısı ayrıştırma, birleştirme ve rozet kararı testleri |
 
 > **Argüman adları sözleşmedir.** `--server-ip`/`--server-port`/`--replay` Unity'deki `AppBoot` ile,
@@ -161,9 +168,9 @@ dotnet run --project VortexArena.Launcher          # kök: deploy\launcher\ aran
 ```
 
 Dağıtım: repo kökünden `scripts\deploy-launcher.bat` → `deploy\launcher\VortexArena.Launcher.exe`
-(tek dosya, self-contained) + yanında boş `server\`, `admin\`, `game_versions\`, `replays\`. Betik
-yeniden koşunca yalnız exe'yi yeniler; bu dört klasörün içeriğine dokunmaz, klasördeki diğer her
-şeyi (eski çıktı) siler. Betik tek dosya anahtarını `-p:VortexSingleFile=true` ile açar;
+(tek dosya, self-contained) + yanında boş `server\`, `admin\`, `game_versions\`, `replays\` ve
+repodan aynalanan `platform-tools\`. Betik yeniden koşunca exe'yi ve `platform-tools\`'u yeniler;
+dört klasörün içeriğine dokunmaz, klasördeki diğer her şeyi (eski çıktı) siler. Betik tek dosya anahtarını `-p:VortexSingleFile=true` ile açar;
 `RuntimeIdentifier`/`SelfContained` csproj'da **koşulludur**, çünkü RID'siz test projesi
 RID'li self-contained bir projeye referans veremez.
 

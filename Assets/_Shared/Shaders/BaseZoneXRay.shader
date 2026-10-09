@@ -1,4 +1,5 @@
-// Dead player's emphasis slot on their own base strip (added by BaseZoneVisibility).
+// Through-wall slot on the local player's own base strip (added by BaseZoneVisibility; it scales
+// _Alpha/_OverlayStrength down while the player is alive).
 //
 // Pass 1 (ZTest Greater): ghost visible only where other geometry is IN FRONT of the strip.
 // Pass 2 (ZTest LEqual, additive): brightens the directly visible strip — "dead = stronger".

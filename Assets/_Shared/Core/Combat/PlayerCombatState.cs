@@ -403,8 +403,8 @@ namespace VortexArena.Core.Combat
             // so telling them to run to their base would be a wasted trip.
             if (!CalibrationState.IsCalibrated)
             {
-                text = "Kalibrasyon gerekli — sağ kumandada A basılıyken B×2";
-                kind = CombatStatusKind.Calibration;
+                // Line stays EMPTY: the always-on-top calibration card (App CalibrationOverlay)
+                // owns this message; a copy here would duplicate it.
             }
             else if (!string.IsNullOrEmpty(_modePrompt))
             {

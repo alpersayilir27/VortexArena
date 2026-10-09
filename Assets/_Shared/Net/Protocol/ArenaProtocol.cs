@@ -62,11 +62,12 @@ namespace VortexArena.Protocol
         // silently fall back to a default.
 
         /// <summary>Manual 2-anchor calibration on every app start; the saved anchor UUID is never
-        /// read. Server default. ⚠️ The mode gates STARTUP restore only — the in-session restore on map
-        /// change always runs (§10.6).</summary>
+        /// read. ⚠️ The mode gates STARTUP restore only — the in-session restore on map change always
+        /// runs (§10.6).</summary>
         public const string CALIB_MODE_TWO_ANCHOR = "two_anchor";
 
-        /// <summary>Headset restores alignment from the saved <c>OVRSpatialAnchor</c> on start.</summary>
+        /// <summary>Headset restores alignment from the saved <c>OVRSpatialAnchor</c> on start.
+        /// Server default.</summary>
         public const string CALIB_MODE_SAVED_ANCHOR = "saved_anchor";
 
         /// <summary>Shared spatial anchor — <b>reserved</b>. The server REJECTS it; the UI shows it

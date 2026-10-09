@@ -66,8 +66,21 @@
   </div>
 </div></div>
 
+<p class="vcap"><b>Kalibrasyon kartı</b> — her şeyin önünde durur (HUD, öldün ekranı, duvar karartması, alan dışı) ve lobide de arenada da çizilir. Üç durumu var: uyarı · ilk nokta alındı · başarı (2 sn, ipucu plakası yok).</p>
+<div class="frame"><div class="stage">
+  <div class="vr"><div class="ph top">VR görüş alanı — yer tutucu</div></div>
+  <div class="ccol">
+    <section class="ccard vp">
+      <div class="cstripes"></div>
+      <small>KALİBRASYON</small>
+      <div class="crow"><i data-ic="warn"></i>Lütfen kalibre alınız</div>
+    </section>
+    <div class="chint vp">Sağ kumandada A basılıyken B'ye bas</div>
+  </div>
+</div></div>
+
 <p class="vcap"><b>Durum çeşitleri</b> — can seviyeleri, koddaki bütün durum satırları, tur sonucu tonları ve öldün kartı satırları. Takımsız modda (FFA) skor bandı gizlenir, şeritte yalnız can kalır.</p>
-<div class="frame"><div class="stage" data-h="1320" style="background:#070B16">
+<div class="frame"><div class="stage" data-h="2160" style="background:#070B16">
   <div class="vgrid">
     <div class="g"><h4>Can</h4>
       <div class="hpbar vp"><span class="lab"><i data-ic="heart"></i>CAN</span><div class="hp"><i style="width:100%"></i></div><b class="val">100</b></div>
@@ -77,7 +90,6 @@
       <div class="hpbar vp bad"><span class="lab"><i data-ic="heart"></i>CAN</span><div class="hp bad"><i style="width:0%"></i></div><b class="val">0</b></div>
     </div>
     <div class="g"><h4>Durum satırı (PlayerCombatState.StatusText)</h4>
-      <div class="vstat vp"><i data-ic="warn"></i>Kalibrasyon gerekli — sağ kumandada A basılıyken B×2</div>
       <div class="vstat vp"><i data-ic="timer"></i>Öldün! Canlanmaya 4 sn</div>
       <div class="vstat vp"><i data-ic="skull"></i>Öldün — tur bitene kadar bekle</div>
       <div class="vstat vp"><i data-ic="warn"></i>Engelden çık ve canlan</div>
@@ -85,6 +97,25 @@
       <div class="vstat vp"><i data-ic="refresh"></i>Canlanılıyor...</div>
       <div class="vstat vp"><i data-ic="home"></i>Tabanına dön ve canlan</div>
       <div class="vstat vp"><i data-ic="shield"></i>Yeniden doğma koruması — hasar almıyorsun</div>
+    </div>
+    <div class="g"><h4>Kalibrasyon kartı (CalibrationOverlay)</h4>
+      <section class="ccard vp">
+        <div class="cstripes"></div>
+        <small>KALİBRASYON</small>
+        <div class="crow"><i data-ic="warn"></i>Lütfen kalibre alınız</div>
+      </section>
+      <div class="chint vp">Sağ kumandada A basılıyken B'ye bas</div>
+      <section class="ccard vp">
+        <div class="cstripes"></div>
+        <small>KALİBRASYON</small>
+        <div class="crow"><i data-ic="timer"></i>1. kalibre alındı. 2.si bekleniyor</div>
+      </section>
+      <div class="chint vp">İkinci işarette A basılıyken B'ye bas</div>
+      <section class="ccard vp ok">
+        <div class="cstripes"></div>
+        <small>KALİBRASYON</small>
+        <div class="crow"><i data-ic="check"></i>Kalibre başarıyla alındı</div>
+      </section>
     </div>
     <div class="g"><h4>Tur sonucu bandı</h4>
       <div class="rres vp">TUR KAZANILDI</div>

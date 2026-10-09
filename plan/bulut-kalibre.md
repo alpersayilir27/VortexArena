@@ -21,7 +21,7 @@ Bu işin kabul şartıdır; her madde koda yazılırken tek tek tutulur.
 - **`ArenaCalibrator`'da mevcut satıra dokunan yalnız üç yer vardır**, üçü de bulut oturumu boşken
   etkisizdir: `Start`'taki dal, `RaiseCalibrated`'daki "bulut dışı hizalama bulut oturumunu
   düşürür" satırı, `RealignFromAnchor`'ın bildirdiği kaynak etiketi. Gerisi yeni metottur.
-- **Her bulut hatası bugünkü "kalibre değil" hâline düşer:** elle A basılıyken B×2 bulut modunda
+- **Her bulut hatası bugünkü "kalibre değil" hâline düşer:** elle A basılıyken B bulut modunda
   da açıktır; operatör modu `two_anchor`'a çevirince başka hiçbir adım gerekmez.
 - **Build genelinde değişen tek şey** `sharedAnchorSupport` proje ayarıdır (APK'ya isteğe bağlı
   `IMPORT_EXPORT_IOT_MAP_DATA` izni ekler). Doğrulamada `two_anchor` modunda açılışta yeni bir
@@ -58,7 +58,7 @@ Bunlar iş bitince `Docs/Isletme-Kurulum.md`'ye işlenir.
 ## 2. Akış
 
 1. Operatör modu **ÇAPA BULUTU** yapar (`set_calibration_mode{anchor_cloud}`).
-2. Bir gözlük elle A/B×2 ile kalibre edilir. Operatör o oyuncuyu seçip **KAYNAK YAP** der
+2. Bir gözlük elle A basılıyken B ile kalibre edilir. Operatör o oyuncuyu seçip **KAYNAK YAP** der
    (`share_calibration{playerId}`).
 3. Sunucu yeni bir grup UUID'si üretir, kaynağa `share_calibration{groupUuid}` yollar.
 4. Kaynak, kayıtlı `worldAnchor`'ını gruba paylaşır ve sonucu bildirir
@@ -101,7 +101,7 @@ Bunlar iş bitince `Docs/Isletme-Kurulum.md`'ye işlenir.
   yanındaki `cloud-calibration.json` (`VenueSurveyStore` yazma deseni: temp → `.prev` → taşı).
   Hatada kayıt değişmez, gerekçe adminlere duyurulur.
 - Kayıt açılışta okunur; `venueId` sunucununkiyle uyuşmuyorsa yok sayılır (çapa mekâna aittir).
-  ⚠️ Mod kalıcılaştırılmaz — sunucu bugünkü gibi `two_anchor` ile açılır; kayıt durduğu için
+  ⚠️ Mod kalıcılaştırılmaz — sunucu bugünkü gibi varsayılan moduyla (`saved_anchor`) açılır; kayıt durduğu için
   yeniden paylaşım gerekmez, operatör yalnız modu yeniden seçer.
 - `HandleHelloAsync`: mod `anchor_cloud` + kayıt varsa oyuncuya `welcome` sonrası
   `load_cloud_calibration{force:false}`.

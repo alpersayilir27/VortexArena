@@ -39,16 +39,7 @@
     <Compile Include="..\..\Assets\_Shared\Net\Protocol\LauncherApi.cs" Link="Protocol\LauncherApi.cs" />
   </ItemGroup>
 
-  <!-- Android platform-tools, embedded so no operator installs the SDK.
-       Unpacked at runtime by AdbService; NOTICE.txt ships with them (Apache 2.0). -->
-  <ItemGroup>
-    <None Remove="PlatformTools\**" />
-    <EmbeddedResource Include="PlatformTools\adb.exe" LogicalName="PlatformTools/adb.exe" />
-    <EmbeddedResource Include="PlatformTools\AdbWinApi.dll" LogicalName="PlatformTools/AdbWinApi.dll" />
-    <EmbeddedResource Include="PlatformTools\AdbWinUsbApi.dll" LogicalName="PlatformTools/AdbWinUsbApi.dll" />
-    <EmbeddedResource Include="PlatformTools\libwinpthread-1.dll" LogicalName="PlatformTools/libwinpthread-1.dll" />
-    <EmbeddedResource Include="PlatformTools\NOTICE.txt" LogicalName="PlatformTools/NOTICE.txt" />
-    <EmbeddedResource Include="PlatformTools\source.properties" LogicalName="PlatformTools/source.properties" />
-  </ItemGroup>
+  <!-- adb is NOT embedded: it runs from the package's platform-tools\ folder, which
+       scripts\deploy-launcher.bat copies from the repo root (launcher\README.md). -->
 
 </Project>

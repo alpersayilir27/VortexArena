@@ -9,7 +9,7 @@ using VortexArena.Protocol;
 namespace VortexArena.Core.Arena
 {
     /// <summary>Two-point calibration aligning the virtual arena with the physical play space. Hold A on the
-    /// right controller and double-tap B with the controller TIP on a floor mark: the first capture
+    /// right controller and tap B once with the controller TIP on a floor mark: the first capture
     /// lights anchor_a, the second lights anchor_b and moves the rig so both virtual markers land on
     /// their physical marks. The pose persists as an OVRSpatialAnchor and is restored next session;
     /// repeating the gesture after a completed calibration starts over.
@@ -74,8 +74,6 @@ namespace VortexArena.Core.Arena
         [SerializeField] private float uncalibratedHeadHeight = 1.8f;
 
         [Header("Capture")]
-        [Tooltip("A basılı tutulurken B'ye iki kez basmak için tanınan süre (saniye). İki basış arası bundan uzunsa ikinci basış yeni bir sekansın ilki sayılır.")]
-        [SerializeField] private float doubleTapSeconds = 1f;
         [Tooltip("Yakalanan noktanın kumanda pivotunun kaç metre ALTINDA olduğu (dünya -Y). " +
                  "İzlenen pivot kumandanın gövdesinin içindedir; uç zemine değdiğinde pivot bu " +
                  "kadar yukarıda kalır. ⚠️ Kumandanın yerel ekseninde DEĞİL dünya ekseninde " +
@@ -158,6 +156,13 @@ namespace VortexArena.Core.Arena
         /// does not depend on this.</summary>
         public static event Action<string> Calibrated;
 
+        /// <summary>A manual sequence has captured A and waits for B. Static so the player HUD
+        /// outlives scene calibrators.</summary>
+        public static bool AwaitingPointB { get; private set; }
+
+        /// <summary>Raised on the main thread when <see cref="AwaitingPointB"/> changes.</summary>
+        public static event Action<bool> AwaitingPointBChanged;
+
         /// <summary>Bumped on every rig alignment. An alignment legitimately teleports root, hands
         /// and body in one frame, so continuity guards (e.g. the root-jump clamp in
         /// <c>ArenaNetCharacterBehaviour</c>) read this and drop their stored reference.</summary>
@@ -207,8 +212,6 @@ namespace VortexArena.Core.Arena
         private OVRSpatialAnchor worldAnchor;
         private Vector3 capturedA;
         private int capturedCount;
-        private int pendingBTaps;
-        private float firstBTapTime;
         private bool waitingForRelease;
         private bool manualCalibrationStarted;
 
@@ -313,6 +316,8 @@ namespace VortexArena.Core.Arena
             // SetFloorLift would shift the rig by a stale delta. Awake runs before the sceneLoaded
             // listeners (FloorState), which drop the floor to 0 on the same load.
             FloorLiftMeters = 0f;
+            // A half-finished sequence dies with its scene: the new calibrator starts at A.
+            SetAwaitingPointB(false);
         }
 
         private void Start()
@@ -484,6 +489,7 @@ namespace VortexArena.Core.Arena
         private void OnDestroy()
         {
             UnhookTrackingEvents();
+            SetAwaitingPointB(false);
         }
 
         private void Update()
@@ -494,8 +500,8 @@ namespace VortexArena.Core.Arena
 
             DevUpdate();
 
-            // Gesture: while A is HELD, tap B twice within doubleTapSeconds. No hold duration —
-            // waiting with the tip on the mark makes the hand shake and the measurement drift.
+            // Gesture: while A is HELD, tap B once. No hold duration — waiting with the tip on the
+            // mark makes the hand shake and the measurement drift.
             bool aHeld = OVRInput.Get(OVRInput.Button.One, Hand);
 
             if (waitingForRelease)
@@ -505,31 +511,12 @@ namespace VortexArena.Core.Arena
                 return;
             }
 
-            // A released → drop the half-finished sequence; taps only count while A is held.
-            if (!aHeld)
-            {
-                pendingBTaps = 0;
+            // B only counts while A is held — a lone B is free for gameplay.
+            if (!aHeld || !OVRInput.GetDown(OVRInput.Button.Two, Hand))
                 return;
-            }
-
-            if (pendingBTaps > 0 && Time.time - firstBTapTime > doubleTapSeconds)
-                pendingBTaps = 0;
-
-            if (!OVRInput.GetDown(OVRInput.Button.Two, Hand))
-                return;
-
-            if (pendingBTaps == 0)
-            {
-                pendingBTaps = 1;
-                firstBTapTime = Time.time;
-                return;
-            }
-
-            pendingBTaps = 0;
 
             // §10.6: manual calibration is CLOSED while calibrated; only the operator reopens it.
-            // Never swallowed silently (long pulse + log). Checked at the END of the sequence — B is
-            // used for other things in game and a single tap would false-alarm.
+            // Never swallowed silently (long pulse + log).
             if (!CalibrationState.ManualAllowed)
             {
                 waitingForRelease = true;
@@ -593,6 +580,7 @@ namespace VortexArena.Core.Arena
                 manualCalibrationStarted = true;
                 capturedA = point;
                 capturedCount = 1;
+                SetAwaitingPointB(true);
                 if (anchorA != null) anchorA.SetActive(true);
                 StartCoroutine(Pulse(1, PointAPulseSeconds));
                 Debug.Log($"ArenaCalibrator: 1/2 — A yakalandı, fiziksel {point} " +
@@ -1033,7 +1021,7 @@ namespace VortexArena.Core.Arena
         /// <see cref="PurgeSavedAnchor"/>. ⚠️ The rig is NOT moved — free-roam keeps the player
         /// physically where they are.
         /// <para>⚠️ Every intermediate state goes too, so a clear never strands the player midway:
-        /// a captured A point with pending taps, the held gesture
+        /// a captured A point, the held gesture
         /// (<see cref="waitingForRelease"/>), and an in-flight restore
         /// (<see cref="restoreAborted"/>) that would otherwise realign the arena later.</para></summary>
         public void Invalidate(bool keepSavedAnchor)
@@ -1076,9 +1064,8 @@ namespace VortexArena.Core.Arena
 
         /// <summary>SOFT half of a clear: completed alignment AND any half-finished sequence. Leaves the
         /// device record to <see cref="PurgeSavedAnchor"/>.
-        /// <para>⚠️ Intermediate state must go: clearing only <see cref="capturedCount"/> leaves
-        /// <see cref="capturedA"/> and the pending tap counter alive, so one B tap after the clear
-        /// could complete a calibration from the PRE-clear A point (§10.6).</para>
+        /// <para>⚠️ Intermediate state must go: a surviving half-finished sequence (A captured) lets
+        /// one B tap after the clear complete a calibration from the PRE-clear A point (§10.6).</para>
         /// <para>⚠️ The <see cref="worldAnchor"/> binding is released (device anchor kept):
         /// <see cref="HandleTrackingDisturbed"/> realigns from that field, so keeping it would undo
         /// a soft clear on the first tracking event.</para>
@@ -1089,8 +1076,7 @@ namespace VortexArena.Core.Arena
             DevAlignmentReplaced();
             capturedCount = 0;
             capturedA = Vector3.zero;
-            pendingBTaps = 0;
-            firstBTapTime = 0f;
+            SetAwaitingPointB(false);
             manualCalibrationStarted = false;
             if (markerHideRoutine != null)
             {
@@ -1231,7 +1217,16 @@ namespace VortexArena.Core.Arena
         private static void RaiseCalibrated(string source)
         {
             autoRestoreBlocked = false;
+            SetAwaitingPointB(false);
             Calibrated?.Invoke(source);
+        }
+
+        private static void SetAwaitingPointB(bool value)
+        {
+            if (AwaitingPointB == value)
+                return;
+            AwaitingPointB = value;
+            AwaitingPointBChanged?.Invoke(value);
         }
 
         /// <summary>Reference pose of the CURRENT alignment in world space: the floor point under
@@ -1586,7 +1581,7 @@ namespace VortexArena.Core.Arena
             Debug.LogWarning(
                 $"ArenaCalibrator: kayıtlı kalibrasyon {RestoreAttempts} denemede geri " +
                 $"yüklenemedi (son durum: {(string.IsNullOrEmpty(lastRestoreStatus) ? "?" : lastRestoreStatus)}) " +
-                "— sağ kumandada A basılıyken B'ye çift basarak ELLE kalibre edin " +
+                "— sağ kumandada A basılıyken B'ye basarak ELLE kalibre edin " +
                 "(o ana dek gönderilen " +
                 "pozlar arena ile örtüşmez).",
                 this);

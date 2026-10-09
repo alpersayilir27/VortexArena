@@ -8,7 +8,8 @@ namespace VortexArena.App.Admin
     /// <summary>
     /// Press DURATION gate on a <see cref="Button"/>: a tap sends one command, a long press a
     /// heavier one. The single calibration-reset button uses it — tap voids the current alignment,
-    /// holding also wipes the anchor saved on the headset (§10.6).
+    /// holding also wipes the anchor saved on the headset (§10.6). The 2 ÇAPA calibration-mode
+    /// button uses it hold-only (null tap, no progress painted).
     /// <para>⚠️ <b>Attached at RUNTIME</b> (<see cref="Attach"/>), never placed in a prefab: the
     /// same button exists in four row/panel prefabs and a component added by hand would be
     /// forgotten in one of them — a reset that silently never wipes.</para>

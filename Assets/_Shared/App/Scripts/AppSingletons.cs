@@ -66,8 +66,8 @@ namespace VortexArena.App
 
         /// <summary>
         /// Singletons of a server-connected session: connection/loading/match-result cards,
-        /// kick shutdown, scene routing, admin spectator, log relay, venue survey gesture + transition
-        /// fade (player only).
+        /// kick shutdown, scene routing, admin spectator, log relay, venue survey gesture +
+        /// transition fade + calibration card (player only).
         /// </summary>
         private static void InstallNetworkSingletons()
         {
@@ -85,6 +85,7 @@ namespace VortexArena.App
             {
                 Survey.VenueSurveyGesture.Install();
                 SceneTransitionFade.Install();
+                CalibrationOverlay.Install();
             }
         }
     }

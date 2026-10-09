@@ -3,15 +3,16 @@
 Dört bileşenin her biri kendi betiğiyle `deploy/` altına üretilir. Betikler **idempotent**:
 hedef klasörü silip yeniden yazarlar. İki istisna: `deploy\player\` sürümlü APK'lar yan yana
 durduğu için silinmez (yalnız aynı adlı dosya üzerine yazılır); `deploy\launcher\` saha paketidir:
-publish başarılı olunca exe yenilenir, `server\` · `admin\` · `game_versions\` · `replays\`
-klasörleri (yoksa boş açılır) ve içerikleri **korunur**, klasördeki diğer her şey silinir.
+publish başarılı olunca exe yenilenir, `platform-tools\` repo kökünden aynalanır, `server\` ·
+`admin\` · `game_versions\` · `replays\` klasörleri (yoksa boş açılır) ve içerikleri **korunur**,
+klasördeki diğer her şey silinir.
 
 | Betik | Kaynak | Çıktı | Ön koşul |
 |---|---|---|---|
 | `deploy-admin-game.bat` | Unity projesi (`Assets/`) | `deploy\admin\VortexArena.exe` | Unity Editor kapalı (betik zorlamaz) |
 | `deploy-player-apk.bat` | Unity projesi (`Assets/`) | `deploy\player\game_v<sürüm>.apk` + `install_game.bat`; sonda APK sunucudaki yayın ucuna POST'lanır (`updater_uploader/` — uç kapalıysa yalnız uyarı, build başarılı sayılır) | Unity Editor kapalı + **Android Build Support** modülü; başlangıçta sunucudaki yayınlanmış sürümler listelenir ve sürüm numarası sorulur |
 | `deploy-server.bat` | `Server/VortexArena.Server.App` | `deploy\server\VortexArena.Server.App.exe` | .NET 10 SDK |
-| `deploy-launcher.bat` | `launcher/VortexArena.Launcher` (WPF) | `deploy\launcher\VortexArena.Launcher.exe` (tek dosya, self-contained; `adb` içinde) + boş `server\` · `admin\` · `game_versions\` · `replays\` | .NET 10 SDK (çalışan launcher'ı betik kendisi kapatır) |
+| `deploy-launcher.bat` | `launcher/VortexArena.Launcher` (WPF) | `deploy\launcher\VortexArena.Launcher.exe` (tek dosya, self-contained) + boş `server\` · `admin\` · `game_versions\` · `replays\` + repo kökünden `platform-tools\` (adb) | .NET 10 SDK + çekilmiş Git LFS (çalışan launcher'ı ve paketin adb'sini betik kendisi kapatır) |
 | `deploy_android_updater.bat` | `updater/` (Kotlin Android) | `deploy\updater\VortexUpdater.apk` + `install_updater.bat` | Unity'nin **Android Build Support** modülü (JDK/Gradle oradan — editör açık olabilir, Unity başlatılmaz); Android SDK'sı `%LOCALAPPDATA%\VortexUpdaterSdk` köküne ilk koşuda iner → ilk koşu internet ister |
 | `docs-setup.bat` | — | `..\vortexarena-docs-site\` (repo DIŞI) | Node 22+, git, internet (yalnız kurulumda) |
 | `defender-exclusions.cmd` | `defender-exclusions.ps1` | Windows Defender dışlama listesi | **Yönetici** + Defender'ın etkin olması |

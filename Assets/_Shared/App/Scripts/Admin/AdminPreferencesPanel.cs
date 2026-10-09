@@ -136,12 +136,18 @@ namespace VortexArena.App.Admin
         // command like friendly fire, not under the selection lock.
         // ⚠️ THREE separate buttons, not prev/next: the third option is visible but disabled, and a
         // cycling cursor would skip it, hiding its existence.
-        [Tooltip("Başlıklar açılışta İKİ ÇAPA ile elle kalibre edilsin (sunucu varsayılanı): " +
-                 "diskteki kayıtlı çapa OKUNMAZ. Anlık komut, tüm adminlere yayılır.")]
+        [Tooltip("Başlıklar açılışta İKİ ÇAPA ile elle kalibre edilsin: diskteki kayıtlı çapa " +
+                 "OKUNMAZ. Tek tık bir şey yapmaz; 3 sn basılı tutunca seçilir. Anlık komut, tüm " +
+                 "adminlere yayılır.")]
         [SerializeField] private Button _calibModeTwoButton;
 
-        [Tooltip("Başlıklar açılışta cihazda KAYITLI çapadan hizalansın — oyuncu her seansta " +
-                 "yeniden kalibre etmez. Zemin işaretleri yerinden oynamadıysa kullanılır.")]
+        /// <summary>Hold (s) that selects 2 ÇAPA. ⚠️ No tap action and no hold feedback on purpose:
+        /// the option must not be picked by a stray click.</summary>
+        private const float CalibModeTwoHoldSeconds = 3f;
+
+        [Tooltip("Başlıklar açılışta cihazda KAYITLI çapadan hizalansın (sunucu varsayılanı) — " +
+                 "oyuncu her seansta yeniden kalibre etmez. Zemin işaretleri yerinden oynamadıysa " +
+                 "kullanılır.")]
         [SerializeField] private Button _calibModeSavedButton;
 
         [Tooltip("Paylaşılan uzamsal çapa — REZERVE. Düğme hiçbir komut göndermez ve pasiftir; " +
@@ -342,7 +348,10 @@ namespace VortexArena.App.Admin
             Wire(_friendlyFireOff, () => AdminCommands.SetFriendlyFire(false));
             Wire(_friendlyFireOn, () => AdminCommands.SetFriendlyFire(true));
 
-            Wire(_calibModeTwoButton, () => AdminCommands.SetCalibrationMode(ArenaProtocol.CALIB_MODE_TWO_ANCHOR));
+            // Hold-only: the tap does nothing, the hold fires at the threshold like a click.
+            HoldButton.Attach(_calibModeTwoButton, null,
+                () => AdminCommands.SetCalibrationMode(ArenaProtocol.CALIB_MODE_TWO_ANCHOR),
+                CalibModeTwoHoldSeconds);
             Wire(_calibModeSavedButton, () => AdminCommands.SetCalibrationMode(ArenaProtocol.CALIB_MODE_SAVED_ANCHOR));
             // ⚠️ _calibModeCloudButton is NOT wired: reserved mode, the server rejects it. A wired
             // but inert button would make the operator think the command went through.
@@ -1613,7 +1622,7 @@ namespace VortexArena.App.Admin
 
         /// <summary>Paints the calibration-mode buttons from the current value (§5.2). Read from the
         /// server, no local cursor: the command is immediate and another operator can change it, so
-        /// "sent" must not be shown as "in effect". An empty value means <c>two_anchor</c> (the
+        /// "sent" must not be shown as "in effect". An empty value means <c>saved_anchor</c> (the
         /// server's startup default).
         /// <para>⚠️ Fields are bound late in the prefab and read null-safely — a missing binding must
         /// not stop the rest of the panel from drawing.</para></summary>
@@ -1622,7 +1631,7 @@ namespace VortexArena.App.Admin
             string mode = AdminSelection.CalibrationMode;
             if (string.IsNullOrEmpty(mode))
             {
-                mode = ArenaProtocol.CALIB_MODE_TWO_ANCHOR;
+                mode = ArenaProtocol.CALIB_MODE_SAVED_ANCHOR;
             }
 
             PaintCalibModeButton(_calibModeTwoButton,

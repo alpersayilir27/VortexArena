@@ -13,7 +13,7 @@ public sealed class LauncherContext : IDisposable
         StatusClient = new ServerStatusClient();
         Server = new ServerController(paths);
         Admin = new AdminController(paths, settings);
-        Adb = new AdbService();
+        Adb = new AdbService(paths.AdbExe);
         Versions = new HttpVersionSource(() => Settings.VersionsUrl, () => Settings.DownloadBaseUrl);
         RefreshControlPort();
     }

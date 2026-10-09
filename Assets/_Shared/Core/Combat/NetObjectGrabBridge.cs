@@ -720,8 +720,14 @@ namespace VortexArena.Core.Combat
 
             // Which hand is bit3 of the object's flags — the only thing that says it (§10.10).
             bool rightHand = _net.HeldByRightHand;
-            Pose palmWorld = ArenaSpace.ArenaToWorld(rightHand ? handR : handL);
+            // Same pivot as the local palm (TryResolvePalm) and RemoteAvatar's items.
+            Pose palmWorld = HandGripPivot.Resolve(ArenaSpace.ArenaToWorld(rightHand ? handR : handL),
+                rightHand);
             ApplyGrip(palmWorld, rightHand);
+
+            // Without this the drawn hand stays at the body-tracked wrist and the object, placed from the
+            // controller pose, reads as slipping out of it (RemoteHandPoser).
+            RemoteWorldHolds.Report(_net.Owner, rightHand, transform, item);
         }
 
         /// <summary>The ONE grip implementation runs on both ends (<see cref="ItemGripSolver"/>) — two

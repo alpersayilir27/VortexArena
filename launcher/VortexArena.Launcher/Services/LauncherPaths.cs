@@ -4,7 +4,7 @@ namespace VortexArena.Launcher.Services;
 
 /// <summary>
 /// The deployment layout, resolved once at startup. Everything the launcher drives lives next to
-/// the exe: <c>server\</c>, <c>admin\</c>, <c>game_versions\</c>, <c>replays\</c>.
+/// the exe: <c>server\</c>, <c>admin\</c>, <c>game_versions\</c>, <c>replays\</c>, <c>platform-tools\</c>.
 /// <para>⚠️ Exe paths are NOT settings. An operator who could point them anywhere could
 /// also point them at a server whose <c>config\maps.json</c> belongs to another business.</para>
 /// </summary>
@@ -50,6 +50,11 @@ public sealed class LauncherPaths
     public string GameVersionsDir => Path.Combine(Root, "game_versions");
 
     public string ReplaysDir => Path.Combine(Root, "replays");
+
+    /// <summary>Android platform-tools; filled by the deploy script, not by the operator.</summary>
+    public string PlatformToolsDir => Path.Combine(Root, "platform-tools");
+
+    public string AdbExe => Path.Combine(PlatformToolsDir, "adb.exe");
 
     public bool ServerExeExists => File.Exists(ServerExe);
 

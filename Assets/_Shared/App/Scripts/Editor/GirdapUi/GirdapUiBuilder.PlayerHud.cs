@@ -48,7 +48,7 @@ namespace VortexArena.App.Editor
 
         // .dcard — 640 wide inside the 900x520 mode canvas
         private const float DeathCardW = 640f;
-        private const float DeathCardH = 302f;
+        private const float DeathCardH = 328f;
         private const float DeathChamfer = 20f;
 
         private static readonly Color PhBdA = Girdap.Rgba(125, 227, 255, 0.55f);
@@ -364,11 +364,11 @@ namespace VortexArena.App.Editor
             ruleRight.rectTransform.anchoredPosition += new Vector2(ruleOffset, 0f);
             ruleRight.Chamfer(0f).Fill(Girdap.Bad, fade, UiGradientMode.Horizontal).Antialias(false);
 
-            // .dcard b — 120 px word, white→red vertex gradient, red halo (CSS skewX(-7deg) skipped:
+            // .dcard b — 144 px word, white→red vertex gradient, red halo (CSS skewX(-7deg) skipped:
             // TMP italic shear comes from the shared font asset, not per text)
-            TextMeshProUGUI word = Text(card, "Title", "ÖLDÜN", GirdapFont.SairaExtraBold, 120f,
+            TextMeshProUGUI word = Text(card, "Title", "ÖLDÜN", GirdapFont.SairaExtraBold, 144f,
                 Color.white, TextAlignmentOptions.Center, 0.01f);
-            PlaceTopCenter(word.rectTransform, 50f, DeathCardW - 40f, 132f);
+            PlaceTopCenter(word.rectTransform, 50f, DeathCardW - 40f, 158f);
             word.enableVertexGradient = true;
             word.colorGradient = new VertexGradient(Color.white, Color.white, Girdap.Bad, Girdap.Bad);
             Color wordHalo = Girdap.Bad;
@@ -378,12 +378,12 @@ namespace VortexArena.App.Editor
             // .dline — killer line; rich text ON for the team-inked name (ModeHudBase wraps it in <noparse>)
             TextMeshProUGUI killer = Text(card, "KillerLine", "", GirdapFont.ChakraSemiBold, 22f,
                 Girdap.Text, TextAlignmentOptions.Center, 0.02f);
-            PlaceTopCenter(killer.rectTransform, 196f, DeathCardW - 40f, 26f);
+            PlaceTopCenter(killer.rectTransform, 222f, DeathCardW - 40f, 26f);
             killer.richText = true;
 
             // .vstat inside the card
             RectTransform status = VhudStatusPlate(card, "StatusFrame");
-            PlaceTopCenter(status, 236f, DeathCardW - 80f, StatusH);
+            PlaceTopCenter(status, 262f, DeathCardW - 80f, StatusH);
 
             SaveAndUnload(root, DeathPrefab);
         }
@@ -459,11 +459,15 @@ namespace VortexArena.App.Editor
         /// <summary>Mole: no health — the band takes the bar's slot, the hit counters sit under it.</summary>
         private static void BindMoleStrip(Transform strip)
         {
+            // Band alone at the top reads small without the health bar above it; scales with its counters.
+            const float scoreScale = 1.3f;
+
             VhudSetActive(strip, "HpBar", false);
             RectTransform score = VhudFind<RectTransform>(strip, "RoundScore");
             if (score != null)
             {
                 PlaceCenter(score, 0f, 0f, StripW, ScoreH);
+                score.localScale = Vector3.one * scoreScale;
             }
 
             const float hitsY = ScoreH * 0.5f + 8f + 12f;
@@ -472,7 +476,8 @@ namespace VortexArena.App.Editor
             RectTransform status = VhudFind<RectTransform>(strip, "Status");
             if (status != null)
             {
-                PlaceCenter(status, 0f, hitsY + 12f + StripGap + StatusH * 0.5f, StripW, StatusH);
+                // hitsY is in the scaled band's space; Status sits in the strip's.
+                PlaceCenter(status, 0f, (hitsY + 12f) * scoreScale + StripGap + StatusH * 0.5f, StripW, StatusH);
             }
         }
 

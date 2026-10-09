@@ -5,9 +5,10 @@ rem  deploy-launcher.bat
 rem  VortexArena.Launcher (WPF, .NET 10) -> single-file exe -> deploy\launcher\
 rem
 rem  deploy\launcher\ is the package: ONE self-contained exe (no .NET
-rem  install on the operator PC, adb inside) next to server\ admin\
-rem  game_versions\ replays\. The folders are created empty and their
-rem  contents survive every rerun.
+rem  install on the operator PC) next to server\ admin\ game_versions\
+rem  replays\. The folders are created empty and their contents survive
+rem  every rerun. platform-tools\ (adb) is mirrored from the repo root
+rem  on every run.
 rem
 rem  Prerequisite: .NET 10 SDK (dotnet on PATH). Nothing else.
 rem
@@ -39,6 +40,7 @@ set "VA_TMP=%VA_ROOT%\.launcher-publish"
 set "VA_OUT=%VA_ROOT%\launcher"
 set "VA_EXE=%VA_OUT%\VortexArena.Launcher.exe"
 set "VA_PROJ=%VA_REPO%\launcher\VortexArena.Launcher\VortexArena.Launcher.csproj"
+set "VA_PT=%VA_REPO%\platform-tools"
 
 echo === VortexArena : launcher publish (tek dosya) ===
 echo   Proje : %VA_PROJ%
@@ -47,6 +49,21 @@ echo.
 
 if not exist "%VA_PROJ%" (
   echo [HATA] Launcher projesi bulunamadi: "%VA_PROJ%"
+  set "VA_RC=1"
+  goto :son
+)
+
+if not exist "%VA_PT%\adb.exe" (
+  echo [HATA] platform-tools bulunamadi: "%VA_PT%\adb.exe"
+  set "VA_RC=1"
+  goto :son
+)
+
+rem  A missing LFS object leaves a ~130-byte pointer that fails only on the
+rem  operator PC, when the first headset is plugged in.
+for %%F in ("%VA_PT%\adb.exe") do if %%~zF lss 1000000 (
+  echo [HATA] "%VA_PT%\adb.exe" Git LFS isaretcisi, gercek dosya degil.
+  echo        Once: git lfs pull
   set "VA_RC=1"
   goto :son
 )
@@ -89,23 +106,24 @@ if not exist "%VA_TMP%\VortexArena.Launcher.exe" (
 
 rem --- Close every running launcher (it locks its own exe) ---------------
 rem  Only after a successful publish, so a failed build leaves it running.
-rem  Only the launcher: a server or admin started from server\ / admin\
-rem  below VA_OUT keeps running, it does not depend on the launcher.
-rem  VA_OUT reaches PowerShell as an environment variable (no quoting).
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$p = @(Get-Process | Where-Object { $_.ProcessName -eq 'VortexArena.Launcher' -or ($_.Path -and [IO.Path]::GetDirectoryName($_.Path) -eq $env:VA_OUT) }); foreach ($x in $p) { Write-Host ('  Kapatiliyor: {0} (PID {1})' -f $x.ProcessName, $x.Id) }; $p | Stop-Process -Force -ErrorAction SilentlyContinue; $p | Wait-Process -Timeout 10 -ErrorAction SilentlyContinue"
+rem  Also the adb server started from the package's platform-tools\ (it
+rem  locks adb.exe; the next adb call restarts it). A server or admin
+rem  started from server\ / admin\ keeps running, it does not depend on
+rem  the launcher. VA_OUT reaches PowerShell as an environment variable.
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$pt = Join-Path $env:VA_OUT 'platform-tools'; $p = @(Get-Process | Where-Object { $_.ProcessName -eq 'VortexArena.Launcher' -or ($_.Path -and [IO.Path]::GetDirectoryName($_.Path) -in @($env:VA_OUT, $pt)) }); foreach ($x in $p) { Write-Host ('  Kapatiliyor: {0} (PID {1})' -f $x.ProcessName, $x.Id) }; $p | Stop-Process -Force -ErrorAction SilentlyContinue; $p | Wait-Process -Timeout 10 -ErrorAction SilentlyContinue"
 
 rem --- Package folder: the exe + the four layout folders ----------------
 rem  server\ admin\ game_versions\ replays\ and their contents are KEPT
-rem  (builds, APKs, recordings); every other top-level entry is stale
-rem  output and goes. Released handles lag a little after a kill, hence
-rem  the retries.
+rem  (builds, APKs, recordings); platform-tools\ is mirrored below;
+rem  every other top-level entry is stale output and goes. Released
+rem  handles lag a little after a kill, hence the retries.
 if not exist "%VA_OUT%" mkdir "%VA_OUT%"
 set "VA_TRY=0"
 :temizle
 del /f /q /a "%VA_OUT%\*" >nul 2>&1
 for /d %%D in ("%VA_OUT%\*") do (
   set "VA_KEEP="
-  for %%K in (server admin game_versions replays) do if /i "%%~nxD"=="%%K" set "VA_KEEP=1"
+  for %%K in (server admin game_versions replays platform-tools) do if /i "%%~nxD"=="%%K" set "VA_KEEP=1"
   if not defined VA_KEEP rmdir /s /q "%%D" 2>nul
 )
 dir /b /a-d "%VA_OUT%" 2>nul | findstr . >nul
@@ -129,6 +147,14 @@ if errorlevel 1 (
   goto :son
 )
 
+rem  /MIR: unchanged files are skipped, removed ones go. Codes 0-7 = ok.
+robocopy "%VA_PT%" "%VA_OUT%\platform-tools" /MIR /R:3 /W:1 /NFL /NDL /NJH /NJS /NP >nul
+if errorlevel 8 (
+  echo [HATA] platform-tools kopyalanamadi: "%VA_OUT%\platform-tools"
+  set "VA_RC=1"
+  goto :son
+)
+
 for %%K in (server admin game_versions replays) do (
   if not exist "%VA_OUT%\%%K" mkdir "%VA_OUT%\%%K"
 )
@@ -146,6 +172,7 @@ echo     %VA_OUT%\server\          (deploy\server icerigini buraya kopyalayin)
 echo     %VA_OUT%\admin\           (deploy\admin icerigini buraya kopyalayin)
 echo     %VA_OUT%\game_versions\   (APK'lar buraya iner)
 echo     %VA_OUT%\replays\         (mac kayitlari)
+echo     %VA_OUT%\platform-tools\  (adb; her calistirmada repodan yenilenir)
 echo.
 echo   Operator ayarlari %%APPDATA%%\VortexArena\launcher\settings.json
 echo   icinde durur; exe yeniden uretilse de ayarlar korunur.
