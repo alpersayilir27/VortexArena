@@ -19,6 +19,7 @@ MonoBehaviour:
   grabPath: 2
   instancing: 0
   releaseMode: 0
+  hideGrabIndicator: 0
   primaryGripRight:
     authored: 1
     position: {x: 0.0507, y: 0.0239, z: 0}
@@ -111,7 +112,6 @@ MonoBehaviour:
     wristAuthored: 0
     wristPosition: {x: 0, y: 0, z: 0}
     wristRotation: {x: 0, y: 0, z: 0, w: 0}
-  secondaryGripRadius: 0.1
   tracerColor: {r: 1, g: 0.85, b: 0.4, a: 0.9}
   tracerWidth: 0.02
   tracerLifetime: 0.1
@@ -119,7 +119,7 @@ MonoBehaviour:
   teamTintChildren: []
   throwableId: bomba
   trigger: 0
-  fuseSeconds: 5
+  fuseSeconds: 3
   holsterRefillSeconds: 3
   throwSpeedScale: 1.2
   maxThrowSpeed: 24
