@@ -307,10 +307,21 @@ harita değişimi kalibrasyonu bozmaz. (Maç sırasında da aynı adımlarla yen
   2 ÇAPA'ya alırsın (§4.3).
 - **Oyun içinde kalibrasyon korunur:** harita değişse de, maç bitip lobiye dönülse de oyuncu
   yeniden kalibre olmaz. Kalibre modu yalnız **uygulamanın ilk açılışını** ilgilendirir.
-- ⚠️ **Kalibrasyon bir kez alındıktan sonra oyuncu kumandayla onu değiştiremez.** Kombinasyonu
-  yapsa da tek titreşim alır ve hiçbir şey olmaz. Bu bilerek böyledir: oyuncunun maç ortasında
-  kazara kendi hizalamasını bozmasını engeller. **Yeniden kalibre ettirmek senin işin** →
-  aşağıdaki §4.1.
+- ⚠️ **Kalibrasyon bir kez alındıktan sonra A+B kombinasyonu kilitlidir.** Yapılsa da tek
+  titreşim gelir ve hiçbir şey olmaz — oyuncunun maç ortasında kazara kendi hizalamasını bozmasını
+  engeller. Yeniden almak için önce kalibrasyon **kapatılır**: senin ekranından (§4.1) ya da
+  kumandadan (aşağıdaki tablo).
+- **Kumandadan kalibrasyon yönetimi** (sağ kumanda; admin ekranındaki düğmelerin aynısı):
+
+  | Kumandada | Admin ekranındaki karşılığı | Titreşim |
+  |---|---|---|
+  | **B**'yi basılı tutarken **A**'ya kısa bas | SIFIRLA'yı **basılı tutmak** — kalibrasyon silinir, gözlükteki kayıt da gider | üç orta |
+  | **B**'yi tek başına **2 sn** basılı tut | SIFIRLA'ya **kısa basmak** — kalibrasyon kapanır, kayıt durur | iki kısa |
+  | **A**'yı tek başına **2 sn** basılı tut | **KALİBRE** — gözlükte kayıtlı hizalama geri yüklenir | iki çok kısa, sonra uzun = tuttu / üç kısa = tutmadı |
+
+  Sonuç senin ekranına anında düşer: satır kalibresize döner (ya da düzelir) ve üstte "… kalibrasyonunu
+  kumandadan kapattı / sildi" duyurusu çıkar. ⚠️ A'yı 2 sn basılı tutmak, B noktası beklenirken
+  (ilk nokta alınmışken) çalışmaz.
 - **Harita değiştirmek kalibrasyonu bozmaz.** Yeni arenaya geçince oyuncular yeniden kalibre
   etmez, bir yere de "ışınlanmaz" — oldukları yerde kalırlar, yeni arena üzerlerine hizalanır.
   Yeni harita yüklenirken birkaç saniye halkalar kaybolabilir; hizalama oturunca geri gelir.

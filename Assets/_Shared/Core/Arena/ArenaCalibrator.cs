@@ -26,7 +26,8 @@ namespace VortexArena.Core.Arena
     /// marks.</para>
     /// <para>Operator clear has two modes (<c>clear_calibration.keepSaved</c>, §5.2/§10.6) behind
     /// <see cref="ApplyOperatorClear"/>: soft keeps the device anchor and leans on
-    /// <see cref="autoRestoreBlocked"/>, hard also drops anchor and UUID.</para>
+    /// <see cref="autoRestoreBlocked"/>, hard also drops anchor and UUID. The controller's own
+    /// clear/reload gestures (<see cref="UpdateGestures"/>) take the same entry points.</para>
     /// <para>Marker POSITIONS come from the venue dimensions file (<c>calibration.a</c>/<c>.b</c>),
     /// so a venue's arenas and lobby share one measurement. ⚠️ Markers are the dimension mock's
     /// cubes — no second marker family.</para>
@@ -113,6 +114,15 @@ namespace VortexArena.Core.Arena
 
         /// <summary>Point B captured and rig aligned: one LONG pulse, audibly distinct from A.</summary>
         private const float PointBPulseSeconds = 1f;
+
+        /// <summary>Reload requested by the A hold: two quick pulses.</summary>
+        private const float ShortPulseSeconds = 0.12f;
+
+        /// <summary>Lone A / lone B hold that fires reload / soft clear (s).</summary>
+        private const float GestureHoldSeconds = 2f;
+
+        /// <summary>Longest A press that still counts as the hard-clear tap (s).</summary>
+        private const float GestureTapMaxSeconds = 0.5f;
 
         /// <summary>Retry count for restoring the saved anchor; the anchor service is not always
         /// ready at scene load. ⚠️ With <see cref="RestoreRetryDelayMs"/> this is a ~30 s window and
@@ -222,6 +232,14 @@ namespace VortexArena.Core.Arena
         private int capturedCount;
         private bool waitingForRelease;
         private bool manualCalibrationStarted;
+
+        private enum GestureLead { None, A, B }
+
+        /// <summary>Controller gesture state (<see cref="UpdateGestures"/>).</summary>
+        private GestureLead gestureLead;
+        private float gestureSince;
+        private float gestureTapSince = -1f;
+        private bool gestureHoldSpoiled;
 
         /// <summary>An in-flight restore was cancelled (<see cref="Invalidate"/>). Operator-side
         /// twin of <see cref="manualCalibrationStarted"/>: the retry window lasts seconds, and
@@ -518,34 +536,157 @@ namespace VortexArena.Core.Arena
                 TryHookTrackingEvents();
 
             DevUpdate();
+            UpdateGestures();
+        }
 
-            // Gesture: while A is HELD, tap B once. No hold duration — waiting with the tip on the
-            // mark makes the hand shake and the measurement drift.
+        /// <summary>Right-controller vocabulary (§10.6), keyed by which button LEADS (first down
+        /// after a full release): A held + B tap = capture · B held + A tap = hard clear · B alone
+        /// <see cref="GestureHoldSeconds"/> = soft clear · A alone <see cref="GestureHoldSeconds"/> =
+        /// reload. The three clear/reload gestures mirror the admin's SIFIRLA hold / SIFIRLA tap /
+        /// KALİBRE.
+        /// <para>⚠️ The hard clear fires on a SHORT A tap only: A+B held for 3 s is the venue survey
+        /// entry (<c>VenueSurveyGesture</c>), and starting it B-first must not erase the anchor.</para>
+        /// <para>⚠️ Unscaled time: a paused match must not freeze the holds.</para></summary>
+        private void UpdateGestures()
+        {
             bool aHeld = OVRInput.Get(OVRInput.Button.One, Hand);
+            bool bHeld = OVRInput.Get(OVRInput.Button.Two, Hand);
+            float now = Time.unscaledTime;
 
+            // Every gesture fires once, then disarms until BOTH buttons are up.
             if (waitingForRelease)
             {
-                if (!aHeld)
+                if (!aHeld && !bHeld)
+                {
                     waitingForRelease = false;
+                    gestureLead = GestureLead.None;
+                }
                 return;
             }
 
-            // B only counts while A is held — a lone B is free for gameplay.
-            if (!aHeld || !OVRInput.GetDown(OVRInput.Button.Two, Hand))
-                return;
+            if (gestureLead == GestureLead.None)
+            {
+                // A wins a same-frame press: the capture gesture keeps its old reading.
+                if (aHeld)
+                    gestureLead = GestureLead.A;
+                else if (bHeld)
+                    gestureLead = GestureLead.B;
+                else
+                    return;
 
-            // §10.6: manual calibration is CLOSED while calibrated; only the operator reopens it.
-            // Never swallowed silently (long pulse + log).
+                gestureSince = now;
+                gestureHoldSpoiled = false;
+                gestureTapSince = -1f;
+            }
+
+            if (gestureLead == GestureLead.A)
+            {
+                if (!aHeld)
+                {
+                    // Lead released: a still-held B must not start a fresh lone hold.
+                    if (bHeld)
+                        waitingForRelease = true;
+                    else
+                        gestureLead = GestureLead.None;
+                    return;
+                }
+
+                // No hold duration on the capture — waiting with the tip on the mark makes the hand
+                // shake and the measurement drift.
+                if (OVRInput.GetDown(OVRInput.Button.Two, Hand))
+                {
+                    gestureHoldSpoiled = true;
+                    TryCapture();
+                    return;
+                }
+
+                // ⚠️ Not while B is pending: the tip is being placed on the second mark.
+                if (!gestureHoldSpoiled && !bHeld && !AwaitingPointB &&
+                    now - gestureSince >= GestureHoldSeconds)
+                {
+                    waitingForRelease = true;
+                    GestureReload();
+                }
+                return;
+            }
+
+            // B leads.
+            if (gestureTapSince >= 0f)
+            {
+                // A tap in progress decides on its own release; B may already be up.
+                if (aHeld)
+                {
+                    if (now - gestureTapSince > GestureTapMaxSeconds)
+                        waitingForRelease = true; // a long press (survey entry), not a tap
+                    return;
+                }
+
+                waitingForRelease = true;
+                GestureClear(false);
+                return;
+            }
+
+            if (!bHeld)
+            {
+                gestureLead = GestureLead.None;
+                return;
+            }
+
+            if (OVRInput.GetDown(OVRInput.Button.One, Hand) || aHeld)
+            {
+                gestureTapSince = now;
+                gestureHoldSpoiled = true;
+                return;
+            }
+
+            if (!gestureHoldSpoiled && now - gestureSince >= GestureHoldSeconds)
+            {
+                waitingForRelease = true;
+                GestureClear(true);
+            }
+        }
+
+        /// <summary>A held + B tap: capture the next point unless the manual gate is closed.</summary>
+        private void TryCapture()
+        {
+            // §10.6: manual calibration is CLOSED while calibrated; the operator or the player's own
+            // clear gesture reopens it. Never swallowed silently (long pulse + log).
             if (!CalibrationState.ManualAllowed)
             {
                 waitingForRelease = true;
                 OVRInput.SetControllerVibration(0f, 0f, Hand);
                 StartCoroutine(Pulse(1, LongPulseSeconds));
-                Debug.Log("ArenaCalibrator: kalibrasyon zaten alınmış — yeniden almak için operatörün admin ekranından sıfırlaması gerekir (§10.6).");
+                Debug.Log("ArenaCalibrator: kalibrasyon zaten alınmış — yeniden almak için önce kapatın " +
+                          "(B'yi 2 sn basılı tutun) ya da operatör admin ekranından sıfırlasın (§10.6).");
                 return;
             }
 
             CapturePoint();
+        }
+
+        /// <summary>B hold (soft, anchor kept) or B held + A tap (hard, anchor erased).</summary>
+        private void GestureClear(bool keepSaved)
+        {
+            OVRInput.SetControllerVibration(0f, 0f, Hand);
+            if (keepSaved)
+                StartCoroutine(Pulse(2, PointAPulseSeconds));
+            else
+                StartCoroutine(Pulse(3, LongPulseSeconds));
+            CalibrationState.ClearFromController(keepSaved);
+        }
+
+        /// <summary>A hold: reload from the saved anchor, like the admin's KALİBRE.</summary>
+        private void GestureReload()
+        {
+            OVRInput.SetControllerVibration(0f, 0f, Hand);
+            StartCoroutine(Pulse(2, ShortPulseSeconds));
+            CalibrationState.ReloadFromController(error =>
+            {
+                // null = abandoned by a scene change; the next scene reports its own alignment.
+                if (error == null || this == null || !isActiveAndEnabled)
+                    return;
+                StartCoroutine(error.Length == 0 ? Pulse(1, PointBPulseSeconds) : Pulse(3));
+            });
         }
 
         /// <summary>Puts a marker on the given FLOOR point (world space, so parenting is
@@ -1158,7 +1299,7 @@ namespace VortexArena.Core.Arena
             return true;
         }
 
-        /// <summary>Single entry point for <c>clear_calibration</c> (§10.6).
+        /// <summary>Single entry point for <c>clear_calibration</c> and the controller's clear gestures (§10.6).
         /// <paramref name="keepSaved"/> = <c>true</c> voids only the alignment and keeps the device
         /// anchor so a following <c>reload_calibration</c> works. ⚠️ Hard mode erases even with no
         /// calibrator in the scene: racing a scene load must not swallow the clear.</summary>
@@ -1739,7 +1880,9 @@ namespace VortexArena.Core.Arena
         }
 
         /// <summary>Haptic vocabulary: 1 short (0.3 s) = A captured · 1 long (1 s) = B captured and
-        /// aligned · 3 short = distance error · 1 medium (0.6 s) = floor mismatch or locked.</summary>
+        /// aligned · 3 short = distance error · 1 medium (0.6 s) = floor mismatch or locked ·
+        /// 2 short (0.3 s) = closed (B hold) · 3 medium (0.6 s) = erased (B + A tap) · 2 quick =
+        /// reload started (A hold), then 1 long = reloaded / 3 short = failed.</summary>
         private IEnumerator Pulse(int count, float seconds = 0.12f)
         {
             for (int i = 0; i < count; i++)

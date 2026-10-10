@@ -361,6 +361,25 @@ public sealed class LobbyService
             Console.WriteLine($"[Lobby] set_calibration: {state.Name} {what}.");
         }
 
+        // The player's own controller clear (§10.6). ⚠️ Announced on every report, not only on a
+        // roster change: a hard clear after a soft one changes nothing in the roster, yet it erased
+        // the device record the operator's KALİBRE would have reloaded.
+        if (!msg.calibrated)
+        {
+            var how = msg.source switch
+            {
+                ArenaProtocol.CALIB_CLEAR_SOURCE_CONTROLLER => "kumandadan kapattı (cihaz kaydı duruyor)",
+                ArenaProtocol.CALIB_CLEAR_SOURCE_CONTROLLER_ERASE => "kumandadan sildi (cihaz kaydı da silindi)",
+                _ => null,
+            };
+            if (how != null)
+            {
+                Console.WriteLine($"[Lobby] set_calibration: {state.Name} kalibrasyonunu {how}.");
+                // Not wrapped in Notice(): the actor is the player's headset, not an admin.
+                _ = BroadcastAdminStateAsync($"{state.Name} kalibrasyonunu {how}");
+            }
+        }
+
         // ⚠️ NOT tied to SetCalibration's return: for an already-calibrated player it returns `false`
         // (nothing changed in the roster) and that is exactly when the operator's button needs an
         // answer — otherwise a successful reload would show "loading" forever (§5.3).

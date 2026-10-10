@@ -1083,8 +1083,18 @@ yetmemesinin sebebi şudur: A'sını almış ama B'sini almamış bir oyuncuda `
 (admin arayüzü · sunucu · istemci) oyuncunun o anki durumuna bakmaz; birini duruma bağlamak,
 komutu var olma sebebi olan durumda işlevsiz bırakır (§7).
 
-**Kalibreliyken elle kalibrasyon kilitlidir:** oyuncu kendi hizalamasını kazara bozamaz, kapıyı yalnız operatör
-açar. Hiç bağlanılmamışsa (sunucusuz editör testi) kapı açıktır ve silah çalışır.
+**Kalibreliyken elle kalibrasyon kilitlidir:** oyuncu kendi hizalamasını kazara bozamaz, kapıyı
+operatörün sıfırlaması ya da oyuncunun **bilinçli kumanda jesti** açar. Hiç bağlanılmamışsa
+(sunucusuz editör testi) kapı açıktır ve silah çalışır.
+
+**Kumanda jestleri adminin üç düğmesinin aynasıdır** (`ArenaCalibrator.UpdateGestures`, sağ
+kumanda, önce basılan tuş belirler): B basılıyken A'ya kısa bas = SIFIRLA basılı tutma (sert, cihaz
+kaydı da gider) · B'yi 2 sn basılı tut = SIFIRLA kısa basış (yumuşak) · A'yı 2 sn basılı tut =
+KALİBRE (kayıtlı çapadan yeniden yükle). Başlıkta operatör komutuyla aynı yoldan geçerler
+(`CalibrationState.ClearFromController` / `ReloadFromController` → `ApplyOperatorClear` /
+`RequestReload`); sunucu durumu komuttan değil başlığın `set_calibration{false, "controller…"}`
+raporundan öğrenir ve adminlere duyurur. Tablo ve iki tuzak (sert silme neden kısa basışta, A
+basılı tutma neden B beklenirken kapalı): `ArenaNet-Protokol.md` §10.6 "Kumanda jestleri".
 
 **Kalibre modu** sunucuda yaşayan canlı bir ayardır (`admin_state.calibrationMode`, operatör
 panelinden değişir) ve tek bir soruyu cevaplar: **başlık açılışta diskteki çapa kaydını geri
@@ -1587,7 +1597,9 @@ gerçek nesnedir, bileşenin tek işi uyarıyı erken tetiklemektir),
 OVRSpatialAnchor kalıcılığı + recenter onarımı; nokta alma jesti **sağ kumandada A basılı
 tutulurken B'ye TEK basış** (basılı tutma süresi yoktur; ilk yakalama A, ikincisi B noktasıdır —
 sıra sabittir) ve **yalnız sunucu "kalibresiz" derken açılır**,
-§3.11. `anchor_a`/`anchor_b` işaretçileri **kurulum aracıdır, dekor değil**: yalnız elle
+§3.11. Aynı sağ kumandada adminin SIFIRLA/KALİBRE düğmelerinin aynası olan üç jest daha vardır
+(B+A kısa = sert silme, B 2 sn = kapatma, A 2 sn = yeniden yükleme — `UpdateGestures`, §3.11).
+`anchor_a`/`anchor_b` işaretçileri **kurulum aracıdır, dekor değil**: yalnız elle
 kalibrasyon sürerken görünürler ve hizalamadan `markerVisibleSeconds` sonra gizlenirler — kayıtlı
 anchor'dan geri yükleme yolunda hiç gösterilmezler, yoksa harita değişiminde maçın ortasında ekrana
 obje düşerdi.
@@ -1605,8 +1617,8 @@ maketinin `DimensionAnchor` küpleri (`AnchorKind`), (3) ada göre arama (`Ancho
 `AwaitingPointBChanged` — kalibrasyon kartının okuduğu şey budur; tamamlanmada, sıfırlamada ve
 sahne değişiminde düşer.
 **`Invalidate()` oyuncuyu hiçbir ara aşamada bırakmaz** (§3.11): tamamlanmış hizalamanın yanında
-yakalanmış A noktasını (ve onunla `AwaitingPointB`'yi), o an basılı tutulan jestin kuyruğunu (A bırakılana
-dek yeni yakalama alınmaz) ve **uçuşta olan kayıtlı-anchor geri yüklemesini** de siler — sonuncusu
+yakalanmış A noktasını (ve onunla `AwaitingPointB`'yi), o an basılı tutulan jestin kuyruğunu (A ve B
+bırakılana dek yeni jest kurulmaz) ve **uçuşta olan kayıtlı-anchor geri yüklemesini** de siler — sonuncusu
 birkaç saniyelik bir yeniden deneme penceresidir ve iptal edilmezse sıfırlamadan sonra başarıya
 ulaşıp arenayı yeniden hizalardı.
 **Sıfırlama iki kiple gelir** (`clear_calibration.keepSaved`, §10.6) ve fark yalnız gözlükteki

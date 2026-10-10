@@ -18,9 +18,11 @@ namespace VortexArena.Core.Arena
     /// <c>reload_calibration</c> has something to load) from hard mode. In soft mode what stops the
     /// alignment coming back silently is the auto-restore gate in <c>ArenaCalibrator</c>, not
     /// erasure. The command is unconditional — it also drops a half-finished sequence (§5.3).
+    /// The controller gestures (<see cref="ClearFromController"/>,
+    /// <see cref="ReloadFromController"/>) run the same two actions from the headset.
     /// </para>
     /// <para>
-    /// ⚠️ That command is the ONLY clear gate. <c>calibrated:false</c> in the roster is NOT a clear
+    /// ⚠️ That command and the player's own gesture are the ONLY clear gates. <c>calibrated:false</c> in the roster is NOT a clear
     /// signal: the server resets that field on every <c>hello</c> (§10.6), so it is published once
     /// on every reconnect — clearing on it would make a briefly disconnected headset lose its saved
     /// anchor. Here the roster is only a MIRROR (<see cref="ApplyServerState"/>).
@@ -61,8 +63,8 @@ namespace VortexArena.Core.Arena
         public static bool AppearsCalibrated => IsCalibrated || _localCalibrated;
 
         /// <summary>Is the MANUAL controller gesture (hold A, tap B) open. Closed while
-        /// calibrated so the player cannot break their own alignment by accident — only the operator
-        /// reopens it (§10.6).</summary>
+        /// calibrated so the player cannot break their own alignment by accident — the operator's
+        /// clear or the player's deliberate clear gesture reopens it (§10.6).</summary>
         public static bool ManualAllowed => !_hasEverConnected || !_serverCalibrated;
 
         /// <summary>Last reported source ("manual" | "anchor" | "session" | "cloud" | editor-only
@@ -264,14 +266,7 @@ namespace VortexArena.Core.Arena
         /// </remarks>
         private void HandleClearCalibration(bool keepSaved)
         {
-            _localCalibrated = false;
-            _serverCalibrated = false;
-            _source = "";
-            // No re-send: the command already cleared the field on the server (§5.3), and the
-            // alignment the reason belonged to is gone in both modes.
-            _anchorSaveError = "";
-
-            ArenaCalibrator.ApplyOperatorClear(keepSaved);
+            ApplyClear(keepSaved);
 
             Debug.Log(keepSaved
                 ? "[CalibrationState] Operatör hizalamayı geçersiz kıldı — cihazdaki kayıt duruyor, " +
@@ -279,6 +274,53 @@ namespace VortexArena.Core.Arena
                 : "[CalibrationState] Operatör kalibrasyonu sıfırladı ve cihaz kaydını sildi — " +
                   "yeniden kalibre edin (A basılıyken B).");
             Raise();
+        }
+
+        /// <summary>The clear itself, shared by the operator command and the controller gesture.</summary>
+        private void ApplyClear(bool keepSaved)
+        {
+            _localCalibrated = false;
+            _serverCalibrated = false;
+            _source = "";
+            // No re-send: the alignment the reason belonged to is gone in both modes.
+            _anchorSaveError = "";
+
+            ArenaCalibrator.ApplyOperatorClear(keepSaved);
+        }
+
+        /// <summary>The player's own clear gesture (§10.6): the operator's soft/hard clear, done on
+        /// the headset. Unlike the operator command the server learns it from us —
+        /// <c>set_calibration{calibrated:false}</c> with the controller source.</summary>
+        public static void ClearFromController(bool keepSaved)
+        {
+            if (Instance == null)
+            {
+                ArenaCalibrator.ApplyOperatorClear(keepSaved);
+                return;
+            }
+
+            Instance.ApplyClear(keepSaved);
+            Instance.Report(false, keepSaved
+                ? ArenaProtocol.CALIB_CLEAR_SOURCE_CONTROLLER
+                : ArenaProtocol.CALIB_CLEAR_SOURCE_CONTROLLER_ERASE);
+
+            Debug.Log(keepSaved
+                ? "[CalibrationState] Kalibrasyon kumandadan kapatıldı — cihazdaki kayıt duruyor " +
+                  "(A'yı 2 sn basılı tutarak geri yüklenebilir)."
+                : "[CalibrationState] Kalibrasyon kumandadan silindi, cihaz kaydı da gitti — " +
+                  "yeniden kalibre edin (A basılıyken B).");
+            Raise();
+        }
+
+        /// <summary>The player's own reload gesture — the operator's <c>reload_calibration</c>
+        /// (§10.6). <paramref name="onResult"/> gets the same result as the reporter.</summary>
+        public static void ReloadFromController(Action<string> onResult)
+        {
+            ArenaCalibrator.RequestReload(error =>
+            {
+                Instance?.HandleReloadResult(error);
+                onResult?.Invoke(error);
+            });
         }
 
         /// <summary>Operator asked to reload the alignment from the saved anchor (§10.6). NOT the

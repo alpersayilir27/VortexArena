@@ -80,6 +80,13 @@ namespace VortexArena.Protocol
         /// never auto-corrects (that would be a second alignment authority).</para></summary>
         public const float CALIB_FLOOR_WARN_METERS = 0.5f;
 
+        /// <summary><c>set_calibration.source</c> with <c>calibrated:false</c>: the player closed the
+        /// alignment with the controller, device anchor KEPT (B hold, §10.6).</summary>
+        public const string CALIB_CLEAR_SOURCE_CONTROLLER = "controller";
+
+        /// <summary>Same, device anchor ERASED too (B held + A tap, §10.6).</summary>
+        public const string CALIB_CLEAR_SOURCE_CONTROLLER_ERASE = "controller_erase";
+
         // ---- Floor model (§10.6 "Kat modeli") ----
 
         /// <summary>Highest floor index a player may report; §10.x kat modeli.

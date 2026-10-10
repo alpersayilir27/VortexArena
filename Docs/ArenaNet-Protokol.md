@@ -40,6 +40,8 @@ Tümü paylaşılan `ArenaProtocol` statik sınıfında tanımlanır (`Assets/_S
 | `PLAYER_NUMBER_MIN` / `PLAYER_NUMBER_MAX` | `1` / `99` | Forma numarası aralığı (§2). `0` = atanmamış ve aralığın dışındadır. Numara **tüm kayıtlı cihazlar** arasında benzersizdir |
 | `CALIB_MODE_TWO_ANCHOR` / `CALIB_MODE_SAVED_ANCHOR` / `CALIB_MODE_ANCHOR_CLOUD` | `"two_anchor"` / `"saved_anchor"` / `"anchor_cloud"` | Kalibre modunun geçerli değerleri (§5.2/§10.6). Sunucu açılış varsayılanı `saved_anchor`. ⚠️ `anchor_cloud` **rezervdir** — sunucu kabul etmez, loglayıp durumu değiştirmez; bilinmeyen/boş değer de aynı şekilde reddedilir (sessizce varsayılana düşmez: mod bir operatör kararıdır, tahmin edilmez) |
 | `CALIB_FLOOR_WARN_METERS` | `0.5` | Kalibrasyonda bildirilen zemin sapmasının (`set_calibration.floorOffset`) mutlak değeri bunu aşarsa sunucu adminlere duyuru basar (§10.6). Bir kapı değil **teşhis eşiğidir**: kalibrasyon yine kabul edilir, operatör gözlükte alan verisi temizliğine yönlendirilir |
+| `CALIB_CLEAR_SOURCE_CONTROLLER` | `"controller"` | `set_calibration{calibrated:false}`'un `source`'u: oyuncu hizalamayı **kumandadan kapattı**, cihaz kaydı duruyor (§10.6 "Kumanda jestleri") |
+| `CALIB_CLEAR_SOURCE_CONTROLLER_ERASE` | `"controller_erase"` | Aynısı, cihaz kaydı da **silindi** |
 | `MAX_FLOOR_INDEX` | `7` | Bir oyuncunun bildirebileceği en yüksek kat indeksi (`set_floor`, §10.6 "Kat modeli"). Kat sayısı haritanın verisidir, sunucu onu bilmez; bu yüzden sabit bir **aralık kapısıdır**, harita başına doğrulama değil — bozuk bir istemci roster'a anlamsız bir kat yazamasın |
 | `FLOOR_CONFIRM_SECONDS` | `1` sn | İstemcinin gönderdiği `set_floor`'un kendi roster satırında yankılanmasını bekleme süresi (§10.6 "Kat modeli"). Dolarsa yerel kat geri alınır: tek doğruluk kaynağı roster'dır, yoksa istemci kendini reddedilmiş bir katta sanır ve herkes onu başka katta çizer |
 | `SURVEY_MIN_PLANE_POINTS` | `3` | Mekan ölçümünde (§10.11) zemin çokgeninin en az köşe sayısı. **İki uçta da aynı kapı**: istemci bu sayının altında göndermez, sunucu da gelirse reddeder — üç noktadan azı bir alan tanımlamaz |
@@ -252,7 +254,7 @@ dizileri türün sözleşmesidir, protokol içeriklerini yorumlamaz.
 
 **`revive_request`** `{ "type":"revive_request" }` — ölü oyuncu, `respawn.delaySeconds` dolduktan **ve** modun canlanma şartını sağladıktan (taban bölgesine girme ya da sabit durma) sonra gönderir; sunucu koşulları doğrulayıp canlandırır (§10.4). Free-roam'da **yatay ışınlanma yoktur; kat geçişi yalnız dikey sanal ofsettir** (bkz. §10.6 "Kat modeli"), bu yüzden canlanma bir **konum değişimi değil, durum değişimidir**.
 
-**`set_calibration`** `{ "type":"set_calibration", "calibrated":true, "source":"manual", "floorOffset":0.07, "error":"" }` (yalnız player) — başlık **kendi** hizalama durumunu bildirir (§10.6). `source` ∈ `"manual"` (kumandada elle: A basılıyken B'ye basış) · `"anchor"` (kayıtlı `OVRSpatialAnchor`'dan geri yükleme) · `"session"` (oturum içi hizalama kaydından geri yükleme: çapa yokken ya da yüklenemezken harita değişimi ve operatörün yeniden yüklemesi — §10.6; telde hiçbir şey değişmez, **sürüm artmaz**) · `"dev"` (yalnız editör build'inin ürettiği etiket: dev hizalama, fiziksel hizalama yoktur — sunucu doğrulamaz, davranışı `manual` ile aynıdır) · `"cloud"` (ileride: paylaşılan uzamsal anchor). **`source` doğrulanmaz**, yalnız kaydedilip roster'da yayılır — `weaponId` gibi serbest etikettir, yeni bir kaynak eklemek sunucuda iş çıkarmaz. `calibrated:false` de gönderilebilir (başlık kendi hizalamasını geçersiz kıldıysa).
+**`set_calibration`** `{ "type":"set_calibration", "calibrated":true, "source":"manual", "floorOffset":0.07, "error":"" }` (yalnız player) — başlık **kendi** hizalama durumunu bildirir (§10.6). `source` ∈ `"manual"` (kumandada elle: A basılıyken B'ye basış) · `"anchor"` (kayıtlı `OVRSpatialAnchor`'dan geri yükleme) · `"session"` (oturum içi hizalama kaydından geri yükleme: çapa yokken ya da yüklenemezken harita değişimi ve operatörün yeniden yüklemesi — §10.6; telde hiçbir şey değişmez, **sürüm artmaz**) · `"dev"` (yalnız editör build'inin ürettiği etiket: dev hizalama, fiziksel hizalama yoktur — sunucu doğrulamaz, davranışı `manual` ile aynıdır) · `"cloud"` (ileride: paylaşılan uzamsal anchor). **`source` doğrulanmaz**, yalnız kaydedilip roster'da yayılır — `weaponId` gibi serbest etikettir, yeni bir kaynak eklemek sunucuda iş çıkarmaz. `calibrated:false` de gönderilebilir (başlık kendi hizalamasını geçersiz kıldıysa). O yönde `source` **kapatmanın kaynağını** söyler: `"controller"` (oyuncu kumandadan kapattı, cihaz kaydı duruyor) · `"controller_erase"` (kumandadan sildi, cihaz kaydı da gitti) — §10.6 "Kumanda jestleri". Sunucu bu iki değerde adminlere duyuru basar ve duyuruyu roster değişimine **bağlamaz** (yumuşak kapatmanın ardından gelen sert silme roster'da hiçbir şeyi değiştirmez ama cihaz kaydını yok etmiştir); `calibrated:false` olduğunda `source` roster'a yazılmaz (`calibrationSource` boş kalır). Telde yeni alan yoktur, **sürüm artmaz**.
 
 `floorOffset` = elle kalibrasyonda kumanda ucunun, kayıtlı çapadan geri yüklemede çapanın
 **tracking-yerel yüksekliği** (metre, **işaretli**): sistemin zemin tahmininin gerçek zeminden
@@ -2379,7 +2381,7 @@ davranır.
 
 | Yazar | Mesaj | Ne yapabilir |
 |---|---|---|
-| Başlık | `set_calibration` (§5.1) | `true` **ve** `false` |
+| Başlık | `set_calibration` (§5.1) | `true` **ve** `false` (`false`: oyuncunun kumanda jesti, aşağıda) |
 | Admin | `clear_calibration` (§5.2) | **yalnız `false`** |
 
 **Admin neden "kalibre oldu" diyemez:** hizalamanın gerçekten oturduğunu yalnız başlık bilir.
@@ -2398,8 +2400,8 @@ hiçbir ara aşamada bırakılmaz; sekansa baştan başlar.
   yani `reload_calibration` (aşağıda) hâlâ okuyacak bir kayıt bulur. Kaydı silmeden "sessizce geri
   alınmamasını" sağlayan şey başlıktaki bir kapıdır: geçersiz kılmadan sonra **otomatik** geri
   yükleme (uygulama açılışı + harita değişimi) kapanır — kayıt cihazda durur ama kendiliğinden
-  okunmaz. O kapıyı yalnız operatörün `reload_calibration`'ı ve oyuncunun kendi elle kalibrasyonu
-  açar. Kapı olmasaydı sonraki `load_match` bozuk hizalamayı sessizce geri yüklerdi.
+  okunmaz. O kapıyı yalnız operatörün `reload_calibration`'ı (ya da oyuncunun aynı işi yapan A
+  basılı tutma jesti) ve oyuncunun kendi elle kalibrasyonu açar. Kapı olmasaydı sonraki `load_match` bozuk hizalamayı sessizce geri yüklerdi.
   ⚠️ **Bu kapı uygulama ömrü kadar yaşar:** başlık yeniden başlatılırsa süreçle birlikte gider ve
   `saved_anchor` modunda hizalama açılışta geri yüklenir. Bu bir eksiklik değil, iki komut
   arasındaki farkın kendisidir — cihazdaki kaydı gerçekten yok etmek isteyen operatör sert kipi
@@ -2442,8 +2444,29 @@ tuş basışı **eski A noktasıyla** kalibrasyonu tamamlayabilir.
 kilitlenir, **eldeki silah alınır ve yenisi alınamaz**, uzak avatar **hayalete döner** (yarı
 saydam, turuncu nabız) ve vuruş kutuları kapanır, kumandada elle kalibrasyon
 (A basılıyken B'ye basış) **açılır**. Kalibreli durumdayken bu jest **kilitlidir** — oyuncu
-kendi hizalamasını kazara bozamaz,
-kapıyı yalnız operatör açar.
+kendi hizalamasını kazara bozamaz; kapıyı operatörün sıfırlaması ya da oyuncunun **bilinçli**
+kapatma jesti (aşağıda) açar.
+
+**Kumanda jestleri** (sağ kumanda; hangi tuşa **önce** basıldığı belirler, her jest bir kez
+tetiklenir ve iki tuş da bırakılana kadar yeni jest kurulmaz):
+
+| Jest | Karşılığı | Telde |
+|---|---|---|
+| A basılıyken B'ye bas | Elle kalibrasyon noktası (yukarıda) | başarıda `set_calibration{true, "manual"}` |
+| B basılıyken A'ya **kısa** bas (≤ 0,5 sn) | Adminin SIFIRLA **basılı tutması** — sert kip, cihaz kaydı da silinir | `set_calibration{false, "controller_erase"}` |
+| B'yi tek başına 2 sn basılı tut | Adminin SIFIRLA **kısa basışı** — yumuşak kip, cihaz kaydı durur | `set_calibration{false, "controller"}` |
+| A'yı tek başına 2 sn basılı tut | Adminin **KALİBRE**'si — kayıtlı çapadan yeniden yükleme | sonuç `set_calibration` (başarı `true` / hata `error`) |
+
+- Başlık tarafında iki kip operatör komutuyla **aynı yoldan** geçer (`ApplyOperatorClear`): yarım
+  sekans silinir, otomatik geri yükleme kapanır. Fark yalnız sunucunun durumu başlıktan
+  öğrenmesidir — komut değil, rapor.
+- ⚠️ **Sert silme A'nın KISA basışıyla tetiklenir**, basılı tutmayla değil: A+B'yi 3 sn basılı
+  tutmak mekan ölçümüne giriştir (§10.11) ve B'ye önce basılarak başlanabilir; uzun basış silmeye
+  dönüşseydi ölçüme giren operatör çapayı yok ederdi.
+- ⚠️ A'nın tek başına basılı tutulması **B noktası beklenirken tetiklenmez**: oyuncu kumanda
+  ucunu ikinci işarete yerleştirirken A'yı basılı tutuyor olabilir.
+- Sunucu kumanda kapatmalarında adminlere duyuru basar (§5.1); roster etkisi `clear_calibration`'la
+  aynıdır (`calibrated:false`, `bodyScale` düşer).
 
 ⚠️ **Silah kapısı ile tetik kapısı AYNI ŞEY DEĞİLDİR ve ikisi de gerekir.** Tetik kapısı tek
 başına bırakılsaydı oyuncunun elinde ateş etmeyen bir silah kalırdı ve bu, sorunu silahta
