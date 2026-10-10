@@ -26,9 +26,8 @@ public sealed record VenueInfo(string Name, int MapCount, bool HasLobby)
 /// Unity therefore requires no launcher work.
 /// </para>
 /// <para>
-/// The file is searched from next to the server exe upwards (same behaviour as the server):
-/// <c>deploy\server\config\maps.json</c> when deployed, <c>Server\config\maps.json</c> in
-/// development.
+/// ⚠️ Read only from the selected build's own <c>config\maps.json</c>, as the server does — no
+/// search upwards: a file found in a parent folder would list venues that build cannot open.
 /// </para>
 /// </summary>
 public sealed class VenueCatalog
@@ -39,9 +38,6 @@ public sealed class VenueCatalog
 
     /// <summary>Must match <c>ArenaProtocol.LOBBY_MODE_ID</c>.</summary>
     public const string LobbyModeId = "lobby";
-
-    /// <summary>How many levels above the exe the search walks up.</summary>
-    private const int SearchDepth = 6;
 
     public static VenueCatalog Empty { get; } = new([], null, null);
 
@@ -63,18 +59,17 @@ public sealed class VenueCatalog
 
     public IReadOnlyList<string> Names => Venues.Select(v => v.Name).ToArray();
 
-    /// <summary>Builds the venue list starting from the server exe path.</summary>
-    public static VenueCatalog ForServerExe(string serverExePath)
+    /// <summary>Builds the venue list from a build's <c>config\maps.json</c>.</summary>
+    public static VenueCatalog ForMapsFile(string mapsPath)
     {
-        if (string.IsNullOrWhiteSpace(serverExePath))
+        if (string.IsNullOrWhiteSpace(mapsPath))
             return new VenueCatalog([], null, "Sunucu klasörü çözülemedi.");
 
-        var mapsPath = FindMapsJson(serverExePath);
-        if (mapsPath == null)
+        if (!File.Exists(mapsPath))
         {
             return new VenueCatalog([], null,
-                "config\\maps.json bulunamadı. Unity'de Tools > VortexArena > Server > Export Server Config " +
-                "çalıştırıp sunucuyu yeniden dağıtın.");
+                $"Bu sunucu sürümünde config\\maps.json yok ({mapsPath}). Sürümü silip yeniden indirin; " +
+                "sorun sürerse sunucu yeniden dağıtılmalı.");
         }
 
         try
@@ -85,29 +80,6 @@ public sealed class VenueCatalog
         {
             return new VenueCatalog([], mapsPath, $"maps.json okunamadı: {ex.Message}");
         }
-    }
-
-    /// <summary>Searches for <c>config\maps.json</c> from next to the exe upwards.</summary>
-    public static string? FindMapsJson(string serverExePath)
-    {
-        string? dir;
-        try
-        {
-            dir = Path.GetDirectoryName(Path.GetFullPath(serverExePath));
-        }
-        catch (Exception)
-        {
-            return null;
-        }
-
-        for (int i = 0; i < SearchDepth && dir != null; i++)
-        {
-            var candidate = Path.Combine(dir, "config", "maps.json");
-            if (File.Exists(candidate)) return candidate;
-            dir = Path.GetDirectoryName(dir);
-        }
-
-        return null;
     }
 
     /// <summary>Parses maps.json. Shape: <c>{ "maps": [ { sceneName, venue, modes } ] }</c>.</summary>

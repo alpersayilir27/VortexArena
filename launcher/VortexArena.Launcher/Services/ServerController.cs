@@ -10,7 +10,8 @@ public sealed record StartResult(Process? Process, string? Error)
 }
 
 /// <summary>
-/// Starts and stops <c>server\VortexArena.Server.App.exe</c>.
+/// Starts and stops <c>server_versions\server_v&lt;N&gt;\VortexArena.Server.App.exe</c>, always
+/// pointed at the venue data folder (<c>--data-dir</c>).
 /// <para>⚠️ <b>stdout is NOT redirected.</b> A redirected pipe dies with the launcher and the server
 /// would go down with it on the next write; the log file is the operator's window instead.</para>
 /// </summary>
@@ -21,12 +22,66 @@ public sealed class ServerController
 
     private const string ProcessName = "VortexArena.Server.App";
 
-    private readonly LauncherPaths _paths;
+    private const string MissingVersionMessage = "Sunucu sürümü yok — aşağıdan bir sürüm indirin.";
 
-    public ServerController(LauncherPaths paths) => _paths = paths;
+    private readonly LauncherPaths _paths;
+    private readonly InstalledBuilds _builds;
+
+    public ServerController(LauncherPaths paths, LauncherSettings settings)
+    {
+        _paths = paths;
+        _builds = new InstalledBuilds(paths.ServerVersionsDir, BuildPackage.Server, () => settings.ServerVersion);
+    }
 
     /// <summary>Process this launcher started; null when the server runs on its own.</summary>
     public Process? Started { get; private set; }
+
+    /// <summary>Unpacked versions, newest first. Cached — <see cref="RefreshInstalled"/> re-reads the disk.</summary>
+    public IReadOnlyList<int> InstalledVersions => _builds.Versions;
+
+    /// <summary>Version <see cref="Start"/> would launch; 0 when no build is unpacked.</summary>
+    public int SelectedVersion => _builds.Selected;
+
+    /// <summary>
+    /// Version of the server that is up; 0 when none runs or it came from the pre-version
+    /// <c>server\</c> folder. Read by <see cref="RefreshRunningVersion"/>, not per tick.
+    /// </summary>
+    public int RunningVersion { get; private set; }
+
+    /// <summary>Re-reads the unpacked versions; true when the set changed.</summary>
+    public bool RefreshInstalled() => _builds.Refresh();
+
+    /// <summary>
+    /// Re-reads the running server's version from its exe path.
+    /// <para>Enumerating processes is not cheap, so this is called on run-state changes only —
+    /// "running" itself is decided by the HTTP status, not by process lookup.</para>
+    /// </summary>
+    public int RefreshRunningVersion()
+    {
+        var version = 0;
+        foreach (var process in Process.GetProcessesByName(ProcessName))
+        {
+            try
+            {
+                if (version == 0)
+                {
+                    version = BuildVersionCatalog.VersionOfExe(
+                        process.MainModule?.FileName, _paths.ServerVersionsDir, BuildPackage.Server);
+                }
+            }
+            catch (Exception)
+            {
+                // Access denied on another user's process; cannot tell its version.
+            }
+            finally
+            {
+                process.Dispose();
+            }
+        }
+
+        RunningVersion = version;
+        return version;
+    }
 
     public TimeSpan? Uptime
     {
@@ -45,27 +100,34 @@ public sealed class ServerController
 
     public StartResult Start(string venue)
     {
-        if (!_paths.ServerExeExists)
-            return new StartResult(null, $"Sunucu bulunamadı: {_paths.ServerExe}");
+        RefreshInstalled(); // the folder may have been copied in or deleted since the last scan
+        var version = SelectedVersion;
+        if (version == 0) return new StartResult(null, MissingVersionMessage);
+
+        var exe = _paths.ServerExeFor(version);
+
+        // Cache may be stale: the folder can be gone since the last refresh.
+        if (!File.Exists(exe)) return new StartResult(null, $"Sunucu bulunamadı: {exe}");
 
         try
         {
             Directory.CreateDirectory(_paths.ReplaysDir);
+            Directory.CreateDirectory(_paths.ServerDir); // --data-dir target; the server seeds it
         }
         catch (Exception ex)
         {
-            return new StartResult(null, $"Kayıt klasörü oluşturulamadı: {ex.Message}");
+            return new StartResult(null, $"Klasör oluşturulamadı: {ex.Message}");
         }
 
         var info = new ProcessStartInfo
         {
-            FileName = _paths.ServerExe,
-            WorkingDirectory = _paths.ServerDir,
+            FileName = exe,
+            WorkingDirectory = _paths.ServerVersionDir(version),
             UseShellExecute = false,
             CreateNoWindow = true,
         };
 
-        foreach (var argument in LauncherSettings.ServerArguments(venue, _paths.ReplaysDir))
+        foreach (var argument in LauncherSettings.ServerArguments(venue, _paths.ReplaysDir, _paths.ServerDir))
             info.ArgumentList.Add(argument);
 
         try
@@ -74,6 +136,7 @@ public sealed class ServerController
             if (process is null) return new StartResult(null, "Sunucu süreci başlatılamadı.");
 
             Started = process;
+            RunningVersion = version;
             return new StartResult(process, null);
         }
         catch (Exception ex)
@@ -115,8 +178,7 @@ public sealed class ServerController
             try
             {
                 var file = process.MainModule?.FileName;
-                if (file is null ||
-                    string.Equals(file, _paths.ServerExe, StringComparison.OrdinalIgnoreCase))
+                if (file is null || IsOurs(file))
                 {
                     found.Add(process);
                     continue;
@@ -133,6 +195,15 @@ public sealed class ServerController
 
         return found;
     }
+
+    /// <summary>
+    /// Any unpacked version's exe under this root, or the pre-version <c>server\</c> one.
+    /// <para>⚠️ The legacy path stays matched: an old server left running must still be killable,
+    /// otherwise it keeps the control port and the new one never comes up.</para>
+    /// </summary>
+    private bool IsOurs(string exePath)
+        => BuildVersionCatalog.VersionOfExe(exePath, _paths.ServerVersionsDir, BuildPackage.Server) > 0 ||
+           string.Equals(exePath, _paths.LegacyServerExe, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Last resort after a clean shutdown did not land. Returns how many were killed.</summary>
     public int KillProcesses()
@@ -159,8 +230,13 @@ public sealed class ServerController
         }
 
         Started = null;
+        RunningVersion = 0;
         return killed;
     }
 
-    public void ForgetStarted() => Started = null;
+    public void ForgetStarted()
+    {
+        Started = null;
+        RunningVersion = 0;
+    }
 }

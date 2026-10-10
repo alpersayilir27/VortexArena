@@ -28,8 +28,8 @@ dotnet run --project Server/VortexArena.Server.App
 
 veya derlenmiş exe: `Server/VortexArena.Server.App/bin/Debug/net10.0/VortexArena.Server.App.exe`
 
-İşletme dağıtımı için: `scripts\deploy-server.bat` → `deploy\server\VortexArena.Server.App.exe`
-(self-contained, .NET kurulumu gerekmez; `config/` yanında gider).
+İşletme dağıtımı için: `scripts\deploy-server.bat` → `deploy\server\server_v<N>\` (aşağıdaki
+*Dağıtım* bölümü).
 
 > Sunucuyu **operatör launcher'ı da başlatabilir** (bkz. `launcher/README.md`) ve launcher kontrol
 > uçlarıyla (aşağıdaki *Launcher kontrol uçları*) durdurabilir. Unity admin uygulaması başlatmaz —
@@ -42,6 +42,7 @@ veya derlenmiş exe: `Server/VortexArena.Server.App/bin/Debug/net10.0/VortexAren
 |---|---|
 | `--venue <mekan>` | Açılacak mekan; `server.json → venue`'yu ezer ve konsol sorusunu atlar (§11.1) |
 | `--replay-dir <yol>` | Maç kaydı klasörü; `server.json → replayDir`'i ezer, göreli yol exe klasörüne göre çözülür |
+| `--data-dir <klasör>` | İşletmenin kalıcı veri klasörü: `config/` (server.json + devices.json), `logs/` ve mekan ölçümü oraya gider. Klasör yoksa oluşturulur; oluşturulamazsa sunucu açılmaz (çıkış kodu `2`). Verilmezse her şey exe'nin yanındadır (aşağıdaki *Dosya yerleşimi*) |
 
 Açılışta:
 - Kestrel `http://0.0.0.0:47821/ws` (WebSocket kontrol) dinler.
@@ -62,8 +63,8 @@ Açılışta:
   `kB/s` o paketlerin toplam baytıdır (`çıkış` içinde de sayılır). Bir paket N oyuncunun batch'i
   olduğu için buradan tek oyuncunun blob ortalaması **türetilmez**.
 - Maç tick döngüsü (10 Hz) çalışır: faz makinesi, geri sayım, süre.
-- `config/` bulunamazsa exe yanında oluşturulur ve varsayılanlarla doldurulur
-  (`server.json`; `maps.json` **üretilmez** — o Unity export'undan gelir).
+- `server.json` bulunamazsa oluşturulur ve varsayılanlarla doldurulur; `maps.json` **üretilmez** —
+  o Unity export'undan gelir (aşağıdaki *Dosya yerleşimi*).
 - Konsolda bağlanan/kopan cihazlar ve çevrimiçi sayısı akar; **Ctrl+C** temiz kapatır.
 
 Açılış başlığında `Modlar : tdm, ffa, tournament` ve `Haritalar : …` satırları kayıtlı mod/harita
@@ -71,9 +72,51 @@ tablosunu özetler (`maps.json` yoksa `Haritalar : yok (doğrulama kapalı)`); `
 yapılandırılmış lobi sahnesini gösterir ve o sahne `maps.json`'da yoksa uyarır; `Hasar : istemci
 bildirir` satırı sunucuda silah tablosu ve hile denetimi olmadığını hatırlatır (§10.3).
 
+## Dosya yerleşimi — sürüm klasörü ve veri klasörü
+
+Sunucunun okuyup yazdığı dosyalar iki kümeye ayrılır: **sürümle gelenler** (exe'nin yanında) ve
+**işletmenin kendi verisi** (`--data-dir`). Ayrımın sebebi: yeni sürüm kurmak sürüm klasörünü
+değiştirir — ayarlar, cihaz adları, günlükler ve ölçüm orada dururken her sürümde kaybolurdu.
+
+| Dosya | `--data-dir` verilmeden | `--data-dir <D>` ile |
+|---|---|---|
+| `server.json` | exe'den başlayıp yukarı doğru aranan `config/` | `<D>\config\server.json` |
+| `devices.json` | aynı `config/` | `<D>\config\devices.json` |
+| `maps.json` | aynı `config/` | **`<exe klasörü>\config\maps.json`** |
+| `logs\server-<zaman>.log` | exe yanındaki `logs/` | `<D>\logs\` |
+| `<Mekan>_dimensions.json` (+ `.prev.json`) | exe'nin yanı | `<D>\` |
+| `.vxr` maç kayıtları | `replayDir` / `--replay-dir` / exe yanındaki `replays/` | aynı (`--replay-dir` ile launcher kendi klasörünü geçer) |
+
+- **`maps.json` her zaman SÜRÜMÜN kopyasıdır.** Harita tablosu oyuncu/admin build'iyle birlikte
+  üretilir ve aynı numaralı sürümle uyuşmak zorundadır; veri klasöründe duran bir kopya
+  **okunmaz**. Dosya hiç yoksa davranış değişmez: tablo boş kalır, harita doğrulaması kapanır.
+- **`server.json` işletmenin verisidir.** Sürüm klasöründeki kopya yalnızca **tohumdur**: veri
+  klasöründe `server.json` yoksa oraya kopyalanır (yeni kurulumun başlangıç noktası), **varsa
+  asla üzerine yazılmaz**. Mekana özel ayarlar bu yüzden sürüm değişince yerinde kalır.
+- `--data-dir` verilmediğinde davranış değişmez: `config/` exe'den başlayıp en çok 6 seviye yukarı
+  aranır (`dotnet run` `bin/Debug/…` içinden koştuğu için), bulunamazsa exe yanında oluşturulur.
+- Çözülen yollar açılış başlığında görünür: `Veri`, `Config`, `maps.json`, `Ölçüm`, `Günlük`.
+
+## Dağıtım
+
+`scripts\deploy-server.bat` **sürümlü** paket üretir: numarayı sorar, `deploy\server\server_v<N>\`
+klasörüne publish eder ve yanına `deploy\server\server_v<N>.zip` paketler, sonra zip'i yayın ucuna
+yükler (ayrıntı: `../scripts/README.md`, `../updater/README.md`).
+
+- **Sürüm klasörünün içeriği:** `VortexArena.Server.App.exe` + publish çıktısı,
+  `config\maps.json` (**zorunlu** — yoksa betik durur), `config\server.json` (tohum),
+  `firewall-kur.cmd`. `devices.json` **girmez**: cihaz adları kuruluma özeldir, sunucu üretir.
+- **Aynı commit'ten alınan sunucu, admin ve oyuncu build'ine AYNI numara verilir** — protokol
+  sürümü ve `maps.json` uyuşmak zorundadır.
+- Paket **self-contained**'dir: işletme PC'sine .NET kurmak gerekmez.
+- Sahada sürümü launcher indirir, açar ve sunucuyu o klasörden `--data-dir` ile başlatır
+  (`launcher/README.md`). Yerel denemek için sürüm klasörü elle launcher paketinin
+  `server_versions\server_v<N>\` dizinine kopyalanır.
+
 ## Günlük dosyası
 
-Sunucu konsola bastığı **her satırı** aynı anda exe'nin yanındaki `logs/` klasörüne yazar;
+Sunucu konsola bastığı **her satırı** aynı anda veri klasöründeki `logs/` klasörüne yazar
+(`--data-dir` yoksa exe'nin yanı);
 dosya adı `server-<yyyy-MM-dd_HH-mm-ss>.log` ve yolu açılış başlığındaki `Günlük :` satırında
 görünür.
 
@@ -121,10 +164,9 @@ Biçim ve ne kaydedilip ne kaydedilmediği: `Docs/ArenaNet-Protokol.md` §12.
 - Disk hatası sunucuyu durdurmaz: tek satır `[Kayıt] Yazılamadı: …` düşer ve o maçın kaydı
   bırakılır. Sunucu çökerse dosya kapatılmamış kalır ama **yine oynatılır** (son tam kayda kadar).
 
-> ⚠️ **Kayıtlar sunucu klasöründe durursa bir dağıtımda gider.** `scripts\deploy-server.bat`
-> `deploy\server` klasörünü siler ve sahada sunucu klasörünü değiştirmek `replays/` dizinini de
-> götürür. Kayıtların kalmasını istiyorsanız `replayDir` sunucu klasörünün **dışını**
-> göstermelidir.
+> ⚠️ **Kayıtlar sürüm klasöründe durursa bir sonraki sürümle birlikte gider.** Sahada sunucu
+> sürüm klasöründen koşar ve o klasör sürüm başına yenilenir. Kayıtların kalmasını istiyorsanız
+> `replayDir` / `--replay-dir` sürüm klasörünün **dışını** göstermelidir.
 
 ## Launcher kontrol uçları
 
@@ -182,9 +224,20 @@ kaydı (bağlantı zamanlayıcısı).
    gelen broadcast'i ve çoğu inbound'u keser → beacon hiç ulaşmaz.
 2. Windows'un uygulama için otomatik eklediği **ENGELLE (Block)** kurallarını siler.
 3. **UDP 47820** + **TCP 47821** + **UDP 47822** için **İZİN** kuralları ekler (Private + Domain).
-   Sunucu exe'si derlenmişse ayrıca **programa özel** izin kuralı ekler (Windows'un yeniden Block
-   kuralı üretmesini önler). Outbound Windows'ta zaten varsayılan serbesttir.
+   Ayrıca **programa özel** izin kuralı ekler (Windows'un yeniden Block kuralı üretmesini önler):
+   **kurulu her sürüm için bir tane**, `..\server_v*\VortexArena.Server.App.exe` yan klasörlerinin
+   hepsine. Program kuralı exe'nin **tam yoluna** bağlıdır, her sürümün yolu farklıdır — bu yüzden
+   tek kural yetmez. Kuralların adı aynı olduğu için betik önce o adı taşıyan kuralların tümünü
+   siler, sonra sıfırdan ekler (tekrar çalıştırmak güvenlidir). Outbound Windows'ta zaten
+   varsayılan serbesttir.
 4. **Teşhis basar:** aktif adaptörler (birden fazlaysa uyarır), IPv4 adresleri, dinlenen portlar.
+
+Betik **yalnız kendi klasörünün yolunu** kullanır, çalışma klasörüne bakmaz: launcher onu seçili
+sürüm klasöründen yönetici olarak çalıştırabilir.
+
+> **Yeni sürüm indirildikten sonra betik yeniden çalıştırılır** (launcher'ın Sunucu sayfasındaki
+> düğme de aynı işi yapar): yeni sürümün exe yolu için kural yoksa Windows onu engeller ve gözlükler
+> sunucuyu bulamaz.
 
 > **Bu betiği admin console çalıştıran DİĞER PC'lerde de çalıştırın.** Beacon bir *broadcast*
 > paketidir; stateful UDP eşleşmesine takılmaz, istemcide inbound izin yoksa Windows onu sessizce
@@ -337,7 +390,8 @@ bağlantısında numara alır; dosya ilk yazımda yeni biçime yükseltilir.
 dosyaya çöp bir satır eklerdi. Admin'e numara da atanmaz (`number: 0`).
 
 **`<Mekan>_dimensions.json` — config değil, ÇIKTI.** Sahada kumandayla alınan mekan ölçümü
-(`venue_survey`, §10.11) `config/` altına değil **exe'nin yanına** yazılır; yanında tek kuşaklık
+(`venue_survey`, §10.11) `config/` altına değil **veri klasörünün köküne** yazılır (`--data-dir`
+yoksa exe'nin yanına); yanında tek kuşaklık
 `<Mekan>_dimensions.prev.json` yedeği durur. Dosya adının mekanı sunucunun **seçili mekanıdır**.
 ⚠️ **Sunucu bu dosyayı hiç okumaz** — ölçünün tüketicisi Unity'dir (`maps.json`'da da arena ölçüsü
 yoktur, sunucu metre kullanmaz). Dosya doğrulandıktan sonra elle Unity projesine
@@ -541,6 +595,6 @@ olmayan kancayı hiç ekleme**.
 - **Hasar modeli:** sunucuda silah tablosu YOKTUR; hasarı istemci hesaplar, sunucu aynen uygular
   (`weaponId` yalnız etiket) — `../Docs/ArenaNet-Protokol.md` §10.3.
 - **Mekan ölçümü:** oyuncunun sahada kumandayla aldığı ölçüyü (`venue_survey`) doğrulayıp
-  **exe'nin yanına** `<Mekan>_dimensions.json` olarak yazar ve sonucu yalnız gönderene döner
+  **veri klasörüne** `<Mekan>_dimensions.json` olarak yazar ve sonucu yalnız gönderene döner
   (`venue_survey_result`) — `../Docs/ArenaNet-Protokol.md` §10.11. Dosya adının mekanı sunucunun
   **seçili mekanıdır**, mesajdaki ad değil. Sunucu bu dosyayı bir daha okumaz: tüketicisi Unity'dir.

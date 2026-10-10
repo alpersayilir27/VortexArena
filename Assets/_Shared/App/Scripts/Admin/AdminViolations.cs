@@ -78,6 +78,25 @@ namespace VortexArena.App.Admin
                 : AdminViolationKind.None;
         }
 
+        /// <summary>Is THIS kind live for the player right now — same snapshot and death gate as
+        /// <see cref="Of"/>, but without obstacle-first priority, for surfaces that show each kind
+        /// separately (stats ledger, feed rows).</summary>
+        public static bool IsLive(int playerId, AdminViolationKind kind)
+        {
+            RemotePlayerRegistry registry = RemotePlayerRegistry.Instance;
+            if (registry == null || !registry.IsAlive(playerId))
+            {
+                return false;
+            }
+
+            switch (kind)
+            {
+                case AdminViolationKind.Obstacle: return registry.IsInObstacle(playerId);
+                case AdminViolationKind.OutOfBounds: return registry.IsOutOfBounds(playerId);
+                default: return false;
+            }
+        }
+
         /// <summary>
         /// The violation's current blink color; <see cref="Girdap.Line"/> for
         /// <see cref="AdminViolationKind.None"/> so an accidental call is not a visible error.

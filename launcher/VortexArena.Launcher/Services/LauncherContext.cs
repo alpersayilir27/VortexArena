@@ -11,10 +11,17 @@ public sealed class LauncherContext : IDisposable
         Paths = paths;
         Settings = settings;
         StatusClient = new ServerStatusClient();
-        Server = new ServerController(paths);
+        Server = new ServerController(paths, settings);
         Admin = new AdminController(paths, settings);
         Adb = new AdbService(paths.AdbExe);
-        Versions = new HttpVersionSource(() => Settings.VersionsUrl, () => Settings.DownloadBaseUrl);
+        Versions = new HttpVersionSource(
+            () => Settings.VersionsUrl, () => Settings.DownloadBaseUrl, GamePackage.FileNameFor);
+        AdminVersions = new HttpVersionSource(
+            () => Settings.AdminVersionsUrl, () => Settings.AdminDownloadBaseUrl,
+            BuildPackage.Admin.FileNameFor);
+        ServerVersions = new HttpVersionSource(
+            () => Settings.ServerVersionsUrl, () => Settings.ServerDownloadBaseUrl,
+            BuildPackage.Server.FileNameFor);
         RefreshControlPort();
     }
 
@@ -30,12 +37,29 @@ public sealed class LauncherContext : IDisposable
 
     public AdbService Adb { get; }
 
+    /// <summary>Player APK feed.</summary>
     public IVersionSource Versions { get; }
+
+    /// <summary>Windows admin build feed; separate list and download base.</summary>
+    public IVersionSource AdminVersions { get; }
+
+    /// <summary>Match server build feed; separate list and download base.</summary>
+    public IVersionSource ServerVersions { get; }
 
     /// <summary>Control port in use: override → <c>server.json</c> → protocol default.</summary>
     public int ControlPort { get; private set; }
 
-    public void RefreshControlPort() => ControlPort = Settings.ResolveControlPort(Paths.ServerConfigJson);
+    /// <summary>
+    /// Re-resolves the control port. The venue data config comes first; it does not exist before the
+    /// server's first start, so the selected build's seed copy answers until then.
+    /// </summary>
+    public void RefreshControlPort()
+    {
+        var version = Server.SelectedVersion;
+        ControlPort = Settings.ResolveControlPort(
+            Paths.ServerConfigJson,
+            version > 0 ? Paths.ServerVersionConfigJson(version) : "");
+    }
 
     /// <summary>Persists settings; a failure must not take the launcher down with it.</summary>
     public void SaveSettings()
@@ -54,5 +78,7 @@ public sealed class LauncherContext : IDisposable
     {
         StatusClient.Dispose();
         (Versions as IDisposable)?.Dispose();
+        (AdminVersions as IDisposable)?.Dispose();
+        (ServerVersions as IDisposable)?.Dispose();
     }
 }

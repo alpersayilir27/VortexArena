@@ -126,6 +126,10 @@ namespace VortexArena.App.Admin
         /// row can explain the cause (the narrow button only carries "HATA").</summary>
         public string calibrationError = "";
 
+        /// <summary>When <see cref="calibrationError"/> last arrived (<c>Time.unscaledTime</c>, local
+        /// only) — how long the stats row keeps the reason up for a calibrated player.</summary>
+        public float calibrationErrorAt = float.NegativeInfinity;
+
         /// <summary>Does the row need operator attention: a PLAYER and uncalibrated.</summary>
         public bool NeedsCalibration => IsPlayer && !calibrated;
 
@@ -164,6 +168,14 @@ namespace VortexArena.App.Admin
 
         /// <summary>Total time spent out of bounds (s).</summary>
         public float outOfBoundsSeconds;
+
+        /// <summary>Arrival of the last <c>violation</c> edge per kind (<c>Time.unscaledTime</c>, local
+        /// only — NOT part of the ledger above): how long the stats row keeps a chip up after the
+        /// violation ended.</summary>
+        public float obstacleEdgeAt = float.NegativeInfinity;
+
+        /// <inheritdoc cref="obstacleEdgeAt"/>
+        public float outOfBoundsEdgeAt = float.NegativeInfinity;
 
         public bool IsPlayer => role == AppSession.RolePlayer;
 
@@ -657,7 +669,13 @@ namespace VortexArena.App.Admin
                 view.floor = view.IsPlayer ? info.floor : 0;
                 view.bodyScale = view.IsPlayer ? info.bodyScale : 0f;
                 view.scaleError = view.IsPlayer ? info.scaleError ?? "" : "";
-                view.calibrationError = view.IsPlayer ? info.calibrationError ?? "" : "";
+                string calibrationError = view.IsPlayer ? info.calibrationError ?? "" : "";
+                if (calibrationError.Length > 0 && calibrationError != view.calibrationError)
+                {
+                    view.calibrationErrorAt = Time.unscaledTime;
+                }
+
+                view.calibrationError = calibrationError;
 
                 if (view.alive != info.alive)
                 {
@@ -945,8 +963,9 @@ namespace VortexArena.App.Admin
             ViolationFeedVersion++;
         }
 
-        /// <summary>Start/end of a physical violation (§10.9) — FEED ONLY: this class derives no edges,
-        /// measures no time and counts nothing. The counters come from the roster (see the field docs).
+        /// <summary>Start/end of a physical violation (§10.9) — FEED ONLY: this class derives no edges
+        /// and counts nothing; it only stamps the edge's arrival for the stats row's display window.
+        /// The counters come from the roster (see the field docs).
         /// <para>⚠️ The message is edge triggered: a lost line is only a log loss, since the ring is
         /// fed from the snapshot bit (<c>AdminViolations.Of</c>). Short contacts (below
         /// <see cref="ArenaProtocol.VIOLATION_MIN_SECONDS"/>) are already filtered on the server —
@@ -962,9 +981,22 @@ namespace VortexArena.App.Admin
             // A row for an id the roster does not know yet is written unnamed ("Oyuncu N"), which reads
             // like a different event than its named end line — say so, so the field can tell it apart
             // from a line that never arrived at all.
-            if (Find(msg.playerId) == null)
+            AdminPlayerView view = Find(msg.playerId);
+            if (view == null)
             {
                 Debug.LogWarning($"[AdminRoster] İhlal satırı roster'dan önce geldi: playerId {msg.playerId}");
+            }
+            else
+            {
+                switch (AdminViolations.Kind(msg.kind))
+                {
+                    case AdminViolationKind.Obstacle:
+                        view.obstacleEdgeAt = Time.unscaledTime;
+                        break;
+                    case AdminViolationKind.OutOfBounds:
+                        view.outOfBoundsEdgeAt = Time.unscaledTime;
+                        break;
+                }
             }
 
             // Unknown kinds are written with their raw label (AdminViolations.Label): swallowing the
@@ -1009,6 +1041,14 @@ namespace VortexArena.App.Admin
             if (msg == null)
             {
                 return;
+            }
+
+            // A repeated failure with the SAME reason leaves lobby_state unchanged, so only this
+            // event can restart the stats row's display window.
+            AdminPlayerView view = msg.ok ? null : Find(msg.playerId);
+            if (view != null)
+            {
+                view.calibrationErrorAt = Time.unscaledTime;
             }
 
             CalibrationResult?.Invoke(msg);

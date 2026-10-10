@@ -191,8 +191,9 @@ kabı değiştiyse önce *Fontları ve asset kabını üret*).
   (POV) yuvası bilerek **boştur**: POV karttan/klavyeden girilir, o kipte hiçbir segment yanmaz.
   İki takım sütunu, sütun başına en çok `maxRowsPerColumn` kart (fazlası "+N oyuncu daha
   (istatistiklerde)"), sütun başlığında takım adı · oyuncu sayısı · "N KALİBRESİZ" çipi; takımsız
-  kipte tek sütun. Solda ihlal akışı (`AdminViolationFeedView` + havuzlu `AdminViolationFeedRow`),
-  sağda öldürme akışı (`AdminKillFeedView` + `AdminKillFeedRow`). Alt şerit `AdminMatchControls`
+  kipte tek sütun. Solda ihlal akışı (`AdminViolationFeedView` + havuzlu `AdminViolationFeedRow`;
+  canlı satır ihlal sürdükçe, diğerleri 10 sn kalır), sağda öldürme akışı (`AdminKillFeedView` +
+  `AdminKillFeedRow`; plaka 8 sn sonra solarak kalkar). Alt şerit `AdminMatchControls`
   (BAŞLAT · DURAKLAT/DEVAM · BİTİR→BİTİR? · İPTAL) + KAT grubu (`AdminFloorControls`; yalnız
   `ArenaFloors.Count > 1` iken görünür, şerit onunla genişler). İstatistik ve tercihler panelleri
   bu prefaba **gömülüdür**, görünürlüğü `AdminSession.OpenPanel` sürer.
@@ -207,8 +208,9 @@ kabı değiştiyse önce *Fontları ve asset kabını üret*).
   ⚠️ Kartın yalnız yüksekliği sabittir; genişliği sütundan gelir, bu yüzden her parça ya kenara
   çapalıdır ya `Bind`'da ölçülür.
 - **AdminStatsRow** — plaka · ad + `#playerId` · durum çipi · öldürme/ölüm/K-D/skor · pil ·
-  kumanda · gövde · kat · ping · ihlal defteri çipleri. Düğmeler: **KALİBRE** (kalibresizse
-  "KALİBRE !" uyarı dolgusuyla; yüklenirken YÜKLENİYOR, sonra TAMAM/HATA; zemin sapması
+  kumanda · gövde · kat · ping · ihlal çipleri (ihlal canlıyken ve bittikten 10 sn sonrasına dek;
+  içindeki sayı maç toplamı). Düğmeler: **KALİBRE** (kalibresizse "KALİBRE !" uyarı dolgusuyla —
+  yüklenirken de; yüklenirken YÜKLENİYOR, sonra TAMAM/HATA; zemin sapması
   `ArenaProtocol.CALIB_FLOOR_WARN_METERS`'i aşarsa yalnız yazı mürekkebi uyarıya döner —
   kalibresiz bağırır, sapan yalnız boyanır) · **ÖLÇ** (ölçülmüşse ×ölçek) · **kalem ikonlu düğme**
   (ad/numara) ·

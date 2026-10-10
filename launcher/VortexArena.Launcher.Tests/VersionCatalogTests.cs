@@ -54,7 +54,7 @@ public class VersionCatalogTests
     [Fact]
     public void SurumListesi_YenidenEskiyeSiralanir()
     {
-        var parsed = HttpVersionSource.ParseList(SampleJson);
+        var parsed = HttpVersionSource.ParseList(SampleJson, GamePackage.FileNameFor);
 
         Assert.Equal([132, 130], parsed.Select(v => v.Version));
         Assert.Equal(1048576, parsed[0].Size);
@@ -68,7 +68,7 @@ public class VersionCatalogTests
         { "versions": [ { "file": "x.apk" }, { "version": 9 } ] }
         """;
 
-        var parsed = HttpVersionSource.ParseList(json);
+        var parsed = HttpVersionSource.ParseList(json, GamePackage.FileNameFor);
 
         Assert.Single(parsed);
         Assert.Equal("game_v9.apk", parsed[0].File);
@@ -77,7 +77,10 @@ public class VersionCatalogTests
     [Fact]
     public void SurumListesi_VersionsDizisiYoksaHata()
     {
-        Assert.ThrowsAny<Exception>(() => { HttpVersionSource.ParseList("""{ "count": 0 }"""); });
+        Assert.ThrowsAny<Exception>(() =>
+        {
+            HttpVersionSource.ParseList("""{ "count": 0 }""", GamePackage.FileNameFor);
+        });
     }
 
     // ────────────────────────────────────────────────────────────────────── merge

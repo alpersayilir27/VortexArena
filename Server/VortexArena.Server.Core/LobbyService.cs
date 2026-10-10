@@ -68,11 +68,18 @@ public sealed class LobbyService
     /// <summary>Match recording (§12); <see cref="MatchRecorder.Disabled"/> when unwired.</summary>
     private readonly MatchRecorder _recorder;
 
-    public LobbyService(PlayerRegistry registry, MatchDirector director, MatchRecorder? recorder = null)
+    /// <summary>Where the venue survey is written (§10.11) — the venue's data folder, not the
+    /// version folder.</summary>
+    private readonly string _surveyDir;
+
+    public LobbyService(PlayerRegistry registry, MatchDirector director, MatchRecorder? recorder = null,
+        ServerPaths? paths = null)
     {
         _registry = registry;
         _director = director;
         _recorder = recorder ?? MatchRecorder.Disabled;
+        // Unwired (dev/tool host): the survey falls back next to the exe, the old location.
+        _surveyDir = paths?.SurveyDir ?? AppContext.BaseDirectory;
         // §12.2: the state a late-joining admin would get opens every recording. These builders live
         // here, so the recorder pulls them instead of the director reaching into this service.
         _recorder.InitialStateProvider = () => new[]
@@ -1228,8 +1235,8 @@ public sealed class LobbyService
 
     // ---- Venue survey (§10.11) ----
 
-    /// <summary>venue_survey: a player uploads a survey taken with the controllers; it is written next
-    /// to the server exe and the result goes back to the SENDER only (it is an event, not state —
+    /// <summary>venue_survey: a player uploads a survey taken with the controllers; it is written into
+    /// the server's data folder and the result goes back to the SENDER only (it is an event, not state —
     /// nothing enters the roster).
     /// <para>
     /// ⚠️ <b>The file is named from the SERVER's venue</b>, not from the message: the venue belongs to
@@ -1249,7 +1256,7 @@ public sealed class LobbyService
         // The file's own `name` field must not stay empty: the generated geometry is labelled from it.
         if (dims != null && string.IsNullOrWhiteSpace(dims.name)) dims.name = venue;
 
-        var path = VenueSurveyStore.Save(venue, dims, out var error);
+        var path = VenueSurveyStore.Save(_surveyDir, venue, dims, out var error);
         if (path == null)
         {
             Console.WriteLine($"[Lobby] venue_survey: {who} ölçümü kaydedilemedi — {error}");

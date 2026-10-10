@@ -40,12 +40,23 @@ public sealed class LauncherSettings
     /// <summary>Server's replay output folder argument.</summary>
     public const string ArgReplayDir = "--replay-dir";
 
+    /// <summary>Server's venue data folder argument: config, logs and survey files live there.</summary>
+    public const string ArgDataDir = "--data-dir";
+
     /// <summary>Launcher and server share the PC, so the admin build dials loopback.</summary>
     public const string DefaultServerIp = "127.0.0.1";
 
     public const string DefaultVersionsUrl = "http://159.100.20.26:8091/versions";
 
     public const string DefaultDownloadBaseUrl = "http://159.100.20.26:8090/game_versions/";
+
+    public const string DefaultAdminVersionsUrl = "http://159.100.20.26:8091/admin/versions";
+
+    public const string DefaultAdminDownloadBaseUrl = "http://159.100.20.26:8090/admin_versions/";
+
+    public const string DefaultServerVersionsUrl = "http://159.100.20.26:8091/server/versions";
+
+    public const string DefaultServerDownloadBaseUrl = "http://159.100.20.26:8090/server_versions/";
 
     /// <summary>Venue to open this session — passed to the server as <c>--venue</c>.</summary>
     [JsonPropertyName("venue")]
@@ -69,6 +80,26 @@ public sealed class LauncherSettings
 
     [JsonPropertyName("downloadBaseUrl")]
     public string DownloadBaseUrl { get; set; } = DefaultDownloadBaseUrl;
+
+    [JsonPropertyName("adminVersionsUrl")]
+    public string AdminVersionsUrl { get; set; } = DefaultAdminVersionsUrl;
+
+    [JsonPropertyName("adminDownloadBaseUrl")]
+    public string AdminDownloadBaseUrl { get; set; } = DefaultAdminDownloadBaseUrl;
+
+    /// <summary>Admin build the operator picked; 0 = use the highest unpacked one.</summary>
+    [JsonPropertyName("adminVersion")]
+    public int AdminVersion { get; set; }
+
+    [JsonPropertyName("serverVersionsUrl")]
+    public string ServerVersionsUrl { get; set; } = DefaultServerVersionsUrl;
+
+    [JsonPropertyName("serverDownloadBaseUrl")]
+    public string ServerDownloadBaseUrl { get; set; } = DefaultServerDownloadBaseUrl;
+
+    /// <summary>Server build the operator picked; 0 = use the highest unpacked one.</summary>
+    [JsonPropertyName("serverVersion")]
+    public int ServerVersion { get; set; }
 
     /// <summary>Last headset the operator picked; re-selected when it shows up again.</summary>
     [JsonPropertyName("preferredDeviceSerial")]
@@ -119,6 +150,10 @@ public sealed class LauncherSettings
     {
         if (string.IsNullOrWhiteSpace(VersionsUrl)) VersionsUrl = DefaultVersionsUrl;
         if (string.IsNullOrWhiteSpace(DownloadBaseUrl)) DownloadBaseUrl = DefaultDownloadBaseUrl;
+        if (string.IsNullOrWhiteSpace(AdminVersionsUrl)) AdminVersionsUrl = DefaultAdminVersionsUrl;
+        if (string.IsNullOrWhiteSpace(AdminDownloadBaseUrl)) AdminDownloadBaseUrl = DefaultAdminDownloadBaseUrl;
+        if (string.IsNullOrWhiteSpace(ServerVersionsUrl)) ServerVersionsUrl = DefaultServerVersionsUrl;
+        if (string.IsNullOrWhiteSpace(ServerDownloadBaseUrl)) ServerDownloadBaseUrl = DefaultServerDownloadBaseUrl;
         return this;
     }
 
@@ -162,6 +197,12 @@ public sealed class LauncherSettings
         return trimmed.Length == 0 ? [] : [ArgVenue, trimmed, ArgReplayDir, replayDir];
     }
 
+    /// <summary>Arguments for the server including its venue data folder.</summary>
+    /// <param name="dataDir">Always passed: without it the server would write config and logs into
+    /// the version folder, and a version upgrade would lose them.</param>
+    public static IReadOnlyList<string> ServerArguments(string venue, string replayDir, string dataDir)
+        => [ArgDataDir, dataDir, .. ServerArguments(venue, replayDir)];
+
     /// <summary>Arguments for watching one recording in the admin build.</summary>
     public static IReadOnlyList<string> ReplayArguments(string replayPath) => [ArgReplay, replayPath];
 
@@ -194,22 +235,26 @@ public sealed class LauncherSettings
 
     // ------------------------------------------------------------------------ port
 
-    /// <summary>Override → <c>server.json</c> → <see cref="DefaultPort"/>.</summary>
-    public int ResolveControlPort(string serverConfigJsonPath)
+    /// <summary>Override → first readable <c>server.json</c> in order → <see cref="DefaultPort"/>.</summary>
+    /// <param name="serverConfigJsonPaths">Venue data config first, then the selected build's seed
+    /// copy — the data one does not exist until the server has started once.</param>
+    public int ResolveControlPort(params string[] serverConfigJsonPaths)
     {
         if (IsValidPort(ControlPortOverride)) return ControlPortOverride;
 
-        try
+        foreach (var path in serverConfigJsonPaths)
         {
-            if (File.Exists(serverConfigJsonPath))
+            try
             {
-                var fromConfig = ParseControlPort(File.ReadAllText(serverConfigJsonPath));
+                if (string.IsNullOrEmpty(path) || !File.Exists(path)) continue;
+
+                var fromConfig = ParseControlPort(File.ReadAllText(path));
                 if (fromConfig.HasValue) return fromConfig.Value;
             }
-        }
-        catch (Exception)
-        {
-            // Unreadable config falls through to the protocol default.
+            catch (Exception)
+            {
+                // Unreadable config falls through to the next candidate.
+            }
         }
 
         return DefaultPort;

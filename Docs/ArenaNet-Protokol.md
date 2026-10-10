@@ -404,7 +404,8 @@ dosyasına yazar (`Server/README.md`), başka hiçbir şey okumaz:
   **gözlükte KAYITLI çapadan hizalamayı yeniden yükletir** (§10.6). **`playerId:0` = TÜM oyuncular.**
   Sunucu bir şey hesaplamaz; hedefe **alansız** bir `reload_calibration` iletir
   (`measure_body_scale` ile aynı çift yönlü desen) ve sonucu başlık `set_calibration` ile döner:
-  başarıda `calibrated:true, source:"anchor"`, başarısızlıkta dolu `error` (§5.1). Operatörün
+  başarıda `calibrated:true` (kaynak kayıtlı çapa ise `source:"anchor"`, çapa yok/yüklenemedi de
+  bellekteki oturum kaydı devraldıysa `source:"session"`), başarısızlıkta dolu `error` (§5.1). Operatörün
   bastığı düğmenin cevabı ayrıca `calibration_result` ile adminlere gider (§5.3).
   ⚠️ **`measure_body_scale`'in aksine kalibresiz hedef ATLANMAZ:** komutun var olma sebebi tam da
   hizalaması olmayan ya da bozulmuş oyuncudur — kalibrasyon kapısı komutu var olduğu durumda
@@ -571,6 +572,10 @@ hizalama alındı ama **çapa cihaza kaydedilemedi** (hizalama bu oturumda geçe
 ⚠️ **Başarılı bir kalibrasyon alanı temizler** (`scaleError` ile aynı
 gerekçe: bir kez başarısız olan oyuncunun satırında uyarı sonsuza kadar kalırdı ve operatör sorunun
 sürdüğünü sanardı); `clear_calibration` de sıfırlar.
+⚠️ **Sahne değişiminin yarıda bıraktığı bir yeniden yükleme bu alana GİRMEZ** — yeni sahne kendi
+geri yüklemesini koşar ve o hizalama kendini bildirir (§10.6), yani terk edilmiş deneme bir
+gerekçe üretmez. Operatör satırının yerel bekleme süresi de buraya yazılmaz (§5.3
+`calibration_result`): zaman aşımı o ekranın kararıdır, oyuncunun durumu değil.
 
 `scaleError` = son gövde ölçümü başarısız olduysa gerekçesi, boş = sorun yok (§5.1/§10.8). Başarılı
 bir ölçüm alanı **temizler**; `clear_calibration` de sıfırlar. Kalibrasyon alanlarıyla aynı
@@ -663,8 +668,13 @@ anlamlı ölçüt akışın kendisidir ve o zaten `0x07` ile görünür.
 geçersiz sayılır.
 **`reload_calibration`** `{ "type":"reload_calibration" }` — istemci **kayıtlı çapadan hizalamayı
 yeniden yüklemeyi dener** ve sonucu bildirir (§10.6): başarıda normal bir
-`set_calibration{calibrated:true, source:"anchor"}`, başarısızlıkta `set_calibration{error:"…"}`
+`set_calibration{calibrated:true}` (`source` = `anchor` ya da oturum kaydı devraldıysa `session`),
+başarısızlıkta `set_calibration{error:"…"}`
 (§5.1). Yalnız player'a gider; alan taşımaz — hedef zaten o bağlantıdır.
+⚠️ **Deneme sürerken gelen ikinci bir istek yeni bir deneme başlatmaz ve reddedilmez:** koşan
+denemeye **katılır** ve aynı sonucu alır (bekleyen her istek bir cevap alır). Toplu komut tek
+oyuncuya iki kez düşebildiği için, "zaten sürüyor" diye düşen bir cevap operatöre var olmayan bir
+arıza bildirirdi.
 **`kicked`** `{ "type":"kicked", "reason":"" }` — istemci bağlantıyı kapatır ve **oyuncu başlığında uygulama kapanır**; kapanış dizisi ve gerekçeleri §5.4'te.
 **`version_mismatch`** `{ "type":"version_mismatch", "serverVersion":25, "clientVersion":24 }` — `hello.protocolVersion` uyuşmadı (§1); `welcome` YERİNE gider, ardından sunucu bağlantıyı `ArenaProtocol.VERSION_CLOSE_REASON` (`"version"`) sebebiyle kapatır. İstemci **atılmış sayılmaz**: uygulama kapanmaz, yeniden bağlanma sürer, bağlantı kartı başlığında "SÜRÜM UYUMSUZ" ve iki sürümü gösterir. Uyarı ilk `welcome`'da silinir. Yeni bir sunucu → istemci tipidir ama **sürüm artırmaz**: tanımayan istemci zarf kuralıyla yok sayar (§5) ve ret yine işler.
 
@@ -779,7 +789,11 @@ yeniden yüklemeyi dener** ve sonucu bildirir (§10.6): başarıda normal bir
 - **Ölüm ihlali kapatır:** ihlaldeki oyuncu ölünce `active:false` satırı o anda gider (süre ölüme
   kadardır) ve halka söner; ölü bir bedenin bloğun içinde durması operatörün müdahale edeceği bir
   şey değildir. Kalibrasyon ise sorulmaz — kalibresiz oyuncunun alan dışına çıkması tam da
-  görülmesi gereken şeydir.
+  görülmesi gereken şeydir. ⚠️ **Defterin kapısı sunucuda değil başlıktadır ve kalibrasyon değil
+  YERLEŞTİRMEdir** (§6.3): rig'i bu sahnede bir kez yerine koyan her yol (elle A/B · çapadan ya da
+  oturum kaydından geri yükleme · kalibresiz tahmini yerleştirme) bitleri açar, yerleştirmeden
+  önceki ham izleme uzayı hiç bildirilmez. Yumuşak sıfırlanmış ya da yalnız tahminen yerleştirilmiş
+  oyuncu bu yüzden deftere yazmaya devam eder.
 - **Geç bağlanan admin açık ihlalleri alır:** `hello` sırasında sürmekte olan (eşiği geçmiş) her
   ihlal için `active:true` satırı yalnız o admine, `lobby_state`'ten **sonra** tekrar gönderilir
   (ad çözülebilsin diye). Kenar hiç admin yokken de ilerler (defter admin'e bağlı değildir), yani
@@ -796,8 +810,11 @@ yeniden yüklemeyi dener** ve sonucu bildirir (§10.6): başarıda normal bir
 { "type":"calibration_result", "playerId":5, "ok":true, "error":"" }
 ```
 
-- `ok:true` = başlık kayıtlı çapadan hizalamayı geri yükledi; `ok:false` ise `error` insan
-  okuyabilir gerekçedir (§5.1 ile aynı serbest metin).
+- `ok:true` = başlıktan bir `set_calibration{calibrated:true}` geldi — kaynağına bakmaz; `ok:false`
+  ise `error` insan okuyabilir gerekçedir (§5.1 ile aynı serbest metin). ⚠️ **"Düğme tuttu"
+  anlamından daha geniştir:** operatörün basmadığı bir hizalama da (elle A/B, harita değişiminin
+  geri yüklemesi, yeniden bağlanan başlığın kendini yeniden bildirmesi) `ok:true` üretir — sunucu
+  bekleyen istek defteri tutmadığı için ayıramaz, ayıklama ekrandadır (aşağıda).
 - Hedef kuralı `net_stats`/`violation` ile aynıdır: bunu okuyan tek şey operatörün ekranıdır.
 - ⚠️ **Bu bir OLAYDIR, durum değildir.** Roster'daki `calibrated`/`calibrationError` alanları durumu
   taşır; bu mesaj yalnız *"az önce basılan düğme ne oldu"* sorusunu cevaplar.
@@ -805,6 +822,9 @@ yeniden yüklemeyi dener** ve sonucu bildirir (§10.6): başarıda normal bir
   ve **her** `set_calibration{error}` bir sonuç satırı yayınlar; hangi satırın hangi düğmeye ait
   olduğunu **admin arayüzü** bilir (bekleyen satırı yoksa yok sayar). Defter tutmak sunucuya, tek
   tüketicisi bir ekran olan bir zaman aşımı sorumluluğu yüklerdi.
+- ⚠️ **Bekleyişin zaman aşımı YALNIZ admin ekranındadır** (60 sn) — telde taşınmaz ve
+  `calibrationError` olarak saklanmaz. Süre başlığın kendi yeniden deneme penceresinden bilerek
+  uzundur (§10.6): kısa tutulursa satır, gerçek sonuç yoldayken "başlıktan yanıt gelmedi" der.
 - ⚠️ Sonuç neden `lobby_state` ile taşınmıyor: zaten kalibreli bir oyuncuda **başarılı** yeniden
   yükleme roster'da hiçbir alanı değiştirmez (§5.3 yayın guard'ı), yani operatörün düğmesi sonsuza
   kadar "yükleniyor" kalırdı.
@@ -915,6 +935,14 @@ aynısıdır — ölçümü istemci yapar, otorite sunucudadır.
 snapshot'a kopyalar ve yalnız ihlal defterini yazar. Taşınmasının sebebi otoritedir — sunucu
 bilmezse defter, maç sonu istatistiği ve iki operatörün ortak listesi mümkün olmaz; admin'in kuralı
 kendi hesaplaması ise "alan dışı"nın biri istemcide biri adminde iki kez yaşaması demek olurdu.
+
+⚠️ **İki ihlal biti de rig O SAHNEDE yerine konduktan SONRA yazılır** (§10.9): yerleştiren yolun
+hangisi olduğu fark etmez (elle A/B · çapadan ya da oturum kaydından geri yükleme · kalibresiz
+tahmini yerleştirme · editörün dev hizalaması), sahnede yerleştirecek bir şey yoksa kapı da
+yoktur. Sahne açılışı ile ilk yerleştirme arasında kafa ham izleme uzayındadır — orada ölçülen
+sınır/engel mesafesi gürültüdür ve her harita yüklemesinde yalancı bir ihlal satırı ile defter
+artışı üretir. Oyuncunun kendi karartma/uyarısı bu kapıya tabi değildir (muhafaza kendi ölçümüyle
+çalışır).
 
 ⚠️ **İskelet akışı (§6.9) bu paketin yerine GEÇMEZ.** Gövde ayrı bir kanaldan gelir ama poz kanalı durur: silahın ele oturması, eşya baytları ve vuruş bildirimi ham anchor pozundan besleniyor. İki kanalın kadansı da ayrıdır (20 Hz ↔ `SKELETON_RATE_HZ`) — iskeletin gecikmesi silahın gecikmesi olmasın diye. "İskelet zaten el eklemini taşıyor, poz kanalı silinsin" **yapılmaz**: blob yalnız yerel eklem rotasyonu taşır (elin yeri alıcının kendi kemik uzunluklarıyla zincirden çözülür, gönderenin elinin konumu değildir) ve o eklem elin fiziksel pozu değil retarget edilmiş bilek kemiğidir.
 
@@ -2519,6 +2547,12 @@ başlatmadan / oyunu kesmeden toparlamaktır.
 başlatır, "hizalandım" işaretini yine **başlık** koyar (`set_calibration`). Otorite değişmez —
 yukarıdaki asimetrik yazar tablosu aynen geçerlidir.
 
+⚠️ **Kayıtlı çapa o sahnede ZATEN BAĞLIYSA deneme onu yeniden yüklemez,** bağlı çapadan hemen
+yeniden hizalar ve `source:"anchor"` ile başarıyı bildirir. Yükleme yolu burada yapısal olarak
+başarısızdır (Tuzaklar, "zaten bağlı çapa"), yani denemeyi tüketirdi: pencere dolana kadar hiçbir
+şey olmaz, sonra oturum kaydı devralıp yepyeni bir çapa kaydedilir ve operatörün satırı,
+hizalaması aslında sağlam olan bir başlıkta zaman aşımına düşer.
+
 ⚠️ **Deneme yalnız ne kayıtlı çapa ne de oturum kaydı varken BAŞARISIZDIR ve öyle bildirilir** —
 hiç kalibre olunmamış ya da `clear_calibration` **sert kipte** (`keepSaved:false`) ikisini de
 silmiş olabilir. Çapa yoksa ya da yüklenemezse başlık oturum kaydını dener
@@ -2526,6 +2560,17 @@ silmiş olabilir. Çapa yoksa ya da yüklenemezse başlık oturum kaydını dene
 koruduğu için günlük akış *hizalamayı geçersiz kıl → yeniden yükle*'dir ve orada bu başarısızlık
 görülmez. Sessizce başarılı sayılmaz: sunucunun hizalı sandığı ama fiilen kaymış bir oyuncuya ateş
 ve hasar açmak, bu sistemin önlemek için var olduğu durumdur.
+
+⚠️ **Başarısızlık gerekçeleri yalnız BAŞLIĞIN kendi kapılarıdır:** kayıt yok (yukarıda), çapa
+yüklenemedi/yerelleşmedi ve sahnede kalibratör yok. **Sahne değişiminin yarıda bıraktığı deneme
+gerekçe ÜRETMEZ** — yeni sahne kendi geri yüklemesini koşar ve o hizalama kendini bildirir
+(`set_calibration` → `calibration_result ok`), yani terk edilmiş denemeyi hata saymak operatöre
+harita değişimi başına bir yalancı kırmızı satır verirdi. Operatör satırının beklemesini kesen
+süre de bir gerekçe değildir, yalnız o ekranın yerel kararıdır (§5.3).
+
+⚠️ **Yeni bir çapa bağlı çapanın yerine geçtiğinde eskisi yok edilir** (oturum kaydıyla
+hizalandıktan sonra yapılan kayıt dahil): bırakılan bağlı çapa her yeniden yüklemede bir yetim
+daha biriktirir ve bir sonraki denemenin yükleme yolunu yukarıdaki tuzağa sokar.
 
 ⚠️ **Sonucun kanalı `lobby_state` DEĞİL `calibration_result`'tır** (§5.3): zaten kalibreli bir
 oyuncuda başarılı yeniden yükleme roster'da hiçbir alanı değiştirmez (yayın guard'ı), yani
@@ -2985,6 +3030,13 @@ okunamıyorsa muhafaza kendini kapatır ve "alan dışı" sorusunu cevaplamaz (a
 (`lobby_state.calibrated` ile birlikte okunur). Gönderende susturmak, susmanın sebebini operatörden
 gizlerdi.
 
+⚠️ **Gönderenin tek kapısı RIG'İN O SAHNEDE YERLEŞTİRİLMİŞ olmasıdır** (§6.3), kalibrasyon değil:
+tahmini yerleştirme de, kayıttan geri yükleme de, elle A/B de kapıyı açar; sahnede yerleştirecek
+bir bileşen yoksa kapı yoktur. Kapının sebebi ölçümün geçerliliğidir — yerleştirilmemiş rig'de kafa
+ham izleme uzayında durur ve her harita yüklemesinin ilk saniyeleri (geri yükleme hemen bitmez)
+yalancı bir ihlalle defteri şişirirdi. Yumuşak sıfırlanmış oyuncu bu yüzden bildirmeye devam
+eder: rig'i yerindedir, yalnız hizalaması geçersizdir.
+
 ### 10.10 Ağ nesneleri (`netId`) — oyuncu olmayan varlıklar
 
 Oyuncu olmayan her ağ varlığı (kırılabilir örtü, hedef tahtası, ileride taşınan malzeme) **tek
@@ -3320,7 +3372,9 @@ ya yazılmaz, yanlış yazılmaz; oyuncu istemcisinin ölçüm dışındaki hiç
 
 ## 11. Sunucu config dosyaları
 
-`Server/config/` altındaki dosyalar; kaynakları FARKLIDIR:
+`config/` altındaki dosyalar; kaynakları FARKLIDIR. Klasörün **yeri** `--data-dir` ile verilir
+(`<veri>\config\`), verilmezse exe'den yukarı doğru aranır; `maps.json` bunun dışındadır ve her
+zaman **exe'nin yanındaki** `config\`'ten okunur (`Server/README.md`):
 
 | Dosya | Kaynağı | Not |
 |---|---|---|
@@ -3328,8 +3382,8 @@ ya yazılmaz, yanlış yazılmaz; oyuncu istemcisinin ölçüm dışındaki hiç
 | `devices.json` | **Sunucu üretir** | `deviceId → { "name":"ertu", "number":7 }`; ilk bağlantıda ve `set_identity`'de yazılır (§2). Eski v1 biçimi (`deviceId → "ad"`) okunur — numara `0` sayılır — ve ilk yazımda yeni biçime yükseltilir. UTF-8, BOM'suz. |
 | `maps.json` | **Unity export** | `MapDefinition` SO'larından: `sceneName`, `venue`, `gameType`, `modes`, `moleDensity` (§10.1, §10.5, §11.1) + harita başına `objects[]` ve kökte `kinds[]` (§10.10). Arena ölçüsü YOKTUR — sunucu metre kullanmaz, ölçü istemcide sahnenin `ArenaBoundary`'sinde kalır. |
 
-> **`<Mekan>_dimensions.json` config DEĞİLDİR, çıktıdır:** sunucu onu `config/` altına değil **kendi
-> exe'sinin yanına** yazar (`venue_survey`, §10.11) ve bir daha hiç okumaz — arena ölçüsünün tüketicisi
+> **`<Mekan>_dimensions.json` config DEĞİLDİR, çıktıdır:** sunucu onu `config/` altına değil **veri
+> klasörünün köküne** yazar (`--data-dir`, yoksa exe'nin yanı; `venue_survey`, §10.11) ve bir daha hiç okumaz — arena ölçüsünün tüketicisi
 > Unity'dir (`maps.json` satırında yazdığı gibi sunucu metre kullanmaz). Yanında tek kuşaklık
 > `<Mekan>_dimensions.prev.json` yedeği durur. Dosya, doğrulandıktan sonra elle repoya
 > `Venues/<İşletme>/Data/` altına taşınır; sunucu klasöründe bırakılan kopya kalıcı sayılmaz.

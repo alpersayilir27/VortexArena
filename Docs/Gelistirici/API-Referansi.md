@@ -367,6 +367,7 @@ durumdur: PlayerPrefs'te anchor UUID'si hiç yok, ya da geri yükleme tüm denem
 
 | Üye | Tip | Açıklama |
 |---|---|---|
+| ✅ `ArenaCalibrator.IsRigPlaced` | `static bool` | Bu sahnenin rig'i yerleştirildi mi (elle A/B, çapa, oturum kaydı, tahmini ön-hizalama, dev). Öncesinde kafa ham takip uzayındadır; `PlayerPoseTracker` iki ihlal bitini buna bağlar. Sahnede kalibratör yoksa `true` |
 | ✅ `ArenaCalibrator.SourceSession` | `const string` = `"session"` | `set_calibration.source` etiketi: hizalama bellekteki **oturum kaydından** geri yüklendi (çapa yok ya da yüklenemedi). Kayıt, hizalamanın referans pozunu **takip uzayında** tutar; harita değişiminde ve operatörün yeniden yüklemesinde kullanılır, uygulama kapanınca gider |
 | ✅ `CalibrationState.ReportAnchorSaveFailure(string reason)` | `static void` | Çapa oluşturulamadı/kaydedilemedi/zaman aşımına uğradı → gerekçeyi saklar, uyarı basar ve `set_calibration{error}` ile operatöre bildirir. Hizalama **geçersiz kılınmaz** |
 | ✅ `CalibrationState.ClearAnchorSaveFailure()` | `static void` | Kayıt sonradan tuttu → gerekçeyi düşürür ve satırın temizlenmesi için güncel durumu yeniden bildirir |
@@ -752,13 +753,13 @@ tabanda **değildir** (aşağıdaki nota bak).
 |---|---|---|
 | `AdminHud` | ✅ `ResourcePath` | Üst şerit + takım sütunları + iki akış + alt şerit. Dışa açık metodu yoktur: veriyi `AdminRoster`'dan okur, panelleri `AdminSession.OpenPanel` açar |
 | `AdminPlayerRow` | ✅ `Height` · `Initialize(Action<int> onSelect, Action<int> onPov)` · `Bind(AdminPlayerView, bool selected)` · `Tick()` · `SetVisible(bool)` · `Place(float top, float height)` ⛔ `EditorWire(...)` | Yan sütun kartı; havuzlanır. Yalnız YÜKSEKLİK sabittir, genişlik sütundan gelir |
-| `AdminStatsRow` | ✅ `Height` · `PlayerId` · `Initialize(Action<int> onSelect, Action<int,string> onPopup)` · `Bind(AdminPlayerView, bool selected)` · `Tick()` · `SetVisible(bool)` · `Place(float top, float height)` · `BeginCalibrationLoad()` · `ApplyCalibrationResult(bool ok, string error)` | İstatistik tablosunun satırı; KALİBRE · ÖLÇ · ad · SIFIRLA · AT düğmelerini kendi sürer |
+| `AdminStatsRow` | ✅ `Height` · `PlayerId` · `CanReloadCalibration` · `Initialize(Action<int> onSelect, Action<int,string> onPopup)` · `Bind(AdminPlayerView, bool selected)` · `Tick()` · `SetVisible(bool)` · `Place(float top, float height)` · `BeginCalibrationLoad()` · `ApplyCalibrationResult(bool ok, string error)` | İstatistik tablosunun satırı; KALİBRE · ÖLÇ · ad · SIFIRLA · AT düğmelerini kendi sürer. `ApplyCalibrationResult` yalnız satır beklerken (`YÜKLENİYOR`) işler; `CanReloadCalibration` = oyuncu bağlı |
 | `AdminStatsPanel` · `AdminPreferencesPanel` · `AdminMatchControls` · `AdminFloorControls` | — | Dışa açık API'leri **yoktur**; roster/oturum durumuna abonedirler. Panel görünürlüğü `AdminSession`, kat şeridi `ArenaFloors.Version` ile tazelenir |
-| `AdminKillFeedView` | ✅ `Bind(IReadOnlyList<AdminKillFeedEntry> feed, int version)` | Havuzlu satırları (`AdminKillFeedRow`) kurar; `version` değişmedikçe hiçbir şey yapmaz |
-| `AdminViolationFeedView` | ✅ `Bind(IReadOnlyList<AdminViolationFeedEntry> feed, int version)` | Aynı desen; canlı ihlal satırı daha yüksektir |
-| `AdminKillFeedRow` | ✅ `Height` · `NewHeight` · `Bind(entry, weapon, newest, alpha, top)` | Vuran plakası · silah · vurulan plakası |
+| `AdminKillFeedView` | ✅ `Bind(IReadOnlyList<AdminKillFeedEntry> feed, int version)` | Havuzlu satırları (`AdminKillFeedRow`) kurar; `version` değişmedikçe yeniden kurmaz, süresi dolan plakayı (8 sn) kendi `Update`'inde soldurup düşürür |
+| `AdminViolationFeedView` | ✅ `Bind(IReadOnlyList<AdminViolationFeedEntry> feed, int version)` | Aynı desen; canlı ihlal satırı daha yüksektir ve ihlal sürdükçe kalır, diğer satırlar 10 sn sonra düşer |
+| `AdminKillFeedRow` | ✅ `Height` · `NewHeight` · `Bind(entry, weapon, newest, alpha, top)` · `SetAlpha(float)` | Vuran plakası · silah · vurulan plakası; `SetAlpha` yeniden ölçmeden opaklığı yazar |
 | `AdminViolationFeedRow` | ✅ `Height` · `LiveHeight` · `IsLive` · `Bind(entry, live, top)` · `TickBlink()` | Canlı ihlal satırı yanıp söner |
-| `AdminViolations` | ✅ `Of(int playerId)` · `Kind(string)` · `Label(AdminViolationKind)` / `Label(string)` · `Blink(kind)` · `Tint(kind)` | **Statik.** İhlal türü → etiket ve Girdap rengi |
+| `AdminViolations` | ✅ `Of(int playerId)` · `IsLive(int playerId, AdminViolationKind)` · `Kind(string)` · `Label(AdminViolationKind)` / `Label(string)` · `Blink(kind)` · `Tint(kind)` | **Statik.** İhlal türü → etiket ve Girdap rengi; `IsLive` tek bir türün snapshot bitini (öncelik sırası olmadan) okur |
 | `AdminRoster` | ✅ `Instance` · `Changed` · `CalibrationResult` · `Red`/`Blue`/`Players` · `KillEvents`/`ViolationEvents` · `KillFeedVersion`/`ViolationFeedVersion` · `KillFeed`/`ViolationFeed` · `Find`/`NameOf`/`NextPlayerId` · `TeamTotals(team, out kills, out deaths, out alive)` · `Phase`/`PhaseReason`/`ModeState` · `TimeRemaining`/`ScoreRed`/`ScoreBlue`/`CountdownSeconds` · `WinnerTeam`/`WinnerPlayerId` · `ModeId`/`SceneName`/`ScoreLimit`/`RoundSeconds` · `IsFfa`/`AdminCount`/`SnapshotAge`/`CanChangeSelection` | Admin tarafının tek veri kaynağı; satır tipi `AdminPlayerView`, öldürme türü `AdminKillKind` |
 
 > ⚠️ `AdminKillKind` (`Kill` · `Suicide` · `Obstacle` · `Death`) ve `AdminViolationKind` serileşmez

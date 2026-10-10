@@ -1,20 +1,26 @@
 <#
 .SYNOPSIS
-  Lists the player APK versions currently published on the update server.
+  Lists the versions currently published on the update server (player APK or
+  admin archive, depending on -Url).
 
 .DESCRIPTION
-  deploy-player-apk.bat calls this right BEFORE it asks for a version number.
-  The number goes into the APK name and the Android package id, so overwriting a
-  published version - or skipping a number - used to be a silent mistake. With the
-  list on screen the choice stops being guesswork.
+  deploy-player-apk.bat and deploy-admin-game.bat call this right BEFORE they ask
+  for a version number. The number names the artifact, so overwriting a published
+  version - or skipping a number - used to be a silent mistake. With the list on
+  screen the choice stops being guesswork.
 
-  Single source of data: the GET /versions endpoint of updater_uploader_main.py on
-  the server (published game_v<N>.apk files, newest first). The local deploy\player\
-  folder is deliberately NOT read: an APK sitting there may never have been
-  published, and headsets only ever see what is on the server.
+  Single source of data: a listing endpoint of updater_uploader_main.py on the
+  server (/versions for the APKs, /admin/versions for the admin archives; newest
+  first). The local deploy\ folder is deliberately NOT read: an artifact sitting
+  there may never have been published, and headsets and operator PCs only ever
+  see what is on the server.
 
 .PARAMETER Url
-  Full address of the /versions endpoint (e.g. http://server:8091/versions).
+  Full address of the listing endpoint (e.g. http://server:8091/versions).
+
+.PARAMETER Label
+  The artifact in the genitive, used in the overwrite warning ("APK'nin" /
+  "admin arsivinin").
 
 .PARAMETER TimeoutSec
   Connect/read timeout. Kept short so a dead server does not stall the start of a
@@ -31,6 +37,7 @@
 [CmdletBinding()]
 param(
   [Parameter(Mandatory = $true)][string]$Url,
+  [string]$Label = "APK'nin",
   [int]$TimeoutSec = 8,
   [int]$Top = 12
 )
@@ -84,6 +91,6 @@ $newest = @($items | Sort-Object -Property modified -Descending)[0]
 Write-Host ''
 Write-Host ('  En yuksek numara   : v{0}' -f $highest)
 Write-Host ('  En son yuklenen    : v{0}  ({1})' -f $newest.version, $newest.modified)
-Write-Host '  Listedeki bir numarayi girmek yayindaki APK''nin uzerine yazar.'
+Write-Host ('  Listedeki bir numarayi girmek yayindaki {0} uzerine yazar.' -f $Label)
 
 exit 0

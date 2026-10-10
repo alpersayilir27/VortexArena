@@ -50,8 +50,10 @@ onu uygula (bilgi kartında yazar).
 ### 1.A Sunucu yönetim bilgisayarındaysa — Launcher'dan
 
 - [ ] Masaüstündeki **VortexArena Launcher** kısayoluna çift tıkla.
-- [ ] Sol menüden **Sunucu** sayfasını aç; listeden **işletmenin adını** seç (kurulumda seçili
-      bırakılmış olmalı; değiştirmen gerekmez).
+- [ ] Sol menüden **Sunucu** sayfasını aç; sayfadaki sürüm listesinde **gözlüklerdeki oyunla ve
+      yönetim uygulamasıyla aynı numaralı** sürüm seçili olmalı (kurulumda seçili bırakılmış olur;
+      değiştirmen gerekmez). Üçünün numarası aynı olmak zorundadır.
+- [ ] Listeden **işletmenin adını** seç (bu da kurulumda seçili bırakılmış olmalı).
 - [ ] **Başlat**'a bas → sayfanın altındaki günlük akmaya başlar, üstteki durum satırında
       "çalışıyor" ve maç bilgileri görünür. Sol menüdeki **Sunucu** satırında küçük bir **play
       işareti** belirir: sunucu ayakta demektir.
@@ -64,11 +66,19 @@ onu uygula (bilgi kartında yazar).
 > açılması mümkün değildir** — listede yanlış satır seçiliyse zaten gözle görürsün.
 > Mekan seçilmeden **Başlat** çalışmaz; uyarıyı görürsen listeden işletmeyi seç.
 
+> **Yeni bir sunucu sürümü indirdiysen:** o sürümü ilk kez başlatmadan önce sürüm kartındaki
+> **Güvenlik duvarı** düğmesine bas ve Windows'un sorduğu yönetici onayını ver. Basmazsan Windows
+> sunucuyu ilk açılışta "izin verilsin mi?" diye sorar; **İptal**'e basılırsa gözlükler sunucuyu
+> bulamaz.
+
 ### 1.B Sunucu ayrı bir bilgisayardaysa — elle
 
 - [ ] Sunucu bilgisayarını aç, ağ kablosunun/Wi-Fi'nin bağlı olduğunu gör.
 - [ ] Masaüstündeki **VortexArena Sunucu** kısayoluna çift tıkla.
-      (Kısayol yoksa: `deploy\server\` klasöründeki **`VortexArena.Server.App.exe`** dosyası.)
+      (Kısayol yoksa: `server_versions\server_v<numara>\` klasöründeki
+      **`VortexArena.Server.App.exe`** dosyası — numara gözlüklerdeki oyunun numarasıyla aynı
+      olmalı. Kısayolu kurulumda teknik ekip hazırlar: ayarların ve günlüklerin işletmenin veri
+      klasörüne düşmesi için kısayolda `--data-dir` satırı bulunur.)
 - [ ] Siyah bir pencere açılır ve **hangi mekanın açılacağını sorar:**
 
 ```
@@ -118,7 +128,10 @@ Lobi       : <o mekanın lobi haritası>
       bilgisayardaysa adres **Gelişmiş** başlığının altındadır (bilgi kartındaki adresi oraya yaz,
       **Uygula**'ya bas). Bu adres hatırlanmaz: launcher her açılışta bu bilgisayarın adresiyle
       (`127.0.0.1`) başlar.
-- [ ] **Başlat** düğmesine bas.
+- [ ] Sayfada **sürüm listesi** vardır. Gözlüklerdeki oyunla **aynı numaralı** sürümü seç
+      (hangi numara kurulu, **Versiyonlar** sayfasında yazar): indirilmemişse **İndir**'e, sonra
+      **Seç**'e bas. Yönetim çalışırken sürüm değiştirilemez — önce **Durdur**.
+- [ ] **Başlat** düğmesine bas; seçtiğin sürüm açılır.
 - [ ] Oyun penceresi açılır ve **IP sormadan doğrudan yönetim ekranına** düşer.
 
 > ⚠️ **Oyunun kendi exe dosyasına doğrudan çift tıklama.** Adres bilgisi launcher tarafından
@@ -322,8 +335,13 @@ yükleyen **KALİBRE** yalnız İstatistik satırındadır.
 
 - [ ] **1.** `I` ile İSTATİSTİK panelini aç, o oyuncunun satırını bul.
 - [ ] **2.** Önce **KALİBRE**'ye bas: gözlükte kayıtlı olan hizalamayı geri yüklemeyi dener ve
-      **kimseyi oyun dışı bırakmaz**. Düğme kısa süre **YÜKLENİYOR** yazar, sonra **TAMAM** ya da
-      **HATA** gösterip eski hâline döner. Tuttuysa iş bitti.
+      **kimseyi oyun dışı bırakmaz**. Düğme **YÜKLENİYOR** yazar, sonra **TAMAM** ya da
+      **HATA** gösterip eski hâline döner. Tuttuysa iş bitti. **Bekleme yarım dakikayı bulabilir**
+      — gözlük birkaç kez deniyor; sonuç gelene kadar düğme beklemede kalır, tekrar basmak
+      gerekmez (basarsan aynı denemeyi beklersin). Oyuncu kalibresizse düğme beklerken de
+      kırmızı kalır: kimin hâlâ kalibresiz olduğu toplu denemenin ortasında da görünsün.
+      ⚠️ Oyuncu **bağlı değilse** (YENİDEN BAĞLANIYOR / ayrılmış) düğme basılmaz — komut gözlüğe
+      ulaşamaz. Bağlanmasını bekle.
 - [ ] **3.** Tutmadıysa **SIFIRLA**'ya **kısa bas**: oyuncunun o anki hizalaması anında geçersiz
       olur. ⚠️ **Onay sormaz, ilk basışta gider.** Satırdaki **KALİBRE** düğmesi **KALİBRE !**
       olur, yan kolondaki kartı kırmızı çerçeveye döner ve kolonun başlığında "N KALİBRESİZ" yazar.
@@ -346,15 +364,23 @@ yükleyen **KALİBRE** yalnız İstatistik satırındadır.
 > hiçbir şey olmaz. Dolduğu anda yazı **yeşil SİLİNDİ**'ye döner — iş bitti demektir, parmağını
 > kaldırabilirsin. Ondan sonra o oyuncuda **KALİBRE** artık iş görmez, tek yol elle A/B'dir.
 
-**Satırda kırmızı "çapa kaydedilemedi (…)" yazıyorsa.** Oyuncu elle kalibre oldu, hizalaması
+**Satırda "çapa kaydedilemedi (…)" yazıyorsa.** Oyuncu elle kalibre oldu, hizalaması
 tuttu — ama gözlük bunu **kalıcı olarak saklayamadı**. Ne anlama gelir:
 
 - Oyuncu bu oturumda normal oynar; **harita değişimi hizalamayı korur**, yeniden kalibre
   ettirmen gerekmez.
+- Yazının **rengi ve ömrü** durumu söyler: oyuncu kalibreliyse yazı **turuncudur** ve birkaç
+  saniye sonra kaybolur (hizalama ayakta, yalnız bir deneme ya da kayıt düşmüş — acelesi yok),
+  oyuncu kalibresizse **kırmızıdır** ve sebep geçerli olduğu sürece durur. Hangi başlıkların
+  gerçekten kalibresiz olduğunu her zaman **KALİBRE** düğmesinden oku (dolu kırmızı +
+  **KALİBRE !**), yazının renginden değil.
 - Gözlükte **uygulama yeniden açılırsa** hizalama gider: o oyuncu elle A/B kalibrasyonunu
   yeniden alır.
-- Aynı gözlükte sürekli görülüyorsa sebep **gözlük tarafındadır**, kalibrasyonu tekrarlamak
-  düzeltmez. Parantez içindeki kodu olduğu gibi teknik ekibe ilet.
+- Parantez içinde **`FailurePermissionInsufficient`** yazıyorsa gözlükte **uzamsal veri izni**
+  verilmemiştir. O sürümü launcher'dan yeniden kur (launcher izni kendisi verir) ya da oyunu
+  kapatıp aç ve çıkan izin penceresinde **İzin Ver**'e bas; sonra oyuncuyu elle kalibre ettir.
+- Başka bir kod aynı gözlükte sürekli görülüyorsa sebep **gözlük tarafındadır**, kalibrasyonu
+  tekrarlamak düzeltmez. Parantez içindeki kodu olduğu gibi teknik ekibe ilet.
 
 **Tek bir gözlüğün KAYDI bozuksa — SIFIRLA'yı BASILI TUT.** Oyuncu sıfırlamadan sonra yeniden
 kalibre oluyor ama aynı oyuncu tekrar tekrar kayıyorsa sorun hizalamada değil, o gözlükte
@@ -618,11 +644,11 @@ Yönetim ekranındaki dashboard'da elindeki kontroller:
 | **Duraklat / Devam et** (alt ortadaki **⏸ DURAKLAT** — duraklattığında **▶ DEVAM** olur) | Koşan maçı dondurur, aynı düğme kaldığı yerden sürdürür | Aşağıdaki "Maçı geçici olarak durdurmak" bölümü |
 | **Kat seçici** (alt barın sağ ucundaki **KAT** düğmeleri) | İzlediğin katı seçer; kuş bakışında yalnız o kat görünür | **Yalnız çok katlı arenada görünür** — tek katlı arenada şerit İPTAL'de biter |
 | **Dost ateşi** | Takım arkadaşının da vurulup vurulamayacağını belirler (Tercihler → **MAÇ** sekmesi). **Kapalı** (varsayılan): takım arkadaşına ateş etsen de canı azalmaz. **Açık**: azalır. Satırdaki iki düğmeden hangisine bassan aç/kapa yapar; açıkken değer kırmızı yanar | Diğer satırların aksine **maç sırasında da değiştirilebilir** — maçı iptal etmen gerekmez, etkisi anında geçer. Takım arkadaşını öldürmek **puan kazandırmaz, tersine öldürenden 1 öldürme ve 1 puan siler** (Counter-Strike kuralı; sayı eksiye düşebilir, takım skoru değişmez, öldürme listesinde yine görünür). Ayar sunucu kapanana kadar kalır: maç bitince, harita değişince kendiliğinden kapanmaz |
-| **Skor ve öldürme akışı** | Üst ortada canlı skor ve süre; **sağ yanda** "kim kimi vurdu" listesi, **sol yanda** ihlal listesi (oyun alanının dışına çıkan ya da engele giren oyuncular) | Maç sırasında takip. İki liste bilerek karşı yanlardadır: biri maçın hikâyesi, diğeri senin iş listen |
+| **Skor ve öldürme akışı** | Üst ortada canlı skor ve süre; **sağ yanda** "kim kimi vurdu" listesi, **sol yanda** ihlal listesi (oyun alanının dışına çıkan ya da engele giren oyuncular) | Maç sırasında takip. İki liste bilerek karşı yanlardadır: biri maçın hikâyesi, diğeri senin iş listen. **İkisi de kendiliğinden temizlenir:** vuruş satırları birkaç saniye sonra solup gider; ihlal listesinde **süren** bir ihlal duruyor olduğu sürece kalır, bitenler kısa süre sonra düşer — yani soldaki listede duran satır "şu an müdahale edilecek" demektir |
 | **Kamera: Kuş bakışı** (sağ üstteki **KUŞ BAKIŞI** düğmesi ya da `3`) | Arenayı yukarıdan görürsün; her oyuncunun **etrafında renkli halka, altında adı** yazar | Kimin nerede olduğunu görmek, güvenlik takibi — **varsayılan görünüm** |
 | **Kamera: POV** (oyuncu kartındaki **POV** düğmesi; seçili oyuncu için `1` ya da `F`) | O oyuncunun **kendi gözünden** izlersin — karttaki POV'a basmak hem oyuncuyu seçer hem gözünden bakmaya geçer. Sağ üstte ayrı bir POV düğmesi yoktur; hangi oyuncuya baktığını listede **turuncu çerçeveli** satırdan görürsün | "Bu oyuncu ne görüyor / neden takıldı?" |
 | **Kamera: Serbest** (sağ üstteki **SERBEST** düğmesi ya da `2`) | Arenada özgürce dolaşırsın: **W A S D** yürü, **Q/E** in-çık, **sağ fare tuşunu basılı tutup** bakış çevir, **Shift** hızlı | Bir köşeye yakından bakmak |
-| **İstatistik** | Skorun altındaki **İSTATİSTİK** kutusuna bas (veya `I`; `Esc` ya da tekrar `I` kapatır) | **Tek tablo**: oyuncu başına öldürme/ölüm/skor, pil, kumanda, gövde, kat **ve PING**; satırın sonunda o oyuncunun ihlal sayıları. Takımlı bir modda satırlar **takım başlıklarıyla gruplanır** (kırmızı grubu, mavi grubu — takım toplamları başlıkta yazar), Herkes Tek modunda grup başlığı olmadan skora göre sıralanır. Tablo ikiye bölünmez; düğmeler her satırda yazıyla durur. Takımı henüz belli olmayan oyuncular **kırmızı grubunda** durur, başlık kaç tane olduğunu yazar |
+| **İstatistik** | Skorun altındaki **İSTATİSTİK** kutusuna bas (veya `I`; `Esc` ya da tekrar `I` kapatır) | **Tek tablo**: oyuncu başına öldürme/ölüm/skor, pil, kumanda, gövde, kat **ve PING**; satırın sonunda o oyuncunun ihlal sayıları — bunlar **sürekli durmaz**: bir tür yalnız o ihlal sürerken ve bittikten birkaç saniye daha görünür, sayı o maçın toplamıdır. Takımlı bir modda satırlar **takım başlıklarıyla gruplanır** (kırmızı grubu, mavi grubu — takım toplamları başlıkta yazar), Herkes Tek modunda grup başlığı olmadan skora göre sıralanır. Tablo ikiye bölünmez; düğmeler her satırda yazıyla durur. Takımı henüz belli olmayan oyuncular **kırmızı grubunda** durur, başlık kaç tane olduğunu yazar |
 | **Tercihler** | Sol üstteki **TERCİHLER** düğmesi (veya `P`; `Esc` kapatır). Panel **dört sekmelidir**: **MAÇ** (mod/harita/süre/skor limiti/geri sayım/dost ateşi + kalibre modu), **GÖRÜNÜM** (halkalar, ad etiketleri, ihlal sesi, kamera hızı, çatı — yalnız senin ekranın), **BAĞLANTI** (yeniden bağlan/kes, oyundan çık), **SES** (ses çıkışı + dört ses türünün seviyesi + salona fon müziği çalan **müzik çalar** — yalnız senin ekranın) | Maç kurmak, görünümü ayarlamak, bağlantıyı yönetmek. Başlat/duraklat/iptal düğmeleri panelde **değil**, ekranın alt ortasındadır |
 | **Tam ekran / Pencereli** | `F11` (ekranda düğmesi yoktur) | Yönetim penceresini tüm ekrana yay veya küçült. Seçimin bu bilgisayarda **hatırlanır**: uygulama bir dahaki açılışta aynı kiple gelir |
 | **Oyundan çık** | Tercihler → **BAĞLANTI** sekmesindeki **OYUNDAN ÇIK** | Yönetim uygulamasını kapatır. Güvenlik için **iki kez** basmak gerekir (ilk basışta düğme "EMİN? ÇIK" olur). Sunucuyu ve maçı **kapatmaz** — o ayrı bir penceredir |

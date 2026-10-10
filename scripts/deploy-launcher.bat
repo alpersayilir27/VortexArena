@@ -5,8 +5,8 @@ rem  deploy-launcher.bat
 rem  VortexArena.Launcher (WPF, .NET 10) -> single-file exe -> deploy\launcher\
 rem
 rem  deploy\launcher\ is the package: ONE self-contained exe (no .NET
-rem  install on the operator PC) next to server\ admin\ game_versions\
-rem  replays\. The folders are created empty and their contents survive
+rem  install on the operator PC) next to server\ server_versions\
+rem  admin_versions\ game_versions\ replays\. The folders are created empty and their contents survive
 rem  every rerun. platform-tools\ (adb) is mirrored from the repo root
 rem  on every run.
 rem
@@ -108,13 +108,13 @@ rem --- Close every running launcher (it locks its own exe) ---------------
 rem  Only after a successful publish, so a failed build leaves it running.
 rem  Also the adb server started from the package's platform-tools\ (it
 rem  locks adb.exe; the next adb call restarts it). A server or admin
-rem  started from server\ / admin\ keeps running, it does not depend on
+rem  started from server\ / admin_versions\ keeps running, it does not depend on
 rem  the launcher. VA_OUT reaches PowerShell as an environment variable.
 powershell -NoProfile -ExecutionPolicy Bypass -Command "$pt = Join-Path $env:VA_OUT 'platform-tools'; $p = @(Get-Process | Where-Object { $_.ProcessName -eq 'VortexArena.Launcher' -or ($_.Path -and [IO.Path]::GetDirectoryName($_.Path) -in @($env:VA_OUT, $pt)) }); foreach ($x in $p) { Write-Host ('  Kapatiliyor: {0} (PID {1})' -f $x.ProcessName, $x.Id) }; $p | Stop-Process -Force -ErrorAction SilentlyContinue; $p | Wait-Process -Timeout 10 -ErrorAction SilentlyContinue"
 
 rem --- Package folder: the exe + the four layout folders ----------------
-rem  server\ admin\ game_versions\ replays\ and their contents are KEPT
-rem  (builds, APKs, recordings); platform-tools\ is mirrored below;
+rem  server\ server_versions\ admin_versions\ game_versions\ replays\ and their
+rem  contents are KEPT (venue data, builds, APKs, recordings); platform-tools\ is mirrored below;
 rem  every other top-level entry is stale output and goes. Released
 rem  handles lag a little after a kill, hence the retries.
 if not exist "%VA_OUT%" mkdir "%VA_OUT%"
@@ -123,7 +123,7 @@ set "VA_TRY=0"
 del /f /q /a "%VA_OUT%\*" >nul 2>&1
 for /d %%D in ("%VA_OUT%\*") do (
   set "VA_KEEP="
-  for %%K in (server admin game_versions replays platform-tools) do if /i "%%~nxD"=="%%K" set "VA_KEEP=1"
+  for %%K in (server server_versions admin_versions game_versions replays platform-tools) do if /i "%%~nxD"=="%%K" set "VA_KEEP=1"
   if not defined VA_KEEP rmdir /s /q "%%D" 2>nul
 )
 dir /b /a-d "%VA_OUT%" 2>nul | findstr . >nul
@@ -155,7 +155,7 @@ if errorlevel 8 (
   goto :son
 )
 
-for %%K in (server admin game_versions replays) do (
+for %%K in (server server_versions admin_versions game_versions replays) do (
   if not exist "%VA_OUT%\%%K" mkdir "%VA_OUT%\%%K"
 )
 
@@ -168,11 +168,17 @@ powershell -NoProfile -Command "$s=(Get-Item '%VA_EXE%').Length/1MB; Write-Host 
 echo.
 echo   Paket (kok = exe'nin klasoru; klasorlerin icerigi korunur):
 echo     %VA_OUT%\VortexArena.Launcher.exe
-echo     %VA_OUT%\server\          (deploy\server icerigini buraya kopyalayin)
-echo     %VA_OUT%\admin\           (deploy\admin icerigini buraya kopyalayin)
+echo     %VA_OUT%\server\          (sunucunun isletme verisi: config, log, olcum)
+echo     %VA_OUT%\server_versions\ (sunucu surumleri buraya iner)
+echo     %VA_OUT%\admin_versions\  (admin surumleri buraya iner)
 echo     %VA_OUT%\game_versions\   (APK'lar buraya iner)
 echo     %VA_OUT%\replays\         (mac kayitlari)
 echo     %VA_OUT%\platform-tools\  (adb; her calistirmada repodan yenilenir)
+echo.
+echo   Sunucu ve admin surumleri launcher'in Sunucu / Yonetim sayfalarindan
+echo   indirilir, elle kopyalanmaz. Yerel denemek icin:
+echo     "%VA_REPO%\deploy\admin\admin_v^<N^>"   -^> "%VA_OUT%\admin_versions\admin_v^<N^>"
+echo     "%VA_REPO%\deploy\server\server_v^<N^>" -^> "%VA_OUT%\server_versions\server_v^<N^>"
 echo.
 echo   Operator ayarlari %%APPDATA%%\VortexArena\launcher\settings.json
 echo   icinde durur; exe yeniden uretilse de ayarlar korunur.

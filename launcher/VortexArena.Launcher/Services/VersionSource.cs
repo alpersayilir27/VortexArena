@@ -5,9 +5,9 @@ using System.Threading;
 
 namespace VortexArena.Launcher.Services;
 
-/// <summary>One APK on the update server.</summary>
+/// <summary>One published package on the update server (player APK or admin build zip).</summary>
 /// <param name="Version">Version number, also the package suffix.</param>
-/// <param name="File">File name as published (<c>game_v&lt;N&gt;.apk</c>).</param>
+/// <param name="File">File name as published (<c>game_v&lt;N&gt;.apk</c>, <c>admin_v&lt;N&gt;.zip</c>).</param>
 /// <param name="Size">Byte length; 0 when the server did not report it.</param>
 /// <param name="Modified">Publish time as the server formatted it; shown verbatim.</param>
 public sealed record RemoteVersion(int Version, string File, long Size, string Modified);
@@ -15,7 +15,7 @@ public sealed record RemoteVersion(int Version, string File, long Size, string M
 public sealed record DownloadProgress(long Received, long Total);
 
 /// <summary>
-/// Where the APK list comes from.
+/// Where a version list comes from.
 /// <para>⚠️ An interface on purpose: the licence backend is expected to replace these open HTTP
 /// endpoints, and nothing above this layer should have to change.</para>
 /// </summary>
@@ -36,11 +36,14 @@ public sealed class HttpVersionSource : IVersionSource, IDisposable
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromMinutes(30) };
     private readonly Func<string> _listUrl;
     private readonly Func<string> _downloadBaseUrl;
+    private readonly Func<int, string> _fileNameFor;
 
-    public HttpVersionSource(Func<string> listUrl, Func<string> downloadBaseUrl)
+    /// <param name="fileNameFor">Package naming of this feed — used when the listing omits "file".</param>
+    public HttpVersionSource(Func<string> listUrl, Func<string> downloadBaseUrl, Func<int, string> fileNameFor)
     {
         _listUrl = listUrl;
         _downloadBaseUrl = downloadBaseUrl;
+        _fileNameFor = fileNameFor;
     }
 
     public async Task<IReadOnlyList<RemoteVersion>> ListAsync(CancellationToken ct)
@@ -49,7 +52,7 @@ public sealed class HttpVersionSource : IVersionSource, IDisposable
         timeout.CancelAfter(TimeSpan.FromSeconds(12));
 
         var json = await _http.GetStringAsync(_listUrl(), timeout.Token).ConfigureAwait(false);
-        return ParseList(json);
+        return ParseList(json, _fileNameFor);
     }
 
     /// <summary>
@@ -119,7 +122,7 @@ public sealed class HttpVersionSource : IVersionSource, IDisposable
     /// Parses the listing: <c>{ "count": N, "versions": [ { version, file, size, modified } ] }</c>.
     /// Unparsable entries are dropped rather than failing the whole list.
     /// </summary>
-    public static IReadOnlyList<RemoteVersion> ParseList(string json)
+    public static IReadOnlyList<RemoteVersion> ParseList(string json, Func<int, string> fileNameFor)
     {
         using var doc = JsonDocument.Parse(json, new JsonDocumentOptions
         {
@@ -150,7 +153,7 @@ public sealed class HttpVersionSource : IVersionSource, IDisposable
                        fileField.ValueKind == JsonValueKind.String
                 ? fileField.GetString() ?? ""
                 : "";
-            if (file.Length == 0) file = GamePackage.FileNameFor(number);
+            if (file.Length == 0) file = fileNameFor(number);
 
             long size = entry.TryGetProperty("size", out var sizeField) &&
                         sizeField.ValueKind == JsonValueKind.Number &&

@@ -14,7 +14,7 @@ namespace VortexArena.Core.Editor
     /// <code>
     /// Unity.exe -batchmode -quit -projectPath &lt;project&gt; -buildTarget Win64 \
     ///   -executeMethod VortexArena.Core.Editor.PlayerBuildTool.BuildWindowsAdmin \
-    ///   -buildOutput &lt;deploy\admin&gt;
+    ///   -buildOutput &lt;deploy\admin\admin_v16&gt; -buildVersion 16
     ///
     /// Unity.exe -batchmode -quit -projectPath &lt;project&gt; -buildTarget Android \
     ///   -executeMethod VortexArena.Core.Editor.PlayerBuildTool.BuildQuestPlayer \
@@ -23,11 +23,13 @@ namespace VortexArena.Core.Editor
     ///   # only the shared scenes + one venue's scenes
     ///   ... -buildOutput &lt;deploy\player&gt; -buildVersion 132 -tenant &lt;Venue&gt;
     /// </code>
-    /// <para><b>The player build is versioned, the admin build is not:</b> <c>-buildVersion</c> is
-    /// REQUIRED for <c>BuildQuestPlayer</c> and produces <c>game_v&lt;version&gt;.apk</c> with the
-    /// application id <c>com.vortex.arenav&lt;version&gt;</c> ('v' without a dot — an Android package
-    /// segment cannot start with a digit), so several versions can stay installed side by side on
-    /// one headset.</para>
+    /// <para><b>BOTH builds are versioned:</b> <c>-buildVersion</c> is REQUIRED by both entry
+    /// points. The player build produces <c>game_v&lt;version&gt;.apk</c> with the application id
+    /// <c>com.vortex.arenav&lt;version&gt;</c> ('v' without a dot — an Android package segment cannot
+    /// start with a digit), so several versions can stay installed side by side on one headset. The
+    /// admin build takes the version only as <c>bundleVersion</c> (so <c>Application.version</c>
+    /// reports it); the version lives in the output folder name, and the application identifier and
+    /// <c>productName</c> are left at their base values.</para>
     /// <para><b>PlayerSettings are changed TEMPORARILY and restored in a <c>finally</c>:</b>
     /// application id, bundleVersion, bundleVersionCode and productName. Therefore
     /// <c>EditorApplication.Exit</c> is called only AFTER the restore, from the outermost level —
@@ -66,9 +68,18 @@ namespace VortexArena.Core.Editor
         private const int MaxBuildVersion = 2000000000;
 
         /// <summary>Windows 64-bit admin build; exit code 1 on failure.</summary>
+        /// <remarks><c>-buildVersion</c> is required: the caller builds into
+        /// <c>admin_v&lt;version&gt;\</c> and publishes <c>admin_v&lt;version&gt;.zip</c>, so an
+        /// unversioned admin build has nowhere to go.</remarks>
         public static void BuildWindowsAdmin()
         {
-            Run("admin", ExeName, BuildTarget.StandaloneWindows64, BuildTargetGroup.Standalone, version: -1);
+            if (!TryGetBuildVersion(out int version))
+            {
+                Quit(false);
+                return;
+            }
+
+            Run("admin", ExeName, BuildTarget.StandaloneWindows64, BuildTargetGroup.Standalone, version);
         }
 
         /// <summary>Meta Quest 3/3S player build (Android, <c>game_v&lt;version&gt;.apk</c>); exit
@@ -111,6 +122,7 @@ namespace VortexArena.Core.Editor
         {
             bool ok = false;
             bool overridden = false;
+            bool androidOverridden = false;
             string prevAppId = null;
             string prevBundleVersion = null;
             string prevProductName = null;
@@ -120,23 +132,38 @@ namespace VortexArena.Core.Editor
             {
                 if (version > 0)
                 {
-                    prevAppId = PlayerSettings.GetApplicationIdentifier(NamedBuildTarget.Android);
                     prevBundleVersion = PlayerSettings.bundleVersion;
                     prevProductName = PlayerSettings.productName;
-                    prevVersionCode = PlayerSettings.Android.bundleVersionCode;
-
-                    // 'v' is glued to the id without a dot: an Android package segment cannot
-                    // start with a digit.
-                    string appId = StripVersionSuffix(prevAppId, '\0') + "v" + version;
-                    string productName = StripVersionSuffix(prevProductName, ' ') + " v" + version;
-
-                    PlayerSettings.SetApplicationIdentifier(NamedBuildTarget.Android, appId);
-                    PlayerSettings.bundleVersion = version.ToString();
-                    PlayerSettings.Android.bundleVersionCode = version;
-                    PlayerSettings.productName = productName;
                     overridden = true;
 
-                    Debug.Log($"[PlayerBuildTool] Sürüm {version} — paket adı: {appId}, uygulama adı: {productName}");
+                    PlayerSettings.bundleVersion = version.ToString();
+
+                    if (group == BuildTargetGroup.Android)
+                    {
+                        prevAppId = PlayerSettings.GetApplicationIdentifier(NamedBuildTarget.Android);
+                        prevVersionCode = PlayerSettings.Android.bundleVersionCode;
+
+                        // 'v' is glued to the id without a dot: an Android package segment cannot
+                        // start with a digit.
+                        string appId = StripVersionSuffix(prevAppId, '\0') + "v" + version;
+                        string productName = StripVersionSuffix(prevProductName, ' ') + " v" + version;
+
+                        PlayerSettings.SetApplicationIdentifier(NamedBuildTarget.Android, appId);
+                        PlayerSettings.Android.bundleVersionCode = version;
+                        PlayerSettings.productName = productName;
+                        androidOverridden = true;
+
+                        Debug.Log($"[PlayerBuildTool] Sürüm {version} — paket adı: {appId}, uygulama adı: {productName}");
+                    }
+                    else
+                    {
+                        // ⚠️ BASE name, no " vN": Windows keys PlayerPrefs (operator settings) by
+                        // productName; the committed value may hold a stale " vN" from a player build.
+                        string productName = StripVersionSuffix(prevProductName, ' ');
+                        PlayerSettings.productName = productName;
+
+                        Debug.Log($"[PlayerBuildTool] Sürüm {version} — uygulama adı: {productName} (sürümsüz, PlayerPrefs anahtarı)");
+                    }
                 }
 
                 ok = Execute(defaultFolder, artifactName, target, group);
@@ -150,12 +177,16 @@ namespace VortexArena.Core.Editor
             {
                 if (overridden)
                 {
-                    PlayerSettings.SetApplicationIdentifier(NamedBuildTarget.Android, prevAppId);
                     PlayerSettings.bundleVersion = prevBundleVersion;
-                    PlayerSettings.Android.bundleVersionCode = prevVersionCode;
                     PlayerSettings.productName = prevProductName;
+                    if (androidOverridden)
+                    {
+                        PlayerSettings.SetApplicationIdentifier(NamedBuildTarget.Android, prevAppId);
+                        PlayerSettings.Android.bundleVersionCode = prevVersionCode;
+                    }
+
                     AssetDatabase.SaveAssets();
-                    Debug.Log($"[PlayerBuildTool] Proje ayarları geri alındı (paket adı: {prevAppId}).");
+                    Debug.Log($"[PlayerBuildTool] Proje ayarları geri alındı (uygulama adı: {prevProductName}).");
                 }
             }
 
@@ -372,9 +403,11 @@ namespace VortexArena.Core.Editor
 
             if (string.IsNullOrWhiteSpace(raw))
             {
-                Fail($"`{ArgBuildVersion} <sayı>` verilmedi — oyuncu build'i sürümsüz alınamaz. " +
-                     "Sürüm hem APK adına (game_v<sayı>.apk) hem paket adına " +
-                     $"({BaseApplicationId}v<sayı>) giriyor. Build'i deploy-player-apk.bat ile başlatın.");
+                Fail($"`{ArgBuildVersion} <sayı>` verilmedi — sürümsüz build alınamaz. " +
+                     "Oyuncu build'inde sürüm APK adına (game_v<sayı>.apk) ve paket adına " +
+                     $"({BaseApplicationId}v<sayı>), admin build'inde çıktı klasörü adına " +
+                     "(admin_v<sayı>) giriyor. Build'i deploy-player-apk.bat ya da " +
+                     "deploy-admin-game.bat ile başlatın.");
                 return false;
             }
 

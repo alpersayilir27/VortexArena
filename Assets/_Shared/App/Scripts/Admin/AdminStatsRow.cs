@@ -33,8 +33,8 @@ namespace VortexArena.App.Admin
     /// </para>
     /// <para>
     /// ⚠️ <b>HP is absent by DESIGN</b> — it lives on the side panel card as a bar. Violations
-    /// appear here as a <b>ledger</b> (count per kind) and deliberately do not blink: the live
-    /// channel is the HUD strip and the card border.
+    /// appear here as a steady chip per kind (count = match total) while live and briefly after,
+    /// and deliberately do not blink: the live channel is the HUD strip and the card border.
     /// </para>
     /// <para>
     /// ⚠️ <b>SIFIRLA is ONE button carrying BOTH reset modes</b> (<see cref="HoldButton"/>): a tap
@@ -71,12 +71,17 @@ namespace VortexArena.App.Admin
         /// <para>⚠️ <b>Required:</b> if the headset is closed or frozen <c>calibration_result</c>
         /// never arrives and the button would hang on "YÜKLENİYOR" forever — no result, no retry.</para>
         /// <para>⚠️ Kept clearly LONGER than the headset's own retry window
-        /// (<c>ArenaCalibrator.RestoreAttempts</c> × <c>RestoreRetryDelayMs</c> ≈ 10 s, plus each
+        /// (<c>ArenaCalibrator.RestoreAttempts</c> × <c>RestoreRetryDelayMs</c> ≈ 30 s, plus each
         /// attempt's load/localize wait): too short and the button says "no reply" seconds before
         /// the real result, making the operator read a success as a failure. If that window grows,
         /// this one grows too.</para>
         /// </summary>
-        private const float LoadTimeoutSeconds = 25f;
+        private const float LoadTimeoutSeconds = 60f;
+
+        /// <summary>How long a violation chip stays after its last edge, and a calibrated player's
+        /// error reason after it arrived (s). The cell answers "what is going on", so a past event
+        /// leaves on its own; the match total still rides in the chip's count.</summary>
+        private const float ChipLingerSeconds = 10f;
 
         /// <summary>Headset battery warning thresholds (0..1). ⚠️ Same numbers as
         /// <see cref="AdminPlayerRow"/>: the same battery must not be red on one screen and yellow
@@ -161,7 +166,7 @@ namespace VortexArena.App.Admin
         [SerializeField] private Button nameCancelButton;
 
         [Header("Durum")]
-        [Tooltip("DURUM hücresi: hazır/bekliyor/ölü… ya da kalibrasyon yoksa KALİBRESİZ.")]
+        [Tooltip("DURUM hücresi: hazır/bekliyor/ölü… Kalibrasyonu KALİBRE düğmesi gösterir.")]
         [SerializeField] private UiChip stateChip;
 
         [Header("Sayı hücreleri")]
@@ -184,7 +189,8 @@ namespace VortexArena.App.Admin
         [SerializeField] private UiChip obstacleChip;
         [SerializeField] private UiChip outOfBoundsChip;
         [Tooltip("Son kalibrasyon sorunu (yükleme düştü ya da çapa kaydedilemedi) — ihlal " +
-                 "hücresinin sonunda kalır (§10.6).")]
+                 "hücresinin sonunda: kalibresiz oyuncuda kırmızı kalır, kalibreli oyuncuda sarı " +
+                 "görünüp birkaç saniyede kalkar (§10.6).")]
         [SerializeField] private UiChip calibrationErrorChip;
         [Tooltip("İhlal yoksa yazılan tire; rozetler gizlenir.")]
         [SerializeField] private TextMeshProUGUI violationEmpty;
@@ -210,6 +216,10 @@ namespace VortexArena.App.Admin
         private int _playerId;
         private bool _calibrated = true;
         private bool _hasLeft;
+
+        /// <summary>Has a live socket — the server only forwards a reload to a connected headset, so
+        /// a reconnecting/left row could only ever time out.</summary>
+        private bool _connected = true;
         private float _floorOffset;
         private float _kickArmedAt = -1f;
 
@@ -235,6 +245,9 @@ namespace VortexArena.App.Admin
         private float _loadStateAt = -1f;
 
         public int PlayerId => _playerId;
+
+        /// <summary>Can a reload reach this headset — the bulk action skips rows that cannot.</summary>
+        public bool CanReloadCalibration => _connected;
 
         private RectTransform Rect => _rect != null ? _rect : _rect = (RectTransform)transform;
 
@@ -322,6 +335,7 @@ namespace VortexArena.App.Admin
             _playerId = view.playerId;
             _calibrated = view.calibrated;
             _hasLeft = view.HasLeft;
+            _connected = view.IsConnected;
             _floorOffset = view.floorOffset;
 
             // Graded dimming: connected 1.0, expected back 0.7, left 0.5 — "may return" and "gone"
@@ -446,9 +460,17 @@ namespace VortexArena.App.Admin
         /// Result of a reload attempt (§5.3 <c>calibration_result</c> or timeout).
         /// <para>No popup on success — the "TAMAM" state is enough; on failure the reason goes to
         /// the panel's toast, since a narrow button cannot carry more than "HATA".</para>
+        /// <para>⚠️ Applied ONLY while this row waits: the server relays every alignment report
+        /// (map change, reconnect, manual A/B) as a result, which would flash TAMAM/HATA and toasts
+        /// on rows nobody pressed. Persistent state comes from <c>lobby_state</c>.</para>
         /// </summary>
         public void ApplyCalibrationResult(bool ok, string error)
         {
+            if (_loadState != LoadState.Loading)
+            {
+                return;
+            }
+
             SetLoadState(ok ? LoadState.Ok : LoadState.Failed);
 
             if (!ok)
@@ -510,8 +532,8 @@ namespace VortexArena.App.Admin
             }
         }
 
-        /// <summary>DURUM cell. ⚠️ An uncalibrated headset OUTRANKS the play state: until it is
-        /// fixed the player cannot take part, so "hazır" there would be a lie.</summary>
+        /// <summary>DURUM cell: what the player is doing. Calibration is NOT shown here — the KALİBRE
+        /// button is the row's only calibration indicator.</summary>
         private void ApplyStateChip(AdminPlayerView view, float alpha)
         {
             if (stateChip == null)
@@ -692,19 +714,25 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>
-        /// Violation ledger cell: one chip per kind, then the last calibration failure.
-        /// <para>⚠️ <b>No blinking, no "ongoing" mark</b> — this is the ledger; the live channel is
-        /// the HUD strip and the card border.</para>
-        /// <para>⚠️ The last reload failure reason STAYS here (§10.6): the toast closes itself after
-        /// a few seconds and without a trace the operator is left with "something happened, but
-        /// what". The field is held by the SERVER, so a later-joining operator sees the same reason;
-        /// a successful calibration clears it, so the row heals itself.</para>
+        /// Violation cell: one chip per kind (count = match total), then the last calibration failure.
+        /// <para>⚠️ A kind's chip shows while it is LIVE and <see cref="ChipLingerSeconds"/> after its
+        /// last edge, then leaves: a permanent ledger chip read as "out of bounds now" on a player
+        /// standing inside. No blinking — the live channel is the HUD strip and the card border.</para>
+        /// <para>⚠️ The calibration failure reason (server-held, §10.6) STAYS, in red, only while the
+        /// player is uncalibrated — there it explains the missing alignment. On a calibrated player the
+        /// alignment stands, so it is amber and leaves after the same window: a lasting red reason
+        /// there read as "no calibration" and hid which headsets really had none.</para>
         /// </summary>
         private void ApplyViolations(AdminPlayerView view, float alpha)
         {
-            bool obstacle = view.obstacleCount > 0;
-            bool outOfBounds = view.outOfBoundsCount > 0;
-            bool error = !string.IsNullOrEmpty(view.calibrationError);
+            float now = Time.unscaledTime;
+            bool obstacle = view.obstacleCount > 0 &&
+                            ShowsViolation(view.playerId, AdminViolationKind.Obstacle, view.obstacleEdgeAt, now);
+            bool outOfBounds = view.outOfBoundsCount > 0 &&
+                               ShowsViolation(view.playerId, AdminViolationKind.OutOfBounds,
+                                   view.outOfBoundsEdgeAt, now);
+            bool error = !string.IsNullOrEmpty(view.calibrationError) &&
+                         (!view.calibrated || now - view.calibrationErrorAt < ChipLingerSeconds);
 
             SetChip(obstacleChip, obstacle,
                 $"{AdminViolations.Label(AdminViolationKind.Obstacle)} {view.obstacleCount}",
@@ -712,7 +740,8 @@ namespace VortexArena.App.Admin
             SetChip(outOfBoundsChip, outOfBounds,
                 $"{AdminViolations.Label(AdminViolationKind.OutOfBounds)} {view.outOfBoundsCount}",
                 UiChipKind.Warn, alpha);
-            SetChip(calibrationErrorChip, error, view.calibrationError, UiChipKind.Bad, alpha);
+            SetChip(calibrationErrorChip, error, view.calibrationError,
+                view.calibrated ? UiChipKind.Warn : UiChipKind.Bad, alpha);
 
             SetCellActive(violationEmpty, !obstacle && !outOfBounds && !error);
             if (violationEmpty != null)
@@ -721,6 +750,11 @@ namespace VortexArena.App.Admin
             }
 
             LayoutViolationChips();
+        }
+
+        private static bool ShowsViolation(int playerId, AdminViolationKind kind, float edgeAt, float now)
+        {
+            return AdminViolations.IsLive(playerId, kind) || now - edgeAt < ChipLingerSeconds;
         }
 
         private static void SetChip(UiChip chip, bool visible, string text, UiChipKind kind,
@@ -1018,13 +1052,15 @@ namespace VortexArena.App.Admin
             }
 
             bool loading = _loadState == LoadState.Loading;
-            calibrateButton.SetInteractable(!loading && !_hasLeft);
+            calibrateButton.SetInteractable(!loading && _connected);
 
             switch (_loadState)
             {
                 case LoadState.Loading:
                     calibrateButton.SetLabel(LabelCalibrateLoading);
-                    calibrateButton.SetKind(UiButtonKind.On);
+                    // Keeps the uncalibrated fill: during a bulk reload every row loads, and a
+                    // uniform look would hide which headsets lack calibration.
+                    calibrateButton.SetKind(_calibrated ? UiButtonKind.On : UiButtonKind.WarnFill);
                     return;
                 case LoadState.Ok:
                     calibrateButton.SetLabel(LabelCalibrateOk);

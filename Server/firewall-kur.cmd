@@ -16,7 +16,9 @@ rem      broadcast'i ve cogu inbound'u keser).
 rem   2) Windows'un otomatik ekledigi ENGELLE (Block) kurallarini siler.
 rem   3) UDP 47820 (beacon) + TCP 47821 (WS kontrol) + UDP 47822 (state)
 rem      icin IZIN kurallari ekler (profil: Private + Domain).
-rem      Exe bulunursa ayrica programa ozel izin kurali eklenir.
+rem      Ayrica KURULU HER SURUMUN exe'si icin programa ozel izin kurali
+rem      ekler (yan klasorler: ..\server_v*): her surumun exe yolu farkli
+rem      oldugu icin tek kural yetmez.
 rem   4) Teshis: aktif adaptorler, IPv4 adresleri, dinlenen portlar.
 rem =====================================================================
 net session >nul 2>&1
@@ -55,14 +57,30 @@ netsh advfirewall firewall add rule name="VortexArena Control (TCP 47821)" dir=i
 netsh advfirewall firewall add rule name="VortexArena State (UDP 47822)" dir=in action=allow protocol=UDP localport=47822 profile=private,domain
 
 rem Programa ozel izin: Windows'un exe icin yeniden Block kurali uretmesini onler.
-rem Once deploy yerlesimi (exe betigin yaninda), sonra repo bin\ yollari.
-set "EXE=%~dp0VortexArena.Server.App.exe"
-if not exist "%EXE%" set "EXE=%~dp0VortexArena.Server.App\bin\Release\net10.0\VortexArena.Server.App.exe"
-if not exist "%EXE%" set "EXE=%~dp0VortexArena.Server.App\bin\Debug\net10.0\VortexArena.Server.App.exe"
-if exist "%EXE%" (
-  netsh advfirewall firewall add rule name="VortexArena Server (Program)" dir=in action=allow program="%EXE%" enable=yes profile=private,domain
-  echo   Program kurali: "%EXE%"
-) else (
+rem TUM yollar %~dp0 uzerinden kurulur - betik yonetici olarak baska bir calisma
+rem klasoruyle baslatilabilir, calisma klasorune guvenilmez.
+rem Surum klasoru yerlesiminde (server_v<N>) her surumun exe yolu farklidir:
+rem yan klasorlerin hepsine birer kural eklenir, boylece surum degisince
+rem betigi yeniden calistirmak gerekse de onceki surumler izinli kalir.
+rem Kurallarin tamami [2/5] adiminda ayni isimle silindi (netsh ayni adli tum
+rem kurallari siler) - burada sifirdan eklenir.
+for %%I in ("%~dp0.") do set "SELFDIR=%%~fI"
+set "SELFDONE="
+set "RULES=0"
+for /d %%D in ("%~dp0..\server_v*") do (
+  if exist "%%~fD\VortexArena.Server.App.exe" (
+    netsh advfirewall firewall add rule name="VortexArena Server (Program)" dir=in action=allow program="%%~fD\VortexArena.Server.App.exe" enable=yes profile=private,domain >nul
+    echo   Program kurali: "%%~fD\VortexArena.Server.App.exe"
+    set /a RULES+=1
+    if /i "%%~fD"=="%SELFDIR%" set "SELFDONE=1"
+  )
+)
+
+rem Betigin kendi klasoru, dongude gorulmediyse (surum klasoru olmayan tek
+rem klasor yerlesimi ya da repo). Alt yordam: blok icinde set + if exist ayni
+rem satirda cozulecegi icin eski deger okunurdu.
+if not defined SELFDONE call :add_self_rule
+if "%RULES%"=="0" (
   echo   [bilgi] Sunucu exe bulunamadi, programa ozel kural eklenmedi.
   echo           Once derleyin: dotnet build Server/VortexArena.Server.sln -c Release
 )
@@ -98,6 +116,20 @@ echo     statik IP. IP degisirse StreamingAssets/arena.json ve gozluklerdeki
 echo     kayitli adres bozulur.
 echo   * AP ayarlari: 5 GHz, sabit kanal, client/AP isolation KAPALI.
 echo   * Admin console calistiran diger PC'lerde de bu betigi calistirin.
+echo   * Yeni sunucu surumu indirildiginde bu betigi tekrar calistirin
+echo     (launcher'in Sunucu sayfasindaki dugme de ayni isi yapar): her
+echo     surumun exe yolu farkli, kural yoksa Windows onu engeller.
 echo =====================================================================
 pause
+exit /b 0
+
+rem --- Alt yordam: betigin kendi klasorundeki exe icin kural --------------
+:add_self_rule
+set "EXE=%SELFDIR%\VortexArena.Server.App.exe"
+if not exist "%EXE%" set "EXE=%SELFDIR%\VortexArena.Server.App\bin\Release\net10.0\VortexArena.Server.App.exe"
+if not exist "%EXE%" set "EXE=%SELFDIR%\VortexArena.Server.App\bin\Debug\net10.0\VortexArena.Server.App.exe"
+if not exist "%EXE%" exit /b 0
+netsh advfirewall firewall add rule name="VortexArena Server (Program)" dir=in action=allow program="%EXE%" enable=yes profile=private,domain >nul
+echo   Program kurali: "%EXE%"
+set /a RULES+=1
 exit /b 0

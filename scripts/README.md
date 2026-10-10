@@ -1,18 +1,19 @@
 # scripts/ — dağıtım ve doküman betikleri
 
 Dört bileşenin her biri kendi betiğiyle `deploy/` altına üretilir. Betikler **idempotent**:
-hedef klasörü silip yeniden yazarlar. İki istisna: `deploy\player\` sürümlü APK'lar yan yana
-durduğu için silinmez (yalnız aynı adlı dosya üzerine yazılır); `deploy\launcher\` saha paketidir:
-publish başarılı olunca exe yenilenir, `platform-tools\` repo kökünden aynalanır, `server\` ·
-`admin\` · `game_versions\` · `replays\` klasörleri (yoksa boş açılır) ve içerikleri **korunur**,
-klasördeki diğer her şey silinir.
+hedef klasörü silip yeniden yazarlar. İstisnalar: `deploy\player\`, `deploy\admin\` ve
+`deploy\server\` sürümlü çıktılar yan yana durduğu için silinmez (yalnız aynı sürümün
+dosyası/klasörü yenilenir); `deploy\launcher\` saha paketidir: publish başarılı olunca exe
+yenilenir, `platform-tools\` repo kökünden aynalanır, `server\` · `server_versions\` ·
+`admin_versions\` · `game_versions\` · `replays\` klasörleri (yoksa boş açılır) ve içerikleri
+**korunur**, klasördeki diğer her şey silinir.
 
 | Betik | Kaynak | Çıktı | Ön koşul |
 |---|---|---|---|
-| `deploy-admin-game.bat` | Unity projesi (`Assets/`) | `deploy\admin\VortexArena.exe` | Unity Editor kapalı (betik zorlamaz) |
+| `deploy-admin-game.bat` | Unity projesi (`Assets/`) | `deploy\admin\admin_v<sürüm>\VortexArena.exe` + yanında `admin_v<sürüm>.zip`; sonda zip sunucudaki yayın ucuna POST'lanır (`updater_uploader/` — uç kapalıysa yalnız uyarı, build başarılı sayılır) | Unity Editor kapalı (betik zorlamaz); başlangıçta sunucudaki yayınlanmış admin sürümleri listelenir ve sürüm numarası sorulur |
 | `deploy-player-apk.bat` | Unity projesi (`Assets/`) | `deploy\player\game_v<sürüm>.apk` + `install_game.bat`; sonda APK sunucudaki yayın ucuna POST'lanır (`updater_uploader/` — uç kapalıysa yalnız uyarı, build başarılı sayılır) | Unity Editor kapalı + **Android Build Support** modülü; başlangıçta sunucudaki yayınlanmış sürümler listelenir ve sürüm numarası sorulur |
-| `deploy-server.bat` | `Server/VortexArena.Server.App` | `deploy\server\VortexArena.Server.App.exe` | .NET 10 SDK |
-| `deploy-launcher.bat` | `launcher/VortexArena.Launcher` (WPF) | `deploy\launcher\VortexArena.Launcher.exe` (tek dosya, self-contained) + boş `server\` · `admin\` · `game_versions\` · `replays\` + repo kökünden `platform-tools\` (adb) | .NET 10 SDK + çekilmiş Git LFS (çalışan launcher'ı ve paketin adb'sini betik kendisi kapatır) |
+| `deploy-server.bat` | `Server/VortexArena.Server.App` | `deploy\server\server_v<sürüm>\VortexArena.Server.App.exe` + yanında `server_v<sürüm>.zip`; sonda zip sunucudaki yayın ucuna POST'lanır (`updater_uploader/` — uç kapalıysa yalnız uyarı, build başarılı sayılır) | .NET 10 SDK + `Server\config\maps.json` (Unity export'u, **zorunlu**); başlangıçta yayınlanmış sunucu sürümleri listelenir ve sürüm numarası sorulur |
+| `deploy-launcher.bat` | `launcher/VortexArena.Launcher` (WPF) | `deploy\launcher\VortexArena.Launcher.exe` (tek dosya, self-contained) + boş `server\` · `server_versions\` · `admin_versions\` · `game_versions\` · `replays\` + repo kökünden `platform-tools\` (adb) | .NET 10 SDK + çekilmiş Git LFS (çalışan launcher'ı ve paketin adb'sini betik kendisi kapatır) |
 | `deploy_android_updater.bat` | `updater/` (Kotlin Android) | `deploy\updater\VortexUpdater.apk` + `install_updater.bat` | Unity'nin **Android Build Support** modülü (JDK/Gradle oradan — editör açık olabilir, Unity başlatılmaz); Android SDK'sı `%LOCALAPPDATA%\VortexUpdaterSdk` köküne ilk koşuda iner → ilk koşu internet ister |
 | `docs-setup.bat` | — | `..\vortexarena-docs-site\` (repo DIŞI) | Node 22+, git, internet (yalnız kurulumda) |
 | `defender-exclusions.cmd` | `defender-exclusions.ps1` | Windows Defender dışlama listesi | **Yönetici** + Defender'ın etkin olması |
@@ -51,24 +52,30 @@ scripts\deploy-admin-game.bat --tenant <İşletme>
 - ⚠️ **OTA/updater sürüm listesi işletme bilgisi taşımaz** — yüklenen her sürümü her gözlük görür;
   hangi sürüm hangi işletmeye ait, dışarıda not edilir.
 
-## Oyuncu APK'sının sürümü
+## Build sürümleri (oyuncu APK'sı, admin, sunucu)
 
-`deploy-player-apk.bat` açılışta **sürüm numarasını sorar** (pozitif tam sayı); sürümsüz oyuncu
-build'i yoktur. Numaranın komut satırı argümanı **yoktur** — bu yüzden `--no-pause` kipinde betik
-sürümü soramaz ve hata verip durur.
+`deploy-player-apk.bat`, `deploy-admin-game.bat` ve `deploy-server.bat` açılışta **sürüm
+numarasını sorar** (pozitif tam sayı); sürümsüz build yoktur. Numaranın komut satırı argümanı
+**yoktur** — bu yüzden `--no-pause` kipinde betik sürümü soramaz ve hata verip durur.
 
 Numara sorulmadan hemen önce **sunucuda yayında olan sürümler listelenir**
 (`lib\list-server-versions.ps1`, aşağıda).
 
-Girilen numara dört yere birden girer: APK adı (`deploy\player\game_v<sürüm>.apk`), Android paket
-adı (`com.vortex.arenav<sürüm>`), `bundleVersion` + `AndroidBundleVersionCode`, ve gözlükte görünen
-uygulama adı (`VortexArena v<sürüm>`).
+- ⚠️ **Aynı commit'ten alınan sunucu, admin ve oyuncu build'ine AYNI numara verilir.** Üçü aynı
+  protokol sürümünü, admin ile oyuncu ayrıca aynı sahne listesini ve tenant'ı, sunucu ile oyuncu da
+  aynı `maps.json`'ı taşımak zorundadır; numaranın ortak olması sahada "hangi sunucu hangi APK ile
+  eşleşiyor" sorusunu tek bakışta cevaplar.
+- Unity betiklerinde sürüm `PlayerSettings`'te **yalnız o build süresince** değiştirilir; build biter bitmez
+  `ProjectSettings.asset` eski haline döner, projenin temel bundle id'si (`com.vortex.arena`)
+  kalıcı olarak değişmez.
+
+**Oyuncu APK'sı.** Numara dört yere birden girer: APK adı
+(`deploy\player\game_v<sürüm>.apk`), Android paket adı (`com.vortex.arenav<sürüm>`),
+`bundleVersion` + `AndroidBundleVersionCode`, ve gözlükte görünen uygulama adı
+(`VortexArena v<sürüm>`).
 
 - ⚠️ **Paket ekinde nokta yoktur** (`com.vortex.arenav132`, `com.vortex.arena.v132` değil):
   Android paket segmenti rakamla başlayamaz.
-- Bu `PlayerSettings` değerleri **yalnız o build süresince** değiştirilir; build biter bitmez
-  `ProjectSettings.asset` eski haline döner, projenin temel bundle id'si (`com.vortex.arena`)
-  kalıcı olarak değişmez.
 - Sürümler **farklı paket adı taşıdığı için aynı gözlükte yan yana kurulu durabilir**; her sürümün
   kendi verisi ve izinleri ayrıdır.
 - `deploy\player\` klasörü build'de **silinmez** — eski sürümlerin APK'ları yerinde kalır, yalnız
@@ -76,6 +83,44 @@ uygulama adı (`VortexArena v<sürüm>`).
 - Build sonunda APK yayın ucuna `POST /upload?v=<sürüm>` ile gönderilir ve sunucuda
   `game_versions\game_v<sürüm>.apk` olarak durur; adres ve gözlükteki updater'ın davranışı
   `updater/README.md`'de.
+
+**Admin build'i.** Numara çıktı klasörü ve zip adına (`deploy\admin\admin_v<sürüm>\` +
+`deploy\admin\admin_v<sürüm>.zip`) ve `bundleVersion`'a girer — yani `Application.version` ve
+sunucuya giden `hello.appVersion` o numaradır.
+
+- ⚠️ **Uygulama adı (`productName`) sürümsüz kalır** (`" v<sürüm>"` eklenmez): admin, operatör
+  ayarlarını `PlayerPrefs`'te tutar ve Windows bu anahtarları `productName` altında saklar — sürüm
+  başına değişen bir ad her sürümde ayarları sıfırlardı. Build, `ProjectSettings`'te kalmış bir
+  `" v<sürüm>"` ekini de bu yüzden temel ada geri çevirir.
+- Standalone **uygulama kimliği ve hiçbir Android ayarı** admin build'inde değiştirilmez.
+- `deploy\admin\` klasörü build'de **silinmez** — yalnız o sürümün klasörü ve zip'i yenilenir,
+  eski sürümler yerinde kalır.
+- Zip'in **kökünde build klasörünün içeriği** durur (`VortexArena.exe`, `VortexArena_Data\`,
+  `UnityPlayer.dll`…), sarmalayıcı klasör yoktur: launcher arşivi doğrudan
+  `admin_versions\admin_v<sürüm>\` altına açar. Adı `*_DoNotShip` ile biten klasörler (Burst hata
+  ayıklama simgeleri) arşive girmez. Paketleyici `lib\zip-build-folder.ps1`'dir (sunucu paketi de
+  onu kullanır); `.tmp`'ye yazıp sonunda adını değiştirir, böylece yarım arşiv yayınlanabilir
+  görünmez.
+- Zip, yayın ucuna `POST /admin/upload?v=<sürüm>` ile gönderilir ve sunucuda
+  `admin_versions\admin_v<sürüm>.zip` olarak durur; indirme adresi `updater/README.md`'de. Saha
+  tarafında sürüm launcher'ın **Yönetim** sayfasından indirilir, elle kopyalanmaz.
+
+**Sunucu paketi.** Numara çıktı klasörü ve zip adına girer (`deploy\server\server_v<sürüm>\` +
+`deploy\server\server_v<sürüm>.zip`). Publish self-contained'dir: işletme PC'sine .NET kurulmaz.
+
+- Sürüm klasörünün içeriği: exe + publish çıktısı, `config\maps.json` (**zorunlu**),
+  `config\server.json` (tohum), `firewall-kur.cmd`. `devices.json` **girmez** — cihaz adları
+  kuruluma özeldir, sunucu üretir.
+- ⚠️ **`maps.json` yoksa betik en başta durur** (sürüm sorulmadan): harita tablosu sürümle birlikte
+  dağılır ve aynı numaralı oyuncu build'iyle uyuşmak zorundadır. Önce Unity'de
+  `Tools > VortexArena > Server > Export Server Config`.
+- `config\server.json` sürüm klasöründe yalnızca **tohumdur**: işletmenin kullandığı kopya sunucunun
+  veri klasöründe yaşar (`--data-dir`, `Server/README.md`) ve sürüm değişince yerinde kalır.
+- `deploy\server\` klasörü build'de **silinmez** — yalnız o sürümün klasörü ve zip'i yenilenir.
+  Publish'e girmeden önce çalışan `VortexArena.Server.App.exe` aranır ve varsa betik adıyla durur.
+- Zip, yayın ucuna `POST /server/upload?v=<sürüm>` ile gönderilir ve sunucuda
+  `server_versions\server_v<sürüm>.zip` olarak durur; indirme adresi `updater/README.md`'de. Saha
+  tarafında sürüm launcher'ın **Sunucu** sayfasından indirilir, elle kopyalanmaz.
 
 ## Dokümantasyon sitesi
 
@@ -144,7 +189,7 @@ Unity'de somut hâli: **Burst**, `Library/BurstCache/JIT/` altına çalışma an
 DLL** üretir ve onu yükler. SAC bu yüklemeyi engeller — `CodeIntegrity` olayı **3077** (audit
 değil, blok), yanında `3118 Smart App Control Block Details`. `git pull` kodu/paketi değiştirdiğinde
 Burst yeniden derler, yeni imzasız DLL doğar ve uyarı tekrarlar. Aynı duvar kendi imzasız
-çıktılarımız için de geçerlidir (`deploy\admin\VortexArena.exe`, sunucu, launcher).
+çıktılarımız için de geçerlidir (admin build'inin `VortexArena.exe`'si, sunucu, launcher).
 
 Betik bu durumu açılışta **kendisi uyarır**. Elle bakmak için:
 
@@ -261,15 +306,17 @@ powershell -NoProfile -File scripts\lib\explain-build-failure.ps1 -Log deploy\ad
 
 ## Sunucudaki sürümler nasıl listelenir (`lib\list-server-versions.ps1`)
 
-`deploy-player-apk.bat` sürüm numarasını sormadan **hemen önce** bu yardımcıyı çağırır; ekrana
-yayındaki her `game_v<sürüm>.apk` gelir (numara, boyut, yüklenme zamanı — en yeniden eskiye,
-uzun listede kuyruk tek satırlık özete düşer).
+Üç dağıtım betiği de sürüm numarasını sormadan **hemen önce** bu yardımcıyı çağırır; ekrana
+yayındaki her sürüm gelir (numara, boyut, yüklenme zamanı — en yeniden eskiye, uzun listede kuyruk
+tek satırlık özete düşer). Hangi listeyi basacağını `-Url` belirler: oyuncu betiği
+`GET /versions`, admin betiği `GET /admin/versions`, sunucu betiği `GET /server/versions` adresini
+verir. Üzerine yazma uyarısındaki çıktı adı `-Label` ile geçilir (verilmezse APK).
 
-- **Tek veri kaynağı sunucudur:** yayın ucunun `GET /versions` yanıtı. Yerel `deploy\player\`
-  klasörü **bilerek okunmaz** — orada duran bir APK hiç yayınlanmamış olabilir ve gözlükteki
-  updater yalnız sunucudakini görür.
-- **Adres tek yerdedir:** `.bat` içindeki `VA_SERVER`; listeleme (`/versions`) ile build sonundaki
-  yükleme (`/upload`) aynı değişkenden türer, ayrı makinelere bakamazlar.
+- **Tek veri kaynağı sunucudur:** yayın ucunun yanıtı. Yerel `deploy\` klasörleri **bilerek
+  okunmaz** — orada duran bir çıktı hiç yayınlanmamış olabilir; gözlükteki updater ve operatör
+  PC'sindeki launcher yalnız sunucudakini görür.
+- **Adres tek yerdedir:** `.bat` içindeki `VA_SERVER`; listeleme ile build sonundaki yükleme aynı
+  değişkenden türer, ayrı makinelere bakamazlar.
 - ⚠️ **Betik hiçbir yoldan hata döndürmez** (her dalda `exit 0`). Sunucu kapalıysa uyarı basılır ve
   numara yine sorulur: listeleme kolaylıktır, build'i engellemesi anlamsız olurdu.
 - ⚠️ **"Şu numarayı gir" önerisi yoktur.** Tek bir test yüklemesi (`v999` gibi) "en büyük + 1"
@@ -280,6 +327,8 @@ Elle çalıştırmak:
 
 ```bat
 powershell -NoProfile -File scripts\lib\list-server-versions.ps1 -Url http://<sunucu>:8091/versions
+powershell -NoProfile -File scripts\lib\list-server-versions.ps1 -Url http://<sunucu>:8091/admin/versions -Label "admin arsivinin"
+powershell -NoProfile -File scripts\lib\list-server-versions.ps1 -Url http://<sunucu>:8091/server/versions -Label "sunucu arsivinin"
 ```
 
 ## Neden bu ön koşullar?
@@ -313,7 +362,7 @@ powershell -NoProfile -File scripts\lib\list-server-versions.ps1 -Url http://<su
   ve çalışıyorsa adıyla durur — yoksa `rmdir` yarıda kalıp publish anlamsız bir dosya izni hatası
   verirdi. `deploy-launcher.bat` ise publish başarılı olduktan sonra çalışan her launcher'ı
   (`VortexArena.Launcher.exe` ve doğrudan `deploy\launcher\`'dan açılmış her süreç) **kendisi
-  kapatır**; paketin `server\` / `admin\` klasöründen açılmış sunucu ve yönetim açık kalır,
+  kapatır**; paketin `server_versions\` / `admin_versions\` klasöründen açılmış sunucu ve yönetim açık kalır,
   launcher'a bağlı değildir. Klasörün kendisi silinmez, yalnız eski içeriği temizlenir: Explorer
   ya da içinde duran bir terminal klasörü kilitler, `rmdir` o yüzden düşerdi.
 

@@ -14,6 +14,11 @@ public static class GamePackage
 
     public const string FileExtension = ".apk";
 
+    /// <summary>Granted with <c>pm grant</c> after every install so the headset never asks.</summary>
+    /// <remarks>⚠️ USE_SCENE: without it the spatial anchor save fails and calibration is lost on
+    /// restart. The game also requests it at startup, for APKs installed without adb.</remarks>
+    public static readonly IReadOnlyList<string> RuntimePermissions = ["com.oculus.permission.USE_SCENE"];
+
     public static string NameFor(int version) => Prefix + version.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     public static string FileNameFor(int version)

@@ -78,6 +78,10 @@ public sealed class AdbService(string adbExe)
     public Task<AdbResult> InstallAsync(string serial, string apkPath, CancellationToken ct)
         => RunAsync(["-s", serial, "install", "-r", "-g", apkPath], InstallTimeout, ct);
 
+    /// <summary><c>pm grant</c> of one runtime permission; silent on success.</summary>
+    public Task<AdbResult> GrantAsync(string serial, string packageName, string permission, CancellationToken ct)
+        => RunAsync(["-s", serial, "shell", "pm", "grant", packageName, permission], ShortTimeout, ct);
+
     /// <summary>Removes ONE version's package. Never called without the operator confirming.</summary>
     public Task<AdbResult> UninstallAsync(string serial, string packageName, CancellationToken ct)
         => RunAsync(["-s", serial, "uninstall", packageName], ShortTimeout, ct);

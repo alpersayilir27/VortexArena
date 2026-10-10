@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
@@ -23,12 +24,12 @@ public enum ServerRunState
 }
 
 /// <summary>
-/// Server page: venue choice, start/stop, live status and the log tail.
+/// Server page: venue choice, start/stop, live status, the server version list and the log tail.
 /// <para>⚠️ While a start or stop is in flight the shell's polling result is IGNORED
 /// (<see cref="_transition"/>): the transition loop owns the state until it finishes, otherwise a
 /// 700 ms poll would flip "Başlıyor" back to "Kapalı" every second.</para>
 /// </summary>
-public sealed class ServerPageViewModel : PageViewModel
+public sealed class ServerPageViewModel : PageViewModel, IBuildVersionListHost
 {
     /// <summary>How long a start is given to answer on the control port.</summary>
     private static readonly TimeSpan StartupBudget = TimeSpan.FromSeconds(20);
@@ -38,13 +39,20 @@ public sealed class ServerPageViewModel : PageViewModel
 
     private const int MaxLogLines = 400;
 
+    /// <summary>Win32 <c>ERROR_CANCELLED</c>: the operator dismissed the UAC prompt.</summary>
+    private const int UacDeclined = 1223;
+
     private readonly Queue<string> _logLines = new();
     private readonly LogTailer _tailer;
     private readonly RelayCommand _startCommand;
     private readonly RelayCommand _stopCommand;
+    private readonly RelayCommand _firewallCommand;
 
     private bool _transition;
-    private bool _serverPresent;
+
+    /// <summary>Build the venue list and the control port were read from.</summary>
+    private int _knownVersion;
+
     private bool _mapsPresent;
     private ServerRunState _runState = ServerRunState.Stopped;
     private VenueInfo? _selectedVenue;
@@ -68,14 +76,16 @@ public sealed class ServerPageViewModel : PageViewModel
 
         OpenLogsFolderCommand = new RelayCommand(OpenLogsFolder);
         ApplyPortCommand = new RelayCommand(ApplyPort);
+        _firewallCommand = new RelayCommand(RunFirewallScript, () => Context.Server.SelectedVersion > 0);
 
         _portText = context.Settings.ControlPortOverride > 0
             ? context.Settings.ControlPortOverride.ToString(CultureInfo.InvariantCulture)
             : "";
 
-        _serverPresent = context.Paths.ServerExeExists;
-        _mapsPresent = context.Paths.ServerMapsJsonExists;
+        _knownVersion = context.Server.SelectedVersion;
+        _mapsPresent = MapsPresent(_knownVersion);
         ReloadVenues();
+        Versions = new BuildVersionListViewModel(this);
     }
 
     public override string Title => "Sunucu";
@@ -85,6 +95,9 @@ public sealed class ServerPageViewModel : PageViewModel
 
     public ObservableCollection<VenueInfo> Venues { get; } = [];
 
+    /// <summary>Server build list card.</summary>
+    public BuildVersionListViewModel Versions { get; }
+
     public ICommand StartCommand => _startCommand;
 
     public ICommand StopCommand => _stopCommand;
@@ -92,6 +105,8 @@ public sealed class ServerPageViewModel : PageViewModel
     public ICommand OpenLogsFolderCommand { get; }
 
     public ICommand ApplyPortCommand { get; }
+
+    public ICommand FirewallCommand => _firewallCommand;
 
     // ------------------------------------------------------------------ page state
 
@@ -101,14 +116,20 @@ public sealed class ServerPageViewModel : PageViewModel
         private set
         {
             if (!Set(ref _runState, value)) return;
+
+            // Which build is up is read here only: enumerating processes every tick is not free.
+            Context.Server.RefreshRunningVersion();
+
             OnPropertyChanged(nameof(RunStateText));
             OnPropertyChanged(nameof(IsRunning));
             OnPropertyChanged(nameof(IsBusy));
             OnPropertyChanged(nameof(CanStart));
             OnPropertyChanged(nameof(CanStop));
             OnPropertyChanged(nameof(VenuePickerEnabled));
+            OnPropertyChanged(nameof(VersionText));
             _startCommand.RaiseCanExecuteChanged();
             _stopCommand.RaiseCanExecuteChanged();
+            Versions.RefreshCommands();
         }
     }
 
@@ -125,16 +146,37 @@ public sealed class ServerPageViewModel : PageViewModel
 
     public bool IsBusy => RunState is ServerRunState.Starting or ServerRunState.Stopping;
 
-    public bool CanStart => RunState == ServerRunState.Stopped && Context.Paths.ServerExeExists;
+    public bool CanStart => RunState == ServerRunState.Stopped && Context.Server.SelectedVersion > 0;
 
     public bool CanStop => RunState is ServerRunState.Running or ServerRunState.Incompatible;
 
     public bool VenuePickerEnabled => RunState == ServerRunState.Stopped;
 
-    /// <summary>Empty-state text while <c>server\</c> has no server build; empty when fine.</summary>
-    public string MissingServerMessage => Context.Paths.ServerExeExists
+    /// <summary>Empty-state text while no server build is unpacked.</summary>
+    public string MissingServerMessage => Context.Server.SelectedVersion > 0
         ? ""
-        : $"Sunucu yok. Sunucu build'ini (VortexArena.Server.App.exe + config) şu klasöre koyun: {Context.Paths.ServerDir}";
+        : "Sunucu yok. Aşağıdaki listeden bir sürüm indirin.";
+
+    /// <summary>Running build, or the selected one while the server is down.</summary>
+    public string VersionText
+    {
+        get
+        {
+            // A running server from outside the version folders: the selected build is not what runs.
+            if (IsRunning)
+            {
+                return Context.Server.RunningVersion > 0
+                    ? $"Sürüm: v{Context.Server.RunningVersion}"
+                    : "Sürüm: bilinmiyor";
+            }
+
+            var version = Context.Server.SelectedVersion;
+            return version > 0 ? $"Sürüm: v{version}" : "Sürüm: yok";
+        }
+    }
+
+    /// <summary>A download or extraction is in flight — the exit prompt warns about it.</summary>
+    public bool IsWorking => Versions.IsWorking;
 
     public string CatalogProblem => _catalog.Problem ?? "";
 
@@ -188,9 +230,14 @@ public sealed class ServerPageViewModel : PageViewModel
 
     // ---------------------------------------------------------------------- venues
 
+    /// <summary>Venue list of the SELECTED build — every version carries its own
+    /// <c>config\maps.json</c>.</summary>
     public void ReloadVenues()
     {
-        _catalog = VenueCatalog.ForServerExe(Context.Paths.ServerExe);
+        var version = Context.Server.SelectedVersion;
+        _catalog = version > 0
+            ? VenueCatalog.ForMapsFile(Context.Paths.ServerMapsJsonFor(version))
+            : VenueCatalog.Empty;
 
         Venues.Clear();
         foreach (var venue in _catalog.Venues) Venues.Add(venue);
@@ -203,6 +250,101 @@ public sealed class ServerPageViewModel : PageViewModel
         OnPropertyChanged(nameof(SelectedVenue));
         OnPropertyChanged(nameof(CatalogProblem));
         OnPropertyChanged(nameof(MissingServerMessage));
+    }
+
+    // --------------------------------------------------------------- version list
+
+    BuildPackage IBuildVersionListHost.Package => BuildPackage.Server;
+
+    string IBuildVersionListHost.VersionsDir => Context.Paths.ServerVersionsDir;
+
+    IVersionSource IBuildVersionListHost.Source => Context.ServerVersions;
+
+    int IBuildVersionListHost.PinnedVersion => Context.Settings.ServerVersion;
+
+    int IBuildVersionListHost.SelectedVersion => Context.Server.SelectedVersion;
+
+    int IBuildVersionListHost.RunningVersion => Context.Server.RunningVersion;
+
+    // Starting/Stopping count as running: the build's files are in use or about to be.
+    bool IBuildVersionListHost.IsRunning => RunState != ServerRunState.Stopped;
+
+    IReadOnlyList<int> IBuildVersionListHost.RefreshInstalled()
+    {
+        Context.Server.RefreshInstalled();
+        return Context.Server.InstalledVersions;
+    }
+
+    void IBuildVersionListHost.PersistSelection(int version)
+    {
+        Context.Settings.ServerVersion = version;
+        Context.SaveSettings();
+    }
+
+    void IBuildVersionListHost.OnListChanged()
+    {
+        // Port, venue list and the empty-state strip all belong to the selected build.
+        DetectServerBuild();
+        OnPropertyChanged(nameof(MissingServerMessage));
+        OnPropertyChanged(nameof(VersionText));
+    }
+
+    void IBuildVersionListHost.ShowInfo(string message) => Inform(message);
+
+    void IBuildVersionListHost.ShowError(string message) => Fail(message);
+
+    string IBuildVersionListHost.RunningBlocksDownload(string versionLabel)
+        => $"{versionLabel} şu an çalışıyor; önce sunucuyu durdurun.";
+
+    string IBuildVersionListHost.SelectionBlocked => "Sunucu çalışırken sürüm değiştirilemez; önce durdurun.";
+
+    string IBuildVersionListHost.SelectionChanged(string versionLabel)
+        => $"Sunucu {versionLabel} ile başlatılacak.";
+
+    string IBuildVersionListHost.InstallFinished(string versionLabel)
+        => $"{versionLabel} kuruldu. Güvenlik duvarı izni için 'Güvenlik duvarı' düğmesine basın " +
+           "(yönetici onayı ister).";
+
+    /// <summary>
+    /// Runs the selected build's firewall script elevated.
+    /// <para>⚠️ Every version has its own exe path, and Windows asks again for each one; without the
+    /// rule the headsets cannot reach the new server.</para>
+    /// </summary>
+    private void RunFirewallScript()
+    {
+        var version = Context.Server.SelectedVersion;
+        if (version == 0)
+        {
+            Fail("Sunucu sürümü yok — önce aşağıdaki listeden bir sürüm indirin.");
+            return;
+        }
+
+        var script = Context.Paths.ServerFirewallScriptFor(version);
+        if (!File.Exists(script))
+        {
+            Fail($"Güvenlik duvarı betiği bulunamadı: {script}");
+            return;
+        }
+
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = script,
+                WorkingDirectory = Context.Paths.ServerVersionDir(version),
+                UseShellExecute = true,
+                Verb = "runas",
+            });
+            Inform("Güvenlik duvarı kuralları uygulanıyor.");
+        }
+        catch (Win32Exception ex) when (ex.NativeErrorCode == UacDeclined)
+        {
+            Inform("Yönetici onayı verilmedi.");
+        }
+        catch (Exception ex)
+        {
+            Fail($"Güvenlik duvarı betiği çalıştırılamadı: {ex.Message}");
+        }
     }
 
     // ----------------------------------------------------------------- shell input
@@ -225,26 +367,36 @@ public sealed class ServerPageViewModel : PageViewModel
     public override Task TickAsync()
     {
         DetectServerBuild();
+        Versions.Tick();
         PumpLog();
         UptimeText = Context.Server.Uptime is { } uptime ? Display.Clock(uptime) : "—";
         return Task.CompletedTask;
     }
 
-    /// <summary>A build copied into (or removed from) <c>server\</c> applies without a restart.</summary>
+    /// <summary>
+    /// A newly installed, removed or newly picked build applies without a restart: port, venue list
+    /// and buttons all follow the selected version.
+    /// </summary>
     private void DetectServerBuild()
     {
-        var present = Context.Paths.ServerExeExists;
-        // Watched too: a copy in progress can land the exe before config\.
-        var maps = Context.Paths.ServerMapsJsonExists;
-        if (present == _serverPresent && maps == _mapsPresent) return;
+        var version = Context.Server.SelectedVersion;
+        var maps = MapsPresent(version);
+        if (version == _knownVersion && maps == _mapsPresent) return;
 
-        _serverPresent = present;
+        _knownVersion = version;
         _mapsPresent = maps;
         Context.RefreshControlPort();
         ReloadVenues();
         OnPropertyChanged(nameof(CanStart));
+        OnPropertyChanged(nameof(VersionText));
+        OnPropertyChanged(nameof(PortSummary));
         _startCommand.RaiseCanExecuteChanged();
+        _firewallCommand.RaiseCanExecuteChanged();
     }
+
+    /// <summary>Watched too: an unpack can land the exe before <c>config\</c>.</summary>
+    private bool MapsPresent(int version)
+        => version > 0 && File.Exists(Context.Paths.ServerMapsJsonFor(version));
 
     private void ShowStatusFields(LauncherStatus? status)
     {
@@ -268,6 +420,11 @@ public sealed class ServerPageViewModel : PageViewModel
 
     private async Task StartAsync()
     {
+        if (!CanStart) return;
+
+        // Server.Start re-reads the folders; the venue must be checked against that same build.
+        Context.Server.RefreshInstalled();
+        DetectServerBuild();
         if (!CanStart) return;
 
         var venue = SelectedVenue?.Name ?? Context.Settings.Venue;

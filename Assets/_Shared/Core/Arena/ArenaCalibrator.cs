@@ -168,6 +168,14 @@ namespace VortexArena.Core.Arena
         /// <c>ArenaNetCharacterBehaviour</c>) read this and drop their stored reference.</summary>
         public static int CalibrationGeneration { get; private set; }
 
+        /// <summary>Has THIS scene's rig been placed yet (alignment, restore, pre-align guess, dev)?
+        /// Until then the head sits in raw tracking space, so position-based reports are noise. True
+        /// with no calibrator in the scene: nothing would ever place the rig.</summary>
+        public static bool IsRigPlaced => current == null || CalibrationGeneration != current.awakeGeneration;
+
+        /// <summary>This scene's calibrator, read by <see cref="IsRigPlaced"/>.</summary>
+        private static ArenaCalibrator current;
+
         /// <summary>Floor offset of the last calibration (signed meters), sent as
         /// <c>set_calibration.floorOffset</c> (§10.6): the controller tip on a manual capture, the
         /// restored anchor on an anchor restore — both sit on the physical floor.</summary>
@@ -220,10 +228,17 @@ namespace VortexArena.Core.Arena
         /// ignoring a clear inside it would realign the arena after the clear (§10.6).</summary>
         private bool restoreAborted;
 
-        /// <summary>An operator-initiated reload is in flight. A second request is rejected, not
-        /// queued: two runs would apply the same anchor twice and the admin button could not tell
-        /// which result was its own.</summary>
+        /// <summary>An operator-initiated reload is in flight. A second request JOINS it
+        /// (<see cref="forcedReloadWaiters"/>) instead of starting a run: two runs would apply the
+        /// same anchor twice, and a rejection would be stored as the player's calibration error.</summary>
         private bool forcedReloadRunning;
+
+        /// <summary>Everyone waiting on the running forced reload; each gets the one result.</summary>
+        private Action<string> forcedReloadWaiters;
+
+        /// <summary><see cref="CalibrationGeneration"/> when this scene's calibrator woke; see
+        /// <see cref="IsRigPlaced"/>.</summary>
+        private int awakeGeneration;
         private bool trackingEventsHooked;
         private bool realignQueued;
 
@@ -318,6 +333,8 @@ namespace VortexArena.Core.Arena
             FloorLiftMeters = 0f;
             // A half-finished sequence dies with its scene: the new calibrator starts at A.
             SetAwaitingPointB(false);
+            current = this;
+            awakeGeneration = CalibrationGeneration;
         }
 
         private void Start()
@@ -490,6 +507,8 @@ namespace VortexArena.Core.Arena
         {
             UnhookTrackingEvents();
             SetAwaitingPointB(false);
+            if (current == this)
+                current = null;
         }
 
         private void Update()
@@ -1358,7 +1377,7 @@ namespace VortexArena.Core.Arena
                     return;
                 }
 
-                worldAnchor = anchor;
+                ReplaceWorldAnchor(anchor);
 
                 var save = await anchor.SaveAnchorAsync();
                 if (this == null)
@@ -1432,8 +1451,9 @@ namespace VortexArena.Core.Arena
 
         /// <summary>The operator's <c>reload_calibration</c> (§10.6): reloads from the saved anchor and
         /// reports back. <paramref name="onResult"/> fires on the main thread exactly once; empty
-        /// string = success. Static because <c>CalibrationState</c> is a persistent singleton that
-        /// does not know the per-scene calibrator.
+        /// string = success, <c>null</c> = abandoned by a scene change (the next scene's own restore
+        /// reports its alignment). Static because <c>CalibrationState</c> is a persistent singleton
+        /// that does not know the per-scene calibrator.
         /// <para>⚠️ An explicit request beats the player's half-finished sequence and an earlier
         /// abort — a broken alignment is why the command exists; the launch path keeps those
         /// guards.</para></summary>
@@ -1453,8 +1473,7 @@ namespace VortexArena.Core.Arena
         {
             if (forcedReloadRunning)
             {
-                // A second run would apply the same anchor twice; let the operator wait.
-                onResult?.Invoke("yükleme zaten sürüyor");
+                forcedReloadWaiters += onResult;
                 return;
             }
 
@@ -1465,7 +1484,7 @@ namespace VortexArena.Core.Arena
 
             // ⚠️ Pierces the mode gate: calibration mode gates only the launch restore (§10.6).
             string saved = ResolveSavedUuid(true);
-            if (string.IsNullOrEmpty(saved) || !Guid.TryParse(saved, out _))
+            if (string.IsNullOrEmpty(saved) || !Guid.TryParse(saved, out Guid uuid))
             {
                 // No anchor, but the session record can still reproduce the alignment — a forced
                 // request pierces the auto-restore gate, same as the anchor path (§10.6).
@@ -1480,20 +1499,56 @@ namespace VortexArena.Core.Arena
                 return;
             }
 
+            if (TryRealignFromBoundAnchor(uuid))
+            {
+                onResult?.Invoke("");
+                return;
+            }
+
             forcedReloadRunning = true;
+            forcedReloadWaiters = onResult;
             restoreAborted = false;
-            _ = RestoreSavedCalibrationAsync(true, onResult);
+            _ = RestoreSavedCalibrationAsync(true);
         }
 
-        /// <summary>Reports an operator request's result exactly once. No-op on the launch run,
-        /// which has no owner.</summary>
-        private void FinishForcedReload(bool forced, Action<string> onResult, string error)
+        /// <summary>Realigns from <see cref="worldAnchor"/> when it IS the saved anchor.
+        /// <para>⚠️ Required: <c>LoadUnboundAnchorsAsync</c> skips an anchor already bound in this
+        /// process, so a calibrated headset's reload would fail every attempt, fall back to the
+        /// session record and re-save a new anchor.</para></summary>
+        private bool TryRealignFromBoundAnchor(Guid uuid)
+        {
+            if (worldAnchor == null || worldAnchor.Uuid != uuid || !worldAnchor.Localized)
+                return false;
+
+            Transform anchor = worldAnchor.transform;
+            // Measured BEFORE the move, same order as the restore path (see TrackingFloorOffset).
+            MeasureFloorOffset(anchor.position, "çapa");
+            AlignRigToAnchorPose(anchor.position, anchor.rotation);
+            capturedCount = 2;
+            RaiseCalibrated(SourceAnchor);
+            return true;
+        }
+
+        /// <summary>Makes <paramref name="anchor"/> the live anchor and destroys the one it replaces
+        /// (device record kept): a bound leftover would keep its UUID out of every later load.</summary>
+        private void ReplaceWorldAnchor(OVRSpatialAnchor anchor)
+        {
+            if (worldAnchor != null && worldAnchor != anchor)
+                Destroy(worldAnchor.gameObject);
+            worldAnchor = anchor;
+        }
+
+        /// <summary>Reports an operator request's result to every waiter, once. No-op on the launch
+        /// run, which has no owner. <c>null</c> = abandoned (see <see cref="RequestReload"/>).</summary>
+        private void FinishForcedReload(bool forced, string error)
         {
             if (!forced)
                 return;
 
             forcedReloadRunning = false;
-            onResult?.Invoke(error);
+            Action<string> waiters = forcedReloadWaiters;
+            forcedReloadWaiters = null;
+            waiters?.Invoke(error);
         }
 
         private enum RestoreOutcome
@@ -1513,16 +1568,17 @@ namespace VortexArena.Core.Arena
         /// <para><paramref name="forced"/> = explicit operator request: the player's half sequence
         /// and an earlier abort do not stop it, and on failure <see cref="StartPreAlign"/> is NOT
         /// called — pre-align belongs to the launch path, not to guessing mid-game.</para>
-        /// <para>⚠️ <paramref name="onResult"/> must fire on EVERY exit branch, including the one
-        /// where the component died during an <c>await</c>: a missing branch hangs the admin
-        /// button.</para></summary>
-        private async Task RestoreSavedCalibrationAsync(bool forced = false, Action<string> onResult = null)
+        /// <para>⚠️ A forced run must reach <see cref="FinishForcedReload"/> on EVERY exit branch,
+        /// including the one where the component died during an <c>await</c>: a missing branch
+        /// leaves <see cref="forcedReloadRunning"/> stuck and every later request joins a dead
+        /// run.</para></summary>
+        private async Task RestoreSavedCalibrationAsync(bool forced = false)
         {
             // On an operator request the disk record is read regardless of mode (see ResolveSavedUuid).
             string saved = ResolveSavedUuid(forced);
             if (string.IsNullOrEmpty(saved) || !Guid.TryParse(saved, out Guid uuid))
             {
-                FinishForcedReload(forced, onResult, "cihazda kayıtlı kalibrasyon yok");
+                FinishForcedReload(forced, "cihazda kayıtlı kalibrasyon yok");
                 return;
             }
 
@@ -1530,7 +1586,7 @@ namespace VortexArena.Core.Arena
             {
                 if (this == null)
                 {
-                    FinishForcedReload(forced, onResult, "sahne değişti");
+                    FinishForcedReload(forced, null);
                     return;
                 }
 
@@ -1543,13 +1599,13 @@ namespace VortexArena.Core.Arena
                 RestoreOutcome outcome = await TryRestoreOnceAsync(uuid, attempt, forced);
                 if (outcome == RestoreOutcome.Aligned)
                 {
-                    FinishForcedReload(forced, onResult, "");
+                    FinishForcedReload(forced, "");
                     return;
                 }
 
                 if (outcome == RestoreOutcome.Abandoned)
                 {
-                    FinishForcedReload(forced, onResult, "sahne değişti");
+                    FinishForcedReload(forced, null);
                     return;
                 }
 
@@ -1559,7 +1615,7 @@ namespace VortexArena.Core.Arena
 
             if (this == null)
             {
-                FinishForcedReload(forced, onResult, "sahne değişti");
+                FinishForcedReload(forced, null);
                 return;
             }
 
@@ -1572,7 +1628,7 @@ namespace VortexArena.Core.Arena
             // auto-restore gate, exactly like the anchor path.
             if ((forced || !autoRestoreBlocked) && TryApplySessionRecord())
             {
-                FinishForcedReload(forced, onResult, "");
+                FinishForcedReload(forced, "");
                 return;
             }
 
@@ -1588,7 +1644,7 @@ namespace VortexArena.Core.Arena
 
             if (forced)
             {
-                FinishForcedReload(true, onResult, $"kayıtlı çapa {RestoreAttempts} denemede yüklenemedi");
+                FinishForcedReload(true, $"kayıtlı çapa {RestoreAttempts} denemede yüklenemedi");
                 return;
             }
 
@@ -1646,7 +1702,7 @@ namespace VortexArena.Core.Arena
                 var go = new GameObject("ArenaWorldAnchor");
                 var anchor = go.AddComponent<OVRSpatialAnchor>();
                 unboundAnchor.BindTo(anchor);
-                worldAnchor = anchor;
+                ReplaceWorldAnchor(anchor);
                 // ⚠️ The session record is written here too, not only in CreateAndSaveAnchorAsync:
                 // left empty on a disk-restored headset, the map-change restore would hit the
                 // calibration-mode gate though that path is mode-independent (see ResolveSavedUuid).

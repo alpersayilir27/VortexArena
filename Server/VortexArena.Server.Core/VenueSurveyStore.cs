@@ -7,7 +7,7 @@ using VortexArena.Protocol;
 
 namespace VortexArena.Server.Core;
 
-/// <summary>Writes a controller-taken venue survey (§10.11) next to the server exe as
+/// <summary>Writes a controller-taken venue survey (§10.11) into the server's data folder as
 /// <c>&lt;Venue&gt;_dimensions.json</c>.
 /// <para>
 /// ⚠️ <b>The file must stay readable by <c>ArenaDimensions.Parse</c></b> (Unity side, JsonUtility):
@@ -33,7 +33,8 @@ public static class VenueSurveyStore
 
     /// <summary>Validates and writes the survey. Returns the full path, or <c>null</c> with the
     /// reason in <paramref name="error"/>.</summary>
-    public static string? Save(string venue, VenueSurveyDimensions? dims, out string error)
+    /// <param name="directory">Target folder (<see cref="ServerPaths.SurveyDir"/>).</param>
+    public static string? Save(string directory, string venue, VenueSurveyDimensions? dims, out string error)
     {
         error = "";
 
@@ -89,7 +90,8 @@ public static class VenueSurveyStore
         dims.columns = FilterColumns(dims.columns);
 
         var safeName = SafeFileName(venue);
-        var path = Path.Combine(AppContext.BaseDirectory, safeName + ArenaProtocol.SURVEY_FILE_SUFFIX);
+        var folder = string.IsNullOrWhiteSpace(directory) ? AppContext.BaseDirectory : directory;
+        var path = Path.Combine(folder, safeName + ArenaProtocol.SURVEY_FILE_SUFFIX);
         var previousPath = Path.ChangeExtension(path, null) + ".prev.json";
         var tempPath = path + ".tmp";
 
@@ -115,6 +117,7 @@ public static class VenueSurveyStore
 
         try
         {
+            Directory.CreateDirectory(folder);
             File.WriteAllText(tempPath, json, Utf8NoBom);
             if (File.Exists(path)) File.Copy(path, previousPath, overwrite: true);
             File.Move(tempPath, path, overwrite: true);

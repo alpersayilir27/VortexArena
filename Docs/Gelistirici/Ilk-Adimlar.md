@@ -116,7 +116,7 @@ Sunucu hiçbir yerden otomatik başlatılmaz ve editör onu ne başlatır ne öl
 başlığında kayıtlı modları (`tdm, ffa`) ve harita tablosunu görürsün.
 
 **b) Maçı başlatacak bir admin bağla.** Maçı yalnız admin rolündeki bir istemci başlatabilir:
-ya `deploy\admin\VortexArena.exe`'yi çalıştır, ya da editörde rolü `Ctrl+Alt+R` ile `admin`
+ya `deploy\admin\admin_v<sürüm>\VortexArena.exe`'yi çalıştır, ya da editörde rolü `Ctrl+Alt+R` ile `admin`
 yapıp oradan başlat.
 
 **c) Play'e bas.** Rolün `player` ise lobiye düşer, admin maçı başlatınca arenaya geçersin.
@@ -160,8 +160,8 @@ kipidir**: sunucuya bağlanılmaz, operatör komutları kapalıdır, izleyici ka
 ⚠️ **Kayıt sunucu açılışında kapalıdır** — dosya üretmek için önce açman gerekir:
 
 - **Launcher'dan:** *Kayıt* sayfası → **Kaydı başlat**. Geliştirme makinesinde launcher kök
-  klasörü exe'nin üstünde `deploy\` arar (`LauncherPaths`), yani `deploy\server` + `deploy\admin`
-  duruyorsa `dotnet run --project launcher/VortexArena.Launcher` ayarsız çalışır.
+  klasörü exe'nin üstünde `deploy\launcher\` arar (`LauncherPaths`), yani orada `server\` ya da
+  `admin_versions\` duruyorsa `dotnet run --project launcher/VortexArena.Launcher` ayarsız çalışır.
 - **Launcher olmadan**, çalışan sunucuya:
   ```powershell
   Invoke-RestMethod -Method Post -Uri http://127.0.0.1:47821/launcher/recording `

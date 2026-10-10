@@ -271,6 +271,14 @@ namespace VortexArena.App
                 gripFlags |= SnapshotEntry.FLAG_HAND_R_STALE;
             }
 
+            // ⚠️ Both violation bits wait for this scene's rig to be placed: until the anchor restore
+            // lands (seconds after every map load) the head sits in raw tracking space and the
+            // measurement is noise — false ALAN DIŞI/DUVAR lines and ledger counts.
+            if (!ArenaCalibrator.IsRigPlaced)
+            {
+                return;
+            }
+
             // §10.9: head inside an interior obstacle. ⚠️ A MEASUREMENT report, not a penalty — the
             // server drains health in its own tick. ObstacleViolationProbe (Core singleton) is only
             // read here, same seam pattern as HeldItems.

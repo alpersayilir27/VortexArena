@@ -289,7 +289,8 @@ namespace VortexArena.Core.Arena
             ArenaCalibrator.RequestReload(HandleReloadResult);
         }
 
-        /// <summary>Result of a reload attempt (empty reason = success).
+        /// <summary>Result of a reload attempt (empty reason = success, <c>null</c> = abandoned by a
+        /// scene change — not a calibration problem, so it must not land in <c>calibrationError</c>).
         /// <para>⚠️ Nothing is sent on success: it already went through
         /// <see cref="ArenaCalibrator.Calibrated"/> → <see cref="Report"/>, and a second report would
         /// produce a duplicate result line (§5.3).</para>

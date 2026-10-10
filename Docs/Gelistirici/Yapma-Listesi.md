@@ -1081,12 +1081,20 @@ Her karede değil. Akıcı geri sayım istiyorsan son değeri kendin azalt.
 Meta Project Setup Tool önerse bile. Çektiği `voice` paketi Android namespace çakışmasıyla build'i
 kırar. Bireysel paketler kullanılır: core + interaction + interaction.ovr @203.0.0, audio @85.0.0.
 
-### ⛔ Uzamsal veri (Scene) iznini açma
+### ⛔ Uzamsal veri (`USE_SCENE`) iznini kaldırma
 
-`USE_SCENE` izni manifest'e, `sceneSupport` `OculusProjectConfig`'e, `requestScenePermissionOnStartup`
-`OVRManager`'a **KONMAZ**: sahne (Scene) API'si hiçbir yerde kullanılmıyor (uzamsal çapa için
-`USE_ANCHOR_API` yeter) ve açılıştaki "uzamsal veriler" dialogu odağı çalıp o pencerede T-poz
-yedeğini tele koyar, sahada da gövde takibi izniyle karıştırılır.
+Çapa kaydı (`SaveAnchorAsync`) bu izin verilmeden `FailurePermissionInsufficient` döner; yalnız
+`USE_ANCHOR_API` yetmez. Sonuç: kalibrasyon cihaza yazılmaz, uygulama yeniden açılınca
+yüklenecek kayıt yoktur. İzin üç yerde **birlikte** durur, biri eksilirse zincir kopar:
+
+- `Assets/Plugins/Android/AndroidManifest.xml` içindeki `uses-permission`,
+- `OculusProjectConfig`'te `sceneSupport` = Supported — None iken Meta'nın manifest güncelleme
+  aracı ve Project Setup Tool izni manifest'ten siler,
+- `VA_CameraRig`'in `OVRManager`'ında `requestScenePermissionOnStartup` — APK adb'siz
+  kurulduğunda izni veren tek yol budur.
+
+Launcher ve `install_game.bat` kurulumdan sonra izni `pm grant` ile ayrıca verir; böyle kurulan
+gözlükte açılış dialogu çıkmaz.
 
 ### ⛔ `.unitypackage` arşivini `Assets/` altına kopyalama
 
@@ -1162,6 +1170,25 @@ bitmiş olmalıdır. `Exit` süreci anında sonlandırır — `finally` bloğu �
 `ProjectSettings.asset` diskte sürümlü değerlerle kalır, sonraki her build o bozuk hâlden başlar.
 ⚠️ Paket eki **noktasızdır** (`com.vortex.arenav132`, `com.vortex.arena.v132` DEĞİL): Android paket
 segmenti rakamla başlayamaz.
+
+### ⛔ Admin build'inin `productName`'ine sürüm ekleme
+
+Sürümlü admin build'i numarayı yalnız `bundleVersion`'a ve çıktı klasörü/zip adına koyar; ürün adı
+**temel ad** kalır. Windows `PlayerPrefs`'i `productName` altında saklar ve operatör ayarları
+(ses çıkışı, tercihler, müzik klasörü) oradadır — sürüm başına değişen bir ad her yeni sürümde
+ayarları sıfırlardı. `ProjectSettings`'te kalmış bir `" v<N>"` eki de build'de temel ada çevrilir.
+
+### ⛔ Sunucu verisini sürüm klasörüne koyma
+
+İşletmenin `server.json`'u, `devices.json`'u, günlükleri ve `<Mekan>_dimensions.json` ölçüm
+dosyaları **veri klasöründe** yaşar — sunucu oraya `--data-dir` ile gösterilir (launcher'da
+`<kök>\server`). Sürüm klasörü yeni sürüm indirilince **bütünüyle değişir**: içine konan ayar,
+cihaz kimliği ve ölçü sessizce kaybolur, cihazlar adlarını ve forma numaralarını yitirir.
+`server.json`'un sürümle gelen kopyası yalnız **tohumdur** (veri klasöründe dosya yoksa kopyalanır,
+varsa asla üzerine yazılmaz); `devices.json` sürüm paketine hiç girmez.
+⚠️ **Tek istisna `maps.json`'dur:** harita tablosu aynı numaralı oyuncu/admin build'iyle uyuşmak
+zorunda olduğu için **sürümün** `config\` klasöründen okunur; veri klasörüne konan bir kopya
+okunmaz.
 
 ### ⛔ Shader varyantını katlayan ayarları açma
 

@@ -820,12 +820,17 @@ namespace VortexArena.App.Admin
         /// state and the result would be swallowed unseen.</para>
         /// <para>No confirm window: reloading benches nobody and leaves the player as before if it
         /// fails — an undoable attempt, unlike a reset.</para>
+        /// <para>Only rows the command can reach: the server skips players without a live socket, so
+        /// a reconnecting/left row would only ever time out into HATA.</para>
         /// </summary>
         private void ReloadAllCalibrations()
         {
             for (int i = 0; i < _live.Count; i++)
             {
-                _live[i].BeginCalibrationLoad();
+                if (_live[i].CanReloadCalibration)
+                {
+                    _live[i].BeginCalibrationLoad();
+                }
             }
 
             AdminCommands.ReloadCalibration(0);
@@ -839,7 +844,8 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>Hands the result to <b>that row only</b>: the message is an event, no relayout
-        /// needed.</summary>
+        /// needed. The row drops it unless it is waiting (see
+        /// <see cref="AdminStatsRow.ApplyCalibrationResult"/>).</summary>
         private void HandleCalibrationResult(CalibrationResultMsg msg)
         {
             if (msg == null)

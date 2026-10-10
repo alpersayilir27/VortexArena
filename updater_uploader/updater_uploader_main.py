@@ -1,19 +1,31 @@
-"""updater_uploader_main.py - publish endpoint for the game APK (single file, stdlib only).
+"""updater_uploader_main.py - publish endpoint for the game APK, the admin build and the server (single file, stdlib only).
 
-Runs on the server, in the folder the APKs live in (e.g. D:\\WebHost\\player_apk_updater).
-Versioned builds are written into the "game_versions" sub folder as game_v<N>.apk, so
-several versions stay published side by side.
+Runs on the server, in the folder the artifacts live in (e.g. D:\\WebHost\\player_apk_updater).
+Versioned builds are written into a per-kind sub folder, so several versions stay published
+side by side.
 
-  POST /upload?v=132  writes the body to game_versions/game_v132.apk
-                      (lands in a .tmp first, then atomic replace - a half
-                      finished upload cannot corrupt an existing APK)
-  GET  /versions      JSON list of published versions, newest first
-  GET  /upload        says "up" (health check)
-  any other path      404 - this script grabs no other endpoint
+  POST /upload?v=132        writes the body to game_versions/game_v132.apk
+  GET  /versions            JSON list of published APK versions, newest first
+  GET  /upload              says "up" (health check)
+
+  POST /admin/upload?v=16   writes the body to admin_versions/admin_v16.zip
+  GET  /admin/versions      JSON list of published admin versions, newest first
+  GET  /admin/upload        says "up" (health check)
+
+  POST /server/upload?v=16  writes the body to server_versions/server_v16.zip
+  GET  /server/versions     JSON list of published server versions, newest first
+  GET  /server/upload       says "up" (health check)
+
+  any other path            404 - this script grabs no other endpoint
+
+Every upload lands in a .tmp first and is then atomically replaced - a half finished
+upload cannot corrupt an existing artifact.
 
 PORT = 8091. Downloading is NOT this script's job: the IIS site (8090) serving the same
-folder as its root hands out game_versions/game_v<N>.apk. The two processes use separate
-ports so they do not clash; IIS needs the .apk MIME mapping (updater/README.md).
+folder as its root hands out game_versions/game_v<N>.apk, admin_versions/admin_v<N>.zip
+and server_versions/server_v<N>.zip.
+The two processes use separate ports so they do not clash; IIS needs the .apk MIME mapping
+(.zip it already knows - updater/README.md).
 
 The legacy game.apk in the root folder is left untouched - old updaters keep downloading
 it - but nothing writes there any more.
@@ -25,26 +37,108 @@ import json
 import os
 import re
 import sys
+import zipfile
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 
 PORT = 8091
-UPLOAD_PATH = "/upload"
-VERSIONS_PATH = "/versions"
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-TARGET_DIR = os.path.join(BASE_DIR, "game_versions")
 CHUNK = 1024 * 1024
 MAX_VERSION = 2000000000
-APK_RE = re.compile(r"^game_v([0-9]+)\.apk$")
 
 
 def log(msg):
     print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] {msg}", flush=True)
 
 
-def apk_path(version):
-    return os.path.join(TARGET_DIR, f"game_v{version}.apk")
+def check_admin_zip(path):
+    """Extra validation for the admin archive; returns an error text or None.
+
+    The launcher extracts the archive straight into admin_versions/admin_v<N>/ and
+    starts VortexArena.exe from the top: an archive that wraps the build in a folder
+    would install silently broken.
+    """
+    try:
+        with zipfile.ZipFile(path) as archive:
+            names = archive.namelist()
+    except (zipfile.BadZipFile, OSError) as e:
+        return f"zip arsivi okunamadi: {e}"
+
+    if "VortexArena.exe" not in names:
+        return "arsiv kokunde VortexArena.exe yok - build klasorunun ICERIGI zip'lenmeli"
+    return None
+
+
+def check_server_zip(path):
+    """Extra validation for the server archive; returns an error text or None.
+
+    The launcher extracts it straight into server_versions/server_v<N>/ and starts the exe
+    from the top. config/maps.json ships WITH the version (the server reads it from the
+    version folder, not from the venue data dir): without it every match would start with
+    map validation off.
+    """
+    try:
+        with zipfile.ZipFile(path) as archive:
+            names = archive.namelist()
+    except (zipfile.BadZipFile, OSError) as e:
+        return f"zip arsivi okunamadi: {e}"
+
+    if "VortexArena.Server.App.exe" not in names:
+        return "arsiv kokunde VortexArena.Server.App.exe yok - publish klasorunun ICERIGI zip'lenmeli"
+    if "config/maps.json" not in names:
+        return "arsivde config/maps.json yok - maps.json surumle birlikte dagilir"
+    return None
+
+
+# One row per artifact kind. Routes, folder, naming and the extra validator live
+# together so a new kind needs no new request handling code.
+KINDS = (
+    {
+        "upload": "/upload",
+        "versions": "/versions",
+        "dir": os.path.join(BASE_DIR, "game_versions"),
+        "prefix": "game_v",
+        "ext": ".apk",
+        "regex": re.compile(r"^game_v([0-9]+)\.apk$"),
+        "health": "uploader ayakta - APK'yi bu yola POST edin: /upload?v=<surum>",
+        "version_hint": "surum gerekli: /upload?v=<pozitif tam sayi>, ornek /upload?v=132",
+        # APK = zip; if the first two bytes are not "PK" this is not an APK.
+        "magic_error": "govde APK degil",
+        "validate": None,
+    },
+    {
+        "upload": "/admin/upload",
+        "versions": "/admin/versions",
+        "dir": os.path.join(BASE_DIR, "admin_versions"),
+        "prefix": "admin_v",
+        "ext": ".zip",
+        "regex": re.compile(r"^admin_v([0-9]+)\.zip$"),
+        "health": "uploader ayakta - admin zip'ini bu yola POST edin: /admin/upload?v=<surum>",
+        "version_hint": "surum gerekli: /admin/upload?v=<pozitif tam sayi>, ornek /admin/upload?v=16",
+        "magic_error": "govde zip degil",
+        "validate": check_admin_zip,
+    },
+    {
+        "upload": "/server/upload",
+        "versions": "/server/versions",
+        "dir": os.path.join(BASE_DIR, "server_versions"),
+        "prefix": "server_v",
+        "ext": ".zip",
+        "regex": re.compile(r"^server_v([0-9]+)\.zip$"),
+        "health": "uploader ayakta - sunucu zip'ini bu yola POST edin: /server/upload?v=<surum>",
+        "version_hint": "surum gerekli: /server/upload?v=<pozitif tam sayi>, ornek /server/upload?v=16",
+        "magic_error": "govde zip degil",
+        "validate": check_server_zip,
+    },
+)
+
+UPLOAD_ROUTES = {kind["upload"]: kind for kind in KINDS}
+VERSIONS_ROUTES = {kind["versions"]: kind for kind in KINDS}
+
+
+def artifact_path(kind, version):
+    return os.path.join(kind["dir"], f"{kind['prefix']}{version}{kind['ext']}")
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -83,27 +177,29 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         route = self._route()
-        if route == VERSIONS_PATH:
-            self._reply_json(200, self._collect_versions())
+        kind = VERSIONS_ROUTES.get(route)
+        if kind is not None:
+            self._reply_json(200, self._collect_versions(kind))
             return
-        if route == UPLOAD_PATH:
-            self._reply(200, "uploader ayakta - APK'yi bu yola POST edin: /upload?v=<surum>")
+        kind = UPLOAD_ROUTES.get(route)
+        if kind is not None:
+            self._reply(200, kind["health"])
             return
         self._reply(404, "bilinmeyen yol")
 
     @staticmethod
-    def _collect_versions():
+    def _collect_versions(kind):
         items = []
         try:
-            names = os.listdir(TARGET_DIR)
+            names = os.listdir(kind["dir"])
         except OSError:
             names = []
 
         for name in names:
-            m = APK_RE.match(name)
+            m = kind["regex"].match(name)
             if not m:
                 continue
-            full = os.path.join(TARGET_DIR, name)
+            full = os.path.join(kind["dir"], name)
             try:
                 st = os.stat(full)
             except OSError:
@@ -120,14 +216,15 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         client = self.client_address[0]
-        if self._route() != UPLOAD_PATH:
+        kind = UPLOAD_ROUTES.get(self._route())
+        if kind is None:
             self._reply(404, "bilinmeyen yol")
             return
 
         version = self._version_arg()
         if version is None:
             log(f"{client}: reddedildi - gecersiz veya eksik surum")
-            self._reply(400, "surum gerekli: /upload?v=<pozitif tam sayi>, ornek /upload?v=132")
+            self._reply(400, kind["version_hint"])
             return
 
         try:
@@ -138,11 +235,12 @@ class Handler(BaseHTTPRequestHandler):
             self._reply(411, "Content-Length gerekli")
             return
 
-        target = apk_path(version)
+        target = artifact_path(kind, version)
+        name = os.path.basename(target)
         tmp = target + ".tmp"
         received = 0
         try:
-            os.makedirs(TARGET_DIR, exist_ok=True)
+            os.makedirs(kind["dir"], exist_ok=True)
             with open(tmp, "wb") as out:
                 while received < length:
                     chunk = self.rfile.read(min(CHUNK, length - received))
@@ -161,14 +259,23 @@ class Handler(BaseHTTPRequestHandler):
             self._reply(400, "yukleme eksik geldi")
             return
 
-        # APK = zip; if the first two bytes are not "PK" this is not an APK.
+        # Every kind is a zip container; wrong first bytes mean the body is something else.
         with open(tmp, "rb") as f:
             magic = f.read(2)
         if magic != b"PK":
             self._cleanup(tmp)
-            log(f"{client}: reddedildi - govde APK degil")
-            self._reply(400, "govde APK degil")
+            log(f"{client}: reddedildi - {kind['magic_error']}")
+            self._reply(400, kind["magic_error"])
             return
+
+        validate = kind["validate"]
+        if validate is not None:
+            problem = validate(tmp)
+            if problem is not None:
+                self._cleanup(tmp)
+                log(f"{client}: reddedildi - {problem}")
+                self._reply(400, problem)
+                return
 
         # Atomic replace: an existing file of the same version is swapped in one move.
         # If IIS is serving it right then Windows can block the replace; 503 tells the
@@ -177,10 +284,10 @@ class Handler(BaseHTTPRequestHandler):
             os.replace(tmp, target)
         except OSError as e:
             self._cleanup(tmp)
-            self._reply(503, f"game_v{version}.apk degistirilemedi (dosya kilitli olabilir): {e}")
+            self._reply(503, f"{name} degistirilemedi (dosya kilitli olabilir): {e}")
             return
 
-        log(f"{client}: surum {version} yayinlandi ({received} bayt)")
+        log(f"{client}: surum {version} yayinlandi ({received} bayt) -> {name}")
         self._reply(200, f"tamam - surum {version}, {received} bayt yayinlandi")
 
     @staticmethod
@@ -192,11 +299,12 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
-    try:
-        os.makedirs(TARGET_DIR, exist_ok=True)
-    except OSError as e:
-        log(f"HATA: surum klasoru olusturulamiyor: {TARGET_DIR}: {e}")
-        sys.exit(1)
+    for kind in KINDS:
+        try:
+            os.makedirs(kind["dir"], exist_ok=True)
+        except OSError as e:
+            log(f"HATA: surum klasoru olusturulamiyor: {kind['dir']}: {e}")
+            sys.exit(1)
 
     try:
         server = ThreadingHTTPServer(("", PORT), Handler)
@@ -206,9 +314,11 @@ def main():
         sys.exit(1)
 
     log(f"dinleniyor: 0.0.0.0:{PORT}")
-    log(f"  POST {UPLOAD_PATH}?v=<surum>  -> game_versions/game_v<surum>.apk")
-    log(f"  GET  {VERSIONS_PATH}          -> yayindaki surumlerin JSON listesi")
-    log(f"hedef klasor: {TARGET_DIR}")
+    for kind in KINDS:
+        folder = os.path.basename(kind["dir"])
+        log(f"  POST {kind['upload']}?v=<surum>  -> {folder}/{kind['prefix']}<surum>{kind['ext']}")
+        log(f"  GET  {kind['versions']}          -> yayindaki surumlerin JSON listesi")
+        log(f"hedef klasor: {kind['dir']}")
     try:
         server.serve_forever()
     except KeyboardInterrupt:

@@ -11,24 +11,34 @@ Launcher ayarlardan yol sormaz; her şeyi **kök klasöre** göre bulur. Dağıt
 
 ```
 <kök>\VortexArena.Launcher.exe
-<kök>\server\VortexArena.Server.App.exe   (+ config\, logs\)
-<kök>\admin\VortexArena.exe
+<kök>\server\                             mekan VERİSİ: config\server.json, config\devices.json,
+                                          logs\, ölçüm dosyaları
+<kök>\server_versions\server_v<N>\VortexArena.Server.App.exe   (+ dll'ler, config\maps.json,
+                                          config\server.json tohumu, firewall-kur.cmd)
+<kök>\admin_versions\admin_v<N>\VortexArena.exe   (+ VortexArena_Data\, UnityPlayer.dll, …)
 <kök>\game_versions\game_v<N>.apk
 <kök>\replays\*.vxr
 <kök>\platform-tools\adb.exe              (+ dll'ler; deploy betiği doldurur)
 ```
 
+`server\` ile `server_versions\` ayrıdır: sunucu `--data-dir <kök>\server` ile başlatılır, yani
+config'ini, günlüklerini ve ölçüm dosyalarını oraya yazar; `maps.json`'ı **yalnız** çalıştığı
+sürümün `config\` klasöründen okur. İlk açılışta `<kök>\server\config\server.json` yoksa sürümün
+içindeki kopyadan tohumlanır. Böylece sürüm değiştirmek operatör verisine dokunmaz.
+
 Kök çözüm sırası:
 
 1. `--root <klasör>` argümanı,
-2. exe'nin klasöründe `server\` ya da `admin\` varsa orası,
+2. exe'nin klasöründe `server\`, `server_versions\` ya da `admin_versions\` varsa orası (eski
+   paketlerdeki `admin\` da kök sayılır),
 3. geliştirme kolaylığı (`dotnet run`): exe'den yukarı en çok 6 seviye çıkıp bu yerleşimi taşıyan
    ilk `deploy\launcher\`,
 4. exe'nin klasörü.
 
-Launcher açılışta kökte `server\`, `admin\`, `game_versions\` ve `replays\` klasörlerini **boş da
-olsa oluşturur**; build'ler sonradan içine kopyalanır. Build gelene kadar sayfa neyin nereye
-konacağını yazar (`Sunucu yok. … şu klasöre koyun: <yol>`); kopyalanan build launcher yeniden
+Launcher açılışta kökte `server\`, `server_versions\`, `admin_versions\`, `game_versions\` ve
+`replays\` klasörlerini **boş da olsa oluşturur**; sunucu ve yönetim build'leri kendi sayfalarındaki
+sürüm listesinden indirilir. Build gelene kadar sayfa boş durumu yazar
+(`Sunucu yok. Aşağıdaki listeden bir sürüm indirin.`); elle kopyalanan build launcher yeniden
 açılmadan görülür.
 
 Aynı anda **tek launcher** açılır. Başka bir klasördeki kopya açılmaz ve klasör de oluşturmaz;
@@ -41,8 +51,8 @@ açık olanın yolunu gösterip kapanır. Aynı exe'ye yeniden tıklamak yalnız
 
 | Sayfa | Ne yapar |
 |---|---|
-| **Sunucu** | Mekan seçimi, başlat/durdur, canlı durum (faz, mod, sahne, oyuncu/yönetim sayısı, çalışma süresi), günlük takibi |
-| **Yönetim** | Yönetim uygulamasını `--server-ip`/`--server-port` ile başlatır, durdurur |
+| **Sunucu** | Mekan seçimi, başlat/durdur, canlı durum (sürüm, faz, mod, sahne, oyuncu/yönetim sayısı, çalışma süresi), sunucu sürümleri (indir/seç, *Güvenlik duvarı* düğmesi), günlük takibi |
+| **Yönetim** | Yönetim uygulamasını `--server-ip`/`--server-port` ile başlatır, durdurur; yönetim sürümlerini listeler, indirir ve hangisinin başlatılacağını seçtirir |
 | **Versiyonlar** | Güncelleme sunucusundaki APK listesi, indirme, `adb` ile gözlüğe kurma, "Yüklü" rozeti |
 | **Kayıt** | Maç kaydını açıp kapatır; `.vxr` dosyalarını listeler, yönetim uygulamasında oynatır |
 
@@ -57,8 +67,10 @@ varsa o → konsolda sor. **Konsol etkileşimli değilse** (betik, servis, launc
 **alfabetik ilk mekan** sessizce açılır. Operatör bunu fark etmez; yanlış işletmenin arenalarını
 yönetmeye çalışır. Launcher bu yolu hiç bırakmaz: mekan seçilmeden sunucu başlatılmaz.
 
-Mekan listesi launcher'a gömülü değildir — `server\config\maps.json`'dan okunur (sunucu exe
-klasöründen başlayıp yukarı 6 seviye aranır). Yeni işletme eklendiğinde Unity'de
+Mekan listesi launcher'a gömülü değildir — **seçili sunucu sürümünün** `config\maps.json`'ından
+okunur — yalnız o sürüm klasörünün kendi dosyası, sunucunun okuduğu yerle aynı; üst klasörlerde
+aranmaz. Dosya yoksa liste boş kalır ve sayfa sebebini yazar. Sürüm seçimi değişince liste
+yeniden okunur. Yeni işletme eklendiğinde Unity'de
 `Tools > VortexArena > Server > Export Server Config` çalıştırmak yeter. Lobisi olmayan mekan
 listede uyarıyla görünür: sunucu o mekanda açık sahne çözemeyip **çıkış kodu 2** ile kapanır.
 
@@ -83,7 +95,10 @@ link'lenerek derlenir — launcher ikinci bir kopya tutmaz.
 
 APK adı `game_v<N>.apk`, Android paket adı `com.vortex.arenav<N>` (kaynak: Unity'deki
 `PlayerBuildTool`). Sürümler gözlükte **yan yana** yaşar; bu yüzden kurulum başka hiçbir sürümü
-silmez. Kurulum `adb install -r -g` ile yapılır.
+silmez. Kurulum `adb install -r -g` ile yapılır; ardından `GamePackage.RuntimePermissions`
+listesindeki her izin `adb shell pm grant` ile ayrıca verilir (uzamsal veri izni `USE_SCENE` —
+olmadan kalibrasyon çapası cihaza kaydedilmez). İzin verilemezse kurulum yine başarılı sayılır,
+operatöre uyarı düşer: oyun izni ilk açılışta gözlükte sorar.
 
 Tek istisna `INSTALL_FAILED_UPDATE_INCOMPATIBLE` (aynı paket farklı imzayla kurulmuş): launcher
 onay ister ve **yalnız o sürümün paketini** kaldırıp yeniden kurar.
@@ -91,6 +106,50 @@ onay ister ve **yalnız o sürümün paketini** kaldırıp yeniden kurar.
 Liste satırları uzak ∪ yerel ∪ gözlükte kurulu sürümlerin birleşimidir. Yerelde olup güncelleme
 sunucusunda görünmeyen (ya da liste o an alınamayan) sürüm **üstü çizili bulut** ikonuyla işaretlenir.
 Liste alınamazsa sayfanın üstünde uyarı bandı çıkar ve 30 saniyede bir yeniden denenir.
+
+## Sürümlü build'ler: her sürüm kendi klasöründe
+
+Sunucu ve Windows yönetim build'i aynı mekanizmayı paylaşır — tek fark paket adı, exe adı ve
+klasörü:
+
+| Build | Paket | Yerleşim | Sayfa |
+|---|---|---|---|
+| Sunucu | `server_v<N>.zip` | `<kök>\server_versions\server_v<N>\VortexArena.Server.App.exe` | Sunucu |
+| Yönetim | `admin_v<N>.zip` | `<kök>\admin_versions\admin_v<N>\VortexArena.exe` | Yönetim |
+
+Arşivin kökünde build'in kendisi durur (sunucuda dll'ler + `config\maps.json` + `config\server.json`
+tohumu + `firewall-kur.cmd`; yönetimde `VortexArena_Data\`, `UnityPlayer.dll`, …).
+
+İndirme sırası: `<ad>.zip.part` → ad değişimi `<ad>.zip` → `<ad>.extract\`'a açma → arşivde paketin
+exe'si var mı kontrolü → klasörün `<ad>\` olarak taşınması → zip'in silinmesi. Yarım kalan bir
+`<ad>\` **kurulu görünürdü** ve operatör bozuk bir build başlatırdı; bu yüzden taşıma en sonda
+yapılır. İptal ya da hatada artıklar (`<ad>.zip`, `<ad>.extract\`) hemen silinir; kilitli olduğu
+için silinemeyen (ve yarım kalan `.part`) bir sonraki liste yenilemesinde — hiçbir indirme
+sürmüyorsa — süpürülür. Hiçbir adım başka bir sürümün klasörüne dokunmaz.
+
+Başlatılan sürüm: `serverVersion` / `adminVersion` ayarı, o sürüm açılmışsa odur; değilse **açılmış
+en yüksek sürüm**. Otomatik seçim kaydedilmez — kayda yalnız operatörün *Seç* dediği sürüm girer.
+Build çalışırken seçim değiştirilemez. Liste satırları uzak ∪ açılmış sürümlerin birleşimidir;
+yerelde olup sunucuda görünmeyen (ya da liste o an alınamayan) sürüm **üstü çizili bulut** ikonuyla
+işaretlenir, liste alınamazsa uyarı bandı çıkar ve periyodik olarak yeniden denenir. Elle kopyalanan
+ya da silinen klasör birkaç saniye içinde listeye yansır.
+
+Sunucu tarafında seçili sürüm ayrıca şunları belirler: `config\maps.json`'dan okunan mekan listesi,
+`config\server.json`'dan okunan kontrol portu tohumu, `--data-dir` dışındaki her yol ve
+*Güvenlik duvarı* düğmesinin çalıştırdığı betik. Sürüm seçimi değişince hepsi yeniden okunur.
+
+**Güvenlik duvarı:** her yeni exe yolu için Windows izni yeniden sorar, yani yeni bir sunucu
+sürümünün ilk açılışında gözlükler sunucuyu bulamayabilir. Sunucu sürüm kartındaki *Güvenlik duvarı*
+düğmesi seçili sürümün `firewall-kur.cmd` betiğini **yönetici olarak** çalıştırır; onay verilmezse
+işlem iptal edilir ve sayfa "Yönetici onayı verilmedi." der. Sunucu sürümü yokken düğme pasiftir.
+Kurulum biten sunucu sürümü için operatöre bu düğme hatırlatılır.
+
+Önceki launcher oturumundan kalan yönetim uygulaması sahiplenilir: `admin_versions\admin_v<N>\`
+altından başlamış her `VortexArena` süreci sayılır ve sürüm numarası yolundan okunur. Tek klasörlü
+eski `admin\` yerleşimi **kullanılmaz** (yalnız kök tespitinde kabul edilir). Sunucu tarafında
+"çalışıyor" kararı HTTP durumundan gelir; zorla kapatma `server_versions\server_v<N>\` altındaki
+exe'lerin yanı sıra eski `server\VortexArena.Server.App.exe`'yi de bulur — açık kalan eski bir
+sunucu kontrol portunu tutar ve yenisi hiç açılmaz.
 
 ## adb paketteki `platform-tools\`'tan çalışır
 
@@ -120,9 +179,15 @@ sorun çıkarmaz).
 | Anahtar | Anlam |
 |---|---|
 | `venue` | Sunucuya `--venue` olarak geçen mekan |
-| `controlPortOverride` | Kontrol portu; `0` = `server\config\server.json → controlPort`, o da yoksa `47821` |
+| `controlPortOverride` | Kontrol portu; `0` = `server\config\server.json → controlPort`, o yoksa seçili sürümün `config\server.json`'u, o da yoksa `47821` |
 | `versionsUrl` | Güncelleme sunucusunun sürüm listesi ucu |
 | `downloadBaseUrl` | APK indirme kök adresi |
+| `adminVersionsUrl` | Yönetim build'i sürüm listesi ucu |
+| `adminDownloadBaseUrl` | Yönetim build'i (`admin_v<N>.zip`) indirme kök adresi |
+| `adminVersion` | Başlatılacak yönetim sürümü; `0` = açılmış en yüksek sürüm |
+| `serverVersionsUrl` | Sunucu build'i sürüm listesi ucu |
+| `serverDownloadBaseUrl` | Sunucu build'i (`server_v<N>.zip`) indirme kök adresi |
+| `serverVersion` | Başlatılacak sunucu sürümü; `0` = açılmış en yüksek sürüm |
 | `preferredDeviceSerial` | Son seçilen gözlük; tekrar takıldığında yine seçilir |
 
 Yönetim uygulamasının bağlandığı sunucu adresi **kaydedilmez**: her açılış `127.0.0.1` ile başlar,
@@ -130,8 +195,10 @@ Yönetim uygulamasının bağlandığı sunucu adresi **kaydedilmez**: her açı
 her açılışta yönetimi sessizce başka bir makineye gönderirdi; eski dosyadaki `serverIp` anahtarı
 yok sayılır.
 
-`versionsUrl` / `downloadBaseUrl` ileride lisans backend'iyle değişecek; bu yüzden liste kaynağı
-`IVersionSource` arayüzünün arkasındadır.
+`versionsUrl` / `downloadBaseUrl` ile sunucu ve yönetim karşılıkları ileride lisans backend'iyle
+değişecek; bu yüzden liste kaynağı `IVersionSource` arayüzünün arkasındadır — oyuncu APK'sı, sunucu
+ve yönetim build'i aynı sınıfın üç ayrı örneğidir, paket adlandırması (`GamePackage` /
+`BuildPackage.Server` / `BuildPackage.Admin`) kurucuya geçirilir.
 
 ## Dosyalar
 
@@ -139,9 +206,9 @@ yok sayılır.
 |---|---|
 | `App.xaml(.cs)` | Uygulama kabuğu, tema birleştirme, tek örnek kilidi, yakalanmamış hata kutusu |
 | `MainWindow.xaml(.cs)` | Kenar çubuğu + sayfa barındırma, koyu başlık çubuğu, çıkış onayı |
-| `Views/` | Sayfa görünümleri (`ServerPage`, `AdminPage`, `VersionsPage`, `RecordingPage`) + `ExitDialog` |
-| `ViewModels/` | `MainViewModel` + sayfa başına bir view model + satır view model'leri |
-| `Services/` | `LauncherPaths`, `LauncherSettings`, `VenueCatalog`, `ServerController`, `ServerStatusClient`, `AdminController`, `LogTailer`, `AdbService`, `VersionSource`, `VersionCatalog`, `ReplayLibrary`, `GamePackage` |
+| `Views/` | Sayfa görünümleri (`ServerPage`, `AdminPage`, `VersionsPage`, `RecordingPage`) + `ExitDialog` + `BuildVersionRow.xaml` (sunucu ve yönetim sayfalarının ortak sürüm satırı) |
+| `ViewModels/` | `MainViewModel` + sayfa başına bir view model + satır view model'leri; sürüm listesi kartı `BuildVersionListViewModel`'dir, sayfa onu `IBuildVersionListHost` olarak besler |
+| `Services/` | `LauncherPaths`, `LauncherSettings`, `VenueCatalog`, `ServerController`, `ServerStatusClient`, `AdminController`, `LogTailer`, `AdbService`, `VersionSource`, `VersionCatalog`, `ReplayLibrary`, `GamePackage`, `BuildPackage`, `BuildVersionCatalog` |
 | `Infrastructure/` | Elle yazılmış MVVM parçaları (`ObservableObject`, `RelayCommand`), dönüştürücüler, tek örnek kilidi, Win32 çağrıları |
 | `Theme/Dark.xaml` · `Theme/Icons.xaml` | Palet + kontrol şablonları; ikon geometrileri |
 | `../../platform-tools/` | Pakete kopyalanan adb dosyaları (repo kökü) |
@@ -168,9 +235,10 @@ dotnet run --project VortexArena.Launcher          # kök: deploy\launcher\ aran
 ```
 
 Dağıtım: repo kökünden `scripts\deploy-launcher.bat` → `deploy\launcher\VortexArena.Launcher.exe`
-(tek dosya, self-contained) + yanında boş `server\`, `admin\`, `game_versions\`, `replays\` ve
-repodan aynalanan `platform-tools\`. Betik yeniden koşunca exe'yi ve `platform-tools\`'u yeniler;
-dört klasörün içeriğine dokunmaz, klasördeki diğer her şeyi (eski çıktı) siler. Betik tek dosya anahtarını `-p:VortexSingleFile=true` ile açar;
+(tek dosya, self-contained) + yanında boş `server\`, `server_versions\`, `admin_versions\`,
+`game_versions\`, `replays\` ve repodan aynalanan `platform-tools\`. Betik yeniden koşunca exe'yi ve
+`platform-tools\`'u yeniler; yerleşim klasörlerinin içeriğine dokunmaz, klasördeki diğer her şeyi
+(eski çıktı) siler. Betik tek dosya anahtarını `-p:VortexSingleFile=true` ile açar;
 `RuntimeIdentifier`/`SelfContained` csproj'da **koşulludur**, çünkü RID'siz test projesi
 RID'li self-contained bir projeye referans veremez.
 

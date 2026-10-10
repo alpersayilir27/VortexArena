@@ -4,16 +4,22 @@
              xmlns:services="clr-namespace:VortexArena.Launcher.Services">
 
     <UserControl.Resources>
-        <!-- Tek istatistik bloğu: üstte etiket, altta değer -->
-        <Style x:Key="StatPanel" TargetType="StackPanel">
-            <Setter Property="Margin" Value="0,0,36,10" />
-            <Setter Property="MinWidth" Value="110" />
-        </Style>
-        <Style x:Key="StatValue" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
-            <Setter Property="FontSize" Value="15" />
-            <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="TextWrapping" Value="NoWrap" />
-        </Style>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="pack://application:,,,/Views/BuildVersionRow.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <!-- Tek istatistik bloğu: üstte etiket, altta değer -->
+            <Style x:Key="StatPanel" TargetType="StackPanel">
+                <Setter Property="Margin" Value="0,0,36,10" />
+                <Setter Property="MinWidth" Value="110" />
+            </Style>
+            <Style x:Key="StatValue" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                <Setter Property="FontSize" Value="15" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="TextWrapping" Value="NoWrap" />
+            </Style>
+        </ResourceDictionary>
     </UserControl.Resources>
 
     <Grid Margin="28,24,28,20">
@@ -84,6 +90,8 @@
                                         </Style>
                                     </TextBlock.Style>
                                 </TextBlock>
+                                <TextBlock Style="{StaticResource HintText}" Margin="0,6,0,0"
+                                           Text="{Binding VersionText}" />
                             </StackPanel>
 
                             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
@@ -130,6 +138,76 @@
                                 <TextBlock Style="{StaticResource StatValue}" Text="{Binding UptimeText}" />
                             </StackPanel>
                         </WrapPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- ════════════════════════════════════════════════ sürümler ══ -->
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                <TextBlock Style="{StaticResource LabelText}" Text="SUNUCU SÜRÜMLERİ" />
+                                <TextBlock Style="{StaticResource HintText}" Margin="0,4,0,0"
+                                           Text="Sürümler yan yana durur; seçili sürüm başlatılır. Mekan verisi (config, günlük, ölçüm) sürümlerin dışındaki server\ klasöründe kalır." />
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Button Style="{StaticResource SmallOutlinedButton}"
+                                        Margin="0,0,8,0"
+                                        Content="Güvenlik duvarı"
+                                        ToolTip="Seçili sürümün güvenlik duvarı kurallarını uygular; yönetici onayı ister."
+                                        Command="{Binding FirewallCommand}" />
+                                <Button Style="{StaticResource SmallOutlinedButton}"
+                                        Margin="0,0,8,0"
+                                        Command="{Binding Versions.OpenFolderCommand}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <Path Style="{StaticResource SmallIcon}"
+                                              Stroke="{StaticResource PrimaryBrush}"
+                                              Data="{StaticResource IconFolder}" />
+                                        <TextBlock Margin="8,0,0,0" VerticalAlignment="Center"
+                                                   Foreground="{StaticResource PrimaryBrush}"
+                                                   Text="Klasör" TextWrapping="NoWrap" />
+                                    </StackPanel>
+                                </Button>
+                                <Button Style="{StaticResource SmallOutlinedButton}"
+                                        Command="{Binding Versions.RefreshCommand}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <Path Style="{StaticResource SmallIcon}"
+                                              Stroke="{StaticResource PrimaryBrush}"
+                                              Data="{StaticResource IconRefresh}" />
+                                        <TextBlock Margin="8,0,0,0" VerticalAlignment="Center"
+                                                   Foreground="{StaticResource PrimaryBrush}"
+                                                   Text="Yenile" TextWrapping="NoWrap" />
+                                    </StackPanel>
+                                </Button>
+                            </StackPanel>
+                        </Grid>
+
+                        <!-- liste alınamadı bandı -->
+                        <Border Style="{StaticResource WarningStrip}" Margin="0,14,0,0"
+                                Visibility="{Binding Versions.HasListError, Converter={StaticResource BoolToVisibility}}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="{Binding Versions.ListError}" />
+                                <Button Grid.Column="1"
+                                        Style="{StaticResource SmallOutlinedButton}"
+                                        Margin="12,0,0,0"
+                                        Content="Yeniden dene"
+                                        Command="{Binding Versions.RefreshCommand}" />
+                            </Grid>
+                        </Border>
+
+                        <ItemsControl Margin="0,14,0,0"
+                                      ItemsSource="{Binding Versions.Rows}"
+                                      ItemTemplate="{StaticResource BuildVersionRowTemplate}" />
                     </StackPanel>
                 </Border>
 

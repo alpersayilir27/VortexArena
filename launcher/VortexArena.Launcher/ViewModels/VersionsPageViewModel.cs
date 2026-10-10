@@ -314,8 +314,9 @@ public sealed class VersionsPageViewModel : PageViewModel
             row.EndWork("İndirildi");
             Inform($"{row.VersionLabel} indirildi.");
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (row.CancellationToken.IsCancellationRequested)
         {
+            // Only the operator's cancel; an HttpClient timeout falls through as an error.
             row.EndWork("İptal edildi");
         }
         catch (Exception ex)
@@ -371,8 +372,7 @@ public sealed class VersionsPageViewModel : PageViewModel
 
             if (result.Combined.Contains("Success", StringComparison.Ordinal))
             {
-                row.EndWork("Kuruldu");
-                Inform($"{row.VersionLabel} gözlüğe kuruldu.");
+                await FinishInstallAsync(device, row).ConfigureAwait(true);
                 return;
             }
 
@@ -441,14 +441,45 @@ public sealed class VersionsPageViewModel : PageViewModel
 
         if (install.Combined.Contains("Success", StringComparison.Ordinal))
         {
-            row.EndWork("Kuruldu");
-            Inform($"{row.VersionLabel} gözlüğe kuruldu.");
+            await FinishInstallAsync(device, row).ConfigureAwait(true);
             return;
         }
 
         var message = AdbInstallError.Translate(install.Combined) ?? FirstLine(install.Combined);
         row.EndWork(message);
         Fail($"{row.VersionLabel} kurulamadı: {message}");
+    }
+
+    /// <summary>
+    /// Pre-grants <see cref="GamePackage.RuntimePermissions"/> once the APK is in. A failed grant is
+    /// only a warning: the game still asks for the permission on its first start.
+    /// <para>Not cancellable: the install already finished, so a cancel must not report it as aborted.</para>
+    /// </summary>
+    private async Task FinishInstallAsync(AdbDevice device, VersionRowViewModel row)
+    {
+        row.ReportStatus("İzinler veriliyor…");
+
+        foreach (var permission in GamePackage.RuntimePermissions)
+        {
+            var grant = await Context.Adb
+                .GrantAsync(device.Serial, row.PackageName, permission, CancellationToken.None)
+                .ConfigureAwait(true);
+
+            // pm grant prints nothing on success; an exception text means it was refused.
+            if (grant.Ok && !grant.Combined.Contains("Exception", StringComparison.Ordinal)) continue;
+
+            // An older build that does not declare the permission has nothing to grant.
+            if (grant.Combined.Contains("has not requested permission", StringComparison.Ordinal)) continue;
+
+            var reason = grant.TimedOut ? "zaman aşımı" : FirstLine(grant.Combined);
+            row.EndWork("Kuruldu (izin verilemedi)");
+            Fail($"{row.VersionLabel} kuruldu ama {permission} izni verilemedi: {reason}. " +
+                 "Oyun ilk açılışta izni soracak — gözlükte İzin Ver'e basın; verilmezse kalibrasyon kaydedilmez.");
+            return;
+        }
+
+        row.EndWork("Kuruldu");
+        Inform($"{row.VersionLabel} gözlüğe kuruldu.");
     }
 
     private void RefreshDeviceGate()

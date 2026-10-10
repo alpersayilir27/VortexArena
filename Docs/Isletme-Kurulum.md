@@ -130,7 +130,7 @@ Arena, her başlıkta **2 nokta** ile fiziksel alana hizalanır (`ArenaCalibrato
    - **Üç kısa titreşim** = iki nokta arasındaki mesafe boyut dosyasındaki `calibration.a`–`calibration.b` mesafesine uymuyor (±%20 dışında); bant ölçüsünü kontrol et, B'yi tekrar al.
    - **Tek titreşim (0,6 sn)** = iki noktanın ölçülen zemin yüksekliği 10 cm'den fazla ayrışıyor; bir noktada kumandanın ucu zemine değmemiş (ya da zemin eğimli). Tekrar al.
 5. Kalibrasyon başlıkta kaydedilir (uzamsal anchor) ve sonraki açılışta **otomatik geri yüklenir** — kalibre modu varsayılanı budur (ESKİ KALİBRE); operatör 2 ÇAPA'yı seçtiği kurulumda her açılışta elle kalibrasyon gerekir (`Docs/Kullanim-Kilavuzu.md`). Yeniden kalibre etmek için kombinasyonu tekrarla — kalibrasyon sıfırdan başlar.
-6. **Her başlıkta kaydı doğrula:** elle kalibrasyonun ardından sunucu konsolunda `ArenaCalibrator: çapa cihaza kaydedildi (…)` satırı görünmelidir. Yerine `çapa kaydedilemedi (…)` görürsen o başlık kalibrasyonunu **kalıcı tutamıyor**: oyuncu o oturumda oynar ve harita değişimi hizalamayı korur, ama uygulama yeniden açılınca elle kalibrasyon gerekir. Aynı başlıkta tekrarlıyorsa sebep gözlük tarafındadır; parantez içindeki kodu teslim notuna yaz.
+6. **Her başlıkta kaydı doğrula:** elle kalibrasyonun ardından sunucu konsolunda `ArenaCalibrator: çapa cihaza kaydedildi (…)` satırı görünmelidir. Yerine `çapa kaydedilemedi (…)` görürsen o başlık kalibrasyonunu **kalıcı tutamıyor**: oyuncu o oturumda oynar ve harita değişimi hizalamayı korur, ama uygulama yeniden açılınca elle kalibrasyon gerekir. Kod `FailurePermissionInsufficient` ise o gözlükte uzamsal veri izni yoktur: sürümü launcher'dan ya da `install_game.bat` ile yeniden kur (izni kurulum verir) veya oyunun ilk açılıştaki izin penceresinde **İzin Ver**'e bas. Başka bir kodla aynı başlıkta tekrarlıyorsa sebep gözlük tarafındadır; parantez içindeki kodu teslim notuna yaz.
 
 > **Kumandayı nasıl tutacağın önemli DEĞİL:** ölçülen nokta kumanda pivotunun sabit bir miktar **altıdır** ve bu ofset dünyaya göre uygulanır — eğik tutmak, çevirmek, gözlüğün nereye baktığı sonucu değiştirmez. Tek koşul **kumandanın ucunun zemin işaretine değmesidir**.
 >
@@ -182,19 +182,25 @@ Arena, her başlıkta **2 nokta** ile fiziksel alana hizalanır (`ArenaCalibrato
 
 - [ ] ⚠️ **Kablolu (GbE) bağlantı — Wi-Fi'a bırakılmaz.** Sunucu Wi-Fi'daysa her downstream paket havayı **iki kez** geçer (sunucu→AP, AP→istemci) ve airtime ikiye katlanır (~%15–20 → ~%30–40). Bant için değil, **havadaki çerçeve sayısını yarıya indirdiği için** zorunlu sayılır.
 - [ ] **Statik IP** (router'da DHCP rezervasyonu tercih edilir); IP'yi teslim paketine yaz. IP değişirse `arena.json` / başlıklardaki kayıtlı adres bozulur.
-- [ ] `Server/firewall-kur.cmd` dosyasına **sağ tık → "Yönetici olarak çalıştır"**. Betik:
+- [ ] Sunucu sürüm klasöründeki (`<kök>\server_versions\server_v<N>\`) `firewall-kur.cmd` dosyasına
+  **sağ tık → "Yönetici olarak çalıştır"** — ya da launcher'ın *Sunucu* sayfasındaki sürüm
+  kartından **Güvenlik duvarı** düğmesine bas (betiği yönetici olarak o çalıştırır). Betik:
   - ağ profilini **Özel (Private)** yapar (Public profilde Defender gelen broadcast'i keser),
   - Windows'un otomatik eklediği **ENGELLE** kurallarını siler,
-  - **UDP 47820** (beacon) + **TCP 47821** (WS kontrol) + **UDP 47822** (poz/state) için **İZİN** kuralı ekler (Private + Domain) — exe derlenmişse programa özel kural da ekler,
+  - **UDP 47820** (beacon) + **TCP 47821** (WS kontrol) + **UDP 47822** (poz/state) için **İZİN** kuralı ekler (Private + Domain) — ayrıca kurulu **her** sunucu sürümünün exe'si için programa özel kural ekler,
   - teşhis basar: aktif adaptörler, IPv4 adresleri, dinlenen portlar.
 - [ ] Launcher için **ek firewall kuralı gerekmez**: launcher sunucunun kontrol uçlarını aynı PC'den (loopback) çağırır, başka adresten gelen istek reddedilir.
 - [ ] **Tek aktif arayüz bırak.** Betiğin "birden fazla aktif adaptör" uyarısı çıkarsa: Ethernet + Wi-Fi aynı anda bağlı ya da VPN / Hyper-V / VMware / WSL sanal adaptörü var demektir → **beacon yanlış arayüzden yayılır ve başlıklar sunucuyu bulamaz.** Kullanılmayanları `Disable-NetAdapter -Name "<Ad>"` ile kapat.
 - [ ] Sunucu ilk açılışta Windows "izin ver?" sorusu gösterirse **"İzin ver"e** bas. İptal edilirse kalıcı engelle kuralı oluşur → `firewall-kur.cmd`'yi tekrar çalıştır.
+- [ ] ⚠️ **Her sunucu sürümü için ayrı kural gerekir:** program kuralı exe'nin yoluna bağlıdır, yeni
+  sürümün exe'si yeni bir yoldadır. İndirilen sürüm ilk kez başlatılmadan **önce** launcher'daki
+  **Güvenlik duvarı** düğmesine basılır (ya da o sürümün `firewall-kur.cmd`'si yönetici olarak
+  çalıştırılır); basılmazsa Windows "izin ver?" sorusunu sorar ve İptal kalıcı engelle kuralı yazar.
 
 **Admin console çalıştıran diğer PC'ler**
 
 - [ ] Sunucu PC ile **aynı subnet**te (aynı router, aynı `192.168.x.*` bloğu).
-- [ ] Bu PC'lerde de `Server/firewall-kur.cmd` **yönetici olarak** çalıştırıldı — beacon *broadcast* paketi olduğu için stateful UDP eşleşmesine takılmaz; istemcide inbound izin yoksa Windows onu düşürür ve sunucu bulunamaz.
+- [ ] Bu PC'lerde de `firewall-kur.cmd` (sunucu sürüm klasöründen kopyalanan betik) **yönetici olarak** çalıştırıldı — beacon *broadcast* paketi olduğu için stateful UDP eşleşmesine takılmaz; istemcide inbound izin yoksa Windows onu düşürür ve sunucu bulunamaz.
 - [ ] Ağ profili bu PC'lerde de **Özel (Private)** (betik zaten yapar).
 
 **Ağ doğrulaması**
@@ -208,7 +214,10 @@ Arena, her başlıkta **2 nokta** ile fiziksel alana hizalanır (`ArenaCalibrato
 
 ## 5. Sunucu kurulumu
 
-- [ ] `Server/config/server.json` dosyasını düzenle — genelde yalnız **`venueName`** ve **`lobbyScene`** işletmeye çekilir, portlar varsayılan kalır:
+- [ ] İşletmenin `server.json`'unu düzenle — yeri **veri klasörüdür**: `<launcher kök>\server\config\server.json`
+  (ilk açılışta yoksa sunucu kendi sürümündeki tohum kopyadan oluşturur; var olan dosyanın üzerine
+  asla yazılmaz, yani sürüm değiştirmek bu ayarlara dokunmaz). Genelde yalnız **`venueName`** ve
+  **`lobbyScene`** işletmeye çekilir, portlar varsayılan kalır:
   ```json
   { "controlPort": 47821, "beaconPort": 47820, "statePort": 47822, "venueName": "<İşletme Adı>",
     "tickHz": 20, "venue": "", "lobbyScene": "" }
@@ -221,18 +230,19 @@ Arena, her başlıkta **2 nokta** ile fiziksel alana hizalanır (`ArenaCalibrato
 
   `lobbyScene` = lobi sahnesi. **Normalde BOŞ bırakılır** — seçilen mekanın lobi haritası otomatik
   bulunur. Yalnız bir mekanda birden çok lobi varsa doldurulur. Maç koşmadığı sürece oyuncular orada bekler: birbirlerini görürler, **kalibrasyonlarını orada yaparlar**, duran silahlardan birini seçip hedef tahtalarına ateş edebilirler — birbirlerine hasar veremeden. Doldurulacaksa değer, o mekanın kendi lobi haritasının adı olmalıdır ve seçilen mekanda bulunmalıdır. Mekanda hiç lobi haritası yoksa oyuncular kabuk bekleme ekranında kalır ve kalibrasyonu arenada yapmak zorunda kalırlar.
-- [ ] `Server/config/maps.json` dosyasının Bölüm 2'deki export'tan geldiğini doğrula (silah tablosu yoktur — hasarı istemci bildirir).
+- [ ] `maps.json`'ın Bölüm 2'deki export'tan geldiğini doğrula (silah tablosu yoktur — hasarı istemci bildirir). ⚠️ Bu dosya **sürümle gelir** ve sunucu onu yalnız çalıştığı sürümün `config\` klasöründen okur; veri klasörüne konan bir kopya okunmaz.
 - [ ] **Dağıtım paketlerini üret** (ofiste, geliştirme makinesinde):
-  - `scripts\deploy-server.bat` → `deploy\server\` (self-contained; işletme PC'sine .NET kurmak gerekmez)
-  - `scripts\deploy-admin-game.bat` → `deploy\admin\` (**Unity editörü kapalı olmalı**)
+  - `scripts\deploy-server.bat` → `deploy\server\server_v<sürüm>\` (self-contained; işletme PC'sine .NET kurmak gerekmez. Açılışta **sürüm numarası** sorar, yanındaki `server_v<sürüm>.zip` yayın sunucusuna gönderilir). ⚠️ Numara, aynı commit'ten alınan admin ve oyuncu build'inin numarasıyla **aynı** verilir.
+  - `scripts\deploy-admin-game.bat` → `deploy\admin\admin_v<sürüm>\` (**Unity editörü kapalı olmalı**; açılışta **sürüm numarası** sorar, yanındaki `admin_v<sürüm>.zip` yayın sunucusuna gönderilir). ⚠️ Numara, aynı commit'ten alınan oyuncu APK'sının numarasıyla **aynı** verilir.
   - `scripts\deploy-player-apk.bat` → `deploy\player\` (**Unity editörü kapalı olmalı** + Android Build Support modülü; açılışta **sürüm numarası** sorar, çıktı `game_v<sürüm>.apk`; platform değişen koşu 20-40 dk sürer)
   - `scripts\deploy-launcher.bat` → **saha paketi** `deploy\launcher\`: `VortexArena.Launcher.exe`
     (**tek dosya**, self-contained; ön koşul .NET 10 SDK) + yanında boş
-    `server\`, `admin\`, `game_versions\`, `replays\` ve gözlüğe kurulum için `platform-tools\` (adb)
-  - `deploy\server\` içeriğini `deploy\launcher\server\`'a, `deploy\admin\` içeriğini
-    `deploy\launcher\admin\`'e kopyala; sonra `deploy\launcher\` klasörünün **tamamını** operatör
-    PC'sine taşı — exe'ler tek başına çalışmaz. Launcher kendi klasörünü kök sayar; eksik
-    klasörleri açılışta boş olarak kendisi açar.
+    `server\`, `server_versions\`, `admin_versions\`, `game_versions\`, `replays\` ve gözlüğe kurulum için `platform-tools\` (adb)
+  - `deploy\launcher\` klasörünün **tamamını** operatör PC'sine taşı — exe'ler tek başına
+    çalışmaz. Launcher kendi klasörünü kök sayar; eksik klasörleri açılışta boş olarak kendisi
+    açar. Sunucu ve yönetim build'i paketle taşınmaz: operatör PC'sinde launcher'ın *Sunucu* ve
+    *Yönetim* sayfalarındaki sürüm listesinden indirilir
+    (`server_versions\server_v<sürüm>\`, `admin_versions\admin_v<sürüm>\`).
 - [ ] **Fon müziği klasörü** (isteğe bağlı): admin exe'sinin **yanına** `Muzik` adlı bir klasör aç
   ve işletmenin çalmasını istediği parçaları (`.mp3` · `.wav` · `.ogg`) içine koy. Admin panelinde
   *Tercihler → SES → Müzik çalar* bu klasörü okur; maç başlayınca listeden rastgele bir parça
@@ -249,8 +259,8 @@ Arena, her başlıkta **2 nokta** ile fiziksel alana hizalanır (`ArenaCalibrato
   Uygulama ve tarayıcı denetimi → Akıllı Uygulama Denetimi*. ⚠️ Kapatma **geri alınamaz** (Windows
   yeniden kurmak gerekir) — kurulumda bilinçli olarak yapılır, sahada panikle değil.
 - [ ] Sunucuyu başlat:
-  - İşletmede: **launcher'dan** — *Sunucu* sayfasında listeden **mekan** seçilir ve **Başlat**. Launcher mekanı `--venue` ile geçtiği için açılışta soru sorulmaz ve yanlış mekan açılmaz.
-  - Alternatif: `server\VortexArena.Server.App.exe` çift tıkla; mekan konsolda sorulur.
+  - İşletmede: **launcher'dan** — *Sunucu* sayfasında sürüm listesinden gözlüklerdeki oyun sürümünün **aynı numarası** **İndir** + **Seç**, sonra listeden **mekan** seçilir ve **Başlat**. Launcher sunucuyu o sürümün klasöründen `--data-dir <kök>\server` ile başlatır ve mekanı `--venue` ile geçtiği için açılışta soru sorulmaz, yanlış mekan açılmaz. Mekan listesi seçili sürümün `maps.json`'undan gelir.
+  - Alternatif: `server_versions\server_v<sürüm>\VortexArena.Server.App.exe` çift tıkla; mekan konsolda sorulur — ama veri klasörü verilmediği için config ve günlükler exe'nin yanına düşer.
   - Geliştirme: `dotnet run --project Server/VortexArena.Server.App`
   - **Launcher sunucuyu durdurur da** — *Sunucu* sayfasındaki **Durdur**, kontrol ucundan temiz kapanıştır. Elle açılmış sunucu kendi penceresinde **Ctrl+C** ile de kapanır.
   - Launcher'ın başlattığı sunucunun **konsol penceresi yoktur**: akan satırlar launcher'daki günlük bölmesinden ve `server\logs\server-*.log` dosyasından okunur.
@@ -263,8 +273,15 @@ Arena, her başlıkta **2 nokta** ile fiziksel alana hizalanır (`ArenaCalibrato
   Modlar     : tdm
   Silahlar   : ak47, m4
   Haritalar  : <arena sahne adları>
-  Config     : <config klasörü>
+  Veri       : <kök>\server
+  Config     : <kök>\server\config
+  maps.json  : <sürüm klasörü>\config\maps.json
+  Ölçüm      : <kök>\server
+  Günlük     : <kök>\server\logs\server-<zaman>.log
   ```
+  ⚠️ `Veri` satırı launcher kökündeki `server\` klasörünü, `maps.json` satırı **sürüm** klasörünü
+  göstermeli; `Veri` sürüm klasörünü gösteriyorsa sunucu launcher'dan değil elle açılmıştır ve
+  ayarlar sürüm değişince kaybolur.
 - [ ] `Haritalar : yok (doğrulama kapalı)` yazıyorsa `maps.json` eksik/bozuk → Unity'de `Export Server Config`'i tekrar çalıştır ve sunucuyu yeniden başlat.
 - [ ] Sunucu launcher'daki **Durdur** ile temiz kapanıyor; işletme personeline başlat/durdur adımı gösterildi.
 
@@ -273,7 +290,8 @@ Arena, her başlıkta **2 nokta** ile fiziksel alana hizalanır (`ArenaCalibrato
 ## 6. Başlıkların hazırlanması
 
 - [ ] Her başlıkta geliştirici modu açık, USB hata ayıklama izni verildi.
-- [ ] APK kurulumu: `install_game.bat` çalıştır — **repo kökündeki de `deploy\player\` altındaki kopya da olur**. Betik `game_v*.apk` dosyalarını sırayla kendi yanında, `deploy\player\` ve `Builds\player\` altında arar; bulduklarını **sürüme göre küçükten büyüğe** listeler ve hangisini kuracağını sorar (boş bırakırsan en büyük sürüm kurulur). Seçtiğin dosyanın yolunu, boyutunu ve tarihini yazar (doğru build'i kurduğunu böyle görürsün), sonra `adb devices` listesini gösterip `adb install -r -g` ile kurar.
+- [ ] APK kurulumu: `install_game.bat` çalıştır — **repo kökündeki de `deploy\player\` altındaki kopya da olur**. Betik `game_v*.apk` dosyalarını sırayla kendi yanında, `deploy\player\` ve `Builds\player\` altında arar; bulduklarını **sürüme göre küçükten büyüğe** listeler ve hangisini kuracağını sorar (boş bırakırsan en büyük sürüm kurulur). Seçtiğin dosyanın yolunu, boyutunu ve tarihini yazar (doğru build'i kurduğunu böyle görürsün), sonra `adb devices` listesini gösterip `adb install -r -g` ile kurar ve **uzamsal veri iznini** (`USE_SCENE`) verir — `Uzamsal veri izni verildi.` satırını gör.
+  - ⚠️ Bu izin olmadan kalibrasyon gözlüğe **kaydedilmez**. Betik `[UYARI] Uzamsal veri izni verilemedi` derse ya da APK adb'siz (doğrudan dosyadan) kurulduysa oyun izni **ilk açılışta** sorar: gözlüğü tak ve **İzin Ver**'e bas. Bunu maçtan önce, kurulumda yap.
   - Her sürümün gözlükte **kendi paketi** vardır (`com.vortex.arenav<sürüm>`), yani sürümler birbirini silmez, yan yana kurulu kalır. İmza uyuşmazlığında kaldırılan paket de yalnız **seçtiğin sürümün** paketidir; diğer sürümler yerinde kalır.
   - Gözlükte hangi sürümü başlattığın uygulama adından okunur: `VortexArena v<sürüm>`. Yer açmak için eski sürümler gözlüğün uygulama listesinden kaldırılır.
   - Cihaz `unauthorized` çıkarsa betik kurmadan durur ve sırayla: onayınla `adb kill-server` + `adb start-server` çalıştırıp onay penceresini yeniden tetikler, gözlükte izni verdiğini sorar, cevabı `adb devices` ile teyit eder ve ancak o zaman kurar. Gözlükte pencereyi görmek için başlığı **takmış** olman gerekir (masada ekran kapalıyken çizilmez) ve bir uygulamanın içindeysen önce ana ekrana çık. ⚠️ **"Bu bilgisayardan her zaman izin ver"i işaretle** — işaretlenmezse yetki adb yeniden başladığında düşer ve her kurulumda yeniden sorulur.
@@ -304,7 +322,7 @@ Sırayla uygula; her madde geçmeden sonrakine geçme.
 
 - [ ] **1.** **Launcher** (`VortexArena.Launcher.exe`) açıldı; *Sunucu* sayfasında **doğru mekan** seçili ve sayfada "sunucu bulunamadı" uyarısı yok (exe yolu sorulmaz, kök exe'nin klasörüdür).
 - [ ] **2.** *Sunucu* sayfasında **Başlat** → günlük bölmesinde `[Venue] '<Mekan>' yapılandırmadan seçildi` satırı ve açılış özeti doğru (Bölüm 5); durum satırında faz/sahne/oyuncu sayısı akıyor.
-- [ ] **3.** *Yönetim* sayfasında **Başlat** → admin uygulaması açıldı ve **IP sormadan** doğrudan **oyuncuların bulunduğu sahneye** düştü (bağlanma ekranında takılı kalmıyor); üstte ortada skor bandı ve altında **İSTATİSTİK** düğmesi, sol üstte **TERCİHLER**, sağ üstte kamera kipleri (**SERBEST** · **KUŞ BAKIŞI**), yanlarda takım kolonları, altta maç kontrol şeridi (**BAŞLAT · DURAKLAT · BİTİR · İPTAL**; çok katlı arenada sağında **KAT** düğmeleri) görünüyor.
+- [ ] **3.** *Yönetim* sayfasında gözlüklerdeki oyun sürümünün aynı numarasını **İndir** + **Seç**, sonra **Başlat** → admin uygulaması açıldı ve **IP sormadan** doğrudan **oyuncuların bulunduğu sahneye** düştü (bağlanma ekranında takılı kalmıyor); üstte ortada skor bandı ve altında **İSTATİSTİK** düğmesi, sol üstte **TERCİHLER**, sağ üstte kamera kipleri (**SERBEST** · **KUŞ BAKIŞI**), yanlarda takım kolonları, altta maç kontrol şeridi (**BAŞLAT · DURAKLAT · BİTİR · İPTAL**; çok katlı arenada sağında **KAT** düğmeleri) görünüyor.
 - [ ] **3b.** Launcher'ın *Versiyonlar* sayfasında bir gözlük USB ile bağlıyken listedeki sürüm **"Yüklü"** rozetiyle görünüyor; *Kayıt* sayfası açılıyor ve kayıt **kapalı** başlıyor.
 - [ ] **4.** İki başlık açıldı → uygulama doğrudan **Lobi**'ye düştü → ikisi de **kendiliğinden** bağlandı (IP girilmedi).
 - [ ] **5.** Admin **roster**'ında iki oyuncu da çevrimiçi görünüyor; sunucu günlüğünde `[+] Gözlük NN bağlandı` ve `[u] UDP kayıt` satırları var.
@@ -327,8 +345,8 @@ Sırayla uygula; her madde geçmeden sonrakine geçme.
 
 **Teslim paketi (işletmede kalacaklar)**
 
-- [ ] Operatör PC'sinde tek klasör: `VortexArena.Launcher.exe` + yanında `server\` (exe + `config/server.json`, `maps.json`, `devices.json` + `firewall-kur.cmd`), `admin\` ve `platform-tools\` (adb); masaüstünde **launcher** kısayolu. Operatör yalnız launcher'ı açar — sunucu ve admin exe'lerine doğrudan tıklanmaz (admin'e adres gelmez).
-- [ ] Launcher'da **mekan** bir kez seçildi, *Sunucu* ve *Yönetim* sayfalarındaki **Başlat** ile doğrulandı; ayarlar `%APPDATA%\VortexArena\launcher\settings.json` içinde kalıcı saklanır (exe yeniden dağıtılsa da korunur).
+- [ ] Operatör PC'sinde tek klasör: `VortexArena.Launcher.exe` + yanında `server\` (işletmenin verisi: `config\server.json`, `config\devices.json`, `logs\`, ölçüm dosyaları), `server_versions\`, `admin_versions\`, `game_versions\`, `replays\` ve `platform-tools\` (adb); masaüstünde **launcher** kısayolu. Operatör yalnız launcher'ı açar — sunucu ve admin exe'lerine doğrudan tıklanmaz (sunucu veri klasörünü, admin de adresi almaz).
+- [ ] Launcher'da sunucu ve yönetim sürümü (gözlüklerdeki oyunla **aynı numara**) indirilip seçildi, **mekan** bir kez seçildi, *Sunucu* ve *Yönetim* sayfalarındaki **Başlat** ile doğrulandı; ayarlar `%APPDATA%\VortexArena\launcher\settings.json` içinde kalıcı saklanır (exe yeniden dağıtılsa da korunur).
 - [ ] Gözlüklere sürüm kurulacaksa **USB kablosu** işletmede bırakıldı; *Versiyonlar* sayfasının sürüm listesini alabilmesi için o PC'nin güncelleme sunucusuna erişimi var (erişim yoksa yalnız yerelde duran APK'lar görünür).
 - [ ] Bilgi kartı: SSID + Wi-Fi parolası, sunucu statik **IP:port** (`…:47821`), arena **sahne adı**, A–B zemin işaretleri arası **mesafe**, APK sürümü + kurulum tarihi.
 - [ ] Başlık etiketleri ↔ `devices.json` adları eşleşme listesi.
@@ -339,13 +357,13 @@ Sırayla uygula; her madde geçmeden sonrakine geçme.
 
 | Belirti | Olası sebep | Çözüm |
 |---|---|---|
-| Ekranda **"SUNUCUYA BAĞLANILAMIYOR"** yazıyor (altında adres + `N sn · M. deneme`) | Adres **biliniyor** ama sunucuya erişilemiyor: sunucu exe'si kapalı/çökmüş; firewall engelliyor; cihaz farklı SSID/subnet'te; sunucunun IP'si değişmiş (DHCP) — ekrandaki adres artık yanlış | Ekranda yazan **adresi oku** (sahada ilk teşhis budur): sunucu PC'sinin gerçek IP'siyle aynı mı? 1) sunucuyu başlat, 2) `Server/firewall-kur.cmd`'yi **yönetici** olarak çalıştır, 3) sunucu PC'sinde `netstat -ano` çıktısında **`0.0.0.0:47821`** görün. Bağlantı kurulunca ekran kendiliğinden kaybolur; masaüstünde beklemek istemezsen **"Yeniden Bağlan"**a bas. Ekranın alt satırındaki **"Son hata"** mesajı (ör. bağlantı reddedildi / zaman aşımı) firewall ile kapalı sunucuyu ayırt ettirir |
+| Ekranda **"SUNUCUYA BAĞLANILAMIYOR"** yazıyor (altında adres + `N sn · M. deneme`) | Adres **biliniyor** ama sunucuya erişilemiyor: sunucu exe'si kapalı/çökmüş; firewall engelliyor; cihaz farklı SSID/subnet'te; sunucunun IP'si değişmiş (DHCP) — ekrandaki adres artık yanlış | Ekranda yazan **adresi oku** (sahada ilk teşhis budur): sunucu PC'sinin gerçek IP'siyle aynı mı? 1) sunucuyu başlat, 2) launcher'daki **Güvenlik duvarı** düğmesine bas (ya da seçili sürümün `firewall-kur.cmd`'sini **yönetici** olarak çalıştır), 3) sunucu PC'sinde `netstat -ano` çıktısında **`0.0.0.0:47821`** görün. Bağlantı kurulunca ekran kendiliğinden kaybolur; masaüstünde beklemek istemezsen **"Yeniden Bağlan"**a bas. Ekranın alt satırındaki **"Son hata"** mesajı (ör. bağlantı reddedildi / zaman aşımı) firewall ile kapalı sunucuyu ayırt ettirir |
 | Ekranda **"SUNUCU BULUNAMADI"** yazıyor ("adres yok") | Cihazın elinde **hiç adres yok**. Gözlük: beacon gelmiyor ve kayıtlı IP de `arena.json` da yok. Admin: oyun **launcher'sız** (exe'ye çift tıklanarak) açılmış → `--server-ip` gelmemiş | Gözlük: lobide sağ kumandada **joystick'e 1 sn basılı tut** → gizli IP paneli → `IP:port` gir (kalıcı saklanır). Admin: uygulamayı **launcher'ın *Yönetim* sayfasından** başlat. Bu ekranda **"Yeniden Bağlan" devre dışıdır** — denenecek adres olmadığı için bilinçlidir |
-| Başlık sunucuyu bulamıyor / bağlanamıyor | Firewall'da engelle kuralı; AP'de **client isolation açık**; başlık farklı SSID/subnet'te; PC ağ profili "Genel" | `firewall-kur.cmd`'yi **yönetici** olarak çalıştır; AP'de isolation'ı kapat; SSID'yi kontrol et; ağ profilini **Özel** yap |
+| Başlık sunucuyu bulamıyor / bağlanamıyor | Firewall'da engelle kuralı (yeni indirilen sunucu sürümünün exe yolu için kural yazılmamış olabilir); AP'de **client isolation açık**; başlık farklı SSID/subnet'te; PC ağ profili "Genel" | Launcher'daki **Güvenlik duvarı** düğmesine bas ya da `firewall-kur.cmd`'yi **yönetici** olarak çalıştır; AP'de isolation'ı kapat; SSID'yi kontrol et; ağ profilini **Özel** yap |
 | Başlık kendiliğinden bağlanmıyor, "sunucu aranıyor" | AP broadcast'i kesiyor / VLAN ayrımı → beacon gelmiyor | Lobide sağ kumandada **joystick'e 1 sn basılı tut** → gizli IP paneli → **IP:port** elle gir (beacon'ı ezer, kalıcı saklanır); kalıcı çözüm için `StreamingAssets/arena.json` + yeni APK |
 | Admin uygulaması "Sunucu adresi yok" diyor (3 sn sonra tam ekran **"SUNUCU BULUNAMADI"**) | Oyun launcher'sız (elle) açılmış — `--server-ip` gelmemiş | Oyunu **launcher'ın *Yönetim* sayfasından** başlat; sunucu adresi her açılışta `127.0.0.1`'dir, ayrı PC'deyse *Gelişmiş* altındaki adres o oturum için doldurulur (kaydedilmez) |
-| Launcher *Yönetim* sayfasında "admin bulunamadı" diyor | Launcher exe'sinin yanındaki `admin\` klasörü boş, silinmiş/taşınmış veya build alınmamış | `scripts\deploy-admin-game.bat` (editör kapalıyken) çalıştır, `deploy\admin\` içeriğini launcher exe'sinin yanındaki `admin\` klasörüne kopyala |
-| Launcher **mekan seçilmeden** sunucuyu başlatmıyor | Bilinçli: mekansız başlatılsa sunucu **alfabetik ilk mekanı** sessizce açardı ve yanlış işletmenin arenaları yönetilirdi | *Sunucu* sayfasındaki listeden bu işletmeyi seç. Liste boşsa `server\config\maps.json` yok → Unity'de **Export Server Config** + yeniden dağıtım |
+| Launcher *Yönetim* sayfasında "admin bulunamadı" diyor | Seçili sürüm indirilmemiş: `admin_versions\admin_v<sürüm>\` yok, silinmiş/taşınmış ya da o sürüm hiç yayınlanmamış | *Yönetim* sayfasındaki listeden gözlüklerdeki oyun sürümünün aynı numarasını **İndir** + **Seç**. Liste boşsa sürüm yayınlanmamış demektir → ofiste `scripts\deploy-admin-game.bat` (editör kapalıyken) o numarayla çalıştır |
+| Launcher **mekan seçilmeden** sunucuyu başlatmıyor | Bilinçli: mekansız başlatılsa sunucu **alfabetik ilk mekanı** sessizce açardı ve yanlış işletmenin arenaları yönetilirdi | *Sunucu* sayfasındaki listeden bu işletmeyi seç. Liste boşsa seçili sunucu sürümünün `config\maps.json`'u yok → Unity'de **Export Server Config** + yeniden dağıtım |
 | Admin harita seçicisinde **başka işletmenin arenaları** var / beklenen arena yok | Sunucu yanlış mekanla açılmış | Günlükteki `[Venue] …` satırını oku. *Sunucu* sayfasından **Durdur**, doğru mekanı seçip yeniden **Başlat** — **mekan çalışırken değişmez** |
 | *Versiyonlar* sayfası "adb yok" diyor | Launcher exe'sinin yanındaki `platform-tools\` klasörü eksik ya da taşınmamış | Ofiste `scripts\deploy-launcher.bat`'ı yeniden çalıştır ya da paketteki `platform-tools\` klasörünü exe'nin yanına kopyala; launcher'ı yeniden açmak gerekmez |
 | *Versiyonlar* sayfasında gözlük görünmüyor ya da "izin bekleniyor" diyor | Gözlük USB'den takılı değil, geliştirici modu kapalı ya da USB hata ayıklama izni verilmemiş | Kabloyu tak, gözlüğü **tak** ve çıkan izin penceresinde **"Bu bilgisayardan her zaman izin ver"** işaretleyerek onayla |

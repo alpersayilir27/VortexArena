@@ -101,15 +101,18 @@ public class VenueCatalogTests
     }
 
     [Fact]
-    public void MapsJsonAramasi_OlmayanYoldaNullDoner()
+    public void MapsDosyasiYoksaSebepDoner()
     {
-        Assert.Null(VenueCatalog.FindMapsJson(@"C:\olmayan\klasor\VortexArena.Server.App.exe"));
+        var catalog = VenueCatalog.ForMapsFile(@"C:\olmayan\klasor\config\maps.json");
+
+        Assert.Empty(catalog.Venues);
+        Assert.Contains("maps.json", catalog.Problem);
     }
 
     [Fact]
-    public void SunucuExeYoksaSebepDoner()
+    public void MapsYoluBossaSebepDoner()
     {
-        var catalog = VenueCatalog.ForServerExe("");
+        var catalog = VenueCatalog.ForMapsFile("");
 
         Assert.Empty(catalog.Venues);
         Assert.NotNull(catalog.Problem);

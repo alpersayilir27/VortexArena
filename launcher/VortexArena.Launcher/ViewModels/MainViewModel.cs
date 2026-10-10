@@ -88,7 +88,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public string RootTooltip => $"{_context.Paths.Root}\nKök: {_context.Paths.Source}";
 
     /// <summary>Something would be interrupted by closing the launcher.</summary>
-    public bool HasBackgroundWork => VersionsPage.IsWorking;
+    public bool HasBackgroundWork => VersionsPage.IsWorking || AdminPage.IsWorking || ServerPage.IsWorking;
 
     public bool ServerIsRunning => ServerPage.IsRunning;
 

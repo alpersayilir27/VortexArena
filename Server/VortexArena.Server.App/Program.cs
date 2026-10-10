@@ -42,9 +42,22 @@ internal static class Program
         try { Console.OutputEncoding = Encoding.UTF8; }
         catch (Exception) { /* no console: the log file carries UTF-8 of its own */ }
 
+        // ⚠️ Resolved BEFORE the tee: the log file's folder comes from here. An error on this path can
+        // therefore only reach the console, never a file.
+        if (!TryReadDataDirArg(args, out var dataDirArg)) return 2;
+        var paths = ServerPaths.Resolve(dataDirArg, out var pathError);
+        if (paths == null)
+        {
+            Console.WriteLine();
+            Console.WriteLine("HATA: Veri klasörü hazırlanamadı — sunucu açılmıyor.");
+            Console.WriteLine($"  {pathError}");
+            Console.WriteLine("  Kullanım: --data-dir <klasör> (yazılabilir olmalı).");
+            return 2;
+        }
+
         // ⚠️ Stays BELOW OutputEncoding: setting the encoding replaces Console.Out and would drop the tee.
         // One file per run: a session can be carried out of the venue whole.
-        var logPath = Path.Combine(AppContext.BaseDirectory, "logs",
+        var logPath = Path.Combine(paths.LogDir,
             $"server-{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.log");
         ConsoleTee.Install(logPath);
 
@@ -57,12 +70,18 @@ internal static class Program
             e.SetObserved();
         };
 
-        var configDir = ResolveConfigDir();
-        var config = ServerConfig.Load(Path.Combine(configDir, "server.json"));
+        // Fresh venue: the version's server.json is copied in as a starting point. An existing one is
+        // the venue's own data and stays untouched.
+        if (paths.TrySeedServerConfig(out var seedError))
+            Console.WriteLine($"[Config] server.json sürüm klasöründen kopyalandı → {paths.ConfigDir}");
+        else if (seedError.Length > 0)
+            Console.WriteLine($"[Config] server.json kopyalanamadı ({seedError}) — varsayılanlar kullanılacak.");
+
+        var config = ServerConfig.Load(Path.Combine(paths.ConfigDir, "server.json"));
         // No weapon table (§10.3): the client computes damage, the server applies it as-is.
         // maps.json is exported from Unity (Tools > VortexArena > Server > Export Server Config);
         // without it the table stays empty and start_match skips map validation.
-        var allMaps = MapTable.Load(Path.Combine(configDir, "maps.json"));
+        var allMaps = MapTable.Load(paths.MapsPath);
 
         // Venue selection (§11): only the chosen venue's maps are playable and visible to admins this
         // session. An empty table leaves nothing to choose.
@@ -73,7 +92,7 @@ internal static class Program
         var replayDirArg = ArgValue(args, "--replay-dir");
         if (!string.IsNullOrWhiteSpace(replayDirArg)) config.replayDir = replayDirArg;
 
-        using var registry = new PlayerRegistry(Path.Combine(configDir, "devices.json"));
+        using var registry = new PlayerRegistry(Path.Combine(paths.ConfigDir, "devices.json"));
         // §12: one recorder for the whole session; every producer writes into the same queue. Recording
         // starts disarmed — the operator arms it from the launcher (§12.2).
         var recorder = new MatchRecorder(config);
@@ -83,7 +102,7 @@ internal static class Program
         // (welcome.match.sceneName). If it cannot be resolved the configuration is already broken, and
         // opening silently with an empty scene would carry that error into the field.
         if (!ValidateLobbyScene(director.LobbyScene, maps, config.lobbyScene)) return 2;
-        var lobby = new LobbyService(registry, director, recorder);
+        var lobby = new LobbyService(registry, director, recorder, paths);
         // ⚠️ Created before the host: POST /launcher/shutdown must run the SAME path as Ctrl+C (§13),
         // and the host needs the trigger at construction time.
         var quit = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -107,7 +126,10 @@ internal static class Program
         Console.WriteLine("  Hasar      : istemci bildirir (silah tablosu ve hile denetimi yok)");
         Console.WriteLine($"  Maç kaydı  : kapalı — launcher'dan açılır (klasör: {recorder.Directory})");
         Console.WriteLine($"  Launcher   : http://127.0.0.1:{config.controlPort}/launcher/* (yalnız bu PC)");
-        Console.WriteLine($"  Config     : {configDir}");
+        Console.WriteLine($"  Veri       : {paths.DataDir}{(paths.IsExternalDataDir ? " (--data-dir)" : " (exe yanı)")}");
+        Console.WriteLine($"  Config     : {paths.ConfigDir}");
+        Console.WriteLine($"  maps.json  : {paths.MapsPath}");
+        Console.WriteLine($"  Ölçüm      : {paths.SurveyDir}");
         Console.WriteLine($"  Günlük     : {logPath}");
 
         registry.Changed += (player, kind) =>
@@ -212,6 +234,31 @@ internal static class Program
         await quit.Task;
         await ShutdownAsync();
         return 0;
+    }
+
+    /// <summary>Reads <c>--data-dir</c>; false = given but valueless, the caller must then exit.</summary>
+    /// <remarks>Checked apart from <see cref="ArgValue"/>: a trailing valueless flag would look like
+    /// "absent" there, and the server would quietly write the venue's data next to the exe.</remarks>
+    private static bool TryReadDataDirArg(string[] args, out string? value)
+    {
+        value = null;
+        for (int i = 0; i < args.Length; i++)
+        {
+            if (!string.Equals(args[i], "--data-dir", StringComparison.OrdinalIgnoreCase)) continue;
+
+            value = i + 1 < args.Length ? args[i + 1].Trim() : null;
+            if (string.IsNullOrEmpty(value))
+            {
+                Console.WriteLine();
+                Console.WriteLine("HATA: --data-dir için klasör verilmedi — sunucu açılmıyor.");
+                Console.WriteLine("  Kullanım: --data-dir <klasör>");
+                return false;
+            }
+
+            return true;
+        }
+
+        return true;
     }
 
     /// <summary>Reads a <c>--key value</c> argument; null if absent.</summary>
@@ -345,24 +392,5 @@ internal static class Program
         }
 
         return true;
-    }
-
-    /// <summary>Finds config/server.json by walking up to 6 levels from the exe, else creates config/
-    /// next to the exe (cosmos ConfigLocator pattern).</summary>
-    /// <remarks>Needed because `dotnet run` runs from bin/Debug/… while the real files live under
-    /// Server/config/. ServerConfig.Load writes the defaults into the fallback.</remarks>
-    private static string ResolveConfigDir()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        for (var level = 0; level <= 6 && dir != null; level++, dir = dir.Parent)
-        {
-            var candidate = Path.Combine(dir.FullName, "config");
-            if (File.Exists(Path.Combine(candidate, "server.json")))
-                return candidate;
-        }
-
-        var fallback = Path.Combine(AppContext.BaseDirectory, "config");
-        Directory.CreateDirectory(fallback);
-        return fallback;
     }
 }

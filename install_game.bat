@@ -222,6 +222,8 @@ exit /b 1
 del "!VA_INSTALL_LOG!" >nul 2>nul
 echo.
 echo Kurulum tamamlandi ^(paket: !VA_PKG!^).
+echo Uzamsal veri izni veriliyor...
+call :va_grant
 pause
 exit /b 0
 
@@ -235,6 +237,33 @@ adb install -r -g "!VA_APK!" > "!VA_INSTALL_LOG!" 2>&1
 type "!VA_INSTALL_LOG!"
 findstr /i /c:"Success" "!VA_INSTALL_LOG!" >nul
 if not errorlevel 1 set "VA_INSTALL_OK=1"
+exit /b 0
+
+rem ---------------------------------------------------------------------
+rem  Pre-grants USE_SCENE so the headset never asks. Without it the spatial
+rem  anchor save fails and calibration is lost on restart. A failure is only
+rem  a warning: the game still asks for it on its first start.
+rem  pm grant prints nothing on success; an exception text means refused.
+rem ---------------------------------------------------------------------
+:va_grant
+set "VA_GRANT_LOG=%TEMP%\va_grant_log_%RANDOM%.txt"
+adb shell pm grant !VA_PKG! com.oculus.permission.USE_SCENE > "!VA_GRANT_LOG!" 2>&1
+set "VA_GRANT_RC=!errorlevel!"
+findstr /i "Exception" "!VA_GRANT_LOG!" >nul
+if not errorlevel 1 set "VA_GRANT_RC=1"
+rem  An older build that does not declare the permission has nothing to grant.
+findstr /c:"has not requested permission" "!VA_GRANT_LOG!" >nul
+if not errorlevel 1 set "VA_GRANT_RC=SKIP"
+if "!VA_GRANT_RC!"=="SKIP" (
+    echo Bu surum uzamsal veri iznini istemiyor - atlandi.
+) else if "!VA_GRANT_RC!"=="0" (
+    echo Uzamsal veri izni verildi.
+) else (
+    type "!VA_GRANT_LOG!"
+    echo [UYARI] Uzamsal veri izni verilemedi. Oyun ilk acilista izni soracak -
+    echo         gozlukte Izin Ver'e basin, verilmezse kalibrasyon kaydedilmez.
+)
+del "!VA_GRANT_LOG!" >nul 2>nul
 exit /b 0
 
 :va_auth_abort

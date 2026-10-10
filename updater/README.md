@@ -22,12 +22,17 @@ Adres değişirse burası düzeltilir ve updater yeniden kurulur — gözlükte 
 ## Sunucu tarafı
 
 İndirme ile yükleme ayrı süreçlerdedir ve ikisi de aynı klasörü kullanır
-(ör. `D:\WebHost\player_apk_updater`):
+(ör. `D:\WebHost\player_apk_updater`). Aynı süreç **üç çıktıyı** yayınlar: gözlüğün oyun APK'sı,
+operatör PC'sinin admin build'i ve sunucu paketi.
 
-- **İndirme = IIS, 8090.** O klasörü kök olarak yayınlayan site; APK'lar `game_versions/` alt
-  klasöründedir ve gözlükteki updater `http://159.100.20.26:8090/game_versions/game_v<sürüm>.apk`
-  adresinden indirir. ⚠️ **IIS `.apk` uzantısını varsayılan MIME listesinde tanımaz ve 404
-  döner.** MIME eşlemesi eklenir: `.apk` → `application/vnd.android.package-archive`.
+- **İndirme = IIS, 8090.** O klasörü kök olarak yayınlayan site; çıktılar alt klasörlerde durur:
+  - `http://159.100.20.26:8090/game_versions/game_v<sürüm>.apk` — gözlükteki updater buradan iner.
+    ⚠️ **IIS `.apk` uzantısını varsayılan MIME listesinde tanımaz ve 404 döner.** MIME eşlemesi
+    eklenir: `.apk` → `application/vnd.android.package-archive`.
+  - `http://159.100.20.26:8090/admin_versions/admin_v<sürüm>.zip` — launcher'ın **Yönetim**
+    sayfası buradan iner. `.zip` IIS'in varsayılan MIME listesinde vardır, ek eşleme gerekmez.
+  - `http://159.100.20.26:8090/server_versions/server_v<sürüm>.zip` — launcher'ın **Sunucu**
+    sayfası buradan iner.
 - **Yükleme ve listeleme = `updater_uploader\updater_uploader_main.py`, 8091.** Betik aynı
   klasöre konur ve `python updater_uploader_main.py` ile çalıştırılır. Uçları:
   - `POST /upload?v=<sürüm>` — gelen APK'yı `game_versions/game_v<sürüm>.apk` olarak yazar
@@ -36,15 +41,31 @@ Adres değişirse burası düzeltilir ve updater yeniden kurulur — gözlükte 
     132, "file": "game_v132.apk", "size": …, "modified": …}, …]}` döner, sürüme göre büyükten
     küçüğe sıralıdır. İki tüketicisi var: gözlükteki updater ekranı ve `deploy-player-apk.bat`'in
     sürüm sormadan önce bastığı liste (`scripts/README.md`).
-  - `GET /upload` — sağlık kontrolü.
+  - `POST /admin/upload?v=<sürüm>` — gelen zip'i `admin_versions/admin_v<sürüm>.zip` olarak yazar
+    (klasör yoksa açılır, aynı atomik değiştirme). APK ile aynı doğrulamalardan geçer
+    (`Content-Length`, `PK` imzası, pozitif tam sayı sürüm) **artı**: arşivin kökünde
+    `VortexArena.exe` yoksa `400` ile reddedilir — launcher arşivi doğrudan açtığı için
+    sarmalayıcı klasörlü bir zip sessizce bozuk kurulum üretirdi.
+  - `GET /admin/versions` — `/versions` ile aynı JSON biçimi, dosya adları `admin_v<sürüm>.zip`.
+  - `POST /server/upload?v=<sürüm>` — gelen zip'i `server_versions/server_v<sürüm>.zip` olarak
+    yazar (klasör yoksa açılır, aynı atomik değiştirme). Aynı doğrulamalardan geçer **artı**:
+    arşivin kökünde `VortexArena.Server.App.exe` **ve** `config/maps.json` yoksa `400` ile
+    reddedilir — launcher arşivi doğrudan açtığı için sarmalayıcı klasörlü zip bozuk kurulum
+    üretirdi, `maps.json` ise sürümle birlikte dağılır ve onsuz sunucu harita doğrulaması kapalı
+    açılırdı.
+  - `GET /server/versions` — `/versions` ile aynı JSON biçimi, dosya adları `server_v<sürüm>.zip`.
+  - `GET /upload`, `GET /admin/upload` ve `GET /server/upload` — sağlık kontrolü.
 
   Portlar ayrı olduğu için IIS ile çakışmaz. Windows Firewall'da 8091'e gelen bağlantı
   `python.exe` için açık olmalı (IIS'in kuralı http.sys'e aittir, Python'u kapsamaz).
-- Yeni sürüm yayınlamak **otomatiktir**: `scripts\deploy-player-apk.bat` build sonunda APK'yı
-  `/upload`'a kendisi POST'lar. Elle yayınlamak da mümkün:
+- Yeni sürüm yayınlamak **otomatiktir**: `scripts\deploy-player-apk.bat`,
+  `scripts\deploy-admin-game.bat` ve `scripts\deploy-server.bat` build sonunda çıktıyı kendileri
+  POST'lar. Elle yayınlamak da mümkün:
   `curl -f -X POST --data-binary "@deploy\player\game_v132.apk" "http://159.100.20.26:8091/upload?v=132"`
-  ya da dosyayı `game_versions/` klasörüne aynı adla kopyalamak.
-- Yükleme ucu **anahtarsızdır** — porta erişebilen herkes APK yayınlayabilir (bilinçli tercih).
+  `curl -f -X POST -H "Expect:" -T "deploy\admin\admin_v16.zip" "http://159.100.20.26:8091/admin/upload?v=16"`
+  `curl -f -X POST -H "Expect:" -T "deploy\server\server_v16.zip" "http://159.100.20.26:8091/server/upload?v=16"`
+  ya da dosyayı ilgili alt klasöre aynı adla kopyalamak.
+- Yükleme ucu **anahtarsızdır** — porta erişebilen herkes sürüm yayınlayabilir (bilinçli tercih).
 - Trafik düz HTTP'dir (`usesCleartextTraffic="true"`) — TLS yoktur.
 
 ## Ekran

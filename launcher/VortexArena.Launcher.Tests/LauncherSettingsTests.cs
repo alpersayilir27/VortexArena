@@ -22,6 +22,7 @@ public class LauncherSettingsTests
         Assert.Equal("--replay", LauncherSettings.ArgReplay);
         Assert.Equal("--venue", LauncherSettings.ArgVenue);
         Assert.Equal("--replay-dir", LauncherSettings.ArgReplayDir);
+        Assert.Equal("--data-dir", LauncherSettings.ArgDataDir);
     }
 
     [Fact]
@@ -52,6 +53,16 @@ public class LauncherSettingsTests
         Assert.Equal(
             ["--venue", "VortexAntep", "--replay-dir", @"C:\deploy\replays"],
             LauncherSettings.ServerArguments("VortexAntep", @"C:\deploy\replays"));
+    }
+
+    [Fact]
+    public void SunucuArgumanlari_VeriKlasoruHerZamanGecer()
+    {
+        // Without --data-dir the server would write config and logs into the version folder and a
+        // version upgrade would lose them.
+        Assert.Equal(
+            ["--data-dir", @"C:\deploy\server", "--venue", "VortexAntep", "--replay-dir", @"C:\deploy\replays"],
+            LauncherSettings.ServerArguments("VortexAntep", @"C:\deploy\replays", @"C:\deploy\server"));
     }
 
     [Fact]
@@ -145,6 +156,25 @@ public class LauncherSettingsTests
             new LauncherSettings().ResolveControlPort(@"C:\olmayan\server.json"));
     }
 
+    [Fact]
+    public void ControlPort_MekanDosyasiYoksaSurumunKopyasiOkunur()
+    {
+        // The data folder's server.json does not exist before the server's first start.
+        var dir = Path.Combine(Path.GetTempPath(), $"va-port-{Guid.NewGuid():N}");
+        try
+        {
+            Directory.CreateDirectory(dir);
+            var seed = Path.Combine(dir, "server.json");
+            File.WriteAllText(seed, """{ "controlPort": 48000 }""");
+
+            Assert.Equal(48000, new LauncherSettings().ResolveControlPort(@"C:\olmayan\server.json", seed));
+        }
+        finally
+        {
+            if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+        }
+    }
+
     // ─────────────────────────────────────────────────────────────── persistence
 
     [Fact]
@@ -160,6 +190,12 @@ public class LauncherSettingsTests
                 ServerIp = "192.168.1.50",
                 VersionsUrl = "http://ornek/versions",
                 DownloadBaseUrl = "http://ornek/files/",
+                AdminVersionsUrl = "http://ornek/admin/versions",
+                AdminDownloadBaseUrl = "http://ornek/admin_files/",
+                AdminVersion = 57,
+                ServerVersionsUrl = "http://ornek/server/versions",
+                ServerDownloadBaseUrl = "http://ornek/server_files/",
+                ServerVersion = 12,
                 PreferredDeviceSerial = "1WMHH000",
             }.Save(path);
 
@@ -171,6 +207,12 @@ public class LauncherSettingsTests
             Assert.DoesNotContain("serverIp", File.ReadAllText(path));
             Assert.Equal("http://ornek/versions", loaded.VersionsUrl);
             Assert.Equal("http://ornek/files/", loaded.DownloadBaseUrl);
+            Assert.Equal("http://ornek/admin/versions", loaded.AdminVersionsUrl);
+            Assert.Equal("http://ornek/admin_files/", loaded.AdminDownloadBaseUrl);
+            Assert.Equal(57, loaded.AdminVersion);
+            Assert.Equal("http://ornek/server/versions", loaded.ServerVersionsUrl);
+            Assert.Equal("http://ornek/server_files/", loaded.ServerDownloadBaseUrl);
+            Assert.Equal(12, loaded.ServerVersion);
             Assert.Equal("1WMHH000", loaded.PreferredDeviceSerial);
         }
         finally
@@ -204,6 +246,12 @@ public class LauncherSettingsTests
             Assert.Equal(LauncherSettings.DefaultServerIp, loaded.ServerIp);
             Assert.Equal("VortexAntep", loaded.Venue);
             Assert.Equal(LauncherSettings.DefaultVersionsUrl, loaded.VersionsUrl);
+            Assert.Equal(LauncherSettings.DefaultAdminVersionsUrl, loaded.AdminVersionsUrl);
+            Assert.Equal(LauncherSettings.DefaultAdminDownloadBaseUrl, loaded.AdminDownloadBaseUrl);
+            Assert.Equal(0, loaded.AdminVersion);
+            Assert.Equal(LauncherSettings.DefaultServerVersionsUrl, loaded.ServerVersionsUrl);
+            Assert.Equal(LauncherSettings.DefaultServerDownloadBaseUrl, loaded.ServerDownloadBaseUrl);
+            Assert.Equal(0, loaded.ServerVersion);
         }
         finally
         {
@@ -221,5 +269,9 @@ public class LauncherSettingsTests
         Assert.Equal(0, loaded.ControlPortOverride);
         Assert.Equal("", loaded.Venue);
         Assert.Equal(LauncherSettings.DefaultDownloadBaseUrl, loaded.DownloadBaseUrl);
+        Assert.Equal(LauncherSettings.DefaultAdminDownloadBaseUrl, loaded.AdminDownloadBaseUrl);
+        Assert.Equal(0, loaded.AdminVersion);
+        Assert.Equal(LauncherSettings.DefaultServerDownloadBaseUrl, loaded.ServerDownloadBaseUrl);
+        Assert.Equal(0, loaded.ServerVersion);
     }
 }

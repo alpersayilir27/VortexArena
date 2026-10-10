@@ -57,6 +57,15 @@ namespace VortexArena.App.Admin
         [Tooltip("Yalnız en yeni satırda görünen vurgu çizgisi (CSS .kf.new::before).")]
         [SerializeField] private UiShape newUnderline;
 
+        /// <summary>Re-applies the plate's opacity without re-measuring it (expiry fade).</summary>
+        public void SetAlpha(float alpha)
+        {
+            if (fade != null)
+            {
+                fade.alpha = alpha;
+            }
+        }
+
         /// <summary>
         /// Fills the plate. <paramref name="weapon"/> is the already resolved weapon display name;
         /// <paramref name="newest"/> draws the <c>.kf.new</c> variant and <paramref name="alpha"/> the
