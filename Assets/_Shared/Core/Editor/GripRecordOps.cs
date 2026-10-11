@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Oculus.Interaction.Input;
 using UnityEditor;
 using UnityEngine;
 using VortexArena.Core.Combat;
@@ -79,9 +80,12 @@ namespace VortexArena.Core.Editor
 
         /// <summary>
         /// Mirrors one hand's record onto the other across the item's YZ plane.
-        /// <para><c>p=(x,y,z) → (−x,y,z)</c> and <c>q=(x,y,z,w) → (x,−y,−z,w)</c> (reflection whose
-        /// normal is X). The finger rig is COPIED joint by joint: ISDK's left and right skeletons
-        /// share one joint convention, so the same local rotations give the mirrored pose.</para>
+        /// <para>Positions reflect <c>(x,y,z) → (−x,y,z)</c>; the wrist and every finger joint go
+        /// through ISDK's hand spaces (<see cref="HandMirroring"/>), the same conversion ISDK's own
+        /// <c>HandGrabUtils.MirrorHandGrabPose</c> uses.</para>
+        /// <para>⚠️ Joint rotations are NOT copied: the left and right skeletons' joint frames are
+        /// mirror images (thumb side is +X on one, −X on the other), so a copied rotation flips the
+        /// thumb root ~180° and splays the other fingers.</para>
         /// <para>⚠️ A STARTING POINT, not the final word: a grip is roughly symmetric but trigger,
         /// magazine and charging handle are one-sided.</para>
         /// </summary>
@@ -97,15 +101,26 @@ namespace VortexArena.Core.Editor
             ItemGripPose src = def.GetGrip(kind, fromRight);
             Pose wrist = ItemGripAuthority.ResolveAnchorToWrist(src, fromRight);
 
-            var mirroredPosition = new Vector3(-src.position.x, src.position.y, src.position.z);
-            var mirroredWrist = new Pose(
-                new Vector3(-wrist.position.x, wrist.position.y, wrist.position.z),
-                new Quaternion(wrist.rotation.x, -wrist.rotation.y, -wrist.rotation.z,
-                    wrist.rotation.w));
+            HandMirroring.HandSpace from = fromRight
+                ? HandMirroring.RightHandSpace
+                : HandMirroring.LeftHandSpace;
+            HandMirroring.HandSpace to = fromRight
+                ? HandMirroring.LeftHandSpace
+                : HandMirroring.RightHandSpace;
+
+            var mirroredPosition = ReflectX(src.position);
+            var mirroredWrist = new Pose(ReflectX(wrist.position),
+                ReflectWrist(wrist.rotation, from, to));
 
             HandJointRotation[] fingers = src.fingerJoints == null
                 ? Array.Empty<HandJointRotation>()
-                : (HandJointRotation[])src.fingerJoints.Clone();
+                : new HandJointRotation[src.fingerJoints.Length];
+            for (int i = 0; i < fingers.Length; i++)
+            {
+                HandJointRotation joint = src.fingerJoints[i];
+                fingers[i] = HandJointRotation.From(joint.joint,
+                    HandMirroring.TransformRotation(joint.rotation, from, to));
+            }
 
             Undo.RecordObject(def, "Kavramayı aynala");
             def.EditorSetGrip(kind, !fromRight, mirroredPosition, mirroredWrist, fingers);
@@ -114,6 +129,21 @@ namespace VortexArena.Core.Editor
             Debug.Log($"{LOG} {def.name}: {GripSlotGui.SlotLabel(kind, fromRight)} → " +
                       $"{GripSlotGui.SlotLabel(kind, !fromRight)} aynalandı.", def);
             return true;
+        }
+
+        private static Vector3 ReflectX(Vector3 v)
+        {
+            return new Vector3(-v.x, v.y, v.z);
+        }
+
+        /// <summary>Reflects the wrist's distal/dorsal axes across the item's YZ plane and rebuilds
+        /// the rotation in the other hand's space (a plain reflection would be left-handed).</summary>
+        private static Quaternion ReflectWrist(Quaternion rotation, HandMirroring.HandSpace from,
+            HandMirroring.HandSpace to)
+        {
+            Vector3 distal = ReflectX(rotation * from.distal);
+            Vector3 dorsal = ReflectX(rotation * from.dorsal);
+            return Quaternion.LookRotation(distal, dorsal) * Quaternion.Inverse(to.rotation);
         }
 
         internal static void ClearSlot(ItemDefinition def, GripSocketKind kind, bool rightHand)

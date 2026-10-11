@@ -42,9 +42,9 @@ namespace VortexArena.Core.Arena
     /// teleported.
     /// </para>
     /// <para>
-    /// With no match set up, entering a red/blue zone asks the server for that team
-    /// (<c>claim_base_team</c>, §5.1) — once per entry, so an admin's later assignment holds until
-    /// the next entry. The server decides; the checks here only spare pointless sends.
+    /// With no match running (lobby wait or the result screen), entering a red/blue zone asks the
+    /// server for that team (<c>claim_base_team</c>, §5.1) — once per entry, so an admin's later
+    /// assignment holds until the next entry. The server decides; the checks here only spare pointless sends.
     /// </para>
     /// </summary>
     public class BaseZone : MonoBehaviour
@@ -136,8 +136,8 @@ namespace VortexArena.Core.Arena
         }
 
         /// <summary>Asks the server for this zone's team on entry (§5.1 <c>claim_base_team</c>).
-        /// Lobby wait, calibrated player, a team that differs — the server re-checks all of it plus
-        /// the team mode.</summary>
+        /// Lobby wait or finished, calibrated player, a team that differs — the server re-checks all
+        /// of it plus the team mode.</summary>
         private void TryClaimTeam()
         {
             if (team == Team.Neutral || ArenaCombat.LocalTeam == team)
@@ -148,8 +148,12 @@ namespace VortexArena.Core.Arena
                 return;
 
             PlayerCombatState state = PlayerCombatState.Instance;
-            if (state == null || state.Phase != ArenaProtocol.PHASE_PAUSED ||
-                state.PhaseReason != ArenaProtocol.PAUSE_REASON_LOBBY)
+            if (state == null)
+                return;
+
+            bool lobbyWait = state.Phase == ArenaProtocol.PHASE_PAUSED &&
+                             state.PhaseReason == ArenaProtocol.PAUSE_REASON_LOBBY;
+            if (!lobbyWait && state.Phase != ArenaProtocol.PHASE_FINISHED)
                 return;
 
             ClaimMsg.team = team == Team.Red ? "red" : "blue";

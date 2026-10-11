@@ -554,7 +554,9 @@ Ayarlanabilir bir "silah dönüşü" alanı da yoktur.
    kırmızı satır (kayıt yok). Aynı düğmeye yine basmak o slotu üzerine yazar. Dünya panelinde
    slotların durumu, çıkış tahmini, izleme/temas durumu ve yardım yazılıdır.
 7. Hayalet **kumanda modeline** bak: elinde doğal duruyorsa kavrama oyunda da doğal görünür.
-   Durmuyorsa silahı çubukla çevir ve yeniden yakala.
+   Durmuyorsa silahı çubukla çevir ve yeniden yakala. Kalın bir sapta avuç kendiliğinden sapın
+   dışına itilir; HUD `AVUÇ İÇERİDE` yazıyorsa el itilemeyecek kadar derindedir — eli geri çekip
+   yeniden yakala.
 8. **Play'den çık** → yakalananlar `WD_*`'a yazılır (Undo'lu) ve **silah kiti kendiliğinden
    eşitlenir** (`Configure All Build Elements`'e ayrıca gitmen gerekmez).
 9. Yazılan kayıtları pencere gösterir: slot başına **Sil**, kavrama başına **Sağ → Sol aynala** /

@@ -895,10 +895,11 @@ seçip hedeflere ateş edebilirler.
   gizlenir, silah yalnız grip'ten gelir ve bekleme maçla aynı oynanır
   (§7, "sahnelenen arena lobi profiliyle koşar").
 - **Takımı admin atar** (`set_team`), üstelik **her fazda** — koşan maçın ortasında da. Oyuncunun
-  tek yolu **tabana girmektir**: maç kurulmadan (lobi beklemesi, sahnelenen arena dahil) bir takımın
-  `BaseZone`'una giren oyuncu o takımı ister (`claim_base_team`); sunucu fazı, kalibrasyonu ve takım
-  kipini doğrular. İstek girişte bir kez gider — admin sonradan değiştirirse ancak yeniden girişte
-  tekrar uygulanır.
+  tek yolu **tabana girmektir**: maç sürmezken (lobi beklemesi, sahnelenen arena ve maç sonu ekranı —
+  `finished` — dahil) bir takımın `BaseZone`'una giren oyuncu o takımı ister (`claim_base_team`);
+  sunucu fazı, kalibrasyonu ve takım kipini doğrular. İstek girişte bir kez gider — admin sonradan
+  değiştirirse ancak yeniden girişte tekrar uygulanır. Oyuncunun maç sonu tablosu takımları
+  `match_end` anında dondurur; `finished`'daki takım değişikliği tabloyu kaydırmaz.
 - **Takımsız modda takım diye bir şey yoktur ve sunucu bunu lobide de uygular:** seçili mod
   takımsızken lobiye katılan/dönen oyuncu takım `""` alır (kırmızı/mavi atanmaz) ve `set_team`
   **reddedilir** — hem koşan maç hem yalnızca seçili mod takımsızsa. Adminde de karşılığı vardır:
@@ -1813,8 +1814,8 @@ için poz/pozisyon/rotasyon dönüşümleri kimliktir. Çağrı yerleri yine ond
 yerde tanımlı kalsın. `WorldToArenaDirection` istisnadır: yönü **normalize eder** ve sıfır/NaN
 girdide `Vector3.forward` döner, çünkü protokol her olayda bir birim yön taşır),
 `BaseZone` (**taban bölgesi** — kırmızı/mavi şerit, canlanma
-kapısı; `Neutral` = herkese açık. **Maç kurulmadan girişte takımı ister:** lobi beklemesinde
-(`paused`/`lobby`) kırmızı/mavi bölgeye giren kalibreli oyuncu, takımı farklıysa
+kapısı; `Neutral` = herkese açık. **Maç sürmezken girişte takımı ister:** lobi beklemesinde
+(`paused`/`lobby`) ve maç sonu ekranında (`finished`) kırmızı/mavi bölgeye giren kalibreli oyuncu, takımı farklıysa
 `claim_base_team` yollar; karar sunucunundur (ArenaNet-Protokol `claim_base_team`). Giriş kenarında
 bir kez gider, admin rolünde hiç gitmez. **Algılama alanı çizilen şeridin kendisidir:** bölgenin
 altındaki Renderer'ların — kapalı olanlar dahil, çünkü `BaseZoneVisibility` şeridi gizleyebilir —
@@ -2978,7 +2979,7 @@ arena geometrisini üreten ve kavrama pozunu yazan araçlar:
 | Sınıf | Görevi |
 |---|---|
 | `GripPoseStudio` | `Kavrama Pozu Stüdyosu` (`Tools > VortexArena > Items`) → **Kavrama Stüdyosu** penceresi: kavrama yakalamanın **editör yüzü** — hedef eşyayı seçer, yakalama sahnesini açar (yoksa kurar), yazılmış kayıtları yönetir (slot başına silme, kavrama başına aynalama, "2. kavramayı sil (tek kavramalı yap)") ve uygulanmamış tamponu *Uygula* / *Sil* ile gösterir. ⚠️ **Kavrama burada YAZILMAZ, Play'de yakalanır; fareyle poz verilen bir düzenleme tezgâhı da EKLENMEZ:** avucun kabzaya değip değmediği ve işaret parmağının tetiğe ulaşıp ulaşmadığı yalnız izlenen gerçek elle cevaplanabiliyor, Scene View'da gözle oturtulan hayalet el bu soruya yanlış cevap verir. ⚠️ Hedef **EditorPrefs'te** yaşar (`GripCaptureSettings`), yakalama sahnesinin Inspector'ıyla paylaşılır — iki ayrı seçim "hangi eşya yakalanıyor" sorusunu doğururdu; sahne alanı da olamaz, eşya seçmek commit'li sahneyi kirletirdi. ⚠️ **Yazma yollarında diyalog yoktur** (`WeaponKitBuilder` ile aynı gerekçe: modal ana thread'i kilitler ve CLI'da timeout olur) — sonuç `Debug.Log`'a gider; tek onay bekleyen iş bekleyen tamponu atmaktır, o yıkıcıdır |
-| `GripRecordOps` | Bir kavrama kaydına dokunan **her** yazma buradan geçer (uygulayıcı, stüdyo penceresi, yakalama sahnesinin Inspector'ı): uygulama, aynalama, silme, tek kavramalı yapma + kaydetme sonrası eşitleme (silahta `WeaponKitBuilder.BuildAll`, diğerinde `NetItemIdGuard.Rebuild`). ⚠️ **İkinci bir yazar, dört alandan hangisinin hangi el olduğunu iki yerde anlatmak ve eşitlemeyi tekrarlamak demekti** — kayıt tek başına ürün değil (soket göstergesi, `WPN_*` prefabları ve eşya kataloğu ondan türüyor), eşitlemesi atlanırsa belirti "kaydettim ama oyunda bir şey değişmedi" olur. **Oturum kuralı burada yaşar:** yalnız 1. kavrama yakalanırsa eşya tek kavramalı olur ve 2. kavrama kayıtları düşer (yoksa reddedilen bir ön kabza eski kaydıyla ikinci eli çekmeye devam ederdi); yakalanan kavramanın yakalanmayan **eli** eski kaydını korur |
+| `GripRecordOps` | Bir kavrama kaydına dokunan **her** yazma buradan geçer (uygulayıcı, stüdyo penceresi, yakalama sahnesinin Inspector'ı): uygulama, aynalama, silme, tek kavramalı yapma + kaydetme sonrası eşitleme (silahta `WeaponKitBuilder.BuildAll`, diğerinde `NetItemIdGuard.Rebuild`). ⚠️ **İkinci bir yazar, dört alandan hangisinin hangi el olduğunu iki yerde anlatmak ve eşitlemeyi tekrarlamak demekti** — kayıt tek başına ürün değil (soket göstergesi, `WPN_*` prefabları ve eşya kataloğu ondan türüyor), eşitlemesi atlanırsa belirti "kaydettim ama oyunda bir şey değişmedi" olur. **Oturum kuralı burada yaşar:** yalnız 1. kavrama yakalanırsa eşya tek kavramalı olur ve 2. kavrama kayıtları düşer (yoksa reddedilen bir ön kabza eski kaydıyla ikinci eli çekmeye devam ederdi); yakalanan kavramanın yakalanmayan **eli** eski kaydını korur. ⚠️ **Aynalama eklem dönüşlerini KOPYALAMAZ:** konum eşyanın YZ düzleminde yansıtılır, bilek ve her parmak eklemi ISDK'nın el uzaylarından geçirilir (`HandMirroring`) — gerekçe Tuzaklar bölümünde ("sol ve sağ elin eklem çerçeveleri birbirinin aynasıdır") |
 | `GripCaptureApplier` | Play **çıkışında** (`EnteredEditMode`) tamponu eşya tanımına yazar (Undo'lu) ve dosyayı siler. ⚠️ **Yazma Play sırasında olamaz:** `AssetDatabase`'e yazılan değer bir sonraki domain reload'da belirsizleşir — araya makineye özel bir disk tamponu girer. ⚠️ **Editör açılışında / domain reload'da BİLEREK uygulanmaz:** çökmeden kalan bir tampon günler sonra sessizce bir eşyayı ezerdi; kalıntı stüdyo penceresinde gösterilir, elle uygulanır ya da atılır. Eşya çözülemiyorsa (asset taşınmış/yeniden adlandırılmış) dosya **korunur** — oturum kaybolmasın |
 | `GripCaptureSessionEditor` | Yakalama sahnesinin kök objesinin (`GripCaptureSession`) Inspector'ı: hangi eşyanın yakalandığını seçer ve eşyada hâlihazırda ne yazılı olduğunu gösterir. Sahneyi açan kullanıcının karşısındaki yüzey burasıdır; stüdyo penceresiyle **aynı** EditorPrefs anahtarını okur |
 | `GripSlotGui` | Slot etiketleri + dört satırlık durum listesi, stüdyo penceresi ile yakalama sahnesinin Inspector'ı arasında paylaşılır (aynı durumun iki çizimi ayrışırdı). ⚠️ Bir slotun kaydı yalnız **o el için yazılmışsa** okunur: `GetGrip` öteki elin kaydına düşüyor, yani filtresiz okuma yazılmamış slotu "yazılmış" gösterirdi |
@@ -3012,9 +3013,9 @@ penceresi "Boot'tan" derken de) ve bir **yazım oturumudur**: bağlantı, keşif
 | `GripCaptureSession` | Sahnenin kök bileşeni ve `IAuthoringSession` işaretçisi: rig'i, eşya kopyasını, elleri ve HUD'u kurar, düğmeleri dinler, yakalananları tampona yazar. Yakalama **başka bir eşyanın** tamponu dururken kapalıdır (önce uygulanır ya da atılır) |
 | `GripCaptureRig` | Aracın kendi OVR rig'i + ISDK el veri kaynakları, SDK prefablarından çalışma anında kurulur (`VA_CameraRig` DEĞİL). ⚠️ Her şey **etkisiz** bir kabın altında kurulup orada yapılandırılır: `OVRManager` ve veri kaynakları alanlarını `Awake`'te okuyor, etkinleştirmeden sonra yazılan alan yok sayılır (belirti: çok kiplilik hiç açılmaz, eller bağlı görünmez). ⚠️ Çok kiplilik iki alana birlikte bağlıdır — `launchSimultaneousHandsControllersOnStartup` (aynı zamanda `OVRInput`'un eklentinin bağlı-kumanda listesine güvenip güvenmeyeceğini belirler) ve `controllerDrivenHandPosesType = None` (açık kalırsa kumandayı tutan elin verisi sentezlenir, yani yakalanan el gerçek el olmaz) |
 | `GripCaptureItem` | Hedef eşyanın **yalnız görsel** kopyası: renderer'lar + çarpışma yüzeyi, başka hiçbir şey. ⚠️ Kopya **etkisiz** bir kabın altında örneklenip orada soyulur (script, fizik, Rigidbody) — eşya prefabının kendi bileşenlerinin (silah, ağ, kavrama) araçta koşması yasak: tek bir `Awake` kopyayı bir oyun tekiline kaydetmeye yeter. Kumanda çubuğu bu kopyayı çevirir, çubuğa tıklamak onu başın önüne geri alır |
-| `GripCaptureHand` | Gösterilen el **kaydın kendisidir**: canlı izleme verisi kayıt biçimine çevrilir, sonra oyunun kayıtları okuduğu **aynı** yoldan ISDK hayaletine uygulanır. Yakalanan el eşyanın üstünde yarı saydam hayalet olarak donar. Hesaplanan anchor'da ayrıca **saydam bir kumanda modeli** durur: kayıtta anchor dönüşü olmadığı için oyunda eşya her zaman kumandanın baktığı yere bakar — hayalet kumanda elde doğal duruyorsa kavrama oyunda da doğal görünür, konumu boş elin ofsetinden (`HandPoseLibrary.AnchorToWrist`) türer, dönüşü eşyanınkine zorlanır |
-| `GripFingerClamp` | Parmakları eşyanın yüzeyinde durdurur: parmak başına, bilekten uca doğru her eklem açık duruştan izlenen duruşa doğru, kemik kapsülü eşyaya değene kadar kapatılır; kayda bu kırpılmış duruş girer. ⚠️ **Karışım ADIM ADIM yürütülür, uç noktada sınanmaz:** dışbükey olmayan bir mesh'e karşı örtüşme sorgusu yalnız **yüzeyi** bildirir, yani eşyanın tamamen içinde kalan ya da ince bir kabzadan geçip çıkan parmak uç-nokta sınamasını geçer ve kayıt eli silahın içinde gösterir. ⚠️ Aynı sebeple elin collider'ı **kemik kapsülleridir**, el mesh'i değil: PhysX iki dışbükey-olmayan mesh'i hiçbir zaman çarpıştırmaz. Avucun eşyanın içinde kalması yalnız uyarılır |
-| `GripCaptureHud` | Dünya uzayındaki panel: slotların durumu, çıkış tahmini (oturum kuralının ne yapacağı), izleme/temas durumu ve yardım. Reddedilen yakalama kırmızı satır + çift titreşimle, kabul edilen kısa titreşimle bildirilir |
+| `GripCaptureHand` | Gösterilen el **kaydın kendisidir**: canlı izleme verisi kayıt biçimine çevrilir, sonra oyunun kayıtları okuduğu **aynı** yoldan ISDK hayaletine uygulanır. Yakalanan el eşyanın üstünde yarı saydam hayalet olarak donar. Hesaplanan anchor'da ayrıca **saydam bir kumanda modeli** durur: kayıtta anchor dönüşü olmadığı için oyunda eşya her zaman kumandanın baktığı yere bakar — hayalet kumanda elde doğal duruyorsa kavrama oyunda da doğal görünür, konumu boş elin ofsetinden (`HandPoseLibrary.AnchorToWrist`) türer, dönüşü eşyanınkine zorlanır. **Avuç eşyanın dışına itilir** (parmak kırpmasından ÖNCE): boş el havayı kavradığı için kalın bir sapta avucu durduran bir şey yoktur; bilekten parmak köklerine uzanan avuç kutusu eşyaya değmeyene kadar bilek **el sırtı yönünde** geri çekilir ve kayda bu bilek girer. ⚠️ Yön sabittir, bir ayrıştırma (depenetration) vektörü kullanılmaz: dışbükey olmayan kalın bir sapta en kısa çıkış yolu sapın öbür yüzü olabilir. İtme üst sınırında hâlâ içerideyse bilek izlendiği gibi kalır ve HUD `AVUÇ İÇERİDE` yazar |
+| `GripFingerClamp` | Parmakları eşyanın yüzeyinde durdurur: parmak başına, bilekten uca doğru her eklem açık duruştan izlenen duruşa doğru, kemik kapsülü eşyaya değene kadar kapatılır; kayda bu kırpılmış duruş girer. ⚠️ **Karışım ADIM ADIM yürütülür, uç noktada sınanmaz:** dışbükey olmayan bir mesh'e karşı örtüşme sorgusu yalnız **yüzeyi** bildirir, yani eşyanın tamamen içinde kalan ya da ince bir kabzadan geçip çıkan parmak uç-nokta sınamasını geçer ve kayıt eli silahın içinde gösterir. ⚠️ Aynı sebeple elin collider'ı **kemik kapsülleridir**, el mesh'i değil: PhysX iki dışbükey-olmayan mesh'i hiçbir zaman çarpıştırmaz. Avucu eşyanın dışına çıkaran adım bu sınıfta değil `GripCaptureHand`'dedir ve ondan önce koşar — avuç içerideyken parmak kökleri de içeride başlar ve kırpma onları kurtaramaz |
+| `GripCaptureHud` | Dünya uzayındaki panel: slotların durumu, çıkış tahmini (oturum kuralının ne yapacağı), izleme/temas durumu ve yardım. Reddedilen yakalama kırmızı satır + çift titreşimle, kabul edilen kısa titreşimle bildirilir. ⚠️ Panelin ileri ekseni başa DEĞİL başın tersine bakar: 3D `TextMeshPro` yazısı da `Quad` arka planı da −Z yüzünden görünür, +Z'si başa çevrilen panel yazıyı ayna görüntüsü gösterir (arka plan bu yüzden yazının +Z tarafındadır) |
 | `GripCaptureBuffer` | Bir Play oturumunun yakalamaları, `Library/VortexArena/GripCapture.json` (makineye özel, commit edilmez). ⚠️ **Her yakalamada yazılır, çıkışta değil:** Play'de bir çökme oturumu kaybetmemeli |
 | `GripCaptureEntry` | Yakalanmış tek slot (kavrama + el + kayıt) |
 | `GripCaptureSettings` | Aracın sabitleri + hedef seçimi (EditorPrefs) ve yakalama sahnesinin yolu |
@@ -6039,6 +6040,20 @@ konsoluna tek satır sebep yazar.
     ölçümü anlamlı kılar — kalibrasyon sorulsaydı yumuşak sıfırlanmış ya da yalnız tahminen
     yerleştirilmiş oyuncu tam da izlenmesi gerektiği anda görünmez olurdu. Oyuncunun kendi
     karartması bu kapıya girmez: onun işi hizalanmamış oyuncuyu da uyarmaktır.
+
+---
+
+233. **Sol ve sağ elin eklem çerçeveleri birbirinin AYNASIDIR — bir elin eklem dönüşünü öbür ele
+    kopyalamak aynalama DEĞİLDİR.** ISDK'nın iki iskeleti aynı eksen sözleşmesini paylaşmaz:
+    başparmak yönü birinde +X, ötekinde −X'tir (`HandMirroring.LeftHandSpace` /
+    `RightHandSpace`). Kopyalanan yerel dönüş kıvrılmayı (X ekseni) aşağı yukarı korur ama yana
+    açılmayı ve burulmayı ters çevirir: başparmak kökü ~180° döner, öteki parmaklar 15–25° sapar —
+    belirti "parmaklar yan yana duruyor ama aynı şekilde sarılmıyor, başparmak ile serçe en
+    bozuk"tur, hata vermez. Doğrusu eklem başına `HandMirroring.TransformRotation(q, kaynakEl,
+    hedefEl)` (ISDK'nın kendi `HandGrabUtils.MirrorHandGrabPose`'u da böyle yapar); bilek
+    dönüşü ise eşyanın düzleminde yansıtılan distal/dorsal eksenlerden hedef elin uzayında
+    yeniden kurulur. Sabit bir `(x, −y, −z, w)` formülü yazılmaz: doğruluğu dalın (OpenXR / OVR)
+    eksen sözleşmesine bağlıdır, el uzayları ise o dalın kendi sabitlerinden gelir.
 
 ## 8. Durum ve sıradaki işler
 

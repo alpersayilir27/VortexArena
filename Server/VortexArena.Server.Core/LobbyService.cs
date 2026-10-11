@@ -289,8 +289,8 @@ public sealed class LobbyService
     }
 
     /// <summary>claim_base_team: a player entered a team's base and asks for that team (§5.1). Only in the
-    /// lobby wait, calibrated, in a teamed mode; anything else is logged and ignored with no reply.
-    /// <para>⚠️ Closed from <c>start_match</c> on (loading, countdown, live, paused, finished): a team
+    /// lobby wait or <c>finished</c>, calibrated, in a teamed mode; anything else is logged and ignored.
+    /// <para>⚠️ Closed from <c>start_match</c> until the match ends (loading, countdown, live, paused): a team
     /// switch inside a match would silently move the revive base, friendly fire and the score.</para>
     /// <para>The client sends on the zone EDGE, so an admin's later set_team holds until the player
     /// walks into a base again.</para></summary>
@@ -304,9 +304,9 @@ public sealed class LobbyService
             Console.WriteLine($"[Lobby] claim_base_team geçersiz takım '{msg.team}' ({state.Name}) — yok sayıldı.");
             return;
         }
-        if (!_director.IsLobbyWait)
+        if (!_director.CanClaimBaseTeam)
         {
-            Console.WriteLine($"[Lobby] claim_base_team: {state.Name} — maç kurulu, takım değişmez.");
+            Console.WriteLine($"[Lobby] claim_base_team: {state.Name} — maç sürüyor, takım değişmez.");
             return;
         }
         // An uncalibrated headset's position is not the arena's: it may "enter" a base it is not in.

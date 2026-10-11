@@ -272,6 +272,10 @@ namespace VortexArena.App
         private PlayerInfo[] _roster = Array.Empty<PlayerInfo>();
         private MatchEndMsg _lastEnd;
 
+        /// <summary>Teams frozen at <c>match_end</c>, by playerId: <c>claim_base_team</c> is open in
+        /// <c>finished</c> (§5.1), and a live team would move a row into the other team's block.</summary>
+        private readonly Dictionary<int, string> _endTeams = new Dictionary<int, string>();
+
         /// <summary>Last <c>modeState</c> line (§10.1) — the co-op customer counters live there and the
         /// server keeps publishing it through the <c>finished</c> phase.</summary>
         private string _modeState = "";
@@ -496,7 +500,33 @@ namespace VortexArena.App
             }
 
             _lastEnd = msg;
+            FreezeTeams();
             ShowResult(msg);
+        }
+
+        /// <summary>Records each listed player's team once; a resent <c>match_end</c> keeps the first.</summary>
+        private void FreezeTeams()
+        {
+            for (int i = 0; i < _roster.Length; i++)
+            {
+                PlayerInfo info = _roster[i];
+                if (info != null && !_endTeams.ContainsKey(info.playerId))
+                {
+                    _endTeams[info.playerId] = info.team ?? "";
+                }
+            }
+        }
+
+        /// <summary>The team the result table shows: frozen at match end, live only for a row that
+        /// was not listed then.</summary>
+        private string TeamOf(PlayerInfo info)
+        {
+            if (info == null)
+            {
+                return "";
+            }
+
+            return _endTeams.TryGetValue(info.playerId, out string team) ? team : info.team ?? "";
         }
 
         /// <summary>Leaving the <c>finished</c> phase closes the screen: new match loaded, countdown
@@ -725,6 +755,7 @@ namespace VortexArena.App
 
             _stage = Stage.Hidden;
             _lastEnd = null;
+            _endTeams.Clear();
             _modeState = "";
             GameplayHudGate.SetHidden(false);
         }
@@ -824,7 +855,7 @@ namespace VortexArena.App
             {
                 for (int i = 0; i < _ranked.Count; i++)
                 {
-                    _blocks[_ranked[i].team == "blue" ? 1 : 0].Add(_ranked[i]);
+                    _blocks[TeamOf(_ranked[i]) == "blue" ? 1 : 0].Add(_ranked[i]);
                 }
 
                 return;
@@ -933,9 +964,9 @@ namespace VortexArena.App
                 : null;
         }
 
-        private static int CompareByTeamThenScore(PlayerInfo a, PlayerInfo b)
+        private int CompareByTeamThenScore(PlayerInfo a, PlayerInfo b)
         {
-            int byTeam = TeamOrder(a.team).CompareTo(TeamOrder(b.team));
+            int byTeam = TeamOrder(TeamOf(a)).CompareTo(TeamOrder(TeamOf(b)));
             return byTeam != 0 ? byTeam : CompareByScoreDescending(a, b);
         }
 
@@ -1203,8 +1234,8 @@ namespace VortexArena.App
                 // a tag; '<' becomes a look-alike instead of being parsed.
                 case 0: return $"{SafeName(info.name)} #{info.playerId}";
                 // ⚠️ Column is NoWrap: a wrapped cell would desync the \n-joined rows.
-                case 1: return info.team == "red" ? $"{Paint("Kırmızı", redTeamColor)} Takım"
-                             : info.team == "blue" ? $"{Paint("Mavi", blueTeamColor)} Takım" : "-";
+                case 1: return TeamOf(info) == "red" ? $"{Paint("Kırmızı", redTeamColor)} Takım"
+                             : TeamOf(info) == "blue" ? $"{Paint("Mavi", blueTeamColor)} Takım" : "-";
                 case 2: return info.score.ToString();
                 case 3: return info.kills.ToString();
                 case 4: return info.deaths.ToString();
@@ -1379,7 +1410,7 @@ namespace VortexArena.App
 
             if (footWhoPlate != null)
             {
-                string team = self != null ? self.team : "";
+                string team = TeamOf(self);
                 footWhoPlate.Fill(Girdap.TeamHi(team), Girdap.TeamLo(team), UiGradientMode.Vertical);
             }
 

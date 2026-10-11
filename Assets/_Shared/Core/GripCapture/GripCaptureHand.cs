@@ -23,7 +23,18 @@ namespace VortexArena.Core.GripCapture
         /// <summary>The hand's own capsules sit here so the clamp never queries them.</summary>
         private const int HandLayer = 2;
 
-        private const float PalmProbeRadius = 0.02f;
+        /// <summary>Palm box half-thickness (m) — the ghost palm plus a little skin, so a thicker
+        /// in-game glove does not sink into the handle either.</summary>
+        private const float PalmHalfThickness = 0.016f;
+
+        /// <summary>Palm box side margin beyond the index/pinky knuckles (m).</summary>
+        private const float PalmSideMargin = 0.01f;
+
+        /// <summary>Furthest the wrist is pushed back out of the item (m); deeper = unresolved.</summary>
+        private const float PalmMaxPush = 0.08f;
+
+        private const int PalmPushSteps = 16;
+        private const int PalmBisectionSteps = 5;
 
         private const int ItemMask = 1 << 0;
 
@@ -143,7 +154,6 @@ namespace VortexArena.Core.GripCapture
                 return;
             }
 
-            Wrist = wrist;
             ReadTracked(local);
 
             Quaternion[] target = HandPoseLibrary.BuildJointRotations(_tracked, _rightHand);
@@ -153,13 +163,18 @@ namespace VortexArena.Core.GripCapture
             _livePuppet.SetRootPose(wrist);
             _livePuppet.SetJointRotations(_target);
 
+            // The free hand closes on air, so nothing stops the palm at a thick handle: it is pushed
+            // out first, otherwise the fingers start inside and the clamp cannot help.
+            PalmInside = !PushPalmOut(ref wrist);
+            Wrist = wrist;
+            _livePuppet.SetRootPose(wrist);
+
             GripFingerClamp.Apply(_maps, _open, _target, _clamped, _touching, _penetrating, _segments);
 
             _livePuppet.SetJointRotations(_clamped);
             _livePuppet.SetRootPose(wrist);
 
             UpdateCapsules();
-            PalmInside = ProbePalm(wrist);
             UpdateControllerGhost(item);
 
             Valid = true;
@@ -393,18 +408,94 @@ namespace VortexArena.Core.GripCapture
             }
         }
 
-        private bool ProbePalm(in Pose wrist)
+        /// <summary>
+        /// Moves the wrist along the back of the hand until the palm box (wrist → knuckles) clears
+        /// the item. <c>false</c> = still inside at <see cref="PalmMaxPush"/>; the wrist is left as
+        /// tracked and the HUD flags it.
+        /// <para>⚠️ Marched along the dorsal axis, not a depenetration vector: against a non-convex
+        /// mesh the shortest way out of a thick handle can be its far side.</para>
+        /// </summary>
+        private bool PushPalmOut(ref Pose wrist)
         {
-            int slot = FingersMetadata.HandJointIdToIndex(HandJointId.HandMiddle1);
+            if (!TryJointPosition(HandJointId.HandIndex1, out Vector3 index) ||
+                !TryJointPosition(HandJointId.HandMiddle1, out Vector3 middle) ||
+                !TryJointPosition(HandJointId.HandPinky1, out Vector3 pinky))
+            {
+                return true;
+            }
+
+            Vector3 distal = middle - wrist.position;
+            HandMirroring.HandSpace space = _rightHand
+                ? HandMirroring.RightHandSpace
+                : HandMirroring.LeftHandSpace;
+            Vector3 dorsal = wrist.rotation * space.dorsal;
+            if (distal.sqrMagnitude < 1e-6f || Vector3.Cross(distal, dorsal).sqrMagnitude < 1e-8f)
+            {
+                return true;
+            }
+
+            Quaternion rotation = Quaternion.LookRotation(distal, dorsal);
+            dorsal = rotation * Vector3.up;
+            Vector3 centre = (wrist.position + middle) * 0.5f;
+            var half = new Vector3((index - pinky).magnitude * 0.5f + PalmSideMargin,
+                PalmHalfThickness, distal.magnitude * 0.5f);
+
+            bool Overlaps(float push) => Physics.CheckBox(centre + dorsal * push, half, rotation,
+                ItemMask, QueryTriggerInteraction.Ignore);
+
+            if (!Overlaps(0f))
+            {
+                return true;
+            }
+
+            float inside = 0f;
+            float free = -1f;
+            for (int step = 1; step <= PalmPushSteps; step++)
+            {
+                float push = PalmMaxPush * step / PalmPushSteps;
+                if (!Overlaps(push))
+                {
+                    free = push;
+                    break;
+                }
+
+                inside = push;
+            }
+
+            if (free < 0f)
+            {
+                return false;
+            }
+
+            for (int step = 0; step < PalmBisectionSteps; step++)
+            {
+                float middlePush = (inside + free) * 0.5f;
+                if (Overlaps(middlePush))
+                {
+                    inside = middlePush;
+                }
+                else
+                {
+                    free = middlePush;
+                }
+            }
+
+            wrist.position += dorsal * free;
+            return true;
+        }
+
+        private bool TryJointPosition(HandJointId id, out Vector3 position)
+        {
+            position = Vector3.zero;
+            int slot = FingersMetadata.HandJointIdToIndex(id);
             if (slot < 0 || slot >= _maps.Length || _maps[slot] == null ||
                 _maps[slot].transform == null)
             {
                 return false;
             }
 
-            Vector3 centre = (wrist.position + _maps[slot].transform.position) * 0.5f;
-            return Physics.CheckSphere(centre, PalmProbeRadius, ItemMask,
-                QueryTriggerInteraction.Ignore);
+            position = _maps[slot].transform.position;
+            return true;
         }
 
         /// <summary>

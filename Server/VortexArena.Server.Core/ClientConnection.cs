@@ -155,7 +155,7 @@ public sealed class ClientConnection
                 if (msg == null) return;
                 // ⚠️ set_team is ADMIN-ONLY (§5.2) — a player may not pick a team freely: team
                 // composition is the operator's, and self-assignment would silently break BalanceTeams
-                // and the operator's plan. The player's only path is claim_base_team (lobby wait).
+                // and the operator's plan. The player's only path is claim_base_team (lobby wait / finished).
                 if (!IsAdmin)
                 {
                     Console.WriteLine($"[ClientConnection] set_team yalnız admin içindir ({State.Name}) — yok sayıldı.");

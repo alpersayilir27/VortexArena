@@ -68,7 +68,8 @@ namespace VortexArena.Core.GripCapture
             background.name = "Arkaplan";
             UnityEngine.Object.Destroy(background.GetComponent<Collider>());
             background.transform.SetParent(_root, false);
-            background.transform.localPosition = new Vector3(0f, 0f, -0.004f);
+            // Behind the text = +Z (the viewer is on the −Z side, see Tick).
+            background.transform.localPosition = new Vector3(0f, 0f, 0.004f);
             background.transform.localScale = new Vector3(PanelWidth * 1.05f, PanelHeight * 1.05f, 1f);
             GripGhostMaterial.Apply(background, BackgroundColour);
 
@@ -117,8 +118,9 @@ namespace VortexArena.Core.GripCapture
                 Vector3 toHead = Flat(head.position - _root.position);
                 if (toHead.sqrMagnitude > 1e-6f)
                 {
-                    // Forward points AT the head: TMP text is readable from its +Z side.
-                    _root.rotation = Quaternion.LookRotation(toHead, Vector3.up);
+                    // Forward points AWAY from the head: TMP text (and the Quad) face −Z, so a
+                    // forward aimed at the viewer shows the text mirrored.
+                    _root.rotation = Quaternion.LookRotation(-toHead, Vector3.up);
                 }
             }
 
