@@ -109,6 +109,10 @@ namespace VortexArena.App.Admin
         /// the cause is stale headset space data.</summary>
         public float floorOffset;
 
+        /// <summary>Why the headset is uncalibrated (<c>ArenaProtocol.CALIB_STEP_*</c>, "" = no
+        /// detail; §10.6 "Kalibrasyon adımı"). Read only while <see cref="calibrated"/> is false.</summary>
+        public string calibStep = "";
+
         /// <summary>Which arena floor the player is on; <c>0</c> = ground. Multi-floor arenas only —
         /// a single-floor arena keeps every row at 0.</summary>
         public int floor;
@@ -666,6 +670,7 @@ namespace VortexArena.App.Admin
                 view.calibrated = view.IsPlayer ? info.calibrated : true;
                 view.calibrationSource = info.calibrationSource ?? "";
                 view.floorOffset = view.IsPlayer ? info.floorOffset : 0f;
+                view.calibStep = view.IsPlayer ? info.calibStep ?? "" : "";
                 view.floor = view.IsPlayer ? info.floor : 0;
                 view.bodyScale = view.IsPlayer ? info.bodyScale : 0f;
                 view.scaleError = view.IsPlayer ? info.scaleError ?? "" : "";

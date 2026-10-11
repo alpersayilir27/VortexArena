@@ -169,7 +169,7 @@ namespace VortexArena.App.Editor
             StretchTop(tele, RowPadX, RowTeleY, RowPadX, RowTeleH);
             RowTeleRow(tele, out TextMeshProUGUI kdCaption, out TextMeshProUGUI kdValue,
                 out UiImage battery, out TextMeshProUGUI batteryValue, out UiSegmentBar ctrlLeft,
-                out UiSegmentBar ctrlRight, out UiImage bodyState);
+                out UiSegmentBar ctrlRight, out UiImage bodyState, out TextMeshProUGUI calib);
 
             RectTransform act = Node(body, "Act");
             StretchTop(act, RowPadX, RowActY, RowPadX, RowActH);
@@ -183,7 +183,7 @@ namespace VortexArena.App.Editor
 
             row.EditorWire(surface, select, dim, plate, number, top, playerName, id, chip,
                 hpValue, bar, tele, kdCaption, kdValue, battery, batteryValue, ctrlLeft,
-                ctrlRight, bodyState, pov, measure, team, reset, kick);
+                ctrlRight, bodyState, calib, pov, measure, team, reset, kick);
 
             SaveAndUnload(root, RowPrefabName);
         }
@@ -261,11 +261,13 @@ namespace VortexArena.App.Editor
             bar.SetFillColors(Girdap.GoA, Girdap.GoB);
         }
 
-        /// <summary>K/D · battery · controller ticks · body icon. Every part is middle-left anchored;
-        /// <c>Bind</c> walks them left to right because an unknown token shrinks.</summary>
+        /// <summary>K/D · battery · controller ticks · body icon · calibration step. Every part is
+        /// middle-left anchored; <c>Bind</c> walks them left to right because an unknown token shrinks.
+        /// </summary>
         private static void RowTeleRow(RectTransform parent, out TextMeshProUGUI kdCaption,
             out TextMeshProUGUI kdValue, out UiImage battery, out TextMeshProUGUI batteryValue,
-            out UiSegmentBar ctrlLeft, out UiSegmentBar ctrlRight, out UiImage bodyState)
+            out UiSegmentBar ctrlLeft, out UiSegmentBar ctrlRight, out UiImage bodyState,
+            out TextMeshProUGUI calib)
         {
             kdCaption = RowTeleText(parent, "KdLabel", "K/D", Girdap.Faint);
             kdValue = RowTeleText(parent, "KdValue", "0/0", Girdap.Muted);
@@ -279,6 +281,13 @@ namespace VortexArena.App.Editor
 
             bodyState = Icon(parent, "BodyIcon", "Body", RowTeleIcon, Girdap.Muted);
             PlaceMiddleLeft(bodyState.rectTransform, 0f, RowTeleIcon, RowTeleIcon);
+
+            // Smaller than the other tokens: a status word, not a reading.
+            calib = Text(parent, "CalibValue", "KALİBRELİ", GirdapFont.SairaSemiBold, 13f,
+                Girdap.Good, TextAlignmentOptions.MidlineLeft);
+            // ⚠️ Taller than the row, same trap as RowNameH: Ellipsis also truncates VERTICALLY.
+            PlaceMiddleLeft(calib.rectTransform, 0f, 80f, RowNameH);
+            calib.overflowMode = TextOverflowModes.Ellipsis;
         }
 
         private static TextMeshProUGUI RowTeleText(RectTransform parent, string name, string text,

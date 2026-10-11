@@ -180,6 +180,8 @@ public sealed class PlayerRegistry : IDisposable
             // Diagnostic fields belong to that alignment and go with it: the offset described that
             // alignment and the error that session — carrying them over shows a solved problem.
             state.FloorOffset = 0f;
+            // The step is headset state too; the headset re-reports a non-empty one on connect.
+            state.CalibStep = "";
             // §10.6 "Kat modeli": the server cannot know which floor a reconnecting headset stands on (the
             // app may have restarted). The client re-reports its local floor from its own roster row.
             state.Floor = 0;
@@ -379,8 +381,11 @@ public sealed class PlayerRegistry : IDisposable
     /// <summary>Writes calibration state (§10.6). Changed → lobby_state broadcast; there is NO
     /// separate calibration message, the state travels with the roster (§5.3).
     /// <para>Admins do not calibrate: <c>role != "player"</c> is rejected silently, otherwise the
-    /// admin would count itself as "uncalibrated" in its own UI.</para></summary>
-    public bool SetCalibration(int playerId, bool calibrated, string? source, float floorOffset = 0f)
+    /// admin would count itself as "uncalibrated" in its own UI.</para>
+    /// <para><paramref name="step"/> (null = untouched) rides the same write so the operator's clear
+    /// costs one broadcast, not two.</para></summary>
+    public bool SetCalibration(int playerId, bool calibrated, string? source, float floorOffset = 0f,
+        string? step = null)
     {
         if (!TryGetByPlayerId(playerId, out var state)) return false;
         if (state.Role != "player") return false;
@@ -390,6 +395,7 @@ public sealed class PlayerRegistry : IDisposable
         var nextOffset = calibrated ? floorOffset : 0f;
         lock (_gate)
         {
+            var nextStep = step ?? state.CalibStep;
             // No broadcast if nothing changed. On a map change every headset restores from its saved
             // anchor and re-reports the same value; without this guard that is N players × N
             // receivers = N² useless lobby_state messages (256 at 16 players).
@@ -400,10 +406,12 @@ public sealed class PlayerRegistry : IDisposable
             // only real delta, and leaving it out would keep a resolved warning stuck on the row.
             var errorCleared = calibrated && state.CalibrationError.Length > 0;
             if (state.Calibrated == calibrated && state.CalibrationSource == nextSource
-                && Math.Abs(state.FloorOffset - nextOffset) < 0.0001f && !errorCleared) return false;
+                && Math.Abs(state.FloorOffset - nextOffset) < 0.0001f && !errorCleared
+                && state.CalibStep == nextStep) return false;
             state.Calibrated = calibrated;
             state.CalibrationSource = nextSource;
             state.FloorOffset = nextOffset;
+            state.CalibStep = nextStep;
             // The reason belongs to the alignment: a successful report invalidates it, and a dropped
             // alignment does not carry it either.
             state.CalibrationError = "";
@@ -470,6 +478,23 @@ public sealed class PlayerRegistry : IDisposable
         {
             if (state.Floor == floor) return false;
             state.Floor = floor;
+        }
+        Changed?.Invoke(state, PlayerChangeKind.Updated);
+        return true;
+    }
+
+    /// <summary>Writes the headset's calibration step (§10.6 "Kalibrasyon adımı"); the value is checked by
+    /// the caller. No broadcast if unchanged — the operator's clear writes the step first and the
+    /// headset's own report of the same step follows.</summary>
+    public bool SetCalibrationStep(int playerId, string step)
+    {
+        if (!TryGetByPlayerId(playerId, out var state)) return false;
+        if (state.Role != "player") return false;
+
+        lock (_gate)
+        {
+            if (state.CalibStep == step) return false;
+            state.CalibStep = step;
         }
         Changed?.Invoke(state, PlayerChangeKind.Updated);
         return true;

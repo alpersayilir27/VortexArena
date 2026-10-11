@@ -180,6 +180,8 @@ namespace VortexArena.App.Admin
         [SerializeField] private UiSegmentBar ctrlLeftDot;
         [SerializeField] private UiSegmentBar ctrlRightDot;
         [SerializeField] private Image bodyIcon;
+        [Tooltip("Kalibrasyon adımı: KALİBRELİ · 1. NOKTA · KAPALI · SİLİNDİ · YOK (§10.6).")]
+        [SerializeField] private TextMeshProUGUI calibText;
 
         [Header("Eylem düğmeleri")]
         [SerializeField] private UiButtonStyle povButton;
@@ -519,7 +521,46 @@ namespace VortexArena.App.Admin
                 bodyIcon.color = BodyColor(view.body);
             }
 
+            if (calibText != null)
+            {
+                calibText.text = CalibLabel(view, out Color calibColor);
+                calibText.color = view.IsConnected ? calibColor : Girdap.Faint;
+            }
+
             LayoutTelemetry(batteryKnown);
+        }
+
+        /// <summary>Calibration step token (§10.6 "Kalibrasyon adımı"). The step is read only while
+        /// uncalibrated; "" means the headset reported no detail.</summary>
+        private static string CalibLabel(AdminPlayerView view, out Color color)
+        {
+            if (!view.IsPlayer)
+            {
+                color = Girdap.Faint;
+                return "";
+            }
+
+            if (view.calibrated)
+            {
+                color = Girdap.Good;
+                return "KALİBRELİ";
+            }
+
+            switch (view.calibStep)
+            {
+                case ArenaProtocol.CALIB_STEP_POINT_A:
+                    color = Girdap.Acc;
+                    return "1. NOKTA ALINDI";
+                case ArenaProtocol.CALIB_STEP_CLOSED:
+                    color = Girdap.Warn;
+                    return "KALİBRE KAPALI";
+                case ArenaProtocol.CALIB_STEP_ERASED:
+                    color = Girdap.Bad;
+                    return "KALİBRE SİLİNDİ";
+                default:
+                    color = Girdap.Warn;
+                    return "KALİBRE YOK";
+            }
         }
 
         private void LayoutTelemetry(bool batteryKnown)
@@ -573,6 +614,14 @@ namespace VortexArena.App.Admin
             if (bodyIcon != null)
             {
                 SetX(bodyIcon.rectTransform, x, TeleIconSize);
+                x += TeleIconSize + TeleGap;
+            }
+
+            if (calibText != null)
+            {
+                // Takes what the row leaves; TMP ellipsis covers a narrow column.
+                float w = Mathf.Ceil(calibText.GetPreferredValues(calibText.text).x);
+                SetX(calibText.rectTransform, x, Mathf.Min(w, Mathf.Max(0f, teleRow.rect.width - x)));
             }
         }
 
@@ -1023,8 +1072,8 @@ namespace VortexArena.App.Admin
             TextMeshProUGUI id, UiChip chip, TextMeshProUGUI hpValue, UiSegmentBar bar,
             RectTransform tele, TextMeshProUGUI kdCaption, TextMeshProUGUI kdValue,
             Image battery, TextMeshProUGUI batteryValue, UiSegmentBar ctrlLeft,
-            UiSegmentBar ctrlRight, Image body, UiButtonStyle pov, UiButtonStyle measure,
-            UiButtonStyle team, UiButtonStyle reset, UiButtonStyle kick)
+            UiSegmentBar ctrlRight, Image body, TextMeshProUGUI calib, UiButtonStyle pov,
+            UiButtonStyle measure, UiButtonStyle team, UiButtonStyle reset, UiButtonStyle kick)
         {
             cardShape = card;
             selectButton = select;
@@ -1045,6 +1094,7 @@ namespace VortexArena.App.Admin
             ctrlLeftDot = ctrlLeft;
             ctrlRightDot = ctrlRight;
             bodyIcon = body;
+            calibText = calib;
             povButton = pov;
             measureButton = measure;
             teamButton = team;

@@ -113,6 +113,17 @@ namespace VortexArena.Protocol
         public float[] hitPos;
     }
 
+    /// The headset reporting its OWN calibration step (§10.6 "Kalibrasyon adımı"). Players only; the
+    /// server mirrors it into <see cref="PlayerInfo.calibStep"/>.
+    [Serializable]
+    public class SetCalibrationStepMsg
+    {
+        public string type = MessageTypes.SetCalibrationStep;
+
+        /// <summary><c>ArenaProtocol.CALIB_STEP_*</c> or "" (no detail).</summary>
+        public string step = "";
+    }
+
     /// A dead player's revive request (§10.4): sent once respawn.delaySeconds elapsed AND the player is
     /// in their own base; the server verifies. Carries no fields.
     [Serializable]
@@ -528,6 +539,10 @@ namespace VortexArena.Protocol
         /// or clean. Rows past <see cref="ArenaProtocol.CALIB_FLOOR_WARN_METERS"/> are flagged in the UI;
         /// <c>clear_calibration</c> resets it.</summary>
         public float floorOffset;
+
+        /// <summary>Why the player is uncalibrated (<c>ArenaProtocol.CALIB_STEP_*</c>, "" = no detail;
+        /// §10.6 "Kalibrasyon adımı"). Meaningful only while <see cref="calibrated"/> is false.</summary>
+        public string calibStep = "";
 
         /// <summary>Floor index in a multi-floor arena (§5.1 <c>set_floor</c>, §10.6 "Kat modeli");
         /// <c>0</c> = ground, always 0 for admins. Written by the client, only mirrored by the server, so

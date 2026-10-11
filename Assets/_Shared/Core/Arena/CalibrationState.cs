@@ -51,6 +51,13 @@ namespace VortexArena.Core.Arena
         /// persisted, which the operator must see (§10.6).</summary>
         private static string _anchorSaveError = "";
 
+        /// <summary>Mode of the last clear (<c>CALIB_STEP_CLOSED</c>/<c>_ERASED</c>, "" = none since
+        /// the last alignment) — the uncalibrated part of <see cref="CurrentStep"/>.</summary>
+        private static string _clearStep = "";
+
+        /// <summary>Last step sent on this connection; the server resets it to "" on hello.</summary>
+        private string _sentStep = "";
+
         /// <summary>Alignment state as the server knows it; uncalibrated players cannot fire, take
         /// damage or revive (§10.6 — all three server-authoritative, this is only the mirror). True
         /// when never connected, so server-less tests keep working.</summary>
@@ -91,6 +98,14 @@ namespace VortexArena.Core.Arena
 
         // Single instance so no DTO is allocated per report.
         private readonly SetCalibrationMsg _reportMsg = new SetCalibrationMsg();
+        private readonly SetCalibrationStepMsg _stepMsg = new SetCalibrationStepMsg();
+
+        /// <summary>This headset's calibration step (§10.6 "Kalibrasyon adımı"): B pending wins, then
+        /// a standing alignment (""), then the last clear's mode — a cancelled A/B attempt falls back
+        /// to it.</summary>
+        private static string CurrentStep =>
+            ArenaCalibrator.AwaitingPointB ? ArenaProtocol.CALIB_STEP_POINT_A
+            : _localCalibrated ? "" : _clearStep;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
@@ -118,6 +133,7 @@ namespace VortexArena.Core.Arena
             // Persistent singleton: subscribe in Awake/OnDestroy rather than OnEnable/OnDisable so
             // events are not missed if the object is deactivated.
             ArenaCalibrator.Calibrated += HandleLocalCalibrated;
+            ArenaCalibrator.AwaitingPointBChanged += HandleAwaitingPointB;
             NetEvents.OnConnected += HandleConnected;
             NetEvents.OnLobbyState += HandleLobbyState;
             NetEvents.OnClearCalibration += HandleClearCalibration;
@@ -132,6 +148,7 @@ namespace VortexArena.Core.Arena
             }
 
             ArenaCalibrator.Calibrated -= HandleLocalCalibrated;
+            ArenaCalibrator.AwaitingPointBChanged -= HandleAwaitingPointB;
             NetEvents.OnConnected -= HandleConnected;
             NetEvents.OnLobbyState -= HandleLobbyState;
             NetEvents.OnClearCalibration -= HandleClearCalibration;
@@ -147,7 +164,35 @@ namespace VortexArena.Core.Arena
         {
             _localCalibrated = true;
             _source = source ?? "";
+            _clearStep = "";
             Report(true, _source);
+            ReportStep();
+        }
+
+        private void HandleAwaitingPointB(bool awaiting)
+        {
+            ReportStep();
+        }
+
+        /// <summary>Sends <see cref="CurrentStep"/> when it differs from the last one sent on this
+        /// connection (§10.6 "Kalibrasyon adımı").</summary>
+        private void ReportStep()
+        {
+            ArenaClient client = ArenaClient.Instance;
+            if (client == null || !client.IsConnected)
+            {
+                return; // server-less session: nobody to report to
+            }
+
+            string step = CurrentStep;
+            if (step == _sentStep)
+            {
+                return;
+            }
+
+            _sentStep = step;
+            _stepMsg.step = step;
+            client.Send(_stepMsg);
         }
 
         private void Report(bool calibrated, string source)
@@ -246,6 +291,10 @@ namespace VortexArena.Core.Arena
             // re-announced — otherwise the row looks clean while nothing is persisted.
             SendError(_anchorSaveError);
 
+            // The server resets the step on hello as well; a non-empty one is re-announced.
+            _sentStep = "";
+            ReportStep();
+
             Raise();
         }
 
@@ -284,8 +333,11 @@ namespace VortexArena.Core.Arena
             _source = "";
             // No re-send: the alignment the reason belonged to is gone in both modes.
             _anchorSaveError = "";
+            // Set BEFORE the calibrator runs: dropping a pending B raises AwaitingPointBChanged.
+            _clearStep = keepSaved ? ArenaProtocol.CALIB_STEP_CLOSED : ArenaProtocol.CALIB_STEP_ERASED;
 
             ArenaCalibrator.ApplyOperatorClear(keepSaved);
+            ReportStep();
         }
 
         /// <summary>The player's own clear gesture (§10.6): the operator's soft/hard clear, done on

@@ -188,6 +188,18 @@ public sealed class ClientConnection
                 if (msg != null) _lobby.HandleSetFloor(this, msg);
                 return;
             }
+            case MessageTypes.SetCalibrationStep:
+            {
+                if (State == null) return;
+                if (State.Role != "player")
+                {
+                    Console.WriteLine($"[ClientConnection] set_calibration_step yalnız player içindir ({State.Name}) — yok sayıldı.");
+                    return;
+                }
+                var msg = JsonUtil.Deserialize<SetCalibrationStepMsg>(json);
+                if (msg != null) _lobby.HandleSetCalibrationStep(this, msg);
+                return;
+            }
             case MessageTypes.SetBodyScale:
             {
                 if (State == null) return;

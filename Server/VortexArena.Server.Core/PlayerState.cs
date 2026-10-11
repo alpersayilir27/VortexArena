@@ -138,6 +138,11 @@ public sealed class PlayerState
     /// offset belonged to that alignment.</remarks>
     public float FloorOffset { get; set; }
 
+    /// <summary>Why the headset is uncalibrated (<see cref="ArenaProtocol.CALIB_STEP_POINT_A"/> and
+    /// friends, "" = no detail; §10.6 "Kalibrasyon adımı"). Mirrored from the headset; reset on hello.
+    /// </summary>
+    public string CalibStep { get; set; } = "";
+
     /// <summary>Floor index the CLIENT reported in a multi-floor arena (§10.6 "Kat modeli"); 0 = ground.
     /// </summary>
     /// <remarks>A ledger like <see cref="Calibrated"/>: the server has no geometry and validates nothing
@@ -345,6 +350,8 @@ public sealed class PlayerState
         calibrationSource = CalibrationSource,
         // §10.6 — floor estimate deviation; the UI marks rows past the threshold with ⚠.
         floorOffset = FloorOffset,
+        // §10.6 "Kalibrasyon adımı" — the uncalibrated row's detail on the admin card.
+        calibStep = CalibStep,
         // §10.6 "Kat modeli" — the client's own floor report; readers draw cross-floor players as ghosts.
         floor = Floor,
         // §10.8 — 0 = not measured; the reader applies 1.

@@ -415,6 +415,24 @@ public sealed class LobbyService
         _registry.SetFloor(state.PlayerId, msg.floor);
     }
 
+    /// <summary>set_calibration_step: the headset reports its OWN calibration step (§5.1, §10.6
+    /// "Kalibrasyon adımı"). A mirror like set_floor: an unknown value is logged and ignored, an
+    /// unchanged one broadcasts nothing.</summary>
+    public void HandleSetCalibrationStep(ClientConnection connection, SetCalibrationStepMsg msg)
+    {
+        var state = connection.State;
+        if (state == null) return;
+
+        var step = msg.step ?? "";
+        if (!ArenaProtocol.IsCalibStep(step))
+        {
+            Console.WriteLine($"[Lobby] set_calibration_step reddedildi ({state.Name}): bilinmeyen adım '{step}'.");
+            return;
+        }
+
+        _registry.SetCalibrationStep(state.PlayerId, step);
+    }
+
     /// <summary>
     /// clear_calibration: an admin resets a player's calibration (playerId 0 = EVERYONE) (§5.2).
     /// The admin can only RESET — the "calibrated" mark is set by the headset alone (§10.6), because
@@ -457,6 +475,9 @@ public sealed class LobbyService
         var kindOne = msg.keepSaved
             ? "hizalaması geçersiz kılındı (cihaz kaydı duruyor)"
             : "kalibrasyonu sıfırlandı, cihaz kaydı da silindi";
+        // §10.6 "Kalibrasyon adımı": written now, not on the headset's report — the target may be
+        // offline and the operator must see the result of the press at once.
+        var step = msg.keepSaved ? ArenaProtocol.CALIB_STEP_CLOSED : ArenaProtocol.CALIB_STEP_ERASED;
 
         if (msg.playerId == 0)
         {
@@ -466,7 +487,7 @@ public sealed class LobbyService
                 if (state.Role != "player") continue;
                 // Uncalibrated players are NOT skipped: a player whose flag is already `false` may be
                 // mid-sequence, and the bulk reset must reach them too.
-                _registry.SetCalibration(state.PlayerId, false, null);
+                _registry.SetCalibration(state.PlayerId, false, null, step: step);
                 if (state.Socket == null) continue;
                 await SendSafeAsync(state.Socket, payload, state.Name);
                 sent++;
@@ -489,7 +510,7 @@ public sealed class LobbyService
             return;
         }
 
-        _registry.SetCalibration(target.PlayerId, false, null);
+        _registry.SetCalibration(target.PlayerId, false, null, step: step);
         if (target.Socket != null)
         {
             await SendSafeAsync(target.Socket, payload, target.Name);

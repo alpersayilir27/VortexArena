@@ -87,6 +87,22 @@ namespace VortexArena.Protocol
         /// <summary>Same, device anchor ERASED too (B held + A tap, §10.6).</summary>
         public const string CALIB_CLEAR_SOURCE_CONTROLLER_ERASE = "controller_erase";
 
+        // ---- Calibration step (§10.6 "Kalibrasyon adımı"): why an UNCALIBRATED headset is so; "" = no
+        // detail. Headset state, the server only mirrors it (and writes it on an operator clear). ----
+
+        /// <summary>Point A captured, B pending.</summary>
+        public const string CALIB_STEP_POINT_A = "point_a";
+
+        /// <summary>Alignment closed, device anchor KEPT (soft clear).</summary>
+        public const string CALIB_STEP_CLOSED = "closed";
+
+        /// <summary>Alignment closed AND device anchor erased (hard clear).</summary>
+        public const string CALIB_STEP_ERASED = "erased";
+
+        /// <summary>Is <paramref name="step"/> a value the server accepts ("" included).</summary>
+        public static bool IsCalibStep(string step) =>
+            step == "" || step == CALIB_STEP_POINT_A || step == CALIB_STEP_CLOSED || step == CALIB_STEP_ERASED;
+
         // ---- Floor model (§10.6 "Kat modeli") ----
 
         /// <summary>Highest floor index a player may report; §10.x kat modeli.

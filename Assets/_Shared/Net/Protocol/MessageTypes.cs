@@ -25,6 +25,8 @@ namespace VortexArena.Protocol
         public const string SetBodyScale = "set_body_scale"; // the headset reports its own body scale (§10.8)
         // The player reports its OWN floor in a multi-floor arena (§10.6 "Kat modeli"); players only.
         public const string SetFloor = "set_floor";
+        // The headset reports its OWN calibration step (§10.6 "Kalibrasyon adımı"); players only.
+        public const string SetCalibrationStep = "set_calibration_step";
         public const string VenueSurvey = "venue_survey"; // manual venue survey upload (§10.11); players only
         // A diagnostic line from the device's own log (§5.1); the server prints and files it, nothing else.
         public const string ClientLog = "client_log";

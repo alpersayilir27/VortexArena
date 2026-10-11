@@ -356,6 +356,11 @@ yükleyen **KALİBRE** yalnız İstatistik satırındadır.
 - [ ] **3.** Tutmadıysa **SIFIRLA**'ya **kısa bas**: oyuncunun o anki hizalaması anında geçersiz
       olur. ⚠️ **Onay sormaz, ilk basışta gider.** Satırdaki **KALİBRE** düğmesi **KALİBRE !**
       olur, yan kolondaki kartı kırmızı çerçeveye döner ve kolonun başlığında "N KALİBRESİZ" yazar.
+      Kartın alt bilgi satırının sonundaki küçük yazı gözlüğün **kalibrasyon adımını** söyler:
+      **KALİBRELİ** (tamam) · **1. NOKTA ALINDI** (oyuncu A'yı aldı, B'yi bekliyor) ·
+      **KALİBRE KAPALI** (kapatıldı, kayıt duruyor — KALİBRE geri yükler) · **KALİBRE SİLİNDİ**
+      (kayıt da silindi — oyuncu elle A/B almalı) · **KALİBRE YOK** (gözlük yeni açıldı, henüz
+      kalibre olmadı).
 - [ ] **4.** O andan itibaren oyuncu **ateş edemez, vurulamaz ve ölürse canlanmaz**;
       diğer oyuncuların ekranında **avatarı yanıp söner** (kimin sorunlu olduğu belli olsun).
       Kendi ekranında her şeyin önünde duran bir kart belirir: **"Lütfen kalibre alınız"** ve

@@ -42,6 +42,7 @@ Tümü paylaşılan `ArenaProtocol` statik sınıfında tanımlanır (`Assets/_S
 | `CALIB_FLOOR_WARN_METERS` | `0.5` | Kalibrasyonda bildirilen zemin sapmasının (`set_calibration.floorOffset`) mutlak değeri bunu aşarsa sunucu adminlere duyuru basar (§10.6). Bir kapı değil **teşhis eşiğidir**: kalibrasyon yine kabul edilir, operatör gözlükte alan verisi temizliğine yönlendirilir |
 | `CALIB_CLEAR_SOURCE_CONTROLLER` | `"controller"` | `set_calibration{calibrated:false}`'un `source`'u: oyuncu hizalamayı **kumandadan kapattı**, cihaz kaydı duruyor (§10.6 "Kumanda jestleri") |
 | `CALIB_CLEAR_SOURCE_CONTROLLER_ERASE` | `"controller_erase"` | Aynısı, cihaz kaydı da **silindi** |
+| `CALIB_STEP_POINT_A` / `CALIB_STEP_CLOSED` / `CALIB_STEP_ERASED` | `"point_a"` / `"closed"` / `"erased"` | Kalibresiz başlığın **adım ayrıntısı** (`set_calibration_step`, `PlayerInfo.calibStep` — §10.6 "Kalibrasyon adımı"): A alındı, B bekleniyor · hizalama kapalı, cihaz kaydı duruyor · hizalama kapalı, cihaz kaydı da silindi. `""` = ayrıntı yok |
 | `MAX_FLOOR_INDEX` | `7` | Bir oyuncunun bildirebileceği en yüksek kat indeksi (`set_floor`, §10.6 "Kat modeli"). Kat sayısı haritanın verisidir, sunucu onu bilmez; bu yüzden sabit bir **aralık kapısıdır**, harita başına doğrulama değil — bozuk bir istemci roster'a anlamsız bir kat yazamasın |
 | `FLOOR_CONFIRM_SECONDS` | `1` sn | İstemcinin gönderdiği `set_floor`'un kendi roster satırında yankılanmasını bekleme süresi (§10.6 "Kat modeli"). Dolarsa yerel kat geri alınır: tek doğruluk kaynağı roster'dır, yoksa istemci kendini reddedilmiş bir katta sanır ve herkes onu başka katta çizer |
 | `SURVEY_MIN_PLANE_POINTS` | `3` | Mekan ölçümünde (§10.11) zemin çokgeninin en az köşe sayısı. **İki uçta da aynı kapı**: istemci bu sayının altında göndermez, sunucu da gelirse reddeder — üç noktadan azı bir alan tanımlamaz |
@@ -297,6 +298,13 @@ değişmez, cevap mesajı yoktur. ⚠️ **Değişmeyen kat yayın üretmez:** a
 roster'a dokunmaz, yoksa harita geçişinde N oyuncu × N alıcı = N² gereksiz `lobby_state` olurdu
 (`set_calibration` ile aynı gerekçe). Sunucu kat **geometrisini bilmez** ve doğrulamaz (§10.3).
 
+**`set_calibration_step`** `{ "type":"set_calibration_step", "step":"point_a" }` (yalnız player) — başlık
+**kendi** kalibrasyon adımını bildirir (§10.6 "Kalibrasyon adımı"). `playerId` taşımaz, bağlantıdan
+çözülür. `step` ∈ `CALIB_STEP_*` ya da `""`; sunucu yalnız **aynalar**: geçerli değeri roster'a yazar
+(`PlayerInfo.calibStep`, §5.3), bilinmeyen değeri loglayıp **yok sayar**. Değişmeyen adım yayın
+üretmez (`set_floor` ile aynı gerekçe). Yeni mesaj tipidir ama `PROTOCOL_VERSION` **artmaz**: eski
+sunucu tanımadığı tipi yok sayar, kaybolan yalnız admin kartındaki ayrıntıdır.
+
 **`set_body_scale`** `{ "type":"set_body_scale", "scale":1.04, "error":"" }` (yalnız player) — başlık **kendi**
 gövde ölçeğini bildirir (§10.8). `playerId` taşımaz, bağlantıdan çözülür (`set_calibration` ile aynı
 sözleşme). Ölçümü istemci yapar, sunucu **yorumlamaz**: yalnız `[BODY_SCALE_MIN, BODY_SCALE_MAX]`
@@ -497,7 +505,7 @@ başlığının yeniden başlatılmasıdır.
     "battery":0.87, "ctrlL":1, "ctrlR":3, "body":1, "scene":"<Arena>",
     "kills":4, "deaths":2, "hp":72.0, "alive":true, "score":7,
     "inMatch":true, "calibrated":true, "calibrationSource":"anchor", "floorOffset":0.07,
-    "floor":1, "bodyScale":1.04, "scaleError":"", "calibrationError":"",
+    "calibStep":"", "floor":1, "bodyScale":1.04, "scaleError":"", "calibrationError":"",
     "obstacleCount":2, "obstacleSeconds":7.4,
     "outOfBoundsCount":0, "outOfBoundsSeconds":0.0 } ] }
 ```
@@ -562,6 +570,10 @@ görünür bir deltası yoktur — dinleyen istemci hiçbir şey olmadığını 
 `floorOffset` = son kalibrasyonda (elle ya da çapadan) bildirilen zemin sapması (metre, işaretli; §5.1).
 `0` = ölçüm yok ya da temiz. Mutlak değeri `CALIB_FLOOR_WARN_METERS`'i aşan satır arayüzde ⚠ ile
 gösterilir (§10.6). `clear_calibration` bu alanı sıfırlar.
+
+`calibStep` = kalibresiz başlığın **adım ayrıntısı** (`CALIB_STEP_*`, `""` = ayrıntı yok; §5.1
+`set_calibration_step`, kural §10.6 "Kalibrasyon adımı"). Yalnız `calibrated:false` iken anlamlıdır —
+kalibreli satırda okuyan onu yok sayar. Admin'de daima `""`; `hello` alanı `""`'e çeker.
 
 `floor` = oyuncunun **kat indeksi** (`0` = zemin kat; §5.1 `set_floor`, kural §10.6 "Kat modeli").
 Admin'de daima `0`. Kaydı istemci doldurur, sunucu yalnız defter tutar — bu yüzden **her okuyan için
@@ -2413,13 +2425,13 @@ hiçbir ara aşamada bırakılmaz; sekansa baştan başlar.
   elle A/B sekansıdır. Oturum kaydı da silinmek zorundadır: yoksa sonraki sahne onunla hizalanıp
   operatörün kararını sessizce geri alırdı.
 
-Bunu üç yerde birden **koşulsuz** tutmak zorunludur, çünkü *yarım kalmış kalibrasyon* telde
-görünmez — A alınmış ama B alınmamış bir başlık henüz `set_calibration{true}` göndermemiştir, yani
-roster'da `calibrated:false` yazar:
+Bunu üç yerde birden **koşulsuz** tutmak zorunludur, çünkü *yarım kalmış kalibrasyon* `calibrated`
+alanında görünmez — A alınmış ama B alınmamış bir başlık henüz `set_calibration{true}` göndermemiştir,
+yani roster'da `calibrated:false` yazar. Adım ayrıntısı (`calibStep`, aşağıda "Kalibrasyon adımı")
+onu operatöre gösterir ama **kapı değil bilgidir**: kendiliğinden bildirilir, bir komuta bağlanamaz:
 
-1. **Arayüz** komutu göndermeyi "satır kalibresiz görünüyor" diye atlamamalıdır — operatörün
-   gördüğü kırmızı satır iki farklı durumu birden gösterir (hiç başlamamış / yarıda kalmış) ve
-   komut ikisini de aynı yere götürmelidir.
+1. **Arayüz** komutu göndermeyi "satır kalibresiz görünüyor" diye atlamamalıdır — kalibresiz satır
+   hiç başlamamış da yarıda kalmış da olabilir ve komut ikisini de aynı yere götürmelidir.
 2. **Sunucu** "değer zaten `false`, değişen bir şey yok" diye erken dönmemelidir. Yalnız `lobby_state`
    yayını değişime bağlı kalır (§5.3 guard'ı: gereksiz roster yayınını önler); komutun **iletilmesi**
    ona bağlanamaz.
@@ -2468,6 +2480,27 @@ tetiklenir ve iki tuş da bırakılana kadar yeni jest kurulmaz):
   ucunu ikinci işarete yerleştirirken A'yı basılı tutuyor olabilir.
 - Sunucu kumanda kapatmalarında adminlere duyuru basar (§5.1); roster etkisi `clear_calibration`'la
   aynıdır (`calibrated:false`, `bodyScale` düşer).
+
+**Kalibrasyon adımı** (`PlayerInfo.calibStep`): admin kartı kalibresiz bir başlığın **neden**
+kalibresiz olduğunu gösterir. Adım başlığın durumudur; başlık değiştikçe `set_calibration_step` ile
+bildirir, sunucu aynalar:
+
+| Durum | `calibrated` | `calibStep` | Yazan |
+|---|---|---|---|
+| Tamam (A ve B alındı ya da kayıttan yüklendi) | `true` | yok sayılır | başlık (`set_calibration`) |
+| A alındı, B bekleniyor | `false` | `point_a` | başlık |
+| Kapalı, cihaz kaydı duruyor | `false` | `closed` | başlık (kumanda jesti / komutun uygulanışı) **ve** sunucu (`clear_calibration{keepSaved:true}` anında) |
+| Silindi, cihaz kaydı da gitti | `false` | `erased` | aynı, `keepSaved:false` |
+| Ayrıntı yok (uygulama açıldı, henüz bir şey olmadı) | `false` | `""` | `hello` sıfırlar |
+
+- Başlık adımı **sondaki duruma göre** hesaplar: B bekleniyorsa `point_a`; değilse kalibreliyse `""`;
+  değilse son kapatmanın kipi. Yarım sekans iptal olunca adım önceki kapatma kipine döner —
+  silinmiş bir kayıt, yarıda bırakılan bir deneme yüzünden "ayrıntı yok"a dönmez.
+- ⚠️ **Sunucu operatörün komutunda adımı kendisi yazar**, başlığın raporunu beklemez: hedef o an
+  bağlı olmayabilir ve operatör bastığı düğmenin sonucunu satırda hemen görmelidir. Ardından gelen
+  başlık raporu aynı değeri taşır ve yayın üretmez.
+- `hello` adımı `""`'e çeker (sunucu yeniden bağlanan başlığın durumunu bilemez); başlık bağlanınca
+  boş olmayan adımını yeniden bildirir. Uygulama yeniden başlarsa adım bellekle birlikte gider.
 
 ⚠️ **Silah kapısı ile tetik kapısı AYNI ŞEY DEĞİLDİR ve ikisi de gerekir.** Tetik kapısı tek
 başına bırakılsaydı oyuncunun elinde ateş etmeyen bir silah kalırdı ve bu, sorunu silahta
