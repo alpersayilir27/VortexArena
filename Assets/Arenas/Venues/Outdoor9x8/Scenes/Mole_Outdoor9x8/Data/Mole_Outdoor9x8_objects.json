@@ -17,6 +17,10 @@
     { "sceneId": 20, "kind": "mole_hole" },
     { "sceneId": 21, "kind": "mole_hole" },
     { "sceneId": 22, "kind": "mole_hole" },
-    { "sceneId": 23, "kind": "mole_hole" }
+    { "sceneId": 23, "kind": "mole_hole" },
+    { "sceneId": 24, "kind": "mole_hole" },
+    { "sceneId": 25, "kind": "mole_hole" },
+    { "sceneId": 26, "kind": "mole_hole" },
+    { "sceneId": 27, "kind": "mole_hole" }
   ]
 }
