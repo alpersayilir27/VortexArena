@@ -894,8 +894,11 @@ seçip hedeflere ateş edebilirler.
   seçilmediyse loadout'tan rastgele biri); silahı modun kendisi dağıtıyorsa tezgâh ve panosu
   gizlenir, silah yalnız grip'ten gelir ve bekleme maçla aynı oynanır
   (§7, "sahnelenen arena lobi profiliyle koşar").
-- **Takımı yalnız admin atar** (`set_team`), üstelik **her fazda** — koşan maçın ortasında da.
-  Oyuncunun kendi takımını seçmesi için protokol mesajı yoktur.
+- **Takımı admin atar** (`set_team`), üstelik **her fazda** — koşan maçın ortasında da. Oyuncunun
+  tek yolu **tabana girmektir**: maç kurulmadan (lobi beklemesi, sahnelenen arena dahil) bir takımın
+  `BaseZone`'una giren oyuncu o takımı ister (`claim_base_team`); sunucu fazı, kalibrasyonu ve takım
+  kipini doğrular. İstek girişte bir kez gider — admin sonradan değiştirirse ancak yeniden girişte
+  tekrar uygulanır.
 - **Takımsız modda takım diye bir şey yoktur ve sunucu bunu lobide de uygular:** seçili mod
   takımsızken lobiye katılan/dönen oyuncu takım `""` alır (kırmızı/mavi atanmaz) ve `set_team`
   **reddedilir** — hem koşan maç hem yalnızca seçili mod takımsızsa. Adminde de karşılığı vardır:
@@ -1805,7 +1808,10 @@ için poz/pozisyon/rotasyon dönüşümleri kimliktir. Çağrı yerleri yine ond
 yerde tanımlı kalsın. `WorldToArenaDirection` istisnadır: yönü **normalize eder** ve sıfır/NaN
 girdide `Vector3.forward` döner, çünkü protokol her olayda bir birim yön taşır),
 `BaseZone` (**taban bölgesi** — kırmızı/mavi şerit, canlanma
-kapısı; `Neutral` = herkese açık. **Algılama alanı çizilen şeridin kendisidir:** bölgenin
+kapısı; `Neutral` = herkese açık. **Maç kurulmadan girişte takımı ister:** lobi beklemesinde
+(`paused`/`lobby`) kırmızı/mavi bölgeye giren kalibreli oyuncu, takımı farklıysa
+`claim_base_team` yollar; karar sunucunundur (ArenaNet-Protokol `claim_base_team`). Giriş kenarında
+bir kez gider, admin rolünde hiç gitmez. **Algılama alanı çizilen şeridin kendisidir:** bölgenin
 altındaki Renderer'ların — kapalı olanlar dahil, çünkü `BaseZoneVisibility` şeridi gizleyebilir —
 kendi yerel kutularının köşeleri bölgenin YEREL uzayına taşınıp XZ dikdörtgeni ölçülür, elle
 girilen bir ölçü alanı YOKTUR ve eklenmez. Sayı alanı görselden sessizce sapardı: oyuncu şeridin

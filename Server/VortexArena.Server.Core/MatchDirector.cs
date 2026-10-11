@@ -404,6 +404,15 @@ public sealed class MatchDirector
         get { lock (_gate) return CanChangeSelectionLocked; }
     }
 
+    /// <summary>Lobby wait: no match set up (§10.1 <c>paused</c>/<c>lobby</c>) — the only state in which a
+    /// player may take a team from a base (§5.1 <c>claim_base_team</c>). Unlike
+    /// <see cref="CanChangeSelection"/>, <see cref="Phase.Finished"/> is CLOSED: the end-of-match table
+    /// still shows that match's teams.</summary>
+    public bool IsLobbyWait
+    {
+        get { lock (_gate) return _phase == Phase.Paused && _pauseReason == PauseReason.Lobby; }
+    }
+
     /// <summary>In-lock form — the lock contract forbids calling public properties under the lock
     /// (<see cref="_gate"/> is reentrant, but the single pattern is kept).</summary>
     private bool CanChangeSelectionLocked =>

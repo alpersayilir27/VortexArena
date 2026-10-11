@@ -27,6 +27,8 @@ namespace VortexArena.Protocol
         public const string SetFloor = "set_floor";
         // The headset reports its OWN calibration step (§10.6 "Kalibrasyon adımı"); players only.
         public const string SetCalibrationStep = "set_calibration_step";
+        // Entering a team's base before the match asks for that team (§5.1); players only, server decides.
+        public const string ClaimBaseTeam = "claim_base_team";
         public const string VenueSurvey = "venue_survey"; // manual venue survey upload (§10.11); players only
         // A diagnostic line from the device's own log (§5.1); the server prints and files it, nothing else.
         public const string ClientLog = "client_log";

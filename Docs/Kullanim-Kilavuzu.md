@@ -650,7 +650,7 @@ Yönetim ekranındaki dashboard'da elindeki kontroller:
 | Kontrol | Ne yapar | Ne zaman kullanılır |
 |---|---|---|
 | **Oyuncu listesi (roster)** | Bağlı oyuncular, takımları, bağlantı durumu (bağlı · "yeniden bağlanıyor" · "ayrıldı") | Maç öncesi herkesin bağlı olduğunu doğrulamak için |
-| **Kırmızı / Mavi** | Seçili oyuncunun takımını değiştirir | Takımları elle dengelemek için (boş bırakırsan sistem otomatik dengeler) |
+| **Kırmızı / Mavi** | Seçili oyuncunun takımını değiştirir | Takımları elle dengelemek için (boş bırakırsan sistem otomatik dengeler). **Maç başlamadan** oyuncular takımlarını kendileri de seçebilir: kırmızı ya da mavi taban şeridine yürüyen (kalibre olmuş) oyuncu o anda o takıma geçer ve listede hemen görünür. Senin atamandan sonra oyuncu ancak bir tabana **yeniden girerse** takımı yine değişir. Maç başladıktan sonra (geri sayım, oyun, duraklama, maç sonu) tabana girmek takımı değiştirmez |
 | **Çıkar (kick)** | Oyuncuyu atar — **o gözlükteki oyun kapanır** | Yanlışlıkla bağlanan/oyunda olmaması gereken cihaz |
 | **Mod seçimi** | Oyun türü: **Takım Ölüm Maçı** (kırmızı-mavi), **Herkes Tek** (takım yok, herkes herkese karşı) veya **Turnuva** (turlar hâlinde takım elemesi). Satıra bas, liste aşağı açılır, seçeceğine tıkla | Her maç öncesi — aşağıdaki "Üç oyun modu" kutusuna bak |
 | **Harita seçimi** | Hangi arenada oynanacağı — mod seçimiyle aynı açılır liste. Listenin **ilk satırı "Lobi"dir**: seçersen herkes lobiye döner | Her maç öncesi — sadece seçili modla uyumlu haritalar listelenir |

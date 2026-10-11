@@ -153,9 +153,9 @@ public sealed class ClientConnection
                 if (State == null) return;
                 var msg = JsonUtil.Deserialize<SetTeamMsg>(json);
                 if (msg == null) return;
-                // ⚠️ set_team is ADMIN-ONLY (§5.2) — a player may not even pick their own team: team
+                // ⚠️ set_team is ADMIN-ONLY (§5.2) — a player may not pick a team freely: team
                 // composition is the operator's, and self-assignment would silently break BalanceTeams
-                // and the operator's plan.
+                // and the operator's plan. The player's only path is claim_base_team (lobby wait).
                 if (!IsAdmin)
                 {
                     Console.WriteLine($"[ClientConnection] set_team yalnız admin içindir ({State.Name}) — yok sayıldı.");
@@ -198,6 +198,18 @@ public sealed class ClientConnection
                 }
                 var msg = JsonUtil.Deserialize<SetCalibrationStepMsg>(json);
                 if (msg != null) _lobby.HandleSetCalibrationStep(this, msg);
+                return;
+            }
+            case MessageTypes.ClaimBaseTeam:
+            {
+                if (State == null) return;
+                if (State.Role != "player")
+                {
+                    Console.WriteLine($"[ClientConnection] claim_base_team yalnız player içindir ({State.Name}) — yok sayıldı.");
+                    return;
+                }
+                var msg = JsonUtil.Deserialize<ClaimBaseTeamMsg>(json);
+                if (msg != null) _lobby.HandleClaimBaseTeam(this, msg);
                 return;
             }
             case MessageTypes.SetBodyScale:

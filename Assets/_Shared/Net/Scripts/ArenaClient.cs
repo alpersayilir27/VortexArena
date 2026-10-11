@@ -63,6 +63,9 @@ namespace VortexArena.Net
         /// <summary>Is the socket open — safe from any thread.</summary>
         public bool IsConnected => IsSocketOpen;
 
+        /// <summary>Did the last <see cref="Connect"/> ask for the admin role.</summary>
+        public bool IsAdminRole => _role == "admin";
+
         /// <summary>Which connect attempt we are on since the last success (0 once connected); shown by
         /// the connection error screen (ConnectionOverlay).</summary>
         public int ConnectAttempts => _connectAttempts;

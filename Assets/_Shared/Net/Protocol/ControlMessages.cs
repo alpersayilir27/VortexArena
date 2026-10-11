@@ -124,6 +124,17 @@ namespace VortexArena.Protocol
         public string step = "";
     }
 
+    /// The player entered a team's base with no match set up and asks for that team (§5.1). Players
+    /// only; the server checks phase, calibration and team mode, a rejection is silent.
+    [Serializable]
+    public class ClaimBaseTeamMsg
+    {
+        public string type = MessageTypes.ClaimBaseTeam;
+
+        /// <summary>"red" | "blue".</summary>
+        public string team = "";
+    }
+
     /// A dead player's revive request (§10.4): sent once respawn.delaySeconds elapsed AND the player is
     /// in their own base; the server verifies. Carries no fields.
     [Serializable]

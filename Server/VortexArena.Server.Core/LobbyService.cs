@@ -288,6 +288,47 @@ public sealed class LobbyService
             _ = BroadcastAdminStateAsync(Notice(connection, $"{target.Name} -> {msg.team}"));
     }
 
+    /// <summary>claim_base_team: a player entered a team's base and asks for that team (§5.1). Only in the
+    /// lobby wait, calibrated, in a teamed mode; anything else is logged and ignored with no reply.
+    /// <para>⚠️ Closed from <c>start_match</c> on (loading, countdown, live, paused, finished): a team
+    /// switch inside a match would silently move the revive base, friendly fire and the score.</para>
+    /// <para>The client sends on the zone EDGE, so an admin's later set_team holds until the player
+    /// walks into a base again.</para></summary>
+    public void HandleClaimBaseTeam(ClientConnection connection, ClaimBaseTeamMsg msg)
+    {
+        var state = connection.State;
+        if (state == null) return;
+
+        if (msg.team != "red" && msg.team != "blue")
+        {
+            Console.WriteLine($"[Lobby] claim_base_team geçersiz takım '{msg.team}' ({state.Name}) — yok sayıldı.");
+            return;
+        }
+        if (!_director.IsLobbyWait)
+        {
+            Console.WriteLine($"[Lobby] claim_base_team: {state.Name} — maç kurulu, takım değişmez.");
+            return;
+        }
+        // An uncalibrated headset's position is not the arena's: it may "enter" a base it is not in.
+        if (!state.Calibrated)
+        {
+            Console.WriteLine($"[Lobby] claim_base_team: {state.Name} kalibresiz — yok sayıldı.");
+            return;
+        }
+        if (IsTeamlessSetUpOrSelected())
+        {
+            Console.WriteLine($"[Lobby] claim_base_team: {state.Name} — takımsız mod, takım atanmaz.");
+            return;
+        }
+        if (state.Team == msg.team) return;
+
+        _registry.SetTeam(state.PlayerId, msg.team);
+        var label = msg.team == "red" ? "KIRMIZI" : "MAVİ";
+        Console.WriteLine($"[Lobby] claim_base_team: {state.Name} tabana girdi → {msg.team}.");
+        // Not wrapped in Notice(): the actor is the player, not an admin.
+        _ = BroadcastAdminStateAsync($"{state.Name} tabana girdi → {label}");
+    }
+
     /// <summary>Is the lobby teamless right now — either the SET UP match (§10.5) or the SELECTED mode
     /// (§5.3 <c>selection_state.teamMode</c>)? Gates hello team assignment (§2) and <c>set_team</c>
     /// (§5.2).</summary>
