@@ -521,7 +521,8 @@ hâlde sayaç yalnız başka bir değişiklik olduğunda ilerler).
 `left` kayıtlar silinir.
 
 `number` = oyuncunun **1..99 forma numarası** (§2); `0` = atanmamış, admin'de daima `0`. **Ad benzersiz
-değildir, ayırt edici alan budur** — arayüzlerde `"7 · ertu"` biçiminde gösterilir.
+değildir, ayırt edici alan budur** — arayüzlerde `"7 · ertu"` biçiminde gösterilir. Tek istisna
+kafanın üstündeki ad plakasıdır (oyun içi ve admin gözlemci): orada **yalnız ad** yazar, numara yazmaz.
 `kills`/`deaths`/`hp`/`alive`/`score` **sunucu-otoriter** maç sayaçlarıdır (§10.2) ve admin gözlemci
 arayüzünün tek doğruluk kaynağıdır: yalnız `kill_event`/`health_update` sayılsa admin yeniden
 bağlandığında tablo sıfırlanırdı. Maç dışında (`paused`/`lobby`) `hp=PLAYER_MAX_HP`, `alive=true`, sayaçlar 0.

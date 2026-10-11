@@ -1054,8 +1054,8 @@ yürüdüğü yer aynı kalır, değişen yalnız gözlükte gördüğü kattır
   bölgesine hiç ulaşamaz ve canlanamazdı.
 - **Başka kattaki rakip soluk, düz bir siluet** olarak görünür: takım renginde ama **yüzde 20
   saydamlıkta**, kenarı parlamayan bir figür — nerede olduğu anlaşılır ama **o siluet vurulamaz.**
-  Oyuncunun gerçek gövdesi kendi katındadır ve orada vurulur; adının yanında "(ÜST KAT)" ya da
-  "(ALT KAT)" yazar. Ölü oyuncunun hayaleti buna benzemez (kenarı parlar) — siluet **canlı** bir
+  Oyuncunun gerçek gövdesi kendi katındadır ve orada vurulur; ad plakasında adın altında "ÜST KAT"
+  ya da "ALT KAT" yazar. Ölü oyuncunun hayaleti buna benzemez (kenarı parlar) — siluet **canlı** bir
   rakiptir. Oyuncuya söylenecek cümle: **"Soluk görünen rakibe ateş etme, o başka katta."**
 - Yönetim ekranındaki oyuncu listesinde, üst kattaki oyuncunun satırında **"1. kat"** gibi bir not
   çıkar (zemin katta bir şey yazmaz; zemin 0, bir üstü 1. kattır) ve kuş bakışında halkası o katın zemininde durur.

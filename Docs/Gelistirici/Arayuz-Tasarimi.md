@@ -82,7 +82,9 @@ bir HTML; tarayıcıda çift tıkla açılır). Her ölçünün kaynağı orası
 kutusundadır (`Assets/Modes/<Mod>/UI/<Mod>Hud.prefab`) ve içleri bilerek boştur: taşıdıkları şey
 yukarıdaki iç içe prefab örnekleridir — kendi şeridini builder'dan üreten mod bunun dışındadır
 ("Aşçı (Burger) — lokanta teması"). Cephane göstergesi silahın kendi üstündedir
-(`Assets/_Shared/Arsenal/Prefabs/AmmoCanvas.prefab`). Bu grupta alan bağları, `onClick` boşluğu ve
+(`Assets/_Shared/Arsenal/Prefabs/AmmoCanvas.prefab`); oyuncunun kafasının üstündeki ad plakası da
+avatarın kendi prefabındadır (`Assets/_Shared/App/Prefabs/RemoteAvatar.prefab` → `NameLabel`: Girdap
+`UiShape` plakası + metin, boyutu koddan). Bu grupta alan bağları, `onClick` boşluğu ve
 "metin yer tutucudur" kuralları geçerlidir → `Yapma-Listesi.md` "Sahne ve prefab".
 
 > **Neden `Resources/` altında?** Prefablar **sahneye KONMAZ** — çalışırken `Resources.Load` ile

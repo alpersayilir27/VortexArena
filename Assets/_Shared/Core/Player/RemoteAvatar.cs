@@ -4,6 +4,7 @@ using UnityEngine;
 using UnityEngine.Rendering;
 using VortexArena.Core.Arena;
 using VortexArena.Core.Combat;
+using VortexArena.Core.UI;
 using VortexArena.Net;
 
 namespace VortexArena.Core.Player
@@ -15,7 +16,7 @@ namespace VortexArena.Core.Player
     /// <para>⚠️ <b>The name label is drawn only for TEAMMATES</b> — never for an opponent, and for
     /// nobody in teamless modes (<see cref="ShouldShowNameLabel"/>).</para>
     /// <para>A dead player becomes a <b>ghost body</b> (translucent, coloured by their OWN team), gets
-    /// " (ölü)" on the label and loses its hit boxes. The same look marks an uncalibrated player, where
+    /// an "ÖLÜ" tag under the name and loses its hit boxes. The same look marks an uncalibrated player, where
     /// it pulses orange — uncalibrated OVERRIDES dead.</para>
     /// <para>A player on ANOTHER floor is drawn twice: the real body on its own floor, normal materials
     /// and hittable, PLUS a ghost <b>floor silhouette</b> projected onto the viewer's floor — the two
@@ -39,7 +40,14 @@ namespace VortexArena.Core.Player
         [SerializeField] private Transform body;
         [SerializeField] private Transform handL;
         [SerializeField] private Transform handR;
+        [Tooltip("Ad plakasının yazısı (dünya uzayı Canvas'ının TextMeshProUGUI çocuğu).")]
         [SerializeField] private TMP_Text nameLabel;
+        [Tooltip("Ad plakasının kökü: kafanın üstüne konan ve kameraya dönen dünya uzayı Canvas'ı. " +
+                 "Boşsa yazının kendisi taşınır.")]
+        [SerializeField] private Transform nameLabelRoot;
+        [Tooltip("Yazının arkasındaki yarı saydam Girdap plakası (pahlı, takım renkli kenar). " +
+                 "Boşsa yazı plakasız çizilir.")]
+        [SerializeField] private UiShape namePlate;
         [SerializeField] private Renderer[] teamRenderers;
 
         [Tooltip("Karakter mesh'i — canlı+kalibreli oyuncuda buna HİÇ dokunulmaz. Takım rengi " +
@@ -98,14 +106,31 @@ namespace VortexArena.Core.Player
         /// <summary>Name label height above the head centre (metres).</summary>
         private const float NameLabelHeightMeters = 0.5f;
 
-        /// <summary>Label colour for a teamless (FFA / unassigned) player: white rather than grey,
-        /// which would only be hard to read.</summary>
-        private static readonly Color NameLabelNeutralColor = Color.white;
+        /// <summary>Label colour for a teamless (FFA / unassigned) player: Girdap text white rather
+        /// than grey, which would only be hard to read.</summary>
+        private static readonly Color NameLabelNeutralColor = Girdap.Text;
 
         /// <summary>Darkening factor of a dead player's label — HIGHER than
-        /// <see cref="DeadColorScale"/>: the text must stay readable, the suffix already says the
+        /// <see cref="DeadColorScale"/>: the text must stay readable, the tag already says the
         /// state.</summary>
         private const float NameLabelDeadScale = 0.55f;
+
+        // Name plate geometry in canvas px (= mm at the prefab's 0.001 canvas scale).
+        private const float NamePlatePadX = 36f;
+        private const float NamePlatePadY = 14f;
+        private const float NamePlateChamfer = 20f;
+        private const float NamePlateEdgeWidth = 6f;
+
+        /// <summary>Plate fill alpha: see-through, so a head never hides the arena behind it.</summary>
+        private const float NamePlateFillAlpha = 0.6f;
+
+        private const float NamePlateEdgeAlpha = 0.9f;
+
+        /// <summary>Whole-plate alpha factor while dead.</summary>
+        private const float NamePlateDeadAlpha = 0.5f;
+
+        /// <summary>Size of the state tag line under the name (TMP size tag).</summary>
+        private const string NameLabelTagSize = "55%";
 
         /// <summary>Snap radius of the empty hand to the foregrip while two-handed (m).
         /// <para>⚠️ A <b>packet-loss safety, not a cosmetic tweak</b> (§6.6): <c>FLAG_GRIP_LINKED</c> can
@@ -124,15 +149,15 @@ namespace VortexArena.Core.Player
         /// it at the root; locally <c>Weapon.modelPivot</c> binds to the same node).</summary>
         private const string ModelPivotChildName = "Model";
 
-        private const string DeadLabelSuffix = " (ölü)";
-        private const string UncalibratedLabelSuffix = " (KALİBRESİZ)";
+        private const string DeadLabelTag = "ÖLÜ";
+        private const string UncalibratedLabelTag = "KALİBRESİZ";
 
-        /// <summary>Floor suffixes, relative to the VIEWER's floor — not an absolute floor number: what
+        /// <summary>Floor tags, relative to the VIEWER's floor — not an absolute floor number: what
         /// the player needs is "above me / below me".</summary>
-        private const string UpperFloorLabelSuffix = " (ÜST KAT)";
+        private const string UpperFloorLabelTag = "ÜST KAT";
 
-        /// <inheritdoc cref="UpperFloorLabelSuffix"/>
-        private const string LowerFloorLabelSuffix = " (ALT KAT)";
+        /// <inheritdoc cref="UpperFloorLabelTag"/>
+        private const string LowerFloorLabelTag = "ALT KAT";
 
         /// <summary>Pulse rate of an uncalibrated avatar (full round trips per second).</summary>
         private const float UncalibratedPulseHz = 1.6f;
@@ -212,11 +237,8 @@ namespace VortexArena.Core.Player
         /// <summary>First interpolated pose applied — until then <see cref="HeadWorld"/> is unset.</summary>
         private bool _hasPose;
 
-        // Name/number/colour are stored in SetInfo; the dead look is applied on top of them.
+        // Name/colour are stored in SetInfo; the dead look is applied on top of them.
         private string _displayName = "";
-
-        /// <summary>Jersey number (§2); 0 = unassigned → not printed on the label.</summary>
-        private int _number;
 
         private Color _teamColor = NeutralColor;
 
@@ -235,9 +257,12 @@ namespace VortexArena.Core.Player
         /// while translucent.</summary>
         private Color _ghostTeamColor = GhostNeutralColor;
 
-        /// <summary>Label colour — same source as <see cref="_teamColor"/>, falling back to
+        /// <summary>Label colour — the team's Girdap text tone on a dark plate, falling back to
         /// <see cref="NameLabelNeutralColor"/> when teamless.</summary>
         private Color _labelColor = NameLabelNeutralColor;
+
+        /// <summary>Plate edge colour — the flat team colour (same as the avatar material).</summary>
+        private Color _plateEdgeColor = Girdap.NeutralHi;
 
         // ── Held items (§6.6) ───────────────────────────────────────────────────────────
         // Catalogue held in a field to avoid a per-frame lookup.
@@ -783,20 +808,19 @@ namespace VortexArena.Core.Player
             }
         }
 
-        /// <summary>Updates the name label, jersey number and team colour ("red"/"blue"/other=grey). A
-        /// <paramref name="number"/> of 0 is NOT printed (§2).
+        /// <summary>Updates the name label and team colour ("red"/"blue"/other=grey). The jersey
+        /// <paramref name="number"/> is deliberately NOT drawn over the head — name only.
         /// <para>⚠️ The ghost colour comes from here too, so a team CHANGE must refresh the look: an
         /// admin can change teams mid-match and a dead player's ghost would freeze in the old
         /// colour.</para></summary>
         public void SetInfo(string displayName, int number, string team)
         {
             _displayName = displayName ?? "";
-            _number = number;
             _team = team == "red" ? Team.Red : team == "blue" ? Team.Blue : Team.Neutral;
             _teamColor = team == "red" ? TeamRedColor : team == "blue" ? TeamBlueColor : NeutralColor;
             _ghostTeamColor = team == "red" ? GhostRedColor : team == "blue" ? GhostBlueColor : GhostNeutralColor;
-            _labelColor = team == "red" ? TeamRedColor
-                : team == "blue" ? TeamBlueColor : NameLabelNeutralColor;
+            _labelColor = team == "red" || team == "blue" ? Girdap.TeamInk(team) : NameLabelNeutralColor;
+            _plateEdgeColor = team == "red" ? Girdap.Red : team == "blue" ? Girdap.Blue : Girdap.NeutralHi;
 
             SelectBody();
 
@@ -1050,7 +1074,7 @@ namespace VortexArena.Core.Player
         }
 
         /// <summary>Applies calibration state (§10.6; from <c>lobby_state</c>). An uncalibrated avatar
-        /// glows, gets " (KALİBRESİZ)" on its label and has its hit boxes disabled — the server already
+        /// glows, gets a "KALİBRESİZ" tag under its name and has its hit boxes disabled — the server already
         /// rejects the damage, so this only spares the shooter a phantom hit.</summary>
         public void SetCalibrated(bool calibrated)
         {
@@ -1089,30 +1113,68 @@ namespace VortexArena.Core.Player
             RefreshSilhouette(); // the shell bounds padding is divided by this scale
         }
 
-        /// <summary>Name label; suffixed " (ölü)" while dead and " (KALİBRESİZ)" while uncalibrated. The
-        /// COLOUR is the team (darkened while dead), matching the admin card and top-view marker.
+        /// <summary>Name plate: the NAME ONLY on its first line (no jersey number); a state tag
+        /// ("ÖLÜ" / "KALİBRESİZ" / floor) goes to a small second line. The text COLOUR is the team
+        /// (darkened while dead), the plate edge the flat team colour.
         /// <para>⚠️ Not an exception to "team colour is never written to the character mesh": the label
         /// already spells out identity, opens no new information and is depth-tested.</para>
-        /// <para>Suffix precedence: state first (uncalibrated OVERRIDES dead), then the floor suffix
+        /// <para>Tag precedence: state first (uncalibrated OVERRIDES dead), then the floor tag
         /// APPENDED to it — the floor is a second, independent fact about the same player.</para></summary>
         private void ApplyLabelText()
         {
-            if (nameLabel != null)
+            if (nameLabel == null)
             {
-                string suffix = !IsCalibrated ? UncalibratedLabelSuffix : IsAlive ? "" : DeadLabelSuffix;
-                if (_otherFloor && FloorState.ViewerHasFloor)
-                {
-                    suffix += Floor > FloorState.Local ? UpperFloorLabelSuffix : LowerFloorLabelSuffix;
-                }
-
-                string prefix = _number > 0 ? _number + " · " : "";
-                nameLabel.text = prefix + _displayName + suffix;
-                nameLabel.color = IsAlive
-                    ? _labelColor
-                    : new Color(_labelColor.r * NameLabelDeadScale, _labelColor.g * NameLabelDeadScale,
-                        _labelColor.b * NameLabelDeadScale, _labelColor.a);
+                return;
             }
+
+            string tag = !IsCalibrated ? UncalibratedLabelTag : IsAlive ? "" : DeadLabelTag;
+            if (_otherFloor && FloorState.ViewerHasFloor)
+            {
+                string floorTag = Floor > FloorState.Local ? UpperFloorLabelTag : LowerFloorLabelTag;
+                tag = tag.Length > 0 ? tag + " · " + floorTag : floorTag;
+            }
+
+            // noparse: a player name must not open rich-text tags.
+            string text = "<noparse>" + _displayName.Replace("</noparse>", "") + "</noparse>";
+            if (tag.Length > 0)
+            {
+                Color tagColor = !IsCalibrated ? Girdap.Warn : Girdap.Muted;
+                text += $"\n<size={NameLabelTagSize}><color=#{ColorUtility.ToHtmlStringRGB(tagColor)}>{tag}</color></size>";
+            }
+
+            nameLabel.text = text;
+            nameLabel.color = IsAlive
+                ? _labelColor
+                : new Color(_labelColor.r * NameLabelDeadScale, _labelColor.g * NameLabelDeadScale,
+                    _labelColor.b * NameLabelDeadScale, _labelColor.a);
+            LayoutNamePlate();
         }
+
+        /// <summary>Sizes the plate to the text and tints it. Girdap rule: width is MEASURED
+        /// (<c>GetPreferredValues</c>), no layout components.</summary>
+        private void LayoutNamePlate()
+        {
+            if (namePlate == null)
+            {
+                return;
+            }
+
+            Vector2 preferred = nameLabel.GetPreferredValues(nameLabel.text);
+            var size = new Vector2(Mathf.Ceil(preferred.x) + NamePlatePadX * 2f,
+                Mathf.Ceil(preferred.y) + NamePlatePadY * 2f);
+            namePlate.rectTransform.sizeDelta = size;
+            nameLabel.rectTransform.sizeDelta = size;
+
+            float alpha = IsAlive ? 1f : NamePlateDeadAlpha;
+            Color fill = Girdap.Plate;
+            fill.a = NamePlateFillAlpha * alpha;
+            Color edge = _plateEdgeColor;
+            edge.a = NamePlateEdgeAlpha * alpha;
+            namePlate.Chamfer(NamePlateChamfer).Fill(fill).Outline(NamePlateEdgeWidth, edge);
+        }
+
+        /// <summary>What is placed over the head and turned to the camera.</summary>
+        private Transform NameLabelRoot => nameLabelRoot != null ? nameLabelRoot : nameLabel.transform;
 
         /// <summary>
         /// <b>Who sees the name label:</b> only the local player's ALLIES, in every mode/map/phase —
@@ -1145,6 +1207,10 @@ namespace VortexArena.Core.Player
             if (nameLabel.enabled != show)
             {
                 nameLabel.enabled = show;
+                if (namePlate != null)
+                {
+                    namePlate.enabled = show;
+                }
             }
         }
 
@@ -2664,7 +2730,8 @@ namespace VortexArena.Core.Player
                 return;
             }
 
-            nameLabel.transform.position = headWorld.position + Vector3.up * NameLabelHeightMeters;
+            Transform label = NameLabelRoot;
+            label.position = headWorld.position + Vector3.up * NameLabelHeightMeters;
 
             if (_mainCamera == null)
             {
@@ -2682,7 +2749,6 @@ namespace VortexArena.Core.Player
                 }
             }
 
-            Transform label = nameLabel.transform;
             Vector3 direction = label.position - _mainCamera.transform.position;
             if (direction.sqrMagnitude < 1e-6f)
             {

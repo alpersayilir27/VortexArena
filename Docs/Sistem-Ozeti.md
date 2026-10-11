@@ -1322,7 +1322,7 @@ canlanan oyuncunun tabanı başka kattaysa şartı hiç sağlayamazdı.
 normal ve vurulabilir** kalır (balkondan görünen rakip vurulabilmelidir); ek olarak izleyenin katına
 izdüşürülmüş bir **silüet** çizilir (`RemoteAvatar`: aynı kemikleri paylaşan ikinci bir
 `SkinnedMeshRenderer` kabuğu, `AvatarGhost` materyali, `_FloorShift` = iki kat yüksekliğinin farkı;
-collider yok, gölge yok, nabız yok) ve ad etiketine " (ÜST KAT)" / " (ALT KAT)" eki gelir. Silüet
+collider yok, gölge yok, nabız yok) ve ad plakasına "ÜST KAT" / "ALT KAT" alt satırı gelir. Silüet
 yalnız bir sunumdur: vuruş hattı onu tanımaz. **Görünümü ölü/kalibresiz hayaletten bilerek
 farklıdır:** silüet **düz**, kenar parlaması (rim) olmadan, **alfa 0,2** takım tonunda çizilir;
 hayalet kenar parlamalı ve alfa 0,28'dir — silüet CANLI bir rakiptir, ceset değildir ve ikisi tek
@@ -1995,7 +1995,7 @@ kendiliğinden geçersizleşir (`RemoteShotFx`).
 gövdesi kendi katında normal ve **vurulabilir** kalır, izleyenin katına ise aynı kemikleri paylaşan
 ikinci bir `SkinnedMeshRenderer` (`AvatarGhost` materyali, `_FloorShift` = iki katın yükseklik farkı,
 takım tonu; collider yok, gölge yok, nabız yok) çizilir — yalnız gövde görünürken ve kat
-farkı varken açık, ad etiketi " (ÜST KAT)" / " (ALT KAT)" ekini alır. Silüet **sunumdur**, vuruş
+farkı varken açık, ad plakası "ÜST KAT" / "ALT KAT" alt satırını alır. Silüet **sunumdur**, vuruş
 hattı onu tanımaz. Ghost materyali ya da gövde mesh'i eksikse bir kez uyarır ve kabuk kurulmaz.
 **Görünümü ölü/kalibresiz hayaletle KARIŞTIRILMAZ:** silüet düz, **kenar parlaması olmadan**, alfa
 **0,2** ile çizilir (hayalet kenar parlamalı ve alfa 0,28) — silüet canlı bir rakiptir, ceset değil.
@@ -2045,6 +2045,13 @@ zaten okuyor).
 Çizilen etiketin RENGİ takımdır (ölüde karartılır) — çizilen her etiket zaten bir takımdaşındır,
 renk yalnız admin kartı ve kuş bakışı işaretçisiyle aynı okumayı verir: bir oyuncunun adı nerede
 yazarsa yazsın aynı renkte okunur. Takımsız modda takım rengi yoktur, etiket nötr okunur.
+**Etiket bir plakadır ve yalnız AD yazar** — forma numarası yazılmaz (ayırt edici numara admin
+kartlarındadır). Plaka world-space bir `Canvas`'tır (`NameLabel` → `Plate` `UiShape` + `Text`
+`TextMeshProUGUI`): Girdap paletinde yarı saydam koyu dolgu, kenarı takım rengi, köşesi pahlı;
+boyutu her metin değişiminde `GetPreferredValues`'tan hesaplanır. Durum (ÖLÜ · KALİBRESİZ ·
+ÜST KAT/ALT KAT) adın altına küçük ikinci satır olarak gelir; ölüde plaka ve metin birlikte
+karartılır. ⚠️ Plaka derinlik testlidir (`UiDrawOnTop` YOK) — duvarın arkasındaki takımdaşın adı
+duvarın içinden okunmamalıdır.
 **Ölü ya da kalibresiz uzak oyuncu HAYALETE döner:** yarı saydam, iki yüzü de çizilen
 `VortexArena/AvatarGhost` (`_Shared/Materials/M_AvatarGhost.mat`) — `Cull Off` + `ZWrite Off`
 olduğu için gövdenin içi görünür, `ZTest` normaldir yani duvar arkasından GÖRÜNMEZ. Renk
@@ -2388,7 +2395,7 @@ sıfırlıyor), bekleyen istek yokken sunucu farklı bir kat yazarsa yerel kat *
 aralık dışı kat **0'a düşürülür ve loglanır** — sunucu defter tutar, geometriyi bilmez. Ölüm dalı
 buradadır (§3.7/§3.13): `PlayerCombatState`'in açık taban katına ~1 sn'lik karartmayla iner, hedef
 bulunduğu kattan yukarı çıkmaz. `ViewerHasFloor` "izleyenin bir katı var mı" sorusudur ve admin
-gözlemcide `false`'tur — kat silüeti ve " (ÜST KAT)" soneki oradan geçmez. Logları `[Kat] …`
+gözlemcide `false`'tur — kat silüeti ve "ÜST KAT" alt satırı oradan geçmez. Logları `[Kat] …`
 önekiyle akar.
 
 **`FloorPortal`** (prefabı `_Shared/App/Prefabs/VA_FloorPortal.prefab`, kiti editör aracı üretir):
