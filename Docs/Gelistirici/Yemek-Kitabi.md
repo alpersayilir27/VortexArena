@@ -2008,6 +2008,7 @@ işletmede oyunu tümden oynanamaz kılardı. Yeni bir arena sahnesini ilk açt�
 | `calibration` | Zemin bandındaki **A** ve **B** işaretlerinin yeri (aynı uzay). Maketin `anchor_a`/`anchor_b` küpleri buradan konumlanır — küpün merkezi noktanın kendisidir, yarısı zeminin altında kalır |
 | `defaultColumnHeight` | `height: 0` bırakılan kolonların yüksekliği |
 | `topViewHeight` | Admin kuş bakışı kamerasının zeminden yüksekliği (opsiyonel; 0 = kameranın varsayılanı). Kamera ortografik olduğu için **kadrajı değiştirmez** — yalnız çatının/yüksek objelerin üstünde kalmasını sağlar |
+| `boundsMargin` | Alan dışı toleransı, metre (opsiyonel; 0 = yok). Muhafaza "alan dışı" kararını tabanı her yandan bu kadar büyütülmüş (merkezi aynı) halkaya göre verir; çizilen taban, kuş bakışı kadrajı ve kalibrasyon noktaları **değişmez**. Saha toleransıdır, ölçü değildir — mekan ölçümü bu alanı taşımaz |
 
 > ⚠️ **Sıra A → B'dir ve geometrik olarak doğrulanamaz** (iki nokta hangisinin önce alındığını
 > söylemez, mesafe kontrolü simetriktir). Garanti prosedüreldir: başlıkta ilk yakalanan nokta A
@@ -2109,7 +2110,7 @@ tutan yazım kuralları:
 | Kolon yüksekliği | Ölçülen yükseklik `defaultColumnHeight` ile aynıysa alan `0` kalır (yani "varsayılanı kullan") |
 | Halka yönü ve ilk köşe | Kaynak dosyadaki halkaya hizalanır — kolon önce **adıyla**, adsızsa **en yakın merkeziyle** eşlenir |
 | Kolon adı | Dosyada boş bırakılmış ad boş kalır (makette görünen `Kolon_00` geri yazılmaz) |
-| `topViewHeight` | Maketten ölçülemez; kaynak dosyadaki değer olduğu gibi taşınır |
+| `topViewHeight` · `boundsMargin` | Maketten ölçülemez; kaynak dosyadaki değer olduğu gibi taşınır |
 
 ⚠️ **Elle 3 ondalıktan hassas yazılmış bir sayı milimetreye yuvarlanır** — bu istenen davranıştır:
 şeritmetre milimetrenin altını ölçmez ve daha uzun sayılar dosyanın diff'ini okunmaz yapar.

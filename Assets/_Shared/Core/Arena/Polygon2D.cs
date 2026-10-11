@@ -18,7 +18,8 @@ namespace VortexArena.Core.Arena
     /// cost of edge-case-heavy planar-arrangement code that <see cref="ArenaBoundary"/> would run on
     /// scene load.</para>
     /// <para>⚠️ Methods allocate nothing (<see cref="Bounds"/> included): the boundary calls them
-    /// every frame and a temporary array means GC pressure.</para>
+    /// every frame and a temporary array means GC pressure. Sole exception: <see cref="Offset"/>,
+    /// called on plan load.</para>
     /// </remarks>
     public static class Polygon2D
     {
@@ -207,6 +208,39 @@ namespace VortexArena.Core.Arena
 
             float scale = 1f / (6f * area);
             return new Vector2(cx * scale, cy * scale);
+        }
+
+        /// <summary>Ring grown outward by <paramref name="distance"/> (mitered corners, any winding).
+        /// <para>⚠️ ALLOCATES a new array — call on plan load only, never per frame.</para></summary>
+        public static Vector2[] Offset(Vector2[] ring, float distance)
+        {
+            if (!IsValid(ring))
+            {
+                return ring;
+            }
+
+            // Outward = right-hand side of the edge on a CCW (positive area) ring.
+            float side = SignedArea(ring) >= 0f ? 1f : -1f;
+            int count = ring.Length;
+            var result = new Vector2[count];
+
+            for (int i = 0; i < count; i++)
+            {
+                Vector2 prev = ring[(i + count - 1) % count];
+                Vector2 point = ring[i];
+                Vector2 next = ring[(i + 1) % count];
+
+                Vector2 e1 = point - prev;
+                Vector2 e2 = next - point;
+                Vector2 n1 = new Vector2(e1.y, -e1.x).normalized * side;
+                Vector2 n2 = new Vector2(e2.y, -e2.x).normalized * side;
+
+                // Miter: keeps each edge exactly `distance` away; a hairpin corner falls back to n1.
+                float denom = 1f + Vector2.Dot(n1, n2);
+                result[i] = denom > 1e-3f ? point + (n1 + n2) * (distance / denom) : point + n1 * distance;
+            }
+
+            return result;
         }
 
         // -------------------------------------------------------------- validation

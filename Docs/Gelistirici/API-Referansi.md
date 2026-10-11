@@ -264,7 +264,8 @@ sahnedeki `ArenaObstacle`'lara olan mesafenin **en küçüğü** olur. Dosya kar
 veri sınıfı: `name`, `plane` (tabanın kapalı köşe halkası; ilk nokta sona tekrarlanmaz),
 `columns[]` (`name`/`height`/`points` — her kolon kendi kapalı halkası), `calibration` (`{a, b}` —
 zemin bandının iki noktası), `defaultColumnHeight`, `topViewHeight` (admin kuş bakışı kamerasının
-zeminden yüksekliği; 0 = kameranın varsayılanı).
+zeminden yüksekliği; 0 = kameranın varsayılanı), `boundsMargin` (alan dışı toleransı, metre; yalnız
+muhafazanın algılaması okur, 0 = yok).
 Koordinatlar metre ve `ArenaBoundary`'yi taşıyan transformun **yerel
 XZ**'sindedir — JSON'daki `y` dünya **Z**'sidir. Dosya **mekan başınadır**; o mekanın bütün
 sahneleri aynı dosyayı gösterir.
@@ -285,7 +286,7 @@ sahneleri aynı dosyayı gösterir.
 | ✅ `FromTextAsset(TextAsset, out string error)` | Aynısı `TextAsset` üzerinden; asset `null` ise sessizce `null` |
 | ✅ `LocalBounds()` | Çokgenin yerel XZ sınırlayıcı kutusu (muhafaza ölçüsü + kuş bakışı kadrajı bundan türer) |
 | ✅ `HasCalibration` | İki kalibrasyon noktası yazılmış ve aralarında en az `MinCalibrationSpan` (0,5 m) var mı. ⚠️ `IsValid`'in parçası DEĞİLDİR: noktasız bir dosya muhafazayı çalıştırmaya yeter |
-| ✅ `ToJson(bool pretty)` | Planı metne çevirir — editör araçları dosyayı bununla yazar. Sayılar milimetreye yuvarlanır (`0.###`); `topViewHeight` yalnız sıfırdan büyükse yazılır |
+| ✅ `ToJson(bool pretty)` | Planı metne çevirir — editör araçları dosyayı bununla yazar. Sayılar milimetreye yuvarlanır (`0.###`); `topViewHeight` ve `boundsMargin` yalnız sıfırdan büyükse yazılır |
 
 `JsonUtility.FromJsonOverwrite` kullanılır: **JSON'da yazılmayan alan varsayılanında kalır**
 (`FromJson` ile eksik bir `defaultColumnHeight` sessizce 0 olurdu = hiç çizilmeyen kolonlar).

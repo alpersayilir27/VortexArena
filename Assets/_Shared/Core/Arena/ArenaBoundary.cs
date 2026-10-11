@@ -223,7 +223,7 @@ namespace VortexArena.Core.Arena
         // Plan cache: so JSON parsing and the ring arrays are not rebuilt per frame
         // (Update runs every frame, the gizmo on every repaint — allocation means GC pressure).
         private ArenaDimensions activePlan;      // resolved plan (null = boundary disabled)
-        private Vector2[] cachedPlane;           // activePlan.plane (fast access)
+        private Vector2[] cachedPlane;           // detection ring: activePlan.plane grown by boundsMargin
         private Vector2[][] cachedColumns;       // column rings that enter the boundary test
         private TextAsset cachedJsonSource;      // which TextAsset the plan was resolved from
         // ⚠️ Whether it was resolved once: with a missing/invalid JSON activePlan stays null, and
@@ -581,7 +581,10 @@ namespace VortexArena.Core.Arena
                 return;
             }
 
-            cachedPlane = activePlan.plane;
+            // Only detection grows by the margin; framing (HalfExtents/LocalCenter) stays on the real ring.
+            cachedPlane = activePlan.boundsMargin > 0f
+                ? Polygon2D.Offset(activePlan.plane, activePlan.boundsMargin)
+                : activePlan.plane;
 
             ArenaDimensions.Column[] columns = activePlan.columns;
             if (columns == null || columns.Length == 0)

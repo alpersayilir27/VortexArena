@@ -278,8 +278,9 @@ namespace VortexArena.Core.Editor
                 columns = columns.ToArray(),
                 calibration = ExtractCalibration(target, root, source, warnings),
                 defaultColumnHeight = target.DefaultColumnHeight,
-                // Not measurable from the mesh: carried over so a round-trip does not drop it.
-                topViewHeight = source != null ? source.topViewHeight : 0f
+                // Not measurable from the mesh: carried over so a round-trip does not drop them.
+                topViewHeight = source != null ? source.topViewHeight : 0f,
+                boundsMargin = source != null ? source.boundsMargin : 0f
             };
         }
 

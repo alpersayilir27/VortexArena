@@ -178,6 +178,12 @@ namespace VortexArena.Core.Arena
         /// </summary>
         public float topViewHeight;
 
+        /// <summary>
+        /// Out-of-bounds tolerance (meters): <see cref="ArenaBoundary"/> detects against the floor
+        /// ring grown outward by this much. Drawing, admin framing and calibration keep the real ring.
+        /// </summary>
+        public float boundsMargin;
+
         /// <summary>Is this a usable plan (at least a triangle).</summary>
         public bool IsValid => Polygon2D.IsValid(plane);
 
@@ -254,6 +260,12 @@ namespace VortexArena.Core.Arena
             }
 
             dimensions.columns ??= Array.Empty<Column>();
+
+            // A negative/NaN margin would shrink or break the detection ring.
+            if (!(dimensions.boundsMargin > 0f) || float.IsInfinity(dimensions.boundsMargin))
+            {
+                dimensions.boundsMargin = 0f;
+            }
 
             // A column without points produces no geometry and cannot enter the boundary test:
             // instead of carrying it along silently it is filtered out here so consumers can trust
@@ -362,6 +374,12 @@ namespace VortexArena.Core.Arena
             {
                 builder.Append(',').Append(nl).Append(i1)
                     .Append("\"topViewHeight\": ").Append(Num(topViewHeight));
+            }
+
+            if (boundsMargin > 0f)
+            {
+                builder.Append(',').Append(nl).Append(i1)
+                    .Append("\"boundsMargin\": ").Append(Num(boundsMargin));
             }
 
             builder.Append(nl).Append('}');

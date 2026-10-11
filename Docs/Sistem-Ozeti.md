@@ -1546,9 +1546,14 @@ QA'da yakalanmalıdır. Arena origin'i bu bileşende DEĞİLDİR, devre dışı 
 `ArenaDimensions` (`Core/Arena` — **arena ölçüsünün TEK doğruluk kaynağı**: elle yazılabilir bir
 JSON dosyası (`TextAsset`), çalışma anında okunur ve **MEKAN başınadır** — bir işletmenin bütün
 sahneleri (arenalar + lobi) aynı dosyayı gösterir, sahne başına kopya kaçınılmaz olarak sapardı.
-Alanlar `plane`/`columns`/`calibration`/`defaultColumnHeight`/`topViewHeight` (sonuncusu admin kuş
+Alanlar `plane`/`columns`/`calibration`/`defaultColumnHeight`/`topViewHeight` (admin kuş
 bakışı kamerasının zeminden yüksekliği — ortografik kamerada kadrajı değil yalnız çatının/yüksek
-objelerin üstünde kalmasını etkiler; 0 = kameranın varsayılanı); noktalar `ArenaBoundary`
+objelerin üstünde kalmasını etkiler; 0 = kameranın varsayılanı)/`boundsMargin` (alan dışı
+**toleransı**, metre: `ArenaBoundary` alan dışı testini tabanı her yandan bu kadar büyütülmüş —
+köşeleri gönyeli, merkezi aynı — bir halkaya göre yapar; 0/yazılmamış = halkanın kendisi. **Yalnız
+algılama okur:** çizilen taban, kuş bakışı kadrajı ve kalibrasyon noktaları halkanın kendisinde
+kalır. Ölçü değil bir saha toleransıdır — mekan ölçümü (`venue_survey`) taşımaz, maketten geri
+okuma (`DimensionMeshReader`) kaynak dosyadan aynen taşır); noktalar `ArenaBoundary`
 transformunun yerel XZ'sinde ve JSON'daki `y` dünya Z'sidir. Halkalar **kapalı**dır (ilk nokta sona
 tekrarlanmaz), köşe yönü önemsizdir. ⚠️ **Taban da kolon da TEK sıralı köşe halkasıdır**: parçalardan
 birleştirme (union) yoktur — içbükeylik için gerekmez ve `ArenaBoundary` yüzünden çalışma anında da
@@ -1561,7 +1566,7 @@ kullanıldığı için **yazılmayan alan varsayılanında kalır** (aksi hâlde
 `defaultColumnHeight` hiç çizilmeyen kolonlar demekti). Okuyucu `JsonUtility`'dir, **yazıcı
 (`ToJson`) elle yazılmıştır**: `JsonUtility.ToJson` her float'ı 17 basamak basar (`3.17` →
 `3.1699981689453127`) ve dosyayı elle okunamaz hâle getirirdi; elle yazıcı sayıları milimetreye
-yuvarlar (`0.###`) ve `topViewHeight`'ı yalnız sıfırdan büyükse yazar. ⚠️ **Kolonun muhafazaya girip girmeyeceğini
+yuvarlar (`0.###`) ve `topViewHeight`/`boundsMargin`'i yalnız sıfırdan büyükse yazar. ⚠️ **Kolonun muhafazaya girip girmeyeceğini
 seçen bir anahtar YOKTUR ve eklenmez** — kolon binanın taşıyıcısıdır, oyuncu ona her hâlükârda
 çarpar. `calibration: {a, b}` = zemine yapıştırılan A/B bantlarının yeri; **mekan başınadır**
 (aynı odadaki tüm sahneler aynı iki fiziksel işareti kullanır) ve `HasCalibration` iki nokta

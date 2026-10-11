@@ -15,5 +15,6 @@
     "b": { "x": 0.0, "y":  2.0 }
   },
 
-  "defaultColumnHeight": 3.0
+  "defaultColumnHeight": 3.0,
+  "boundsMargin": 1.0
 }
