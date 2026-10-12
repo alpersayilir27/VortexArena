@@ -333,6 +333,72 @@ def decal_uv_rect(key):
     return u0 + pad, v1 - s + pad, u0 + s - pad, v1 - pad
 
 
+# Same-facing faces of two parts closer than this flicker on Quest (near plane 0.05 m); layered
+# parts (panel on body, sticker, trim) stand at least this far off the surface they sit on.
+ZF_GAP = 0.002
+
+
+def zfight_pairs(meshes, gap=ZF_GAP, min_area=1e-5):
+    """meshes: [(part name, world-space Mesh)]. Returns [(a, b, overlap m2)] for same-facing faces
+    of different parts within `gap` of each other that overlap; back-to-back faces are ignored."""
+    from mathutils import Vector
+    buckets = {}
+    for pi, (_, me) in enumerate(meshes):
+        me.calc_loop_triangles()
+        for lt in me.loop_triangles:
+            if lt.area < 1e-9:
+                continue
+            n = lt.normal.copy()
+            vs = [me.vertices[i].co.copy() for i in lt.vertices]
+            key = tuple(round(c * 20) for c in n)
+            buckets.setdefault(key, []).append((n.dot(vs[0]), pi, n, vs))
+
+    def clip(poly, a, b):
+        # keeps the part of poly left of edge a->b (2D Sutherland-Hodgman step)
+        side = lambda p: (b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0])
+        out = []
+        for i, p in enumerate(poly):
+            q = poly[i - 1]
+            sp, sq = side(p), side(q)
+            if sp >= 0:
+                if sq < 0:
+                    t = sq / (sq - sp)
+                    out.append((q[0] + (p[0] - q[0]) * t, q[1] + (p[1] - q[1]) * t))
+                out.append(p)
+            elif sq >= 0:
+                t = sq / (sq - sp)
+                out.append((q[0] + (p[0] - q[0]) * t, q[1] + (p[1] - q[1]) * t))
+        return out
+
+    def area2(poly):
+        return sum(poly[i - 1][0] * p[1] - p[0] * poly[i - 1][1] for i, p in enumerate(poly)) / 2
+
+    acc = {}
+    for tris in buckets.values():
+        tris.sort(key=lambda t: t[0])
+        for i, (d1, p1, n1, v1) in enumerate(tris):
+            for d2, p2, n2, v2 in tris[i + 1:]:
+                if d2 - d1 >= gap - 1e-6:   # exactly `gap` apart is allowed
+                    break
+                if p1 == p2 or n1.dot(n2) < 0.999:
+                    continue
+                t1 = n1.orthogonal().normalized()
+                t2 = n1.cross(t1)
+                a = [(v.dot(t1), v.dot(t2)) for v in v1]
+                b = [(v.dot(t1), v.dot(t2)) for v in v2]
+                if area2(a) < 0:
+                    a.reverse()
+                poly = b if area2(b) > 0 else b[::-1]
+                for k in range(3):
+                    poly = clip(poly, a[k - 1], a[k])
+                    if len(poly) < 3:
+                        break
+                if len(poly) >= 3:
+                    key = tuple(sorted((p1, p2)))
+                    acc[key] = acc.get(key, 0.0) + abs(area2(poly))
+    return [(meshes[a][0], meshes[b][0], s) for (a, b), s in sorted(acc.items(), key=lambda kv: -kv[1]) if s > min_area]
+
+
 class Builder:
     """Collects parts of one model under a source collection; bake() joins them into one export mesh."""
 
@@ -625,6 +691,9 @@ class Builder:
             ob = bpy.data.objects.new(o.name + "_baked", me)
             out_col.objects.link(ob)
             baked.append(ob)
+        self.zfights = zfight_pairs([(p.name.split(".")[0], ob.data) for p, ob in zip(sorted(self.parts, key=kind), baked)])
+        for a, b, s in self.zfights:
+            print(f"Z-FIGHT {self.name}: {a} / {b} ({s * 1e4:.1f} cm2)")
         with bpy.context.temp_override(active_object=baked[0], selected_editable_objects=baked, object=baked[0]):
             bpy.ops.object.join()
         res = baked[0]

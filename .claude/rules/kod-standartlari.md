@@ -53,6 +53,9 @@ değildir.
 - Dosya, obje ve koleksiyon adları ASCII'dir; Blender'daki obje adı FBX adıyla aynıdır
   (`A4_Fridge` → `A4_Fridge.fbx`).
 - Önizleme render'ı geçicidir, repoya girmez.
+- ⚠️ **Z-fight üretilmez:** iki parçanın aynı yöne bakan yüzleri aynı düzlemde üst üste binmez;
+  katmanlı parça en az 2 mm açıkta durur. Betik bunu bake sırasında denetler (BurgerKitchen:
+  `bk_common.zfight_pairs`, ayrıntı proje README'sinde); yeni projede aynı denetim kurulur.
 
 ## Serialize edilen veri
 

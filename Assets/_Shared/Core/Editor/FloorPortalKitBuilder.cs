@@ -7,9 +7,9 @@ using Object = UnityEngine.Object;
 
 namespace VortexArena.Core.Editor
 {
-    /// <summary>Produces/updates the floor-portal kit: <c>M_FloorPortal.mat</c>,
-    /// <c>M_FloorPortalFill.mat</c> and <c>VA_FloorPortal.prefab</c> (ring pair + fill discs +
-    /// audio sources, all wired into <see cref="FloorPortal"/>).
+    /// <summary>Produces/updates the floor-portal kit: materials, band/arrow meshes, band gradient
+    /// and <c>VA_FloorPortal.prefab</c> (per disc: plate + fill + glowing band + up/down arrow,
+    /// plus audio sources, all wired into <see cref="FloorPortal"/>).
     /// <para>⚠️ The prefab is rewritten IN PLACE at the same path (<see cref="PrefabPath"/>), so
     /// scene instances placed by <see cref="TemplateBasicsLoader"/> keep their links; a
     /// delete + recreate would break every arena that already uses a portal.</para>
@@ -33,21 +33,42 @@ namespace VortexArena.Core.Editor
         private const string MaterialDir = "Assets/_Shared/Materials";
         private const string RingMaterialPath = MaterialDir + "/M_FloorPortal.mat";
         private const string FillMaterialPath = MaterialDir + "/M_FloorPortalFill.mat";
+        private const string BandMaterialPath = MaterialDir + "/M_FloorPortalBand.mat";
+        private const string BandTexturePath = MaterialDir + "/T_FloorPortalBand.asset";
+        private const string BandMeshPath = PrefabDir + "/VA_FloorPortal_Band.asset";
+        private const string ArrowMeshPath = PrefabDir + "/VA_FloorPortal_Arrow.asset";
 
         /// <summary>Default upper-floor height (m) — the real value is set per arena on the scene
         /// instance, this is only the prefab's starting point.</summary>
         private const float DefaultUpperHeight = 3f;
 
-        // Disc geometry. Unity's cylinder primitive is 1 m across and 2 m tall, so 0.5 scale = a
+        // Plate geometry. Unity's cylinder primitive is 1 m across and 2 m tall, so 0.5 scale = a
         // 0.5 m wide disc and 0.01 = a 2 cm thick plate.
         private const float DiscRadiusScale = 0.5f;
-        private const float RingThicknessScale = 0.01f;
+        private const float PlateThicknessScale = 0.01f;
+        private const float PlateHalfThickness = PlateThicknessScale; // 2 m primitive × scale / 2
         private const float FillThicknessScale = 0.012f;
 
-        /// <summary>Fill lift above the ring (m) — without it the two coplanar discs z-fight.</summary>
+        /// <summary>Plate centre above the floor (m): the plate's underside sits 1.5 cm up, so floor
+        /// finishes and cage plates do not swallow it.</summary>
+        private const float PlateLift = 0.025f;
+
+        /// <summary>Fill lift above the plate centre (m) — without it the two coplanar discs z-fight.</summary>
         private const float FillLift = 0.006f;
 
-        private static readonly Color RingColor = new Color(0.35f, 0.85f, 1f, 0.45f);
+        // Band: open tube just outside the disc edge, fading out upwards.
+        private const float BandRadius = 0.27f;
+        private const float BandHeight = 0.35f;
+        private const int BandSegments = 48;
+        private const int BandTextureHeight = 32;
+
+        // Arrow (pointing +Y, pivot at its centre): two crossed flat outlines, visible from any side.
+        private const float ArrowShaftHalfWidth = 0.05f;
+        private const float ArrowShaftHeight = 0.2f;
+        private const float ArrowHeadHalfWidth = 0.14f;
+        private const float ArrowTotalHeight = 0.36f;
+
+        private static readonly Color RingColor = new Color(0.35f, 0.85f, 1f, 0.6f);
         private static readonly Color FillColor = new Color(0.9f, 1f, 1f, 0.7f);
 
         /// <summary>Shader search chain (first hit wins). The material is an ASSET, so the shader is
@@ -61,24 +82,50 @@ namespace VortexArena.Core.Editor
 
         private const string LowerDiscName = "Alt";
         private const string UpperDiscName = "Üst";
+        private const string PlateName = "Plaka";
         private const string FillName = "Dolum";
+        private const string BandName = "Halka";
+        private const string ArrowName = "Ok";
+
+        /// <summary>Generated assets the disc builder needs.</summary>
+        private struct Kit
+        {
+            public Material Ring;
+            public Material Fill;
+            public Material Band;
+            public Mesh BandMesh;
+            public Mesh ArrowMesh;
+        }
 
         // ----------------------------------------------------------------- entry point
 
         [MenuItem("Tools/VortexArena/Arena/Kat Portalı Kitini Üret", false, 4)]
         public static void BuildKit()
         {
-            Material ring = EnsureMaterial(RingMaterialPath, "M_FloorPortal", RingColor);
-            Material fill = EnsureMaterial(FillMaterialPath, "M_FloorPortalFill", FillColor);
+            var kit = new Kit
+            {
+                Ring = EnsureMaterial(RingMaterialPath, "M_FloorPortal", RingColor),
+                Fill = EnsureMaterial(FillMaterialPath, "M_FloorPortalFill", FillColor),
+                Band = EnsureMaterial(BandMaterialPath, "M_FloorPortalBand", RingColor),
+            };
 
-            if (ring == null || fill == null)
+            if (kit.Ring == null || kit.Fill == null || kit.Band == null)
             {
                 Debug.LogError(Log + "Kat portalı malzemesi için shader bulunamadı " +
                                "(URP Unlit/Lit, Sprites/Default) — prefab üretilmedi.");
                 return;
             }
 
-            BuildPrefab(ring, fill);
+            // The fade lives in the texture: URP Unlit ignores vertex colours.
+            Texture2D gradient = EnsureBandTexture();
+            kit.Band.SetTexture("_BaseMap", gradient);
+            kit.Band.SetTexture("_MainTex", gradient);
+            EditorUtility.SetDirty(kit.Band);
+
+            kit.BandMesh = EnsureMesh(BandMeshPath, "VA_FloorPortal_Band", BuildBandMesh);
+            kit.ArrowMesh = EnsureMesh(ArrowMeshPath, "VA_FloorPortal_Arrow", BuildArrowMesh);
+
+            BuildPrefab(kit);
 
             AssetDatabase.SaveAssets();
         }
@@ -122,6 +169,8 @@ namespace VortexArena.Core.Editor
             material.SetFloat("_DstBlendAlpha", (float)BlendMode.OneMinusSrcAlpha);
             material.SetFloat("_ZWrite", 0f);
             material.SetFloat("_AlphaClip", 0f);
+            // Two-sided: the band is seen from inside and the flat arrow from behind.
+            material.SetFloat("_Cull", (float)CullMode.Off);
             material.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
             material.SetOverrideTag("RenderType", "Transparent");
             material.renderQueue = (int)RenderQueue.Transparent;
@@ -148,7 +197,7 @@ namespace VortexArena.Core.Editor
 
         /// <summary>Builds the portal hierarchy in memory and saves it over
         /// <see cref="PrefabPath"/>.</summary>
-        private static void BuildPrefab(Material ring, Material fill)
+        private static void BuildPrefab(Kit kit)
         {
             bool existed = AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath) != null;
             var live = new List<GameObject>();
@@ -157,9 +206,9 @@ namespace VortexArena.Core.Editor
             live.Add(root);
             root.layer = 0; // Default: the portal is art, it is not on Obstacle.
 
-            Transform lower = CreateDisc(root.transform, LowerDiscName, Vector3.zero, ring, fill, live);
+            Transform lower = CreateDisc(root.transform, LowerDiscName, Vector3.zero, false, kit, live);
             Transform upper = CreateDisc(root.transform, UpperDiscName,
-                new Vector3(0f, DefaultUpperHeight, 0f), ring, fill, live);
+                new Vector3(0f, DefaultUpperHeight, 0f), true, kit, live);
 
             // Spatial, clip-less sources: the clips are bound per arena on the instance.
             AudioSource charge = CreateAudio(root, true);
@@ -173,6 +222,8 @@ namespace VortexArena.Core.Editor
             SetReference(serialized, "upperDisc", upper);
             SetReference(serialized, "lowerFill", lower.Find(FillName));
             SetReference(serialized, "upperFill", upper.Find(FillName));
+            SetReference(serialized, "lowerArrow", lower.Find(ArrowName));
+            SetReference(serialized, "upperArrow", upper.Find(ArrowName));
             SetReference(serialized, "chargeSound", charge);
             SetReference(serialized, "teleportSound", teleport);
             SetReference(serialized, "busySound", busy);
@@ -196,37 +247,53 @@ namespace VortexArena.Core.Editor
             }
 
             Debug.Log(Log + (existed ? "VA_FloorPortal.prefab güncellendi (" : "VA_FloorPortal.prefab üretildi (") +
-                      PrefabPath + "): Alt + Üst diski, Dolum diskleri ve üç AudioSource bağlandı.");
+                      PrefabPath + "): Alt + Üst diski (plaka, dolum, halka, ok) ve üç AudioSource bağlandı.");
             Debug.Log(Log + "ELDE: portalı sahneye 'Tools > VortexArena > Arena > Template Temellerini Yükle' " +
                       "ile koy, yerini ve upperHeight'ını gerçek yerleşime göre ayarla, ses kliplerini bağla.");
         }
 
-        /// <summary>One disc (ring + empty fill child), cylinder primitive without collider.</summary>
+        /// <summary>One disc: an UNSCALED anchor at floor level (the hop logic reads its XZ) holding
+        /// plate, fill, band and arrow, all collider-free.</summary>
         /// <remarks>The fill starts at scale 0 on x/z — the charge animation grows it, so a
         /// non-zero start would read as "already charging".</remarks>
         private static Transform CreateDisc(
             Transform parent,
             string name,
             Vector3 localPosition,
-            Material ring,
-            Material fill,
+            bool arrowDown,
+            Kit kit,
             List<GameObject> live)
         {
-            GameObject disc = CreateFlatCylinder(name, ring,
-                new Vector3(DiscRadiusScale, RingThicknessScale, DiscRadiusScale), live);
+            var disc = new GameObject(name) { layer = 0 };
+            live.Add(disc);
             disc.transform.SetParent(parent, false);
             disc.transform.localPosition = localPosition;
 
-            GameObject fillDisc = CreateFlatCylinder(FillName, fill,
+            GameObject plate = CreateFlatCylinder(PlateName, kit.Ring,
+                new Vector3(DiscRadiusScale, PlateThicknessScale, DiscRadiusScale), live);
+            Attach(plate, disc.transform, new Vector3(0f, PlateLift, 0f));
+
+            GameObject fill = CreateFlatCylinder(FillName, kit.Fill,
                 new Vector3(0f, FillThicknessScale, 0f), live);
-            fillDisc.transform.SetParent(disc.transform, false);
-            // Lift is in the PARENT's scale: the ring's y scale is 0.01, so the local offset is
-            // divided back out to land FillLift metres above the ring.
-            fillDisc.transform.localPosition = new Vector3(0f, FillLift / RingThicknessScale, 0f);
-            fillDisc.transform.localScale = new Vector3(
-                0f, FillThicknessScale / RingThicknessScale, 0f);
+            Attach(fill, disc.transform, new Vector3(0f, PlateLift + FillLift, 0f));
+
+            GameObject band = CreateMeshObject(BandName, kit.BandMesh, kit.Band, live);
+            Attach(band, disc.transform, new Vector3(0f, PlateLift - PlateHalfThickness, 0f));
+
+            GameObject arrow = CreateMeshObject(ArrowName, kit.ArrowMesh, kit.Ring, live);
+            Attach(arrow, disc.transform, new Vector3(0f, FloorPortal.ArrowHeightMeters, 0f));
+            if (arrowDown)
+            {
+                arrow.transform.localRotation = Quaternion.Euler(0f, 0f, 180f);
+            }
 
             return disc.transform;
+        }
+
+        private static void Attach(GameObject child, Transform parent, Vector3 localPosition)
+        {
+            child.transform.SetParent(parent, false);
+            child.transform.localPosition = localPosition;
         }
 
         /// <summary>Collider-free cylinder primitive with shadows disabled.</summary>
@@ -245,15 +312,172 @@ namespace VortexArena.Core.Editor
             }
 
             go.transform.localScale = scale;
+            ConfigureRenderer(go.GetComponent<MeshRenderer>(), material);
+            return go;
+        }
 
-            var renderer = go.GetComponent<MeshRenderer>();
+        private static GameObject CreateMeshObject(
+            string name, Mesh mesh, Material material, List<GameObject> live)
+        {
+            var go = new GameObject(name) { layer = 0 };
+            live.Add(go);
+            go.AddComponent<MeshFilter>().sharedMesh = mesh;
+            ConfigureRenderer(go.AddComponent<MeshRenderer>(), material);
+            return go;
+        }
+
+        private static void ConfigureRenderer(MeshRenderer renderer, Material material)
+        {
             renderer.sharedMaterial = material;
             renderer.shadowCastingMode = ShadowCastingMode.Off;
             renderer.receiveShadows = false;
             renderer.lightProbeUsage = LightProbeUsage.Off;
             renderer.reflectionProbeUsage = ReflectionProbeUsage.Off;
+        }
 
-            return go;
+        // ----------------------------------------------------------------- generated assets
+
+        /// <summary>Loads the mesh asset and refills it IN PLACE (GUID kept), or creates it.</summary>
+        private static Mesh EnsureMesh(string path, string name, System.Action<Mesh> build)
+        {
+            var mesh = AssetDatabase.LoadAssetAtPath<Mesh>(path);
+            bool created = mesh == null;
+            if (created)
+            {
+                mesh = new Mesh { name = name };
+            }
+
+            mesh.Clear();
+            build(mesh);
+            mesh.RecalculateNormals();
+            mesh.RecalculateBounds();
+
+            if (created)
+            {
+                EnsureFolder(PrefabDir);
+                AssetDatabase.CreateAsset(mesh, path);
+            }
+            else
+            {
+                EditorUtility.SetDirty(mesh);
+            }
+
+            return mesh;
+        }
+
+        /// <summary>Open tube, pivot at its bottom centre; UV v runs 0 (bottom) → 1 (top).</summary>
+        private static void BuildBandMesh(Mesh mesh)
+        {
+            int ring = BandSegments + 1; // seam vertex duplicated for the UV wrap
+            var vertices = new Vector3[ring * 2];
+            var uv = new Vector2[ring * 2];
+            var triangles = new int[BandSegments * 6];
+
+            for (int i = 0; i < ring; i++)
+            {
+                float u = i / (float)BandSegments;
+                float angle = u * Mathf.PI * 2f;
+                var bottom = new Vector3(Mathf.Cos(angle) * BandRadius, 0f, Mathf.Sin(angle) * BandRadius);
+                vertices[i] = bottom;
+                vertices[ring + i] = bottom + new Vector3(0f, BandHeight, 0f);
+                uv[i] = new Vector2(u, 0f);
+                uv[ring + i] = new Vector2(u, 1f);
+            }
+
+            for (int i = 0; i < BandSegments; i++)
+            {
+                int t = i * 6;
+                triangles[t] = i;
+                triangles[t + 1] = ring + i;
+                triangles[t + 2] = i + 1;
+                triangles[t + 3] = i + 1;
+                triangles[t + 4] = ring + i;
+                triangles[t + 5] = ring + i + 1;
+            }
+
+            mesh.vertices = vertices;
+            mesh.uv = uv;
+            mesh.triangles = triangles;
+        }
+
+        /// <summary>Two crossed flat arrows (XY and ZY planes) pointing +Y, pivot at the centre.</summary>
+        private static void BuildArrowMesh(Mesh mesh)
+        {
+            float bottom = -ArrowTotalHeight * 0.5f;
+            float neck = bottom + ArrowShaftHeight;
+            float tip = ArrowTotalHeight * 0.5f;
+
+            // Outline in (across, up): shaft quad 0-3, head triangle 4-6.
+            var outline = new[]
+            {
+                new Vector2(-ArrowShaftHalfWidth, bottom), new Vector2(ArrowShaftHalfWidth, bottom),
+                new Vector2(ArrowShaftHalfWidth, neck), new Vector2(-ArrowShaftHalfWidth, neck),
+                new Vector2(-ArrowHeadHalfWidth, neck), new Vector2(ArrowHeadHalfWidth, neck),
+                new Vector2(0f, tip),
+            };
+            int[] outlineTriangles = { 0, 2, 1, 0, 3, 2, 4, 6, 5 };
+
+            var vertices = new Vector3[outline.Length * 2];
+            var triangles = new int[outlineTriangles.Length * 2];
+            for (int i = 0; i < outline.Length; i++)
+            {
+                vertices[i] = new Vector3(outline[i].x, outline[i].y, 0f);
+                vertices[outline.Length + i] = new Vector3(0f, outline[i].y, outline[i].x);
+            }
+
+            for (int i = 0; i < outlineTriangles.Length; i++)
+            {
+                triangles[i] = outlineTriangles[i];
+                triangles[outlineTriangles.Length + i] = outlineTriangles[i] + outline.Length;
+            }
+
+            mesh.vertices = vertices;
+            mesh.triangles = triangles;
+        }
+
+        /// <summary>White vertical alpha ramp (opaque at the floor, clear at the top); rewritten IN
+        /// PLACE when it exists.</summary>
+        private static Texture2D EnsureBandTexture()
+        {
+            const int width = 4;
+            var texture = AssetDatabase.LoadAssetAtPath<Texture2D>(BandTexturePath);
+            bool created = texture == null;
+            if (created)
+            {
+                texture = new Texture2D(width, BandTextureHeight, TextureFormat.RGBA32, false)
+                {
+                    name = "T_FloorPortalBand",
+                };
+            }
+
+            texture.wrapMode = TextureWrapMode.Clamp;
+            texture.filterMode = FilterMode.Bilinear;
+
+            var pixels = new Color[width * BandTextureHeight];
+            for (int y = 0; y < BandTextureHeight; y++)
+            {
+                float v = y / (BandTextureHeight - 1f);
+                var color = new Color(1f, 1f, 1f, Mathf.Pow(1f - v, 1.5f));
+                for (int x = 0; x < width; x++)
+                {
+                    pixels[y * width + x] = color;
+                }
+            }
+
+            texture.SetPixels(pixels);
+            texture.Apply(false, false);
+
+            if (created)
+            {
+                EnsureFolder(MaterialDir);
+                AssetDatabase.CreateAsset(texture, BandTexturePath);
+            }
+            else
+            {
+                EditorUtility.SetDirty(texture);
+            }
+
+            return texture;
         }
 
         private static AudioSource CreateAudio(GameObject root, bool loop)

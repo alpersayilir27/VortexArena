@@ -2,7 +2,8 @@
 # textures (surface splat + two visor-edge variants). Textures are white with the stain in alpha;
 # colour comes from code (_BaseColor).
 # K1: built upright (nozzle +Z); the prefab's visual child turns it so the nozzle is local +Z.
-# K2: pivot = ceiling contact point, drum hangs below it; its lowest point is the cord anchor.
+# K2: pivot = ceiling contact point, drum hangs below it; the scene's cord anchor sits 1 cm inside
+# the spout (at the lowest point the cord's flat end shows a gap).
 import importlib, math, os, sys
 SCRIPTS = r"C:\UnityProjects\VortexArena\blender\BurgerKitchen\scripts"
 if SCRIPTS not in sys.path:
@@ -12,7 +13,7 @@ import bk_common
 importlib.reload(bk_common)
 
 BOTTLE_HALF = 0.20      # bottle spans z -0.20..0.20 around its grip centre
-REEL_DROP = 0.62        # ceiling to the bottom of the drum (cord anchor)
+REEL_DROP = 0.62        # ceiling to the bottom of the spout
 
 
 def bottle(name):

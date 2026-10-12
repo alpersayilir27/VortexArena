@@ -1784,7 +1784,7 @@ değişimi **dikey sanal ofsettir** (`Docs/Sistem-Ozeti.md` §3.13, ağ tarafı
 
 | # | Yaptığın | Görmen gereken |
 |---|---|---|
-| 1 | `Tools > VortexArena > Arena > Kat Portalı Kitini Üret` | `M_FloorPortal` + `M_FloorPortalFill` ve `VA_FloorPortal.prefab` üretildi/güncellendi (konsolda tek satır). Kit zaten varsa da çalıştırılabilir |
+| 1 | `Tools > VortexArena > Arena > Kat Portalı Kitini Üret` | `M_FloorPortal` · `M_FloorPortalFill` · `M_FloorPortalBand`, halka/ok mesh'leri ve `VA_FloorPortal.prefab` üretildi/güncellendi (konsolda malzeme ve prefab satırları). Kit zaten varsa da çalıştırılabilir |
 | 2 | `Tools > VortexArena > Arena > Template Temellerini Yükle` → **Kat sayısı** = kaç kat oynanacaksa (1–4) → *Yükle* | Her ek kat için bir `Portal_Kat{k}_{k+1}` örneği sahnede, X'te 2 m aralıkla dizili (`Portal_Kat0_1` (0,0,0), `Portal_Kat1_2` (2,3,0) …). Sahnede zaten portal varsa araç hiç dokunmaz (raporda "atlandı") |
 | 3 | Her portalı oynanacak yere **taşı** (ölçek 1 kalır) ve `upperHeight`'ını gerçek kat yüksekliğine yaz | `Üst` çemberi o yükseklikte belirir (Gizmo çemberleri Scene view'de çizilir). ⚠️ Portalın **kökü kendi katının zeminine** oturmalı (±0,25 m); ⚠️ iki portalın diskleri **aynı X/Z'ye gelmez** — konsolda çakışma uyarısı görürsen portalı kaydır |
 | 4 | Üst kat plakasını (zemin mesh'i) portalın tanımladığı yüksekliğe kur; collider'ı **`Default`** layer'da bırak | Alt kattan yukarı ateş eden oyuncunun mermisi plakada durur. ⚠️ Plakayı **`Obstacle` layer'ına ALMA** — üst kattaki herkes sürekli ihlalde sayılır ve ekranı kararır |

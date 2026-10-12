@@ -22,6 +22,7 @@ WAIN = 1.25                # diner wainscot top
 PASS_X0, PASS_X1 = -3.55, -3.43     # diner face, kitchen face
 PASS_S, PASS_N = -2.64, 3.01        # end segments start just outside the end posts
 PASS_TOP = 2.44                     # band above the ORDER header
+PASS_GAP = 0.002                    # pass wall face layers (tiles, strips) stand this far off its box
 # diner entrance: opening in the diner south wall (inside the D4 door jamb) + vestibule behind it
 DOOR_X0, DOOR_X1, DOOR_H = -6.53, -5.47, 2.10
 VEST_D, VEST_H = 1.4, 2.6
@@ -45,51 +46,71 @@ def floor(b):
         b._finish(f"Floor_{color}", bm, color, 0.0, 1)
 
 
-def wall(b, k, a, c, inward, diner):
-    """Wall from a to c (x, y); inward = unit (nx, ny) toward the room."""
+def wall(b, k, a, c, inward, diner, paint=True, cornice=True, trim=(None, None)):
+    """Wall from a to c (x, y); inward = unit (nx, ny) toward the room.
+    trim (start, end): None = strips run to the end; g = a crossing strip of the same kind stands
+    g off this end, stop at its face (overlapping strips z-fight)."""
     (ax, ay), (cx2, cy2) = a, c
     nx, ny = inward
     along_x = ay == cy2
     length = abs(cx2 - ax) if along_x else abs(cy2 - ay)
     mx, my = (ax + cx2) / 2, (ay + cy2) / 2
+    ux, uy = ((cx2 > ax) - (cx2 < ax), 0) if along_x else (0, (cy2 > ay) - (cy2 < ay))
     def strip(tag, depth, z_lo, z_hi, color, bevel=0.01):
-        size = (length, depth, z_hi - z_lo) if along_x else (depth, length, z_hi - z_lo)
-        b.box(f"{tag}_{k}", size, (mx + nx * depth / 2, my + ny * depth / 2), z_lo, color, bevel, 1)
+        s0, s1 = (0.0 if t is None else depth + t for t in trim)
+        ln, sx, sy = length - s0 - s1, mx + ux * (s0 - s1) / 2, my + uy * (s0 - s1) / 2
+        size = (ln, depth, z_hi - z_lo) if along_x else (depth, ln, z_hi - z_lo)
+        b.box(f"{tag}_{k}", size, (sx + nx * depth / 2, sy + ny * depth / 2), z_lo, color, bevel, 1)
     inside = (mx + nx, my + ny, 1.5)
     if diner:
-        b.quad(f"Paint_{k}", [(ax, ay, WAIN + 0.06), (cx2, cy2, WAIN + 0.06), (cx2, cy2, CEIL - CORN), (ax, ay, CEIL - CORN)], "cream", inside)
+        if paint:
+            b.quad(f"Paint_{k}", [(ax, ay, WAIN + 0.06), (cx2, cy2, WAIN + 0.06), (cx2, cy2, CEIL - CORN), (ax, ay, CEIL - CORN)], "cream", inside)
         strip("Wainscot", 0.02, SK, WAIN, "teal", 0.006)
         strip("DinerStripe", 0.035, WAIN, WAIN + 0.06, "red", 0.008)
     else:
         b.quad(f"Tiles_{k}", [(ax, ay, SK), (cx2, cy2, SK), (cx2, cy2, CEIL - CORN), (ax, ay, CEIL - CORN)], "white", inside, tile=True)
     strip("Skirting", 0.03, 0.0, SK, "red_dark")
-    strip("Cornice", 0.06, CEIL - CORN, CEIL, "red", 0.015)
+    if cornice:
+        strip("Cornice", 0.06, CEIL - CORN, CEIL, "red", 0.015)
 
 
 def build(name):
     b = bk_common.Builder(name)
     floor(b)
     b.quad("Ceiling", [(DX, -HY, CEIL), (KX, -HY, CEIL), (KX, HY, CEIL), (DX, HY, CEIL)], "red", (0, 0, 0))
-    wall(b, "N", (-KX, HY), (KX, HY), (0, -1), False)
-    wall(b, "S", (-KX, -HY), (KX, -HY), (0, 1), False)
-    wall(b, "E", (KX, HY), (KX, -HY), (-1, 0), False)
-    wall(b, "DN", (DX, HY), (-KX, HY), (0, -1), True)
+    # kitchen walls end at the pass wall's kitchen face, diner walls at its diner face; at a corner
+    # E / DW strips stop at the crossing wall's strips, at the pass wall the room's strips stop
+    wall(b, "N", (PASS_X1, HY), (KX, HY), (0, -1), False, trim=(PASS_GAP, None))
+    wall(b, "S", (PASS_X1, -HY), (KX, -HY), (0, 1), False, trim=(PASS_GAP, None))
+    wall(b, "E", (KX, HY), (KX, -HY), (-1, 0), False, trim=(0.0, 0.0))
+    wall(b, "DN", (DX, HY), (PASS_X0, HY), (0, -1), True, trim=(None, PASS_GAP))
     # diner south wall with the entrance opening, and the vestibule behind it
-    wall(b, "DS1", (DX, -HY), (DOOR_X0, -HY), (0, 1), True)
-    wall(b, "DS2", (DOOR_X1, -HY), (-KX, -HY), (0, 1), True)
-    lintel(b)
+    wall(b, "DS1", (DX, -HY), (DOOR_X0, -HY), (0, 1), True, paint=False, cornice=False)
+    wall(b, "DS2", (DOOR_X1, -HY), (PASS_X0, -HY), (0, 1), True, paint=False, cornice=False, trim=(None, PASS_GAP))
+    diner_south(b)
     vestibule(b)
-    wall(b, "DW", (DX, -HY), (DX, HY), (1, 0), True)
+    wall(b, "DW", (DX, -HY), (DX, HY), (1, 0), True, trim=(0.0, 0.0))
     pass_wall(b)
     return b.bake()
 
 
-def lintel(b):
-    """Wall above the door opening (paint + cornice), seen from the diner."""
+def diner_south(b):
+    """Diner south wall paint as ONE connected face around the door opening, plus one cornice: a
+    separate lintel quad gets its own colour gradient and lightmap chart and reads as a patch."""
     y = -HY
-    b.quad("Lintel", [(DOOR_X0, y, DOOR_H), (DOOR_X1, y, DOOR_H), (DOOR_X1, y, CEIL - CORN), (DOOR_X0, y, CEIL - CORN)],
-           "cream", ((DOOR_X0 + DOOR_X1) / 2, 0, 2.5))
-    b.box("LintelCornice", (DOOR_X1 - DOOR_X0, 0.06, CORN), ((DOOR_X0 + DOOR_X1) / 2, y + 0.03), CEIL - CORN, "red", 0.015, 1)
+    xs, zs = (DX, DOOR_X0, DOOR_X1, PASS_X0), (WAIN + 0.06, DOOR_H, CEIL - CORN)
+    bm = bmesh.new()
+    v = [[bm.verts.new((x, y, z)) for z in zs] for x in xs]
+    for i in range(3):
+        for j in range(2):
+            if (i, j) != (1, 0):  # (1, 0) = door opening
+                f = bm.faces.new([v[i][j], v[i + 1][j], v[i + 1][j + 1], v[i][j + 1]])
+                f.normal_update()
+                if f.normal.y < 0:
+                    f.normal_flip()
+    b._finish("Paint_DS", bm, "cream", 0.0, 1)
+    x1 = PASS_X0 - PASS_GAP - 0.06  # stops at the pass wall's cornice
+    b.box("Cornice_DS", (x1 - DX, 0.06, CORN), ((DX + x1) / 2, y + 0.03), CEIL - CORN, "red", 0.015, 1)
 
 
 def vestibule(b):
@@ -123,8 +144,9 @@ def vestibule(b):
     for tag, xs in (("W", x0), ("E", x1)):
         b.quad(f"VestWall{tag}", [(xs, y0, WAIN + 0.06), (xs, y1, WAIN + 0.06), (xs, y1, h), (xs, y0, h)], "cream", inside)
         sgn = 1 if tag == "W" else -1
-        b.box(f"VestWain{tag}", (0.02, VEST_D, WAIN), (xs + sgn * 0.01, (y0 + y1) / 2), 0.0, "teal", 0.006, 1)
-        b.box(f"VestStripe{tag}", (0.035, VEST_D, 0.06), (xs + sgn * 0.0175, (y0 + y1) / 2), WAIN, "red", 0.008, 1)
+        # start behind the outer door frame (0.08 deep), not inside it
+        b.box(f"VestWain{tag}", (0.02, VEST_D - 0.08, WAIN), (xs + sgn * 0.01, (y0 + 0.08 + y1) / 2), 0.0, "teal", 0.006, 1)
+        b.box(f"VestStripe{tag}", (0.035, VEST_D - 0.08, 0.06), (xs + sgn * 0.0175, (y0 + 0.08 + y1) / 2), WAIN, "red", 0.008, 1)
     # top of the opening seen from inside the hall
     b.quad("VestHead", [(x0, y1, DOOR_H), (x1, y1, DOOR_H), (x1, y1, h), (x0, y1, h)], "cream", (xm, y1 - 1, 2.0))
     b.lathe("VestLamp", [(0, h - 0.03), (0.14, h - 0.03), (0.14, h + 0.001), (0, h + 0.001)], (xm, (y0 + y1) / 2), "steel", 20)
@@ -138,14 +160,14 @@ def vestibule(b):
 
 def pass_wall(b):
     t, xc = PASS_X1 - PASS_X0, (PASS_X0 + PASS_X1) / 2
-    kx, dxf = PASS_X1 + 0.002, PASS_X0 - 0.002            # kitchen / diner face planes
-    pieces = [  # (name, z0, z1, y0, y1)
-        ("S", -HY, PASS_S, 0.0, CEIL), ("N", PASS_N, HY, 0.0, CEIL), ("Top", -HY, HY, PASS_TOP, CEIL)]
+    kx, dxf = PASS_X1 + PASS_GAP, PASS_X0 - PASS_GAP      # kitchen / diner face planes
+    pieces = [  # (name, z0, z1, y0, y1); end segments stop under the top band, no overlap
+        ("S", -HY, PASS_S, 0.0, PASS_TOP), ("N", PASS_N, HY, 0.0, PASS_TOP), ("Top", -HY, HY, PASS_TOP, CEIL)]
     for n, z0, z1, y0, y1 in pieces:
         b.box(f"Pass_{n}", (t, z1 - z0, y1 - y0), (xc, (z0 + z1) / 2), y0, "cream", 0.0, 1)
-        ylo = max(y0, SK)
+        ylo, yhi = max(y0, SK), min(y1, CEIL - CORN)
         # kitchen face: tiles; diner face: paint above the wainscot
-        b.quad(f"PassTiles_{n}", [(kx, z0, ylo), (kx, z1, ylo), (kx, z1, CEIL - CORN), (kx, z0, CEIL - CORN)], "white", (0, (z0 + z1) / 2, 1.5), tile=True)
+        b.quad(f"PassTiles_{n}", [(kx, z0, ylo), (kx, z1, ylo), (kx, z1, yhi), (kx, z0, yhi)], "white", (0, (z0 + z1) / 2, 1.5), tile=True)
         if y0 < WAIN:
             b.box(f"PassWain_{n}", (0.02, z1 - z0, WAIN - SK), (dxf - 0.01, (z0 + z1) / 2), SK, "teal", 0.006, 1)
             b.box(f"PassStripe_{n}", (0.035, z1 - z0, 0.06), (dxf - 0.0175, (z0 + z1) / 2), WAIN, "red", 0.008, 1)

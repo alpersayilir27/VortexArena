@@ -8,7 +8,7 @@ elle yapılan bir düzenleme betiğe yazılmadıkça bir sonraki üretimde kaybo
 
 | Yer | İçerik |
 |---|---|
-| `scripts/bk_common.py` | Ortak modül: palet tanımı ve dokusu, parça kurucular (`Builder.box` · `cyl` · `profile_x`), `bake()` (modifier uygula + palet UV'si + tek mesh), `export_fbx()` |
+| `scripts/bk_common.py` | Ortak modül: palet tanımı ve dokusu, parça kurucular (`Builder.box` · `cyl` · `profile_x`), `bake()` (modifier uygula + palet UV'si + z-fight denetimi + tek mesh), `export_fbx()` |
 | `scripts/<id>_<ad>.py` | Obje başına bir betik. Koşunca objeyi kurar, birleştirir ve FBX'ini yazar |
 | `ref/<id>_<ad>_sheet.png` | Gemini'den gelen 2×2 görünüm sayfası (ön · sol · arka · sağ). Görünüm ve renk kaynağıdır; ölçü kaynağı değildir |
 | `Assets/Modes/Burger/KitchenKit/` | Çıktı: `Models/<Id>_<Ad>.fbx`, `Textures/BK_*.png`, `Materials/M_BK_*.mat`, `Prefabs/BK_<Id>_<Ad>.prefab` |
@@ -25,6 +25,10 @@ elle yapılan bir düzenleme betiğe yazılmadıkça bir sonraki üretimde kaybo
    ⚠️ Her dışa aktarma `BK_Palette.png` ve `BK_Decals.png`'yi de yeniden yazar; onlar da yeniden
    içe aktarılır. Aksi hâlde yeni eklenen renk ya da etiket Unity'de eski dokudan okunur (boş palet
    sütunu macenta görünür).
+4. ⚠️ Sahnede lightmap'li duran bir modeli (kabuk ve Static işaretli her kit objesi) yeniden dışa
+   aktarmak lightmap UV'sini yeniden ürettirir: kullanan sahne **yeniden bake edilene kadar** eski
+   lightmap yanlış yere oturur (lekeler, renk bantları) ve hata vermez. Dışa aktarma ile bake aynı
+   işte yapılır.
 
 ## Kurallar
 
@@ -60,6 +64,12 @@ elle yapılan bir düzenleme betiğe yazılmadıkça bir sonraki üretimde kaybo
   %60'ta ana renk, üst açık). Tek renkli ince parça (derz, işaret) pahsız kalır.
 - ⚠️ **Pahsız kutu (`bevel=0`) düz gölgelenir** (`Builder.box`): yumuşak gölgelemede köşe
   normalleri bütün yüzeye yayılır, geniş düz duvar kirli/gri yanar ve lightmap bunu düzeltmez.
+- ⚠️ **Z-fight yok:** iki parçanın aynı yöne bakan yüzü aynı düzlemde üst üste binmez — Quest'te
+  titrer, Blender'da görünmez. Katmanlı parça (panel, etiket, astar, şerit) oturduğu yüzden en az
+  `ZF_GAP` (2 mm) uzakta durur; birleşen parçalar (köşede kesişen çıtalar, gövde + kemer) ya uç uca
+  kesilir ya tek katı olarak kurulur (`hull`). Bir parçanın ucu başka parçaya gömülecekse yüzüyle
+  hizalanmaz, içine girer. `bake()` her objede `zfight_pairs()` koşar ve
+  `Z-FIGHT <obje>: <parça> / <parça>` yazar — bu satırla dışa aktarılmış obje bitmiş sayılmaz.
 - ⚠️ **Kaynak koleksiyon gizliyken bake edilmez:** gizli koleksiyonun modifier'ları hesaplanmaz,
   pahlar sessizce düşer. `Builder` koleksiyonu kurarken açar.
 - **Ölçüler sahneye bağlıdır**, görsele değil:

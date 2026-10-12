@@ -1,0 +1,767 @@
+{
+  "importHints": {
+    "baseMap": "ASTC 6x6, sRGB",
+    "normalMap": "ASTC 5x5, Normal map",
+    "maskMap": "ASTC 6x6, Linear",
+    "maxSize": 1024
+  },
+  "materials": {
+    "ZM_A_ArmChair_01_0": {
+      "baseMap": "T_ZM_A_ArmChair_01_0_A.png",
+      "normalMap": "T_ZM_A_ArmChair_01_0_N.png",
+      "maskMap": "T_ZM_A_ArmChair_01_0_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "polyhaven"
+    },
+    "ZM_A_Chandelier_01_0": {
+      "baseMap": "T_ZM_A_Chandelier_01_0_A.png",
+      "normalMap": "T_ZM_A_Chandelier_01_0_N.png",
+      "maskMap": "T_ZM_A_Chandelier_01_0_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "polyhaven"
+    },
+    "ZM_A_Chandelier_01_1": {
+      "baseMap": "T_ZM_A_Chandelier_01_1_A.png",
+      "normalMap": null,
+      "maskMap": "T_ZM_A_Chandelier_01_1_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "polyhaven"
+    },
+    "ZM_A_ClassicConsole_01_0": {
+      "baseMap": "T_ZM_A_ClassicConsole_01_0_A.png",
+      "normalMap": "T_ZM_A_ClassicConsole_01_0_N.png",
+      "maskMap": "T_ZM_A_ClassicConsole_01_0_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "polyhaven"
+    },
+    "ZM_A_GothicBed_01_0": {
+      "baseMap": "T_ZM_A_GothicBed_01_0_A.png",
+      "normalMap": "T_ZM_A_GothicBed_01_0_N.png",
+      "maskMap": "T_ZM_A_GothicBed_01_0_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "polyhaven"
+    },
+    "ZM_A_GothicCommode_01_0": {
+      "baseMap": "T_ZM_A_GothicCommode_01_0_A.png",
+      "normalMap": "T_ZM_A_GothicCommode_01_0_N.png",
+      "maskMap": "T_ZM_A_GothicCommode_01_0_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "polyhaven"
+    },
+    "ZM_A_Rockingchair_01_0": {
+      "baseMap": "T_ZM_A_Rockingchair_01_0_A.png",
+      "normalMap": "T_ZM_A_Rockingchair_01_0_N.png",
+      "maskMap": "T_ZM_A_Rockingchair_01_0_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "polyhaven"
+    },
+    "ZM_A_brass_candleholders_0": {
+      "baseMap": "T_ZM_A_brass_candleholders_0_A.png",
+      "normalMap": "T_ZM_A_brass_candleholders_0_N.png",
+      "maskMap": "T_ZM_A_brass_candleholders_0_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "polyhaven"
+    },
+    "ZM_A_brass_candleholders_1": {
+      "baseMap": "T_ZM_A_brass_candleholders_1_A.png",
+      "normalMap": null,
+      "maskMap": "T_ZM_A_brass_candleholders_1_M.png",
+      "alphaClip": true,
+      "twoSided": false,
+      "emission": {
+        "fromBase": true,
+        "intensity": 3.0,
+        "color": [
+          1,
+          1,
+          1
+        ]
+      },
+      "source": "polyhaven"
+    },
+    "ZM_A_covered_car_0": {
+      "baseMap": "T_ZM_A_covered_car_0_A.png",
+      "normalMap": "T_ZM_A_covered_car_0_N.png",
+      "maskMap": "T_ZM_A_covered_car_0_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "polyhaven"
+    },
+    "ZM_A_covered_car_1": {
+      "baseMap": "T_ZM_A_covered_car_1_A.png",
+      "normalMap": "T_ZM_A_covered_car_1_N.png",
+      "maskMap": "T_ZM_A_covered_car_1_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "polyhaven"
+    },
+    "ZM_A_fancy_picture_frame_01_0": {
+      "baseMap": "T_ZM_A_fancy_picture_frame_01_0_A.png",
+      "normalMap": "T_ZM_A_fancy_picture_frame_01_0_N.png",
+      "maskMap": "T_ZM_A_fancy_picture_frame_01_0_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "polyhaven"
+    },
+    "ZM_A_fancy_picture_frame_01_1": {
+      "baseMap": "T_ZM_A_fancy_picture_frame_01_1_A.png",
+      "normalMap": "T_ZM_A_fancy_picture_frame_01_1_N.png",
+      "maskMap": "T_ZM_A_fancy_picture_frame_01_1_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "polyhaven"
+    },
+    "ZM_A_fancy_picture_frame_02_0": {
+      "baseMap": "T_ZM_A_fancy_picture_frame_02_0_A.png",
+      "normalMap": "T_ZM_A_fancy_picture_frame_02_0_N.png",
+      "maskMap": "T_ZM_A_fancy_picture_frame_02_0_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "polyhaven"
+    },
+    "ZM_A_fancy_picture_frame_02_1": {
+      "baseMap": "T_ZM_A_fancy_picture_frame_02_1_A.png",
+      "normalMap": "T_ZM_A_fancy_picture_frame_02_1_N.png",
+      "maskMap": "T_ZM_A_fancy_picture_frame_02_1_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "polyhaven"
+    },
+    "ZM_A_hanging_picture_frame_03_0": {
+      "baseMap": "T_ZM_A_hanging_picture_frame_03_0_A.png",
+      "normalMap": "T_ZM_A_hanging_picture_frame_03_0_N.png",
+      "maskMap": "T_ZM_A_hanging_picture_frame_03_0_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "polyhaven"
+    },
+    "ZM_A_hanging_picture_frame_03_1": {
+      "baseMap": "T_ZM_A_hanging_picture_frame_03_1_A.png",
+      "normalMap": "T_ZM_A_hanging_picture_frame_03_1_N.png",
+      "maskMap": "T_ZM_A_hanging_picture_frame_03_1_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "polyhaven"
+    },
+    "ZM_A_marble_bust_01_0": {
+      "baseMap": "T_ZM_A_marble_bust_01_0_A.png",
+      "normalMap": "T_ZM_A_marble_bust_01_0_N.png",
+      "maskMap": "T_ZM_A_marble_bust_01_0_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "polyhaven"
+    },
+    "ZM_A_ornate_mirror_01_0": {
+      "baseMap": "T_ZM_A_ornate_mirror_01_0_A.png",
+      "normalMap": "T_ZM_A_ornate_mirror_01_0_N.png",
+      "maskMap": "T_ZM_A_ornate_mirror_01_0_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "polyhaven"
+    },
+    "ZM_A_street_lamp_01_0": {
+      "baseMap": "T_ZM_A_street_lamp_01_0_A.png",
+      "normalMap": "T_ZM_A_street_lamp_01_0_N.png",
+      "maskMap": "T_ZM_A_street_lamp_01_0_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "polyhaven"
+    },
+    "ZM_A_street_lamp_01_1": {
+      "baseMap": "T_ZM_A_street_lamp_01_1_A.png",
+      "normalMap": "T_ZM_A_street_lamp_01_1_N.png",
+      "maskMap": "T_ZM_A_street_lamp_01_1_M.png",
+      "alphaClip": true,
+      "twoSided": false,
+      "emission": null,
+      "source": "polyhaven"
+    },
+    "ZM_A_street_lamp_01_2": {
+      "baseMap": "T_ZM_A_street_lamp_01_2_A.png",
+      "normalMap": "T_ZM_A_street_lamp_01_2_N.png",
+      "maskMap": "T_ZM_A_street_lamp_01_2_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": {
+        "fromBase": true,
+        "intensity": 6.0,
+        "color": [
+          1,
+          1,
+          1
+        ]
+      },
+      "source": "polyhaven"
+    },
+    "ZM_A_vintage_grandfather_clock_01_0": {
+      "baseMap": "T_ZM_A_vintage_grandfather_clock_01_0_A.png",
+      "normalMap": "T_ZM_A_vintage_grandfather_clock_01_0_N.png",
+      "maskMap": "T_ZM_A_vintage_grandfather_clock_01_0_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "polyhaven"
+    },
+    "ZM_A_vintage_grandfather_clock_01_1": {
+      "baseMap": "T_ZM_A_vintage_grandfather_clock_01_1_A.png",
+      "normalMap": "T_ZM_A_vintage_grandfather_clock_01_1_N.png",
+      "maskMap": "T_ZM_A_vintage_grandfather_clock_01_1_M.png",
+      "alphaClip": true,
+      "twoSided": false,
+      "emission": null,
+      "source": "polyhaven"
+    },
+    "ZM_A_vintage_oil_lamp_0": {
+      "baseMap": "T_ZM_A_vintage_oil_lamp_0_A.png",
+      "normalMap": "T_ZM_A_vintage_oil_lamp_0_N.png",
+      "maskMap": "T_ZM_A_vintage_oil_lamp_0_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "polyhaven"
+    },
+    "ZM_A_vintage_oil_lamp_1": {
+      "baseMap": "T_ZM_A_vintage_oil_lamp_1_A.png",
+      "normalMap": null,
+      "maskMap": "T_ZM_A_vintage_oil_lamp_1_M.png",
+      "alphaClip": true,
+      "twoSided": false,
+      "emission": {
+        "fromBase": true,
+        "intensity": 3.0,
+        "color": [
+          1,
+          1,
+          1
+        ]
+      },
+      "source": "polyhaven"
+    },
+    "ZM_A_vintage_oil_lamp_2": {
+      "baseMap": "T_ZM_A_vintage_oil_lamp_2_A.png",
+      "normalMap": "T_ZM_A_vintage_oil_lamp_2_N.png",
+      "maskMap": "T_ZM_A_vintage_oil_lamp_2_M.png",
+      "alphaClip": true,
+      "twoSided": false,
+      "emission": null,
+      "source": "polyhaven"
+    },
+    "ZM_Bark": {
+      "baseMap": "T_ZM_Bark_A.png",
+      "normalMap": "T_ZM_Bark_N.png",
+      "maskMap": "T_ZM_Bark_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "zm_textures"
+    },
+    "ZM_Bone": {
+      "baseMap": "T_ZM_Bone_A.png",
+      "normalMap": null,
+      "maskMap": "T_ZM_Bone_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "zm_textures"
+    },
+    "ZM_Brick": {
+      "baseMap": "T_ZM_Brick_A.png",
+      "normalMap": "T_ZM_Brick_N.png",
+      "maskMap": "T_ZM_Brick_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "zm_textures"
+    },
+    "ZM_Bronze": {
+      "baseMap": "T_ZM_Bronze_A.png",
+      "normalMap": "T_ZM_Bronze_N.png",
+      "maskMap": "T_ZM_Bronze_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "zm_textures"
+    },
+    "ZM_CarPaint": {
+      "baseMap": "T_ZM_CarPaint_A.png",
+      "normalMap": null,
+      "maskMap": "T_ZM_CarPaint_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "zm_textures"
+    },
+    "ZM_CastIron": {
+      "baseMap": "T_ZM_CastIron_A.png",
+      "normalMap": null,
+      "maskMap": "T_ZM_CastIron_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "zm_textures"
+    },
+    "ZM_Ceiling": {
+      "baseMap": "T_ZM_Ceiling_A.png",
+      "normalMap": "T_ZM_Ceiling_N.png",
+      "maskMap": "T_ZM_Ceiling_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "zm_textures"
+    },
+    "ZM_Checker": {
+      "baseMap": "T_ZM_Checker_A.png",
+      "normalMap": "T_ZM_Checker_N.png",
+      "maskMap": "T_ZM_Checker_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "zm_textures"
+    },
+    "ZM_Cobble": {
+      "baseMap": "T_ZM_Cobble_A.png",
+      "normalMap": "T_ZM_Cobble_N.png",
+      "maskMap": "T_ZM_Cobble_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "zm_textures"
+    },
+    "ZM_Concrete": {
+      "baseMap": "T_ZM_Concrete_A.png",
+      "normalMap": "T_ZM_Concrete_N.png",
+      "maskMap": "T_ZM_Concrete_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "zm_textures"
+    },
+    "ZM_Copper": {
+      "baseMap": "T_ZM_Copper_A.png",
+      "normalMap": null,
+      "maskMap": "T_ZM_Copper_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "zm_textures"
+    },
+    "ZM_Deck": {
+      "baseMap": "T_ZM_Deck_A.png",
+      "normalMap": "T_ZM_Deck_N.png",
+      "maskMap": "T_ZM_Deck_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "zm_textures"
+    },
+    "ZM_Dirt": {
+      "baseMap": "T_ZM_Dirt_A.png",
+      "normalMap": "T_ZM_Dirt_N.png",
+      "maskMap": "T_ZM_Dirt_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "zm_textures"
+    },
+    "ZM_DoorWood": {
+      "baseMap": "T_ZM_DoorWood_A.png",
+      "normalMap": "T_ZM_DoorWood_N.png",
+      "maskMap": "T_ZM_DoorWood_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "zm_textures"
+    },
+    "ZM_Fabric": {
+      "baseMap": "T_ZM_Fabric_A.png",
+      "normalMap": "T_ZM_Fabric_N.png",
+      "maskMap": "T_ZM_Fabric_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "zm_textures"
+    },
+    "ZM_FireTile": {
+      "baseMap": "T_ZM_FireTile_A.png",
+      "normalMap": "T_ZM_FireTile_N.png",
+      "maskMap": "T_ZM_FireTile_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "zm_textures"
+    },
+    "ZM_Flagstone": {
+      "baseMap": "T_ZM_Flagstone_A.png",
+      "normalMap": "T_ZM_Flagstone_N.png",
+      "maskMap": "T_ZM_Flagstone_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "zm_textures"
+    },
+    "ZM_FloorWood": {
+      "baseMap": "T_ZM_FloorWood_A.png",
+      "normalMap": "T_ZM_FloorWood_N.png",
+      "maskMap": "T_ZM_FloorWood_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "zm_textures"
+    },
+    "ZM_Foliage": {
+      "baseMap": "T_ZM_Foliage_A.png",
+      "normalMap": "T_ZM_Foliage_N.png",
+      "maskMap": "T_ZM_Foliage_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "zm_textures"
+    },
+    "ZM_Glass": {
+      "baseMap": "T_ZM_Glass_A.png",
+      "normalMap": null,
+      "maskMap": "T_ZM_Glass_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "zm_textures"
+    },
+    "ZM_GlowBlue": {
+      "baseMap": "T_ZM_GlowBlue_A.png",
+      "normalMap": null,
+      "maskMap": "T_ZM_GlowBlue_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": {
+        "fromBase": false,
+        "intensity": 8.0,
+        "color": [
+          0.25,
+          0.55,
+          1.0
+        ]
+      },
+      "source": "zm_textures"
+    },
+    "ZM_GlowRed": {
+      "baseMap": "T_ZM_GlowRed_A.png",
+      "normalMap": null,
+      "maskMap": "T_ZM_GlowRed_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": {
+        "fromBase": false,
+        "intensity": 6.0,
+        "color": [
+          1.0,
+          0.08,
+          0.05
+        ]
+      },
+      "source": "zm_textures"
+    },
+    "ZM_Gold": {
+      "baseMap": "T_ZM_Gold_A.png",
+      "normalMap": "T_ZM_Gold_N.png",
+      "maskMap": "T_ZM_Gold_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "zm_textures"
+    },
+    "ZM_Hide": {
+      "baseMap": "T_ZM_Hide_A.png",
+      "normalMap": null,
+      "maskMap": "T_ZM_Hide_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "zm_textures"
+    },
+    "ZM_Iron": {
+      "baseMap": "T_ZM_Iron_A.png",
+      "normalMap": "T_ZM_Iron_N.png",
+      "maskMap": "T_ZM_Iron_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "zm_textures"
+    },
+    "ZM_LampGlow": {
+      "baseMap": "T_ZM_LampGlow_A.png",
+      "normalMap": null,
+      "maskMap": "T_ZM_LampGlow_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": {
+        "fromBase": false,
+        "intensity": 6.0,
+        "color": [
+          1.0,
+          0.62,
+          0.25
+        ]
+      },
+      "source": "zm_textures"
+    },
+    "ZM_Marble": {
+      "baseMap": "T_ZM_Marble_A.png",
+      "normalMap": "T_ZM_Marble_N.png",
+      "maskMap": "T_ZM_Marble_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "zm_textures"
+    },
+    "ZM_Mirror": {
+      "baseMap": "T_ZM_Mirror_A.png",
+      "normalMap": null,
+      "maskMap": "T_ZM_Mirror_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "zm_textures"
+    },
+    "ZM_Mountain": {
+      "baseMap": "T_ZM_Mountain_A.png",
+      "normalMap": "T_ZM_Mountain_N.png",
+      "maskMap": "T_ZM_Mountain_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "zm_textures"
+    },
+    "ZM_Paper": {
+      "baseMap": "T_ZM_Paper_A.png",
+      "normalMap": null,
+      "maskMap": "T_ZM_Paper_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "zm_textures"
+    },
+    "ZM_Parquet": {
+      "baseMap": "T_ZM_Parquet_A.png",
+      "normalMap": "T_ZM_Parquet_N.png",
+      "maskMap": "T_ZM_Parquet_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "zm_textures"
+    },
+    "ZM_Plaster": {
+      "baseMap": "T_ZM_Plaster_A.png",
+      "normalMap": "T_ZM_Plaster_N.png",
+      "maskMap": "T_ZM_Plaster_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "zm_textures"
+    },
+    "ZM_Road": {
+      "baseMap": "T_ZM_Road_A.png",
+      "normalMap": "T_ZM_Road_N.png",
+      "maskMap": "T_ZM_Road_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "zm_textures"
+    },
+    "ZM_Roof": {
+      "baseMap": "T_ZM_Roof_A.png",
+      "normalMap": "T_ZM_Roof_N.png",
+      "maskMap": "T_ZM_Roof_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "zm_textures"
+    },
+    "ZM_Roots": {
+      "baseMap": "T_ZM_Roots_A.png",
+      "normalMap": "T_ZM_Roots_N.png",
+      "maskMap": "T_ZM_Roots_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "zm_textures"
+    },
+    "ZM_Rug": {
+      "baseMap": "T_ZM_Rug_A.png",
+      "normalMap": "T_ZM_Rug_N.png",
+      "maskMap": "T_ZM_Rug_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "zm_textures"
+    },
+    "ZM_Shade": {
+      "baseMap": "T_ZM_Shade_A.png",
+      "normalMap": null,
+      "maskMap": "T_ZM_Shade_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": {
+        "fromBase": false,
+        "intensity": 1.2,
+        "color": [
+          0.95,
+          0.75,
+          0.5
+        ]
+      },
+      "source": "zm_textures"
+    },
+    "ZM_Sheet": {
+      "baseMap": "T_ZM_Sheet_A.png",
+      "normalMap": "T_ZM_Sheet_N.png",
+      "maskMap": "T_ZM_Sheet_M.png",
+      "alphaClip": false,
+      "twoSided": true,
+      "emission": null,
+      "source": "zm_textures"
+    },
+    "ZM_ShutterPaint": {
+      "baseMap": "T_ZM_ShutterPaint_A.png",
+      "normalMap": "T_ZM_ShutterPaint_N.png",
+      "maskMap": "T_ZM_ShutterPaint_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "zm_textures"
+    },
+    "ZM_Siding": {
+      "baseMap": "T_ZM_Siding_A.png",
+      "normalMap": "T_ZM_Siding_N.png",
+      "maskMap": "T_ZM_Siding_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "zm_textures"
+    },
+    "ZM_SidingCream": {
+      "baseMap": "T_ZM_SidingCream_A.png",
+      "normalMap": "T_ZM_SidingCream_N.png",
+      "maskMap": "T_ZM_SidingCream_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "zm_textures"
+    },
+    "ZM_Steel": {
+      "baseMap": "T_ZM_Steel_A.png",
+      "normalMap": "T_ZM_Steel_N.png",
+      "maskMap": "T_ZM_Steel_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "zm_textures"
+    },
+    "ZM_Stone": {
+      "baseMap": "T_ZM_Stone_A.png",
+      "normalMap": "T_ZM_Stone_N.png",
+      "maskMap": "T_ZM_Stone_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "zm_textures"
+    },
+    "ZM_Trim": {
+      "baseMap": "T_ZM_Trim_A.png",
+      "normalMap": "T_ZM_Trim_N.png",
+      "maskMap": "T_ZM_Trim_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "zm_textures"
+    },
+    "ZM_TrimPaint": {
+      "baseMap": "T_ZM_TrimPaint_A.png",
+      "normalMap": "T_ZM_TrimPaint_N.png",
+      "maskMap": "T_ZM_TrimPaint_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "zm_textures"
+    },
+    "ZM_Velvet": {
+      "baseMap": "T_ZM_Velvet_A.png",
+      "normalMap": "T_ZM_Velvet_N.png",
+      "maskMap": "T_ZM_Velvet_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "zm_textures"
+    },
+    "ZM_Wainscot": {
+      "baseMap": "T_ZM_Wainscot_A.png",
+      "normalMap": "T_ZM_Wainscot_N.png",
+      "maskMap": "T_ZM_Wainscot_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "zm_textures"
+    },
+    "ZM_Wallpaper": {
+      "baseMap": "T_ZM_Wallpaper_A.png",
+      "normalMap": "T_ZM_Wallpaper_N.png",
+      "maskMap": "T_ZM_Wallpaper_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "zm_textures"
+    },
+    "ZM_WallpaperGrey": {
+      "baseMap": "T_ZM_WallpaperGrey_A.png",
+      "normalMap": "T_ZM_WallpaperGrey_N.png",
+      "maskMap": "T_ZM_WallpaperGrey_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "zm_textures"
+    },
+    "ZM_WindowView": {
+      "baseMap": "T_ZM_WindowView_A.png",
+      "normalMap": null,
+      "maskMap": "T_ZM_WindowView_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": {
+        "fromBase": true,
+        "intensity": 0.8,
+        "color": [
+          1,
+          1,
+          1
+        ]
+      },
+      "source": "zm_textures"
+    }
+  }
+}

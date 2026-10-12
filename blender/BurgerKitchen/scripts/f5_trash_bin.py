@@ -23,8 +23,10 @@ def build(name):
 
     # full black bag: puffy top just under the floor box, edge folded over the rim
     b.box("Bag", (2 * BX - 0.01, BYB - BYF - 0.01, 0.08), (0, by), FLOOR - 0.08, "charcoal", 0.03, 3)
+    # lining stands inside the cavity walls; flush with them it z-fights the green body
+    lin = 2 * bk_common.ZF_GAP + 0.002
     b.hollow_box("BagFold", (W + 0.02, YB - YF + 0.02, 0.07), (0, yc), RIM - 0.055,
-                 (2 * BX, BYB - BYF, 0.2), (0, by), RIM - 0.1, "charcoal", 0.02, 2)
+                 (2 * BX - 2 * lin, BYB - BYF - 2 * lin, 0.2), (0, by), RIM - 0.1, "charcoal", 0.02, 2)
 
     # lid standing open at the back, on a steel hinge
     b.cyl("Hinge", 0.025, W - 0.08, (0, YB - 0.03, RIM + 0.015), "X", "steel", 12, 0.006)

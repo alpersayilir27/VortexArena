@@ -25,7 +25,7 @@ dağıtıcısı (`NO_dispenser_sauce`) sahneden kalkar. Mayonez/hardal yoktur.
 |---|---|
 | Kind | `ketchup_bottle` (`KIND_ketchup_bottle.asset`), grab **anyone**, olaylar `squeeze` (policy owner), `squirt` (policy owner) |
 | Prefab | `NO_ketchup_bottle`: `NetIdentity`, `NetObject`, `NetObjectBody`, `NetObjectPoseSender`, `NetObjectGrabBridge`, `GripSocket`, yeni `BurgerKetchupBottle` |
-| Sahnede | 2 adet, her çalışma adasının üstünde; asılma noktası `HangAnchor_N` (y 1,85, burun aşağı), kordon ucu `CordAnchor_N` (makaranın altı) |
+| Sahnede | 2 adet, her çalışma adasının üstünde; asılma noktası `HangAnchor_N` (y 1,85, burun aşağı), kordon ucu `CordAnchor_N` (makara ağzının 1 cm içi — ağzın altında kalırsa kordonla makara arasında boşluk görünür) |
 | Görsel | `K1_KetchupBottle` (kırmızı şişe + sarı kapak, 0,43 m), tavanda `K2_KetchupReel`; sos katmanı `K3_KetchupPuddle` (`NO_sauce` içinde `CartoonVisual`: ince havuz + sıkılmış zikzak çizgi + alt katmanın kenarından sarkan damlalar, parlak `M_BK_Ketchup`; palet kırmızısı domatesle aynı olduğu için kullanılmaz) |
 
 **Kordon ve geri dönüş (yalnız sahibin fiziği):**

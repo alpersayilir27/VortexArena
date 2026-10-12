@@ -16,7 +16,7 @@ def build(name):
     yc, d = (Y0 + Y1) / 2, Y1 - Y0
     for i, (x, y) in enumerate([(-0.19, Y0 + 0.08), (0.19, Y0 + 0.08), (-0.19, Y1 - 0.08), (0.19, Y1 - 0.08)]):
         b.cyl(f"Foot_{i}", 0.035, 0.07, (x, y, 0.035), "Z", "steel", 12, 0.008)
-    b.box("Body", (W, d, TOP - 0.06), (0, yc), 0.06, "steel", 0.045, 3)
+    b.box("Body", (W, d, TOP - 0.08), (0, yc), 0.06, "steel", 0.045, 3)   # ends under TopPlate
 
     # front red panel with big cream dial and yellow heat arc
     b.box("Panel", (W - 0.08, 0.02, 0.52), (0, Y0 - 0.01), 0.28, "red", 0.012, 2)
@@ -33,17 +33,18 @@ def build(name):
     rim_h = 0.045
     b.box("Rim_F", (W, 0.04, rim_h), (0, Y0 + 0.02), TOP, "steel", 0.01, 1)
     b.box("Rim_B", (W, 0.08, rim_h + 0.06), (0, Y1 - 0.04), TOP, "steel", 0.012, 1)
-    for i, sx in enumerate([-1, 1]):
-        b.box(f"Rim_S{i}", (0.04, d, rim_h), (sx * (W / 2 - 0.02), yc), TOP, "steel", 0.01, 1)
+    for i, sx in enumerate([-1, 1]):  # between Rim_F and Rim_B, so corners do not overlap
+        b.box(f"Rim_S{i}", (0.04, d - 0.12, rim_h), (sx * (W / 2 - 0.02), yc - 0.02), TOP, "steel", 0.01, 1)
 
     # two wire baskets resting on the oil, wooden handles angled up toward the back
     for i, x in enumerate([-0.105, 0.105]):
-        bx0, bx1, by0, by1, bz0, bz1 = x - 0.085, x + 0.085, Y0 + 0.07, Y1 - 0.15, TOP - 0.02, TOP + 0.10
+        bx0, bx1, by0, by1, bz0, bz1 = x - 0.085, x + 0.085, Y0 + 0.07, Y1 - 0.15, TOP - 0.01, TOP + 0.10
         t = 0.012
-        for k, (cx, cy, sx, sy) in enumerate([(x, by0, bx1 - bx0, t), (x, by1, bx1 - bx0, t), (bx0, (by0 + by1) / 2, t, by1 - by0), (bx1, (by0 + by1) / 2, t, by1 - by0)]):
+        # front/back bars run outer to outer, side bars fit between them (no shared top faces)
+        for k, (cx, cy, sx, sy) in enumerate([(x, by0, bx1 - bx0 + t, t), (x, by1, bx1 - bx0 + t, t), (bx0, (by0 + by1) / 2, t, by1 - by0 - t), (bx1, (by0 + by1) / 2, t, by1 - by0 - t)]):
             b.box(f"BasketTop_{i}_{k}", (sx, sy, t), (cx, cy), bz1 - t, "steel_dark", 0)
-        for k in range(4):  # vertical wires on the front face
-            b.box(f"BasketWire_{i}_{k}", (0.008, 0.008, bz1 - bz0), (bx0 + 0.02 + k * 0.043, by0), bz0, "steel_dark", 0)
+        for k in range(4):  # vertical wires on the front face, ends buried in the plate and the bar
+            b.box(f"BasketWire_{i}_{k}", (0.008, 0.008, bz1 - bz0 - 0.004), (bx0 + 0.02 + k * 0.043, by0), bz0, "steel_dark", 0)
         b.pipe(f"Hook_{i}", [(x, by1, bz1), (x, by1 + 0.05, bz1 + 0.04), (x, Y1 - 0.06, bz1 + 0.05)], 0.008, "steel_dark", 8)
         b.pipe(f"HandleRod_{i}", [(x, by0 + 0.02, bz1), (x, by0 - 0.01, bz1 + 0.06)], 0.009, "steel_dark", 8)
         b.pipe(f"Handle_{i}", [(x, by0 - 0.01, bz1 + 0.06), (x, by0 - 0.06, bz1 + 0.16)], 0.02, "wood", 10)

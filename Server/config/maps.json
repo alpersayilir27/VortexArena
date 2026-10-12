@@ -340,6 +340,14 @@
         { "sceneId": 1, "kind": "breakable_cover" },
         { "sceneId": 2, "kind": "target_board" }
       ]
+    },
+    {
+      "sceneName": "ZombieManor_VortexAntep",
+      "venue": "VortexAntep",
+      "gameType": "quickbattle",
+      "moleDensity": 1.5,
+      "modes": ["tdm"],
+      "objects": []
     }
   ],
   "kinds": [

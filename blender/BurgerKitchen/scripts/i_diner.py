@@ -1,7 +1,7 @@
 # I diner (behind the ORDER windows, outside the play area, look only — no colliders needed):
 # I1 booth = table + two benches + ketchup bottle, table length along X, benches on +-Y,
 # pivot = floor center of the table. I2 jukebox, front -Y, pivot = floor center.
-import importlib, sys
+import importlib, math, sys
 SCRIPTS = r"C:\UnityProjects\VortexArena\blender\BurgerKitchen\scripts"
 if SCRIPTS not in sys.path:
     sys.path.insert(0, SCRIPTS)
@@ -36,15 +36,18 @@ def booth(name):
 def jukebox(name):
     b = bk_common.Builder(name)
     W, Dp = 0.75, 0.55
-    b.box("Body", (W, Dp, 1.15), (0, 0), 0.0, "purple", 0.05, 3)
-    b.cyl("Arch", W / 2, Dp, (0, 0, 1.15), "Y", "purple", 24, 0.04, 2)
+    # body + arch as one tombstone solid: a separate arch cylinder shares the body's front/back planes
+    pts = [(sx * W / 2, sy * Dp / 2, 0.0) for sx in (-1, 1) for sy in (-1, 1)]
+    pts += [(W / 2 * math.cos(math.radians(a)), sy * Dp / 2, 1.15 + W / 2 * math.sin(math.radians(a)))
+            for a in range(0, 181, 15) for sy in (-1, 1)]
+    b.hull("Body", pts, "purple", 0.05, 3)
     b.cyl("ArchGlass", W / 2 - 0.07, 0.02, (0, -Dp / 2 - 0.005, 1.15), "Y", "cream", 24)
     g = b.box("GlowL", (0.05, 0.03, 1.0), (-W / 2 + 0.06, -Dp / 2 - 0.01), 0.12, "yellow", 0.01, 1); g["bk_glow"] = True
     g = b.box("GlowR", (0.05, 0.03, 1.0), (W / 2 - 0.06, -Dp / 2 - 0.01), 0.12, "yellow", 0.01, 1); g["bk_glow"] = True
     b.box("Speaker", (0.48, 0.02, 0.40), (0, -Dp / 2 - 0.006), 0.15, "charcoal", 0.03, 2)
     for k in range(5):
         b.box(f"Slat_{k}", (0.44, 0.012, 0.02), (0, -Dp / 2 - 0.018), 0.20 + k * 0.07, "steel", 0)
-    b.box("Panel", (0.5, 0.02, 0.2), (0, -Dp / 2 - 0.006), 0.66, "red", 0.02, 1)
+    b.box("Panel", (0.5, 0.02, 0.18), (0, -Dp / 2 - 0.006), 0.66, "red", 0.02, 1)   # stays under ArchGlass
     for k in range(4):
         b.cyl(f"Button_{k}", 0.02, 0.02, (-0.15 + k * 0.1, -Dp / 2 - 0.02, 0.74), "Y", "white", 10)
     return b.bake()

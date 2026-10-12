@@ -77,6 +77,9 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Arenas/Venues/Outdoor9x8/Scenes/Japan_Outdoor9x8/Japan_Outdoor9x8.unity
     guid: fae98837a7fc1894ca92a85c5fedb666
+  - enabled: 1
+    path: Assets/Arenas/Venues/VortexAntep/Scenes/ZombieManor_VortexAntep/ZombieManor_VortexAntep.unity
+    guid: fc47d96168d37914ab7ef6069b059497
   m_configObjects:
     com.unity.dt.app-ui: {fileID: 11400000, guid: 1b1c20d82303e4b5781c3ef50ac1449f, type: 2}
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}

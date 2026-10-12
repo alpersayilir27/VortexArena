@@ -34,7 +34,15 @@ namespace VortexArena.Core.Arena
         /// <summary>Minimum interval between HUD searches when none is found (s).</summary>
         private const float HudSearchIntervalSeconds = 0.5f;
 
-        private static readonly Color IdleColor = new Color(0.35f, 0.85f, 1f, 0.45f);
+        /// <summary>Arrow centre above its disc (m) — <c>public</c> so the kit builder places it at
+        /// the same rest height the bob animates around.</summary>
+        public const float ArrowHeightMeters = 1.2f;
+
+        private const float ArrowBobMeters = 0.06f;
+        private const float ArrowBobSpeed = 2f;
+        private const float ArrowSpinDegreesPerSecond = 60f;
+
+        private static readonly Color IdleColor = new Color(0.35f, 0.85f, 1f, 0.6f);
         private static readonly Color ChargedColor = Color.white;
         private static readonly Color BusyColor = new Color(1f, 0.25f, 0.2f, 0.6f);
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
@@ -60,8 +68,12 @@ namespace VortexArena.Core.Arena
         [SerializeField, HideInInspector] private Transform upperDisc;
         [SerializeField, HideInInspector] private Transform lowerFill;
         [SerializeField, HideInInspector] private Transform upperFill;
+        [SerializeField, HideInInspector] private Transform lowerArrow;
+        [SerializeField, HideInInspector] private Transform upperArrow;
 
         private MaterialPropertyBlock _block;
+        private Renderer[] _lowerRenderers;
+        private Renderer[] _upperRenderers;
         private ModeHudBase _hud;
         private float _hudSearchTime;
         private OVRCameraRig _rig;
@@ -210,6 +222,26 @@ namespace VortexArena.Core.Arena
             }
         }
 
+        /// <summary>Bob + spin; runs regardless of calibration so the portal reads from afar.</summary>
+        private void LateUpdate()
+        {
+            float time = Time.unscaledTime;
+            AnimateArrow(lowerArrow, time, false);
+            AnimateArrow(upperArrow, time, true);
+        }
+
+        private static void AnimateArrow(Transform arrow, float time, bool down)
+        {
+            if (arrow == null)
+            {
+                return;
+            }
+
+            arrow.localPosition = new Vector3(
+                0f, ArrowHeightMeters + Mathf.Sin(time * ArrowBobSpeed) * ArrowBobMeters, 0f);
+            arrow.localRotation = Quaternion.Euler(0f, time * ArrowSpinDegreesPerSecond, down ? 180f : 0f);
+        }
+
         /// <summary>Refreshes the cached floor and validates the root height; the portal DISABLES
         /// itself when its root sits on no floor level — a portal lifting the player to a height with
         /// no mesh under it is worse than a missing portal.</summary>
@@ -356,21 +388,15 @@ namespace VortexArena.Core.Arena
                 return;
             }
 
-            // Y is the builder's thickness compensation (the disc parent is squashed): only the
-            // radius animates.
+            // Y is the thickness the builder set: only the radius animates.
             float f = Mathf.Clamp01(progress);
             fill.localScale = new Vector3(f, fill.localScale.y, f);
         }
 
         private void Paint(Transform disc, Color color)
         {
-            if (disc == null)
-            {
-                return;
-            }
-
-            var renderer = disc.GetComponent<Renderer>();
-            if (renderer == null)
+            Renderer[] renderers = RenderersOf(disc);
+            if (renderers == null)
             {
                 return;
             }
@@ -379,7 +405,43 @@ namespace VortexArena.Core.Arena
             // arena at once.
             _block ??= new MaterialPropertyBlock();
             _block.SetColor(BaseColorId, color);
-            renderer.SetPropertyBlock(_block);
+            for (int i = 0; i < renderers.Length; i++)
+            {
+                renderers[i].SetPropertyBlock(_block);
+            }
+        }
+
+        /// <summary>Plate, band and arrow of a disc — everything but the fill, which keeps its own
+        /// colour. Cached on first use.</summary>
+        private Renderer[] RenderersOf(Transform disc)
+        {
+            if (disc == null)
+            {
+                return null;
+            }
+
+            bool upper = disc == upperDisc;
+            Renderer[] cached = upper ? _upperRenderers : _lowerRenderers;
+            if (cached != null)
+            {
+                return cached;
+            }
+
+            Transform fill = upper ? upperFill : lowerFill;
+            var list = new List<Renderer>(disc.GetComponentsInChildren<Renderer>(true));
+            list.RemoveAll(r => fill != null && r.transform.IsChildOf(fill));
+            cached = list.ToArray();
+
+            if (upper)
+            {
+                _upperRenderers = cached;
+            }
+            else
+            {
+                _lowerRenderers = cached;
+            }
+
+            return cached;
         }
 
         /// <summary>Writes the HUD notice — only while this portal holds the player, and it clears its

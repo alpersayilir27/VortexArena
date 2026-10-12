@@ -1,0 +1,509 @@
+{
+  "note": "practical lights (Baked/Mixed in Unity), one per glowing cluster",
+  "lights": [
+    {
+      "name": "ZM_LampGlow_0.001",
+      "position": [
+        0.5295,
+        2.65,
+        -4.2275
+      ],
+      "color": [
+        1.0,
+        0.62,
+        0.32
+      ],
+      "previewWatts": 60.0
+    },
+    {
+      "name": "ZM_LampGlow_1.001",
+      "position": [
+        2.6325,
+        2.65,
+        -4.2275
+      ],
+      "color": [
+        1.0,
+        0.62,
+        0.32
+      ],
+      "previewWatts": 60.0
+    },
+    {
+      "name": "ZM_LampGlow_2.001",
+      "position": [
+        -0.13,
+        2.23,
+        -0.77
+      ],
+      "color": [
+        1.0,
+        0.62,
+        0.32
+      ],
+      "previewWatts": 60.0
+    },
+    {
+      "name": "ZM_LampGlow_3.001",
+      "position": [
+        2.13,
+        2.23,
+        -0.77
+      ],
+      "color": [
+        1.0,
+        0.62,
+        0.32
+      ],
+      "previewWatts": 60.0
+    },
+    {
+      "name": "ZM_LampGlow_4.001",
+      "position": [
+        2.0864,
+        0.1852,
+        7.3
+      ],
+      "color": [
+        1.0,
+        0.62,
+        0.32
+      ],
+      "previewWatts": 60.0
+    },
+    {
+      "name": "ZM_LampGlow_5.001",
+      "position": [
+        -0.4,
+        1.37,
+        7.048
+      ],
+      "color": [
+        1.0,
+        0.62,
+        0.32
+      ],
+      "previewWatts": 60.0
+    },
+    {
+      "name": "ZM_LampGlow_6.001",
+      "position": [
+        -0.9,
+        2.395,
+        7.8
+      ],
+      "color": [
+        1.0,
+        0.62,
+        0.32
+      ],
+      "previewWatts": 60.0
+    },
+    {
+      "name": "ZM_LampGlow_7.001",
+      "position": [
+        -1.25,
+        5.23,
+        3.245
+      ],
+      "color": [
+        1.0,
+        0.62,
+        0.32
+      ],
+      "previewWatts": 60.0
+    },
+    {
+      "name": "ZM_LampGlow_8.001",
+      "position": [
+        5.65,
+        5.23,
+        3.245
+      ],
+      "color": [
+        1.0,
+        0.62,
+        0.32
+      ],
+      "previewWatts": 60.0
+    },
+    {
+      "name": "ZM_LampGlow_9.001",
+      "position": [
+        2.3715,
+        7.23,
+        1.5625
+      ],
+      "color": [
+        1.0,
+        0.62,
+        0.32
+      ],
+      "previewWatts": 60.0
+    },
+    {
+      "name": "ZM_LampGlow_10.001",
+      "position": [
+        3.2515,
+        7.23,
+        1.5625
+      ],
+      "color": [
+        1.0,
+        0.62,
+        0.32
+      ],
+      "previewWatts": 60.0
+    },
+    {
+      "name": "ZM_LampGlow_11.001",
+      "position": [
+        2.0864,
+        3.1852,
+        7.3
+      ],
+      "color": [
+        1.0,
+        0.62,
+        0.32
+      ],
+      "previewWatts": 60.0
+    },
+    {
+      "name": "ZM_LampGlow_12.001",
+      "position": [
+        -0.4,
+        4.37,
+        7.048
+      ],
+      "color": [
+        1.0,
+        0.62,
+        0.32
+      ],
+      "previewWatts": 60.0
+    },
+    {
+      "name": "ZM_LampGlow_13.001",
+      "position": [
+        -0.9,
+        5.395,
+        7.8
+      ],
+      "color": [
+        1.0,
+        0.62,
+        0.32
+      ],
+      "previewWatts": 60.0
+    },
+    {
+      "name": "ZM_LampGlow_14.001",
+      "position": [
+        4.7,
+        4.37,
+        7.048
+      ],
+      "color": [
+        1.0,
+        0.62,
+        0.32
+      ],
+      "previewWatts": 60.0
+    },
+    {
+      "name": "ZM_LampGlow_15.001",
+      "position": [
+        5.2,
+        5.395,
+        7.8
+      ],
+      "color": [
+        1.0,
+        0.62,
+        0.32
+      ],
+      "previewWatts": 60.0
+    },
+    {
+      "name": "ZM_LampGlow_16.001",
+      "position": [
+        6.129,
+        7.32,
+        3.52
+      ],
+      "color": [
+        1.0,
+        0.62,
+        0.32
+      ],
+      "previewWatts": 60.0
+    },
+    {
+      "name": "ZM_LampGlow_17.001",
+      "position": [
+        -1.769,
+        7.32,
+        3.52
+      ],
+      "color": [
+        1.0,
+        0.62,
+        0.32
+      ],
+      "previewWatts": 60.0
+    },
+    {
+      "name": "ZM_LampGlow_18.001",
+      "position": [
+        4.7,
+        7.37,
+        7.048
+      ],
+      "color": [
+        1.0,
+        0.62,
+        0.32
+      ],
+      "previewWatts": 60.0
+    },
+    {
+      "name": "ZM_LampGlow_19.001",
+      "position": [
+        5.2,
+        8.395,
+        7.8
+      ],
+      "color": [
+        1.0,
+        0.62,
+        0.32
+      ],
+      "previewWatts": 60.0
+    },
+    {
+      "name": "ZM_Shade_0.001",
+      "position": [
+        0.799,
+        2.2714,
+        1.4988
+      ],
+      "color": [
+        1.0,
+        0.7,
+        0.42
+      ],
+      "previewWatts": 70.0
+    },
+    {
+      "name": "ZM_Shade_1.001",
+      "position": [
+        0.299,
+        2.2714,
+        5.3988
+      ],
+      "color": [
+        1.0,
+        0.7,
+        0.42
+      ],
+      "previewWatts": 70.0
+    },
+    {
+      "name": "ZM_Shade_2.001",
+      "position": [
+        4.699,
+        2.2714,
+        5.3988
+      ],
+      "color": [
+        1.0,
+        0.7,
+        0.42
+      ],
+      "previewWatts": 70.0
+    },
+    {
+      "name": "ZM_Shade_3.001",
+      "position": [
+        0.399,
+        5.2714,
+        5.1988
+      ],
+      "color": [
+        1.0,
+        0.7,
+        0.42
+      ],
+      "previewWatts": 70.0
+    },
+    {
+      "name": "ZM_Shade_4.001",
+      "position": [
+        4.399,
+        5.2714,
+        5.5988
+      ],
+      "color": [
+        1.0,
+        0.7,
+        0.42
+      ],
+      "previewWatts": 70.0
+    },
+    {
+      "name": "ZM_GlowBlue_0.001",
+      "position": [
+        -1.2231,
+        7.9,
+        5.35
+      ],
+      "color": [
+        0.35,
+        0.6,
+        1.0
+      ],
+      "previewWatts": 12.0
+    },
+    {
+      "name": "ZM_GlowBlue_1.001",
+      "position": [
+        -1.2231,
+        7.2,
+        4.85
+      ],
+      "color": [
+        0.35,
+        0.6,
+        1.0
+      ],
+      "previewWatts": 12.0
+    },
+    {
+      "name": "ZM_GlowRed_0.001",
+      "position": [
+        -0.8531,
+        6.615,
+        5.2
+      ],
+      "color": [
+        1.0,
+        0.15,
+        0.1
+      ],
+      "previewWatts": 3.0
+    },
+    {
+      "name": "ZM_lamp_0.001",
+      "position": [
+        -0.7002,
+        3.2671,
+        -5.7492
+      ],
+      "color": [
+        1.0,
+        0.62,
+        0.32
+      ],
+      "previewWatts": 150.0
+    },
+    {
+      "name": "ZM_lamp_1.001",
+      "position": [
+        4.8998,
+        3.2671,
+        -5.7492
+      ],
+      "color": [
+        1.0,
+        0.62,
+        0.32
+      ],
+      "previewWatts": 150.0
+    },
+    {
+      "name": "ZM_flame_0.001",
+      "position": [
+        -1.5538,
+        1.7114,
+        1.4198
+      ],
+      "color": [
+        1.0,
+        0.6,
+        0.3
+      ],
+      "previewWatts": 6.0
+    },
+    {
+      "name": "ZM_flame_1.001",
+      "position": [
+        1.8104,
+        1.774,
+        6.6809
+      ],
+      "color": [
+        1.0,
+        0.6,
+        0.3
+      ],
+      "previewWatts": 6.0
+    },
+    {
+      "name": "ZM_flame_2.001",
+      "position": [
+        1.8104,
+        1.774,
+        7.9209
+      ],
+      "color": [
+        1.0,
+        0.6,
+        0.3
+      ],
+      "previewWatts": 6.0
+    },
+    {
+      "name": "ZM_flame_3.001",
+      "position": [
+        5.9657,
+        4.4484,
+        6.8198
+      ],
+      "color": [
+        1.0,
+        0.6,
+        0.3
+      ],
+      "previewWatts": 6.0
+    },
+    {
+      "name": "ZM_flame_4.001",
+      "position": [
+        1.8104,
+        4.774,
+        6.6809
+      ],
+      "color": [
+        1.0,
+        0.6,
+        0.3
+      ],
+      "previewWatts": 6.0
+    },
+    {
+      "name": "ZM_flame_5.001",
+      "position": [
+        1.8104,
+        4.774,
+        7.9209
+      ],
+      "color": [
+        1.0,
+        0.6,
+        0.3
+      ],
+      "previewWatts": 6.0
+    }
+  ]
+}
