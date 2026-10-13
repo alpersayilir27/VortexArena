@@ -149,7 +149,19 @@
         { "sceneId": 5, "kind": "zombie_spawn" },
         { "sceneId": 6, "kind": "zombie_spawn" },
         { "sceneId": 7, "kind": "zombie_spawn" },
-        { "sceneId": 8, "kind": "zombie_spawn" }
+        { "sceneId": 8, "kind": "zombie_spawn" },
+        { "sceneId": 9, "kind": "zombie_spawn" },
+        { "sceneId": 10, "kind": "zombie_spawn" },
+        { "sceneId": 11, "kind": "zombie_spawn" },
+        { "sceneId": 12, "kind": "zombie_spawn" },
+        { "sceneId": 13, "kind": "zombie_spawn" },
+        { "sceneId": 14, "kind": "zombie_spawn" },
+        { "sceneId": 15, "kind": "zombie_spawn" },
+        { "sceneId": 16, "kind": "zombie_spawn" },
+        { "sceneId": 17, "kind": "zombie_spawn" },
+        { "sceneId": 18, "kind": "zombie_spawn" },
+        { "sceneId": 19, "kind": "zombie_spawn" },
+        { "sceneId": 20, "kind": "zombie_spawn" }
       ]
     },
     {
@@ -385,7 +397,7 @@
       "venue": "VortexAntep",
       "gameType": "zombie",
       "moleDensity": 1.5,
-      "zombiePace": 0.7,
+      "zombiePace": 1,
       "modes": ["zombie"],
       "objects": [
         { "sceneId": 1, "kind": "zombie_spawn" },
@@ -395,7 +407,20 @@
         { "sceneId": 5, "kind": "zombie_spawn" },
         { "sceneId": 6, "kind": "zombie_spawn" },
         { "sceneId": 7, "kind": "zombie_spawn" },
-        { "sceneId": 8, "kind": "zombie_spawn" }
+        { "sceneId": 8, "kind": "zombie_spawn" },
+        { "sceneId": 9, "kind": "zombie_spawn" },
+        { "sceneId": 10, "kind": "zombie_spawn" },
+        { "sceneId": 11, "kind": "zombie_spawn" },
+        { "sceneId": 12, "kind": "zombie_spawn" },
+        { "sceneId": 13, "kind": "zombie_spawn" },
+        { "sceneId": 14, "kind": "zombie_spawn" },
+        { "sceneId": 15, "kind": "zombie_spawn" },
+        { "sceneId": 16, "kind": "zombie_spawn" },
+        { "sceneId": 17, "kind": "zombie_spawn" },
+        { "sceneId": 18, "kind": "zombie_spawn" },
+        { "sceneId": 19, "kind": "zombie_spawn" },
+        { "sceneId": 20, "kind": "zombie_spawn" },
+        { "sceneId": 21, "kind": "zombie_spawn" }
       ]
     }
   ],

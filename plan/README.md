@@ -5,7 +5,7 @@
 
 | Planlanmış iş | Dosya |
 |---|---|
-| **Zombi modu** (`zombie`, kooperatif dalga savunması): zombi bir **ağ nesnesidir** — sunucu doğurur/öldürür/skorlar, **beyni (NavMesh + saldırı kararı) en eski bağlı Windows admin'de** koşar ve pozu `0x09` ile akar; admin düşünce/susunca sıradaki admin devralır, admin yoksa maç duraklar. Sunucu geometri almaz. Kalan iş: moda ait HUD görünümü ve karar bekleyen maddeler (obje poz tavanı 16→48, aradaki oyuncudan kaçınma, doğuş animasyonu, görüş hattı, denge) | `zombi-modu.md` |
+| **Zombi modu** (`zombie`, kooperatif dalga savunması): zombi bir **ağ nesnesidir** — sunucu doğurur/öldürür/skorlar, **beyni (NavMesh + saldırı kararı) en eski bağlı Windows admin'de** koşar ve pozu `0x09` ile akar; admin düşünce/susunca sıradaki admin devralır, admin yoksa maç duraklar. Sunucu geometri almaz. Kalan iş yedi fazda: (1) oynanış temeli — duvar collider'ı + NavMesh, doğma noktaları, her katta zombi, admin seçimli zorluk (Kolay/Normal/Zor), eşzamanlı tavan 30 · poz tavanı 32; (2) Mixamo zombi + animasyon + sis/dissolve doğuş; (3) kan efekti; (4) ses + dinamik müzik; (5) karanlık/sisli atmosfer; (6) zombi temalı HUD + geri sayım; (7) dalgayla açılan silah tuvali | `zombi-modu.md` |
 | **Zombi konağı — 3 katlı arena sanatı**: Blender'da part part üretilen perili konak; her katta iç + dış alan (Kat0 avlu, Kat1 damalı balkon, Kat2 çatı terası), kat geçişi kat portalıyla. Yalnız sanat; mod kodu ve Unity sahne kurulumu ayrı. ⚠️ Üst kat boşluk şeritleri için atışı kesmeyen bir ihlal mekanizması Unity aşamasında gerekiyor | `zombie-manor-sanat.md` |
 | **Lisans ve izleme**: işletme başına süreli lisans + gözlük limiti (koltuk) + lease başına maç bütçesi; updater ve oyun **tek keystore**, gözlük kısa kodla aktive olur. Şifreli ve bütünlüğü doğrulanan yerel kullanım defteri: maçtan önce kalıcı kayıt, eksik/bozuk dosyada **tam kilit**, merkezle imzalı mutabakat ve denetimli kurtarma. İşletme bazında maç/zaman/katılım istatistiği; ileride oyun bazlı lisans için ayrı kredi rezervasyonu ve çevrimdışı geri alma koruması şartı. .NET backend bugünkü OTA uçlarının yerini alır. Henüz **hiçbir şey yazılmadı**. ⚠️ Faz 3 `PROTOCOL_VERSION` 25→26 — tüm gözlüklere yeni APK | `lisans-ve-izleme.md` |
 | **Bulut kalibrasyonu** (`anchor_cloud`): tek gözlüğün hizası Meta paylaşılan uzamsal çapasıyla (grup paylaşımı) herkese dağıtılır — operatör bir oyuncuyu **kaynak** yapar, sunucu grup kimliğini taşır, alıcılar `AlignRigToAnchorPose` ile hizalanıp `source:"cloud"` bildirir. `PROTOCOL_VERSION` artmaz; diğer iki mod bugünkü gibi kalır (bulut yolu eski kalibrasyon kaydına yazmaz). ⚠️ Gözlüklere **internet** + her gözlükte **Enhanced spatial services** ister. Henüz **hiçbir şey yazılmadı** | `bulut-kalibre.md` |
@@ -38,7 +38,8 @@ yazar); sebep sunucu konsoluna ve `admin_state.notice`'e yazılır.
 - Sunucu test projesi: ileride.
 - Tracer rengi silah başına farklılaşmaz — hepsi aynı kalır (altyapı destekliyor, istenmiyor).
 - Çarpma efekti ve sesi yüzeye göre farklılaşmaz — her isabet `default` yüzeydir (altyapı
-  destekliyor, anahtarı `SurfaceLibrary.definitions`; haritalara yüzey ataması yapılmaz).
+  destekliyor, anahtarı `SurfaceLibrary.definitions`; haritalara yüzey ataması yapılmaz). Tek
+  istisna zombidir: vuruş kutularındaki `SurfaceTag` kan efekti oynatır (gövde / kafa).
 - Fırlatılan bombanın uzak vuruş kutularıyla çarpışma eşlemesi ve kırılan objenin efekti
   değişmez: ikisi zaten kayıt ve havuz kullanır (`RemoteHitBox.Active`, `BlastFxPool`), sahne
   taraması ya da `Instantiate` yoktur.

@@ -15,11 +15,16 @@ import zm_common as zm
 importlib.reload(zm)
 import zm_rooms as zr
 importlib.reload(zr)
-from zm_common import Part, bl, west_x, east_x, collection, clear_collection, tree, NW, NE, SW, SE, ZONE_Z, FLOORS
+from zm_common import (Part, bl, west_x, east_x, collection, clear_collection, tree, NW, NE, SW, SE, ZONE_Z,
+                       FLOORS, WIN_Z)
 from zm_rooms import flat_window, face_box
 
 ZA = ZONE_Z[0]
-F2 = FLOORS[2]
+F1, F2 = FLOORS[1], FLOORS[2]
+# neighbour houses grow with the manor: beside a 3.5 m storey an unscaled house reads as a doll house.
+# heights are stretched about a base (porch deck / ground), footprints are not touched
+HSC = 1.12
+hs = lambda h, base=0.0: base + (h - base) * HSC
 WING_D = 2.9                     # wing depth beyond the house's boundary wall
 PITCH = math.radians(55)
 EAVE_U, EAVE_H = 0.18, F2 + 0.08 # inner eave just outside the terrace coping, 2 cm over its top
@@ -76,11 +81,11 @@ def wing(name, I0, I1, n):
     # windows: front (two storeys + attic), outer side, back
     um = (0.15 + Do) / 2
     for v, sgn in ((-0.075, -1), (Lb + 0.075, 1)):
-        for h0, h1 in ((0.9, 2.2), (3.9, 5.2)):
+        for h0, h1 in (WIN_Z, (F1 + WIN_Z[0], F1 + WIN_Z[1])):
             flat_window(p, P(um, v), n, td * sgn, 0.9, h0, h1)
         flat_window(p, P(nr, v), n, td * sgn, 0.55, F2 + 0.45, F2 + 1.15, shutters=False)
     for vf in (0.3, 0.7):
-        for h0, h1 in ((0.9, 2.2), (3.9, 5.2)):
+        for h0, h1 in (WIN_Z, (F1 + WIN_Z[0], F1 + WIN_Z[1])):
             flat_window(p, P(Do, Lb * vf), td, n, 0.9, h0, h1)
     p.finish()
 
@@ -135,6 +140,7 @@ def house(cx, cz, w, d, h, face_deg, body="Siding", boarded=(), broken=(), seed=
     front porch on posts, plinth, corner boards, shuttered / boarded / broken windows, front door.
     face_deg turns its front: 0 = toward +z (north), 90 = toward +x. boarded/broken: window indices."""
     rr = random.Random(seed)
+    h *= HSC
     a = math.radians(face_deg)
     f = Vector((math.sin(a), math.cos(a)))           # front normal (venue)
     s = Vector((f.y, -f.x))
@@ -175,19 +181,21 @@ def house(cx, cz, w, d, h, face_deg, body="Siding", boarded=(), broken=(), seed=
     for k, (u0, h1) in enumerate(((d / 2 + pd, 0.32), (d / 2 + pd + 0.3, 0.16))):
         obox(u0 - 0.005 * k, u0 + 0.3, -0.7 + 0.02 * k, 0.7 - 0.02 * k, -0.1 - 0.015 * k, h1, "Stone")
     for v in (-w / 2 + 0.4, -0.8, 0.8, w / 2 - 0.4):
-        obox(d / 2 + pd - 0.16, d / 2 + pd - 0.04, v - 0.06, v + 0.06, 0.47, 2.6, "TrimPaint")    # tops in the beam
-    pq = [Q(d / 2 - 0.02, -w / 2 + 0.15, 2.95), Q(d / 2 + pd + 0.15, -w / 2 + 0.15, 2.6),
-          Q(d / 2 + pd + 0.15, w / 2 - 0.15, 2.6), Q(d / 2 - 0.02, w / 2 - 0.15, 2.95)]
+        obox(d / 2 + pd - 0.16, d / 2 + pd - 0.04, v - 0.06, v + 0.06, 0.47, hs(2.6, 0.47), "TrimPaint")   # tops in the beam
+    pq = [Q(d / 2 - 0.02, -w / 2 + 0.15, hs(2.95, 0.47)), Q(d / 2 + pd + 0.15, -w / 2 + 0.15, hs(2.6, 0.47)),
+          Q(d / 2 + pd + 0.15, w / 2 - 0.15, hs(2.6, 0.47)), Q(d / 2 - 0.02, w / 2 - 0.15, hs(2.95, 0.47))]
     nb.slab(pq, Vector((0, 0, 0.07)), "Roof")
-    obox(d / 2 + pd - 0.17, d / 2 + pd - 0.03, -w / 2 + 0.3, w / 2 - 0.3, 2.45, 2.62, "TrimPaint")   # porch beam
-    # door + windows: front (two storeys), sides
-    face_box(nb, P(d / 2, 0), s, f, -0.45, 0.45, -0.01, 0.035, 0.45, 2.55, "DoorWood")
-    face_box(nb, P(d / 2, 0), s, f, -0.56, 0.56, -0.02, 0.05, 2.55, 2.7, "TrimPaint")
+    obox(d / 2 + pd - 0.17, d / 2 + pd - 0.03, -w / 2 + 0.3, w / 2 - 0.3, hs(2.45, 0.47), hs(2.62, 0.47),
+         "TrimPaint")                                                                             # porch beam
+    # door + windows: front (two storeys), sides; the door stands on the deck, so it stretches upward only
+    face_box(nb, P(d / 2, 0), s, f, -0.45, 0.45, -0.01, 0.035, 0.45, hs(2.55, 0.45), "DoorWood")
+    face_box(nb, P(d / 2, 0), s, f, -0.56, 0.56, -0.02, 0.05, hs(2.55, 0.45), hs(2.7, 0.45), "TrimPaint")
     wins = [(P(d / 2, k * w / 4), s, f) for k in (-1, 1)]                                    # ground floor front
     wins += [(P(d / 2, k * w / 4), s, f) for k in (-1, 0, 1)]                                # upper front
     wins += [(P(u, sv * w / 2), -f * sv, s * sv) for sv in (-1, 1) for u in (-d / 4, d / 4)]   # sides (both floors)
+    low, up = (hs(0.95), hs(2.15)), (hs(3.25), hs(4.35))
     for i, (pc, tan, nrm) in enumerate(wins):
-        storeys = ((0.95, 2.15),) if i < 2 else ((3.25, 4.35),) if i < 5 else ((0.95, 2.15), (3.25, 4.35))
+        storeys = (low,) if i < 2 else (up,) if i < 5 else (low, up)
         for h0, h1 in storeys:
             if h1 > h - 0.3:
                 continue

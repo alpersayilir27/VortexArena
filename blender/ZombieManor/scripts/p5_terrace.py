@@ -15,7 +15,7 @@ importlib.reload(zm)
 import zm_rooms as zr
 importlib.reload(zr)
 from zm_common import (Part, bl, west_x, east_x, zone_poly, column_bounds, collection, clear_collection,
-                       NW, NE, FLOORS, SLAB, ZONE_Z, CEIL, WALL_T, PORTALS)
+                       NW, NE, FLOORS, SLAB, ZONE_Z, SHED_TOP, WALL_T, PORTALS)
 from zm_rooms import north_z, balustrade, lift_cage
 
 ZA, ZB = ZONE_Z
@@ -27,7 +27,7 @@ px, pz = PORTALS[(1, 2)]
 CAGE_Z0 = pz - 0.7                       # cage front line (lift_cage)
 SHED_X0 = px - 0.9 - 0.08                # shed's west end, just west of the cage side wall
 SHED_Z0 = CAGE_Z0 - 0.08
-ROOF_H = CEIL + 0.02                     # shed roof sits on the cage headers
+ROOF_H = SHED_TOP + 0.02                 # shed roof sits on the cage headers
 
 root = collection("ZM_P5_Terrace")
 clear_collection(root)
@@ -76,7 +76,7 @@ ch.finish()
 
 # ---------------------------------------------------------------- P2 arrival cage inside a rooftop shed
 L_, R_ = Part("ZM_K2_LiftCageP12", root), Part("ZM_K2_LiftCageP12Roof", root)  # roof: under ArenaRoof in Unity
-lift_cage(L_, px, pz, F2, -1, needle_deg=60.0, roof=R_)
+lift_cage(L_, px, pz, F2, -1, needle_deg=60.0, roof=R_, top=SHED_TOP)   # a shed, not a room: lower headers
 L_.finish()
 R_.finish()
 

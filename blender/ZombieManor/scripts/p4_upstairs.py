@@ -14,7 +14,7 @@ importlib.reload(zm)
 import zm_rooms as zr
 importlib.reload(zr)
 from zm_common import (Part, west_x, east_x, zone_poly, column_bounds, collection, clear_collection,
-                       NW, NE, FLOORS, SLAB, ZONE_Z, CEIL, WALL_T, PORTALS)
+                       NW, NE, FLOORS, SLAB, ZONE_Z, CEIL, DOOR_H, WIN_Z, WALL_T, PORTALS)
 from zm_rooms import north_z, s_x, s_z, lining, north_window, fake_door, chimney_breast, lift_cage, wall_decay
 
 ZA, ZB = ZONE_Z
@@ -48,7 +48,7 @@ w.wall(NW, WB, F1, F2, "Siding", "WallpaperGrey", "Trim", side=1)
 lining(w, NW, WB, WALL_T / 2, -1, WALL_T, fh=F1, trim=(True, False),
        gaps=[(s_z(NW, WB, FAKE_W[1]) - 0.12, s_z(NW, WB, FAKE_W[0]) + 0.12, "door")])
 w.wall(NE, NW, F1, F2, "Siding", "WallpaperGrey", "Trim", side=1,
-       openings=[(s_x(NE, NW, N_WINDOW[1]), s_x(NE, NW, N_WINDOW[0]), 2.2, 0.9)])
+       openings=[(s_x(NE, NW, N_WINDOW[1]), s_x(NE, NW, N_WINDOW[0]), WIN_Z[1], WIN_Z[0])])
 lining(w, NE, NW, WALL_T / 2, -1, WALL_T, fh=F1)
 w.wall(EB, NE, F1, F2, "Siding", "WallpaperGrey", "Trim", side=1)
 lining(w, EB, NE, WALL_T / 2, -1, WALL_T, fh=F1, trim=(False, True),
@@ -70,7 +70,7 @@ for xa, xb in crown_runs:
 pa, pb = (PART_X, ZB - 0.02), (PART_X, BREAST_Z[0] + 0.03)      # start off the slab/ceiling edge plane at ZB
 sp = lambda z: z - pa[1]
 w.wall(pa, pb, F1 - 0.045, F2 - 0.05, "WallpaperGrey", "WallpaperGrey", "WallpaperGrey",
-       openings=[(sp(PART_DOOR[0]), sp(PART_DOOR[1]), 2.2 + 0.045)])
+       openings=[(sp(PART_DOOR[0]), sp(PART_DOOR[1]), DOOR_H + 0.045)])
 start = lambda depth, embed: -(0.02 + WALL_T / 2 + depth + 0.004)   # stop at the facade lining's front
 end = lambda depth, embed: -(0.03 + depth + 0.004)              # stop at the breast lining's front
 for fs in (1, -1):
@@ -79,9 +79,9 @@ for fs in (1, -1):
     xf = PART_X + fs * WALL_T / 2                               # fs=+1: east (study) face
     xa, xb = sorted((xf - fs * 0.02, xf + fs * 0.04))
     for za, zb in ((PART_DOOR[0] - 0.1, PART_DOOR[0] + 0.01), (PART_DOOR[1] - 0.01, PART_DOOR[1] + 0.1)):
-        w.box(xa, za, xb, zb, F1 - 0.03, F1 + 2.22, "Trim")
+        w.box(xa, za, xb, zb, F1 - 0.03, F1 + DOOR_H + 0.02, "Trim")
     xa, xb = sorted((xf - fs * 0.02, xf + fs * 0.05))
-    w.box(xa, PART_DOOR[0] - 0.14, xb, PART_DOOR[1] + 0.14, F1 + 2.22, F1 + 2.36, "Trim")
+    w.box(xa, PART_DOOR[0] - 0.14, xb, PART_DOOR[1] + 0.14, F1 + DOOR_H + 0.02, F1 + DOOR_H + 0.16, "Trim")
 
 # fallen paper (s, h, w, h-size, curl)
 wall_decay(w, NW, WB, WALL_T / 2, -1, WALL_T, [(s_z(NW, WB, 3.9), 1.8, 0.4, 0.7, True)], fh=F1,

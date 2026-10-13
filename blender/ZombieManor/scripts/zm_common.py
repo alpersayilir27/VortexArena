@@ -15,9 +15,15 @@ REPO = r"C:\UnityProjects\VortexArena"
 PROJ = os.path.join(REPO, "blender", "ZombieManor")
 DIMENSIONS_JSON = os.path.join(REPO, "Assets", "Arenas", "Venues", "VortexAntep", "Data", "vortexantep_dimensions.json")
 
-FLOORS = (0.0, 3.0, 6.0)   # floor top heights; portals' upperHeight must match
+FLOORS = (0.0, 3.5, 7.0)   # floor top heights; portals' upperHeight must match
 SLAB = 0.20                # slab thickness below an upper floor top
 CEIL = FLOORS[1] - SLAB    # visual ceiling height above each floor
+STOREY = FLOORS[1] - FLOORS[0]
+# equal storeys: one portal rig and one wall height serve both floors; texture tiling is derived from STOREY
+assert abs((FLOORS[2] - FLOORS[1]) - STOREY) < 1e-6
+DOOR_H = 2.4               # head height of every walkable opening (interior doors, front door, breach)
+WIN_Z = (0.9, 2.2)         # window band above a floor; human-size, independent of STOREY
+SHED_TOP = 2.8             # terrace shed / cage roof height above the terrace floor
 ZONE_Z = (-0.5, 3.5)       # A | B | C split lines (south to north)
 RAIL_H = 1.0
 WALL_T = 0.15
@@ -248,8 +254,10 @@ MATS = {
                       gen=dict(kind="damask", v=2, bg=(0.50, 0.43, 0.31), fg=(0.66, 0.58, 0.42)), c1=(0.36, 0.32, 0.22)),
     "WallpaperGrey": dict(tex=("gen", "damask_grey", "1024"), base=("ph", "decrepit_wallpaper", "2k"), T=0.64,
                           gen=dict(kind="damask", v=2, bg=(0.40, 0.41, 0.40), fg=(0.55, 0.56, 0.54)), c1=(0.3, 0.3, 0.3)),
-    # night outside a window: self-lit; v offset keeps both storeys' windows (0.9-2.2 / 3.9-5.2 m) in one tile
-    "WindowView": dict(tex=("gen", "window_view", "512"), T=(1.1, 1.5), off=(0.0, -0.6), emit=0.8,
+    # night outside a window: self-lit; a half-storey tile plus the sill offset puts both storeys' window
+    # bands (WIN_Z and FLOORS[1] + WIN_Z) at the same place inside one tile
+    "WindowView": dict(tex=("gen", "window_view", "512"), T=(1.1, STOREY / 2),
+                       off=(0.0, -WIN_Z[0] / (STOREY / 2)), emit=0.8,
                        gen=dict(kind="window", v=2), c1=(0.15, 0.17, 0.22)),
     "ShutterPaint": dict(tex=("ph", "distressed_painted_planks", "1k"), T=1.6, grey=True, tint=(0.2, 0.26, 0.22),
                          c1=(0.05, 0.07, 0.06)),                  # louvred shutters: flaking dark green paint

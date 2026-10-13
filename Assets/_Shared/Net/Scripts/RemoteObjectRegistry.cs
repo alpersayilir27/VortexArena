@@ -126,8 +126,12 @@ namespace VortexArena.Net
         /// <para>⚠️ <b>We never apply the incoming pose of an object we own</b> — the server relays our
         /// own packets back and applying them would fight the local physics one interp buffer late. Same
         /// rule as not drawing our own player pose from the snapshot.</para>
+        /// <para><paramref name="snapDistance"/> (m, <c>0</c> = off) is OPT-IN: above it the two samples
+        /// are treated as a TELEPORT and the later one is returned unlerped. Only for objects that really
+        /// jump (a relocating zombie); a thrown prop must keep lerping, or every lost packet turns into a
+        /// hitch.</para>
         /// </summary>
-        public bool TryGetInterpolatedPose(int netId, out Pose arenaPose)
+        public bool TryGetInterpolatedPose(int netId, out Pose arenaPose, float snapDistance = 0f)
         {
             arenaPose = Pose.identity;
 
@@ -186,6 +190,14 @@ namespace VortexArena.Net
 
             if (hasBefore && hasAfter)
             {
+                if (snapDistance > 0f && IsFartherThan(before.pose, after.pose, snapDistance))
+                {
+                    // Lerping across a teleport would slide the body through the walls between the two
+                    // points.
+                    arenaPose = ToPose(after.pose);
+                    return true;
+                }
+
                 int span = after.recvMs - before.recvMs;
                 float t = span > 0 ? Mathf.Clamp01((renderMs - before.recvMs) / (float)span) : 1f;
                 arenaPose = LerpPose(before.pose, after.pose, t);
@@ -264,6 +276,14 @@ namespace VortexArena.Net
             return new Pose(
                 new Vector3(data.px, data.py, data.pz),
                 new Quaternion(data.qx, data.qy, data.qz, data.qw));
+        }
+
+        private static bool IsFartherThan(in PoseData a, in PoseData b, float distance)
+        {
+            float dx = b.px - a.px;
+            float dy = b.py - a.py;
+            float dz = b.pz - a.pz;
+            return dx * dx + dy * dy + dz * dz > distance * distance;
         }
 
         private static Pose LerpPose(in PoseData a, in PoseData b, float t)

@@ -5,7 +5,7 @@ import random
 
 from mathutils import Matrix, Vector
 
-from zm_common import bl, west_x, east_x, NW, NE, CEIL
+from zm_common import bl, west_x, east_x, NW, NE, CEIL, DOOR_H, WIN_Z
 
 SINK = 0.02
 
@@ -56,7 +56,7 @@ def lining(p, a, b, center_off, face_sign, wall_t, gaps=(), trim=(False, False),
             s1 = L + ext[1](depth, embed)
         ops = []
         for g0, g1, kind in gaps:
-            if h0 >= 2.2:
+            if h0 >= DOOR_H:
                 continue
             g0, g1 = (g0 + st, g1 - st) if kind == "door" else (g0 - st, g1 + st)
             if g1 > s0 and g0 < s1:
@@ -66,7 +66,7 @@ def lining(p, a, b, center_off, face_sign, wall_t, gaps=(), trim=(False, False),
         p.wall(tuple(a + d * s0 + n * off), tuple(a + d * s1 + n * off), fh + h0, fh + h1, mat, t=t, openings=ops)
 
 
-def north_window(p, x0, x1, fh, win_z=(0.9, 2.2)):
+def north_window(p, x0, x1, fh, win_z=WIN_Z):
     """Casing, sill, dark glass and muntins for an opening in the north wall (room at z < boundary)."""
     xm = (x0 + x1) / 2
     zi = north_z(xm)
@@ -88,11 +88,12 @@ def fake_door(p, x_face, inward, z0, z1, fh=0.0):
     # backs 2 cm deep in the wall: deeper than every wainscot layer's back
     for za, zb in ((z0 - 0.12, z0 + 0.0), (z1 - 0.0, z1 + 0.12)):                  # jambs
         xa, xb = xs(-0.02, 0.045)
-        p.box(xa, za, xb, zb, fh - 0.03, fh + 2.3, "Trim")
+        p.box(xa, za, xb, zb, fh - 0.03, fh + DOOR_H + 0.1, "Trim")
     xa, xb = xs(-0.02, 0.05)
-    p.box(xa, z0 - 0.16, xb, z1 + 0.16, fh + 2.3, fh + 2.46, "Trim")                # head
+    p.box(xa, z0 - 0.16, xb, z1 + 0.16, fh + DOOR_H + 0.1, fh + DOOR_H + 0.26, "Trim")   # head
     # panelled leaf: centre plane 2.5 mm out (back 2 cm in the wall), bottom clear of the wall's bottom
-    panel_door(p, (X(0.0025), z0, fh + 0.004), (0, 1, 0), (0, 0, 1), (inward, 0, 0), z1 - z0, 2.296, knobs=(1,))
+    panel_door(p, (X(0.0025), z0, fh + 0.004), (0, 1, 0), (0, 0, 1), (inward, 0, 0), z1 - z0, DOOR_H + 0.096,
+               knobs=(1,))
     for hh, ang in ((0.7, 12), (1.35, -9), (1.95, 6)):                              # boards, resting on the leaf
         p.obox((X(0.0375), (z0 + z1) / 2, fh + hh), (0.025, z1 - z0 + 0.3, 0.15), "DoorWood", rot=(ang, 0, 0))
 
@@ -451,9 +452,10 @@ def text_mesh(p, s, M, size, depth, mat):
     return p._set(faces, mat)
 
 
-def lift_cage(p, px, pz, fh, sgn, needle_deg=0.0, roof=None):
+def lift_cage(p, px, pz, fh, sgn, needle_deg=0.0, roof=None, top=CEIL):
     """Cage lift around a floor portal disc against the north wall. sgn = +1: side wall at px + 0.9 (east),
-    boundary west; sgn = -1: mirrored. The 1 m door faces south; needle_deg tilts the floor dial's needle."""
+    boundary west; sgn = -1: mirrored. The 1 m door faces south; needle_deg tilts the floor dial's needle.
+    top: height the headers reach (the rooftop shed is lower than a room ceiling)."""
     X = lambda u: px + sgn * u
     xb = west_x(pz) if sgn > 0 else east_x(pz)
     u0 = sgn * (xb - px) + 0.005           # boundary side (negative u)
@@ -520,8 +522,8 @@ def lift_cage(p, px, pz, fh, sgn, needle_deg=0.0, roof=None):
     ub(u0, cz0 - 0.03, u1 + 0.03, cz0 + 0.03, 2.3, 2.42, "CastIron")                             # top beams
     ub(u1 - 0.03, cz0 + 0.03, u1 + 0.03, cz1, 2.3, 2.42, "CastIron")
     ub(u0 + 0.01, cz0 - 0.036, u1 + 0.02, cz0 - 0.029, 2.33, 2.39, "Gold")                       # brass band on the beam
-    ub(u0, cz0 - 0.02, u1 + 0.02, cz0 + 0.02, 2.42, CEIL + 0.02, "Trim")                        # headers
-    ub(u1 - 0.02, cz0 + 0.02, u1 + 0.02, cz1, 2.42, CEIL + 0.02, "Trim")
+    ub(u0, cz0 - 0.02, u1 + 0.02, cz0 + 0.02, 2.42, top + 0.02, "Trim")                         # headers
+    ub(u1 - 0.02, cz0 + 0.02, u1 + 0.02, cz1, 2.42, top + 0.02, "Trim")
     # cage ceiling + lamp go to `roof` (own object under ArenaRoof in Unity: it sits below the admin's
     # floor-band cut and would cover the portal in the top-down view)
     r = roof or p

@@ -1,0 +1,52 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cb92817862df6854282dcc2e688d89bc, type: 3}
+  m_Name: ZombieSounds
+  m_EditorClassIdentifier: VortexArena.Modes.Zombie::VortexArena.Modes.Zombie.ZombieSounds
+  groanClips:
+  - {fileID: 8300000, guid: e1ed2b74b7fe5414abe28d9ff07c0a7f, type: 3}
+  - {fileID: 8300000, guid: d3a07eae1ad8ab94099f4a39f7782850, type: 3}
+  - {fileID: 8300000, guid: 58c7b0cfb8ce4bb43831b6d632961342, type: 3}
+  - {fileID: 8300000, guid: 38972955b789e55419b1a91833581b59, type: 3}
+  - {fileID: 8300000, guid: 48c02295da06bdb4b95f83f817fbf0f4, type: 3}
+  - {fileID: 8300000, guid: d8ba12039e08fcd4a8f46c57321efe4b, type: 3}
+  attackClips:
+  - {fileID: 8300000, guid: 75e3b791870b16b4d89bf29db2ae4fae, type: 3}
+  - {fileID: 8300000, guid: ddf925006a111e1408bbcf43b8f3c50b, type: 3}
+  - {fileID: 8300000, guid: df7d81bd41454174f9778fb0ab04c94c, type: 3}
+  - {fileID: 8300000, guid: 5e3aee5a61b9d364a9ca9cf41efe8e7b, type: 3}
+  - {fileID: 8300000, guid: ad96ab7942af25847a6bf67db36288cb, type: 3}
+  - {fileID: 8300000, guid: 1775f331d4b852d4191a125ee4d4438c, type: 3}
+  - {fileID: 8300000, guid: 635a827d749c3fd48afefe540b6a07d8, type: 3}
+  deathClips:
+  - {fileID: 8300000, guid: 5649c518b8a536e498260c8f45215203, type: 3}
+  - {fileID: 8300000, guid: e8aba357864ba754a8c34c924d87e764, type: 3}
+  - {fileID: 8300000, guid: ce274cc84e7987a4b82cdc5dc1fb6e99, type: 3}
+  - {fileID: 8300000, guid: d033920d97eaa1443aec81d3f77ed9ce, type: 3}
+  spawnClips:
+  - {fileID: 8300000, guid: 441a0835ad0dace4592ad82186ecd5a5, type: 3}
+  - {fileID: 8300000, guid: 4bd88c5dcca87e04faf149d65bc90ba2, type: 3}
+  groanVolume: 0.65
+  attackVolume: 0.9
+  deathVolume: 0.9
+  spawnVolume: 0.7
+  pitchJitter: 0.12
+  groanIntervalMin: 8
+  groanIntervalMax: 15
+  maxGroaners: 6
+  minDistance: 1
+  maxDistance: 12
+  musicTension: {fileID: 8300000, guid: 02104ce7c1bb29f49a00677b79d37aa3, type: 3}
+  musicWave: {fileID: 8300000, guid: 8c95a517e4614e343b87c4598b2c3f01, type: 3}
+  musicVolume: 0.55
+  waveStartSting: {fileID: 0}
+  waveClearSting: {fileID: 0}

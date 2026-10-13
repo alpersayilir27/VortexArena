@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zombi — VortexArena arayüz</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Saira+Condensed:wght@500;600;700;800&family=Rubik+Wet+Paint&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="tema.css">
+<link rel="stylesheet" href="zombi.css">
+</head>
+<body class="b">
+
+<p class="vcap"><b>"Kan damlası" teması</b> — paslı metal plaka, damlayan kırmızı başlık; palet <code>Kan</code>, yazı tipi Rubik Wet Paint (DALGA hücresi, geri sayım, bildirim) + Saira Condensed (etiket ve sayı) + Barlow (saat). <b>Dalga sırasında · şerit</b> — üstte kalan süre; hücreler DALGA · AYAKTA (şu an ayakta zombi) · EKİP (toplam leş) · SEN; altta can ve durum plakası. Sayılar 68 px (DALGA 84), etiketler 26 px — aşçı şeridinin ~2 katı. Şerit 606 × 312, kafaya kilitli. Örnek: 3:12, dalga 4, ayakta 14, ekip 87, sen 23, can 72.</p>
+<div class="frame"><div class="stage">
+  <div class="zvr"><div class="ph">VR görüş alanı — yer tutucu (sisli gece)</div></div>
+  <div class="zs">
+    <div class="clock">3:12</div>
+    <div class="row">
+      <div class="cell wave"><em>DALGA</em><b>4</b></div>
+      <div class="cell alive"><em>AYAKTA</em><b>14</b></div>
+      <div class="cell"><em>EKİP</em><b>87</b></div>
+      <div class="cell"><em>SEN</em><b>23</b></div>
+    </div>
+    <div class="hp"><em>CAN 72</em><div class="track"><i style="width:283px"></i></div></div>
+    <div class="durum"><span class="ikon"><i data-ic="warn"></i></span><span>TABANDA KAL</span></div>
+  </div>
+</div></div>
+
+<p class="vcap"><b>Dalga arası · büyük geri sayım</b> — görüşün ortasında, dalga arasının son saniyeleri. Başlık sıradaki dalga (96 px), sayı 280 px, altta HAZIRLAN (40 px). Sayıyı tabanın merkez bildirimi çizer, başlık ve alt satır modun alanlarıdır. Maç başı geri sayımı da aynı yerde çizilir (o an dalga 1'dir); hafif karartma yalnız maç başı geri sayımında açılır.</p>
+<div class="frame"><div class="stage">
+  <div class="zvr"><div class="ph">VR görüş alanı — yer tutucu</div></div>
+  <div class="zdim"></div>
+  <div class="zcd"><div class="t">DALGA 5</div><div class="n">3</div><div class="s">HAZIRLAN</div></div>
+</div></div>
+
+<p class="vcap"><b>Kısa bildirimler</b> — görüşün ortasının biraz üstünde (10°). Dalga başında 2 sn "DALGA N BAŞLADI" (tek satır), silah açılınca 3 sn "YENİ SİLAH AÇILDI · ad" (küçük satır + büyük satır). Plaka 780 × 128; küçük satır varken büyük satır 44 px aşağı iter — ikinci bir yerleşim yoktur.</p>
+<div class="frame"><div class="stage" data-h="620">
+  <div class="zvr"><div class="ph">VR görüş alanı — yer tutucu</div></div>
+  <div class="zt" style="margin-top:-180px"><b>DALGA 5 BAŞLADI</b></div>
+  <div class="zt iki" style="margin-top:20px"><small>YENİ SİLAH AÇILDI</small><b>P90</b></div>
+</div></div>
+
+<p class="vcap"><b>Durumlar</b> — saat normal / son 10 saniye (kırmızı plaka), can üç kademe (72 · 34 · 12), duraklama sebebi düz Türkçe olarak durum plakasında yazar (mod onu <code>modeState</code>'te yollar, HUD olduğu gibi çizer).</p>
+<div class="frame"><div class="stage" data-h="760">
+  <div class="zvr"><div class="ph">VR görüş alanı — yer tutucu</div></div>
+  <div class="zs" style="margin-top:-330px">
+    <div class="clock">3:12</div>
+    <div class="hp" style="top:78px"><em>CAN 72</em><div class="track"><i style="width:283px"></i></div></div>
+    <div class="durum" style="top:134px"><span class="ikon"><i data-ic="warn"></i></span><span>TABANDA KAL</span></div>
+  </div>
+  <div class="zs" style="margin-top:50px">
+    <div class="clock son">0:08</div>
+    <div class="hp" style="top:78px"><em>CAN 34</em><div class="track"><i style="width:134px"></i></div></div>
+    <div class="durum" style="top:134px"><span class="ikon"><i data-ic="warn"></i></span><span>OBJE SUNUCUSU YOK — ZOMBİLER BEKLİYOR</span></div>
+  </div>
+  <div class="zs" style="margin-top:230px">
+    <div class="hp" style="top:0"><em>CAN 12</em><div class="track"><i style="width:47px"></i></div></div>
+  </div>
+</div></div>
+
+<script src="tema.js"></script>
+</body>
+</html>

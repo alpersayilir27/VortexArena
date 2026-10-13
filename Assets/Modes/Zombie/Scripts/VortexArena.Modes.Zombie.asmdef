@@ -5,7 +5,8 @@
         "VortexArena.Core",
         "VortexArena.Net",
         "VortexArena.Protocol",
-        "Unity.TextMeshPro"
+        "Unity.TextMeshPro",
+        "UnityEngine.UI"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

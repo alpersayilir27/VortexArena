@@ -256,6 +256,10 @@ namespace VortexArena.App.Editor
                 "_countdownValue", "_countdownNext", false);
             PrefsToggle(PrefsRow(right, ref y, "Dost ateşi"), so, "_friendlyFireOff",
                 "_friendlyFireOn");
+            RectTransform difficultyRow = PrefsRow(right, ref y, "Zorluk");
+            PrefsBind(so, "_difficultyRow", difficultyRow.gameObject);
+            PrefsSeg3(difficultyRow, so, new[] { "KOLAY", "NORMAL", "ZOR" },
+                new[] { "_difficultyEasy", "_difficultyNormal", "_difficultyHard" });
             float rightH = y;
 
             // .pgrid's `.wide` cell starts after the TALLER column (row-gap is 0).
@@ -620,6 +624,30 @@ namespace VortexArena.App.Editor
 
             PrefsBind(so, offField, off.TargetButton);
             PrefsBind(so, onField, on.TargetButton);
+        }
+
+        /// <summary>CSS <c>.seg.in</c> with THREE cells, same plate as <see cref="PrefsToggle"/>; the
+        /// live cell's kind is written at runtime.</summary>
+        private static void PrefsSeg3(RectTransform row, SerializedObject so, string[] labels,
+            string[] fields)
+        {
+            float top = (PrefsRowH - PrefsToggleH) * 0.5f;
+
+            RectTransform seg = Node(row, "Seg");
+            PlaceRight(seg, 0f, top, PrefsToggleW, PrefsToggleH);
+
+            UiShape bg = Shape(seg, "Bg");
+            Stretch(bg.rectTransform);
+            bg.Chamfer(8f).Outline(1f, Girdap.SegBd).Fill(Girdap.SegInBg);
+
+            float itemW = (PrefsToggleW - 10f - 4f * (labels.Length - 1)) / labels.Length;
+            for (int i = 0; i < labels.Length; i++)
+            {
+                // Font is a step smaller than the two-cell segment: three labels in the same plate.
+                UiButtonStyle cell = Button(seg, "Seg" + i, labels[i], UiButtonKind.Seg,
+                    5f + i * (itemW + 4f), 5f, itemW, 40f, null, null, 17f, GirdapFont.SairaBold, 8f);
+                PrefsBind(so, fields[i], cell.TargetButton);
+            }
         }
 
         /// <summary>CSS <c>level()</c> row: mute square + wide stepper whose value box carries the

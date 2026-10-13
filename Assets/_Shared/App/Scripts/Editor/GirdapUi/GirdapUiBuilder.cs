@@ -61,6 +61,7 @@ namespace VortexArena.App.Editor
             BuildCalibration();
             BuildPlayerHud();
             BuildLokanta(); // after the shared strip: it replaces HealthHud inside BurgerHud
+            BuildZombieHud(); // same: replaces the strip copied into ZombieHud
             AssetDatabase.SaveAssets();
         }
 
@@ -367,6 +368,7 @@ namespace VortexArena.App.Editor
                 case GirdapFont.FredokaSemiBold: return "Fredoka-SemiBold";
                 case GirdapFont.NunitoExtraBold: return "Nunito-ExtraBold";
                 case GirdapFont.NunitoBold: return "Nunito-Bold";
+                case GirdapFont.RubikWetPaint: return "RubikWetPaint-Regular";
                 default: return "ChakraPetch-Bold";
             }
         }

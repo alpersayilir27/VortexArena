@@ -237,6 +237,10 @@ namespace VortexArena.Protocol
         /// <summary>Countdown length (s), clamped server-side; <c>0</c> = protocol default. Used for
         /// every countdown, including between rounds.</summary>
         public int countdownSeconds;
+
+        /// <summary>Difficulty (<see cref="MatchDifficulty"/>); empty/unknown = <c>normal</c>. Generic
+        /// field: only <c>zombie</c> reads it today (§10.5), other modes ignore it.</summary>
+        public string difficulty;
     }
 
     [Serializable]
@@ -364,6 +368,10 @@ namespace VortexArena.Protocol
 
         /// <summary>Countdown length (s); <c>0</c> = keep current.</summary>
         public int countdownSeconds;
+
+        /// <summary>Difficulty (<see cref="MatchDifficulty"/>); <b>empty = keep current</b> — the
+        /// panel draws the row only for <c>zombie</c>, so an unrelated mode must not blank it.</summary>
+        public string difficulty;
     }
 
     /// <summary>Friendly-fire switch (§5.2) — a <b>server session setting</b>, not a match parameter.
@@ -913,6 +921,10 @@ namespace VortexArena.Protocol
 
         /// <summary>Countdown length (s); 0 = never chosen (COUNTDOWN_SECONDS).</summary>
         public int countdownSeconds;
+
+        /// <summary>Shared difficulty of the next match (<see cref="MatchDifficulty"/>); never empty —
+        /// never chosen echoes as <c>normal</c>.</summary>
+        public string difficulty = MatchDifficulty.Normal;
 
         /// <summary>CURRENT friendly-fire value (§5.2): effective state, not a selection, so it is outside
         /// the "0 = not chosen" contract.</summary>

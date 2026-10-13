@@ -29,6 +29,7 @@ Her reçetenin altında *neden böyle* kutusu var — orayı okumazsan çalış�
 | Moda özel oyuncu gövdesi (karakter modeli) | [13.3](#133-moda-özel-oyuncu-gövdesi) |
 | Moda özel eldiven (oyuncunun kendi eli) | [13.4](#134-moda-özel-eldiven-oyuncunun-kendi-eli) |
 | Burger müşterisine yeni görünüm (NPC karakteri) | [13.5](#135-burger-müşteri-görünümü-ekleme) |
+| Zombiye yeni gövde (görünüş + animasyon) | [13.6](#136-zombi-gövdesi-görünüş-ekleme) |
 | Yeni arena eklemek | [14](#14-yeni-arena-eklemek) |
 | Hazır bir environment'ın içinde arena bölgesi kurmak | [14.1](#141-hazır-bir-environmentın-içinde-arena-bölgesi-kurmak) |
 | Gökyüzü ekleme / değiştirme | [14.3](#143-gökyüzü-ekleme--değiştirme) |
@@ -996,6 +997,10 @@ sahibi admindir** (§3.6b "Sunucu-atanmış sahiplik"); örnek uygulama `Assets/
      `Obstacle`. Kat döşemesinin collider'ı o katın yürünür alanını verir (döşemesi olmayan boşluk
      şeritleri yürünmez kalır), `Obstacle` hacimleri ve dekor engel kutuları duvar/mobilyayı oyar.
      `ArenaRoof` kökünün altındaki plakalar bu bake'in **içindedir** — üst katın zemini odur.
+     ⚠️ Duvar FBX'leri collider'sız gelir: oyun alanının içindeki **her duvar hattına** (kapı/gedik
+     açıklıkları hariç) `Obstacle` kutusu konmazsa NavMesh o duvarı görmez ve zombi içinden geçer.
+     Bake'ten sonra duvar hattı boyunca `NavMesh.Raycast` ile tarayıp yalnız açıklıkların geçirdiğini
+     doğrula.
    - ⚠️ **Çok katlı arenada her `zombie_spawn` noktası KENDİ katının döşeme NavMesh'inin ÜSTÜNDE
      durmalıdır:** yerleştirmede örnekleme yarıçapı 1,5 m'ye kırpılır, yani döşemesini kaçıran nokta
      alt/üst kata yapışmaz — hiç yerleşmez. Üst kat noktaları döşeme kenarlarına, portallardan uzağa
@@ -1010,9 +1015,58 @@ sahibi admindir** (§3.6b "Sunucu-atanmış sahiplik"); örnek uygulama `Assets/
    - Kırılabilir siper `NavMeshObstacle` (carve) taşır, `Broken` olunca kapanır.
    - ⚠️ **Oynanacak her kata en az bir `zombie_spawn` koy:** zombi kat portalı kullanamaz, bir kata
      ancak o katın doğum noktasına ışınlanarak gider — noktası olmayan kat zombisiz kalır.
-   - **Dar ya da çok katlı arenada akını `MapDefinition.zombiePace` ile yavaşlat** (`1` temel tempo,
-     `0,25`–`2`): doğum aralığını ve dalga arasını böler, aynı anda ayakta duran zombi sayısını
-     çarpar; dalganın toplam zombisi ile hasar değişmez. Export'la `maps.json`'a çıkar.
+   - ⚠️ **Oynanacak her kata ~5 nokta koy ve BİRBİRİNDEN UZAĞA yay** (kapı ağızları, oda köşeleri,
+     koridor başları): beyin son 3 kullanılmış noktayı atlar ve oyuncudan **3–15 m** bandında nokta
+     arar, yani tek bir kümede duran iki üç nokta her dalgada aynı kapıyı tekrarlar ya da hiçbiri
+     bandı tutmadığı için koşullar bırakılıp zombi oyuncunun dibinde belirir.
+   - **Tek katlı arenada noktaların bir kısmı UZAK, bir kısmı YAKIN olsun:** dış yaklaşma
+     koridorunun ucundakiler mesafeyi, çitin 4–6 m dışındakiler ise dalganın ilk zombilerinin
+     oyuncuya **hızla ulaşmasını** verir — hepsi uzaktaysa dalganın başı boş geçer.
+   - **Akın temposu `MapDefinition.zombiePace` ile ayarlanır** (temel değer `1`, aralık `0,25`–`2`):
+     doğum aralığını ve dalga arasını böler, aynı anda ayakta duran zombi sayısını çarpar; dalganın
+     toplam zombisi ile hasar değişmez. Dar ya da çok katlı arenada akını yavaşlatmak için kullanılır.
+     Export'la `maps.json`'a çıkar.
+8. **Silahlar:** zombi arenasında silah panosu `VA_WeaponCanvas_V2` **örneğidir** ve **oynanacak her
+   kata bir tane** konur — zombi gibi oyuncu da kat değiştirir, tek pano üst kattaki oyuncuyu silahsız
+   bırakır. ⚠️ **Pano örneği unpack EDİLMEZ** (kilit plakaları çalışma anında eklenir, prefaba yazılmaz).
+   - ⚠️ **Gece arenasında panonun üstüne lamba asılır:** pano ve silahlar hareketlidir, lightmap almaz,
+     yalnız ışık problarından beslenir; karanlık arenada problar neredeyse siyahtır ve pano gözlükte
+     hiç görünmez. Kalıp: panonun üst kenarına konağın dökme demir/lamba camı malzemesiyle tablo
+     lambası + **Baked** sıcak spot ışık (gerçek zamanlı ışık YASAK), panonun önüne 0,35 ve 1 m'de sık
+     ışık probu, sonra bake. Pano materyali örnekte `M_ZB_WeaponBoard`'a (hafif öz-ışık) çevrilir —
+     ortak `M_Arsenal_Board` diğer arenaların panolarıyla paylaşılır, ona dokunulmaz.
+   - Silahlar **dalgayla açılır:** tablo `ZombieArsenal` asset'indedir (`weaponId` → açılış dalgası).
+     Asset yoksa sınıfın gömülü tablosu koşar; düzenlemek için *Tools > VortexArena > Zombie >
+     Cephanelik tablosunu oluştur* ile `Resources/Zombie/ZombieArsenal` üretilir, sonra Inspector'dan
+     satır eklenir/değiştirilir. `weaponId` `WeaponDefinition`'daki değerle **birebir** yazılır.
+   - ⚠️ **Tabloda olmayan silah AÇIKtır** — kilitli kalması bozukluk gibi görünür, açık kalması yalnız
+     eksik veridir. Geri sayım (dalga 0) **dalga 1 sayılır**.
+   - Kilitli silah **alınamaz** (`WeaponGranter.SelectionGate`): koyu örtü + kilit + "DALGA N" ile durur,
+     nişan ışını/retikülü bile çizilmez. Dalgası gelince kızıl nabız atar ve HUD "YENİ SİLAH AÇILDI"
+     bildirimi verir — kod tarafı için `Docs/Sistem-Ozeti.md` §4 (`ZombieWeaponUnlocks`).
+   - Tablo tamamen istemci tarafıdır: sunucu silah doğrulaması yapmaz, yani denge değişikliği **sunucu
+     dağıtımı istemez**.
+9. **Kan efekti:** `NO_zombie`'nin `Hit_Body` ve `Hit_Head` kutularında `SurfaceTag` durur (`SUR_ZombieFlesh`
+   / `SUR_ZombieHead`). ⚠️ Zombi modeli değişip vuruş kutuları yeniden kurulursa etiketler de yeni
+   kutulara taşınır — etiketsiz kutu `default` tozunu çıkarır ve kan "kaybolur".
+10. **Ses ve müzik:** yaratık sesleri ile modun iki müzik katmanı tek asset'te durur — `ZombieSounds`
+    (`Resources/Zombie/ZombieSounds`), *Tools > VortexArena > Zombie > Ses verisini oluştur* ile
+    üretilir ve yer tutucu klipler bağlanmış gelir.
+    - **Kalıcı sesle değiştirmek = asset'i düzenlemek:** Inspector'da ilgili havuza/alana yeni klibi
+      sürükle. Kod değişmez, menü öğesi var olan asset'i **yeniden doldurmaz**. Alanlar: inleme ·
+      saldırı · ölüm · doğuş havuzları, seviyeler, perde sapması, inleme aralığı, aynı anda inleyen
+      tavanı, 3B mesafe, `musicTension` (dalga arası döngü) · `musicWave` (dalga döngüsü); vurgu
+      alanları opsiyoneldir, boş kalabilir.
+    - Yer tutucular `Assets/Modes/Zombie/Audio/Placeholder/` altındadır, kaynakları aynı klasördeki
+      `KAYNAKLAR.txt`'de listelidir — kalıcı klip gelince yer tutucu dosya silinir ve satırı
+      `KAYNAKLAR.txt`'den çıkarılır.
+    - ⚠️ **İsabet sesi bu asset'te DEĞİL:** et/kafa isabeti `SUR_ZombieFlesh` / `SUR_ZombieHead`
+      yüzey tanımlarından gelir. Buraya da konursa her isabet iki kez duyulur.
+    - ⚠️ **Harita ambiyansı da burada değil:** o sahnenin `MapDefinition.ambienceClip`'idir ve
+      `SceneAmbience` çalar. Mod müziği onun **üstüne** biner, yerine geçmez.
+    - Klipler **mono** olur ve 3B sesler `Decompress On Load` ile içe aktarılır (kısa tek seferlik
+      ses her çalışta çözülürse kare düşer); müzik döngüleri uzun olduğu için sıkıştırılmış kalır.
+    - Asset hiç yoksa mod sessizdir ve konsola **tek** uyarı düşer — yarım sesli koşmaz.
 
 ---
 
@@ -1576,6 +1630,71 @@ ister ve vurulduğunda `hit_report` göndererek NPC'yi oyuncu isabeti sayar.
 
 ⚠️ **Görünümde root motion olmaz** — müşterinin transform'unu `BurgerCustomer` sürüyor; animasyon da
 sürerse iki yazıcı müşteriyi yolundan kaçırır.
+
+---
+
+## 13.6 Zombi gövdesi (görünüş) ekleme
+
+Zombinin gövdesi ağ nesnesinin kendisi değil, `NO_zombie` → `ZombieView` → `looks` dizisinden
+doğurulan bir **görünüş prefabıdır** (`Assets/Modes/Zombie/Prefabs/Looks/ZB_*`). ⚠️ **Hangisinin
+çıkacağını sunucu seçmez, `netId` seçer** — protokolde gövde alanı yoktur
+(`Docs/ArenaNet-Protokol.md` §10.5 değişmez).
+
+⚠️ **Hiçbir adım elle yapılmaz.** Prefab, materyal, maske, denetleyici ve `NO_zombie`'nin tamamını
+`ZombieLookBuilder` yazar; Inspector'da yapılan düzenleme bir sonraki koşuda kaybolur.
+
+**1. Kaynak + FBX.** Mixamo karakteri `blender/Zombies/source/characters/` altına konur ve
+`scripts/zb_build.py` içindeki `CHARACTERS` sözlüğüne `"<dosya>.fbx": "ZB_<Ad>"` satırı eklenir.
+Betik koşturulur (`blender/Zombies/README.md`): çıktı `Assets/Modes/Zombie/Models/ZB_<Ad>.fbx` +
+`ZB_<Ad>_Albedo.png`, bütçe 8k üçgen · tek materyal · 1024 atlas. Import ayarı: *Animation Type*
+**Humanoid**, *Avatar Definition* **Create From This Model**, *Import Animation* **kapalı**,
+*Material Creation Mode* **None** (materyali araç üretir).
+
+**2. Araca tanıt.** `ZombieLookBuilder.LookNames` dizisine `"ZB_<Ad>"` eklenir.
+
+**3. Üret:** `Tools > VortexArena > Zombie > Zombi görünüşlerini üret`. Araç gövdeyi, `Idle_A`
+bekleme pozunda kafa kemiği **1,60 m**'ye gelecek şekilde ölçekler, `M_ZB_<Ad>` materyalini bağlar,
+göz kürelerini ve `Hit_Head`/`Hit_Body` kutularını **kemiklere** takar, `ZB_<Ad>.prefab`'ı yazar ve
+`NO_zombie`'nin `looks` dizisini tazeler.
+- ⚠️ **Boy T-pozdan ölçülmez:** zombi klipleri kambur; T-pozda 1,80 m'lik gövde yürürken kafası
+  ~1,35 m'de durur ve 1,5 m'lik biri gibi okunur.
+- ⚠️ **Materyalde soluk öz-ışık vardır** (`_EmissionMap` = albedo × 0,2; `_EMISSION` asset'te sabit):
+  zombi hareketlidir, lightmap almaz, yalnız ışık problarından beslenir — gece arenalarında problar
+  neredeyse siyah olduğundan onsuz gövde siluet bile vermez.
+- Bake'ten gelen atlas kaynak dokuya eşit parlaklıkta olmalıdır (`blender/Zombies/README.md`).
+
+**4. Gözlükle ince ayar:** `ZB_<Ad>.prefab` → `ZombieLook` → göz sapmaları. Araç bunları bake'li
+mesh'ten (burun ucu, kafa tepesi) **ölçer** ve sıfırdan farklı bir değeri bir daha ezmez — gövde başına elle
+oturtulacak tek şey budur.
+
+### Belirleyici seçimler nasıl çalışır
+
+Hepsi `ZombieKinds.StableHash(netId, tuz)`'dan türer, yani her gözlükte **aynı** sonucu verir:
+gövde (`looks` uzunluğuna göre modulo) · sürünücü mü (~%12) · yürüyüş takımı (0–2) · boy sapması
+(±%5); saldırı çeşidi `(a + netId) % 5`, ölüm `netId % 2`, doğuş `netId % 3`.
+
+⚠️ **`GetHashCode` kullanılmaz** (süreç içinde sabittir, süreçler arasında değil) ve kural
+**kopyalanmaz**: sürünücü ayrımını beyin de (hız × 0,45) gövde de (sürünme animasyonu) aynı
+`ZombieKinds.IsCrawler` çağrısından okur. İkinci bir kopya, bir gözlükte sürünen başka gözlükte
+yürüyen zombi üretir ve hata verecek bir ağ alanı yoktur.
+
+⚠️ **`looks` dizisinden eleman çıkarmak** sahadaki bütün zombilerin gövdesini kaydırır (modulo
+tabanı değişir). Sıra önemsizdir, **uzunluk** önemlidir.
+
+### Vuruş kutuları
+
+`Hit_Head` kafa kemiğinde (0,24 m küp, `HitZone.Head`, `SUR_ZombieHead`), `Hit_Body` göğüs
+kemiğinde (0,42 × 0,62 × 0,30 m, kalça–göğüs, `HitZone.Body`, `SUR_ZombieFlesh`). ⚠️ **Kemikte
+dururlar, kökte değil:** kökteki kutu gövde sürünürken ya da düşerken ayakta kalır ve ekip havaya
+ateş eder. `RemoteHitBox`'ın `avatar` alanı **boş kalır** — bu bir ağ nesnesi kutusudur, isabet
+`targetNetId` ile raporlanır.
+
+### Yeni animasyon klibi
+
+Klip FBX'i `blender/Zombies/README.md`'deki tabloya `ZA_<Ad>` olarak eklenir ve
+`ZombieLookBuilder.Trims` dizisine satırı yazılır (kırpma kareleri 30 fps'te, döngü bayrağı).
+Denetleyicideki durum ve geçişleri de aynı araçta kurulur — Animator penceresinde elle eklenen
+durum bir sonraki koşuda yoktur.
 
 ---
 

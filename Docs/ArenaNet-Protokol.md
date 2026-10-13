@@ -37,7 +37,7 @@ Tümü paylaşılan `ArenaProtocol` statik sınıfında tanımlanır (`Assets/_S
 | `OBJECT_OWNER_SILENCE_MS` | `1000` | Sahibin poz kanalı (`0x01`) bu süredir susmuşsa sunucu onu **obje sahipliği için kopmuş** sayar ve tuttuğu/uçurduğu objeleri zemine indirir (§10.10). Poz kanalı 20 Hz akar, yani eşik 20 paketlik kayba dayanır; istemcilerin kendi bayatlık pencereleriyle (uzak obje akışı ve uzak poz gövdesi, 1 sn) **aynı** tutulur — sunucu objeyi indirmeden önce obje başkalarının ekranında bırakıldığı noktaya geri sıçramaz |
 | `OBJECT_HOST_SILENCE_MS` | `1500` | **Admin sahipli** objeler için susma eşiği (§10.10 "Sunucu-atanmış sahiplik"): nesne sahibi admin en az bir objeye sahipken bu süre boyunca hiçbirinden `0x09` göndermezse sahiplik sıradaki admin'e devredilir. ⚠️ `OBJECT_OWNER_SILENCE_MS` burada **kullanılamaz**: o eşik `0x01` poz kanalını ölçer ve admin `0x01` hiç göndermez (§2), yani admin sahipli her obje ilk taramada zemine inerdi. Eşik obje poz kanalının kendi frekansına (`OBJECT_POSE_RATE_HZ`) göre 30 paketlik kayba dayanır |
 | `OBJECT_GRAB_CONFIRM_SECONDS` | `1.0` | İyimser kavramanın (`object_grab`) kendisini sahip + `Held` gösteren bir `object_state` ile onaylanması için istemcinin beklediği süre (§10.10). Dolunca yerel kavrama geri alınır: sessiz red (elde olan obje, eski sunucu) başka hiçbir mesajla gelmez; süre olmasaydı el, objeyi hiç tutmadığı hâlde dolu kalırdı |
-| `OBJECT_MAX_ENTRIES_PER_PACKET` | `16` | Tek `0x05` datagramının obje bölümüne yazılan en fazla girdi (§6.8). 8 + 16×34 + 16×12 = 744 B bütçeye sığar ama olay bölümü aynı bütçeyi paylaşır — gerçek kapı yine boyut kapısıdır (`COMBINED_MAX_BYTES`); bu sayı `objectCount`'un `u8` olmasının tavanı ve bir emniyettir |
+| `OBJECT_MAX_ENTRIES_PER_PACKET` | `32` | Tek `0x05` datagramının obje bölümüne yazılan en fazla girdi (§6.8). En kötü hâl 16 oyuncu + 32 obje: 8 + 16×34 + 32×12 = 936 B, yani 1200 B bütçesine (`COMBINED_MAX_BYTES`) sığar — ama olay bölümü aynı bütçeyi paylaşır, dolayısıyla **gerçek kapı yine boyut kapısıdır**; bu sayı `objectCount`'un `u8` olmasının tavanı ve bir emniyettir. ⚠️ Boyut kapısı düşerse o tikin obje pozlarının **tamamı** düşer (§6.8), bir kısmı değil |
 | `PLAYER_NUMBER_MIN` / `PLAYER_NUMBER_MAX` | `1` / `99` | Forma numarası aralığı (§2). `0` = atanmamış ve aralığın dışındadır. Numara **tüm kayıtlı cihazlar** arasında benzersizdir |
 | `CALIB_MODE_TWO_ANCHOR` / `CALIB_MODE_SAVED_ANCHOR` / `CALIB_MODE_ANCHOR_CLOUD` | `"two_anchor"` / `"saved_anchor"` / `"anchor_cloud"` | Kalibre modunun geçerli değerleri (§5.2/§10.6). Sunucu açılış varsayılanı `saved_anchor`. ⚠️ `anchor_cloud` **rezervdir** — sunucu kabul etmez, loglayıp durumu değiştirmez; bilinmeyen/boş değer de aynı şekilde reddedilir (sessizce varsayılana düşmez: mod bir operatör kararıdır, tahmin edilmez) |
 | `CALIB_FLOOR_WARN_METERS` | `0.5` | Kalibrasyonda bildirilen zemin sapmasının (`set_calibration.floorOffset`) mutlak değeri bunu aşarsa sunucu adminlere duyuru basar (§10.6). Bir kapı değil **teşhis eşiğidir**: kalibrasyon yine kabul edilir, operatör gözlükte alan verisi temizliğine yönlendirilir |
@@ -389,12 +389,14 @@ dosyasına yazar (`Server/README.md`), başka hiçbir şey okumaz:
 
 ### 5.2 Yalnız admin → Sunucu
 
-- **`start_match`** `{ "type":"start_match", "modeId":"tdm", "sceneName":"<Arena>", "roundSeconds":600, "scoreLimit":30, "countdownSeconds":10 }`
+- **`start_match`** `{ "type":"start_match", "modeId":"tdm", "sceneName":"<Arena>", "roundSeconds":600, "scoreLimit":30, "countdownSeconds":10, "difficulty":"normal" }`
   `roundSeconds`/`scoreLimit`/`countdownSeconds` **o maça özeldir**: `0` ya da eksikse modun kendi varsayılanı (`IGameMode.DefaultRoundSeconds`/`DefaultScoreLimit`, geri sayımda `COUNTDOWN_SECONDS`) kullanılır. Operatörün arayüzde seçtiği değerler buradan geçer; `ROUND_SECONDS_OPTIONS` yalnız arayüz listesidir, sunucu her pozitif değeri kabul eder.
   ⚠️ **`scoreLimit` ÜÇ değerlidir** ve bu yüzden `≤ 0` ile okunmaz: `> 0` = o limit · `0` = modun varsayılanı · **`SCORE_LIMIT_UNLIMITED` (`-1`) = sınırsız** — maçın skor/tur limiti yoktur, bitişi süre ya da operatörün `abort_match`'i belirler. Sunucu sentineli **olduğu gibi taşır** (0'a çevirmez): `load_match`/`admin_state` onu geri yayar, yani panelde "mod varsayılanı" ile "sınırsız" ayırt edilebilir kalır. Her negatif değer `SCORE_LIMIT_UNLIMITED`'a normalize edilir (`ArenaProtocol.NormalizeScoreLimit`), yani telde tek bir "sınırsız" yazımı vardır.
   Sınırsız ayrı bir kural dalı AÇMAZ: sunucudaki limit kapılarının tamamı zaten `limit > 0` diye sorar (`TdmMode`/`FfaMode`/`TournamentMode`), yani sentinel hepsini birden kapatır. Tur tabanlı modda (`tournament`, §10.5) **tur tavanı da kalkar** — tavan `2 × limit − 1` olarak limitten türüyor.
   ⚠️ **`PROTOCOL_VERSION` bu değer için ARTMAZ:** mevcut bir alanın yeni bir değeridir (tel formatı aynı) ve tanımayan eski bir sunucu `> 0` kapısında kalıp modun varsayılanını kullanır — kaybolan şey bozuk bir çizim değil, uygulanmamış bir operatör seçimidir. Admin ile sunucu aynı depodan birlikte dağıtıldığı için kabul edilir; oyuncu istemcisi bu alanı hiç okumaz.
   `countdownSeconds` sunucuda `[COUNTDOWN_SECONDS_MIN, COUNTDOWN_SECONDS_MAX]` aralığına **kırpılır** ve maç boyunca **her** geri sayımda kullanılır — tur tabanlı modlarda (`tournament`, §10.5) turlar arasındaki geri sayım da budur. Oyuncu istemcisine ayrı bir alan olarak GİTMEZ: `countdown{seconds}` zaten her saniye gerçek değeri taşır.
+  `difficulty` **zorluk seçimidir** (`easy` · `normal` · `hard`): eksik, boş ya da tanınmayan değer `normal` okunur. **Ad geneldir, okuyan tektir** — bugün yalnız `zombie` modu dalga tablosunu buradan seçer (§10.5), diğer modlar alanı yok sayar; moda özel bir alan her yeni modda telde yeni bir alan açardı. Seçim `set_selection` ile de taşınır ve `admin_state` ile tüm adminlere geri yayılır (`scoreLimit` ile aynı yol, §5.3); boş string orada "dokunulmadı" demektir.
+  ⚠️ **`PROTOCOL_VERSION` bu alan için ARTMAZ:** alan yalnız admin↔sunucu arasında yaşar, oyuncu istemcisine hiç gitmez (zorluğun istemcideki tek izi `modeState`'in `diff` anahtarıdır, §10.5 — tanımayan parser bilinmeyen anahtarı atlar). Tanımayan eski bir sunucu `normal` koşar: kaybolan şey bozuk bir maç değil, uygulanmamış bir operatör seçimidir; admin ile sunucu aynı depodan birlikte dağıtılır.
 - **`abort_match`** `{ "type":"abort_match" }`
 - **`end_match`** `{ "type":"end_match" }` — maçı **normal yoldan** bitirir: faz `finished`, `match_end` yayınlanır, sonuç ekranı açılır ve `MATCH_END_SECONDS` sonra lobiye dönülür. ⚠️ **`abort_match` ile karıştırma:** iptal maçı yok sayıp doğrudan lobiye düşürür (`match_end` YOK, sonuç ekranı YOK); `end_match` ise "maç burada bitti" der. Kazananı **çekirdek** belirler, mod değil — takım skorlu maçta yüksek skor (eşitse berabere), oyuncu skorlu maçta en yüksek `score`'lu oyuncu (kimse puan almadıysa berabere). Modun `IsMatchOver`'ı **sorulmaz**: operatör bitirdiğinde modun şartı zaten sağlanmamıştır. `playing` **ve** duraklı fazlarda çalışır (tur arası toplanmada da bitirilebilir); lobide ve zaten bitmiş maçta loglanıp yok sayılır. ⚠️ **`PROTOCOL_VERSION` bu mesaj için ARTMAZ:** yalnız admin→sunucu yönünde yeni bir tip eklendi, oyuncu istemcisi onu ne gönderir ne okur; tanımayan eski bir sunucu bilinmeyen tipi zaten loglayıp yok sayar (kaybolan şey bir düğmenin işlevidir, bozuk bir maç değil) ve admin ile sunucu aynı depodan birlikte dağıtılır.
 - **`pause_match`** `{ "type":"pause_match" }` — koşan maçı dondurur: `playing` → `paused` + `phaseReason:"operator"` (§10.1). Süre durur, hasar kapanır, skorlar ve `modeState` **korunur**. **Yalnız `playing` iken iş yapar**; başka fazda loglanıp yok sayılır (duraklı bir maçı duraklatmanın anlamı yok).
@@ -463,9 +465,10 @@ dosyasına yazar (`Server/README.md`), başka hiçbir şey okumaz:
   büyüdükten sonra operatöre hemen deneten elle kapıdır. Bu yüzden **kalibrasyon komutlarına
   gömülmez**: çalışan bir hizalamayı yenilemek, gereksiz yere izleme kesintisi demek olurdu.
 - **`return_to_lobby`** `{ "type":"return_to_lobby" }`
-- **`set_selection`** `{ "type":"set_selection", "modeId":"tdm", "sceneName":"<Arena>", "roundSeconds":600, "scoreLimit":30, "countdownSeconds":10 }` — bir sonraki maçın **ortak** mod/harita/süre/limit/geri sayım seçimi. Maçı BAŞLATMAZ; yalnız sunucudaki seçimi günceller ve sunucu bunu `admin_state` ile tüm adminlere yayar (çoklu admin senkronu, §5.3). Boş string veya `0` bırakılan alan mevcut değerini korur. Seçim maç bitiminde sıfırlanmaz — operatör aynı haritayı tekrar başlatabilsin.
+- **`set_selection`** `{ "type":"set_selection", "modeId":"tdm", "sceneName":"<Arena>", "roundSeconds":600, "scoreLimit":30, "countdownSeconds":10, "difficulty":"normal" }` — bir sonraki maçın **ortak** mod/harita/süre/limit/geri sayım/zorluk seçimi. Maçı BAŞLATMAZ; yalnız sunucudaki seçimi günceller ve sunucu bunu `admin_state` ile tüm adminlere yayar (çoklu admin senkronu, §5.3). Boş string veya `0` bırakılan alan mevcut değerini korur. Seçim maç bitiminde sıfırlanmaz — operatör aynı haritayı tekrar başlatabilsin.
   ⚠️ **`sceneName` yalnız operatör harita/mod imlecini gerçekten oynattığında doldurulur** (süre/limit dokunuşunda boş gider): dolu harita alanı sahnelemeyi tetikler (§10.7), yani süre değiştirmek herkesi bir arenaya taşırdı.
   ⚠️ **`scoreLimit` "0 = dokunulmadı" sözleşmesinin İSTİSNASIDIR:** `SCORE_LIMIT_UNLIMITED` (`-1`) bir seçimdir — "sınırsız seçildi" der, "bu alana dokunmadım" demez. Sunucudaki kapı bu yüzden pozitiflik değil sıfırdan farklılıktır; pozitiflik kapısı sınırsız seçimini sessizce yutar ve diğer operatörün panelinde hiç görünmezdi.
+  `difficulty` de ortak bir seçimdir (§5.2 `start_match`): boş string "dokunulmadı" der, tanınmayan değer `normal`e normalize edilir. Panelde satır yalnız `zombie` modu seçiliyken çizilir, ama seçim sunucuda **mod değişince silinmez** — operatör aynı zorlukla ikinci maçı başlatabilsin.
   **Neden maç parametreleri de ortak:** iki operatör aynı ekranı görmezse biri 5 dk sandığı maçı 30 dk başlatır. Süre/limit *operasyonel* durumdur, görünüm tercihi değil (§5.3 son madde).
   ⚠️ **`sceneName` yalnız bir not değil, anlık bir sahne komutudur:** harita değiştiğinde sunucu o arenayı **sahneler** — TÜM istemciler (oyuncular + adminler) oraya geçer (§10.7). Bu yüzden **`modeId`/`sceneName` yalnız MAÇ KURULMAMIŞKEN kabul edilir**, yani tam iki durumda: `finished` (maç bitti, sıradaki seçilebilmeli) ve `paused` + `phaseReason:"lobby"`. Diğer her durumda ikisi de **düşürülür** — `playing` ama aynı zamanda `paused` + `loading`/`countdown`/`operator`/`mode`: BAŞLAT'a basıldığı andan itibaren maç kuruludur, kurulmakta olanın (yükleme/geri sayım) ya da donmuş olanın (operatör/mod duraklatması) altından sahne çekilemez. Düşürülen alanlar için komutun süre/limit kısmı yine işlenir (onlar sahne yüklemez), konsola sebep yazılır ve `admin_state` mevcut seçimle geri yayınlanır — iyimser davranan panelin imleci sunucunun değerine çekilsin. Kurulmuş bir maçın haritasını değiştirmek diye bir şey yoktur; önce `abort_match`, sonra yeni harita `start_match` ile gelir.
   Aynı kuralı istemci de **arayüz kapısı** olarak uygular (`AdminRoster.CanChangeSelection` → mod/harita seçicileri pasif). Otorite yine sunucudadır: arayüz kapısı yalnız operatörü boşuna tıklatmamak içindir, bayat/yarışan bir panelin komutunu sunucu keser.
@@ -723,7 +726,7 @@ arıza bildirirdi.
 ```json
 { "type":"admin_state", "modeId":"tdm", "sceneName":"<Arena>",
   "venueId":"<Mekan>", "venueScenes":["<Arena>","<Arena2>","<Lobi>"],
-  "roundSeconds":600, "scoreLimit":30, "countdownSeconds":10, "friendlyFire":false,
+  "roundSeconds":600, "scoreLimit":30, "countdownSeconds":10, "difficulty":"normal", "friendlyFire":false,
   "calibrationMode":"saved_anchor", "objectHostId":4,
   "notice":"Ofis-PC: harita -> <Arena>", "adminCount":2 }
 ```
@@ -734,6 +737,7 @@ arıza bildirirdi.
   bağlanıp ayrıldığında. ⚠️ `pause_match`/`resume_match` için duyuru **yalnız komut gerçekten uygulandıysa** yayılır — reddedilen komut diğer operatörlerin ekranına olmamış bir eylemi yazmamalı.
 - `modeId`/`sceneName` = ortak seçim. ⚠️ **Hiçbir zaman boş değildir:** sunucu açılışta seçimi **mekanın lobi haritasıyla** tohumlar (`modeId:"lobby"`, `sceneName:<mekanın lobisi>` — §10.7 açık sahnenin açılış değeri), sonrasında da boş alan mevcut değeri koruduğu için seçim bir daha boşalamaz. Böylece ilk `admin_state`'i alan admin de "hiç harita seçilmemiş" bir durum görmez. Admin arayüzü **kendi yerel seçimini değil bunu gösterir**; gelen değer arayüzdeki mod/harita seçicisini günceller. Yani bir operatör haritayı değiştirdiğinde diğerinin ekranı da (paneli açık olmasa bile) o haritaya döner — sahneyi zaten `return_to_lobby` sahnelemesi taşır (§10.7), `admin_state` yalnız seçiciyi hizalar.
 - `roundSeconds`/`scoreLimit`/`countdownSeconds` = bir sonraki maçın ortak parametreleri (`0` = hiç seçilmedi, modun/protokolün varsayılanı kullanılacak). Mod/harita ile aynı kanaldan gider — sebebi §5.2 `set_selection` notunda. `scoreLimit` burada da üç değerlidir: `-1` = **sınırsız seçildi** (panel bunu "sınırsız" yazar, "mod varsayılanı" değil).
+- `difficulty` = bir sonraki maçın ortak zorluğu (`easy`/`normal`/`hard`, §5.2); hiç seçilmediyse `normal` gider. Panelin ZORLUK satırı imlecini buradan hizalar — tıpkı süre/limitte olduğu gibi yerel imleç iyimser ilerler, sunucunun değeri son sözü söyler.
 - `friendlyFire` = dost ateşi anahtarının **o anki** değeri (§5.2). Bir seçim değil **yürürlükteki durum**dur: koşan maçta da geçerli olduğu için diğer alanların "`0`/boş = değişmedi" sözleşmesine girmez ve mod/harita seçicisinin kilidine takılmaz — panelde maç kuruluyken de basılabilir.
 - `calibrationMode` = kalibre modunun **o anki** değeri (§5.2/§10.6). `friendlyFire` ile aynı
   sınıftadır: bir seçim değil yürürlükteki durumdur, mod/harita seçicisinin kilidine takılmaz.
@@ -2408,7 +2412,9 @@ kuralın söyleyeceği bir şey yoktur (telde yine `false` gider).
 > | `a` | Kabul edilen saldırı sayacı; her geçen saldırıda artar. İstemci saldırı animasyonunu bu sayının **değişiminden** oynatır — tek yayın, geri alma yok, `mole`'un nonce'u gibi |
 >
 > **Doğum noktası seçimi sunucudadır:** her doğumda `zombie_spawn` kimliklerinden **rastgele biri**
-> seçilir, **son kullanılan hariç** (üst üste aynı noktadan akın gelmesin). ⚠️ "Oyunculardan uzak
+> seçilir, **son kullanılan 3 nokta hariç** (üst üste aynı kapıdan akın gelmesin). Sahnede 4'ten az
+> nokta varsa yalnız **son kullanılan** dışlanır — daha fazlasını dışlamak seçeneksiz bırakırdı.
+> ⚠️ "Oyunculardan uzak
 > nokta" sunucuda seçilemez — mesafe metredir, sunucuda metre yoktur.
 > ⚠️ Doğan zombinin `object_spawn` pozu **anlamsızdır** (sunucunun konumu yok, birim poz gider): her
 > başlık onu ilk akan poz gelene kadar **gizler**, sahip başlık ise doğum noktasına kendisi oturur.
@@ -2420,8 +2426,14 @@ kuralın söyleyeceği bir şey yoktur (telde yine `false` gider).
 > | Kural | Ne |
 > |---|---|
 > | Hedef seçimi | Zombi **yalnız kendi katındaki** oyuncuyu kovalar; zombinin katı poz yüksekliğinden, oyuncunun katı kadro katından (kafa o katın altına inmişse kafa yüksekliğinden) çözülür. Yani zombi başka kattaki oyuncuya **asla vurmaz** |
-> | Doğum yeri | Taze doğumlar, o an kovalanabilir **canlı oyuncu bulunan katlara** sırayla (round-robin) dağıtılır. Seçilen katta sunucunun `sp`'si o kattaysa ve oradaki her oyuncudan ≥ 2,5 m (yatay) uzaktaysa o kullanılır; değilse aynı kattan ≥ 2,5 m uzak rastgele bir nokta, o da yoksa en yakın oyuncudan **en uzak** nokta. O katta hiç nokta yoksa ya da kovalanabilir canlı oyuncu hiç yoksa sunucunun `sp`'si olduğu gibi işler |
-> | Katta kalanın kurtarılması | Kendi katında 6 sn boyunca hedefi olmayan zombi, başka katta kovalanabilir canlı oyuncu varken **dolu bir katın** doğum noktasına ışınlanır (aynı kat sırası + aynı nokta kuralı, `sp` tercihi olmadan) |
+> | Kat kotası | Her kat, üzerinde **kimse olmasa bile** en az `fm` zombi tutar (`fm` = zorluk tablosunun boş kat tabanı); boş katların **toplamı** ise canlı zombilerin en çok **%40**'ını tutabilir. Kalan zombiler dolu katlara **oyuncu sayısına göre** paylaştırılır. ⚠️ `rem` 0 olduğunda (dalganın doğacak zombisi kalmadı) boş kat tabanı **0'a düşer** — yoksa kimsenin uğramadığı kattaki taban dalgayı sonsuza kilitlerdi |
+> | Doğum yeri | Taze zombi, **açığı en büyük** kata gider. Dolu katta nokta seçimi: o kattaki en yakın oyuncudan **3–15 m**, **son kullanılan 3 noktadan** biri değil ve başka bir zombinin **1 m**'si içinde değil; hiçbir nokta sağlamazsa en yakın oyuncudan **en uzak** nokta. Sunucunun `sp`'si yalnız bir öneridir, bu kurallar onu geçer |
+> | Boş kattaki zombi | Kendi katında dolaşır. Katı kotasını aşıyorsa, **her zombinin KENDİ** rastgele **3–10 sn** gecikmesi dolunca açığı olan bir katın doğum noktasına **0,5–1 m** sapmayla ışınlanır. ⚠️ Gecikme zombi başınadır, kat başına değil: ortak bir sayaçla hepsi aynı anda kalkar ve grup hâlinde ışınlanma oyuncuya hata gibi görünür |
+>
+> ⚠️ **Işınlanan zombi uzak başlıklarda ARA DEĞER ALMAZ:** akan pozu iki örnek arasında **1,5 m**'den
+> fazla atlayan obje, araya karıştırılmak yerine doğrudan yeni poza **oturtulur** (§6.12). Kural
+> obje türü başına açılır (zombi açar); interpolasyon kapatılmazsa ışınlanan zombi katlar arasında
+> boşlukta süzülerek görünür.
 >
 > ⚠️ **Zombi kat portalı KULLANAMAZ:** katlar arası takip tek yoldan, yukarıdaki ışınlanmayla olur.
 > Bu kural dengeleme değil **kilit açmadır** — dalga ancak kendi zombilerinin hepsi ölünce biter, yani
@@ -2439,34 +2451,57 @@ kuralın söyleyeceği bir şey yoktur (telde yine `false` gider).
 > kimsenin `kills`'i artmaz ve `IGameMode.OnKill` skor yazmaz. Olay **relay EDİLMEZ** (`true` döner):
 > gerçeği `object_state`'in `payload`'ı (`a`) taşır.
 >
-> **Dalga tablosu (sunucuda; istemci yalnız hızı okur).** `w` = dalga numarası, 1'den başlar:
+> **Dalga tablosu ZORLUĞA göredir (sunucuda; istemci yalnız hızı okur).** Zorluğu operatör seçer
+> (`start_match.difficulty`, §5.2); `d` = dalga numarası, 1'den başlar:
 >
-> | Ne | Değer |
-> |---|---|
-> | Hasar | `12 + 4×(w−1)`, tavan `32` — **tempodan etkilenmez** |
-> | Eşzamanlı ayakta zombi | `round((3 + w) × tempo)`, `1`…`12` arasına kırpılır |
-> | Dalganın toplam zombisi | `4 × w` — **tempodan etkilenmez** |
-> | Doğum aralığı | `2 sn ÷ tempo` (tavanın altındayken) |
-> | Hız (istemcide) | `0,7 + 0,1×(w−1)` m/s, **tavan 1,2 m/s** |
-> | Saldırı erişimi (istemcide) | 1,2 m yatay |
-> | Saldırı bekleme | 1,5 sn (vuruş karesi animasyonun ~0,4. sn'si) — **tempodan etkilenmez** |
-> | Dalgalar arası | `8 sn ÷ tempo` |
-> | Ölü zombinin silinmesi | 3 sn sonra `object_despawn` |
+> | Ne | `easy` | `normal` | `hard` |
+> |---|---|---|---|
+> | Dalganın toplam zombisi | `6 + 3d` | `8 + 4d` | `12 + 6d` |
+> | Eşzamanlı ayakta zombi | `4 + d`, tavan `16` | `6 + 2d`, tavan `24` | `10 + 3d`, tavan `30` |
+> | Doğum aralığı | 1,6 sn | 1,0 sn | 0,6 sn |
+> | Dalgalar arası | 8 sn | 6 sn | 5 sn |
+> | Hasar | `12 + 4(d−1)`, tavan `32` | `15 + 4(d−1)`, tavan `40` | `20 + 5(d−1)`, tavan `50` |
+> | Boş kat tabanı (`fm`) | `2` | `3` | `4` |
+>
+> Zorluktan bağımsız olanlar: hız (istemcide) `0,7 + 0,1×(d−1)` m/s, **tavan 1,2 m/s** · saldırı
+> erişimi (istemcide) 1,2 m yatay, sunucu sınırı 2,5 m · saldırı bekleme 1,5 sn (vuruş karesi
+> animasyonun ~0,4. sn'si) · ölü zombinin silinmesi 3 sn sonra `object_despawn`.
+>
+> **Oyuncu sayısıyla ölçekleme:** sunucu **her dalga başında** bağlı oyuncu sayısını (`n`, en az `1`)
+> bir kez **fotoğraflar** ve `çarpan = clamp(1 + 0,15×(n−4); 0,55; 1,9)` ile dalganın **toplam
+> zombisini** ve **eşzamanlı tavanını** çarpar (yuvarlanır; eşzamanlı en az `1` ve zorluğun tavanını
+> **asla** aşmaz). ⚠️ Fotoğraf dalga başındadır, tik başına değil: ortada kopan/katılan bir oyuncu
+> koşan dalganın hedefini kaydırırsa dalga bitmez ya da birden boşalır.
 >
 > **Tempo HARİTA verisidir, kod sabiti değil** (`maps.json → zombiePace`, §11): dar ya da çok katlı
-> bir arenada aynı akın boğucu olur, geniş arenada seyrek kalır. `1` temel tempodur ve yukarıdaki
-> tabloyu bugünkü sayılara indirir; alan yazılmamışsa (ya da `≤ 0` ise) `1` işler, yani mevcut
-> arenalar tek satır iş gerektirmez. Tempo maç başında **bir kez** okunur.
+> bir arenada aynı akın boğucu olur, geniş arenada seyrek kalır. Tempo **doğum aralığını ve dalga
+> arasını böler, eşzamanlı tavanı çarpar** — ve **oyuncu çarpanından SONRA** uygulanır; kırpmalar
+> değişmez (eşzamanlı en az `1`, en çok zorluğun tavanı). `1` temel tempodur ve yukarıdaki tabloyu
+> olduğu gibi bırakır; alan yazılmamışsa (ya da `≤ 0` ise) `1` işler, yani mevcut arenalar tek satır
+> iş gerektirmez. Tempo maç başında **bir kez** okunur.
 >
 > ⚠️ **Hız tavanı bir güvenlik kuralıdır, denge ayarı değil:** free-roam alanda oyuncuyu
 > **koşturan** bir düşman onu gerçek duvara koşturur. Hızlı yürüyüş ~1,4 m/s'dir; 1,2 m/s'de oyuncu
 > geri adımla kurtulur.
-> ⚠️ **Eşzamanlı tavan `OBJECT_MAX_ENTRIES_PER_PACKET`'in (16) altında tutulur:** tavanı aşan obje
-> pozu taşmaz, **düşer** (§6.8) ve hangi zombinin düştüğü adil değildir — 17. zombi açlıktan donar.
+> ⚠️ **Eşzamanlı zombi sayısının mutlak tavanı 30'dur ve bu `OBJECT_MAX_ENTRIES_PER_PACKET`'e (32)
+> dayanır:** tavanı aşan obje pozu taşmaz, **düşer** (§6.8) ve hangi zombinin düştüğü adil değildir —
+> 33. zombi açlıktan donar. 32 girdinin tamamı tek tike sığar (en kötü hâl 16 oyuncu + 32 obje = 936 B
+> < `COMBINED_MAX_BYTES`), ama bütçe kapısı düşerse o tikin obje pozlarının **tamamı** düşer; 30'da
+> kalmak olay bölümüne de pay bırakır.
 >
-> **`modeState` biçimi:** `w:<dalga>;left:<ayakta zombi>;next:<sonraki dalgaya kalan sn|0>` +
-> kayıpta `;over:lost`. Çekirdek yorumlamaz (§10.1). Mod duraklamasında (`phaseReason:"mode"`) yerini
-> duraklama gerekçesi alır — HUD o metni olduğu gibi yazar.
+> **`modeState` biçimi:** `w:<dalga>;left:<ayakta zombi>;next:<sonraki dalgaya kalan sn|0>;rem:<bu
+> dalgada doğacak kalan zombi>;fm:<boş kat tabanı>;diff:<easy|normal|hard>` + kayıpta `;over:lost`.
+> `rem` dalgalar arasında da `0`'dır. Çekirdek yorumlamaz (§10.1). Anahtarlar **eklenebilirdir**:
+> bilinmeyen anahtar ve tam sayı beklenen yerdeki bozuk değer **atlanır**, hata değildir. Mod
+> duraklamasında (`phaseReason:"mode"`) alanın yerini duraklama gerekçesi alır — HUD o metni olduğu
+> gibi yazar.
+> ⚠️ `rem` ve `fm` **beynin girdisidir**, HUD süsü değil: kat kotası ikisinden hesaplanır (yukarıdaki
+> çok katlı kuralı). `start_match`'ten itibaren teldeki sıfır durumu
+> `w:0;left:0;next:0;rem:0;fm:3;diff:normal`dur (`InitialModeState`): sayaç yükleme ekranından beri
+> ekranda durur, ilk doğumu beklemez. ⚠️ Bu sıfır durumu **`normal` tablosunun değerlerini yazar**,
+> operatörün seçimini değil: `InitialModeState` `start_match` anında, modun maç bağlamını (dolayısıyla
+> zorluğu) aldığı `OnMatchStart`'tan önce okunur. Gerçek zorluk geri sayım bitince ilk `modeState`
+> yazımıyla gelir ve beyin dalga başlamadan önce `fm`/`diff` ile iş yapmaz.
 >
 > **Skor** `scoring:"shared"`tir (§10.2): öldürülen zombi başına son vuruşu yapan oyuncunun
 > `PlayerInfo.score`'una +1, aynı miktar ortak toplam olarak `match_state.scoreRed`'e; `scoreBlue`

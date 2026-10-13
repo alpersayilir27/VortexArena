@@ -50,6 +50,25 @@ namespace VortexArena.Core.Combat
 
         public static WeaponGranter Instance { get; private set; }
 
+        /// <summary>Extra gate a MODE may install over the frame path: "may this weapon be taken right
+        /// now" (<c>null</c> = every weapon may).</summary>
+        /// <remarks>⚠️ The hook exists because Core must not know the modes (a mode assembly references
+        /// Core, never the other way round); the zombie wave unlocks are its only user today.
+        /// <para>⚠️ Only a condition that is STABLE across a grip press may be installed here — it is
+        /// read by <see cref="WeaponFrame.Filter"/> too, and a gate that flips under the player's thumb
+        /// empties the candidate list mid-press and burns the press (see
+        /// <see cref="WeaponFrame.Filter"/>). "Locked until wave N" qualifies: it only ever goes
+        /// locked → unlocked.</para></remarks>
+        // ⚠️ Fully qualified: `using System` would make `Random` ambiguous in this file.
+        public static System.Func<WeaponDefinition, bool> SelectionGate;
+
+        /// <summary>Whether the mode gate (if any) allows <paramref name="definition"/>.</summary>
+        public static bool IsSelectionAllowed(WeaponDefinition definition)
+        {
+            System.Func<WeaponDefinition, bool> gate = SelectionGate;
+            return gate == null || definition == null || gate(definition);
+        }
+
 #if UNITY_EDITOR
         /// <summary>EDITOR ONLY (dev sandbox): hand out the loadout IN ORDER instead of randomly,
         /// one weapon per grip press, so every weapon can be reviewed deterministically.
@@ -64,8 +83,8 @@ namespace VortexArena.Core.Combat
         private Weapon _grantedLeft;
         private Weapon _grantedRight;
 
-        /// <summary>Weapon selected from a frame — ONE per player, reset per map (see
-        /// <see cref="HandleSceneLoaded"/>).</summary>
+        /// <summary>Weapon selected from a frame — ONE per player, reset per map
+        /// (<see cref="HandleSceneLoaded"/>) and per match (<see cref="HandleLoadMatch"/>).</summary>
         private WeaponDefinition _selected;
 
         /// <summary>PERSISTENT clone of the selected weapon, PER HAND: released it is hidden, not
@@ -436,6 +455,7 @@ namespace VortexArena.Core.Combat
             // takeable until the next load_match.
             ModeSelection.Changed += HandleRulesChanged;
             NetEvents.OnCountdown += HandleCountdown;
+            NetEvents.OnLoadMatch += HandleLoadMatch;
             ApplyRules();
         }
 
@@ -450,6 +470,7 @@ namespace VortexArena.Core.Combat
             ModeRuntime.Changed -= HandleRulesChanged;
             ModeSelection.Changed -= HandleRulesChanged;
             NetEvents.OnCountdown -= HandleCountdown;
+            NetEvents.OnLoadMatch -= HandleLoadMatch;
 
             if (_aliveSubscribed && PlayerCombatState.Instance != null)
             {
@@ -1004,10 +1025,14 @@ namespace VortexArena.Core.Combat
         /// null select (details in <see cref="CanSelectWith"/>).</para>
         /// <para><paramref name="hand"/> is the hand that raised the ISDK event
         /// (<see cref="ResolveController"/>); <c>None</c> means unresolved, not "no hand".</para>
+        /// <para>A mode gate (<see cref="SelectionGate"/>) can refuse the weapon as well; it is
+        /// repeated here rather than left to <see cref="WeaponFrame.Filter"/> alone, because the filter
+        /// is FAIL-OPEN when the hand cannot be resolved.</para>
         /// </summary>
         public static void SelectWeapon(WeaponDefinition definition, OVRInput.Controller hand)
         {
-            if (Instance == null || definition == null || !CanSelectWith(hand))
+            if (Instance == null || definition == null || !CanSelectWith(hand) ||
+                !IsSelectionAllowed(definition))
             {
                 return;
             }
@@ -1409,6 +1434,17 @@ namespace VortexArena.Core.Combat
         private void HandleCountdown(CountdownMsg msg)
         {
             RefillSummoned();
+        }
+
+        /// <summary>A NEW match drops the frame selection, like a new map does.</summary>
+        /// <remarks>⚠️ The scene load is not enough: running the same map twice in a row keeps the
+        /// loaded scene, so <see cref="HandleSceneLoaded"/> never fires and the player would start the
+        /// second run holding the previous run's pick — in a progression mode (zombie waves) that is a
+        /// weapon they have not unlocked yet.</remarks>
+        private void HandleLoadMatch(LoadMatchMsg msg)
+        {
+            _selected = null;
+            DestroySummoned();
         }
 
         private void RefillSummoned()

@@ -135,6 +135,12 @@ namespace VortexArena.Core.UI
         /// that string (§10.1).</summary>
         protected virtual void OnMatchStateApplied(MatchStateMsg msg) { }
 
+        /// <summary>The centre notice was just redrawn. A mode that dresses that ONE text with extra
+        /// elements (a title above, a subtitle below) feeds them from here — the base keeps owning
+        /// WHEN the notice is visible, so the extra elements can never outlive the number.
+        /// <paramref name="countdown"/> tells the match-start countdown from the mode's own notice.</summary>
+        protected virtual void OnCenterNoticeRefreshed(string text, bool countdown) { }
+
         // ------------------------------------------------------------- Unity lifecycle
 
         protected virtual void OnEnable()
@@ -578,6 +584,8 @@ namespace VortexArena.Core.UI
             {
                 centerNoticeDim.SetActive(text.Length > 0 && _countdownActive);
             }
+
+            OnCenterNoticeRefreshed(text, _countdownActive);
         }
 
         /// <summary>The death screen's killer line. A missing killer (environmental death, or a

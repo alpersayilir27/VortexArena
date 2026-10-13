@@ -12,12 +12,14 @@ from mathutils import Vector
 sys.path.insert(0, os.path.join(r"C:\UnityProjects\VortexArena", "blender", "ZombieManor", "scripts"))
 import zm_common as zm
 importlib.reload(zm)
-from zm_common import Part, bl, west_x, east_x, zone_poly, column_bounds, collection, clear_collection, tree, SW, SE, ZONE_Z
+from zm_common import (Part, bl, west_x, east_x, zone_poly, column_bounds, collection, clear_collection, tree,
+                       SW, SE, ZONE_Z, FLOORS, CEIL, DOOR_H)
 import zm_rooms as zr
 importlib.reload(zr)
 from zm_rooms import panel_door, shutter
 
 ZA = ZONE_Z[0]
+F1 = FLOORS[1]
 CURB_H, CURB_T = 0.35, 0.25
 BAR_TOP, PILLAR_W, PILLAR_H = 1.65, 0.5, 2.0
 PIER_H, GATE_W = 2.3, 1.4     # the two gate piers are identical; the east one wraps Kolon_3
@@ -191,16 +193,16 @@ f.finish()
 fa = Part("ZM_K0_FrontFacade", root)
 s = lambda x: x - W0[0]
 base_open = [(s(DOOR_X[0]), s(DOOR_X[1]), CURB_H), (s(BREACH_X[0]), s(BREACH_X[1]), CURB_H)]
-# bottom below grade and top inside the balcony slab: the side walls' 0 / 3.0 planes stay unshared at the corners
+# bottom below grade and top inside the balcony slab: the side walls' 0 / F1 planes stay unshared at the corners
 fa.wall(W0, E0, -0.035, 0.35, "Stone", "Wallpaper", "Stone", t=0.19, openings=[(a_, b_, CURB_H + 0.035) for a_, b_, _ in base_open])
-up_open = [(s(DOOR_X[0]), s(DOOR_X[1]), 2.2 - 0.35), (s(BREACH_X[0]), s(BREACH_X[1]), 2.2 - 0.35)]
+up_open = [(s(DOOR_X[0]), s(DOOR_X[1]), DOOR_H - 0.35), (s(BREACH_X[0]), s(BREACH_X[1]), DOOR_H - 0.35)]
 up_open += [(s(x0), s(x1), WIN_Z[1] - 0.35, WIN_Z[0] - 0.35) for x0, x1 in WIN_X]
-fa.wall(W0, E0, 0.35, 2.98, "SidingCream", "Wallpaper", "TrimPaint", openings=up_open)   # porch front: cream (reference)
+fa.wall(W0, E0, 0.35, F1 - 0.02, "SidingCream", "Wallpaper", "TrimPaint", openings=up_open)   # porch front: cream (reference)
 OUT = 0.075 + 0.015    # exterior face offset of proud trim (wall half-thickness + 15 mm)
 
 # fascia band where the balcony slab meets the facade
 p0, p1 = Vector(W0) + Vector((0, -OUT)), Vector(E0) + Vector((0, -OUT))
-fa.wall(tuple(p0), tuple(p1), 2.80, 3.0, "TrimPaint", t=0.03)
+fa.wall(tuple(p0), tuple(p1), CEIL, F1, "TrimPaint", t=0.03)
 
 
 def casing(x0, x1, z0, z1, head=0.16):
@@ -212,7 +214,7 @@ def casing(x0, x1, z0, z1, head=0.16):
             + [bl((x0 + x1) / 2, zz, z1 + head + 0.2)], "TrimPaint")
 
 
-casing(*DOOR_X, 0.0, 2.2)
+casing(*DOOR_X, 0.0, DOOR_H)
 for x0, x1 in WIN_X:
     casing(x0, x1, WIN_Z[0], WIN_Z[1], head=0.12)
     fa.box(x0 - 0.08, ZA - 0.16, x1 + 0.08, ZA - 0.07, WIN_Z[0] - 0.05, WIN_Z[0] + 0.012, "TrimPaint")   # sill
@@ -238,15 +240,16 @@ for i, (hh, ang) in enumerate(((1.15, 8), (1.5, -12), (1.85, 5))):
 leaf_w = (DOOR_X[1] - DOOR_X[0]) / 2 - 0.01
 a6, a24 = math.radians(6), math.radians(24)
 U6 = Vector((-math.sin(a6), math.cos(a6), 0))
-panel_door(fa, Vector((DOOR_X[0] + 0.03, ZA + 0.08, 0.01)), U6, (0, 0, 1), (math.cos(a6), math.sin(a6), 0), leaf_w, 2.12)
+panel_door(fa, Vector((DOOR_X[0] + 0.03, ZA + 0.08, 0.01)), U6, (0, 0, 1), (math.cos(a6), math.sin(a6), 0), leaf_w,
+           DOOR_H - 0.08)
 Ul, Vl = Vector((-math.cos(a24), -math.sin(a24), 0)), Vector((math.sin(a24), -math.cos(a24), 0))
 panel_door(fa, Vector((DOOR_X[1] + 0.25, ZA - 1.05, 0.026)) - Ul * leaf_w / 2 - Vl * 1.05, Ul, Vl, (0, 0, 1),
-           leaf_w, 2.1, knobs=(1,))                                                   # torn off, lying face up
+           leaf_w, DOOR_H - 0.1, knobs=(1,))                                          # torn off, lying face up
 fa.box(DOOR_X[0], ZA - 0.09, DOOR_X[1], ZA + 0.09, 0.0, 0.02, "Stone")   # threshold
 
 # breach: splintered siding stubs on the jambs (kept inside 0.12 m of each jamb) + low rubble
 for side_x, sgn in ((BREACH_X[0], 1), (BREACH_X[1], -1)):
-    for hh in (0.6, 0.95, 1.4, 1.75, 2.05):
+    for hh in (0.6, 0.95, 1.4, 1.75, DOOR_H - 0.15):
         ln = rnd.uniform(0.04, 0.12)
         fa.obox((side_x + sgn * ln / 2, ZA - 0.06, hh), (ln, 0.02, 0.17), "Siding", rot=(0, rnd.uniform(-20, 20), 0))
 for i in range(9):
@@ -254,28 +257,28 @@ for i in range(9):
             (rnd.uniform(0.1, 0.5), rnd.uniform(0.05, 0.14), 0.04), rnd.choice(("Siding", "TrimPaint", "Stone")),
             rot=(rnd.uniform(-8, 8), rnd.uniform(-8, 8), rnd.uniform(0, 180)))
 
-# canopy over the door on two knee braces (stays below the balcony slab at 2.80 m)
+# canopy over the door on two knee braces (its wall end stays below the balcony slab's fascia at CEIL)
 cx0, cx1, cz = 0.06, 1.94, ZA - 0.9
 cn = Part("ZM_K0_Canopy", root)               # roof + fascia as their own object: under ArenaRoof in Unity
-cn.hull([bl(x, zz, hh) for x in (cx0, cx1) for zz, hh in ((ZA - 0.075, 2.74), (cz, 2.48))]
-        + [bl(x, zz, hh - 0.06) for x in (cx0, cx1) for zz, hh in ((ZA - 0.075, 2.74), (cz, 2.48))], "Roof")
-cn.box(cx0 - 0.01, cz - 0.035, cx1 + 0.01, cz + 0.01, 2.33, 2.46, "TrimPaint")
+cn.hull([bl(x, zz, hh) for x in (cx0, cx1) for zz, hh in ((ZA - 0.075, CEIL - 0.06), (cz, 2.68))]
+        + [bl(x, zz, hh - 0.06) for x in (cx0, cx1) for zz, hh in ((ZA - 0.075, CEIL - 0.06), (cz, 2.68))], "Roof")
+cn.box(cx0 - 0.01, cz - 0.035, cx1 + 0.01, cz + 0.01, 2.53, 2.66, "TrimPaint")
 cn.finish()
 for bx in (cx0 + 0.15, cx1 - 0.15):
-    fa.pipe([bl(bx, ZA - OUT, 1.95), bl(bx, cz + 0.08, 2.42)], [0.035, 0.035], "TrimPaint", segs=4)
-    fa.box(bx - 0.04, ZA - OUT - 0.02, bx + 0.04, ZA - OUT + 0.01, 1.9, 2.45, "TrimPaint")
+    fa.pipe([bl(bx, ZA - OUT, 2.15), bl(bx, cz + 0.08, 2.62)], [0.035, 0.035], "TrimPaint", segs=4)
+    fa.box(bx - 0.04, ZA - OUT - 0.02, bx + 0.04, ZA - OUT + 0.01, 2.1, 2.65, "TrimPaint")
 
-# wall lanterns flanking the door (bottom at 2.10 m, clear of heads)
+# wall lanterns flanking the door (bottom at 2.30 m, clear of heads)
 for lx in (DOOR_X[0] - 0.43, DOOR_X[1] + 0.43):
     lz = ZA - OUT - 0.18
-    fa.box(lx - 0.03, lz, lx + 0.03, ZA - OUT, 2.28, 2.32, "Iron")                 # arm
-    fa.box(lx - 0.1, lz - 0.1, lx + 0.1, lz + 0.1, 2.1, 2.13, "Iron")               # base plate
-    fa.box(lx - 0.1, lz - 0.1, lx + 0.1, lz + 0.1, 2.33, 2.36, "Iron")              # top plate
-    fa.box(lx - 0.075, lz - 0.075, lx + 0.075, lz + 0.075, 2.13, 2.33, "LampGlow")
+    fa.box(lx - 0.03, lz, lx + 0.03, ZA - OUT, 2.48, 2.52, "Iron")                 # arm
+    fa.box(lx - 0.1, lz - 0.1, lx + 0.1, lz + 0.1, 2.3, 2.33, "Iron")               # base plate
+    fa.box(lx - 0.1, lz - 0.1, lx + 0.1, lz + 0.1, 2.53, 2.56, "Iron")              # top plate
+    fa.box(lx - 0.075, lz - 0.075, lx + 0.075, lz + 0.075, 2.33, 2.53, "LampGlow")
     for px in (-0.09, 0.09):
         for pz in (-0.09, 0.09):
-            fa.box(lx + px - 0.01, lz + pz - 0.01, lx + px + 0.01, lz + pz + 0.01, 2.13, 2.33, "Iron")
-    fa.hull([bl(lx, ZA - OUT - 0.18, 2.48)] + [bl(lx + x, ZA - OUT - 0.18 + y, 2.36) for x in (-0.11, 0.11) for y in (-0.1, 0.1)], "Iron")
+            fa.box(lx + px - 0.01, lz + pz - 0.01, lx + px + 0.01, lz + pz + 0.01, 2.33, 2.53, "Iron")
+    fa.hull([bl(lx, ZA - OUT - 0.18, 2.68)] + [bl(lx + x, ZA - OUT - 0.18 + y, 2.56) for x in (-0.11, 0.11) for y in (-0.1, 0.1)], "Iron")
 fa.finish()
 
 # ---------------------------------------------------------------- outside the south boundary: street

@@ -65,6 +65,10 @@ namespace VortexArena.App.Admin
         /// win limit and no round cap: rounds run until the operator hits İPTAL.</para></summary>
         private const int ScoreLimitUnlimited = ArenaProtocol.SCORE_LIMIT_UNLIMITED;
 
+        /// <summary><c>modeId</c> of the only mode reading the difficulty (§10.5); the ZORLUK row hangs
+        /// on it. ⚠️ Must match the server's <c>ZombieMode.ModeId</c> literally.</summary>
+        private const string ZombieModeId = "zombie";
+
         // ⚠️ Fields are [SerializeField]: the look comes from the prefab and this class only writes
         // data. An unbound field silently draws nothing, so never delete an element — disable it.
 
@@ -126,6 +130,16 @@ namespace VortexArena.App.Admin
         // segment would flip the state when the operator presses the half already lit.
         [SerializeField] private Button _friendlyFireOff;
         [SerializeField] private Button _friendlyFireOn;
+
+        // Difficulty (§5.2 difficulty). SHARED like duration/limit, but read by the zombie mode only
+        // (§10.5), so the row is drawn only while that mode is selected.
+        // ⚠️ Three-state segment: each button SETS its own value (see _friendlyFireOff).
+        [Tooltip("Zorluk satırının kökü (etiket + üç düğme). Yalnız zombi modu seçiliyken açılır.")]
+        [SerializeField] private GameObject _difficultyRow;
+
+        [SerializeField] private Button _difficultyEasy;
+        [SerializeField] private Button _difficultyNormal;
+        [SerializeField] private Button _difficultyHard;
 
         // ⚠️ No separate "LOBİYE DÖN" button and none is added back: the lobby is the first row of
         // the map selector, so the rule has one gate. Ending a running match is İPTAL.
@@ -303,6 +317,10 @@ namespace VortexArena.App.Admin
         /// <summary>Countdown length (s); <c>0</c> = protocol default (§5.2).</summary>
         private int _countdownSeconds;
 
+        /// <summary>Next match's difficulty (SHARED, §5.2). ⚠️ NOT reset on a mode change: the server
+        /// keeps its own selection too, so the operator can run the same difficulty again.</summary>
+        private string _difficulty = MatchDifficulty.Normal;
+
         private bool _dirty = true;
 
         /// <summary>Which venue filter built the current map list. <c>-1</c> = never filtered: the
@@ -347,6 +365,9 @@ namespace VortexArena.App.Admin
             Wire(_countdownNext, CountdownUp);
             Wire(_friendlyFireOff, () => AdminCommands.SetFriendlyFire(false));
             Wire(_friendlyFireOn, () => AdminCommands.SetFriendlyFire(true));
+            Wire(_difficultyEasy, () => SelectDifficulty(MatchDifficulty.Easy));
+            Wire(_difficultyNormal, () => SelectDifficulty(MatchDifficulty.Normal));
+            Wire(_difficultyHard, () => SelectDifficulty(MatchDifficulty.Hard));
 
             // Hold-only: the tap does nothing, the hold fires at the threshold like a click.
             HoldButton.Attach(_calibModeTwoButton, null,
@@ -642,7 +663,7 @@ namespace VortexArena.App.Admin
             }
 
             AdminCommands.StartMatch(SelectedModeId, SelectedSceneName, _roundSeconds, _scoreLimit,
-                _countdownSeconds);
+                _countdownSeconds, _difficulty);
         }
 
         /// <summary>Is BAŞLAT meaningful now: an arena is staged (lobby not open), no match set up
@@ -663,6 +684,9 @@ namespace VortexArena.App.Admin
 
         /// <summary>Unknown mode (no catalog) keeps the row open — the server decides.</summary>
         private bool SelectedModeHasScoreLimit => SelectedMode == null || SelectedMode.HasScoreLimit;
+
+        /// <summary>Is the difficulty row meaningful — i.e. is the zombie mode selected (§10.5)?</summary>
+        private bool SelectedModeIsZombie => SelectedModeId == ZombieModeId;
 
         /// <summary>Game type selected (§11) — rebuilds both lists and publishes like a mode change.
         /// <para>⚠️ The game type itself is not on the wire, but its first mode/map ARE: publishing
@@ -729,6 +753,20 @@ namespace VortexArena.App.Admin
             // ⚠️ Countdown has no ModeDefinition field and gets none: it is a match parameter, not
             // mode shape (§5.2). 0 = protocol default.
             _countdownSeconds = 0;
+        }
+
+        /// <summary>Sets the shared difficulty (§5.2). The local cursor advances optimistically and the
+        /// server's echo has the last word, like duration/limit.</summary>
+        private void SelectDifficulty(string difficulty)
+        {
+            string picked = MatchDifficulty.Normalize(difficulty);
+            if (_difficulty == picked)
+            {
+                return;
+            }
+
+            _difficulty = picked;
+            PublishSelection(false);
         }
 
         private void DurationPrev() { StepDuration(-1); }
@@ -928,7 +966,9 @@ namespace VortexArena.App.Admin
             AdminCommands.SetSelection(
                 sendSelection ? SelectedModeId : "",
                 sendSelection ? SelectedSceneName : "",
-                _roundSeconds, _scoreLimit, _countdownSeconds);
+                _roundSeconds, _scoreLimit, _countdownSeconds,
+                // Empty = untouched: only the mode that reads it may write it (§5.2).
+                SelectedModeIsZombie ? _difficulty : "");
 
             if (mapChanged)
             {
@@ -1019,6 +1059,12 @@ namespace VortexArena.App.Admin
             {
                 _countdownSeconds = Mathf.Clamp(AdminSelection.CountdownSeconds,
                     ArenaProtocol.COUNTDOWN_SECONDS_MIN, ArenaProtocol.COUNTDOWN_SECONDS_MAX);
+                changed = true;
+            }
+
+            if (AdminSelection.Difficulty != _difficulty)
+            {
+                _difficulty = MatchDifficulty.Normalize(AdminSelection.Difficulty);
                 changed = true;
             }
 
@@ -1571,6 +1617,7 @@ namespace VortexArena.App.Admin
             // teammates can be shot must not go unnoticed.
             ApplyToggle(_friendlyFireOff, _friendlyFireOn, AdminSelection.FriendlyFire, true);
 
+            ApplyDifficulty();
             ApplyCalibrationMode();
 
             _markersValue.text = AdminSession.Markers == AdminMarkerVisibility.Off ? "kapalı"
@@ -1652,6 +1699,30 @@ namespace VortexArena.App.Admin
             // Reserved option: disabled on every refresh. Its label comes from the prefab; the code
             // writes no text, the disabled surface carries the state.
             PaintCalibModeButton(_calibModeCloudButton, false, false);
+        }
+
+        /// <summary>Draws the ZORLUK row only for the mode that reads it (§10.5) and lights the live
+        /// third. ⚠️ Fields are read null-safely: an unbound element must not stop the rest of the panel
+        /// from drawing.</summary>
+        private void ApplyDifficulty()
+        {
+            bool visible = SelectedModeIsZombie;
+            if (_difficultyRow != null && _difficultyRow.activeSelf != visible)
+            {
+                _difficultyRow.SetActive(visible);
+            }
+
+            if (!visible)
+            {
+                return;
+            }
+
+            SetKind(_difficultyEasy, _difficulty == MatchDifficulty.Easy
+                ? UiButtonKind.SegOn : UiButtonKind.Seg);
+            SetKind(_difficultyNormal, _difficulty == MatchDifficulty.Normal
+                ? UiButtonKind.SegOn : UiButtonKind.Seg);
+            SetKind(_difficultyHard, _difficulty == MatchDifficulty.Hard
+                ? UiButtonKind.SegOn : UiButtonKind.Seg);
         }
 
         private static void PaintCalibModeButton(Button button, bool active, bool usable)

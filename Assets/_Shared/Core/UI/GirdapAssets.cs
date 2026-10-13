@@ -30,6 +30,9 @@ namespace VortexArena.Core.UI
         public TMP_FontAsset nunitoExtraBold;
         public TMP_FontAsset nunitoBold;
 
+        [Header("Fonts (Kan)")]
+        public TMP_FontAsset rubikWetPaint;
+
         [Header("Patterns")]
         public Sprite dots;
         public Sprite radial;
@@ -55,6 +58,7 @@ namespace VortexArena.Core.UI
                 case GirdapFont.FredokaSemiBold: return fredokaSemiBold;
                 case GirdapFont.NunitoExtraBold: return nunitoExtraBold;
                 case GirdapFont.NunitoBold: return nunitoBold;
+                case GirdapFont.RubikWetPaint: return rubikWetPaint;
                 default: return null;
             }
         }

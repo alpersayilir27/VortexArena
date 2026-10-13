@@ -1,0 +1,21 @@
+{
+    "name": "VortexArena.Modes.Zombie.Editor",
+    "rootNamespace": "VortexArena.Modes.Zombie.Editor",
+    "references": [
+        "VortexArena.Modes.Zombie",
+        "VortexArena.Core",
+        "VortexArena.Net",
+        "VortexArena.Protocol"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

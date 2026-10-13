@@ -7,6 +7,7 @@
     ['mac-sonu.html', 'Maç sonu (oyuncu)'],
     ['oyuncu-hud.html', 'Oyuncu HUD (VR)'],
     ['asci.html', 'Aşçı (Burger)'],
+    ['zombi.html', 'Zombi'],
     ['kit.html', 'Tema kiti'],
   ];
 

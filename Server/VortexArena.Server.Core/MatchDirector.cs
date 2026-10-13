@@ -217,6 +217,9 @@ public sealed class MatchDirector
     private int _roundSeconds;
     private int _scoreLimit;
 
+    /// <summary>Difficulty of the running match (§5.2); normalized, so never empty.</summary>
+    private string _difficulty = MatchDifficulty.Normal;
+
     /// <summary>Length of every countdown in this match (§5.2 <c>start_match.countdownSeconds</c>);
     /// <see cref="ArenaProtocol.COUNTDOWN_SECONDS"/> when the admin gives none. Round-based modes use it
     /// between rounds too.</summary>
@@ -500,6 +503,14 @@ public sealed class MatchDirector
     public int ScoreLimit
     {
         get { lock (_gate) return _scoreLimit; }
+    }
+
+    /// <summary>Difficulty of the running match (<see cref="MatchDifficulty"/>); only <c>zombie</c>
+    /// reads it (§10.5). Resolved at <c>start_match</c>, so a mode may read it in
+    /// <c>OnMatchStart</c>.</summary>
+    public string Difficulty
+    {
+        get { lock (_gate) return _difficulty; }
     }
 
     /// <summary>Console/announcement text of the limit: <c>sınırsız</c> · <c>mod limiti</c> · a number.
@@ -1284,9 +1295,11 @@ public sealed class MatchDirector
     /// <para><paramref name="scoreLimit"/> may also be
     /// <see cref="ArenaProtocol.SCORE_LIMIT_UNLIMITED"/>: an UNLIMITED match — no limit branch runs, the
     /// end is decided by the clock or the operator's <c>abort_match</c> (in round-based modes the round
-    /// cap lifts too).</para></remarks>
+    /// cap lifts too).</para>
+    /// <para><paramref name="difficulty"/> is empty/unknown-tolerant (<c>normal</c>); only <c>zombie</c>
+    /// reads it (§10.5).</para></remarks>
     public async Task StartMatchAsync(string? modeId, string? sceneName, int roundSeconds = 0,
-        int scoreLimit = 0, int countdownSeconds = 0)
+        int scoreLimit = 0, int countdownSeconds = 0, string? difficulty = null)
     {
         modeId ??= "";
         sceneName ??= "";
@@ -1374,6 +1387,7 @@ public sealed class MatchDirector
             : mode.DefaultScoreLimit;
         // The countdown range is a server constraint, not a UI list (§5.2): 0 = default, a given value is
         // clamped. Clamped here so there is a single writer.
+        var appliedDifficulty = MatchDifficulty.Normalize(difficulty ?? "");
         var appliedCountdown = countdownSeconds > 0
             ? Math.Clamp(countdownSeconds, ArenaProtocol.COUNTDOWN_SECONDS_MIN, ArenaProtocol.COUNTDOWN_SECONDS_MAX)
             : ArenaProtocol.COUNTDOWN_SECONDS;
@@ -1397,6 +1411,8 @@ public sealed class MatchDirector
             SetSceneLocked(sceneName);
             _roundSeconds = appliedRound;
             _scoreLimit = appliedLimit;
+            // Set BEFORE the mode's OnMatchStart can run: the zombie mode resolves its wave table here.
+            _difficulty = appliedDifficulty;
             _countdownSeconds = appliedCountdown;
             _scoreRed = 0;
             _scoreBlue = 0;
@@ -1466,7 +1482,7 @@ public sealed class MatchDirector
         // mid-match, so this line is the only later record of which match ran under which rule.
         Console.WriteLine($"[match] start_match: mod '{mode.ModeId}', sahne '{sceneName}', " +
                           $"{appliedRound} sn / limit {DescribeScoreLimit(appliedLimit)} / " +
-                          $"geri sayım {appliedCountdown} sn, " +
+                          $"geri sayım {appliedCountdown} sn, zorluk {appliedDifficulty}, " +
                           $"dost ateşi {(FriendlyFire ? "AÇIK" : "kapalı")}, " +
                           $"{players.Count} oyuncu ({teamInfo}).");
         await FlushAsync(outbox);
@@ -3011,6 +3027,7 @@ public sealed class MatchDirector
         _scoreBlue = 0;
         _roundSeconds = 0;
         _scoreLimit = 0;
+        _difficulty = MatchDifficulty.Normal;
         _countdownSeconds = ArenaProtocol.COUNTDOWN_SECONDS;
         _countdownRemaining = 0;
         _matchStartPending = false;

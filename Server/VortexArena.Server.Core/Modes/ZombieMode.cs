@@ -38,22 +38,70 @@ public sealed class ZombieMode : IGameMode
 
     private const float AttackCooldownSeconds = 1.5f;
 
-    private const int DamageBase = 12;
-    private const int DamagePerWave = 4;
-    private const int DamageCap = 32;
+    /// <summary>Absolute ceiling of zombies standing at once, whatever the difficulty, the pace and the
+    /// player count produce.</summary>
+    /// <remarks>⚠️ Stays UNDER <see cref="ArenaProtocol.OBJECT_MAX_ENTRIES_PER_PACKET"/> (32): an object
+    /// pose over that ceiling does not spill, it is DROPPED (§6.8) and the choice is not fair — the 33rd
+    /// zombie would simply freeze. The two spare slots are the event section's share of the byte
+    /// budget.</remarks>
+    private const int ConcurrentCapMax = 30;
 
-    /// <summary>Zombies standing at once: <c>(ConcurrentBase + wave) × pace</c>, capped.</summary>
-    /// <remarks>⚠️ The cap stays UNDER <see cref="ArenaProtocol.OBJECT_MAX_ENTRIES_PER_PACKET"/> (16):
-    /// an object pose over that ceiling does not spill, it is DROPPED (§6.8) and the choice is not fair —
-    /// the 17th zombie would simply freeze.</remarks>
-    private const int ConcurrentBase = 3;
-    private const int ConcurrentCapMax = 12;
+    /// <summary>How many of the last used spawn points are excluded from the next draw (§10.5).</summary>
+    private const int SpawnRecency = 3;
 
-    /// <summary>Zombies in one wave: <c>WavePerWave × wave</c>.</summary>
-    private const int WavePerWave = 4;
+    /// <summary>Player-count scaling of a wave (§10.5): <c>1 + PlayerFactorStep × (n − 4)</c>, clamped.
+    /// 4 players is the reference group the difficulty table is written for.</summary>
+    private const float PlayerFactorStep = 0.15f;
+    private const float PlayerFactorMin = 0.55f;
+    private const float PlayerFactorMax = 1.9f;
 
-    private const float SpawnIntervalSeconds = 2f;
-    private const float WaveBreakSeconds = 8f;
+    /// <summary>One difficulty's wave table (§10.5). <c>d</c> = wave number, 1-based; damage uses
+    /// <c>d−1</c>, so wave 1 deals the base damage.</summary>
+    private readonly struct WaveTable
+    {
+        public readonly string Id;
+        public readonly int TotalBase;
+        public readonly int TotalPerWave;
+        public readonly int StandingBase;
+        public readonly int StandingPerWave;
+        public readonly int StandingCap;
+        public readonly float SpawnInterval;
+        public readonly float WaveBreak;
+        public readonly int DamageBase;
+        public readonly int DamagePerWave;
+        public readonly int DamageCap;
+
+        /// <summary>Zombies an EMPTY storey keeps even with nobody on it (<c>modeState fm</c>); the brain
+        /// reads it (§10.5 multi-floor rule), the server only publishes it.</summary>
+        public readonly int EmptyFloorMin;
+
+        public WaveTable(string id, int totalBase, int totalPerWave, int standingBase,
+            int standingPerWave, int standingCap, float spawnInterval, float waveBreak, int damageBase,
+            int damagePerWave, int damageCap, int emptyFloorMin)
+        {
+            Id = id;
+            TotalBase = totalBase;
+            TotalPerWave = totalPerWave;
+            StandingBase = standingBase;
+            StandingPerWave = standingPerWave;
+            StandingCap = standingCap;
+            SpawnInterval = spawnInterval;
+            WaveBreak = waveBreak;
+            DamageBase = damageBase;
+            DamagePerWave = damagePerWave;
+            DamageCap = damageCap;
+            EmptyFloorMin = emptyFloorMin;
+        }
+    }
+
+    private static readonly WaveTable EasyTable = new(MatchDifficulty.Easy, 6, 3, 4, 1, 16,
+        1.6f, 8f, 12, 4, 32, 2);
+
+    private static readonly WaveTable NormalTable = new(MatchDifficulty.Normal, 8, 4, 6, 2, 24,
+        1.0f, 6f, 15, 4, 40, 3);
+
+    private static readonly WaveTable HardTable = new(MatchDifficulty.Hard, 12, 6, 10, 3, 30,
+        0.6f, 5f, 20, 5, 50, 4);
 
     /// <summary>Pace of a map that sets none (§10.5) — exactly the base numbers of the wave table.</summary>
     private const float DefaultPace = 1f;
@@ -104,18 +152,31 @@ public sealed class ZombieMode : IGameMode
     private int _spawnedThisWave;
     private float _spawnTimer;
 
+    /// <summary>Wave size and standing cap of the RUNNING wave: both are snapshotted at wave start
+    /// (player factor), so the numbers cannot shift mid-wave.</summary>
+    private int _waveTotal;
+    private int _standingCap;
+
+    /// <summary>Player-count factor of the running wave (§10.5), snapshotted at wave start.</summary>
+    private float _playerFactor = 1f;
+
+    /// <summary>The difficulty table of this match, resolved once at match start (§10.5).</summary>
+    private WaveTable _table = NormalTable;
+
     /// <summary>The map's pace and the two intervals it produces, resolved once at match start.</summary>
     private float _pace = DefaultPace;
-    private float _spawnInterval = SpawnIntervalSeconds;
-    private float _waveBreak = WaveBreakSeconds;
+    private float _spawnInterval = NormalTable.SpawnInterval;
+    private float _waveBreak = NormalTable.WaveBreak;
 
     /// <summary>Seconds left of the between-waves break; <c>0</c> = not in a break.</summary>
     private float _breakTimer;
 
-    /// <summary>Last spawn point used — excluded from the next draw so a wave does not pour out of one
-    /// door. ⚠️ "Pick the point farthest from the players" is impossible here: distance is metres and the
-    /// server has none (§10.10).</summary>
-    private int _lastSpawnPoint;
+    /// <summary>Ring of the last <see cref="SpawnRecency"/> spawn points used — excluded from the next
+    /// draw so a wave does not pour out of one door. <c>0</c> = unused slot.
+    /// <para>⚠️ "Pick the point farthest from the players" is impossible here: distance is metres and the
+    /// server has none (§10.10).</para></summary>
+    private readonly int[] _recentSpawns = new int[SpawnRecency];
+    private int _recentWrite;
 
     private bool _lost;
 
@@ -164,7 +225,12 @@ public sealed class ZombieMode : IGameMode
 
     /// <summary>Zero state from <c>start_match</c> on, so the HUD's wave counter is on screen during
     /// loading and the countdown instead of appearing with the first spawn.</summary>
-    public string InitialModeState => "w:0;left:0;next:0";
+    /// <remarks>⚠️ Carries the <c>normal</c> table's numbers, NOT the operator's pick: this is read at
+    /// <c>start_match</c>, before <see cref="OnMatchStart"/> hands us the match (and with it the
+    /// difficulty). The real values arrive with the first push once the countdown ends, and nothing acts
+    /// on <c>fm</c>/<c>diff</c> before the first wave.</remarks>
+    public string InitialModeState =>
+        $"w:0;left:0;next:0;rem:0;fm:{NormalTable.EmptyFloorMin};diff:{NormalTable.Id}";
 
     public void OnMatchStart(MatchDirector director)
     {
@@ -176,16 +242,22 @@ public sealed class ZombieMode : IGameMode
             _spawnedThisWave = 0;
             _spawnTimer = 0f;
             _breakTimer = 0f;
-            _lastSpawnPoint = 0;
+            _waveTotal = 0;
+            _standingCap = 0;
+            _playerFactor = 1f;
+            Array.Clear(_recentSpawns, 0, _recentSpawns.Length);
+            _recentWrite = 0;
             _lost = false;
             _paused = false;
             _resuming = false;
             _savedRemaining = 0f;
 
-            // Pace is map data (§10.5): read at setup, never on the tick.
+            // Difficulty is the operator's pick, pace is map data (§10.5): both read at setup, never on
+            // the tick.
+            _table = TableOf(director.Difficulty);
             _pace = ResolvePace(director);
-            _spawnInterval = SpawnIntervalSeconds / _pace;
-            _waveBreak = WaveBreakSeconds / _pace;
+            _spawnInterval = _table.SpawnInterval / _pace;
+            _waveBreak = _table.WaveBreak / _pace;
 
             foreach (var netId in director.ObjectIdsOfKind(SpawnKind)) _spawnPoints.Add(netId);
         }
@@ -199,7 +271,7 @@ public sealed class ZombieMode : IGameMode
         }
         else
         {
-            Console.WriteLine($"[zombie] maç başladı — {director.RoundSeconds} sn, " +
+            Console.WriteLine($"[zombie] maç başladı — {director.RoundSeconds} sn, zorluk {_table.Id}, " +
                               $"{_spawnPoints.Count} doğum noktası, tempo ×{_pace:0.##}; süre bitince " +
                               "dayanıldı, tüm oyuncular aynı anda ölürse kayıp.");
         }
@@ -363,18 +435,17 @@ public sealed class ZombieMode : IGameMode
             _breakTimer = MathF.Max(0f, _breakTimer - deltaSeconds);
             if (_breakTimer > 0f) return;
 
-            StartWaveLocked();
+            StartWaveLocked(director);
             return;
         }
 
         if (_wave == 0)
         {
-            StartWaveLocked();
+            StartWaveLocked(director);
             return;
         }
 
-        int total = WaveTotal(_wave);
-        if (_spawnedThisWave >= total)
+        if (_spawnedThisWave >= _waveTotal)
         {
             // The wave is over only once the last CORPSE is gone: the despawn delay is the death
             // animation's window, and the break must not start on top of it.
@@ -386,19 +457,26 @@ public sealed class ZombieMode : IGameMode
         if (_spawnTimer > 0f) return;
 
         _spawnTimer = _spawnInterval;
-        if (StandingCountLocked() >= ConcurrentCapOf(_wave)) return;
+        if (StandingCountLocked() >= _standingCap) return;
 
         SpawnZombieLocked(director);
     }
 
-    private void StartWaveLocked()
+    /// <summary>Opens a wave and FREEZES its numbers: the player count is snapshotted here, once (§10.5).
+    /// ⚠️ Re-counting every tick would move a running wave's target — a leaver would leave it unfinishable
+    /// and a joiner would empty it at a stroke.</summary>
+    private void StartWaveLocked(MatchDirector director)
     {
         _wave++;
         _spawnedThisWave = 0;
         _spawnTimer = 0f;
         _breakTimer = 0f;
-        Console.WriteLine($"[zombie] dalga {_wave} — {WaveTotal(_wave)} zombi, en çok " +
-                          $"{ConcurrentCapOf(_wave)} ayakta, hasar {DamageOfWave(_wave):0}.");
+        _playerFactor = PlayerFactorOf(ConnectedCount(director));
+        _waveTotal = WaveTotalLocked(_wave);
+        _standingCap = ConcurrentCapLocked(_wave);
+        Console.WriteLine($"[zombie] dalga {_wave} ({_table.Id}) — {_waveTotal} zombi, en çok " +
+                          $"{_standingCap} ayakta, hasar {DamageOfWave(_wave):0}, " +
+                          $"oyuncu çarpanı ×{_playerFactor:0.##}.");
     }
 
     /// <summary>Spawns one zombie OWNED by the host but not held — i.e. straight into the flight window
@@ -420,22 +498,40 @@ public sealed class ZombieMode : IGameMode
 
         _zombies[netId] = zombie;
         _spawnedThisWave++;
-        _lastSpawnPoint = spawnPoint;
+        _recentSpawns[_recentWrite] = spawnPoint;
+        _recentWrite = (_recentWrite + 1) % _recentSpawns.Length;
     }
 
-    /// <summary>A random spawn point, never the one used last (§10.5) — otherwise a whole wave can pour
-    /// out of a single door. With one point in the scene that point is used every time.</summary>
+    /// <summary>A random spawn point, never one of the last <see cref="SpawnRecency"/> used (§10.5) —
+    /// otherwise a whole wave can pour out of a single door.</summary>
+    /// <remarks>⚠️ With fewer than <c>SpawnRecency + 1</c> points only the LAST one is excluded: a wider
+    /// window would leave no legal point and the draw could never finish.</remarks>
     private int PickSpawnPointLocked()
     {
         if (_spawnPoints.Count == 1) return _spawnPoints[0];
+
+        int window = _spawnPoints.Count > SpawnRecency ? SpawnRecency : 1;
 
         int chosen;
         do
         {
             chosen = _spawnPoints[_rng.Next(_spawnPoints.Count)];
-        } while (chosen == _lastSpawnPoint);
+        } while (IsRecentlyUsed(chosen, window));
 
         return chosen;
+    }
+
+    /// <summary>Is the point among the last <paramref name="window"/> used? Walks the ring backwards from
+    /// the newest entry.</summary>
+    private bool IsRecentlyUsed(int spawnPoint, int window)
+    {
+        for (var i = 1; i <= window; i++)
+        {
+            int index = (_recentWrite - i + _recentSpawns.Length) % _recentSpawns.Length;
+            if (_recentSpawns[index] == spawnPoint) return true;
+        }
+
+        return false;
     }
 
     private void TickDeadLocked(MatchDirector director, float deltaSeconds)
@@ -524,16 +620,48 @@ public sealed class ZombieMode : IGameMode
 
     // ---------------------------------------------------------------- helpers
 
-    private static int WaveTotal(int wave) => WavePerWave * Math.Max(1, wave);
-
-    /// <summary><c>(ConcurrentBase + wave) × pace</c>, clamped. Never below 1 — a rounded-down cap would
-    /// leave the arena empty for the whole wave, which never ends then (a wave ends when its zombies
-    /// die).</summary>
-    private int ConcurrentCapOf(int wave)
+    /// <summary>Wave size: the difficulty table's <c>TotalBase + TotalPerWave × d</c> scaled by the
+    /// player factor. Never below 1 — a wave of zero zombies ends the moment it starts and the run would
+    /// race through its waves.</summary>
+    private int WaveTotalLocked(int wave)
     {
-        int baseCap = ConcurrentBase + Math.Max(1, wave);
-        int paced = (int)MathF.Round(baseCap * _pace, MidpointRounding.AwayFromZero);
-        return Math.Clamp(paced, 1, ConcurrentCapMax);
+        int table = _table.TotalBase + _table.TotalPerWave * Math.Max(1, wave);
+        int scaled = (int)MathF.Round(table * _playerFactor, MidpointRounding.AwayFromZero);
+        return Math.Max(1, scaled);
+    }
+
+    /// <summary>Zombies standing at once: the table's <c>StandingBase + StandingPerWave × d</c> capped by
+    /// the difficulty, then scaled by the player factor and the map pace (in that order, §10.5).</summary>
+    /// <remarks>⚠️ Never below 1 and never above the difficulty cap (nor
+    /// <see cref="ConcurrentCapMax"/>): a cap rounded down to 0 would leave the arena empty for the whole
+    /// wave, which then never ends (a wave ends when its zombies die).</remarks>
+    private int ConcurrentCapLocked(int wave)
+    {
+        int table = Math.Min(_table.StandingCap,
+            _table.StandingBase + _table.StandingPerWave * Math.Max(1, wave));
+        int scaled = (int)MathF.Round(table * _playerFactor * _pace, MidpointRounding.AwayFromZero);
+        return Math.Clamp(scaled, 1, Math.Min(_table.StandingCap, ConcurrentCapMax));
+    }
+
+    /// <summary>The difficulty's table (§10.5); an unknown/empty pick reads as <c>normal</c>.</summary>
+    private static WaveTable TableOf(string difficulty) =>
+        MatchDifficulty.Normalize(difficulty) switch
+        {
+            MatchDifficulty.Easy => EasyTable,
+            MatchDifficulty.Hard => HardTable,
+            _ => NormalTable
+        };
+
+    /// <summary>Wave scaling from the connected player count (§10.5); <c>n</c> is at least 1, so an empty
+    /// roster does not produce a 0.55× wave the first joiner then walks into.</summary>
+    private static float PlayerFactorOf(int players) =>
+        Math.Clamp(1f + PlayerFactorStep * (Math.Max(1, players) - 4), PlayerFactorMin, PlayerFactorMax);
+
+    private static int ConnectedCount(MatchDirector director)
+    {
+        var count = 0;
+        foreach (var _ in director.ConnectedPlayers()) count++;
+        return count;
     }
 
     /// <summary>The map's pace (§10.5), clamped; the mode's default when the map sets none.</summary>
@@ -544,8 +672,10 @@ public sealed class ZombieMode : IGameMode
         return pace > 0f ? Math.Clamp(pace, MinPace, MaxPace) : DefaultPace;
     }
 
-    private static float DamageOfWave(int wave) =>
-        Math.Min(DamageCap, DamageBase + DamagePerWave * (Math.Max(1, wave) - 1));
+    /// <summary>Damage of one hit (§10.5) — from the difficulty table, NOT from the event, so a tampered
+    /// client cannot choose it. Pace does not touch it.</summary>
+    private float DamageOfWave(int wave) =>
+        Math.Min(_table.DamageCap, _table.DamageBase + _table.DamagePerWave * (Math.Max(1, wave) - 1));
 
     /// <summary>§10.5: the server writes the WHOLE payload on every write, so no key can go missing
     /// between two states.</summary>
@@ -569,8 +699,12 @@ public sealed class ZombieMode : IGameMode
         return any;
     }
 
-    /// <summary>§10.5 <c>w:..;left:..;next:..[;over:lost]</c>. ⚠️ Not pushed while we hold the pause: the
-    /// reason text lives in the same field there (§10.1) and would be overwritten.</summary>
+    /// <summary>§10.5 <c>w:..;left:..;next:..;rem:..;fm:..;diff:..[;over:lost]</c>. ⚠️ Not pushed while we
+    /// hold the pause: the reason text lives in the same field there (§10.1) and would be
+    /// overwritten.</summary>
+    /// <remarks><c>rem</c> and <c>fm</c> are the BRAIN's input, not HUD decoration (§10.5 multi-floor
+    /// rule): the storey quota is computed from them, and <c>rem:0</c> is what drops the empty-storey
+    /// minimum to 0 so a wave cannot stall on an unvisited floor.</remarks>
     private void PushModeState(MatchDirector director)
     {
         string state;
@@ -579,7 +713,9 @@ public sealed class ZombieMode : IGameMode
             if (_paused) return;
 
             int next = (int)MathF.Ceiling(_breakTimer);
-            state = $"w:{_wave};left:{StandingCountLocked()};next:{next}";
+            int remaining = Math.Max(0, _waveTotal - _spawnedThisWave);
+            state = $"w:{_wave};left:{StandingCountLocked()};next:{next};rem:{remaining};" +
+                    $"fm:{_table.EmptyFloorMin};diff:{_table.Id}";
             if (_lost) state += ";over:lost";
         }
 

@@ -44,6 +44,17 @@ namespace VortexArena.Modes.Zombie
         /// <summary>Seconds to the next wave; <c>0</c> = the wave is running.</summary>
         public const string StateNext = "next";
 
+        /// <summary>Zombies of the running wave the server has not spawned yet; <c>0</c> = the wave is
+        /// fully out. The brain holds the empty storeys only while this is above zero.</summary>
+        public const string StateRemaining = "rem";
+
+        /// <summary>Empty-storey minimum: how many zombies may wait on a storey with no player
+        /// (difficulty dependent).</summary>
+        public const string StateFloorMin = "fm";
+
+        /// <summary>Difficulty the admin picked: <c>easy|normal|hard</c>.</summary>
+        public const string StateDifficulty = "diff";
+
         /// <summary>Present only when the run is over: <c>over:lost</c>.</summary>
         public const string StateOver = "over";
 
@@ -69,6 +80,58 @@ namespace VortexArena.Modes.Zombie
 
         public static float SpeedOfWave(int wave) =>
             Mathf.Min(SpeedCap, SpeedBase + SpeedPerWave * (Mathf.Max(1, wave) - 1));
+
+        // ------------------------------------------------------------------- deterministic variety
+
+        /// <summary>Share of crawlers in a wave (0..1).</summary>
+        private const int CrawlerPercent = 12;
+
+        /// <summary>Speed scale of a crawler: it drags itself, and at wave speed the crawl cycle would
+        /// skate.</summary>
+        public const float CrawlerSpeedScale = 0.45f;
+
+        // Salts: every deterministic choice draws from its OWN stream. Reusing one hash would correlate
+        // the picks (every crawler the same look) and that reads as a bug in the field.
+        private const int SaltLook = 0;
+        private const int SaltCrawler = 101;
+        private const int SaltLocoSet = 211;
+        private const int SaltScale = 307;
+
+        /// <summary>Stable hash of a <c>netId</c>, non-negative.</summary>
+        /// <remarks>⚠️ Hand-rolled FNV-1a, NOT <c>GetHashCode</c>: the look, the crawler flag and the
+        /// gait must come out IDENTICAL on every headset, and the runtime's hash is only guaranteed
+        /// stable within one process. A mismatch here is a zombie that crawls on one visor and walks on
+        /// the next, with no network field to blame.</remarks>
+        public static int StableHash(int netId, int salt)
+        {
+            uint hash = 2166136261u;
+            uint value = (uint)netId ^ (uint)(salt * 0x9E3779B9);
+
+            for (int i = 0; i < 4; i++)
+            {
+                hash ^= (value >> (i * 8)) & 0xFFu;
+                hash *= 16777619u;
+            }
+
+            return (int)(hash & 0x7FFFFFFF);
+        }
+
+        /// <summary>Does this zombie crawl? ⚠️ Derived from the <c>netId</c> instead of a payload field:
+        /// the BRAIN (speed) and the VIEW (animation) must agree, and the protocol carries no kind flag.
+        /// Both sides call THIS — a second copy of the rule drifts silently.</summary>
+        public static bool IsCrawler(int netId) =>
+            netId > 0 && StableHash(netId, SaltCrawler) % 100 < CrawlerPercent;
+
+        /// <summary>Index into the look prefab list.</summary>
+        public static int LookIndex(int netId, int lookCount) =>
+            lookCount > 0 ? StableHash(netId, SaltLook) % lookCount : 0;
+
+        /// <summary>Locomotion clip set (0..2) — which idle/walk/run trio this body uses.</summary>
+        public static int LocoSet(int netId) => StableHash(netId, SaltLocoSet) % 3;
+
+        /// <summary>Body size jitter (±5%) so a wave does not read as one model repeated.</summary>
+        public static float ScaleJitter(int netId) =>
+            1f + (StableHash(netId, SaltScale) % 101 - 50) * 0.001f;
 
         /// <summary>Integer payload value, or <paramref name="fallback"/> when the key is missing or not a
         /// number. ⚠️ Tolerant on purpose: a half-written payload must leave the presentation at its

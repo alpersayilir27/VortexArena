@@ -48,6 +48,10 @@ namespace VortexArena.App.Admin
         /// (<c>COUNTDOWN_SECONDS</c>). Also the between-rounds countdown in round-based modes (§5.2).</summary>
         public static int CountdownSeconds { get; private set; }
 
+        /// <summary>Shared selection: next match's difficulty (<c>MatchDifficulty</c>, §5.2); read only
+        /// by the <c>zombie</c> row. Empty = no <c>admin_state</c> yet.</summary>
+        public static string Difficulty { get; private set; } = MatchDifficulty.Normal;
+
         /// <summary>
         /// Friendly fire's EFFECTIVE value (§5.2) — not a "selection": it applies to the running
         /// match immediately, so it is exempt from the selection lock
@@ -131,8 +135,10 @@ namespace VortexArena.App.Admin
             string modeId = msg.modeId ?? "";
             string sceneName = msg.sceneName ?? "";
             string calibrationMode = msg.calibrationMode ?? "";
+            // Normalized so an older/empty value reads as one spelling (§5.2).
+            string difficulty = MatchDifficulty.Normalize(msg.difficulty);
             bool changed = modeId != ModeId || sceneName != SceneName ||
-                           calibrationMode != CalibrationMode ||
+                           calibrationMode != CalibrationMode || difficulty != Difficulty ||
                            msg.roundSeconds != RoundSeconds || msg.scoreLimit != ScoreLimit ||
                            msg.countdownSeconds != CountdownSeconds ||
                            msg.friendlyFire != FriendlyFire ||
@@ -152,6 +158,7 @@ namespace VortexArena.App.Admin
             RoundSeconds = msg.roundSeconds;
             ScoreLimit = msg.scoreLimit;
             CountdownSeconds = msg.countdownSeconds;
+            Difficulty = difficulty;
             FriendlyFire = msg.friendlyFire;
             CalibrationMode = calibrationMode;
             AdminCount = msg.adminCount;

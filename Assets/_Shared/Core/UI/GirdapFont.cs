@@ -10,6 +10,10 @@ namespace VortexArena.Core.UI
     /// <see cref="FredokaSemiBold"/>; <c>--fn</c> 800 → <see cref="NunitoExtraBold"/>, 600/700 →
     /// <see cref="NunitoBold"/>.
     /// </para>
+    /// <para>
+    /// "Kan" skin (<c>zombi.css</c>): <c>--fz-a</c> 400 → <see cref="RubikWetPaint"/>; its labels and
+    /// values stay on the Saira roles.
+    /// </para>
     /// <para>⚠️ Serialized — new values go to the END (Unity stores the numeric index).</para>
     /// </summary>
     public enum GirdapFont
@@ -23,6 +27,7 @@ namespace VortexArena.Core.UI
         FredokaBold = 6,
         FredokaSemiBold = 7,
         NunitoExtraBold = 8,
-        NunitoBold = 9
+        NunitoBold = 9,
+        RubikWetPaint = 10
     }
 }

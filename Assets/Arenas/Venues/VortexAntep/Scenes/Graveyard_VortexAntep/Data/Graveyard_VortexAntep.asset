@@ -19,7 +19,7 @@ MonoBehaviour:
   - zombie
   moleDensity: 1.5
   zombiePace: 1
-  ambienceClip: {fileID: 0}
+  ambienceClip: {fileID: 8300000, guid: 76a9890b5b469ca4a9f8d5a31cb1e3d1, type: 3}
   ambienceVolume: 0.2
   musicClip: {fileID: 0}
   musicVolume: 0.5

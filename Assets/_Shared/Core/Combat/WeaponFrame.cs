@@ -683,8 +683,8 @@ namespace VortexArena.Core.Combat
             }
         }
 
-        /// <summary>ISDK gate: may this interactor select the weapon right now — CALIBRATED, ALIVE
-        /// and within <see cref="maxGrabDistance"/>.
+        /// <summary>ISDK gate: may this interactor select the weapon right now — CALIBRATED, ALIVE,
+        /// allowed by the mode gate and within <see cref="maxGrabDistance"/>.
         /// <para>⚠️ <b>Only conditions that are STABLE across a grip press belong here</b>, and
         /// "does the player already hold a weapon" is NOT one of them — that rule lives in
         /// <c>WeaponGranter.SelectWeapon</c> and must stay there. A filter that flips with the grip
@@ -709,7 +709,10 @@ namespace VortexArena.Core.Combat
             // argument — the alive flag does not flip under the player's thumb mid-press.
             // A children's session takes no weapon either (WeaponGranter.IsKidsPlayground): the racks
             // are swept anyway, so this only keeps the ray/reticle off one that survives the sweep.
-            if (!CalibrationState.IsCalibrated || !ArenaCombat.IsAlive || WeaponGranter.IsKidsPlayground)
+            // A mode may lock the weapon itself (WeaponGranter.SelectionGate — zombie wave unlocks).
+            // Same stability argument: that gate only ever goes locked → unlocked.
+            if (!CalibrationState.IsCalibrated || !ArenaCombat.IsAlive || WeaponGranter.IsKidsPlayground ||
+                !WeaponGranter.IsSelectionAllowed(_weapon != null ? _weapon.Definition : null))
             {
                 return false;
             }

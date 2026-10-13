@@ -16,12 +16,11 @@ importlib.reload(zm)
 import zm_rooms as zr
 importlib.reload(zr)
 from zm_common import (Part, bl, west_x, east_x, zone_poly, column_bounds, collection, clear_collection,
-                       NW, NE, ZONE_Z, CEIL, WALL_T, PORTALS)
+                       NW, NE, ZONE_Z, CEIL, STOREY, DOOR_H, WIN_Z, WALL_T, PORTALS)
 from zm_rooms import (SINK, north_z, s_x, s_z, lining, north_window, fake_door, chimney_breast, lift_cage, wall_decay,
                       panel_door)
 
 ZA, ZB = ZONE_Z
-STOREY = 3.0
 W = lambda z: (west_x(z), z)
 E = lambda z: (east_x(z), z)
 W0, E0, WB, EB = W(ZA), E(ZA), W(ZB), E(ZB)
@@ -30,7 +29,6 @@ BC_BREACH = (-0.6, 0.8)          # ragged hole foyer -> salon (west)
 BC_DOOR = (3.9, 5.1)             # framed doorway foyer -> salon (east)
 FRONT_DOOR, FRONT_BREACH = (0.3, 1.7), (4.2, 5.4)
 N_WINDOWS = ((0.4, 1.5), (4.3, 5.5))
-WIN_Z = (0.9, 2.2)
 FAKE_DOOR_W = (4.3, 5.3)         # boarded door into the west wing (z range on the west wall)
 FAKE_DOOR_E = (4.0, 5.0)         # boarded door into the east wing (z range on the east wall)
 # chimney breast around Kolon_1: fireplace opens west into the salon, mass runs back into the north wall
@@ -67,7 +65,7 @@ lining(w, E0, NE, WALL_T / 2, -1, WALL_T, gaps=east_gaps, trim=(False, True))
 
 # B|C wall: breach (west) + framed doorway (east); both faces papered
 sb = lambda x: s_x(WB, EB, x)
-bc_ops = [(sb(BC_BREACH[0]), sb(BC_BREACH[1]), 2.2), (sb(BC_DOOR[0]), sb(BC_DOOR[1]), 2.2)]
+bc_ops = [(sb(BC_BREACH[0]), sb(BC_BREACH[1]), DOOR_H), (sb(BC_DOOR[0]), sb(BC_DOOR[1]), DOOR_H)]
 # inner walls stay off the perimeter's top/bottom planes (both are hidden: below grade / inside the slab)
 w.wall(WB, EB, -0.035, STOREY - 0.05, "Wallpaper", "Wallpaper", "Wallpaper",
        openings=[(s0_, s1_, top + 0.035) for s0_, s1_, top in bc_ops])
@@ -81,8 +79,8 @@ lining(w, W0, E0, 0.0, -1, 0.19, gaps=[(sf(FRONT_DOOR[0]) - 0.1, sf(FRONT_DOOR[1
                                        (sf(FRONT_BREACH[0]), sf(FRONT_BREACH[1]), "hole")], trim=(True, True), crown=False)
 # inner casing of the front door: back buried 5 mm in the upper wall (the plinth is deeper still)
 for xa, xb in ((FRONT_DOOR[0] - 0.1, FRONT_DOOR[0] + 0.01), (FRONT_DOOR[1] - 0.01, FRONT_DOOR[1] + 0.1)):
-    w.box(xa, ZA + 0.07, xb, ZA + 0.135, -0.03, 2.22, "Trim")
-w.box(FRONT_DOOR[0] - 0.14, ZA + 0.07, FRONT_DOOR[1] + 0.14, ZA + 0.145, 2.22, 2.36, "Trim")
+    w.box(xa, ZA + 0.07, xb, ZA + 0.135, -0.03, DOOR_H + 0.02, "Trim")
+w.box(FRONT_DOOR[0] - 0.14, ZA + 0.07, FRONT_DOOR[1] + 0.14, ZA + 0.145, DOOR_H + 0.02, DOOR_H + 0.16, "Trim")
 # the upper facade is thinner than its plinth: its crown starts at the 0.15 m wall face, 0.08 deep
 d_ = (Vector(E0) - Vector(W0)).normalized()
 n_ = Vector((d_.y, -d_.x))
@@ -102,13 +100,13 @@ for fs in (1, -1):
     zz = lambda o: zc - fs * o
     za, zb = sorted((zz(-0.02), zz(0.04)))
     for xa, xb in ((BC_DOOR[0] - 0.1, BC_DOOR[0] + 0.01), (BC_DOOR[1] - 0.01, BC_DOOR[1] + 0.1)):
-        w.box(xa, za, xb, zb, -0.03, 2.22, "Trim")
+        w.box(xa, za, xb, zb, -0.03, DOOR_H + 0.02, "Trim")
     za, zb = sorted((zz(-0.02), zz(0.05)))
-    w.box(BC_DOOR[0] - 0.14, za, BC_DOOR[1] + 0.14, zb, 2.22, 2.36, "Trim")
+    w.box(BC_DOOR[0] - 0.14, za, BC_DOOR[1] + 0.14, zb, DOOR_H + 0.02, DOOR_H + 0.16, "Trim")
 leaf_w = BC_DOOR[1] - BC_DOOR[0] - 0.02
 a4 = math.radians(4)
 panel_door(w, (BC_DOOR[1] + 0.03, ZB + 0.095, 0.01), (math.sin(a4), math.cos(a4), 0), (0, 0, 1),
-           (math.cos(a4), -math.sin(a4), 0), leaf_w, 2.14)                         # leaf swung into the salon
+           (math.cos(a4), -math.sin(a4), 0), leaf_w, DOOR_H - 0.06)                # leaf swung into the salon
 
 # breach: plaster chunks + splintered lath around the ragged hole, rubble on both sides
 for x_edge, sgn in ((BC_BREACH[0], 1), (BC_BREACH[1], -1)):
@@ -119,7 +117,7 @@ for x_edge, sgn in ((BC_BREACH[0], 1), (BC_BREACH[1], -1)):
                "Wallpaper", rot=(0, rnd.uniform(-25, 25), 0))
 for i in range(6):
     xx = rnd.uniform(BC_BREACH[0] + 0.1, BC_BREACH[1] - 0.1)
-    w.obox((xx, ZB, 2.12 - rnd.uniform(0, 0.05)), (0.025, 0.12, rnd.uniform(0.1, 0.18)), "Wainscot",
+    w.obox((xx, ZB, DOOR_H - 0.08 - rnd.uniform(0, 0.05)), (0.025, 0.12, rnd.uniform(0.1, 0.18)), "Wainscot",
            rot=(0, rnd.uniform(-30, 30), 0))
 for i in range(10):
     w.obox((rnd.uniform(BC_BREACH[0] - 0.3, BC_BREACH[1] + 0.3), ZB + rnd.choice((-1, 1)) * rnd.uniform(0.2, 0.7), 0.025),
@@ -139,7 +137,7 @@ w.finish()
 
 # ---------------------------------------------------------------- ceilings (underside of the Kat1 slab)
 c = Part("ZM_K0_Ceiling", root)
-# foyer: coffered plaster; beam bottoms 2.655 / 2.675 stay off the crown's 2.68, tops end inside the slab
+# foyer: coffered plaster; the two beam depths differ, so neither bottom meets the crown's, tops end inside the slab
 c.prism(zone_poly("B"), CEIL, CEIL + 0.06, "Plaster")
 for zz in (0.5, 2.5):
     c.box(west_x(zz) - 0.02, zz - 0.08, east_x(zz) + 0.02, zz + 0.08, CEIL - 0.145, CEIL + 0.03, "Plaster")
@@ -163,10 +161,12 @@ px0, pz0, px1, pz1 = k2[0] - 0.1, k2[1] - 0.1, k2[2] + 0.1, k2[3] + 0.1
 po.box(px0 - 0.07, pz0 - 0.07, px1 + 0.07, pz1 + 0.07, -SINK, 0.16, "Marble")
 po.box(px0 - 0.045, pz0 - 0.045, px1 + 0.045, pz1 + 0.045, 0.16, 0.28, "Trim")
 po.box(px0 - 0.025, pz0 - 0.025, px1 + 0.025, pz1 + 0.025, 0.28, 0.32, "Trim")
-po.box(px0, pz0, px1, pz1, 0.32, 2.46, "Trim")                                          # shaft
+# the capital hangs off the ceiling, not off a fixed height: on a taller storey the shaft grows instead
+CAP = CEIL - 0.34
+po.box(px0, pz0, px1, pz1, 0.32, CAP, "Trim")                                           # shaft
 for (ax, a0, a1, c, sg) in (("x", pz0, pz1, px0, -1), ("x", pz0, pz1, px1, 1), ("z", px0, px1, pz0, -1), ("z", px0, px1, pz1, 1)):
     P_ = (lambda a, h, d: (c + sg * d, a, h)) if ax == "x" else (lambda a, h, d: (a, c + sg * d, h))
-    for h0, h1 in ((0.42, 0.84), (1.0, 2.34)):                                          # panels below / above the band
+    for h0, h1 in ((0.42, 0.84), (1.0, CAP - 0.12)):                                    # panels below / above the band
         # sunk moulded border, then a raised field with bevelled sides so light picks it out
         o0, o1 = sorted((c + sg * -0.008, c + sg * 0.006))
         if ax == "x":
@@ -176,9 +176,9 @@ for (ax, a0, a1, c, sg) in (("x", pz0, pz1, px0, -1), ("x", pz0, pz1, px1, 1), (
         po.hull([bl(*P_(a, h, d)) for d, ins in ((0.002, 0.075), (0.022, 0.11))
                  for a in (a0 + ins, a1 - ins) for h in (h0 + ins - 0.05, h1 - ins + 0.05)], "Trim")
 po.box(px0 - 0.03, pz0 - 0.03, px1 + 0.03, pz1 + 0.03, 0.88, 0.95, "Gold")              # brass band
-po.box(px0 - 0.03, pz0 - 0.03, px1 + 0.03, pz1 + 0.03, 2.46, 2.53, "Trim")              # capital mouldings
-po.box(px0 - 0.06, pz0 - 0.06, px1 + 0.06, pz1 + 0.06, 2.53, 2.58, "Trim")
-po.box(px0 - 0.1, pz0 - 0.1, px1 + 0.1, pz1 + 0.1, 2.58, CEIL + 0.02, "Trim")
+po.box(px0 - 0.03, pz0 - 0.03, px1 + 0.03, pz1 + 0.03, CAP, CAP + 0.07, "Trim")          # capital mouldings
+po.box(px0 - 0.06, pz0 - 0.06, px1 + 0.06, pz1 + 0.06, CAP + 0.07, CAP + 0.12, "Trim")
+po.box(px0 - 0.1, pz0 - 0.1, px1 + 0.1, pz1 + 0.1, CAP + 0.12, CEIL + 0.02, "Trim")
 po.finish()
 
 # ---------------------------------------------------------------- chimney breast + fireplace wrapping Kolon_1

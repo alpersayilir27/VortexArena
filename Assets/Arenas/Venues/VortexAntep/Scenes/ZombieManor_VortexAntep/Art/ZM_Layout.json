@@ -4,7 +4,7 @@
       "prefab": "ZM_D_Chandelier",
       "position": [
         0.8,
-        2.74,
+        3.24,
         1.5
       ],
       "rotationY": 0.0,
@@ -14,7 +14,7 @@
       "prefab": "ZM_D_Chandelier",
       "position": [
         0.3,
-        2.74,
+        3.24,
         5.4
       ],
       "rotationY": 0.0,
@@ -24,7 +24,7 @@
       "prefab": "ZM_D_Chandelier",
       "position": [
         4.7,
-        2.74,
+        3.24,
         5.4
       ],
       "rotationY": 0.0,
@@ -204,7 +204,7 @@
       "prefab": "ZM_D_Chandelier",
       "position": [
         0.4,
-        5.74,
+        6.74,
         5.2
       ],
       "rotationY": 0.0,
@@ -214,7 +214,7 @@
       "prefab": "ZM_D_Chandelier",
       "position": [
         4.4,
-        5.74,
+        6.74,
         5.6
       ],
       "rotationY": 0.0,
@@ -224,7 +224,7 @@
       "prefab": "ZM_D_Bed",
       "position": [
         0.83,
-        3.0,
+        3.5,
         8.7126
       ],
       "rotationY": -180.0,
@@ -234,7 +234,7 @@
       "prefab": "ZM_D_Desk",
       "position": [
         6.2528,
-        3.0,
+        3.5,
         6.27
       ],
       "rotationY": -90.0,
@@ -244,7 +244,7 @@
       "prefab": "ZM_D_Typewriter",
       "position": [
         5.9528,
-        3.951,
+        4.451,
         6.12
       ],
       "rotationY": -90.0,
@@ -254,7 +254,7 @@
       "prefab": "ZM_D_OilLamp",
       "position": [
         5.9656,
-        3.951,
+        4.451,
         6.82
       ],
       "rotationY": 0.0,
@@ -264,7 +264,7 @@
       "prefab": "ZM_D_FramePortrait",
       "position": [
         3.8,
-        4.75,
+        5.25,
         8.7215
       ],
       "rotationY": -180.0,
@@ -274,7 +274,7 @@
       "prefab": "ZM_D_FramePortrait",
       "position": [
         -1.8727,
-        4.75,
+        5.25,
         6.3
       ],
       "rotationY": 90.0,
@@ -284,7 +284,7 @@
       "prefab": "ZM_D_FrameLandscape",
       "position": [
         2.562,
-        4.75,
+        5.25,
         6.05
       ],
       "rotationY": -90.0,
@@ -294,7 +294,7 @@
       "prefab": "ZM_D_FrameSmall",
       "position": [
         2.718,
-        4.7,
+        5.2,
         6.0
       ],
       "rotationY": 90.0,
@@ -304,7 +304,7 @@
       "prefab": "ZM_D_Candelabra",
       "position": [
         1.81,
-        4.212,
+        4.712,
         6.68
       ],
       "rotationY": -90.0,
@@ -314,7 +314,7 @@
       "prefab": "ZM_D_Candelabra",
       "position": [
         1.81,
-        4.212,
+        4.712,
         7.92
       ],
       "rotationY": -90.0,
@@ -324,7 +324,7 @@
       "prefab": "ZM_D_SheetGhost",
       "position": [
         5.75,
-        3.0,
+        3.5,
         4.0
       ],
       "rotationY": -45.0,
@@ -334,7 +334,7 @@
       "prefab": "ZM_D_SheetChair",
       "position": [
         3.35,
-        3.0,
+        3.5,
         6.1
       ],
       "rotationY": 143.13,
@@ -344,7 +344,7 @@
       "prefab": "ZM_D_RockingChair",
       "position": [
         5.2,
-        3.0,
+        3.5,
         2.6
       ],
       "rotationY": -150.11,

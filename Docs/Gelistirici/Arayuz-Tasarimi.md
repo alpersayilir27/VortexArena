@@ -147,6 +147,9 @@ kabı değiştiyse önce *Fontları ve asset kabını üret*).
 - ⚠️ **Serileşen enum'a yeni değer SONA eklenir** (`UiButtonKind` · `UiChipKind` ·
   `UiGradientMode` · `GirdapFont`): Unity sayısal indeks saklar, araya giren değer üretilmiş her
   prefabın görünümünü kaydırır.
+- ⚠️ **`Image.type = Filled` sprite'sız çalışmaz.** Sprite'ı boş bir `Image` düz dörtgene düşer ve
+  `fillAmount` sessizce yok sayılır — dolan hiçbir çubuk (can, sabır, ilerleme) kıpırdamaz. Dolgu
+  grafiğine ya sprite verilir (`HealthBar_Fill.png` gibi) ya da `UiSegmentBar` kullanılır.
 - ⚠️ **Var olan TMP font asset'i yeniden üretilmez.** Taze atlas, kayıtlı prefablardaki glif
   indekslerini geçersiz kılar ve yazılar yeniden import edilene kadar boş çizilir; menü bu yüzden
   mevcut asset'e dokunmaz.
@@ -304,3 +307,41 @@ bileşen ebeveyn rect'inden okur, ikinci bir sayı kodda tutulmaz.
 geçişi de bu yüzden onu atlar. Tabandan yalnız saat/çerçeve/durum plakası alanları bağlanır;
 can/skor/müşteri sayacı gibi eski alanlar bilerek boştur — bağlı olmayan alan hata vermeden
 çizilmez.
+
+## Zombi — kan teması
+
+Zombi modunun arayüzü Girdap kitiyle (`UiShape`/`UiPolygonGraphic`) çizilir ama **kendi paletini**
+kullanır: palet `Kan` (`Assets/_Shared/Core/UI/Kan.cs`). Fontlar: **Rubik Wet Paint** (DALGA hücresi,
+büyük geri sayım, bildirimler — damlayan kan harfleri), Saira Condensed ExtraBold/Bold (etiket ve
+sayılar), Barlow Medium (saat). Girdap ve Lokanta bu palete dokunmaz, tersi de geçerli.
+
+**Ölçünün kaynağı mockup'tır ve kalıcıdır:** `Docs/Gelistirici/Arayuz/zombi.html` (+ kendi
+`zombi.css`'i; gezinme `tema.css`/`tema.js` ile ortaktır). Kareleri: dalga şeridi · dalga arası
+geri sayım · kısa bildirim · durumlar. Görsel değişiklik **önce mockup'ta** yapılır, sonra
+builder'a geçirilir.
+
+| Prefab | Menü | Ölçü |
+|---|---|---|
+| `Assets/Modes/Zombie/UI/ZombieHud.prefab` (kökü `ZombieClientController`) | *Yalnız Zombi HUD* | `ZombieStrip` 606×312 (kafaya kilitli; saat 240×68 · dört hücre 150×124, sayı 68 px / DALGA 84 px, etiket 26 px · can 606×44 · durum plakası 606×44) · `WaveNotice` görüş ortası (başlık 96 px, sayı 280 px, alt satır 40 px) · `Toast` 780×128 (büyük satır 48 px, küçük satır 26 px) |
+
+Şerit aşçı şeridinin (560×176) yerine geçer ve onun RectTransform'unu, iç Canvas'ını ve kafa
+kilidini **devralır** — yazı iki katına çıkarken panelin durduğu yer değişmez.
+
+**Panodaki silah kilidi** HUD'ın parçası değil, yuvanın üstündeki dünya uzayı plakasıdır
+(`ZombieWeaponLockView`, çalışma anında kurulur): silahın arkasında soluk kemik zemin (karanlıkta
+silüet okunsun, açıldıktan sonra da kalır), kilitliyken önünde koyu örtü + kilit ikonu + "DALGA N"
+(Rubik Wet Paint, `Kan.BloodHi`); açılınca örtü silinir ve "AÇILDI" kısa bir kızıl nabız atar.
+Mockup'ı yoktur, ölçüsü silahın kendi kutusundan türer.
+
+⚠️ **Geri sayımın sayısı tabanın merkez bildirimidir** (`centerNoticeText`), başlığı ve alt satırı
+modun kendi alanlarıdır: taban ne zaman görüneceğine karar verir, mod `OnCenterNoticeRefreshed`
+kancasında yalnız çevresini yazar. Süslemeyi ayrı açıp kapatan bir mod onları sayıdan uzun
+yaşatırdı.
+
+⚠️ **Zombi HUD'ı `HealthHud` örneği TAŞIMAZ** (aşçı şeridinden kopyalandığı için canı hiç yoktu);
+canı tabanın `healthFill` + `healthText` çifti çizer, `healthStrip` bilerek boştur. Gerekçe:
+`HealthStrip` eşik renklerini `Girdap` paletinden verir ve kan temalı şeride ikinci bir kırmızı
+sokardı. `healthFill` sprite'lı bir `Image`'dır (sebebi "Tuzaklar"da).
+
+⚠️ **Bildirim plakası tek düzendir:** küçük satır varken büyük satıra `margin` ile üst boşluk
+verilir (`toastSmallBand`, builder'dan serileşir) — ikinci bir yerleşim ve Layout Group yoktur.

@@ -60,6 +60,10 @@ public sealed class LobbyService
     /// <summary>Shared countdown selection (§5.2); 0 = unset → COUNTDOWN_SECONDS.</summary>
     private int _selectedCountdownSeconds;
 
+    /// <summary>Shared difficulty selection (§5.2); only <c>zombie</c> reads it (§10.5). ⚠️ Not cleared
+    /// on a mode change: the operator must be able to start a second run at the same difficulty.</summary>
+    private string _selectedDifficulty = MatchDifficulty.Normal;
+
     /// <summary>Calibration mode (§5.2/§10.6) — <b>effective state, not a selection</b>: same class
     /// as friendly fire, it bypasses the selection lock and can change during a running match. Read
     /// and written only under <c>_selectionGate</c> (same lock as the other shared fields).</summary>
@@ -814,7 +818,7 @@ public sealed class LobbyService
         lock (_selectionGate) previousModeId = _selectedModeId;
 
         var changed = ApplySelection(requestedModeId, requestedSceneName,
-            msg.roundSeconds, msg.scoreLimit, msg.countdownSeconds);
+            msg.roundSeconds, msg.scoreLimit, msg.countdownSeconds, msg.difficulty);
 
         // Base strips depend on the selected mode's team mode (§10.7) — announced to everyone when
         // the MODE changes. Map/duration/limit changes do not produce this broadcast.
@@ -890,7 +894,7 @@ public sealed class LobbyService
     /// "untouched", but a negative value IS a choice (unlimited, §5.2), so its gate is non-zero
     /// rather than positive.</para></summary>
     private bool ApplySelection(string? modeId, string? sceneName, int roundSeconds, int scoreLimit,
-        int countdownSeconds)
+        int countdownSeconds, string? difficulty = null)
     {
         lock (_selectionGate)
         {
@@ -924,6 +928,16 @@ public sealed class LobbyService
                 _selectedCountdownSeconds = countdownSeconds;
                 changed = true;
             }
+            // Empty = untouched; anything else is normalized, so the wire carries one spelling.
+            if (!string.IsNullOrEmpty(difficulty))
+            {
+                var normalizedDifficulty = MatchDifficulty.Normalize(difficulty);
+                if (_selectedDifficulty != normalizedDifficulty)
+                {
+                    _selectedDifficulty = normalizedDifficulty;
+                    changed = true;
+                }
+            }
             return changed;
         }
     }
@@ -937,7 +951,8 @@ public sealed class LobbyService
         string previousModeId;
         lock (_selectionGate) previousModeId = _selectedModeId;
 
-        ApplySelection(msg.modeId, msg.sceneName, msg.roundSeconds, msg.scoreLimit, msg.countdownSeconds);
+        ApplySelection(msg.modeId, msg.sceneName, msg.roundSeconds, msg.scoreLimit, msg.countdownSeconds,
+            msg.difficulty);
 
         bool modeChanged;
         lock (_selectionGate) modeChanged = _selectedModeId != previousModeId;
@@ -945,7 +960,7 @@ public sealed class LobbyService
 
         await BroadcastAdminStateAsync(Notice(connection, $"maç başlatılıyor: {msg.sceneName} / {msg.modeId}"));
         await _director.StartMatchAsync(msg.modeId, msg.sceneName, msg.roundSeconds, msg.scoreLimit,
-            msg.countdownSeconds);
+            msg.countdownSeconds, msg.difficulty);
     }
 
     public async Task HandleAbortMatchAsync(ClientConnection connection)
@@ -1227,6 +1242,7 @@ public sealed class LobbyService
                 roundSeconds = _selectedRoundSeconds,
                 scoreLimit = _selectedScoreLimit,
                 countdownSeconds = _selectedCountdownSeconds,
+                difficulty = _selectedDifficulty,
                 // NOT a selection, the effective state (§5.2): the switch is valid during a running
                 // match, so it bypasses the selection lock (CanChangeSelection) and is sent as-is.
                 friendlyFire = _director.FriendlyFire,

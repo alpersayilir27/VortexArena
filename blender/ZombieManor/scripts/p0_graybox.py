@@ -9,11 +9,11 @@ sys.path.insert(0, os.path.join(r"C:\UnityProjects\VortexArena", "blender", "Zom
 import zm_common as zm
 importlib.reload(zm)
 
-from zm_common import (FLOORS, CEIL, SLAB, ZONE_Z, RAIL_H, PORTALS, PORTAL_R, NW, SW, SE, NE,
-                       west_x, east_x, zone_poly, column_bounds, box, prism, wall, disc, collection, clear_collection)
+from zm_common import (FLOORS, CEIL, SLAB, STOREY, DOOR_H, SHED_TOP, ZONE_Z, RAIL_H, PORTALS, PORTAL_R,
+                       NW, SW, SE, NE, west_x, east_x, zone_poly, column_bounds, box, prism, wall, disc,
+                       collection, clear_collection)
 
 ZA, ZB = ZONE_Z
-STOREY = FLOORS[1] - FLOORS[0]
 PART_X = 2.8          # north-south partition line through the fireplace column
 PART_Z0 = 5.6         # partition starts here; south of it the rooms stay open
 NORTH_AT = lambda x: NW[1] + (NE[1] - NW[1]) * (x - NW[0]) / (NE[0] - NW[0])
@@ -51,8 +51,8 @@ box("K0_GatePost_Kolon3", x0 - 0.1, z0 - 0.08, x1 + 0.1, z1 + 0.1, 0.0, 2.4, "wa
 # house front facade on the A|B line: front door + broken bay opening
 wa = west_x(ZA)
 wall("K0_Facade_Front", W(ZA), E(ZA), 0.0, STOREY, "ext", f0,
-     openings=[(0.3 - wa, 1.7 - wa, 2.2), (4.2 - wa, 5.4 - wa, 2.2)])
-box("K0_Canopy", 0.0, ZA - 0.9, 2.0, ZA - 0.08, 2.5, 2.65, "roof", f0)
+     openings=[(0.3 - wa, 1.7 - wa, DOOR_H), (4.2 - wa, 5.4 - wa, DOOR_H)])
+box("K0_Canopy", 0.0, ZA - 0.9, 2.0, ZA - 0.08, 2.7, 2.85, "roof", f0)
 
 # house perimeter (B + C) and the B|C wall
 wall("K0_Wall_W", NW, W(ZA), 0.0, STOREY, "wall", f0, side=1)
@@ -60,7 +60,7 @@ wall("K0_Wall_N", NE, NW, 0.0, STOREY, "wall", f0, side=1)
 wall("K0_Wall_E", E(ZA), NE, 0.0, STOREY, "wall", f0, side=1)
 wb = west_x(ZB)
 wall("K0_Wall_BC", W(ZB), E(ZB), 0.0, STOREY, "wall", f0,
-     openings=[(-0.6 - wb, 0.8 - wb, 2.2), (3.8 - wb, 5.2 - wb, 2.2)])
+     openings=[(-0.6 - wb, 0.8 - wb, DOOR_H), (3.8 - wb, 5.2 - wb, DOOR_H)])
 wall("K0_Partition", (PART_X, PART_Z0), (PART_X, NORTH_AT(PART_X)), 0.0, STOREY, "wall", f0)
 
 # Kolon_2 -> foyer post (Kat0), monument pedestal (Kat1 balcony)
@@ -83,7 +83,7 @@ def portal_booth(tag, px, pz, h, coll, door_w=1.0):
     wall(f"{tag}_Side", (x_in, z_front), (x_in, NORTH_AT(x_in)), h, h + STOREY, "wall", coll)
     a, b = ((x_wall, z_front), (x_in, z_front)) if west_side else ((x_in, z_front), (x_wall, z_front))
     s_door = abs(px - a[0]) - door_w / 2
-    wall(f"{tag}_Front", a, b, h, h + STOREY, "wall", coll, openings=[(s_door, s_door + door_w, 2.2)])
+    wall(f"{tag}_Front", a, b, h, h + STOREY, "wall", coll, openings=[(s_door, s_door + door_w, DOOR_H)])
 
 
 # ---------------------------------------------------------------- Kat1: balcony B (open air) + rooms C
@@ -95,7 +95,7 @@ wall("K1_Rail_Balcony_S", W(ZA), E(ZA), h1, h1 + RAIL_H, "rail", f1, t=0.12, sid
 wall("K1_WingWall_W", W(ZB), W(ZA), h1, h1 + STOREY, "ext", f1, side=1)
 wall("K1_WingWall_E", E(ZA), E(ZB), h1, h1 + STOREY, "ext", f1, side=1)
 wall("K1_Facade_BC", W(ZB), E(ZB), h1, h1 + STOREY, "ext", f1,
-     openings=[(-0.6 - wb, 0.6 - wb, 2.3), (3.9 - wb, 5.1 - wb, 2.3)])
+     openings=[(-0.6 - wb, 0.6 - wb, 2.5), (3.9 - wb, 5.1 - wb, 2.5)])
 wall("K1_Wall_W", NW, W(ZB), h1, h1 + STOREY, "wall", f1, side=1)
 wall("K1_Wall_N", NE, NW, h1, h1 + STOREY, "wall", f1, side=1)
 wall("K1_Wall_E", E(ZB), NE, h1, h1 + STOREY, "wall", f1, side=1)
@@ -117,7 +117,8 @@ portal_booth("K1_BoothP01", p1x, p1z, h1, f1)
 portal_booth("K1_BoothP12", p2x, p2z, h1, f1)
 portal_booth("K2_ShedP12", p2x, p2z, h2, f2)
 x_in = p2x - 0.9
-box("K2_ShedP12_Roof", x_in - 0.1, p2z - 0.8, east_x(p2z) + 0.15, NORTH_AT(x_in) + 0.15, h2 + 2.6, h2 + 2.75, "roof", f2)
+box("K2_ShedP12_Roof", x_in - 0.1, p2z - 0.8, east_x(p2z) + 0.15, NORTH_AT(x_in) + 0.15,
+    h2 + SHED_TOP - 0.2, h2 + SHED_TOP - 0.05, "roof", f2)
 disc("MK_P01_Lower", p1x, p1z, FLOORS[0], PORTAL_R, "portal", c_mark)
 disc("MK_P01_Upper", p1x, p1z, h1, PORTAL_R, "portal", c_mark)
 disc("MK_P12_Lower", p2x, p2z, h1, PORTAL_R, "portal", c_mark)

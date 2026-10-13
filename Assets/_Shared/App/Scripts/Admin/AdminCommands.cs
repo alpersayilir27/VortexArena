@@ -26,9 +26,11 @@ namespace VortexArena.App.Admin
         /// <para><paramref name="scoreLimit"/> may also be <b>unlimited</b>
         /// (<see cref="ArenaProtocol.SCORE_LIMIT_UNLIMITED"/>). ⚠️ Hence a negative value is NOT
         /// clamped to <c>0</c> — clamping would silently turn "unlimited" into "mode default".</para>
+        /// <para><paramref name="difficulty"/> (<see cref="MatchDifficulty"/>) is read only by
+        /// <c>zombie</c> (§10.5); null/unknown goes out as <c>normal</c>.</para>
         /// </summary>
         public static void StartMatch(string modeId, string sceneName, int roundSeconds = 0,
-            int scoreLimit = 0, int countdownSeconds = 0)
+            int scoreLimit = 0, int countdownSeconds = 0, string difficulty = null)
         {
             if (string.IsNullOrEmpty(modeId) || string.IsNullOrEmpty(sceneName))
             {
@@ -42,7 +44,8 @@ namespace VortexArena.App.Admin
                 sceneName = sceneName,
                 roundSeconds = Mathf.Max(0, roundSeconds),
                 scoreLimit = ArenaProtocol.NormalizeScoreLimit(scoreLimit),
-                countdownSeconds = Mathf.Max(0, countdownSeconds)
+                countdownSeconds = Mathf.Max(0, countdownSeconds),
+                difficulty = MatchDifficulty.Normalize(difficulty)
             };
 
             if (Send(msg))
@@ -92,13 +95,17 @@ namespace VortexArena.App.Admin
         /// <para>⚠️ <paramref name="scoreLimit"/> is the exception: a negative value
         /// (<see cref="ArenaProtocol.SCORE_LIMIT_UNLIMITED"/>) means <b>unlimited was chosen</b>,
         /// not "untouched" — so it is neither clamped nor counted as an empty command.</para>
+        /// <para><paramref name="difficulty"/> (<see cref="MatchDifficulty"/>) rides the same channel;
+        /// <c>null</c>/empty = "leave this field alone", since the row exists only for
+        /// <c>zombie</c>.</para>
         /// </summary>
         public static void SetSelection(string modeId, string sceneName, int roundSeconds = 0,
-            int scoreLimit = 0, int countdownSeconds = 0)
+            int scoreLimit = 0, int countdownSeconds = 0, string difficulty = null)
         {
             int limit = ArenaProtocol.NormalizeScoreLimit(scoreLimit);
             if (string.IsNullOrEmpty(modeId) && string.IsNullOrEmpty(sceneName) &&
-                roundSeconds <= 0 && limit == 0 && countdownSeconds <= 0)
+                roundSeconds <= 0 && limit == 0 && countdownSeconds <= 0 &&
+                string.IsNullOrEmpty(difficulty))
             {
                 return;
             }
@@ -109,7 +116,8 @@ namespace VortexArena.App.Admin
                 sceneName = sceneName ?? "",
                 roundSeconds = Mathf.Max(0, roundSeconds),
                 scoreLimit = limit,
-                countdownSeconds = Mathf.Max(0, countdownSeconds)
+                countdownSeconds = Mathf.Max(0, countdownSeconds),
+                difficulty = difficulty ?? ""
             });
         }
 

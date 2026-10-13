@@ -8,7 +8,7 @@ yazılmadıkça bir sonraki üretimde kaybolur. Plan ve kalan partlar: `plan/zom
 
 | Yer | İçerik |
 |---|---|
-| `scripts/zm_common.py` | Ortak modül: mekân ölçüsünün okunması (`DIMENSIONS_JSON`), kat yükseklikleri (`FLOORS`), şerit çizgileri (`ZONE_Z`), portal yerleri (`PORTALS`), koordinat eşlemesi (`bl`), graybox kurucuları, malzemeler (`MATS`, `material()`, `tile_of()`), z-fight denetimi (`zfight_report`), sanat parçası kurucusu (`Part`: `box` · `prism` · `obox` · `wall` · `cyl` · `pipe` · `hull` · `slab` · `sphere` · `lathe` · `skin` · `finish`), ağaç (`tree`; `leaves=True` koyu yaprak kümeleri). `Part.smooth = True` iken eklenen yüzler yumuşak gölgelenir (heykel, dağ); varsayılan düz |
+| `scripts/zm_common.py` | Ortak modül: mekân ölçüsünün okunması (`DIMENSIONS_JSON`), kat yükseklikleri (`FLOORS`, `STOREY`, `CEIL`), geçit ve pencere ölçüleri (`DOOR_H` kapı/gedik baş hizası, `WIN_Z` pencere bandı, `SHED_TOP` teras barakası/kafes tavanı), şerit çizgileri (`ZONE_Z`), portal yerleri (`PORTALS`), koordinat eşlemesi (`bl`), graybox kurucuları, malzemeler (`MATS`, `material()`, `tile_of()`), z-fight denetimi (`zfight_report`), sanat parçası kurucusu (`Part`: `box` · `prism` · `obox` · `wall` · `cyl` · `pipe` · `hull` · `slab` · `sphere` · `lathe` · `skin` · `finish`), ağaç (`tree`; `leaves=True` koyu yaprak kümeleri). `Part.smooth = True` iken eklenen yüzler yumuşak gölgelenir (heykel, dağ); varsayılan düz |
 | `scripts/p0_graybox.py` | Part 0: kat kat hacim maketi (`ZM_P0_Graybox` koleksiyonu). Yerleşim onayı içindir, dışa aktarılmaz; sanatı gelen graybox parçası gizlenir |
 | `scripts/zm_rooms.py` | Yapı taşları (kat yüksekliği `fh` parametreli): `lining()` duvar kaplaması, `north_window()`, `fake_door()` kör kapı, `chimney_breast()` şömine bacası + `fireplace()` Viktorya şöminesi (dökme demir kemerli iç plaka, ızgara + korlar, majolika çini yanaklar, sütunlu-konsollu oymalı ahşap çerçeve, mermer ocak taşı + pirinç paravan, isteğe bağlı kemerli ayna; raf üstü `MANTEL_TOP`), `lift_cage()` kafes asansör (dökme demir + pirinç, halkalı süs bandı, rakamlı kat göstergesi, düğme paneli, katlanmış makaslı kapı; `sgn` ile aynalanır), `text_mesh()` kabartma yazı, `panel_door()` dört panelli Viktorya kapısı (pervaz/kayıt, pahlı yükseltilmiş paneller, pirinç tokmak; herhangi bir yerel çerçevede: açık, duvara yaslı, yerde), `shutter()` panjur (çerçeve + 40° eğik lameller), `frame_box()` yerel çerçevede kutu, `balustrade()` korkuluk (çoklu doğru, köşe fenerleri), `post_lantern()`, `face_box()` + `flat_window()` herhangi yöne bakan dış duvar yüzüne, `wall_decay()` sıva yaması + kıvrık kâğıt şeridi |
 | `scripts/p1_courtyard.py` | Part 1: avlu zemini, çit + zincirli kapı, ön cephe (kapı, pencereler, yıkık açıklık, kanopi, fenerler), sınır dışında sokak (çöp kutuları, posta kutusu, rögar kapağı, gazeteler) ve kuru ağaçlar (`ZM_P1_Courtyard`) |
@@ -62,7 +62,12 @@ yazılmadıkça bir sonraki üretimde kaybolur. Plan ve kalan partlar: `plan/zom
   olarak çarpar, o yüzden kolonu saran görsel hacim (şömine bacası, hol direği, heykel kaidesi,
   kapı ayağı) kolon tabanını her yönden en az 10 cm aşar ve baş yüksekliğinin üstüne çıkar.
 - **Kat yükseklikleri `FLOORS`'tadır** ve Unity'deki kat portallarının `upperHeight`'ı ile aynı
-  olmak zorundadır; plaka, portal kökünü taşıdığı için gerçek yükseklikte kurulur.
+  olmak zorundadır; plaka, portal kökünü taşıdığı için gerçek yükseklikte kurulur. Katlar eşit
+  aralıklıdır (`STOREY` = 3,5 m; `zm_common` bunu assert ile denetler) — `upperHeight` = `STOREY`.
+- **Geçit ve pencere ölçüleri sabitlerdedir:** kapı/gedik baş hizası `DOOR_H` (2,4 m), pencere bandı
+  `WIN_Z` (0,9–2,2 m, kat zemininden). Pencere insan ölçüsünde kalır: kat yükselince büyümez,
+  yalnız üst kattaki kopyası `FLOORS[1] + WIN_Z` olur. Kat aralığı değişirse `DOOR_H`/`WIN_Z`
+  değişmez, duvar ve kaplama yükseklikleri `STOREY`/`CEIL` üzerinden kendiliğinden gelir.
 - **Dokular ve hazır modeller yalnız CC0 kaynaktan:** Poly Haven ve ambientCG; doku kimliği `MATS`'ta,
   model kimliği `p7_decor.py`'dedir, dosyalar `tex_cache/` ve `asset_cache/`'ten yeniden indirilir.
   Hazır model kendi malzemesiyle (`ZM_A_<kimlik>_<n>`) gelir ve bütçeye indirgenir: kahraman prop
@@ -117,14 +122,14 @@ yazılmadıkça bir sonraki üretimde kaybolur. Plan ve kalan partlar: `plan/zom
   silah tuvalinin asılacağı yerdir; tuval ölçüsü değişirse pano betikten büyütülür.
 - **Kat dilimleri:** bir alt katın tavanı `CEIL`–`CEIL+0.06`, üst katın döşeme plakası
   `CEIL+0.06`–kat yüksekliği arasındadır (ayrı objeler: Unity'de plaka `Default` + `ArenaRoof`).
-  Alt kat duvarları plakanın içinde biter (iç duvar 2,95), üst kat duvarı plakanın içinden başlar
-  (2,96) — iki katın duvar yüzleri aynı düzlemde üst üste binmez.
+  Alt kat duvarları plakanın içinde biter (iç duvar `STOREY−0,05`), üst kat duvarı plakanın içinden
+  başlar (`FLOORS[1]−0,04`) — iki katın duvar yüzleri aynı düzlemde üst üste binmez.
 - **Dekor kiti sözleşmesi:** her prop dünya orijininde kurulur; ön yüzü mekân +z (Unity +Z), pivotu
   dayandığı yerdedir — yer propu: alt, arka kenar ortası (halı, hayalet, koltuk, zırh, şamdan, daktilo:
   alt orta); duvar propu: duvara değen arka yüzün ortası; tavan propu (avize): göbeğin üstü. Duvar
   propu kâğıttan 3 mm, yer propu küpeşteden 4 cm açıkta durur. **Yerleşimin sahibi Unity sahnesidir:**
   `ZM_P7_Layout` yalnız ilk öneridir; betiği yeniden koşmak kit mesh'lerini yeniler.
 - ⚠️ **Avize alt ucu kat zemininden ≥ 2,1 m yukarıda kalır** (VR'da baş + gözlük); tavan göbeği
-  2,74'te, avize boyu 0,6 m.
+  `CEIL−0,06`'da (3,24), avize boyu 0,6 m.
 - `VOID_*` mesh'leri üst kattaki boşluk şeritlerini işaretler (zemini olmayan fiziksel alan);
   sanat değildir, dışa aktarılmaz.

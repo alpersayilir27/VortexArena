@@ -103,8 +103,8 @@ namespace VortexArena.App.Editor
             return fa;
         }
 
-        // Heavy display faces (Saira ExtraBold, Fredoka) alias badly at 72/8 and need a larger
-        // sample + padding; body faces (Barlow, Nunito) fit a 512 atlas.
+        // Heavy display faces (Saira ExtraBold, Fredoka, Rubik Wet Paint) alias badly at 72/8 and
+        // need a larger sample + padding; body faces (Barlow, Nunito) fit a 512 atlas.
         private static void AtlasMetrics(GirdapFont role, out int pointSize, out int padding,
             out int atlas)
         {
@@ -113,6 +113,7 @@ namespace VortexArena.App.Editor
                 case GirdapFont.SairaExtraBold:
                 case GirdapFont.FredokaBold:
                 case GirdapFont.FredokaSemiBold:
+                case GirdapFont.RubikWetPaint:
                     pointSize = 90;
                     padding = 9;
                     atlas = 1024;
@@ -154,6 +155,7 @@ namespace VortexArena.App.Editor
             container.fredokaSemiBold = fonts[GirdapFont.FredokaSemiBold];
             container.nunitoExtraBold = fonts[GirdapFont.NunitoExtraBold];
             container.nunitoBold = fonts[GirdapFont.NunitoBold];
+            container.rubikWetPaint = fonts[GirdapFont.RubikWetPaint];
 
             container.dots = LoadSprite("Dots_16.png");
             container.radial = LoadSprite("Radial_256.png");

@@ -1,0 +1,66 @@
+/* Zombi modu arayüzü — "kan damlası" teması. Ölçünün kalıcı kaynağı: 1 CSS px = 1 birim,
+   builder karşılığı GirdapUiBuilder.ZombieHud.cs, palet Kan.cs. */
+:root {
+  --z-blood: #8E0E0E; --z-blood-hi: #D11F1F; --z-blood-lo: #3A0505; --z-blood-sh: #2A0303;
+  --z-bone: #EDE3CF; --z-bone-warm: #FFE9E0; --z-bone-bright: #F2E6D6;
+  --z-label: #C9B79A; --z-alive: #FF5A4A;
+  --z-plate-a: #24170F; --z-plate-b: #0F0906;
+  --z-clock-a: #2A1D17; --z-clock-b: #140D0A;
+  --z-border: #4B2A1E;
+  --fz: 'Rubik Wet Paint', 'Saira Condensed', sans-serif;
+  --fd2: 'Saira Condensed', sans-serif;
+}
+
+.zvr { position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 35%, #1A2230 0%, #0A0D13 60%, #050608 100%); }
+.zvr::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 55%, rgba(90, 105, 125, .18) 80%, rgba(110, 125, 145, .28)); }
+.zvr .ph { position: absolute; left: 50%; top: 40px; transform: translateX(-50%); font: 500 17px/1 var(--fb); color: rgba(255, 255, 255, .35); }
+
+/* ---------------------------------------------------------------- şerit (606 × 312) */
+
+.zs { position: absolute; left: 50%; top: 50%; width: 606px; height: 312px; margin: -156px 0 0 -303px; }
+.zs * { box-sizing: border-box; }
+
+.zs .clock { position: absolute; left: 183px; top: 0; width: 240px; height: 68px; background: linear-gradient(180deg, var(--z-clock-a), var(--z-clock-b)); border: 3px solid var(--z-border); border-radius: 8px; color: var(--z-bone); font: 500 46px/62px var(--fb); text-align: center; }
+/* son 10 sn: kırmızı plaka aynı yere biner */
+.zs .clock.son { background: linear-gradient(180deg, var(--z-blood), var(--z-blood-lo)); border-color: var(--z-blood-hi); }
+
+.zs .row { position: absolute; left: 0; top: 78px; width: 606px; height: 124px; background: linear-gradient(180deg, var(--z-plate-a), var(--z-plate-b)); border: 3px solid var(--z-border); border-radius: 10px; box-shadow: 0 10px 30px rgba(0, 0, 0, .7), inset 0 0 40px rgba(120, 10, 10, .35); }
+.zs .cell { position: absolute; top: 0; width: 150px; height: 124px; text-align: center; }
+.zs .cell:nth-child(1) { left: 0; }
+.zs .cell:nth-child(2) { left: 152px; }
+.zs .cell:nth-child(3) { left: 304px; }
+.zs .cell:nth-child(4) { left: 456px; }
+.zs .cell + .cell::before { content: ''; position: absolute; left: -2px; top: 0; width: 2px; height: 124px; background: rgba(142, 14, 14, .55); }
+.zs .cell em { position: absolute; left: 0; top: 10px; width: 150px; height: 34px; font: 700 26px/34px var(--fd2); font-style: normal; letter-spacing: .06em; color: var(--z-label); }
+.zs .cell b { position: absolute; left: 0; top: 44px; width: 150px; height: 80px; font: 800 68px/80px var(--fd2); font-variant-numeric: tabular-nums; color: var(--z-bone); }
+.zs .cell.wave { background: linear-gradient(180deg, var(--z-blood-hi), var(--z-blood-lo)); border-radius: 7px 0 0 7px; }
+.zs .cell.wave em, .zs .cell.wave b { font-family: var(--fz); font-weight: 400; color: var(--z-bone-warm); text-shadow: 0 3px 0 rgba(0, 0, 0, .5); }
+.zs .cell.wave b { font-size: 84px; }
+.zs .cell.alive b { color: var(--z-alive); }
+
+/* can — aşçı şeridinde yok; zombiler oyuncuya vurduğu için burada var */
+.zs .hp { position: absolute; left: 0; top: 212px; width: 606px; height: 44px; background: linear-gradient(180deg, var(--z-plate-a), var(--z-plate-b)); border: 3px solid var(--z-border); border-radius: 8px; }
+.zs .hp em { position: absolute; left: 16px; top: 0; width: 170px; height: 44px; font: 800 28px/44px var(--fd2); font-style: normal; color: var(--z-bone); }
+.zs .hp .track { position: absolute; left: 190px; top: 13px; width: 400px; height: 18px; background: var(--z-blood-lo); border: 2px solid var(--z-border); border-radius: 4px; }
+.zs .hp .track i { position: absolute; left: 3px; top: 3px; height: 12px; background: var(--z-blood-hi); border-radius: 2px; }
+
+.zs .durum { position: absolute; left: 0; top: 268px; width: 606px; height: 44px; background: linear-gradient(180deg, var(--z-clock-a), var(--z-clock-b)); border: 3px solid var(--z-border); border-radius: 8px; font: 700 24px/38px var(--fd2); color: var(--z-label); }
+.zs .durum .ikon { position: absolute; left: 14px; top: 11px; width: 22px; height: 22px; }
+.zs .durum .ikon svg { display: block; width: 22px; height: 22px; }
+.zs .durum span { position: absolute; left: 44px; top: 0; height: 38px; }
+
+/* ----------------------------------------------- dalga arası geri sayım (görüş ortası) */
+
+.zcd { position: absolute; left: 0; right: 0; top: 50%; text-align: center; }
+.zcd .t { position: absolute; left: 0; right: 0; top: -255px; height: 130px; font: 400 96px/130px var(--fz); color: var(--z-blood-hi); text-shadow: 0 6px 0 var(--z-blood-sh); }
+.zcd .n { position: absolute; left: 0; right: 0; top: -170px; height: 340px; font: 400 280px/340px var(--fz); color: var(--z-bone-bright); text-shadow: 0 10px 0 var(--z-blood-lo); }
+.zcd .s { position: absolute; left: 0; right: 0; top: 180px; height: 60px; font: 700 40px/60px var(--fd2); letter-spacing: .18em; color: var(--z-label); }
+.zdim { position: absolute; inset: 0; background: rgba(0, 0, 0, .35); }
+
+/* ------------------------------------------------------------ kısa bildirim (780 × 128) */
+
+.zt { position: absolute; left: 50%; top: 50%; width: 780px; height: 128px; margin: -64px 0 0 -390px; background: linear-gradient(180deg, var(--z-blood-hi), var(--z-blood)); border-radius: 8px; box-shadow: 0 10px 30px rgba(0, 0, 0, .7); color: var(--z-bone-warm); font-family: var(--fz); text-align: center; }
+.zt small { position: absolute; left: 0; right: 0; top: 14px; height: 34px; font-size: 26px; line-height: 34px; letter-spacing: .14em; }
+.zt b { position: absolute; left: 24px; right: 24px; top: 0; bottom: 0; font-weight: 400; font-size: 48px; line-height: 128px; }
+/* küçük satır varken büyük satır o kadar aşağı iter (koddaki toastSmallBand = 44) */
+.zt.iki b { top: 44px; line-height: 84px; }

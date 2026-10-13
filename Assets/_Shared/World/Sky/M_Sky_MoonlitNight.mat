@@ -45,7 +45,7 @@ Material:
     - _CloudOpacity: 0.5
     - _CloudScale: 0.6
     - _CloudSoftness: 0.3
-    - _Exposure: 0.39999998
+    - _Exposure: 0.15
     - _HorizonBlend: 0.6
     - _Rotation: 0
     - _RotationSpeed: 1

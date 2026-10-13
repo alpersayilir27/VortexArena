@@ -306,10 +306,11 @@ namespace VortexArena.Protocol
         public const float OBJECT_GRAB_CONFIRM_SECONDS = 1f;
 
         /// <summary>Max object entries in the object section of one <c>0x05</c> datagram (§6.8). ⚠️ The
-        /// real gate is still the byte budget (<see cref="COMBINED_MAX_BYTES"/>) — 8 + 16×34 + 16×12
-        /// = 744 B fits, but the event section shares the same budget; this number is the <c>u8</c>
-        /// ceiling of <c>objectCount</c> and a safety net.</summary>
-        public const int OBJECT_MAX_ENTRIES_PER_PACKET = 16;
+        /// real gate is still the byte budget (<see cref="COMBINED_MAX_BYTES"/>) — the worst case
+        /// 16 players + 32 objects is 8 + 16×34 + 32×12 = 936 B and fits, but the event section shares
+        /// the same budget and a failed gate drops ALL of the tick's object poses; this number is the
+        /// <c>u8</c> ceiling of <c>objectCount</c> and a safety net.</summary>
+        public const int OBJECT_MAX_ENTRIES_PER_PACKET = 32;
 
         // ---- object_state.flags core bits (§10.10). Positions are FIXED and never renumbered: a
         // shifted bit does not fail, it draws the wrong object broken. Bit4+ is per kind. ----

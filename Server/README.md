@@ -516,7 +516,7 @@ aynı ortak kanaldan (`set_selection` → `admin_state`) gider, böylece iki ope
 | `tournament` | `Modes/TournamentMode.cs` | TDM varsayılanından farkı: **canlanma yok** (`Revive = None`, gecikme 0) + **yedek mermi sınırlı** (`LimitedReserve = true`; yedek sınırını yazan tek mod). Tur tabanlı takım elemesi | 120 sn (**turun** süresi) / 4 tur (operatör **sınırsız** da seçebilir) |
 | `burger` | `Modes/BurgerMode.cs` | **Oyun tipi `kids`** · silah yok (`Weapons = None`, dolayısıyla hasar yok) · takımsız ama **tek ekip** (`Allies = true`: kırmızı/mavi yok, herkes birbirinin takım arkadaşı) · canlanma yok (gecikme 0) · ortak skor (`PlayerAndShared`) · denge `server.json → burger` | 600 sn / **sınırsız** (limit yok) |
 | `mole` | `Modes/MoleMode.cs` | **Oyun tipi `kids`** · silah yok (`Weapons = None`, dolayısıyla hasar yok) · **iki takım + takım skoru** · canlanma yok (gecikme 0) · köstebek yoğunluğu harita başına (`maps.json → moleDensity`; yazılmamışsa modun varsayılanı) | 300 sn / **sınırsız** (limit yok) |
-| `zombie` | `Modes/ZombieMode.cs` | **Oyun tipi `zombie`** · takımsız ama **tek ekip** (`Allies = true`) · **silah kanvası** · ortak skor (`PlayerAndShared`) · **sabit durarak canlanma** (gecikme 0, 3 sn doğum koruması) · zombiler ağ nesnesi, beyni **nesne sahibi admin**'de · akın temposu harita başına (`maps.json → zombiePace`; yazılmamışsa `1`) | 300 sn / **sınırsız** (limit yok) |
+| `zombie` | `Modes/ZombieMode.cs` | **Oyun tipi `zombie`** · takımsız ama **tek ekip** (`Allies = true`) · **silah kanvası** · ortak skor (`PlayerAndShared`) · **sabit durarak canlanma** (gecikme 0, 3 sn doğum koruması) · zombiler ağ nesnesi, beyni **nesne sahibi admin**'de · dalga tablosu operatörün **zorluk** seçiminden (`start_match.difficulty`) · akın temposu harita başına (`maps.json → zombiePace`; yazılmamışsa `1`) | 300 sn / **sınırsız** (limit yok) |
 
 > `ffa` skoru `AddPlayerScore(killerId, 1)` ile yazar ve kazananı `TryGetLeader` ile bulur;
 > eşitlikte `TryGetLeader` false döndüğü için maç berabere biter. Oyuncusuz başlatılan maçta
@@ -571,9 +571,12 @@ aynı ortak kanaldan (`set_selection` → `admin_state`) gider, böylece iki ope
 > makinesi, hasar tablosu, ortak skor ve bitiş koşulu sunucudadır; yürüme/hedef seçme/vuruş anı admin
 > derlemesindedir ve `object_event{attack}` ile bildirilir (hasarı mod yazar, olay taşımaz).
 > Doğum noktaları haritanın `zombie_spawn` nesneleridir, mod onları maç başında `ObjectIdsOfKind` ile
-> öğrenir — **haritada nokta yoksa konsola uyarı düşer ve zombi çıkmaz**. Doğum aralığı, dalga arası
-> ve aynı anda ayakta duran zombi sayısı haritanın `zombiePace` çarpanıyla ölçeklenir (maç başında bir
-> kez okunur, `1` temel tempo); dalganın toplam zombisi ile hasar tablosu tempodan etkilenmez.
+> öğrenir — **haritada nokta yoksa konsola uyarı düşer ve zombi çıkmaz**. Dalga tablosunu operatörün
+> **zorluk** seçimi belirler (`start_match.difficulty`: `easy`/`normal`/`hard`; eksik/tanınmayan =
+> `normal`) ve dalga başına bağlı oyuncu sayısıyla ölçeklenir. Doğum aralığı, dalga arası ve aynı anda
+> ayakta duran zombi sayısı ayrıca haritanın `zombiePace` çarpanıyla ölçeklenir (maç başında bir kez
+> okunur, `1` temel tempo); hasar tablosu tempodan etkilenmez. Sayılar `Docs/ArenaNet-Protokol.md`
+> §10.5'teki zorluk tablosundadır.
 > Maç ya süre dolunca
 > ("dayanıldı") ya bağlı tüm oyuncular aynı anda yerdeyken ("kayıp") biter; kazanan yoktur ve sonuç
 > ekranı `HoldsResultForOperator` ile operatörü bekler.

@@ -25,7 +25,7 @@ W = lambda z: (west_x(z), z)
 E = lambda z: (east_x(z), z)
 RAIL_Z = ZA + 0.02                      # railing centre line, newels 1 cm inside the slab edge
 DOORS = ((-0.65, 0.55), (3.9, 5.1))     # arched doors balcony -> rooms (venue x)
-SPRING = 2.05                           # arch springing height; keystone stays under the Kat1 ceiling (2.8)
+SPRING = 2.25                           # arch springing height; keystone stays under the Kat1 ceiling (CEIL)
 BOARD_X, BOARD_H = (1.0, 3.3), (0.9, 2.05)
 WIN_ZC, WIN_W, WIN_H = 1.55, 1.0, (0.9, 2.4)   # flat shuttered window on each wing wall
 FACADE_TOP = F2 - 0.03                  # stays under the wing walls' top (corner planes unshared)
@@ -62,7 +62,7 @@ w.wall(E(ZA - 0.075), E(ZB), F1, F2, "Siding", "Siding", "TrimPaint", side=1)
 fa_a = (west_x(ZB) - 0.15, ZB)
 fa_b = (east_x(ZB) + 0.15, ZB)
 sx = lambda x: x - fa_a[0]
-H0 = F1 - 0.04                           # above the Kat0 wall top (2.95), inside the slab
+H0 = F1 - 0.04                           # above the Kat0 wall top (STOREY - 0.05), inside the slab
 R_ = [(x1 - x0) / 2 for x0, x1 in DOORS]
 open_top = [F1 + SPRING + rr + 0.05 for rr in R_]
 w.wall(fa_a, fa_b, H0, FACADE_TOP, "Siding", "WallpaperGrey", "TrimPaint",

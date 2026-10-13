@@ -1,0 +1,7 @@
+﻿GEÇİCİ SESLER — hepsi CC0 (kamu malı), kalıcı seslerle değiştirilecek (liste: plan/zombi-modu.md).
+
+Zombie_Hit/Attack/Groan/Death_*.wav  <- "Zombies Sound Pack" (artisticdude), https://opengameart.org/content/zombies-sound-pack
+                                        Kayıtlar adsızdı; gruplar yalnız süreye göre ayrıldı.
+Zombie_Music_Tension.ogg             <- "Horror Atmosphere" (Juhani Junkala), https://opengameart.org/content/horror-atmosphere
+Zombie_Music_Wave.wav                <- "Short Battle Loop", https://opengameart.org/content/short-battle-loop
+Zombie_Ambience.ogg                  <- "Abandoned passages" (congusbongus), https://opengameart.org/content/abandoned-passages-horror-ambience-loop

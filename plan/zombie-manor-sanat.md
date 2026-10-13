@@ -9,7 +9,7 @@ kapanır, onaysız sonraki parta geçilmez.
 
 - Ölçü kaynağı hedef mekânın `_dimensions.json`'udur (betikte `zm_common.DIMENSIONS_JSON`); duvar
   ve korkuluklar fiziksel sınırın üstünde durur, iç yüzleri sınıra oturur.
-- Kat zeminleri 0 / 3,0 / 6,0 m; görsel tavan zeminden 2,8 m. Kat geçişi yalnız kat portalıyla
+- Kat zeminleri 0 / 3,5 / 7,0 m; görsel tavan zeminden 3,3 m. Kat geçişi yalnız kat portalıyla
   (`Yemek-Kitabi.md` "Çok katlı arena") — görünen merdiven yürünebilir gibi durmaz.
 - Alan güneyden kuzeye üç şerittir; ayrım çizgileri `zm_common.ZONE_Z`:
   - **A** — Kat0 avlu (açık hava) · Kat1 ve Kat2 boşluk.
@@ -37,11 +37,6 @@ collider'ları, `ArenaRoof`, dekor prefabları, pratik ışıklar, ışık/yans�
 `.lighting` dosyası (Shadowmask), ışık bake'i, her katta `zombie_spawn` noktaları, bütün katları
 kaplayan collider kaynaklı NavMesh. Kalanlar:
 
-- [ ] **Gözlükte ışık kontrolü:** pratik ışık şiddetleri (avize 0,8 · fener 0,9 · alev 0,4) bake
-      sonrası gözlükte ayarlanır; değişiklik yeniden bake ister.
-- [ ] **Gece gökyüzü:** şimdilik `M_Sky_RuralEvening`; fırtınalı gece için mevcut bir `M_Sky_*`
-      çoğaltılır (Ctrl+D) ve kaynağı Inspector'dan seçilir (`Yemek-Kitabi.md` "Gökyüzü"), sonra yeniden bake.
-- [ ] Silah tuvali (balkon panosu).
 - ⚠️ **Boşluk bölgesi mekanizması yok:** üst kattaki oyuncu boşluk şeridine (Kat1 A, Kat2 A+B)
   fiziksel olarak yürüyebilir ve havada kalır. `Obstacle` hacmi çözüm değildir — atış ışını
   maskesizdir, balkondan/terastan avluya ateşi keser. Atışı kesmeyen bir "boşluk ihlali" yolu
