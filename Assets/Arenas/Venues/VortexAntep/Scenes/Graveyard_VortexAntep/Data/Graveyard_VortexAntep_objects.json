@@ -1,0 +1,12 @@
+{
+  "objects": [
+    { "sceneId": 1, "kind": "zombie_spawn" },
+    { "sceneId": 2, "kind": "zombie_spawn" },
+    { "sceneId": 3, "kind": "zombie_spawn" },
+    { "sceneId": 4, "kind": "zombie_spawn" },
+    { "sceneId": 5, "kind": "zombie_spawn" },
+    { "sceneId": 6, "kind": "zombie_spawn" },
+    { "sceneId": 7, "kind": "zombie_spawn" },
+    { "sceneId": 8, "kind": "zombie_spawn" }
+  ]
+}

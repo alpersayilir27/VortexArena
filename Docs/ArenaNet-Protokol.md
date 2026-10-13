@@ -35,6 +35,7 @@ Tümü paylaşılan `ArenaProtocol` statik sınıfında tanımlanır (`Assets/_S
 | `OBJECT_DROP_CLEARANCE` | `0.05` m | Sahibi ölünce/kopunca zemine indirilen objenin arena zemininden (y = 0, §3) yüksekliği (§10.10). Sunucu objenin yarı yüksekliğini bilmez — obje türüne göre bir miktar batar ya da havada durur; bu pay "zemine gömülü görünmesin" içindir, fizik değildir |
 | `OBJECT_KILL_Y` | `-0.5` m | Arena zemininin (y = 0, §3) bu kadar altına inen obje **kaybolmuş** sayılır (§10.10): onu bu yükseklikte gören SAHİP objeyi ev pozuna koyar, hızını sıfırlar ve o pozla `object_rest` yollar. ⚠️ Düşen obje kendiliğinden hiç durmaz — hızı `OBJECT_REST_SPEED`'in altına inmez, yani `object_rest` hiç gitmez; zeminden kaçan malzeme bu kapı olmadan sahipli ve erişilmez kalır. Sunucuda karşılığı yoktur: sunucu metre bilmez |
 | `OBJECT_OWNER_SILENCE_MS` | `1000` | Sahibin poz kanalı (`0x01`) bu süredir susmuşsa sunucu onu **obje sahipliği için kopmuş** sayar ve tuttuğu/uçurduğu objeleri zemine indirir (§10.10). Poz kanalı 20 Hz akar, yani eşik 20 paketlik kayba dayanır; istemcilerin kendi bayatlık pencereleriyle (uzak obje akışı ve uzak poz gövdesi, 1 sn) **aynı** tutulur — sunucu objeyi indirmeden önce obje başkalarının ekranında bırakıldığı noktaya geri sıçramaz |
+| `OBJECT_HOST_SILENCE_MS` | `1500` | **Admin sahipli** objeler için susma eşiği (§10.10 "Sunucu-atanmış sahiplik"): nesne sahibi admin en az bir objeye sahipken bu süre boyunca hiçbirinden `0x09` göndermezse sahiplik sıradaki admin'e devredilir. ⚠️ `OBJECT_OWNER_SILENCE_MS` burada **kullanılamaz**: o eşik `0x01` poz kanalını ölçer ve admin `0x01` hiç göndermez (§2), yani admin sahipli her obje ilk taramada zemine inerdi. Eşik obje poz kanalının kendi frekansına (`OBJECT_POSE_RATE_HZ`) göre 30 paketlik kayba dayanır |
 | `OBJECT_GRAB_CONFIRM_SECONDS` | `1.0` | İyimser kavramanın (`object_grab`) kendisini sahip + `Held` gösteren bir `object_state` ile onaylanması için istemcinin beklediği süre (§10.10). Dolunca yerel kavrama geri alınır: sessiz red (elde olan obje, eski sunucu) başka hiçbir mesajla gelmez; süre olmasaydı el, objeyi hiç tutmadığı hâlde dolu kalırdı |
 | `OBJECT_MAX_ENTRIES_PER_PACKET` | `16` | Tek `0x05` datagramının obje bölümüne yazılan en fazla girdi (§6.8). 8 + 16×34 + 16×12 = 744 B bütçeye sığar ama olay bölümü aynı bütçeyi paylaşır — gerçek kapı yine boyut kapısıdır (`COMBINED_MAX_BYTES`); bu sayı `objectCount`'un `u8` olmasının tavanı ve bir emniyettir |
 | `PLAYER_NUMBER_MIN` / `PLAYER_NUMBER_MAX` | `1` / `99` | Forma numarası aralığı (§2). `0` = atanmamış ve aralığın dışındadır. Numara **tüm kayıtlı cihazlar** arasında benzersizdir |
@@ -77,6 +78,8 @@ Tümü paylaşılan `ArenaProtocol` statik sınıfında tanımlanır (`Assets/_S
 
 - `role`: `"player"` (VR/Quest) veya `"admin"` (Windows masaüstü). Admin oynamaz; lobi rosterinde görünür, komut yetkisi vardır.
 - **Admin sahne olarak oyuncuları takip eder:** `load_match` / `welcome.match` / `return_to_lobby` admin istemcisinde de sahne yükler (gözlemci görünümü). İki fark: admin `set_ready` **göndermez** (Loading kapısını yalnız `role=player` besler) ve poz **göndermez** (`0x01 PoseUpdate` yok), ama `0x00` ile UDP kaydı yapıp snapshot'ları alır.
+  - ⚠️ **Tek istisna: sahibi olduğu ağ nesnesinin pozu.** Sunucu bir objenin sahipliğini bir admin'e yazdıysa (§10.10 "Sunucu-atanmış sahiplik") o admin o obje için `0x09 ObjectPose` ve `object_event` gönderir — kendi gövdesinin pozunu yine göndermez. Objenin `0x09` kapısı role bakmaz, sahipliğe bakar (§6.12). `object_grab`/`object_release`/`object_rest` admin'e **kapalıdır**: admin'in eli yoktur, eşya kavrayamaz.
+  - **"Birincil/ikincil admin yoktur" kuralı bozulmaz:** komut yetkisi her admin'de eşittir. Nesne sahipliği için sunucunun en eski admin'i seçmesi bir yetki ayrımı değil, **tek poz kaynağı** kuralıdır — iki admin aynı objeyi sürerse obje iki yerde olur.
 - `deviceId` — **role göre iki ayrı semantik:**
   - `player`: `SystemInfo.deviceUniqueIdentifier`, **kalıcı** kimlik. Sunucu `devices.json`'da **ad + numara** çiftine eşler (ikisi de otomatik atanır, aşağıda), kayıt bağlantı kopsa da durur (aynı gözlük geri gelince adı/numarası/kimliği korunur).
   - `admin`: `<deviceUniqueIdentifier>:admin:<oturum GUID'i>` — **oturum başına benzersiz**. Sebep: aynı fiziksel PC'de iki admin penceresi açılabilsin. Ortak deviceId ile ikisi aynı kaydı paylaşır, her `hello` diğerinin soketini kapatır ve sonsuz kick döngüsü olurdu. GUID süreç ömrü boyunca sabittir (yeniden bağlanma aynı kaydı bulur), uygulama kapanınca ölür.
@@ -721,12 +724,13 @@ arıza bildirirdi.
 { "type":"admin_state", "modeId":"tdm", "sceneName":"<Arena>",
   "venueId":"<Mekan>", "venueScenes":["<Arena>","<Arena2>","<Lobi>"],
   "roundSeconds":600, "scoreLimit":30, "countdownSeconds":10, "friendlyFire":false,
-  "calibrationMode":"saved_anchor",
+  "calibrationMode":"saved_anchor", "objectHostId":4,
   "notice":"Ofis-PC: harita -> <Arena>", "adminCount":2 }
 ```
 - Gönderim anları: admin `hello` yanıtında (welcome'dan hemen sonra, geç katılan admin senkron başlasın), her `set_selection`'da, her admin komutunda (`start_match`/`abort_match`/`pause_match`/`resume_match`/`mode_continue`/`return_to_lobby`/`kick`/`set_team`/`set_friendly_fire`/`set_calibration_mode`), oyuncunun bildirdiği
   zemin sapması eşiği aştığında, gövde ölçümü ya da kayıtlı hizalamanın yeniden yüklenmesi
-  başarısız olduğunda (§10.6/§10.8) ve admin
+  başarısız olduğunda (§10.6/§10.8), **nesne sahibi admin değiştiğinde** (`objectHostId`, §10.10)
+  ve admin
   bağlanıp ayrıldığında. ⚠️ `pause_match`/`resume_match` için duyuru **yalnız komut gerçekten uygulandıysa** yayılır — reddedilen komut diğer operatörlerin ekranına olmamış bir eylemi yazmamalı.
 - `modeId`/`sceneName` = ortak seçim. ⚠️ **Hiçbir zaman boş değildir:** sunucu açılışta seçimi **mekanın lobi haritasıyla** tohumlar (`modeId:"lobby"`, `sceneName:<mekanın lobisi>` — §10.7 açık sahnenin açılış değeri), sonrasında da boş alan mevcut değeri koruduğu için seçim bir daha boşalamaz. Böylece ilk `admin_state`'i alan admin de "hiç harita seçilmemiş" bir durum görmez. Admin arayüzü **kendi yerel seçimini değil bunu gösterir**; gelen değer arayüzdeki mod/harita seçicisini günceller. Yani bir operatör haritayı değiştirdiğinde diğerinin ekranı da (paneli açık olmasa bile) o haritaya döner — sahneyi zaten `return_to_lobby` sahnelemesi taşır (§10.7), `admin_state` yalnız seçiciyi hizalar.
 - `roundSeconds`/`scoreLimit`/`countdownSeconds` = bir sonraki maçın ortak parametreleri (`0` = hiç seçilmedi, modun/protokolün varsayılanı kullanılacak). Mod/harita ile aynı kanaldan gider — sebebi §5.2 `set_selection` notunda. `scoreLimit` burada da üç değerlidir: `-1` = **sınırsız seçildi** (panel bunu "sınırsız" yazar, "mod varsayılanı" değil).
@@ -734,6 +738,11 @@ arıza bildirirdi.
 - `calibrationMode` = kalibre modunun **o anki** değeri (§5.2/§10.6). `friendlyFire` ile aynı
   sınıftadır: bir seçim değil yürürlükteki durumdur, mod/harita seçicisinin kilidine takılmaz.
   Oyuncuya buradan gitmez — o değeri `welcome`'da bir kez alır.
+- `objectHostId` = **sunucu-atanmış nesne sahipliğini** taşıyan admin'in `playerId`'si; `0` = sahip
+  yok (§10.10 "Sunucu-atanmış sahiplik"). `friendlyFire` ile aynı sınıftadır: bir seçim değil
+  yürürlükteki durumdur. Operatörün "sunucu-sürülen nesneler neden dondu" sorusunun tek cevap
+  yeridir — değer `0` iken hiçbir admin o nesneleri sürmüyordur ve mod kendini duraklatmış olabilir.
+  Sahip değiştiğinde (admin bağlanma/ayrılma, susma devri) `admin_state` yeniden yayılır.
 - `notice` = son admin eyleminin insan okuyabilir özeti (`"<admin adı>: <eylem>"`). Boş olabilir. ⚠️ Alan tel üstünde durur ama **Unity admin arayüzü onu çizmez** (HUD'da durum satırı yoktur) — sunucu yine de doldurur, çünkü tüketicisi arayüz değil protokoldür.
 - `adminCount` = o an çevrimiçi admin sayısı.
 - `venueId`/`venueScenes` = sunucunun açılışta seçtiği mekan ve o mekanın sahne adları (§11.1). Oturum boyunca değişmez ama her `admin_state`'te taşınır ki geç bağlanan admin de ilk mesajda hangi arenaları görebileceğini öğrensin. **Admin harita seçicisi kendi yerel kataloğunu bununla süzer**: katalog tüm projeyi tanır, oynatılabilir olana sunucu karar verir. Boş gelirse süzme yapılmaz.
@@ -2044,6 +2053,7 @@ olmalı, tanınmayan `modeId` reddedilir):
 | `tournament` | Turnuva | `two` | — | `team` | **`none`** | `weaponcanvas` | **`true`** | `0` | `false` | 120 sn / 4 tur |
 | `burger` | Hamburgerci | `none` | **`true`** | `shared` | `none` | **`none`** | `false` | `0` | `false` | 600 sn / limitsiz |
 | `mole` | Köstebek Ezme | `two` | — | `team` | **`none`** | **`none`** | `false` | `0` | `false` | 300 sn / limitsiz |
+| `zombie` | Zombi | `none` | **`true`** | `shared` | **`standstill`** | `weaponcanvas` | `false` | `0` | `false` | 300 sn / limitsiz |
 
 **Yedek sınırını yazan tek mod `tournament`'tır:** turnuva dışında hiçbir silahlı modda yedek
 sınırı yoktur (lobi profilleri dahil) — mermi saymak tur tabanlı elemenin kaynağıdır, serbest
@@ -2365,6 +2375,87 @@ kuralın söyleyeceği bir şey yoktur (telde yine `false` gider).
 > | Toplanma takılırsa ne olur? | Çıkış operatöründür: takılan oyuncuyu **atar** (`kick`), maçı o anki skorla bitirir (`end_match`) ya da sonuçsuz kaldırır (`abort_match`). Atılan/kopan oyuncu toplamdan düştüğü için kalanlar hazırsa tur o an başlar — sayım her tikte çevrimiçi oyunculardan yeniden yapılır. Bekleme uzarsa sunucu konsoluna 30 sn'de bir "toplanma bekleniyor (h/t) — tabanına dönmeyenler: …" satırı düşer; bu bir **teşhis** satırıdır, tur başlatmaz |
 > | Cephane? | Şarjör + yedek şarjör (`weaponSource:"weaponcanvas"`), **her tur başında herkes tam dolu** — istemci geri sayımda doldurur. **Yedeği sınırlı tek mod budur** (`limitedReserve:true`): yedek silahın `spareMagazines`'i kadardır, bitince şarjör değiştirme reddedilir. Sunucunun bundan haberi yoktur (§10.3: silah tablosu yok) |
 > | Taraflar yarıda değişir mi? | **Hayır, taraf değişimi (side swap) YOKTUR.** Free-roam'da taraf değiştirmek oyuncuların fiziksel olarak karşı tabana yürümesi demektir ve arena simetrik olmadığı sürece karşılığı da azdır. İstenirse ayrı bir iş olarak planlanır |
+
+> **`zombie` — kooperatif dalga savunması.** Oyuncular **tek ekip**tir (`teamMode:"none"` +
+> `allies:true`), silah sahnedeki çerçevelerden gelir ve zombiler dalga dalga gelip **yakın dövüşle**
+> vurur. Kazanan yoktur (`shared` skor); bitiş **süre** ya da **tüm bağlı oyuncuların aynı anda ölü
+> olması**dır (kayıp). Sonuç ekranı operatör kapatana kadar durur
+> (`HoldsResultForOperator`, §10.1). Canlanma `standstill`'dir ve doğma koruması 3 sn'dir
+> (`SpawnProtectionSeconds`, §10.4): oyuncu öldüğü yerde canlanır, yani zombilerin ortasında
+> canlanabilir.
+>
+> **Zombi bir AĞ NESNESİDİR (§10.10), oyuncu değil.** Sunucu doğurur, canını tutar, kırar ve skorunu
+> yazar; oyuncunun zombiyi vurması bugünkü `hit_report{targetNetId}` yoludur — ayrı bir hasar kapısı
+> yoktur. **Pozunu sahibi akıtır** (`0x09`, §6.12) ve sahip bir **admin**tir (aşağıdaki beyin kuralı).
+>
+> **Türler (`kinds[]`, §11):**
+>
+> | `kind` | `maxHp` | `grab` | `events[]` | Ne |
+> |---|---|---|---|---|
+> | `zombie` | `100` | `none` | `attack` (`policy:"owner"`, `phaseGate:"playing"`) | Dinamik doğan zombi. `stage` yalnız `0`'dır — ölüm ayrı bir aşama değil `Broken` bayrağıdır |
+> | `zombie_spawn` | `0` | `none` | — | Sahnede bake'li doğum noktası; görseli yoktur, hasar almaz, yalnız `netId`'si için vardır |
+>
+> **`payload` (`s`) biçimi:** `sp:<doğum noktası netId>;w:<dalga>;a:<saldırı sayacı>`. Sunucu her
+> yazışta **tam** string'i yazar (anahtar düşmez), istemci bilmediği anahtarı atlar.
+>
+> | Anahtar | Ne |
+> |---|---|
+> | `sp` | Zombinin doğduğu `zombie_spawn` objesinin `netId`'si. ⚠️ **Konum tele girmez ve giremez:** sunucu metre bilmez (§10.10), `maps.json`'ın obje satırı yalnız `sceneId` + `kind` taşır. Beyin bu kimlikten sahnedeki transform'u kendisi çözer |
+> | `w` | Zombinin doğduğu dalga. Beyin **hızını** buradan türetir; hasarı HİÇ bilmez |
+> | `a` | Kabul edilen saldırı sayacı; her geçen saldırıda artar. İstemci saldırı animasyonunu bu sayının **değişiminden** oynatır — tek yayın, geri alma yok, `mole`'un nonce'u gibi |
+>
+> **Doğum noktası seçimi sunucudadır:** her doğumda `zombie_spawn` kimliklerinden **rastgele biri**
+> seçilir, **son kullanılan hariç** (üst üste aynı noktadan akın gelmesin). ⚠️ "Oyunculardan uzak
+> nokta" sunucuda seçilemez — mesafe metredir, sunucuda metre yoktur.
+> ⚠️ Doğan zombinin `object_spawn` pozu **anlamsızdır** (sunucunun konumu yok, birim poz gider): her
+> başlık onu ilk akan poz gelene kadar **gizler**, sahip başlık ise doğum noktasına kendisi oturur.
+>
+> **`object_event attack`:** `i:[hedef playerId]`, `f`/`s` boş — **hasar sayısı TAŞIMAZ.** Sunucu
+> kapıları (sırayla, düşen sessiz red): gönderen o zombinin sahibi mi (`policy:"owner"`) · faz
+> `playing` · zombi `Broken` değil · o zombinin saldırı bekleme süresi dolmuş · hedef bağlı
+> **oyuncu**, canlı, kalibreli (§10.6) ve doğma koruması altında değil (§10.4) · zombinin son `0x09`
+> pozu ile hedefin son kafa pozu arasındaki **yatay** uzaklık `ATTACK_REACH_BOUND` (2,5 m) altında.
+> ⚠️ Son kapı bir **sınır**dır, doğrulama değil (§10.10 mantığı): sunucu metre bilmez, yalnız
+> mantıksız olanı düşürür — gecikme ve poz aralığı payı bu yüzden erişimin iki katıdır.
+> Geçen saldırının hasarı **dalga tablosundan** gelir, `health_update` `attackerId:0` ile yayılır ve
+> ölüm **çevreseldir**: `kill_event` `killerId:0` + `weaponId:"zombie"` (`WEAPON_ID_ZOMBIE`) ile gider,
+> kimsenin `kills`'i artmaz ve `IGameMode.OnKill` skor yazmaz. Olay **relay EDİLMEZ** (`true` döner):
+> gerçeği `object_state`'in `payload`'ı (`a`) taşır.
+>
+> **Dalga tablosu (sunucuda; istemci yalnız hızı okur).** `w` = dalga numarası, 1'den başlar:
+>
+> | Ne | Değer |
+> |---|---|
+> | Hasar | `12 + 4×(w−1)`, tavan `32` |
+> | Eşzamanlı ayakta zombi | `3 + w`, tavan `12` |
+> | Dalganın toplam zombisi | `4 × w` |
+> | Doğum aralığı | 2 sn (tavanın altındayken) |
+> | Hız (istemcide) | `0,7 + 0,1×(w−1)` m/s, **tavan 1,2 m/s** |
+> | Saldırı erişimi (istemcide) | 1,2 m yatay |
+> | Saldırı bekleme | 1,5 sn (vuruş karesi animasyonun ~0,4. sn'si) |
+> | Dalgalar arası | 8 sn |
+> | Ölü zombinin silinmesi | 3 sn sonra `object_despawn` |
+>
+> ⚠️ **Hız tavanı bir güvenlik kuralıdır, denge ayarı değil:** free-roam alanda oyuncuyu
+> **koşturan** bir düşman onu gerçek duvara koşturur. Hızlı yürüyüş ~1,4 m/s'dir; 1,2 m/s'de oyuncu
+> geri adımla kurtulur.
+> ⚠️ **Eşzamanlı tavan `OBJECT_MAX_ENTRIES_PER_PACKET`'in (16) altında tutulur:** tavanı aşan obje
+> pozu taşmaz, **düşer** (§6.8) ve hangi zombinin düştüğü adil değildir — 17. zombi açlıktan donar.
+>
+> **`modeState` biçimi:** `w:<dalga>;left:<ayakta zombi>;next:<sonraki dalgaya kalan sn|0>` +
+> kayıpta `;over:lost`. Çekirdek yorumlamaz (§10.1). Mod duraklamasında (`phaseReason:"mode"`) yerini
+> duraklama gerekçesi alır — HUD o metni olduğu gibi yazar.
+>
+> **Skor** `scoring:"shared"`tir (§10.2): öldürülen zombi başına son vuruşu yapan oyuncunun
+> `PlayerInfo.score`'una +1, aynı miktar ortak toplam olarak `match_state.scoreRed`'e; `scoreBlue`
+> **daima 0**. Zombi kırmak normalde bir dünya durumudur ve skor yazmaz (§10.10) — bu modda skoru
+> yazan şey obje hasar hattı değil, **moda haber veren `IGameMode.OnObjectHit` kancasıdır**.
+>
+> **Beyin (NavMesh + hedef seçimi + saldırı kararı) admin build'inde koşar.** Sunucu NavMesh,
+> collider ya da harita ölçüsü **almaz**: geometri sunucuya taşınırsa ikinci bir doğruluk kaynağı
+> doğar (`Docs/Sistem-Ozeti.md` §7). Sahip seçimi, devir ve susma bekçisi §10.10 "Sunucu-atanmış
+> sahiplik"tedir; sahip yokken (`admin_state.objectHostId == 0`) mod kendini `TryPauseForMode` ile
+> duraklatır, admin gelince **kaldığı süreden** sürer ve dalga sayacı sıfırlanmaz.
 
 > ⚠️ **`lobby` bu tabloda YOKTUR ve olmayacaktır.** Lobi bir **tür**dür ama `IGameMode` değildir
 > (§10.7): sunucuda kaydı olmadığı için `start_match{"lobby"}` "bilinmeyen mod" diye reddedilir —
@@ -2721,7 +2812,7 @@ hasar veremeden.
 | Oyuncuya hasar? | **İmkânsız** — `hit_report` yalnız `playing` fazında işlenir (§10.3) |
 | Atış görünür mü? | Evet — `rules.fireWhilePaused:true` olduğu için atış olayı relay edilir (§6.5/§10.3) |
 | Silah nereden gelir? | **Mod dağıtır** (`weaponSource:"random"`): grip'e basılı tutulan elde loadout'tan rastgele bir silah durur, bırakınca yok olur. Loadout'u istemci `modeId:"lobby"` ile kendi katalogundan çözer. Lobi bilinçli olarak `"weaponcanvas"` değil `"random"` taşır: iki lobi sahnesine elle silah yerleştirme işi doğmasın diye. ⚠️ **Açık sahne `gameType:"kids"` ise ya da seçili mod çocuk ailesindense silah hiç gelmez** — sahneleme bölümüne bak |
-| Taban şeritleri görünür mü? | **Seçili mod belirler** (`selection_state.teamMode`, §5.3): takımlı mod seçiliyken (`tdm`/`tournament`) kırmızı/mavi şeritler durur, takımsız mod seçiliyken (`ffa`) gizlenir. Kapı **silah kaynağı DEĞİLDİR** — aktif kural hâlâ lobi profilidir, değişen yalnız sunumdur. Sunucu bu mesajı hiç yollamamışsa istemci aktif kuralın `teamMode`'una düşer |
+| Taban şeritleri görünür mü? | **Seçili mod belirler** (`selection_state.teamMode`, §5.3): takımlı mod seçiliyken (`tdm`/`tournament`) kırmızı/mavi şeritler durur, takımsız mod seçiliyken (`ffa`, `zombie` …) gizlenir. Kapı **silah kaynağı DEĞİLDİR** — aktif kural hâlâ lobi profilidir, değişen yalnız sunumdur. Sunucu bu mesajı hiç yollamamışsa istemci aktif kuralın `teamMode`'una düşer |
 | Canlanma / skor / süre? | Yok. Herkes canlı (`hp=PLAYER_MAX_HP`), sayaçlar 0 (§5.3) |
 | Takım? | Vardır ve **admin atar** (`set_team`, §5.2) — her fazda, sunucuya bağlı herkes için; **takımsız mod koşuyorsa ya da seçiliyse komut reddedilir**. Oyuncu takımını serbestçe seçemez; **tek yolu tabana girmektir** (`claim_base_team`, §5.1): yalnız maç sürmezken (lobi beklemesi ya da `finished`), takımlı modda ve kalibreliyken. Tek istisna sunucunun kendisidir: `set_selection` modu değiştirdiği anda **seçili modun takım kipi herkese uygulanır** — takımlı bir moda geçilince takımı olmayan (`team:""`) her bağlı oyuncu küçük takıma yazılır (takımı olanlara dokunulmaz, dengeleme `start_match`'te yapılır, §10.1), takımsız bir moda geçilince her bağlı oyuncunun takımı temizlenir (`team:""`). İki yön de aynı gerekçeyle simetriktir: lobideki etiket ve takım kartı seçili modun gerçeğini göstersin — takımsız maçtan dönen oyuncu beyaz kalmasın, takımsız mod seçiliyken de kimse kırmızı/mavi görünmesin. ⚠️ Bunun sonucu: admin'in `set_team` ile elle verdiği takım, takımsız bir mod seçilince silinir ve o mod seçili kaldıkça yenisi atanamaz — elle takım ataması **takımlı** mod seçildikten sonra yapılır. Tanınmayan ya da boş `modeId` hiçbir takıma dokunmaz |
 | Maç başlatılabilir mi? | **Hayır.** `lobby` kayıtlı bir `IGameMode` olmadığı için `start_match` reddedilir (§10.1) |
@@ -3193,6 +3284,11 @@ Geçerse `hp = max(0, hp - damage)`; `hp == 0` ise `Broken` biti kalkar → **he
 Skor, kill feed ve `IGameMode.OnKill` **hiç çalışmaz**: obje kırmak bir oyun olayı değil bir dünya
 durumudur.
 
+⚠️ **Modun haberi vardır ama kararı yoktur:** yayından sonra `IGameMode.OnObjectHit(...)` çağrılır
+(vuran, `netId`, `kind`, hasar, kırıldı mı). Objeyi kırmanın bir **oyun** anlamı olduğu modlar
+(§10.5 `zombie`: öldürülen zombi ortak skora yazılır) skoru oradan yazar; çekirdek yine yazmaz.
+Kanca kilidin **dışında** koşar, obje durumu çoktan yayınlanmıştır.
+
 ⚠️ **Doğma koruması ve dost ateşi kapıları objede YOKTUR** ve eklenmez: ikisi de oyuncular arası bir
 ilişkiyi yargılar, objenin takımı yoktur. `friendlyFire` kapalıyken kendi takımının siperini
 kırabilmek **kuraldır**, kaçak değil.
@@ -3283,6 +3379,35 @@ biri ağ nesnesi, biri katalogdan üretilmiş kopya.
 
 ⚠️ **Kavrama pozu türün prefabında SABİT olmak zorundadır.** Obje ele kanonik pozla bağlanır; serbest
 kavrama her istemcide farklı bir ofset demektir ve obje uzak başlıkta elin yanında durur.
+
+#### Sunucu-atanmış sahiplik (beyin sahipte)
+
+Yukarıdaki sahiplik `object_grab` ile **istenir**. Bir objenin hareketi istemcide hesaplanmak
+zorundaysa (NavMesh üzerinde yürüyen bir düşman: §10.5 `zombie`) sahipliği **sunucu atar** ve kimse
+istemez. Şekli:
+
+- **Doğuş:** `owner` dolu, `Held` **yok**, `Awake` var — yani obje doğduğu anda uçuş penceresindedir
+  ve poz kapısı sahibine açıktır (§6.12). Ayrı bir "sana verdim" mesajı yoktur.
+- **Sahip bir ADMIN'dir** ve sunucu onu seçer: **en eski bağlı admin**. Değer `admin_state.objectHostId`
+  ile duyurulur (§5.3); `0` = sahip yok. ⚠️ Geri gelen eski admin sıranın **sonuna** girer, sahipliği
+  geri almaz — admin kaydı oturumluktur (§2), bağlantı anı = kayıt anıdır.
+- **Sahip `object_rest` GÖNDERMEZ** — bu obje hiç dinlenmez; `Awake` maç boyunca açık kalır ve
+  sahipliği bitiren tek şey objenin `object_despawn`'ıdır.
+- ⚠️ **Sahip düşerse obje serbest BIRAKILMAZ**, sıradaki admin'e yazılır (her obje için bir
+  `object_state`). Zemine indirme kuralı (yukarıdaki 4. madde) yalnız **oyuncu** sahipli objeler
+  içindir: sunucu-sürülen bir obje zemine indirildiğinde beyni de düşer ve obje maçın geri kalanında
+  yerinde durur. Admin yoksa `owner = 0` yazılır — objeler son pozlarında donar, mod isterse kendini
+  duraklatır (§10.5 `zombie`).
+- ⚠️ **`OBJECT_OWNER_SILENCE_MS` bekçisi admin sahipli objede KOŞMAZ.** O eşik sahibin `0x01` poz
+  kanalını ölçer ve admin `0x01` hiç göndermez (§2) → muafiyet olmasa her sunucu-sürülen obje ilk
+  taramada zemine inerdi. Admin'in susması **`0x09` ile** ölçülür: sahip en az bir objeye sahipken
+  `OBJECT_HOST_SILENCE_MS` (§1) boyunca hiçbirinden obje pozu gelmezse "sustu" sayılır, sıranın
+  sonuna alınır ve devir yapılır. Susmuş admin **kendini kanıtlayana kadar** yeniden seçilmez
+  (`status` heartbeat'i, §5.1) — yoksa donmuş tek admin 10 Hz'de sahip olup sahipliğini kaybederdi.
+- **Gönderen kapısı ikiye ayrılır:** `object_grab`/`object_release`/`object_rest` yalnız
+  `role=player`a açıktır (admin'in eli yoktur); `object_event` admin'e de açıktır ama **yalnız sahibi
+  olduğu objede**. Kapı toptan açılsaydı admin sahadaki eşyayı kavrayabilirdi. `0x09` kapısı role hiç
+  bakmaz: ölçütü sahiplik + `Held` değil (§6.12).
 
 #### Obje olayları (`object_event`)
 

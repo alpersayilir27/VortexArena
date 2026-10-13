@@ -950,6 +950,48 @@ başlık arenayı objeyle doldurabilirdi.
 
 ---
 
+## 11.7 Sunucu-sürülen ağ nesnesi (beyin sahipte)
+
+Kendi kendine **yürüyen** bir nesne (zombi, ileride bir NPC) ağ nesnesidir ama hareketi sunucuda
+yazılamaz: orada NavMesh, collider ve metre yoktur. Bir **oyuncuya** da verilemez — nesne o
+oyuncuya göre davranır ve o kopunca dalgayı yanında götürür. Sürücü, sunucunun seçtiği **nesne
+sahibi admindir** (§3.6b "Sunucu-atanmış sahiplik"); örnek uygulama `Assets/Modes/Zombie/`.
+
+1. **Sunucu tarafı:** nesneyi sahipli, elde değil doğur —
+   `director.SpawnObject(kind, default, owner: director.ObjectHostId, inHand: false, payload: …)`.
+   Doğum pozu **anlamsızdır** (sunucu sahne konumlarını bilmez): nesnenin nereden çıkacağı sahnede
+   duran bir işaretçi objesidir ve telde `netId` olarak, payload içinde gider.
+2. ⚠️ **Sahip yoksa ve giderse:** `IGameMode.OnObjectHostChanged(0)` gelince mod kendini
+   `TryPauseForMode(...)` ile duraklatır ve kalan süreyi **kendi saklar** (çekirdek duraklamada
+   saati sıfırlar, dönüşte tam süreyi verir). Sahip dönünce süreyi geri yaz ve **nesnelerini yeni
+   sahibe yeniden ata** (`director.SetObjectOwner`) — sahipsiz kalan nesneler devirle miras
+   alınmaz, devredilecek eski kayıt artık yoktur.
+3. **İstemci tarafı iki bileşendir:** beyin yalnız `NetObject.IsMine` iken çalışır (sahip olmayan
+   makinede `NavMeshAgent` **kapalı** durur, yoksa akan pozla kavga eder) ve pozu
+   `UdpStateChannel.SendObjectPose` ile `OBJECT_POSE_RATE_HZ` akıtır; sunum ise her gözlükte
+   `RemoteObjectRegistry.TryGetInterpolatedPose` ile uygulanır, akış kesilince **son pozu korur**.
+4. ⚠️ **Prefaba `NetObjectPoseSender` KOYMA** — "durdum" deyip `object_rest` yollar ve sahipliği
+   kapatır; duran yaratık maçın kalanında donar (`Yapma-Listesi.md`).
+5. Vuruş/temas gibi kararları beyin **olayla** bildirir (`NetObjectSync.SendEvent`); olay **sayı
+   taşımaz**, hasarı sunucu kendi tablosundan okur. Sunucunun doğrulaması ancak gevşek bir
+   **sınır** olabilir (`MatchDirector.TryGetObjectToPlayerDistance`): iki poz da istemciden gelir
+   ve bir interpolasyon tamponu geridedir.
+6. **Arena şartı:** sürülen nesne taşıyan mod bir arenaya eklenecekse o sahnede **NavMesh bake'i**
+   olmalıdır ve bake nesnenin yürüyeceği **tüm** yolu kapsamalıdır (zombi oyun alanının dışından
+   geldiği için dış yollar dahil). Bake yoksa beyin tek bir Türkçe uyarı yazar ve nesne olduğu
+   yerde durur — hata vermez. İşletme sahnesi ayrı kopyadır → her işletme sahnesi kendi bake'ini alır.
+   - `NavMeshSurface` arena sanatının kökündedir, kaynağı o kökün **çocuklarıdır** (`Collect Objects
+     = Children`): `All` seçilirse kamera rig'i ve el meshleri de bake'e girer. Kaynak birleştirilmiş
+     mesh olmaz; `ArenaRoof` ve üst kat döşemeleri kaynağın dışında kalır.
+   - ⚠️ **Ajan tipi `Zombie`'dir** (0,3 m yarıçap, 1,8 m boy — `Navigation > Agents`); yüzey ve
+     prefabın `NavMeshAgent`'ı **aynı** tipi seçer. Tip tutmazsa ajan NavMesh'i bulamaz ve zombi
+     doğduğu yerde durur; varsayılan `Humanoid` (0,5 m) dar kapıda tıkar.
+   - Bake sonrası her doğum noktasından oyun alanına yol çıkmalı, çitin dışındaki bir noktadan giden
+     yol ise **kapıdan** dolaşmalıdır — dolaşmıyorsa çit bake'e engel olarak girmemiştir.
+   - Kırılabilir siper `NavMeshObstacle` (carve) taşır, `Broken` olunca kapanır.
+
+---
+
 ## 12. Kendi HUD'ını yazmak
 
 Sıfırdan yazma — `ModeHudBase`'den türet. Faz/süre, geri sayım, can barı, ölüm ekranı, kill-feed
@@ -1064,6 +1106,10 @@ public sealed class BenimModum : IGameMode
 }
 ```
 + `MatchDirector.RegisterModes()` içine `Register(new BenimModum());`
+
+> `IsMatchOver` `true` dönmeden önce son `modeState`'i yazabilir (`SetModeState`, ör. zombideki
+> `over:lost`): çekirdek bekleyen bu yayını `finished`'tan **önce** gönderir, yani maç sonu ekranı
+> sonucu `finished` ile birlikte okur.
 
 > ⚠️ **`Teams = None` seçtiysen bir karar daha vermek zorundasın: `Allies`.** `false` (varsayılan) =
 > **herkes tek** — kimse kimsenin takımdaşı değil, ad etiketi çizilmez, dost ateşi anahtarı o modu
@@ -1522,13 +1568,23 @@ Tek düğmeli bir sihirbaz **yoktur** (kaldırıldı). Akış altı adımdır ve
 | 5 | Environment sanatı (**dünya orijinine**, zemin y=0), hareketsiz dekora **static flag**, gökyüzü materyali, bake | elle + `… > Arena > Sahne Bütçesini Ölç` |
 | 6 | Tüm kayıtları yap | `… > Build > Configure All Build Elements` |
 
+⚠️ **Desteklenen modlarının hepsi takımsız olan arenada (zombi gibi) taban şeridi YOKTUR:** 2. adım
+o sahneye taban bölgesi koymaz (seçenek işaretli olsa da) ve sahneye elle de konmaz — takımsız modda
+canlanma kuralı modun kendisindedir, renkli şerit olmayan bir kuralı öğretir. Sahnede kalmış bir
+bölgeyi `Configure All Build Elements` penceresinin hazırlık listesi ✗ ile bildirir.
+
+⚠️ **Sahne `zombie` modunu taşıyacaksa 5. adıma NavMesh bake'i eklenir** — ve yalnız o zaman:
+diğer modlarda NavMesh'i okuyan hiçbir şey yoktur, boşuna bake'lenen bir sahne yalnız build süresi
+ve dosya ekler. Bake, yaratığın yürüyeceği **tüm** yolu kapsamalıdır: zombiler oyun alanının
+**dışından** geldiği için dış yollar ve kapılar da dahil (gerekçe ve istemci davranışı §11.7).
+
 **3. adımın boyut dosyası hazır olmalıdır.** Dosya elle yazılabilir (§17.2) ya da sahada kumandayla
 ölçülüp sunucudan alınabilir (§17.5) — sonuç aynı dosyadır, mekan başına tektir ve o mekanın bütün
 sahneleri onu gösterir.
 
 **2. adım** altyapıyı prefab **ÖRNEĞİ** olarak koyar (`VA_ArenaBoundary` = `ArenaBoundary`,
 `VA_CameraRig`, `VA_PoseSync`, `VA_CalibrationManager`, seçime bağlı
-`VA_ModeHud` · taban bölgeleri), sahneye bakan referansları bağlar
+`VA_ModeHud` · taban bölgeleri — yalnız takımlı modu olan haritada), sahneye bakan referansları bağlar
 (`ArenaCalibrator`'ın `rigRoot`'u ile `ArenaBoundary`'nin
 `head`/`fadeRenderer`/`warningText`'i — sonuncular rig'in içindedir ve **boş kalırsa muhafaza
 sessizce hiçbir şey göstermez**), taban şeritlerini takım rengine boyar ve mekanın boyut dosyasını
@@ -1747,7 +1803,7 @@ Fiziksel oda değişmedi: ölçü aynı, kalibrasyon bantları aynı yerde.
 | 1 | Environment'ı **import edildiği yerde bırak** — orijini bozuk olabilir, önemsiz; hiçbir şeyini taşıma |
 | 2 | [Reçete 14](#14-yeni-arena-eklemek)'teki normal altı adımı uygula (altyapı → maket → ölçü düzeltme → sanat → kayıtlar) |
 | 3 | `VA_ArenaBoundary` örneğini oynatmak istediğin bölgenin üstüne **taşı ve döndür** (ölçek **1** kalır). Maket ve `anchor_a`/`anchor_b` onun altındadır, birlikte gelirler |
-| 4 | `BaseZone`'ları, silahları (`WPN_*` örnekleri / `VA_WeaponCanvas`) ve `ArenaObstacle`'ları **elle o bölgeye** yerleştir |
+| 4 | `BaseZone`'ları (yalnız takımlı modu olan haritada; takımsız haritada hiç yok), silahları (`WPN_*` örnekleri / `VA_WeaponCanvas`) ve `ArenaObstacle`'ları **elle o bölgeye** yerleştir |
 
 - **Pano `VA_WeaponCanvas*` prefabının ÖRNEĞİ olarak konur, unpack edilmez** — kökündeki
   `WeaponCanvas` bileşeni süpürmenin panoyu bulduğu tek işarettir; koparsa silahı modun kendisi
@@ -1780,7 +1836,8 @@ değişimi **dikey sanal ofsettir** (`Docs/Sistem-Ozeti.md` §3.13, ağ tarafı
 - **Zemin kat (kat 0, dünya y = 0) zorunludur**, üst katlar isteğe bağlıdır.
 - **Zeminin altına kat konmaz** (bodrum diye bir seviye yoktur).
 - **Her takımın taban şeridi zemin kattadır**, üst kata taban konmaz: ölüm oyuncuyu tabanının katına
-  indirir ve hedef hiçbir zaman bulunduğu kattan yukarı değildir.
+  indirir ve hedef hiçbir zaman bulunduğu kattan yukarı değildir. Takımsız haritada taban şeridi hiç
+  yoktur — bu kural o haritada boştur.
 
 | # | Yaptığın | Görmen gereken |
 |---|---|---|
@@ -1790,7 +1847,7 @@ değişimi **dikey sanal ofsettir** (`Docs/Sistem-Ozeti.md` §3.13, ağ tarafı
 | 4 | Üst kat plakasını (zemin mesh'i) portalın tanımladığı yüksekliğe kur; collider'ı **`Default`** layer'da bırak | Alt kattan yukarı ateş eden oyuncunun mermisi plakada durur. ⚠️ Plakayı **`Obstacle` layer'ına ALMA** — üst kattaki herkes sürekli ihlalde sayılır ve ekranı kararır |
 | 5 | (İsteğe bağlı, admin kuş bakışı için) plakayı `ArenaRoof` kökünün altına al — `GameObject > VortexArena > Arena Roof` | Admin tepeden bakarken üst kat gizlenir, alt kat okunur |
 | 6 | Portalın ses kancalarını bağla: dolum (2 sn boyunca döner) · geçiş anı · meşgul uyarısı | Boş bırakılan kanca sessizdir, uyarı çıkmaz |
-| 7 | Taban bölgelerini **zemin kata** koy (üst kata taban konmaz) | Ölen oyuncu tabanının katına iner; bölge yalnız oyuncunun katı ona eşitken içeride sayar |
+| 7 | Takımlı modu olan haritada taban bölgelerini **zemin kata** koy (üst kata taban konmaz; takımsız haritada bu adım atlanır) | Ölen oyuncu tabanının katına iner; bölge yalnız oyuncunun katı ona eşitken içeride sayar |
 | 8 | Play (ya da gözlükte aç) | Konsolda `[ArenaFloors] n kat: 0.00 m / 3.00 m …`. Çemberin üstünde 2 sn durunca HUD'da geri sayım, sonra kısa karartma ve diğer kat |
 | 9 | Admin istatistik panelini aç | Üst kattaki oyuncunun ayrıntı şeridinde `1. kat` jetonu (zemin kat 0'dır, yazılmaz), halkası onun katının zemininde |
 

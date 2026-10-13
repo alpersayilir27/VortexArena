@@ -77,9 +77,13 @@ namespace VortexArena.Core.Player
                 avatar = GetComponentInParent<RemoteAvatar>(true);
             }
 
-            if (avatar == null)
+            // A box on a NETWORK OBJECT (zombie) is legitimate: there the hit is reported with targetNetId
+            // and the zone multiplier comes from the same place (§10.10) — only a box under NEITHER parent
+            // is a wiring error.
+            if (avatar == null && GetComponentInParent<VortexArena.Net.NetObject>(true) == null)
             {
-                Debug.LogWarning($"[RemoteHitBox] '{name}' bir RemoteAvatar altında değil; vuruşlar raporlanamaz.", this);
+                Debug.LogWarning($"[RemoteHitBox] '{name}' bir RemoteAvatar ya da NetObject altında değil; " +
+                                 "vuruşlar raporlanamaz.", this);
             }
         }
 

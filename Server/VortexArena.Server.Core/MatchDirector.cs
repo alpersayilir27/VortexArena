@@ -109,6 +109,28 @@ public sealed class MatchDirector
     /// the 20 Hz pose intake behind the match lock (the <c>Alive</c> pattern).</summary>
     private readonly ConcurrentDictionary<int, ObjectOwnership> _objectOwners = new();
 
+    /// <summary>The admin currently holding the server-assigned object ownership (§10.10); null = none.
+    /// Guarded by <see cref="_gate"/>.</summary>
+    /// <remarks>⚠️ A <see cref="PlayerState"/> REFERENCE, not a <c>playerId</c>: an admin record is
+    /// deleted on disconnect (§2) and its id goes back to the pool, so the next admin to connect can
+    /// carry the id of the one that just left — an id-keyed host would silently follow it.</remarks>
+    private PlayerState? _objectHost;
+
+    /// <summary>The host's <c>playerId</c> (§5.3 <c>admin_state.objectHostId</c>); <c>0</c> = none.
+    /// Guarded by <see cref="_gate"/>, mirrored lock-free in <see cref="_objectHostIdFast"/>.</summary>
+    private int _objectHostId;
+
+    /// <summary>Lock-free mirror of <see cref="_objectHostId"/> for the UDP recv thread: the object
+    /// pose path must never enter the match lock (the <c>ShotRelayOpen</c> pattern).</summary>
+    private volatile int _objectHostIdFast;
+
+    /// <summary>UTC ticks of the last <c>0x09</c> received for an object the HOST owns — the silence
+    /// clock of <see cref="ArenaProtocol.OBJECT_HOST_SILENCE_MS"/> (§10.10).</summary>
+    /// <remarks>Written lock-free on the recv thread (<see cref="RecordObjectPose"/>) and read on the
+    /// tick, hence <c>Interlocked</c>: a <c>long</c> read is not atomic on 32-bit. ⚠️ It is the HOST's
+    /// clock, not per object: one pose from any of its objects proves the brain is running.</remarks>
+    private long _lastHostPoseTicks = DateTime.UtcNow.Ticks;
+
     /// <summary>Last pose seen on <c>0x09</c> per object (§6.12). The server does NOT write it into the
     /// table as state — it is the pose an object is FREED at when its owner drops or dies; without it
     /// the object would teleport back to where it was picked up.</summary>
@@ -343,6 +365,20 @@ public sealed class MatchDirector
     /// PRESENTATION (this is not the damage gate; that one is on WS and locked).</remarks>
     public bool ShotRelayOpen => _shotRelayOpen;
 
+    /// <summary><c>playerId</c> of the admin holding the server-assigned object ownership (§10.10);
+    /// <c>0</c> = none. The source of <c>admin_state.objectHostId</c> (§5.3).</summary>
+    public int ObjectHostId
+    {
+        get { lock (_gate) return _objectHostId; }
+    }
+
+    /// <summary>Raised when <see cref="ObjectHostId"/> changes, so <c>LobbyService</c> can rebroadcast
+    /// <c>admin_state</c> (§5.3). Wired once at startup; called OUTSIDE the lock.</summary>
+    /// <remarks>A callback and not a direct call because the director must not know the lobby service
+    /// (that service already takes its own lock, and the order is _gate → lobby, never the reverse) —
+    /// the same shape as <c>MatchRecorder.InitialStateProvider</c>.</remarks>
+    public Action<int>? ObjectHostChanged { get; set; }
+
     /// <summary>The server's configured lobby scene — for the startup log and validation.</summary>
     public string LobbyScene => _lobbyScene;
 
@@ -362,6 +398,7 @@ public sealed class MatchDirector
         Register(new TournamentMode());
         Register(new BurgerMode(_burger));
         Register(new MoleMode());
+        Register(new ZombieMode());
     }
 
     private void Register(IGameMode mode) => _modes[mode.ModeId] = mode;
@@ -744,6 +781,8 @@ public sealed class MatchDirector
         IGameMode? modeToRoundStart;
         IGameMode? modeToEnd;
         IGameMode? modeToTick = null;
+        IGameMode? modeForHost;
+        int? hostChangedTo = null;
 
         lock (_gate)
         {
@@ -783,10 +822,15 @@ public sealed class MatchDirector
             // TickViolationFeedLocked): the penalty applies only in `playing`, but the operator must also
             // see a player leaving the arena in the lobby and during the countdown.
             TickViolationFeedLocked(outbox, now);
+            // ⚠️ BEFORE the owner sweep, not after: a retired admin's record is gone, so that sweep
+            // would read it as "owner lost" and ground the driven objects a tick before the handover
+            // could move them (§10.10).
+            if (TickObjectHostLocked(outbox, now)) hostChangedTo = _objectHostId;
             // Also outside the switch, for the same reason: an object held in the lobby must be freed
             // when its owner drops, not only during a match.
             TickObjectOwnersLocked(outbox);
 
+            modeForHost = _mode;
             modeToStart = _matchStartPending ? _mode : null;
             modeToRoundStart = _roundStartPending ? _mode : null;
             modeToEnd = _matchEndPending ? _mode : null;
@@ -805,6 +849,14 @@ public sealed class MatchDirector
         modeToStart?.OnMatchStart(this);
         modeToRoundStart?.OnRoundStart(this);
         modeToEnd?.OnMatchEnd(this);
+
+        if (hostChangedTo.HasValue)
+        {
+            // ⚠️ Before OnTick: a mode whose objects lost their brain pauses itself in THIS tick,
+            // instead of running one more wave step on frozen objects.
+            modeForHost?.OnObjectHostChanged(this, hostChangedTo.Value);
+            ObjectHostChanged?.Invoke(hostChangedTo.Value);
+        }
 
         if (modeToTick == null)
         {
@@ -2096,6 +2148,10 @@ public sealed class MatchDirector
     private async Task HandleObjectHitAsync(PlayerState shooter, HitReportMsg msg)
     {
         var outbox = new List<Outgoing>();
+        IGameMode? mode;
+        string kind;
+        float appliedDamage;
+        bool broken;
         lock (_gate)
         {
             // ⚠️ WIDER than the player path's "playing only" gate (§10.3): with fireWhilePaused a target
@@ -2115,10 +2171,20 @@ public sealed class MatchDirector
                 RejectObjectHit(shooter, msg.targetNetId, reason);
                 return;
             }
+            kind = entry.Kind;
+            broken = (entry.Flags & ArenaProtocol.OBJECT_FLAG_BROKEN) != 0;
+            appliedDamage = msg.damage;
+            mode = _mode;
             // To EVERYONE (§10.10): a broken cover is everyone's cover.
             QueueBroadcastLocked(outbox, JsonUtil.Serialize(WorldObjectTable.ToStateMsg(entry)));
         }
         await FlushAsync(outbox);
+
+        // ⚠️ AFTER the state went out, outside the lock (hook contract): the mode may write score or
+        // spawn/despawn from here, and the core writes none for a broken object itself (§10.10).
+        // `broken` is THIS hit's doing — a second hit on a broken object never passes the gates.
+        mode?.OnObjectHit(this, shooter.PlayerId, msg.targetNetId, kind, appliedDamage, broken);
+        FlushRosterRefresh(); // the hook may have written a shared score (§10.2)
     }
 
     // ---- Object ownership, events, dynamic spawn (§10.10) ----
@@ -2267,13 +2333,29 @@ public sealed class MatchDirector
         }
     }
 
-    /// <summary>Common sender gate of the three object messages: a connected PLAYER. Admins and
+    /// <summary>Common sender gate of the four object messages: a connected PLAYER. Admins and
     /// pre-hello connections have no hands.</summary>
+    /// <remarks>⚠️ ONE exception (§10.10): an admin holding SERVER-ASSIGNED ownership may send
+    /// <c>object_event</c> — but only on an object it actually owns. Grab/release/rest stay player-only;
+    /// opening the gate wholesale would let an admin pick items up off the floor.</remarks>
     private bool ObjectSenderOkLocked(PlayerState player, string type, int netId)
     {
-        if (player.IsConnected && player.Role == "player") return true;
+        if (!player.IsConnected)
+        {
+            RejectObject(player, type, netId, "gönderen bağlantısız");
+            return false;
+        }
 
-        RejectObject(player, type, netId, "gönderen bağlantısız/oyuncu değil");
+        if (player.Role == "player") return true;
+
+        if (player.Role == "admin" && type == MessageTypes.ObjectEvent &&
+            _objects.TryGetLocked(netId, out var entry) && entry.Owner == player.PlayerId)
+        {
+            return true;
+        }
+
+        RejectObject(player, type, netId,
+            "gönderen oyuncu değil (admin yalnız sahibi olduğu objede object_event yollar)");
         return false;
     }
 
@@ -2373,6 +2455,12 @@ public sealed class MatchDirector
         {
             var playerId = pair.Value.PlayerId;
             var known = _registry.TryGetByPlayerId(playerId, out var owner);
+            // ⚠️ SERVER-ASSIGNED ownership is exempt (§10.10): this gate reads the owner's 0x01 pose
+            // channel and an admin never sends one (§2), so without the exemption every server-driven
+            // object would be grounded on the FIRST sweep — and grounding it drops its brain for the
+            // rest of the match. An admin host's silence is measured on 0x09 in
+            // TickObjectHostLocked, which also does the handover.
+            if (known && owner.Role == "admin") continue;
             // LastPoseAt is written lock-free from the recv thread, like every other freshness gate here.
             var silentMs = known ? (now - owner.LastPoseAt).TotalMilliseconds : 0d;
             var silent = known && owner.Connection == PlayerConnection.Connected
@@ -2390,6 +2478,194 @@ public sealed class MatchDirector
         foreach (var playerId in lost) ReleaseObjectsOfLocked(outbox, playerId, dropToGround: true);
     }
 
+    /// <summary>Keeps the SERVER-ASSIGNED object host (§10.10): the oldest connected admin. Returns true
+    /// when the host changed — the caller raises the hooks outside the lock.</summary>
+    /// <remarks>Why the server picks it at all: a driven object's pose has to come from exactly ONE
+    /// client, and the admin build is the only one with the geometry to drive it (the server knows no
+    /// metres). Two hosts would put the same object in two places.
+    /// <para>Three ways the host is lost, all handled here: the record is gone/dropped, or it went
+    /// SILENT on <c>0x09</c> while owning objects. The objects then move WITH the host — a driven
+    /// object is never released to the floor, since releasing it drops its brain for the match.</para></remarks>
+    private bool TickObjectHostLocked(List<Outgoing> outbox, DateTime now)
+    {
+        var current = _objectHost;
+        var currentOk = current != null && current.IsConnected && current.Role == "admin";
+
+        if (currentOk && IsObjectHostSilentLocked(current!, now))
+        {
+            Console.WriteLine($"[world] nesne sahibi {current!.Name} (#{current.PlayerId}): " +
+                              $"{ArenaProtocol.OBJECT_HOST_SILENCE_MS} ms obje pozu yok — sahiplik devrediliyor.");
+            current.ObjectHostDemotedAt = now;
+            currentOk = false;
+        }
+
+        if (currentOk) return false;
+
+        var next = NextObjectHostLocked();
+        if (ReferenceEquals(next, current)) return false;
+
+        _objectHost = next;
+        _objectHostId = next?.PlayerId ?? 0;
+        _objectHostIdFast = _objectHostId;
+        // Fresh clock for the new host: the silence it inherits is the old one's.
+        Interlocked.Exchange(ref _lastHostPoseTicks, now.Ticks);
+
+        if (current != null) TransferDrivenObjectsLocked(outbox, current.PlayerId, _objectHostId);
+
+        Console.WriteLine(_objectHostId == 0
+            ? "[world] nesne sahibi YOK — sunucu-sürülen objeler son pozlarında donuyor."
+            : $"[world] nesne sahibi: {next!.Name} (#{_objectHostId}).");
+        return true;
+    }
+
+    /// <summary>Has the host stopped streaming (§10.10)? Asked ONLY while it owns something: an admin
+    /// driving nothing has no pose to send and must not be demoted for the silence.</summary>
+    private bool IsObjectHostSilentLocked(PlayerState host, DateTime now)
+    {
+        if (!AnyObjectOwnedBy(host.PlayerId)) return false;
+
+        var last = new DateTime(Interlocked.Read(ref _lastHostPoseTicks));
+        return (now - last).TotalMilliseconds >= ArenaProtocol.OBJECT_HOST_SILENCE_MS;
+    }
+
+    /// <summary>The oldest connected admin eligible to host (§10.10); null = no admin.</summary>
+    /// <remarks>⚠️ A DEMOTED (silent) admin rejoins the queue only on EVIDENCE OF LIFE — its own
+    /// <c>status</c> heartbeat (§5.1) pushing <c>LastSeen</c> past the demotion stamp. A cooldown timer
+    /// instead would re-elect a frozen single admin over and over: host for 1.5 s, demoted, host again.
+    /// <para>Ties on <c>ConnectedAt</c> are broken by <c>playerId</c> so two admins connecting in the
+    /// same tick still produce ONE deterministic answer.</para></remarks>
+    private PlayerState? NextObjectHostLocked()
+    {
+        PlayerState? best = null;
+        foreach (var player in _registry.Snapshot())
+        {
+            if (!player.IsConnected || player.Role != "admin") continue;
+            if (player.ObjectHostDemotedAt != DateTime.MinValue &&
+                player.LastSeen <= player.ObjectHostDemotedAt)
+            {
+                continue;
+            }
+
+            if (best == null || player.ConnectedAt < best.ConnectedAt ||
+                (player.ConnectedAt == best.ConnectedAt && player.PlayerId < best.PlayerId))
+            {
+                best = player;
+            }
+        }
+
+        return best;
+    }
+
+    /// <summary>Moves every object the old host drove to the new one (<c>0</c> = nobody) and publishes
+    /// one <c>object_state</c> each (§10.10).</summary>
+    private void TransferDrivenObjectsLocked(List<Outgoing> outbox, int fromPlayerId, int toPlayerId)
+    {
+        var ids = _objects.ListOwnedByLocked(fromPlayerId);
+        for (var i = 0; i < ids.Count; i++)
+        {
+            if (!_objects.TrySetOwnerLocked(ids[i], toPlayerId, out var entry)) continue;
+
+            SyncOwnerLocked(entry);
+            QueueBroadcastLocked(outbox, JsonUtil.Serialize(WorldObjectTable.ToStateMsg(entry)));
+        }
+    }
+
+    /// <summary>Does this player own any object? Read off the lock-free mirror, so the 10 Hz tick
+    /// allocates nothing for the silence question.</summary>
+    private bool AnyObjectOwnedBy(int playerId)
+    {
+        foreach (var pair in _objectOwners)
+        {
+            if (pair.Value.PlayerId == playerId) return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>Server-assigned ownership hand-over for a MODE (§10.10): writes the owner of an object
+    /// that is not in a hand and publishes <c>object_state</c>; false = unknown id, the object is held,
+    /// or the owner is unchanged.</summary>
+    /// <remarks>Called from a mode hook, i.e. OUTSIDE the lock — the message goes into
+    /// <see cref="_pendingOutbox"/>, like <see cref="SpawnObject"/>.</remarks>
+    public bool SetObjectOwner(int netId, int playerId)
+    {
+        lock (_gate)
+        {
+            if (!_objects.TrySetOwnerLocked(netId, playerId, out var entry)) return false;
+
+            SyncOwnerLocked(entry);
+            QueueBroadcastLocked(_pendingOutbox, JsonUtil.Serialize(WorldObjectTable.ToStateMsg(entry)));
+            return true;
+        }
+    }
+
+    /// <summary>Horizontal (XZ) distance in metres between an object's last streamed <c>0x09</c> pose
+    /// and a player's last HEAD pose; false = either side has no pose yet.</summary>
+    /// <remarks>⚠️ A BOUND for a mode's reach gate, not a measurement the server trusts (§10.10): both
+    /// poses are client-reported and one interp buffer old. Vertical distance is deliberately ignored —
+    /// the server does not know floor heights, so a multi-floor arena would reject legitimate contact.
+    /// <para>Lock-free: both sources are concurrent/atomic reads, and the caller is a mode hook.</para></remarks>
+    public bool TryGetObjectToPlayerDistance(int netId, int playerId, out float meters)
+    {
+        meters = 0f;
+        if (!_lastObjectPoses.TryGetValue(netId, out var objectPose)) return false;
+        if (!_registry.TryGetByPlayerId(playerId, out var player)) return false;
+
+        var hands = player.LastHands;
+        if (hands == null) return false;
+
+        var head = hands.Head;
+        if (!IsFinitePosition(objectPose) || !IsFinitePosition(head)) return false;
+
+        var dx = objectPose.px - head.px;
+        var dz = objectPose.pz - head.pz;
+        meters = MathF.Sqrt(dx * dx + dz * dz);
+        return true;
+    }
+
+    /// <summary>Damage from a server-driven network OBJECT to a player (§10.5 <c>zombie</c>): the
+    /// <c>hit_report</c> player gates minus the ones that judge a relation between players. Returns
+    /// whether the damage was applied.</summary>
+    /// <remarks>Gates kept: phase <c>playing</c> · target connected + <c>role=player</c> + alive ·
+    /// calibrated (§10.6) · not spawn protected (§10.4) · a usable damage number. Gates DROPPED:
+    /// friendly fire and the self-hit test — the source is an object and an object has no team, exactly
+    /// as on the object hit path (§10.10).
+    /// <para>Death is ENVIRONMENTAL: <c>killerId 0</c>, <c>weaponId</c>
+    /// <see cref="ArenaProtocol.WEAPON_ID_ZOMBIE"/>, nobody's <c>kills</c> rises and
+    /// <c>IGameMode.OnKill</c> is not raised — the obstacle drain's shape (§10.9).</para>
+    /// <para>Called from a mode hook (outside the lock), so the messages go into
+    /// <see cref="_pendingOutbox"/> and the tick loop dispatches them (≤100 ms).</para></remarks>
+    public bool DamagePlayerFromObject(int playerId, float damage, int sourceNetId)
+    {
+        lock (_gate)
+        {
+            if (_phase != Phase.Playing) return false;
+            if (!float.IsFinite(damage) || damage <= 0f) return false;
+            if (!_registry.TryGetByPlayerId(playerId, out var target)) return false;
+            if (!target.IsConnected || target.Role != "player" || !target.Alive) return false;
+            if (!target.Calibrated) return false;
+
+            var now = DateTime.UtcNow;
+            if (now < target.SpawnProtectedUntil) return false;
+
+            target.Hp = MathF.Max(0f, target.Hp - damage);
+            DelayRegenLocked(target, now);
+            // attackerId = 0: environmental damage, not an attack (§10.9/§10.5).
+            QueueHealthUpdateLocked(_pendingOutbox, target, JsonUtil.Serialize(new HealthUpdateMsg
+            {
+                playerId = target.PlayerId,
+                hp = target.Hp,
+                attackerId = 0
+            }));
+
+            if (target.Hp > 0f) return true;
+
+            KillPlayerLocked(_pendingOutbox, target, null, ArenaProtocol.WEAPON_ID_ZOMBIE, now);
+            Console.WriteLine($"[match] zombi ölümü: {target.Name} (netId {sourceNetId})");
+            return true;
+        }
+    }
+
     /// <summary>May this player stream the object's pose (§6.12)? Owner, and the object is NOT in a hand
     /// — the flight window between <c>object_release</c> and <c>object_rest</c>. Read LOCK-FREE from
     /// StateHost's recv thread: the pose gate must not queue behind the match lock.</summary>
@@ -2404,7 +2680,19 @@ public sealed class MatchDirector
     /// map is concurrent and the match lock is never taken here.</summary>
     /// <remarks>⚠️ This is NOT the object's state: <c>world_state</c> must carry a RESTING pose, and this
     /// one is a frame from mid-flight. Its only reader is the "owner dropped" release path.</remarks>
-    public void RecordObjectPose(int netId, PoseData pose) => _lastObjectPoses[netId] = pose;
+    public void RecordObjectPose(int netId, PoseData pose)
+    {
+        _lastObjectPoses[netId] = pose;
+
+        // §10.10: the HOST's silence clock lives here, because an admin sends no 0x01 at all (§2) —
+        // the only proof its brain is still running is an object pose. Lock-free on purpose: this runs
+        // on the recv thread, which must never enter the match lock.
+        if (_objectHostIdFast != 0 && _objectOwners.TryGetValue(netId, out var owner)
+                                   && owner.PlayerId == _objectHostIdFast)
+        {
+            Interlocked.Exchange(ref _lastHostPoseTicks, DateTime.UtcNow.Ticks);
+        }
+    }
 
     /// <summary>Creates a runtime network object and announces it with <c>object_spawn</c> (§10.10);
     /// returns the allocated <c>netId</c>, or <c>0</c> when rejected (unknown kind / range exhausted).</summary>
@@ -2679,8 +2967,10 @@ public sealed class MatchDirector
         SetPhaseLocked(Phase.Finished, now);
         // Both callers gate on an in-match phase, so this runs once per match.
         _matchEndPending = _mode != null;
-        Console.WriteLine($"[match] maç sonu — kazanan: {DescribeOutcomeLocked(outcome)} " +
-                          $"(kırmızı {_scoreRed} : mavi {_scoreBlue})");
+        // Teamless modes carry their result in the mode state; a red/blue score would be noise there.
+        Console.WriteLine(_rules.Teams == TeamMode.None
+            ? $"[match] maç sonu (takımsız) — mod durumu '{_modeState}'"
+            : $"[match] maç sonu — kazanan: {DescribeOutcomeLocked(outcome)} (kırmızı {_scoreRed} : mavi {_scoreBlue})");
         QueueBroadcastLocked(outbox, JsonUtil.Serialize(BuildMatchStateLocked()));
         QueueBroadcastLocked(outbox, JsonUtil.Serialize(new MatchEndMsg
         {
@@ -2770,9 +3060,14 @@ public sealed class MatchDirector
         lock (_gate)
         {
             if (_phase != Phase.Playing) return;
+            // Whatever IsMatchOver queued (a final modeState) goes out BEFORE the end: left in the pending
+            // queue it lands a tick after `finished` as a `playing` match_state and hides the result screen.
+            outbox.AddRange(_pendingOutbox);
+            _pendingOutbox.Clear();
             EnterEndLocked(outbox, DateTime.UtcNow, outcome);
         }
         await FlushAsync(outbox);
+        FlushReadyClear();
         FlushRosterRefresh();
     }
 

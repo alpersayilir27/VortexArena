@@ -65,6 +65,7 @@ public interface IGameMode
     /// <summary>true moves the phase to End (time up / score limit); the winner comes back in
     /// <see cref="MatchOutcome"/> per the mode's score channel
     /// (<see cref="ModeRules.Scoring"/>).</summary>
+    /// <remarks>May write a final modeState before returning true: the core sends it ahead of the end.</remarks>
     bool IsMatchOver(MatchDirector director, out MatchOutcome outcome);
 
     /// <summary>Scoring after a validated kill; write ONLY through the director's ledger (AddScore /
@@ -91,4 +92,20 @@ public interface IGameMode
     /// table — and each of those broadcasts its own <c>object_state</c>, because ONE event may change
     /// several objects.</para></remarks>
     bool OnObjectEvent(MatchDirector director, int playerId, int netId, string kind, ObjectEventMsg msg) => false;
+
+    /// <summary>A validated <c>hit_report</c> landed on a network OBJECT (§10.10), break or not. The
+    /// core wrote <c>hp</c>/<c>Broken</c> and already published the <c>object_state</c>.</summary>
+    /// <remarks>Breaking an object is a WORLD state, so the core writes no score for it. A mode where
+    /// it also means something in the GAME (a killed zombie) writes that here — through the director's
+    /// ledger, like <see cref="OnKill"/>.
+    /// <para><paramref name="attackerId"/> is the shooter; <paramref name="broken"/> true means THIS hit
+    /// was the one that broke it (a second hit on a broken object never reaches the gates).</para></remarks>
+    void OnObjectHit(MatchDirector director, int attackerId, int netId, string kind, float damage,
+        bool broken) { }
+
+    /// <summary>The server-assigned object host changed (§10.10); <c>0</c> = there is none.</summary>
+    /// <remarks>A mode whose objects are DRIVEN by that host (§10.5 <c>zombie</c>) learns from here that
+    /// their brain is gone, and pauses itself. Also raised on the first host of a match, so a mode
+    /// never has to poll <see cref="MatchDirector.ObjectHostId"/>.</remarks>
+    void OnObjectHostChanged(MatchDirector director, int hostPlayerId) { }
 }

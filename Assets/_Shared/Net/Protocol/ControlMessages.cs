@@ -922,6 +922,12 @@ namespace VortexArena.Protocol
         /// get it from here — they read it once from <see cref="WelcomeMsg.calibrationMode"/>.</summary>
         public string calibrationMode = "";
 
+        /// <summary>CURRENT holder of the server-assigned object ownership (§10.10); <c>0</c> = none.
+        /// Same class as <see cref="friendlyFire"/>: effective state, not a selection.</summary>
+        /// <remarks>The operator's only answer to "why did the server-driven objects freeze" — at
+        /// <c>0</c> nobody is driving them.</remarks>
+        public int objectHostId;
+
         public string notice;
         public int adminCount;
 

@@ -129,6 +129,23 @@
       "objects": []
     },
     {
+      "sceneName": "Graveyard_VortexAntep",
+      "venue": "VortexAntep",
+      "gameType": "quickbattle",
+      "moleDensity": 1.5,
+      "modes": ["zombie"],
+      "objects": [
+        { "sceneId": 1, "kind": "zombie_spawn" },
+        { "sceneId": 2, "kind": "zombie_spawn" },
+        { "sceneId": 3, "kind": "zombie_spawn" },
+        { "sceneId": 4, "kind": "zombie_spawn" },
+        { "sceneId": 5, "kind": "zombie_spawn" },
+        { "sceneId": 6, "kind": "zombie_spawn" },
+        { "sceneId": 7, "kind": "zombie_spawn" },
+        { "sceneId": 8, "kind": "zombie_spawn" }
+      ]
+    },
+    {
       "sceneName": "IceWorld_Outdoor12x12",
       "venue": "Outdoor12x12",
       "gameType": "quickbattle",
@@ -408,6 +425,10 @@
     { "kind": "sauce", "maxHp": 0, "grab": "anyone", "events": [] },
     { "kind": "spatula", "maxHp": 0, "grab": "anyone", "events": [] },
     { "kind": "target_board", "maxHp": 60, "grab": "none", "events": [] },
-    { "kind": "tomato", "maxHp": 0, "grab": "anyone", "events": [] }
+    { "kind": "tomato", "maxHp": 0, "grab": "anyone", "events": [] },
+    { "kind": "zombie", "maxHp": 100, "grab": "none", "events": [
+        { "name": "attack", "policy": "owner", "phaseGate": "playing" }
+      ] },
+    { "kind": "zombie_spawn", "maxHp": 0, "grab": "none", "events": [] }
   ]
 }

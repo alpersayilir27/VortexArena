@@ -1,0 +1,131 @@
+{
+  "target": "VortexAntep",
+  "gates": [
+    {
+      "side": "E",
+      "center": [
+        6.447,
+        0.0,
+        2.159
+      ],
+      "outward": [
+        1.0,
+        0.0,
+        -0.023
+      ]
+    },
+    {
+      "side": "W",
+      "center": [
+        -2.116,
+        0.0,
+        2.278
+      ],
+      "outward": [
+        -1.0,
+        0.0,
+        -0.002
+      ]
+    },
+    {
+      "side": "N",
+      "center": [
+        2.236,
+        0.0,
+        9.021
+      ],
+      "outward": [
+        0.03,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "side": "S",
+      "center": [
+        0.196,
+        0.0,
+        -4.588
+      ],
+      "outward": [
+        0.002,
+        0.0,
+        -1.0
+      ]
+    }
+  ],
+  "zombieSpawns": [
+    {
+      "name": "ZombieSpawn_E1",
+      "position": [
+        19.644,
+        -0.03,
+        1.852
+      ],
+      "yaw": -88.7
+    },
+    {
+      "name": "ZombieSpawn_E2",
+      "position": [
+        18.893,
+        -0.036,
+        -0.331
+      ],
+      "yaw": -88.7
+    },
+    {
+      "name": "ZombieSpawn_W1",
+      "position": [
+        -15.316,
+        -0.03,
+        2.247
+      ],
+      "yaw": 89.9
+    },
+    {
+      "name": "ZombieSpawn_W2",
+      "position": [
+        -14.621,
+        0.024,
+        4.448
+      ],
+      "yaw": 89.9
+    },
+    {
+      "name": "ZombieSpawn_N1",
+      "position": [
+        2.627,
+        -0.03,
+        22.215
+      ],
+      "yaw": -178.3
+    },
+    {
+      "name": "ZombieSpawn_N2",
+      "position": [
+        4.805,
+        -0.02,
+        21.45
+      ],
+      "yaw": -178.3
+    },
+    {
+      "name": "ZombieSpawn_S1",
+      "position": [
+        0.226,
+        -0.03,
+        -17.788
+      ],
+      "yaw": -0.1
+    },
+    {
+      "name": "ZombieSpawn_S2",
+      "position": [
+        -1.976,
+        -0.015,
+        -17.093
+      ],
+      "yaw": -0.1
+    }
+  ]
+}

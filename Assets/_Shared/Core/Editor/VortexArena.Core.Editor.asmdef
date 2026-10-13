@@ -8,6 +8,7 @@
         "VortexArena.Net.Editor",
         "VortexArena.Protocol",
         "Unity.ProBuilder",
+        "Unity.AI.Navigation",
         "Oculus.Interaction"
     ],
     "includePlatforms": [

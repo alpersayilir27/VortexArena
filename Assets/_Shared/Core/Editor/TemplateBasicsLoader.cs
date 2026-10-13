@@ -95,8 +95,10 @@ namespace VortexArena.Core.Editor
                 new GUIContent("VA_ModeHud", "Lobi sahnesinde İSTENMEZ — lobide mod HUD'ı yoktur."),
                 includeModeHud);
             includeBaseZones = EditorGUILayout.ToggleLeft(
-                new GUIContent("Taban bölgeleri (Base_Red / Base_Blue)",
-                    "Lobi sahnesinde İSTENMEZ — lobide canlanma bölgesi yoktur."),
+                new GUIContent("Taban bölgeleri (Base_Red / Base_Blue, yalnız takımlı haritada)",
+                    "Lobi sahnesinde İSTENMEZ — lobide canlanma bölgesi yoktur. Desteklenen " +
+                    "modlarının hepsi takımsız olan haritada (zombi gibi) işaretli olsa da konmaz: " +
+                    "takımsız modda taban yoktur."),
                 includeBaseZones);
             floorCount = EditorGUILayout.IntSlider(
                 new GUIContent("Kat sayısı",
@@ -191,7 +193,7 @@ namespace VortexArena.Core.Editor
             EditorSceneManager.MarkSceneDirty(scene);
 
             report.Add("ELDE: ölçü maketini üret (kalibrasyon işaretçileri ondan gelir) · " +
-                       "taban bölgelerini gerçek yerleşime göre taşı · " +
+                       "taban bölgelerini gerçek yerleşime göre taşı (takımsız haritada taban yok) · " +
                        "arena geometrisini DÜNYA ORİJİNİNE göre kur (zemin y=0; arena uzayı = " +
                        "dünya uzayı, sahneyi kaydırmak herkesin ağ konumunu kaydırır) · " +
                        "environment sanatını kur · NavMesh/ışık bake et · " +
@@ -261,6 +263,12 @@ namespace VortexArena.Core.Editor
         /// have been positioned by hand.</summary>
         private static void EnsureBaseZones(List<string> report)
         {
+            if (IsTeamlessMapScene(SceneManager.GetActiveScene().name))
+            {
+                report.Add("Takımsız harita (desteklenen modların hepsi takımsız) — taban bölgesi eklenmedi.");
+                return;
+            }
+
             BaseZone[] existing =
                 Object.FindObjectsByType<BaseZone>(FindObjectsInactive.Include, FindObjectsSortMode.None);
             if (existing.Length > 0)
@@ -279,6 +287,48 @@ namespace VortexArena.Core.Editor
             SpawnBaseZone(asset, "Base_Red", Team.Red, TeamRedMaterial);
             SpawnBaseZone(asset, "Base_Blue", Team.Blue, TeamBlueMaterial);
             report.Add("kondu: Base_Red + Base_Blue (yerleri ELLE ayarlanır)");
+        }
+
+        /// <summary>Whether the scene's map is team-less: it lists supported modes and EVERY one of
+        /// them resolves to a <see cref="ModeTeamMode.None"/> mode. Such a map carries NO
+        /// <see cref="BaseZone"/>.</summary>
+        /// <remarks>⚠️ Single source for the question — <c>BuildReadiness</c> asks the same thing, and
+        /// two copies would drift. Unknown map, empty mode list ("no restriction") or an unresolvable
+        /// modeId all answer <c>false</c>: a half-known map must keep the team layout.</remarks>
+        public static bool IsTeamlessMapScene(string sceneName)
+        {
+            if (string.IsNullOrEmpty(sceneName))
+            {
+                return false;
+            }
+
+            // Resources path is the catalog's documented home (GameCatalog summary).
+            var catalog = Resources.Load<GameCatalog>("GameCatalog");
+            MapDefinition map = catalog != null ? catalog.FindMap(sceneName) : null;
+            string[] modeIds = map != null ? map.SupportedModeIds : null;
+            if (modeIds == null || modeIds.Length == 0)
+            {
+                return false;
+            }
+
+            bool resolvedAny = false;
+            for (int i = 0; i < modeIds.Length; i++)
+            {
+                if (string.IsNullOrWhiteSpace(modeIds[i]))
+                {
+                    continue;
+                }
+
+                ModeDefinition mode = catalog.FindMode(modeIds[i]);
+                if (mode == null || mode.TeamMode != ModeTeamMode.None)
+                {
+                    return false;
+                }
+
+                resolvedAny = true;
+            }
+
+            return resolvedAny;
         }
 
         /// <summary>Places one <c>VA_FloorPortal</c> per extra floor at <c>(2k, 3k, 0)</c>. Skipped

@@ -91,8 +91,12 @@ namespace VortexArena.Core.Editor
                 ti.sRGBTexture = kind == "A";
                 ti.alphaSource = kind == "A" && !alpha.Contains(file) ? TextureImporterAlphaSource.None
                                                                       : TextureImporterAlphaSource.FromInput;
-                ti.alphaIsTransparency = kind == "A" && alpha.Contains(file);
+                bool clipped = kind == "A" && alpha.Contains(file);
+                ti.alphaIsTransparency = clipped;
                 ti.mipmapEnabled = true;
+                // Cut-out cards: without coverage preservation distant mips fade the foliage away.
+                ti.mipMapsPreserveCoverage = clipped;
+                ti.alphaTestReferenceValue = 0.5f;                                 // matches _Cutoff
                 ti.wrapMode = TextureWrapMode.Repeat;
                 ti.maxTextureSize = 1024;
                 // Quest: ASTC 6x6, normals 5x5 (they band at 6x6)

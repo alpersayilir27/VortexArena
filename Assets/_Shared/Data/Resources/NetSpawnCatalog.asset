@@ -37,3 +37,5 @@ MonoBehaviour:
     prefab: {fileID: 951370016390284948, guid: c697235545c57d547969d7603a1fe054, type: 3}
   - id: customer
     prefab: {fileID: 749250250015823784, guid: b42a15d47f0bdb848934ae8ac643de06, type: 3}
+  - id: zombie
+    prefab: {fileID: 4419276076395750198, guid: 5e13ada24b5917848a13f28e273bae97, type: 3}

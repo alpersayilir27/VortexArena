@@ -360,6 +360,47 @@ public sealed class WorldObjectTable
         return released;
     }
 
+    /// <summary>Server-assigned ownership (§10.10): writes <paramref name="playerId"/> as the owner of
+    /// an object that is NOT in a hand, keeping it in the flight window (<c>Awake</c> set, <c>Held</c>
+    /// clear). <paramref name="playerId"/> <c>0</c> leaves the object ownerless and asleep. False = no
+    /// such object, the object is HELD, or the owner is unchanged.</summary>
+    /// <remarks>⚠️ Separate from <see cref="TryGrabLocked"/> on purpose: that path answers a REQUEST
+    /// (grab rules, catching, hand bits), this one is the server handing a driven object to the next
+    /// host. A HELD object is refused — stealing out of a hand has no path (§10.10).</remarks>
+    public bool TrySetOwnerLocked(int netId, int playerId, out NetObjectEntry entry)
+    {
+        if (!_byNetId.TryGetValue(netId, out var found))
+        {
+            entry = null!;
+            return false;
+        }
+
+        entry = found;
+        if ((found.Flags & ArenaProtocol.OBJECT_FLAG_HELD) != 0) return false;
+        if (found.Owner == playerId) return false;
+
+        found.Owner = playerId;
+        if (playerId == 0) found.Flags &= ~ArenaProtocol.OBJECT_FLAG_AWAKE;
+        else found.Flags |= ArenaProtocol.OBJECT_FLAG_AWAKE;
+        return true;
+    }
+
+    /// <summary>netIds currently owned by one player, ascending — the handover list of a lost host
+    /// (§10.10). Empty when the player owns nothing.</summary>
+    public List<int> ListOwnedByLocked(int playerId)
+    {
+        var ids = new List<int>();
+        if (playerId == 0) return ids;
+
+        foreach (var entry in _byNetId.Values)
+        {
+            if (entry.Owner == playerId) ids.Add(entry.NetId);
+        }
+
+        ids.Sort();
+        return ids;
+    }
+
     /// <summary>Objects that currently have an owner — the source the director mirrors into its
     /// lock-free ownership map after a rebuild/reset.</summary>
     public IEnumerable<NetObjectEntry> OwnedLocked()

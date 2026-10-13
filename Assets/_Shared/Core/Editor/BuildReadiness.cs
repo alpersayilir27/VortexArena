@@ -1,5 +1,9 @@
 using System;
 using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.SceneManagement;
+using VortexArena.Core.Arena;
+using Object = UnityEngine.Object;
 
 namespace VortexArena.Core.Editor
 {
@@ -74,6 +78,18 @@ namespace VortexArena.Core.Editor
                     "Eksik kalırsa harita ne admin seçicisinde ne maps.json'da olur; silinmiş arenanın " +
                     "kalıntı satırı ise APK build'ini 'diskte olmayan sahne' diye iptal ettirir. " +
                     "Hepsini Çalıştır bunu koşar."),
+
+                Check(
+                    "Takımsız harita ↔ taban bölgesi",
+                    AreTeamlessBasesClean,
+                    null,
+                    null,
+                    "AKTİF sahne: desteklenen modlarının hepsi takımsız olan haritada BaseZone " +
+                    "bulunmamalı. NE ZAMAN: bir sahneyi takımsız moda (zombi gibi) alınca ya da " +
+                    "takımlı bir arenayı takımsıza çevirince. ✗ ise insan adımıdır: şerit sahneden " +
+                    "ELLE silinir — takımsız modda BaseZoneVisibility onu yalnız gizler, yani " +
+                    "sahada hiç hata vermez, ama canlanma kuralı olmayan bir bölge sahnede " +
+                    "yaşamaya devam eder."),
 
                 Check(
                     "Silah kiti",
@@ -172,6 +188,32 @@ namespace VortexArena.Core.Editor
             };
 
             return rows;
+        }
+
+        /// <summary>Clean when the active scene's map is not team-less, or is team-less and carries no
+        /// <see cref="BaseZone"/>.</summary>
+        /// <remarks>"Is the map team-less" is asked from <see cref="TemplateBasicsLoader"/> — the tool
+        /// that also skips placing the zones, so both sides cannot drift.</remarks>
+        private static bool AreTeamlessBasesClean(out string detail)
+        {
+            Scene scene = SceneManager.GetActiveScene();
+            if (!scene.IsValid() || !TemplateBasicsLoader.IsTeamlessMapScene(scene.name))
+            {
+                detail = "aktif sahne takımsız harita değil — denetim geçerli değil.";
+                return true;
+            }
+
+            BaseZone[] zones =
+                Object.FindObjectsByType<BaseZone>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            if (zones.Length == 0)
+            {
+                detail = "takımsız haritada taban bölgesi yok.";
+                return true;
+            }
+
+            detail = $"Takımsız haritada taban bölgesi var (×{zones.Length}, ilki '{zones[0].name}') — " +
+                     "sil (zombi gibi takımsız modlarda taban yoktur).";
+            return false;
         }
 
         /// <summary>Runs a check; on exception the row becomes ✗ with the message as detail.</summary>

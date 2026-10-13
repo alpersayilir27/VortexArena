@@ -1,0 +1,19 @@
+{
+    "name": "VortexArena.Modes.Zombie",
+    "rootNamespace": "VortexArena.Modes.Zombie",
+    "references": [
+        "VortexArena.Core",
+        "VortexArena.Net",
+        "VortexArena.Protocol",
+        "Unity.TextMeshPro"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

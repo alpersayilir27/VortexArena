@@ -291,6 +291,14 @@ namespace VortexArena.Protocol
         /// release point. Matches the clients' own staleness windows (1 s), so nothing snaps back first.</para></summary>
         public const int OBJECT_OWNER_SILENCE_MS = 1000;
 
+        /// <summary>Pose silence (channel <c>0x09</c>) after which a SERVER-ASSIGNED object host (an
+        /// admin, §10.10) counts as silent: its objects move to the next admin in line.
+        /// <para>⚠️ <see cref="OBJECT_OWNER_SILENCE_MS"/> cannot be reused here — it measures
+        /// <c>0x01</c>, which an admin never sends (§2), so every server-driven object would be
+        /// grounded on the first sweep. Measured on the object pose channel instead, which gives
+        /// 30 lost packets of slack at <see cref="OBJECT_POSE_RATE_HZ"/>.</para></summary>
+        public const int OBJECT_HOST_SILENCE_MS = 1500;
+
         /// <summary>How long the client waits for an optimistic <c>object_grab</c> to be confirmed by an
         /// <c>object_state</c> naming it owner AND held (§10.10); after that the local grab is undone.
         /// <para>⚠️ A rejection is silent and travels on no other message — without this clock a refused
@@ -503,6 +511,11 @@ namespace VortexArena.Protocol
         /// the kill feed can tell it apart from a real kill. ⚠️ <c>weaponId</c> is a free, unvalidated
         /// label (§10.3); this constant only keeps both ends writing the same string.</summary>
         public const string WEAPON_ID_OBSTACLE = "obstacle";
+
+        /// <summary><c>kill_event.weaponId</c> tag for a death caused by a server-driven network object
+        /// (§10.5 <c>zombie</c>; <c>killerId</c> is 0, nobody's kills increase). Same free-label rule as
+        /// <see cref="WEAPON_ID_OBSTACLE"/> — the constant only keeps both ends on one string.</summary>
+        public const string WEAPON_ID_ZOMBIE = "zombie";
 
         // ---- Violation feed (§5.3/§10.9): `kind` values. Carried as a string; an unknown kind is
         // shown raw rather than dropped. ----

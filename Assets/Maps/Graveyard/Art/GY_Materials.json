@@ -1,0 +1,207 @@
+{
+  "importHints": {
+    "baseMap": "ASTC 6x6, sRGB",
+    "normalMap": "ASTC 5x5, Normal map",
+    "maskMap": "ASTC 6x6, Linear",
+    "maxSize": 1024
+  },
+  "materials": {
+    "GY_A_Branches": {
+      "baseMap": "T_GY_A_Branches_A.png",
+      "normalMap": "T_GY_A_Branches_N.png",
+      "maskMap": "T_GY_A_Branches_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "polyhaven:dry_branches_medium_01"
+    },
+    "GY_A_Candle": {
+      "baseMap": "T_GY_A_Candle_A.png",
+      "normalMap": "T_GY_A_Candle_N.png",
+      "maskMap": "T_GY_A_Candle_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "polyhaven:wooden_candlestick"
+    },
+    "GY_A_Fern": {
+      "baseMap": "T_GY_A_Fern_A.png",
+      "normalMap": "T_GY_A_Fern_N.png",
+      "maskMap": "T_GY_A_Fern_M.png",
+      "alphaClip": true,
+      "twoSided": true,
+      "emission": null,
+      "source": "polyhaven:fern_02"
+    },
+    "GY_A_RockMossA": {
+      "baseMap": "T_GY_A_RockMossA_A.png",
+      "normalMap": "T_GY_A_RockMossA_N.png",
+      "maskMap": "T_GY_A_RockMossA_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "polyhaven:rock_moss_set_01"
+    },
+    "GY_A_RockMossB": {
+      "baseMap": "T_GY_A_RockMossB_A.png",
+      "normalMap": "T_GY_A_RockMossB_N.png",
+      "maskMap": "T_GY_A_RockMossB_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "polyhaven:rock_moss_set_02"
+    },
+    "GY_A_Statue": {
+      "baseMap": "T_GY_A_Statue_A.png",
+      "normalMap": "T_GY_A_Statue_N.png",
+      "maskMap": "T_GY_A_Statue_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "polyhaven:gothic_statue"
+    },
+    "GY_A_StreetLamp": {
+      "baseMap": "T_GY_A_StreetLamp_A.png",
+      "normalMap": "T_GY_A_StreetLamp_N.png",
+      "maskMap": "T_GY_A_StreetLamp_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "polyhaven:street_lamp_02"
+    },
+    "GY_A_Stump": {
+      "baseMap": "T_GY_A_Stump_A.png",
+      "normalMap": "T_GY_A_Stump_N.png",
+      "maskMap": "T_GY_A_Stump_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "polyhaven:tree_stump_01"
+    },
+    "GY_Bark": {
+      "baseMap": "T_GY_Bark_A.png",
+      "normalMap": "T_GY_Bark_N.png",
+      "maskMap": "T_GY_Bark_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "gy_textures"
+    },
+    "GY_CastIron": {
+      "baseMap": "T_GY_CastIron_A.png",
+      "normalMap": null,
+      "maskMap": "T_GY_CastIron_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "gy_textures"
+    },
+    "GY_Cobble": {
+      "baseMap": "T_GY_Cobble_A.png",
+      "normalMap": "T_GY_Cobble_N.png",
+      "maskMap": "T_GY_Cobble_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "gy_textures"
+    },
+    "GY_DoorDark": {
+      "baseMap": "T_GY_DoorDark_A.png",
+      "normalMap": null,
+      "maskMap": "T_GY_DoorDark_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "gy_textures"
+    },
+    "GY_FirCard": {
+      "baseMap": "T_GY_FirCard_A.png",
+      "normalMap": null,
+      "maskMap": "T_GY_FirCard_M.png",
+      "alphaClip": true,
+      "twoSided": true,
+      "emission": null,
+      "source": "polyhaven:fir_sapling (impostor)"
+    },
+    "GY_Grave": {
+      "baseMap": "T_GY_Grave_A.png",
+      "normalMap": "T_GY_Grave_N.png",
+      "maskMap": "T_GY_Grave_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "gy_textures"
+    },
+    "GY_LampGlow": {
+      "baseMap": "T_GY_LampGlow_A.png",
+      "normalMap": null,
+      "maskMap": "T_GY_LampGlow_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": {
+        "fromBase": false,
+        "intensity": 1.0,
+        "color": [
+          1.0,
+          0.62,
+          0.25
+        ]
+      },
+      "source": "gy_textures"
+    },
+    "GY_Masonry": {
+      "baseMap": "T_GY_Masonry_A.png",
+      "normalMap": "T_GY_Masonry_N.png",
+      "maskMap": "T_GY_Masonry_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "gy_textures"
+    },
+    "GY_Mud": {
+      "baseMap": "T_GY_Mud_A.png",
+      "normalMap": "T_GY_Mud_N.png",
+      "maskMap": "T_GY_Mud_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "gy_textures"
+    },
+    "GY_Path": {
+      "baseMap": "T_GY_Path_A.png",
+      "normalMap": "T_GY_Path_N.png",
+      "maskMap": "T_GY_Path_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "gy_textures"
+    },
+    "GY_Roof": {
+      "baseMap": "T_GY_Roof_A.png",
+      "normalMap": "T_GY_Roof_N.png",
+      "maskMap": "T_GY_Roof_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "gy_textures"
+    },
+    "GY_Sandstone": {
+      "baseMap": "T_GY_Sandstone_A.png",
+      "normalMap": "T_GY_Sandstone_N.png",
+      "maskMap": "T_GY_Sandstone_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "gy_textures"
+    },
+    "GY_StoneWall": {
+      "baseMap": "T_GY_StoneWall_A.png",
+      "normalMap": "T_GY_StoneWall_N.png",
+      "maskMap": "T_GY_StoneWall_M.png",
+      "alphaClip": false,
+      "twoSided": false,
+      "emission": null,
+      "source": "gy_textures"
+    }
+  }
+}

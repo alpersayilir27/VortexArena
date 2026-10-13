@@ -610,6 +610,11 @@ namespace VortexArena.Core.UI
             {
                 line = "Engelde kaldın";
             }
+            else if (string.Equals(_deathWeaponId, ArenaProtocol.WEAPON_ID_ZOMBIE))
+            {
+                // Killer is a network OBJECT, so killerId is 0 (§10.10) — "Öldün" would hide what hit you.
+                line = "Zombiler seni yakaladı";
+            }
             else
             {
                 line = "Öldün";

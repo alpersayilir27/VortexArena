@@ -165,6 +165,36 @@ düşüş yoludur** ve düzeni sabittir; oraya bir bölüm eklemek bu sefer onla
 pozunun düşmesi bilinçlidir: kaybolan şey objenin son pozu değil hareketinin akıcılığıdır —
 dinlenme pozu güvenilir WS kanalından gelir.
 
+### ⛔ Sunucu-sürülen ağ nesnesine `NetObjectPoseSender` takma
+
+Beyni sahipte olan bir nesnenin (zombi) prefabına o bileşen **konmaz**: işi "durmayı ölçüp
+`object_rest` yollamak"tır ve `object_rest` **sahipliği kapatır**. Hedefinin önünde bir saniye
+duran yaratık kendi beynini geri verir, sunucu `Awake`'i düşürür ve yaratık maçın kalanında
+kinematik olarak donar — hata vermez, "zombi takıldı" diye görünür. Poz akışı o nesnenin
+beyninin kendi işidir, dinlenme sözleşmesi olmadan (`ZombieBrain`).
+
+### ⛔ Sürülen nesnenin beynini oyuncu istemcisine ya da sunucuya yazma
+
+İkisi de ayrı sebeplerle kapalıdır: **sunucuda** NavMesh, collider ve metre yoktur (hareket
+yazılamaz), **oyuncu istemcisinde** ise yaratık o oyuncuya göre davranır (kopan oyuncu dalgayı
+yanında götürür). Tek meşru makine **nesne sahibi admindir** — seçimi sunucu yapar, istemci
+istemez. Sunucuda duran şey ayrıca da: dalga makinesi, hasar sayısı, can, skor ve bitiş koşulu;
+istemcide duran şey yürüme, hedef seçme ve vuruş anı. Hasar sayısını olaya **koymak** da bu
+kuralın ihlalidir: olay yalnız "vurdum, hedef şu" der, sayıyı sunucu tablodan okur.
+
+### ⛔ Nesne sahibi admini `playerId` ile hatırlama
+
+Admin kaydı kopuşta silinir ve **aynı numara sıradaki admine verilebilir**. "Sahibi şu id'ydi"
+diye tutulan karar yeni admini eskisi sanar: düşürülmüş sahibin bekleme cezası yeni bağlanana
+işler, nesneler kimsenin sürmediği hâlde "sahipli" görünür. Kalıcı olarak tutulacak şey **kayıt
+nesnesinin kendisi** + bağlanma anıdır.
+
+### ⛔ `TryResetObjectsForMode`'u dinamik nesne üreten moddan çağırma
+
+O çağrı **tüm dinamik nesneleri siler**: kendi dalgasını/müşterisini doğuran mod onu çağırırsa
+sahadaki her şeyini yok eder. Tur başında sahneyi temizlemek isteyen mod yalnız **kendi**
+nesnelerini `DespawnObject` ile kaldırır.
+
 ### ⛔ İskelet tel düzenini `SkeletonWire.FORMAT` ve `PROTOCOL_VERSION` artırmadan değiştirme
 
 `SkeletonWire.JOINT_INDICES`'e eklem eklemek, sırasını değiştirmek ya da blob düzenine alan eklemek
@@ -414,6 +444,13 @@ Bileşeni kapatmak görsel taban şeridini ekranda bırakır. Gizlemen gerekiyor
 İkinci yüzü: **kapalı bir `BaseZone` canlanma için açık sayılmaz.** `Update` koşmadığı için
 `IsPlayerInside` donar — açık sayılsaydı oyuncu bölgeye girse de hiç canlanamazdı (sunucuda
 kendiliğinden işleyen bir emniyet ağı yok; geriye kalan tek çare operatörün elle canlandırmasıdır).
+
+### ⛔ Takımsız haritaya taban bölgesi koyma
+
+Desteklenen modlarının hepsi takımsız olan haritada (zombi gibi) `BaseZone` **yoktur** — "gizli dursun"
+diye bırakılmaz. Takım seçimi, canlanma ve şerit görünürlüğü takım kipine bakar; ama istemci mod bilgisini
+almadan önce görünürlük lobi kuralına düşer ve şerit bir an görünür, oyuncu da anlamı olmayan bir taban
+görür. Template temel yükleyicisi böyle haritada taban koymaz, Build Readiness varsa ✗ verir.
 
 ### ⛔ Silah panosu prefabını `WeaponCanvas` bileşeni olmadan yapma, sahnedeki örneği unpack etme
 
@@ -1177,6 +1214,13 @@ Sürümlü admin build'i numarayı yalnız `bundleVersion`'a ve çıktı klasör
 **temel ad** kalır. Windows `PlayerPrefs`'i `productName` altında saklar ve operatör ayarları
 (ses çıkışı, tercihler, müzik klasörü) oradadır — sürüm başına değişen bir ad her yeni sürümde
 ayarları sıfırlardı. `ProjectSettings`'te kalmış bir `" v<N>"` eki de build'de temel ada çevrilir.
+
+### ⛔ Beyin taşıyan admin derlemesini `Run In Background` kapalı bırakma
+
+Masaüstü oynatıcısı odak kaybında döngüyü durdurur: `Update` durunca sürülen nesnelerin poz akışı
+kesilir, yaratıklar yerinde donar ve sunucu bunu "sahip sessiz" sayıp sahipliği devreder. Sahada
+belirti "operatör başka pencereye geçince zombiler duruyor"dur. Nesne sürülen mod oynanacaksa admin
+derlemesi bu ayar **açık** kurulur.
 
 ### ⛔ Sunucu verisini sürüm klasörüne koyma
 

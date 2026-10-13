@@ -1,0 +1,305 @@
+{
+  "note": "point lights (Baked in Unity); kind = Lantern | Lamp | Candle",
+  "lights": [
+    {
+      "name": "GY_Lantern_0",
+      "kind": "Lantern",
+      "position": [
+        -1.38,
+        3.03,
+        -5.25
+      ],
+      "color": [
+        1.0,
+        0.62,
+        0.3
+      ],
+      "previewWatts": 25.0
+    },
+    {
+      "name": "GY_Lantern_1",
+      "kind": "Lantern",
+      "position": [
+        1.38,
+        3.03,
+        -5.25
+      ],
+      "color": [
+        1.0,
+        0.62,
+        0.3
+      ],
+      "previewWatts": 25.0
+    },
+    {
+      "name": "GY_Lantern_2",
+      "kind": "Lantern",
+      "position": [
+        5.25,
+        3.03,
+        -1.38
+      ],
+      "color": [
+        1.0,
+        0.62,
+        0.3
+      ],
+      "previewWatts": 25.0
+    },
+    {
+      "name": "GY_Lantern_3",
+      "kind": "Lantern",
+      "position": [
+        5.25,
+        3.03,
+        1.38
+      ],
+      "color": [
+        1.0,
+        0.62,
+        0.3
+      ],
+      "previewWatts": 25.0
+    },
+    {
+      "name": "GY_Lantern_4",
+      "kind": "Lantern",
+      "position": [
+        1.38,
+        3.03,
+        5.25
+      ],
+      "color": [
+        1.0,
+        0.62,
+        0.3
+      ],
+      "previewWatts": 25.0
+    },
+    {
+      "name": "GY_Lantern_5",
+      "kind": "Lantern",
+      "position": [
+        -1.38,
+        3.03,
+        5.25
+      ],
+      "color": [
+        1.0,
+        0.62,
+        0.3
+      ],
+      "previewWatts": 25.0
+    },
+    {
+      "name": "GY_Lantern_6",
+      "kind": "Lantern",
+      "position": [
+        -5.25,
+        3.03,
+        1.38
+      ],
+      "color": [
+        1.0,
+        0.62,
+        0.3
+      ],
+      "previewWatts": 25.0
+    },
+    {
+      "name": "GY_Lantern_7",
+      "kind": "Lantern",
+      "position": [
+        -5.25,
+        3.03,
+        -1.38
+      ],
+      "color": [
+        1.0,
+        0.62,
+        0.3
+      ],
+      "previewWatts": 25.0
+    },
+    {
+      "name": "GY_Candle_0",
+      "kind": "Candle",
+      "position": [
+        7.8052,
+        0.3132,
+        -6.8562
+      ],
+      "color": [
+        1.0,
+        0.55,
+        0.22
+      ],
+      "previewWatts": 3.0
+    },
+    {
+      "name": "GY_Candle_1",
+      "kind": "Candle",
+      "position": [
+        -6.5412,
+        0.322,
+        -9.4355
+      ],
+      "color": [
+        1.0,
+        0.55,
+        0.22
+      ],
+      "previewWatts": 3.0
+    },
+    {
+      "name": "GY_Candle_2",
+      "kind": "Candle",
+      "position": [
+        2.3777,
+        0.2842,
+        -9.0897
+      ],
+      "color": [
+        1.0,
+        0.55,
+        0.22
+      ],
+      "previewWatts": 3.0
+    },
+    {
+      "name": "GY_Candle_3",
+      "kind": "Candle",
+      "position": [
+        9.3379,
+        0.2083,
+        -4.3968
+      ],
+      "color": [
+        1.0,
+        0.55,
+        0.22
+      ],
+      "previewWatts": 3.0
+    },
+    {
+      "name": "GY_Candle_4",
+      "kind": "Candle",
+      "position": [
+        -5.7139,
+        0.6873,
+        7.3685
+      ],
+      "color": [
+        1.0,
+        0.55,
+        0.22
+      ],
+      "previewWatts": 3.0
+    },
+    {
+      "name": "GY_Candle_5",
+      "kind": "Candle",
+      "position": [
+        4.1012,
+        0.2666,
+        9.2169
+      ],
+      "color": [
+        1.0,
+        0.55,
+        0.22
+      ],
+      "previewWatts": 3.0
+    },
+    {
+      "name": "GY_Candle_6",
+      "kind": "Candle",
+      "position": [
+        2.4396,
+        0.2477,
+        9.1516
+      ],
+      "color": [
+        1.0,
+        0.55,
+        0.22
+      ],
+      "previewWatts": 3.0
+    },
+    {
+      "name": "GY_Candle_7",
+      "kind": "Candle",
+      "position": [
+        -7.4983,
+        0.7093,
+        4.4003
+      ],
+      "color": [
+        1.0,
+        0.55,
+        0.22
+      ],
+      "previewWatts": 3.0
+    },
+    {
+      "name": "GY_Lamp_0",
+      "kind": "Lamp",
+      "position": [
+        13.25,
+        3.2589,
+        -1.302
+      ],
+      "color": [
+        1.0,
+        0.6,
+        0.28
+      ],
+      "previewWatts": 60.0
+    },
+    {
+      "name": "GY_Lamp_1",
+      "kind": "Lamp",
+      "position": [
+        -13.25,
+        3.2728,
+        1.302
+      ],
+      "color": [
+        1.0,
+        0.6,
+        0.28
+      ],
+      "previewWatts": 60.0
+    },
+    {
+      "name": "GY_Lamp_2",
+      "kind": "Lamp",
+      "position": [
+        1.302,
+        3.2535,
+        13.25
+      ],
+      "color": [
+        1.0,
+        0.6,
+        0.28
+      ],
+      "previewWatts": 60.0
+    },
+    {
+      "name": "GY_Lamp_3",
+      "kind": "Lamp",
+      "position": [
+        -1.302,
+        3.2641,
+        -13.25
+      ],
+      "color": [
+        1.0,
+        0.6,
+        0.28
+      ],
+      "previewWatts": 60.0
+    }
+  ]
+}

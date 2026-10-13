@@ -140,6 +140,11 @@ namespace VortexArena.Core.Arena
         /// of it plus the team mode.</summary>
         private void TryClaimTeam()
         {
+            // Same gate as BaseZoneVisibility.ShouldShow: in a team-less mode the strip means
+            // nothing, and a leftover zone would silently ask the server for a team.
+            if (ModeSelection.HasValue ? ModeSelection.IsTeamless : ModeRuntime.IsTeamless)
+                return;
+
             if (team == Team.Neutral || ArenaCombat.LocalTeam == team)
                 return;
 

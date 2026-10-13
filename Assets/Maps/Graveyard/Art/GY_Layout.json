@@ -1,0 +1,131 @@
+{
+  "target": "Map",
+  "gates": [
+    {
+      "side": "E",
+      "center": [
+        5.25,
+        0.0,
+        0.0
+      ],
+      "outward": [
+        1.0,
+        0.0,
+        -0.0
+      ]
+    },
+    {
+      "side": "W",
+      "center": [
+        -5.25,
+        0.0,
+        0.0
+      ],
+      "outward": [
+        -1.0,
+        0.0,
+        -0.0
+      ]
+    },
+    {
+      "side": "N",
+      "center": [
+        0.0,
+        0.0,
+        5.25
+      ],
+      "outward": [
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "side": "S",
+      "center": [
+        0.0,
+        0.0,
+        -5.25
+      ],
+      "outward": [
+        0.0,
+        0.0,
+        -1.0
+      ]
+    }
+  ],
+  "zombieSpawns": [
+    {
+      "name": "ZombieSpawn_E1",
+      "position": [
+        18.45,
+        -0.03,
+        0.0
+      ],
+      "yaw": -90.0
+    },
+    {
+      "name": "ZombieSpawn_E2",
+      "position": [
+        17.75,
+        -0.007,
+        -2.2
+      ],
+      "yaw": -90.0
+    },
+    {
+      "name": "ZombieSpawn_W1",
+      "position": [
+        -18.45,
+        -0.03,
+        0.0
+      ],
+      "yaw": 90.0
+    },
+    {
+      "name": "ZombieSpawn_W2",
+      "position": [
+        -17.75,
+        0.026,
+        2.2
+      ],
+      "yaw": 90.0
+    },
+    {
+      "name": "ZombieSpawn_N1",
+      "position": [
+        0.0,
+        -0.03,
+        18.45
+      ],
+      "yaw": -180.0
+    },
+    {
+      "name": "ZombieSpawn_N2",
+      "position": [
+        2.2,
+        -0.019,
+        17.75
+      ],
+      "yaw": -180.0
+    },
+    {
+      "name": "ZombieSpawn_S1",
+      "position": [
+        0.0,
+        -0.03,
+        -18.45
+      ],
+      "yaw": -0.0
+    },
+    {
+      "name": "ZombieSpawn_S2",
+      "position": [
+        -2.2,
+        -0.033,
+        -17.75
+      ],
+      "yaw": -0.0
+    }
+  ]
+}

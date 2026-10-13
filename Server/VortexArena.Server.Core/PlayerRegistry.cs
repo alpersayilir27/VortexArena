@@ -192,6 +192,10 @@ public sealed class PlayerRegistry : IDisposable
             state.BodyScale = 0f;
             state.Connection = PlayerConnection.Connected;
             state.DisconnectedAt = default;
+            // §10.10: restamped even when an EXISTING record is reused, so a returning admin joins the
+            // object host queue at the END instead of taking the host back from whoever took over.
+            state.ConnectedAt = DateTime.UtcNow;
+            state.ObjectHostDemotedAt = DateTime.MinValue;
             state.LastSeen = DateTime.UtcNow;
             state.Socket = connection;
             // Every welcome carries a new udpToken; a stale UDP endpoint becomes invalid (the client

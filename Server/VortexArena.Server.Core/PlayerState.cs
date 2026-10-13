@@ -36,6 +36,21 @@ public sealed class PlayerState
     /// meaningful while <see cref="PlayerConnection.Reconnecting"/>.</summary>
     public DateTime DisconnectedAt { get; set; }
 
+    /// <summary>When this session connected (UTC) — restamped on EVERY <c>hello</c>, so a returning
+    /// device goes to the END of the queue.</summary>
+    /// <remarks>Its only consumer is the object host choice (§10.10 "oldest connected admin"). ⚠️ The
+    /// queue cannot be keyed on <c>playerId</c>: an admin record is deleted on disconnect (§2) and its
+    /// id returns to the pool, so a NEW admin can arrive carrying the id of the one that just left.</remarks>
+    public DateTime ConnectedAt { get; set; }
+
+    /// <summary>When this admin was dropped from the object host queue for going silent (§10.10);
+    /// <see cref="DateTime.MinValue"/> = never.</summary>
+    /// <remarks>⚠️ The demotion must OUTLAST the silence, otherwise a frozen single admin would be
+    /// re-elected on the next tick and lose the host again 1.5 s later, ten times a second. It is
+    /// cleared by evidence of life, not by a timer: the admin is eligible again once a <c>status</c>
+    /// heartbeat lands (<see cref="LastSeen"/> passes this stamp).</remarks>
+    public DateTime ObjectHostDemotedAt { get; set; } = DateTime.MinValue;
+
     /// <summary>The single "is online" answer: every match gate (loading, hit, revive, snapshot) reads
     /// this, so <c>reconnecting</c> and <c>left</c> records enter none of them.</summary>
     public bool IsConnected => Connection == PlayerConnection.Connected;

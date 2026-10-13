@@ -93,6 +93,11 @@ public sealed class LobbyService
         // empty in practice.
         _selectedSceneName = director.LobbyScene;
         _selectedModeId = director.LobbyScene.Length > 0 ? ArenaProtocol.LOBBY_MODE_ID : "";
+        // §10.10: the object host is chosen on the match tick, so the only way admin_state can follow it
+        // is a callback — the director must not reach into this service (lock order _gate → lobby).
+        _director.ObjectHostChanged = hostId => _ = BroadcastAdminStateAsync(hostId == 0
+            ? "nesne sahibi yok — sunucu-sürülen nesneler bekliyor"
+            : $"nesne sahibi: {NameOfPlayerId(hostId)}");
         _registry.Changed += OnRegistryChanged;
     }
 
@@ -1052,6 +1057,11 @@ public sealed class LobbyService
         lock (_selectionGate) return _calibrationMode;
     }
 
+    /// <summary>Readable name for a <c>playerId</c>, for a notice the server itself produces (no admin
+    /// pressed a button); the bare id when the record is already gone.</summary>
+    private string NameOfPlayerId(int playerId) =>
+        _registry.TryGetByPlayerId(playerId, out var state) ? state.Name : $"#{playerId}";
+
     /// <summary>Notice line: "<admin name>: <action>" — shown in every admin's status line.</summary>
     private static string Notice(ClientConnection connection, string action) =>
         $"{connection.State?.Name ?? "Admin"}: {action}";
@@ -1223,6 +1233,9 @@ public sealed class LobbyService
                 // Same class as friendly fire (§10.6): effective state, not a selection, bypassing
                 // the selection lock. Players do not get it here — they receive it once in welcome.
                 calibrationMode = _calibrationMode,
+                // §10.10: who drives the server-assigned objects right now; 0 = nobody. Same class as
+                // friendly fire — effective state, not a selection, so it bypasses the selection lock.
+                objectHostId = _director.ObjectHostId,
                 notice = notice,
                 adminCount = _registry.ConnectedAdminCount(),
                 // The venue is fixed for the session (chosen at startup) but travels with

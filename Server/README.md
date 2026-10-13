@@ -477,6 +477,7 @@ alanları roster ile taşınıyor ve admin istatistik tablosunun sağlama noktas
 | `öldürme: Gözlük 03 → Gözlük 05 (ak47) — skor kırmızı 4 : mavi 2` | doğrulanmış öldürme |
 | `canlandı: Gözlük 05` | `revive_request` kabul edildi |
 | `maç sonu — kazanan: blue (kırmızı 12 : mavi 30)` | `match_end` yayınlandı |
+| `maç sonu (takımsız) — mod durumu 'w:3;left:0;next:0;over:lost'` | takımsız modda `match_end`; sonuç mod durumundadır, takım skoru basılmaz |
 
 Kabul edilen vuruşların hasar satırı **yazılmaz** (saniyede onlarca satır olurdu); yalnız
 öldürme + ret satırları loglanır. Ret satırları da atıcı başına **2 sn'de bir** yazılır (istemciler
@@ -514,6 +515,7 @@ aynı ortak kanaldan (`set_selection` → `admin_state`) gider, böylece iki ope
 | `tournament` | `Modes/TournamentMode.cs` | TDM varsayılanından farkı: **canlanma yok** (`Revive = None`, gecikme 0) + **yedek mermi sınırlı** (`LimitedReserve = true`; yedek sınırını yazan tek mod). Tur tabanlı takım elemesi | 120 sn (**turun** süresi) / 4 tur (operatör **sınırsız** da seçebilir) |
 | `burger` | `Modes/BurgerMode.cs` | **Oyun tipi `kids`** · silah yok (`Weapons = None`, dolayısıyla hasar yok) · takımsız ama **tek ekip** (`Allies = true`: kırmızı/mavi yok, herkes birbirinin takım arkadaşı) · canlanma yok (gecikme 0) · ortak skor (`PlayerAndShared`) · denge `server.json → burger` | 600 sn / **sınırsız** (limit yok) |
 | `mole` | `Modes/MoleMode.cs` | **Oyun tipi `kids`** · silah yok (`Weapons = None`, dolayısıyla hasar yok) · **iki takım + takım skoru** · canlanma yok (gecikme 0) · köstebek yoğunluğu harita başına (`maps.json → moleDensity`; yazılmamışsa modun varsayılanı) | 300 sn / **sınırsız** (limit yok) |
+| `zombie` | `Modes/ZombieMode.cs` | Takımsız ama **tek ekip** (`Allies = true`) · **silah kanvası** · ortak skor (`PlayerAndShared`) · **sabit durarak canlanma** (gecikme 0, 3 sn doğum koruması) · zombiler ağ nesnesi, beyni **nesne sahibi admin**'de | 300 sn / **sınırsız** (limit yok) |
 
 > `ffa` skoru `AddPlayerScore(killerId, 1)` ile yazar ve kazananı `TryGetLeader` ile bulur;
 > eşitlikte `TryGetLeader` false döndüğü için maç berabere biter. Oyuncusuz başlatılan maçta
@@ -561,6 +563,26 @@ aynı ortak kanaldan (`set_selection` → `admin_state`) gider, böylece iki ope
 > ⚠️ **Toplanmanın tıkandığı iki hâl de konsola yazılır:** sayılacak oyuncu kalmaması ve tur açma
 > isteğinin faz yüzünden reddedilmesi. İkisi de sahada "kimse bir şey yapmıyor" gibi görünür, tek
 > ayrımları o satırdır — bu yüzden ikisi de sessiz geçilmez.
+
+> **`zombie` kooperatif dalga savunmasıdır** ve tek "beyni sunucuda olmayan" moddur: zombi bir ağ
+> nesnesidir (`zombie`), canı ve kırılması sunucudadır ama **pozunu sahibi yayınlar** — ve sahip bir
+> oyuncu değil, **nesne sahibi admin**'dir (§10.10). Sunucu metre bilmez, NavMesh yoktur: dalga
+> makinesi, hasar tablosu, ortak skor ve bitiş koşulu sunucudadır; yürüme/hedef seçme/vuruş anı admin
+> derlemesindedir ve `object_event{attack}` ile bildirilir (hasarı mod yazar, olay taşımaz).
+> Doğum noktaları haritanın `zombie_spawn` nesneleridir, mod onları maç başında `ObjectIdsOfKind` ile
+> öğrenir — **haritada nokta yoksa konsola uyarı düşer ve zombi çıkmaz**. Maç ya süre dolunca
+> ("dayanıldı") ya bağlı tüm oyuncular aynı anda yerdeyken ("kayıp") biter; kazanan yoktur ve sonuç
+> ekranı `HoldsResultForOperator` ile operatörü bekler.
+
+> **Nesne sahibi admin = sunucu-atanmış sahiplik** (§10.10; `MatchDirector.ObjectHostId`, hepsine
+> `admin_state.objectHostId` ile duyurulur): sahip, **en eski bağlanmış** admindir. ⚠️ Admin `0x01`
+> poz yollamadığı için normal `OBJECT_OWNER_SILENCE_MS` sessizlik taraması onun nesnelerini
+> **düşürmez** — yerine `OBJECT_HOST_SILENCE_MS` ile *nesne pozu* sessizliğine bakılır ve sahiplik
+> sıradaki admine devredilir. Düşürülen admin kuyruğa ancak **kendi `status` atışı yeniden
+> gelince** döner, yoksa tek adminli kurulumda sahiplik 10 Hz'de titrerdi. Sahip hiç kalmazsa
+> sürülen nesnelerin sahibi `0` olur ve ilgili mod kendini duraklatır (`IGameMode.OnObjectHostChanged`);
+> sahip geri geldiğinde mod nesneleri yeni sahibe **yeniden atar** — devir yapılacak eski sahip
+> kaydı artık yoktur. Konsolda `[zombie]` satırları dalga akışını ve duraklamayı yazar.
 
 **Yeni mod eklemek:**
 1. `Modes/<Ad>Mode.cs` içinde `IGameMode` uygula.
