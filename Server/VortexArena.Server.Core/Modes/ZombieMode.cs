@@ -133,8 +133,8 @@ public sealed class ZombieMode : IGameMode
 
     public string ModeId => "zombie";
 
-    /// <summary>Armed co-op, so the quick-battle family (§11) — the kids maps carry no weapons.</summary>
-    public string GameType => "quickbattle";
+    /// <summary>Zombie family (§11): the <c>start_match</c> gate rejects a map from any other family.</summary>
+    public string GameType => MapTable.ZombieGameType;
 
     /// <summary>Co-op shape: no red/blue but everyone is an ally, so friendly fire and the teamkill
     /// penalty treat the whole squad as one team (§10.5). Revive is <c>standstill</c> — the player

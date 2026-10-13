@@ -137,7 +137,7 @@
     {
       "sceneName": "Graveyard_VortexAntep",
       "venue": "VortexAntep",
-      "gameType": "quickbattle",
+      "gameType": "zombie",
       "moleDensity": 1.5,
       "zombiePace": 1,
       "modes": ["zombie"],
@@ -383,7 +383,7 @@
     {
       "sceneName": "ZombieManor_VortexAntep",
       "venue": "VortexAntep",
-      "gameType": "quickbattle",
+      "gameType": "zombie",
       "moleDensity": 1.5,
       "zombiePace": 0.7,
       "modes": ["zombie"],

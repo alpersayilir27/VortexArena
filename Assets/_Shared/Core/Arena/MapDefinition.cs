@@ -14,7 +14,8 @@ namespace VortexArena.Core.Arena
         [Tooltip("Build listesindeki sahne adıyla BİREBİR aynı (katalog anahtarı).")]
         [SerializeField] private string sceneName = "";
         [SerializeField] private string displayName = "";
-        [Tooltip("Oyun tipi — operatörün ilk seçimi. Bugünkü tüm arenalar Hızlı Savaş'tır.")]
+        [Tooltip("Oyun tipi — operatörün ilk seçimi: Hızlı Savaş, Zombi ya da Çocuk Oyunları. " +
+                 "Harita yalnız kendi tipindeki modlara açıktır.")]
         // Default QuickBattle: existing assets resolve correctly WITHOUT being touched.
         [SerializeField] private GameType gameType = GameType.QuickBattle;
 

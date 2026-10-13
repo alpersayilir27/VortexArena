@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Arena.MapDefinition
   sceneName: ZombieManor_VortexAntep
   displayName: "Zombi Kona\u011F\u0131"
-  gameType: 0
+  gameType: 2
   supportedModeIds:
   - zombie
   moleDensity: 1.5

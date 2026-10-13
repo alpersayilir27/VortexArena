@@ -14,10 +14,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Arena.MapDefinition
   sceneName: Graveyard_VortexAntep
   displayName: "Mezarl\u0131k"
-  gameType: 0
+  gameType: 2
   supportedModeIds:
   - zombie
   moleDensity: 1.5
+  zombiePace: 1
   ambienceClip: {fileID: 0}
   ambienceVolume: 0.2
   musicClip: {fileID: 0}

@@ -976,7 +976,12 @@ sahibi admindir** (§3.6b "Sunucu-atanmış sahiplik"); örnek uygulama `Assets/
    taşımaz**, hasarı sunucu kendi tablosundan okur. Sunucunun doğrulaması ancak gevşek bir
    **sınır** olabilir (`MatchDirector.TryGetObjectToPlayerDistance`): iki poz da istemciden gelir
    ve bir interpolasyon tamponu geridedir.
-6. **Arena şartı:** sürülen nesne taşıyan mod bir arenaya eklenecekse o sahnede **NavMesh bake'i**
+6. ⚠️ **Harita Zombi ailesine yazılır:** zombi oynanacak sahnenin `MapDefinition`'ında **Oyun türü
+   = `Zombie`** ve `supportedModeIds = zombie` olur. Oyun türü atlanırsa harita admin panelindeki
+   **Zombi** listesinde hiç görünmez, görünse bile `start_match` tip uyuşmazlığından reddedilir —
+   belirti "maç başlamıyor"dur. Bir sahne başka ailenin modlarını taşıyamaz: oyun tipi tek
+   seçimdir.
+7. **Arena şartı:** sürülen nesne taşıyan mod bir arenaya eklenecekse o sahnede **NavMesh bake'i**
    olmalıdır ve bake nesnenin yürüyeceği **tüm** yolu kapsamalıdır (zombi oyun alanının dışından
    geldiği için dış yollar dahil). Bake yoksa beyin tek bir Türkçe uyarı yazar ve nesne olduğu
    yerde durur — hata vermez. İşletme sahnesi ayrı kopyadır → her işletme sahnesi kendi bake'ini alır.
@@ -1166,8 +1171,8 @@ ekranı → [13.2](#132-moda-özel-maç-sonu-ekranı) (boş bırakılırsa genel
 **Oyun tipi:** `ModeDefinition`'ın `gameType` alanı ile sunucudaki `IGameMode.GameType` **aynı
 aileyi** göstermelidir ([Sistem Özeti §3.10](../Sistem-Ozeti.md)). İkisinin de varsayılanı Hızlı
 Savaş'tır (`QuickBattle` / `"quickbattle"`), yani Hızlı Savaş modu yazarken ikisine de dokunmazsın;
-yalnız bir Çocuk Oyunları modu ikisini birden çevirir — SO'da `Kids`, mod sınıfında
-`public string GameType => "kids";`.
+Hızlı Savaş dışındaki aileler ikisini birden çevirir — SO'da `Kids` ya da `Zombie`, mod sınıfında
+`public string GameType => MapTable.KidsGameType;` ya da `MapTable.ZombieGameType`.
 
 > ⚠️ **İkisi tutmazsa mod o haritada BAŞLATILAMAZ:** `start_match` modun tipini haritanın
 > `gameType`'ıyla karşılaştırır ve uyuşmazsa reddeder. Sahadaki belirti yine "maç başlamıyor"dur,
@@ -1592,7 +1597,7 @@ o sahneye taban bölgesi koymaz (seçenek işaretli olsa da) ve sahneye elle de 
 canlanma kuralı modun kendisindedir, renkli şerit olmayan bir kuralı öğretir. Sahnede kalmış bir
 bölgeyi `Configure All Build Elements` penceresinin hazırlık listesi ✗ ile bildirir.
 
-⚠️ **Sahne `zombie` modunu taşıyacaksa 5. adıma NavMesh bake'i eklenir** — ve yalnız o zaman:
+⚠️ **Sahne bir zombi haritasıysa 5. adıma NavMesh bake'i eklenir** — ve yalnız o zaman:
 diğer modlarda NavMesh'i okuyan hiçbir şey yoktur, boşuna bake'lenen bir sahne yalnız build süresi
 ve dosya ekler. Bake, yaratığın yürüyeceği **tüm** yolu kapsamalıdır: zombiler oyun alanının
 **dışından** geldiği için dış yollar ve kapılar da dahil (gerekçe ve istemci davranışı §11.7).
@@ -1778,7 +1783,8 @@ araç penceresinden seç.
 
 ⚠️ **Aynı `MapDefinition`'daki `gameType` haritayı bir oyun ailesine bağlar**
 ([Sistem Özeti §3.10](../Sistem-Ozeti.md)): Hızlı Savaş arenasında alana **dokunulmaz** —
-varsayılanı `QuickBattle`'dır; yalnız Çocuk Oyunları haritasında `Kids` seçilir. Değer 6. adımda
+varsayılanı `QuickBattle`'dır; Çocuk Oyunları haritasında `Kids`, zombi haritasında `Zombie`
+seçilir. Değer 6. adımda
 `maps.json`'a `gameType` olarak girer, yani sonradan değiştirirsen o adım yeniden koşar. Yanlış tip
 hiçbir yerde hata vermez: harita yalnız kendi ailesinin modlarıyla başlatılabilir, diğerlerinde
 `start_match` reddedilir — sahadaki belirti **"maç başlamıyor"**dur.
@@ -1890,7 +1896,7 @@ değişimi **dikey sanal ofsettir** (`Docs/Sistem-Ozeti.md` §3.13, ağ tarafı
   tonunda bir **silüet** olarak düşer (ölü/kalibresiz hayaletten bilerek farklı görünür); gerçek
   gövde kendi katında vurulabilir kalır.
 - Sunucuda portal, sayaç ya da kilit **yoktur**: sunucu yalnız oyuncunun katını defter olarak tutar.
-- **Harita `zombie` modunu da taşıyacaksa** NavMesh collider'dan bake'lenir, her kat kendi döşeme
+- **Harita bir zombi haritasıysa** (oyun tipi `Zombie`) NavMesh collider'dan bake'lenir, her kat kendi döşeme
   kenarlarında `zombie_spawn` taşır ve zemin kata dışarıdan bir yaklaşma koridoru girer (§11.7).
   Zombi **yalnız kendi katındaki** oyuncuyu kovalar ve kat portalı kullanamaz — katlar arası takip
   yalnız dolu kattaki doğum noktasına ışınlanmayla olur, bu yüzden noktasız kat zombisiz kalır.

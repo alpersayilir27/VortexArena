@@ -23,7 +23,8 @@ namespace VortexArena.Core
         [Tooltip("Protokol anahtarı — sunucudaki IGameMode.ModeId ile birebir aynı.")]
         [SerializeField] private string modeId = "";
         [SerializeField] private string displayName = "";
-        [Tooltip("Oyun tipi — operatörün ilk seçimi. Bugünkü tüm arenalar Hızlı Savaş'tır.")]
+        [Tooltip("Oyun tipi — operatörün ilk seçimi: Hızlı Savaş, Zombi ya da Çocuk Oyunları. " +
+                 "Modun tipi, oynanacağı haritanın tipiyle aynı olmalıdır.")]
         // Default QuickBattle: existing assets resolve correctly WITHOUT being touched.
         [SerializeField] private GameType gameType = GameType.QuickBattle;
         [Tooltip("Bu tanım bir MAÇ modu değil, LOBİ profilidir (§10.7): sunucuda IGameMode " +

@@ -910,12 +910,21 @@ maçı bitirmenin yolu **İPTAL**'dir (ikisi de aynı işi yapar).
 farklı/eski sürüm var. Sebep launcher'ın **Sunucu** sayfasındaki günlüğe tek satır olarak düşer;
 teknik ekibe o satırı ilet.
 
+### Oyun tipi — ilk seçim
+
+Tercihler'in **MAÇ** sekmesindeki **Oyun tipi** satırı üç seçenek sunar, bu sırayla: **Hızlı
+Savaş**, **Zombi**, **Çocuk Oyunları**. Seçtiğin tip harita ve mod listelerini süzer — altta
+yalnız o ailenin arenaları ve modları kalır. Mekânda o tipe ait arena yoksa harita listesi boş
+kalır. Bir ailenin modu başka ailenin haritasında başlamaz.
+
+- **Hızlı Savaş:** silahlı arena maçları (Takım Ölüm Maçı, Herkes Tek, Turnuva).
+- **Zombi:** silahlı işbirliği; modun adı **Klasik**'tir.
+- **Çocuk Oyunları:** silahsız çocuk oyunları (aşağıda).
+
 ### Çocuk Oyunları — Hamburgerci
 
-Çocuk Oyunları ayrı bir ailedir: **silah yok, vurulma yok, ölüm yok.** Bu modlar yalnız kendi
-haritalarında açılır: Tercihler'in **MAÇ** sekmesinde **Oyun tipi** satırından **Çocuk Oyunları**'nı
-seçince harita ve mod listeleri yalnız o aileyi gösterir (mekânda tek aile varsa bu satır hiç
-görünmez). Savaş modu çocuk haritasında başlamaz, tersi de doğru. Çocuk haritası açıkken, maç
+Çocuk Oyunları ayrı bir ailedir: **silah yok, vurulma yok, ölüm yok.** Savaş modu çocuk
+haritasında başlamaz, tersi de doğru. Çocuk haritası açıkken, maç
 başlamadan önce de **kimsenin eline silah gelmez**; yan tuş (grip) yalnız eşyaları tutar.
 
 **Hamburgerci** bir işbirliği vardiyasıdır: takım yok, kazanan yok, süre dolunca biter ve **sonuç

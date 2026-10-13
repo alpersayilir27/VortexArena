@@ -2038,9 +2038,10 @@ yollar. Amaç tek: **istemci modun ne olduğunu TAHMİN ETMESİN.** Kural telden
   hiç `hit_report` gönderilmez, yani hasarı kapatan şey silahın yokluğudur. Ayrı bir anahtar,
   yalnız ikisinin çelişebileceği bir durum üretirdi. `none` **can eriten her yolu** kapatır: iç
   engel cezası da (§10.9) bu kuralda koşmaz.
-- **Lobi profili tek değildir; seçimi AÇIK SAHNENİN oyun ailesi yapar** (§10.7): `quickbattle`
-  haritasında `weaponSource:"random"` + `fireWhilePaused:true`, `kids` haritasında
-  `weaponSource:"none"` + `fireWhilePaused:false`; ikisi de aynı `rules` alanlarıyla taşınır.
+- **Lobi profili tek değildir; seçimi AÇIK SAHNENİN oyun ailesi yapar** (§10.7): ayrım
+  **`kids` ile diğer her şey** arasındadır — `kids` haritasında `weaponSource:"none"` +
+  `fireWhilePaused:false`, `quickbattle` ve `zombie` haritalarında silahlı profil
+  (`weaponSource:"random"` + `fireWhilePaused:true`); ikisi de aynı `rules` alanlarıyla taşınır.
   ⚠️ Askeri bir lobi sahnesinde beklenen çocuk oturumunu sahne kapısı göremez — istemci orada
   **seçili modun ailesine** bakar (§10.7).
 **Kayıtlı modlar** (sunucuda `MatchDirector.RegisterModes()`; `start_match.modeId` bunlardan biri
@@ -2053,7 +2054,7 @@ olmalı, tanınmayan `modeId` reddedilir):
 | `tournament` | Turnuva | `two` | — | `team` | **`none`** | `weaponcanvas` | **`true`** | `0` | `false` | 120 sn / 4 tur |
 | `burger` | Hamburgerci | `none` | **`true`** | `shared` | `none` | **`none`** | `false` | `0` | `false` | 600 sn / limitsiz |
 | `mole` | Köstebek Ezme | `two` | — | `team` | **`none`** | **`none`** | `false` | `0` | `false` | 300 sn / limitsiz |
-| `zombie` | Zombi | `none` | **`true`** | `shared` | **`standstill`** | `weaponcanvas` | `false` | `0` | `false` | 300 sn / limitsiz |
+| `zombie` | Klasik | `none` | **`true`** | `shared` | **`standstill`** | `weaponcanvas` | `false` | `0` | `false` | 300 sn / limitsiz |
 
 **Yedek sınırını yazan tek mod `tournament`'tır:** turnuva dışında hiçbir silahlı modda yedek
 sınırı yoktur (lobi profilleri dahil) — mermi saymak tur tabanlı elemenin kaynağıdır, serbest
@@ -2376,7 +2377,9 @@ kuralın söyleyeceği bir şey yoktur (telde yine `false` gider).
 > | Cephane? | Şarjör + yedek şarjör (`weaponSource:"weaponcanvas"`), **her tur başında herkes tam dolu** — istemci geri sayımda doldurur. **Yedeği sınırlı tek mod budur** (`limitedReserve:true`): yedek silahın `spareMagazines`'i kadardır, bitince şarjör değiştirme reddedilir. Sunucunun bundan haberi yoktur (§10.3: silah tablosu yok) |
 > | Taraflar yarıda değişir mi? | **Hayır, taraf değişimi (side swap) YOKTUR.** Free-roam'da taraf değiştirmek oyuncuların fiziksel olarak karşı tabana yürümesi demektir ve arena simetrik olmadığı sürece karşılığı da azdır. İstenirse ayrı bir iş olarak planlanır |
 
-> **`zombie` — kooperatif dalga savunması.** Oyuncular **tek ekip**tir (`teamMode:"none"` +
+> **`zombie` — kooperatif dalga savunması.** `zombie` oyun tipinin tur tipidir (admin panelinde
+> **Zombi › Klasik**), dolayısıyla yalnız `gameType:"zombie"` haritalarda başlatılabilir.
+> Oyuncular **tek ekip**tir (`teamMode:"none"` +
 > `allies:true`), silah sahnedeki çerçevelerden gelir ve zombiler dalga dalga gelip **yakın dövüşle**
 > vurur. Kazanan yoktur (`shared` skor); bitiş **süre** ya da **tüm bağlı oyuncuların aynı anda ölü
 > olması**dır (kayıp). Sonuç ekranı operatör kapatana kadar durur
@@ -3615,11 +3618,17 @@ zaman **exe'nin yanındaki** `config\`'ten okunur (`Server/README.md`):
 > **`weapons.json` YOKTUR:** sunucu silah tanımı tutmaz, hasarı istemci bildirir (§10.3). Silah
 > istatistikleri yalnız Unity'deki `WeaponDefinition` SO'larındadır.
 >
-> **`gameType` = OYUN TİPİ** (`"quickbattle"` \| `"kids"`): haritayı hangi oyun ailesinin
-> kullandığı. `modes` ile karıştırılmaz — `modes` **tur tipini** (`tdm`/`ffa`/`tournament`) süzer,
-> `gameType` bir üst katmandır ve operatörün ilk seçimidir. Sunucudaki tüketicisi `start_match`
-> doğrulamasıdır (§10.1): modun tipiyle haritanın tipi uyuşmazsa komut reddedilir. **Boş = eski
-> export** → `"quickbattle"` sayılır, yani bugünkü arenalar tek satır iş bile gerektirmez.
+> **`gameType` = OYUN TİPİ** (`"quickbattle"` \| `"zombie"` \| `"kids"`): haritayı hangi oyun
+> ailesinin kullandığı. `modes` ile karıştırılmaz — `modes` **tur tipini** (`tdm`/`ffa`/`tournament`)
+> süzer, `gameType` bir üst katmandır ve operatörün ilk seçimidir. Sunucudaki tüketicisi
+> `start_match` doğrulamasıdır (§10.1): bir haritanın oyun tipi, üzerinde oynanacak modun oyun
+> tipiyle **aynı olmak zorundadır** (`IGameMode.GameType` ↔ harita girdisindeki `gameType`);
+> uyuşmazsa komut reddedilir. **Boş = eski export** → `"quickbattle"` sayılır, yani bugünkü
+> arenalar tek satır iş bile gerektirmez.
+>
+> ⚠️ **Oyun tipi ağda TAŞINMAZ:** ne bir mesaj alanıdır ne de el sıkışmada bildirilir — yalnız
+> `maps.json`'daki `gameType` ile sunucudaki `IGameMode.GameType` içinde yaşar, istemci tarafında
+> ise seçicinin kendi verisidir.
 >
 > **`moleDensity` = KÖSTEBEK YOĞUNLUĞU ÇARPANI** (§10.5): o haritada aynı anda kaç köstebeğin ayakta
 > duracağını belirleyen **harita başına** ayar — `1` temel yoğunluktur. Tek tüketicisi `mole` modudur;

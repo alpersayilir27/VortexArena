@@ -13,8 +13,8 @@ MonoBehaviour:
   m_Name: ZOMBIE
   m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.ModeDefinition
   modeId: zombie
-  displayName: Zombi
-  gameType: 0
+  displayName: Klasik
+  gameType: 2
   lobbyProfile: 0
   roundSeconds: 300
   scoreLimit: 0

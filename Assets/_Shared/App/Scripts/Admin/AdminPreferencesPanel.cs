@@ -1176,9 +1176,16 @@ namespace VortexArena.App.Admin
         /// <see cref="TMP_Dropdown.AddOptions(List{string})"/> copies into its own list.</summary>
         private readonly List<string> _optionScratch = new List<string>();
 
-        /// <summary>Distinct game types of the catalog's maps, in ENUM order — a stable order keeps
-        /// the rows from moving between sessions. Read once: the catalog cannot change at
-        /// runtime.</summary>
+        /// <summary>Game type display order — the enum's int order is the SERIALIZATION order (new
+        /// values appended at the end), not what the operator should see.</summary>
+        private static readonly GameType[] GameTypeOrder =
+        {
+            GameType.QuickBattle, GameType.Zombie, GameType.Kids
+        };
+
+        /// <summary>Distinct game types of the catalog's maps, in DISPLAY order
+        /// (<see cref="GameTypeOrder"/>) — a stable order keeps the rows from moving between
+        /// sessions. Read once: the catalog cannot change at runtime.</summary>
         private void CollectGameTypes()
         {
             _gameTypes.Clear();
@@ -1189,18 +1196,17 @@ namespace VortexArena.App.Admin
                 return;
             }
 
-            var all = (GameType[])System.Enum.GetValues(typeof(GameType));
-            for (int i = 0; i < all.Length; i++)
+            for (int i = 0; i < GameTypeOrder.Length; i++)
             {
                 for (int m = 0; m < maps.Length; m++)
                 {
                     if (maps[m] == null || string.IsNullOrEmpty(maps[m].SceneName) ||
-                        maps[m].GameType != all[i])
+                        maps[m].GameType != GameTypeOrder[i])
                     {
                         continue;
                     }
 
-                    _gameTypes.Add(all[i]);
+                    _gameTypes.Add(GameTypeOrder[i]);
                     break;
                 }
             }
@@ -1242,7 +1248,12 @@ namespace VortexArena.App.Admin
 
         private static string GameTypeLabel(GameType type)
         {
-            return type == GameType.Kids ? "Çocuk Oyunları" : "Hızlı Savaş";
+            return type switch
+            {
+                GameType.Kids => "Çocuk Oyunları",
+                GameType.Zombie => "Zombi",
+                _ => "Hızlı Savaş"
+            };
         }
 
         private void RebuildModeOptions()

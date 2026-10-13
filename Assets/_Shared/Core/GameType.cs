@@ -12,7 +12,10 @@ namespace VortexArena.Core
         QuickBattle,
 
         /// <summary>Children's games; wire name <c>"kids"</c>.</summary>
-        Kids
+        Kids,
+
+        /// <summary>Wave-defence co-op; wire name <c>"zombie"</c>.</summary>
+        Zombie
     }
 
     /// <summary>Wire names of <see cref="GameType"/> (§11).</summary>
@@ -20,8 +23,14 @@ namespace VortexArena.Core
     {
         public const string QuickBattle = "quickbattle";
         public const string Kids = "kids";
+        public const string Zombie = "zombie";
 
         /// <summary>Enum → wire name.</summary>
-        public static string ToWire(GameType type) => type == GameType.Kids ? Kids : QuickBattle;
+        public static string ToWire(GameType type) => type switch
+        {
+            GameType.Kids => Kids,
+            GameType.Zombie => Zombie,
+            _ => QuickBattle
+        };
     }
 }

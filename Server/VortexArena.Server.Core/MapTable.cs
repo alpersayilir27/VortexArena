@@ -30,8 +30,8 @@ public sealed class MapEntry
     /// treated as <see cref="MapTable.DefaultVenue"/>.</remarks>
     public string venue = "";
 
-    /// <summary>Game family of the map (§11): "quickbattle" | "kids". EMPTY = old export → quick
-    /// battle.</summary>
+    /// <summary>Game family of the map (§11): "quickbattle" | "zombie" | "kids". EMPTY = old export →
+    /// quick battle.</summary>
     public string gameType = "";
 
     /// <summary>Mole density multiplier of this map (§10.5): 1 = base density, <c>&lt;= 0</c> = old
@@ -82,6 +82,10 @@ public sealed class MapTable
     /// <summary>The Kids family (§11) — the value the kids modes and the weaponless lobby profile
     /// (§10.7) key off.</summary>
     public const string KidsGameType = "kids";
+
+    /// <summary>The Zombie family (§11) — armed, so it runs the normal lobby profile (§10.7); only the
+    /// Kids family is weaponless.</summary>
+    public const string ZombieGameType = "zombie";
 
     private readonly Dictionary<string, MapEntry> _byScene = new(StringComparer.Ordinal);
 
