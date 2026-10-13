@@ -21,6 +21,8 @@ reçete `Docs/Gelistirici/Yemek-Kitabi.md` §11.7.
       payload'a doğuş anı (`t:<kalan sn>`) eklenir ya da animasyon tamamen yerel tutulur.
 - [ ] **Build Readiness satırı:** `supportedModeIds`'i `zombie` içeren ya da boş olan arenada
       NavMesh verisi var mı? Kontrol listesine satır eklenecek mi?
+- [ ] **Zombi çeşitleri:** tek tür var; dalga ilerledikçe yalnız sayı, hasar ve hız artar. Dalgaya
+      göre değişen tür (hızlı, iri) her biri için model + `kind` + denge satırı ister.
 - [ ] **Görüş hattı:** bugün en yakın oyuncu kovalanır, duvar/kolon arkasını da görür. Kolonlu
       arenada sahte takip gibi okunabilir.
 

@@ -980,15 +980,34 @@ sahibi admindir** (§3.6b "Sunucu-atanmış sahiplik"); örnek uygulama `Assets/
    olmalıdır ve bake nesnenin yürüyeceği **tüm** yolu kapsamalıdır (zombi oyun alanının dışından
    geldiği için dış yollar dahil). Bake yoksa beyin tek bir Türkçe uyarı yazar ve nesne olduğu
    yerde durur — hata vermez. İşletme sahnesi ayrı kopyadır → her işletme sahnesi kendi bake'ini alır.
-   - `NavMeshSurface` arena sanatının kökündedir, kaynağı o kökün **çocuklarıdır** (`Collect Objects
-     = Children`): `All` seçilirse kamera rig'i ve el meshleri de bake'e girer. Kaynak birleştirilmiş
-     mesh olmaz; `ArenaRoof` ve üst kat döşemeleri kaynağın dışında kalır.
+   - **Tek katlı arenada** `NavMeshSurface` arena sanatının kökündedir, kaynağı o kökün
+     **çocuklarıdır** (`Collect Objects = Children`) ve render mesh'lerinden bake'lenir: `All`
+     seçilirse kamera rig'i ve el meshleri de bake'e girer. Kaynak birleştirilmiş mesh olmaz;
+     yürünmeyecek yukarı yüzeyler (`ArenaRoof`, kat portalı olmadığı için oyun alanı dışında kalan
+     plakalar) kaynağın dışında tutulur — tek yüzey hepsini tek düzlem sanır.
+   - ⚠️ **Çok katlı arenada (kat portalı var) bake COLLIDER'DAN alınır, render mesh'inden değil:**
+     tek bir `NavMeshSurface` (ajan tipi `Zombie`), `Collect Objects = Volume` ile **bütün katları**
+     (+ dış yaklaşma koridorunu) kaplar, `Use Geometry = Physics Colliders`, layer'lar `Default` +
+     `Obstacle`. Kat döşemesinin collider'ı o katın yürünür alanını verir (döşemesi olmayan boşluk
+     şeritleri yürünmez kalır), `Obstacle` hacimleri ve dekor engel kutuları duvar/mobilyayı oyar.
+     `ArenaRoof` kökünün altındaki plakalar bu bake'in **içindedir** — üst katın zemini odur.
+   - ⚠️ **Çok katlı arenada her `zombie_spawn` noktası KENDİ katının döşeme NavMesh'inin ÜSTÜNDE
+     durmalıdır:** yerleştirmede örnekleme yarıçapı 1,5 m'ye kırpılır, yani döşemesini kaçıran nokta
+     alt/üst kata yapışmaz — hiç yerleşmez. Üst kat noktaları döşeme kenarlarına, portallardan uzağa
+     konur (zombi balkon/teras kenarında ya da oda köşesinde belirir).
+   - **Zemin kat yaklaşma koridoru:** sınırın dışından kapıya uzanan ince bir box collider
+     (`Default` layer) — zombi oyun alanına dışarıdan yürür.
    - ⚠️ **Ajan tipi `Zombie`'dir** (0,3 m yarıçap, 1,8 m boy — `Navigation > Agents`); yüzey ve
      prefabın `NavMeshAgent`'ı **aynı** tipi seçer. Tip tutmazsa ajan NavMesh'i bulamaz ve zombi
      doğduğu yerde durur; varsayılan `Humanoid` (0,5 m) dar kapıda tıkar.
    - Bake sonrası her doğum noktasından oyun alanına yol çıkmalı, çitin dışındaki bir noktadan giden
      yol ise **kapıdan** dolaşmalıdır — dolaşmıyorsa çit bake'e engel olarak girmemiştir.
    - Kırılabilir siper `NavMeshObstacle` (carve) taşır, `Broken` olunca kapanır.
+   - ⚠️ **Oynanacak her kata en az bir `zombie_spawn` koy:** zombi kat portalı kullanamaz, bir kata
+     ancak o katın doğum noktasına ışınlanarak gider — noktası olmayan kat zombisiz kalır.
+   - **Dar ya da çok katlı arenada akını `MapDefinition.zombiePace` ile yavaşlat** (`1` temel tempo,
+     `0,25`–`2`): doğum aralığını ve dalga arasını böler, aynı anda ayakta duran zombi sayısını
+     çarpar; dalganın toplam zombisi ile hasar değişmez. Export'la `maps.json`'a çıkar.
 
 ---
 
@@ -1577,6 +1596,8 @@ bölgeyi `Configure All Build Elements` penceresinin hazırlık listesi ✗ ile 
 diğer modlarda NavMesh'i okuyan hiçbir şey yoktur, boşuna bake'lenen bir sahne yalnız build süresi
 ve dosya ekler. Bake, yaratığın yürüyeceği **tüm** yolu kapsamalıdır: zombiler oyun alanının
 **dışından** geldiği için dış yollar ve kapılar da dahil (gerekçe ve istemci davranışı §11.7).
+Sahne **çok katlıysa** bake render mesh'inden değil **collider'dan** alınır ve tek yüzey bütün
+katları kaplar; kurulumu ve kat başına doğum noktası kuralı §11.7'dedir.
 
 **3. adımın boyut dosyası hazır olmalıdır.** Dosya elle yazılabilir (§17.2) ya da sahada kumandayla
 ölçülüp sunucudan alınabilir (§17.5) — sonuç aynı dosyadır, mekan başına tektir ve o mekanın bütün
@@ -1869,6 +1890,11 @@ değişimi **dikey sanal ofsettir** (`Docs/Sistem-Ozeti.md` §3.13, ağ tarafı
   tonunda bir **silüet** olarak düşer (ölü/kalibresiz hayaletten bilerek farklı görünür); gerçek
   gövde kendi katında vurulabilir kalır.
 - Sunucuda portal, sayaç ya da kilit **yoktur**: sunucu yalnız oyuncunun katını defter olarak tutar.
+- **Harita `zombie` modunu da taşıyacaksa** NavMesh collider'dan bake'lenir, her kat kendi döşeme
+  kenarlarında `zombie_spawn` taşır ve zemin kata dışarıdan bir yaklaşma koridoru girer (§11.7).
+  Zombi **yalnız kendi katındaki** oyuncuyu kovalar ve kat portalı kullanamaz — katlar arası takip
+  yalnız dolu kattaki doğum noktasına ışınlanmayla olur, bu yüzden noktasız kat zombisiz kalır.
+  Dar/çok katlı arenada akın boğucu geliyorsa kaldıraç `MapDefinition.zombiePace`'tir.
 
 ---
 

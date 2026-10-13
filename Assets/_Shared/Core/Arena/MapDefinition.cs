@@ -29,6 +29,13 @@ namespace VortexArena.Core.Arena
         // Default = what a NEW venue starts with: existing assets pick it up WITHOUT being touched.
         [SerializeField] private float moleDensity = 1.5f;
 
+        [Header("Zombi modu")]
+        [Range(0.25f, 2f)]
+        [Tooltip("Zombi modunda tempo: 1 = varsayılan; küçük değer doğum aralığını ve dalga arasını uzatır, " +
+                 "aynı anda ayaktaki zombiyi azaltır. Yalnız zombi modu okur.")]
+        // Default = what a NEW venue starts with: existing assets pick it up WITHOUT being touched.
+        [SerializeField] private float zombiePace = 1f;
+
         [Header("Ortam sesi")]
         [Tooltip("Sahne yüklenir yüklenmez loop olarak başlayan ambiyans. Boş = sessiz.")]
         [SerializeField] private AudioClip ambienceClip;
@@ -62,6 +69,10 @@ namespace VortexArena.Core.Arena
         /// <summary>Mole density multiplier of the map (1 = base density); read only by the mole
         /// mode, through maps.json.</summary>
         public float MoleDensity => moleDensity;
+
+        /// <summary>Zombie tempo multiplier of the map (1 = default pace); read only by the zombie
+        /// mode, through maps.json.</summary>
+        public float ZombiePace => zombiePace;
 
         /// <summary>The scene's ambience clip; silent when unassigned.
         /// <c>SceneAmbience</c> reads and loops it on scene load — there is NO scene setup step.</summary>

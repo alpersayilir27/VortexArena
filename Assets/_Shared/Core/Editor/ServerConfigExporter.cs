@@ -504,7 +504,7 @@ namespace VortexArena.Core.Editor
 
         // ----------------------------------------------------------------- json
 
-        /// <summary><c>{ "maps": [ { "sceneName", "venue", "gameType", "moleDensity",
+        /// <summary><c>{ "maps": [ { "sceneName", "venue", "gameType", "moleDensity", "zombiePace",
         /// "modes": ["&lt;modId&gt;"], "objects": [ { "sceneId", "kind" } ] } ], "kinds": [ { "kind",
         /// "maxHp", "grab", "events": [ { "name", "policy", "phaseGate" } ] } ] }</c> — for the server's
         /// <c>start_match</c> validation, venue selection and object table (§10.10).</summary>
@@ -544,6 +544,8 @@ namespace VortexArena.Core.Editor
                         // server's JSON parser would reject the file.
                         .Append("      \"moleDensity\": ")
                         .Append(map.MoleDensity.ToString(CultureInfo.InvariantCulture)).Append(",\n")
+                        .Append("      \"zombiePace\": ")
+                        .Append(map.ZombiePace.ToString(CultureInfo.InvariantCulture)).Append(",\n")
                         .Append("      \"modes\": ").Append(BuildModesArray(map.SupportedModeIds)).Append(",\n")
                         .Append("      \"objects\": ")
                         .Append(BuildObjectsArray(ReadSceneObjects(map, knownKinds, result))).Append('\n')

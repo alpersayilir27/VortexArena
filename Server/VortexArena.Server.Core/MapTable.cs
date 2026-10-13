@@ -40,6 +40,12 @@ public sealed class MapEntry
     /// it; on every other map it is carried and ignored.</remarks>
     public float moleDensity;
 
+    /// <summary>Zombie pace multiplier of this map (§10.5): 1 = base pace, <c>&lt;= 0</c> = old export
+    /// → the mode's own default.</summary>
+    /// <remarks>Per-map because a cramped or multi-floor arena drowns under the pace a wide one needs.
+    /// Only <c>ZombieMode</c> reads it; on every other map it is carried and ignored.</remarks>
+    public float zombiePace;
+
     /// <summary>modIds supported by this map; EMPTY = no restriction.</summary>
     /// <remarks>Same semantics as MapDefinition.SupportsMode — a field forgotten on a new map must not
     /// hide the mode.</remarks>

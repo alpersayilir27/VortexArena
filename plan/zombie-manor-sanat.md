@@ -34,17 +34,14 @@ Bütçe: toplam ≤ 300k üçgen (bağlı dekor kopyaları dahil).
 
 Sahne kurulu (`Scenes/<SahneAdı>/`): şablon, iki kat portalı, `Obstacle` hacimleri, kat plakası
 collider'ları, `ArenaRoof`, dekor prefabları, pratik ışıklar, ışık/yansıma probları, sahnenin
-`.lighting` dosyası (Shadowmask), ışık bake'i. Kalanlar:
+`.lighting` dosyası (Shadowmask), ışık bake'i, her katta `zombie_spawn` noktaları, bütün katları
+kaplayan collider kaynaklı NavMesh. Kalanlar:
 
 - [ ] **Gözlükte ışık kontrolü:** pratik ışık şiddetleri (avize 0,8 · fener 0,9 · alev 0,4) bake
       sonrası gözlükte ayarlanır; değişiklik yeniden bake ister.
 - [ ] **Gece gökyüzü:** şimdilik `M_Sky_RuralEvening`; fırtınalı gece için mevcut bir `M_Sky_*`
       çoğaltılır (Ctrl+D) ve kaynağı Inspector'dan seçilir (`Yemek-Kitabi.md` "Gökyüzü"), sonra yeniden bake.
-- [ ] **Taban bölgeleri** geçici yerde (avlu / salon); zombi modu kuralıyla kesinleşir.
-- [ ] **Katalog kaydı test içindir:** `MapDefinition` yalnız `tdm` ile kayıtlı (adminli deneme için);
-      zombi modu (`zombi-modu.md`) yazılınca `supportedModeIds` = `zombie` yapılır, `tdm` çıkarılır —
-      liste boş bırakılırsa harita her modda oynanır.
-- [ ] NavMesh (yalnız zemin kat, collider kaynaklı; `zombi-modu.md`), silah tuvali (balkon panosu).
+- [ ] Silah tuvali (balkon panosu).
 - ⚠️ **Boşluk bölgesi mekanizması yok:** üst kattaki oyuncu boşluk şeridine (Kat1 A, Kat2 A+B)
   fiziksel olarak yürüyebilir ve havada kalır. `Obstacle` hacmi çözüm değildir — atış ışını
   maskesizdir, balkondan/terastan avluya ateşi keser. Atışı kesmeyen bir "boşluk ihlali" yolu

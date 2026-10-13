@@ -2410,6 +2410,20 @@ kuralın söyleyeceği bir şey yoktur (telde yine `false` gider).
 > ⚠️ Doğan zombinin `object_spawn` pozu **anlamsızdır** (sunucunun konumu yok, birim poz gider): her
 > başlık onu ilk akan poz gelene kadar **gizler**, sahip başlık ise doğum noktasına kendisi oturur.
 >
+> **Çok katlı arenada `sp` bir ÖNERİDİR** (kat sayısı ≥ 2, katlar `FloorPortal`'lardan türer): sunucu
+> kat bilmez ve bilmeyecektir, bu yüzden kat kararı tamamen beyindedir. Tek katlı arenada davranış
+> değişmez — `sp` olduğu gibi kullanılır.
+>
+> | Kural | Ne |
+> |---|---|
+> | Hedef seçimi | Zombi **yalnız kendi katındaki** oyuncuyu kovalar; zombinin katı poz yüksekliğinden, oyuncunun katı kadro katından (kafa o katın altına inmişse kafa yüksekliğinden) çözülür. Yani zombi başka kattaki oyuncuya **asla vurmaz** |
+> | Doğum yeri | Taze doğumlar, o an kovalanabilir **canlı oyuncu bulunan katlara** sırayla (round-robin) dağıtılır. Seçilen katta sunucunun `sp`'si o kattaysa ve oradaki her oyuncudan ≥ 2,5 m (yatay) uzaktaysa o kullanılır; değilse aynı kattan ≥ 2,5 m uzak rastgele bir nokta, o da yoksa en yakın oyuncudan **en uzak** nokta. O katta hiç nokta yoksa ya da kovalanabilir canlı oyuncu hiç yoksa sunucunun `sp`'si olduğu gibi işler |
+> | Katta kalanın kurtarılması | Kendi katında 6 sn boyunca hedefi olmayan zombi, başka katta kovalanabilir canlı oyuncu varken **dolu bir katın** doğum noktasına ışınlanır (aynı kat sırası + aynı nokta kuralı, `sp` tercihi olmadan) |
+>
+> ⚠️ **Zombi kat portalı KULLANAMAZ:** katlar arası takip tek yoldan, yukarıdaki ışınlanmayla olur.
+> Bu kural dengeleme değil **kilit açmadır** — dalga ancak kendi zombilerinin hepsi ölünce biter, yani
+> kimsenin uğramadığı bir katta kalan zombi onsuz maçı sonsuza kilitler.
+>
 > **`object_event attack`:** `i:[hedef playerId]`, `f`/`s` boş — **hasar sayısı TAŞIMAZ.** Sunucu
 > kapıları (sırayla, düşen sessiz red): gönderen o zombinin sahibi mi (`policy:"owner"`) · faz
 > `playing` · zombi `Broken` değil · o zombinin saldırı bekleme süresi dolmuş · hedef bağlı
@@ -2426,15 +2440,20 @@ kuralın söyleyeceği bir şey yoktur (telde yine `false` gider).
 >
 > | Ne | Değer |
 > |---|---|
-> | Hasar | `12 + 4×(w−1)`, tavan `32` |
-> | Eşzamanlı ayakta zombi | `3 + w`, tavan `12` |
-> | Dalganın toplam zombisi | `4 × w` |
-> | Doğum aralığı | 2 sn (tavanın altındayken) |
+> | Hasar | `12 + 4×(w−1)`, tavan `32` — **tempodan etkilenmez** |
+> | Eşzamanlı ayakta zombi | `round((3 + w) × tempo)`, `1`…`12` arasına kırpılır |
+> | Dalganın toplam zombisi | `4 × w` — **tempodan etkilenmez** |
+> | Doğum aralığı | `2 sn ÷ tempo` (tavanın altındayken) |
 > | Hız (istemcide) | `0,7 + 0,1×(w−1)` m/s, **tavan 1,2 m/s** |
 > | Saldırı erişimi (istemcide) | 1,2 m yatay |
-> | Saldırı bekleme | 1,5 sn (vuruş karesi animasyonun ~0,4. sn'si) |
-> | Dalgalar arası | 8 sn |
+> | Saldırı bekleme | 1,5 sn (vuruş karesi animasyonun ~0,4. sn'si) — **tempodan etkilenmez** |
+> | Dalgalar arası | `8 sn ÷ tempo` |
 > | Ölü zombinin silinmesi | 3 sn sonra `object_despawn` |
+>
+> **Tempo HARİTA verisidir, kod sabiti değil** (`maps.json → zombiePace`, §11): dar ya da çok katlı
+> bir arenada aynı akın boğucu olur, geniş arenada seyrek kalır. `1` temel tempodur ve yukarıdaki
+> tabloyu bugünkü sayılara indirir; alan yazılmamışsa (ya da `≤ 0` ise) `1` işler, yani mevcut
+> arenalar tek satır iş gerektirmez. Tempo maç başında **bir kez** okunur.
 >
 > ⚠️ **Hız tavanı bir güvenlik kuralıdır, denge ayarı değil:** free-roam alanda oyuncuyu
 > **koşturan** bir düşman onu gerçek duvara koşturur. Hızlı yürüyüş ~1,4 m/s'dir; 1,2 m/s'de oyuncu
@@ -3585,7 +3604,7 @@ zaman **exe'nin yanındaki** `config\`'ten okunur (`Server/README.md`):
 |---|---|---|
 | `server.json` | **Elle** | Portlar + `venueName` + `tickHz` + `venue` + `lobbyScene` + maç kaydı klasörü ve saklaması (`replayDir` · `replayKeepDays`, §12.5); yoksa varsayılanlarla oluşturulur (§1 sabitleri). `venue` = açılışta seçilecek mekan (boş = konsolda sorulur). `lobbyScene` = lobi sahnesi (§10.7); **boş = seçilen mekanın lobi haritası otomatik bulunur**. ⚠️ Çözülemezse sunucu **açılmaz** (aşağı). |
 | `devices.json` | **Sunucu üretir** | `deviceId → { "name":"ertu", "number":7 }`; ilk bağlantıda ve `set_identity`'de yazılır (§2). Eski v1 biçimi (`deviceId → "ad"`) okunur — numara `0` sayılır — ve ilk yazımda yeni biçime yükseltilir. UTF-8, BOM'suz. |
-| `maps.json` | **Unity export** | `MapDefinition` SO'larından: `sceneName`, `venue`, `gameType`, `modes`, `moleDensity` (§10.1, §10.5, §11.1) + harita başına `objects[]` ve kökte `kinds[]` (§10.10). Arena ölçüsü YOKTUR — sunucu metre kullanmaz, ölçü istemcide sahnenin `ArenaBoundary`'sinde kalır. |
+| `maps.json` | **Unity export** | `MapDefinition` SO'larından: `sceneName`, `venue`, `gameType`, `modes`, `moleDensity`, `zombiePace` (§10.1, §10.5, §11.1) + harita başına `objects[]` ve kökte `kinds[]` (§10.10). Arena ölçüsü YOKTUR — sunucu metre kullanmaz, ölçü istemcide sahnenin `ArenaBoundary`'sinde kalır. |
 
 > **`<Mekan>_dimensions.json` config DEĞİLDİR, çıktıdır:** sunucu onu `config/` altına değil **veri
 > klasörünün köküne** yazar (`--data-dir`, yoksa exe'nin yanı; `venue_survey`, §10.11) ve bir daha hiç okumaz — arena ölçüsünün tüketicisi
@@ -3607,6 +3626,13 @@ zaman **exe'nin yanındaki** `config\`'ten okunur (`Server/README.md`):
 > başka haritalarda da yazılıdır ama hiçbir şeye dokunmaz. **Eksik/`0` = eski export** → modun kendi
 > varsayılanı işler, yani mevcut arenalar tek satır iş gerektirmez. ⚠️ Sunucu değeri makul bir aralığa
 > **kırpar**: yanlış yazılmış bir sayı ne çıkışları durdurabilmeli ne salonu köstebeğe boğabilmeli.
+>
+> **`zombiePace` = ZOMBİ TEMPO ÇARPANI** (§10.5): o haritada akının ne sıklıkta geldiğini ve aynı anda
+> kaç zombinin ayakta durduğunu belirleyen **harita başına** ayar — `1` temel tempodur. Tek tüketicisi
+> `zombie` modudur ve değeri **maç başında bir kez** okur; başka haritalarda da yazılıdır ama hiçbir
+> şeye dokunmaz. **Eksik/`≤ 0` = eski export** → `1`, yani mevcut arenalar tek satır iş gerektirmez.
+> ⚠️ Dalganın toplam zombisi, hasar ve saldırı beklemesi tempodan **etkilenmez** — tempo zorluğu değil
+> **doluluğu** ayarlar. Sunucu değeri makul bir aralığa **kırpar** (`moleDensity` ile aynı gerekçe).
 >
 
 > **Ağ nesneleri `maps.json`'a iki yerden girer** (§10.10): harita girdisinde

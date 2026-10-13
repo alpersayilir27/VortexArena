@@ -5,6 +5,7 @@
       "venue": "Outdoor14x16",
       "gameType": "kids",
       "moleDensity": 1.5,
+      "zombiePace": 1,
       "modes": ["burger"],
       "objects": [
         { "sceneId": 1, "kind": "dispenser_bun_whole" },
@@ -30,6 +31,7 @@
       "venue": "Outdoor9x8",
       "gameType": "kids",
       "moleDensity": 1.5,
+      "zombiePace": 1,
       "modes": ["burger"],
       "objects": [
         { "sceneId": 1, "kind": "dispenser_bun_whole" },
@@ -70,6 +72,7 @@
       "venue": "VortexAntep",
       "gameType": "kids",
       "moleDensity": 1.5,
+      "zombiePace": 1,
       "modes": ["burger"],
       "objects": [
         { "sceneId": 1, "kind": "dispenser_bun_whole" },
@@ -109,6 +112,7 @@
       "venue": "Outdoor9x8",
       "gameType": "quickbattle",
       "moleDensity": 1.5,
+      "zombiePace": 1,
       "modes": ["ffa", "tdm", "tournament"],
       "objects": []
     },
@@ -117,6 +121,7 @@
       "venue": "VortexAntep",
       "gameType": "quickbattle",
       "moleDensity": 1.5,
+      "zombiePace": 1,
       "modes": ["ffa", "tdm", "tournament"],
       "objects": []
     },
@@ -125,6 +130,7 @@
       "venue": "Outdoor14x16",
       "gameType": "quickbattle",
       "moleDensity": 1.5,
+      "zombiePace": 1,
       "modes": ["ffa", "tdm", "tournament"],
       "objects": []
     },
@@ -133,6 +139,7 @@
       "venue": "VortexAntep",
       "gameType": "quickbattle",
       "moleDensity": 1.5,
+      "zombiePace": 1,
       "modes": ["zombie"],
       "objects": [
         { "sceneId": 1, "kind": "zombie_spawn" },
@@ -150,6 +157,7 @@
       "venue": "Outdoor12x12",
       "gameType": "quickbattle",
       "moleDensity": 1.5,
+      "zombiePace": 1,
       "modes": ["ffa", "tdm", "tournament"],
       "objects": []
     },
@@ -158,6 +166,7 @@
       "venue": "Outdoor12x16",
       "gameType": "quickbattle",
       "moleDensity": 1.5,
+      "zombiePace": 1,
       "modes": ["ffa", "tdm", "tournament"],
       "objects": []
     },
@@ -166,6 +175,7 @@
       "venue": "Outdoor14x16",
       "gameType": "quickbattle",
       "moleDensity": 1.5,
+      "zombiePace": 1,
       "modes": ["ffa", "tdm", "tournament"],
       "objects": []
     },
@@ -174,6 +184,7 @@
       "venue": "Outdoor9x8",
       "gameType": "quickbattle",
       "moleDensity": 1.5,
+      "zombiePace": 1,
       "modes": ["ffa", "tdm", "tournament"],
       "objects": []
     },
@@ -182,6 +193,7 @@
       "venue": "Outdoor12x12",
       "gameType": "quickbattle",
       "moleDensity": 1.5,
+      "zombiePace": 1,
       "modes": ["lobby"],
       "objects": [
         { "sceneId": 1, "kind": "target_board" }
@@ -192,6 +204,7 @@
       "venue": "Outdoor12x16",
       "gameType": "quickbattle",
       "moleDensity": 1.5,
+      "zombiePace": 1,
       "modes": ["lobby"],
       "objects": []
     },
@@ -200,6 +213,7 @@
       "venue": "Outdoor14x16",
       "gameType": "quickbattle",
       "moleDensity": 1.5,
+      "zombiePace": 1,
       "modes": ["lobby"],
       "objects": [
         { "sceneId": 1, "kind": "target_board" },
@@ -212,6 +226,7 @@
       "venue": "Outdoor9x8",
       "gameType": "quickbattle",
       "moleDensity": 1.5,
+      "zombiePace": 1,
       "modes": ["lobby"],
       "objects": [
         { "sceneId": 1, "kind": "target_board" },
@@ -224,6 +239,7 @@
       "venue": "VortexAntep",
       "gameType": "quickbattle",
       "moleDensity": 1.5,
+      "zombiePace": 1,
       "modes": ["lobby"],
       "objects": [
         { "sceneId": 1, "kind": "breakable_cover" },
@@ -239,6 +255,7 @@
       "venue": "VortexAntep",
       "gameType": "quickbattle",
       "moleDensity": 1.5,
+      "zombiePace": 1,
       "modes": ["ffa", "tdm", "tournament"],
       "objects": [
         { "sceneId": 1, "kind": "breakable_cover" },
@@ -254,6 +271,7 @@
       "venue": "Outdoor14x16",
       "gameType": "quickbattle",
       "moleDensity": 1.5,
+      "zombiePace": 1,
       "modes": ["ffa", "tdm", "tournament"],
       "objects": []
     },
@@ -262,6 +280,7 @@
       "venue": "Outdoor14x16",
       "gameType": "kids",
       "moleDensity": 2.5,
+      "zombiePace": 1,
       "modes": ["mole"],
       "objects": [
         { "sceneId": 1, "kind": "mole_hole" },
@@ -291,6 +310,7 @@
       "venue": "Outdoor9x8",
       "gameType": "kids",
       "moleDensity": 2.5,
+      "zombiePace": 1,
       "modes": ["mole"],
       "objects": [
         { "sceneId": 1, "kind": "mole_hole" },
@@ -322,6 +342,7 @@
       "venue": "VortexAntep",
       "gameType": "kids",
       "moleDensity": 2.5,
+      "zombiePace": 1,
       "modes": ["mole"],
       "objects": [
         { "sceneId": 1, "kind": "mole_hole" },
@@ -352,6 +373,7 @@
       "venue": "VortexAntep",
       "gameType": "quickbattle",
       "moleDensity": 1.5,
+      "zombiePace": 1,
       "modes": ["ffa", "tdm", "tournament"],
       "objects": [
         { "sceneId": 1, "kind": "breakable_cover" },
@@ -363,8 +385,18 @@
       "venue": "VortexAntep",
       "gameType": "quickbattle",
       "moleDensity": 1.5,
-      "modes": ["tdm"],
-      "objects": []
+      "zombiePace": 0.7,
+      "modes": ["zombie"],
+      "objects": [
+        { "sceneId": 1, "kind": "zombie_spawn" },
+        { "sceneId": 2, "kind": "zombie_spawn" },
+        { "sceneId": 3, "kind": "zombie_spawn" },
+        { "sceneId": 4, "kind": "zombie_spawn" },
+        { "sceneId": 5, "kind": "zombie_spawn" },
+        { "sceneId": 6, "kind": "zombie_spawn" },
+        { "sceneId": 7, "kind": "zombie_spawn" },
+        { "sceneId": 8, "kind": "zombie_spawn" }
+      ]
     }
   ],
   "kinds": [

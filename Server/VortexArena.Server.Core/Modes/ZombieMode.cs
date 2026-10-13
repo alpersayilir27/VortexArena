@@ -42,7 +42,7 @@ public sealed class ZombieMode : IGameMode
     private const int DamagePerWave = 4;
     private const int DamageCap = 32;
 
-    /// <summary>Zombies standing at once: <c>ConcurrentBase + wave</c>, capped.</summary>
+    /// <summary>Zombies standing at once: <c>(ConcurrentBase + wave) × pace</c>, capped.</summary>
     /// <remarks>⚠️ The cap stays UNDER <see cref="ArenaProtocol.OBJECT_MAX_ENTRIES_PER_PACKET"/> (16):
     /// an object pose over that ceiling does not spill, it is DROPPED (§6.8) and the choice is not fair —
     /// the 17th zombie would simply freeze.</remarks>
@@ -54,6 +54,14 @@ public sealed class ZombieMode : IGameMode
 
     private const float SpawnIntervalSeconds = 2f;
     private const float WaveBreakSeconds = 8f;
+
+    /// <summary>Pace of a map that sets none (§10.5) — exactly the base numbers of the wave table.</summary>
+    private const float DefaultPace = 1f;
+
+    /// <summary>Pace clamp: a mis-typed export must neither stall the waves nor flood the hall. Mirrors
+    /// the MapDefinition.zombiePace range.</summary>
+    private const float MinPace = 0.25f;
+    private const float MaxPace = 2f;
 
     /// <summary>How long a broken zombie stays in the world before <c>object_despawn</c> — the death
     /// animation's length. ⚠️ Removing it at once would cut the animation on every headset.</summary>
@@ -95,6 +103,11 @@ public sealed class ZombieMode : IGameMode
     private int _wave;
     private int _spawnedThisWave;
     private float _spawnTimer;
+
+    /// <summary>The map's pace and the two intervals it produces, resolved once at match start.</summary>
+    private float _pace = DefaultPace;
+    private float _spawnInterval = SpawnIntervalSeconds;
+    private float _waveBreak = WaveBreakSeconds;
 
     /// <summary>Seconds left of the between-waves break; <c>0</c> = not in a break.</summary>
     private float _breakTimer;
@@ -169,6 +182,11 @@ public sealed class ZombieMode : IGameMode
             _resuming = false;
             _savedRemaining = 0f;
 
+            // Pace is map data (§10.5): read at setup, never on the tick.
+            _pace = ResolvePace(director);
+            _spawnInterval = SpawnIntervalSeconds / _pace;
+            _waveBreak = WaveBreakSeconds / _pace;
+
             foreach (var netId in director.ObjectIdsOfKind(SpawnKind)) _spawnPoints.Add(netId);
         }
 
@@ -182,8 +200,8 @@ public sealed class ZombieMode : IGameMode
         else
         {
             Console.WriteLine($"[zombie] maç başladı — {director.RoundSeconds} sn, " +
-                              $"{_spawnPoints.Count} doğum noktası; süre bitince dayanıldı, tüm oyuncular " +
-                              "aynı anda ölürse kayıp.");
+                              $"{_spawnPoints.Count} doğum noktası, tempo ×{_pace:0.##}; süre bitince " +
+                              "dayanıldı, tüm oyuncular aynı anda ölürse kayıp.");
         }
 
         // No host = no brain: pause before the first wave rather than spawning zombies nobody drives.
@@ -360,14 +378,14 @@ public sealed class ZombieMode : IGameMode
         {
             // The wave is over only once the last CORPSE is gone: the despawn delay is the death
             // animation's window, and the break must not start on top of it.
-            if (_zombies.Count == 0) _breakTimer = WaveBreakSeconds;
+            if (_zombies.Count == 0) _breakTimer = _waveBreak;
             return;
         }
 
         _spawnTimer -= deltaSeconds;
         if (_spawnTimer > 0f) return;
 
-        _spawnTimer = SpawnIntervalSeconds;
+        _spawnTimer = _spawnInterval;
         if (StandingCountLocked() >= ConcurrentCapOf(_wave)) return;
 
         SpawnZombieLocked(director);
@@ -508,8 +526,23 @@ public sealed class ZombieMode : IGameMode
 
     private static int WaveTotal(int wave) => WavePerWave * Math.Max(1, wave);
 
-    private static int ConcurrentCapOf(int wave) =>
-        Math.Min(ConcurrentCapMax, ConcurrentBase + Math.Max(1, wave));
+    /// <summary><c>(ConcurrentBase + wave) × pace</c>, clamped. Never below 1 — a rounded-down cap would
+    /// leave the arena empty for the whole wave, which never ends then (a wave ends when its zombies
+    /// die).</summary>
+    private int ConcurrentCapOf(int wave)
+    {
+        int baseCap = ConcurrentBase + Math.Max(1, wave);
+        int paced = (int)MathF.Round(baseCap * _pace, MidpointRounding.AwayFromZero);
+        return Math.Clamp(paced, 1, ConcurrentCapMax);
+    }
+
+    /// <summary>The map's pace (§10.5), clamped; the mode's default when the map sets none.</summary>
+    private static float ResolvePace(MatchDirector director)
+    {
+        // <= 0 = old export with no field, or a scene outside the catalog: the map asks for nothing.
+        float pace = director.CurrentMap?.zombiePace ?? 0f;
+        return pace > 0f ? Math.Clamp(pace, MinPace, MaxPace) : DefaultPace;
+    }
 
     private static float DamageOfWave(int wave) =>
         Math.Min(DamageCap, DamageBase + DamagePerWave * (Math.Max(1, wave) - 1));
