@@ -232,6 +232,23 @@ public sealed class WorldObjectTable
         return true;
     }
 
+    /// <summary>Breaks an object outright (hp 0 + <c>Broken</c>) with no shooter; false = no such object
+    /// or it is already broken. The mode's path for a kill nobody fired at.</summary>
+    public bool BreakLocked(int netId, out NetObjectEntry entry)
+    {
+        if (!_byNetId.TryGetValue(netId, out var found))
+        {
+            entry = null!;
+            return false;
+        }
+
+        entry = found;
+        if ((found.Flags & ArenaProtocol.OBJECT_FLAG_BROKEN) != 0) return false;
+        found.Hp = 0f;
+        found.Flags |= ArenaProtocol.OBJECT_FLAG_BROKEN;
+        return true;
+    }
+
     // ---- Ownership (§10.10) ----
 
     /// <summary>object_grab gates: the object exists → its kind is grabbable → it is in NOBODY'S HAND. On
@@ -486,8 +503,11 @@ public sealed class WorldObjectTable
     /// (owned + <c>Awake</c>, §10.10): its owner's physics drops it and <c>object_rest</c> closes the
     /// flight. ⚠️ An OWNERLESS object is kinematic on every headset and would hang in the air at its
     /// spawn pose.</para></remarks>
+    /// <param name="maxHp">Per-object health ceiling overriding the kind's (§10.10): the same
+    /// <c>kind</c> may spawn with different HP (zombie types). <c>null</c>/<c>&lt;= 0</c> = the kind's
+    /// value. ⚠️ Server-internal — no wire field carries a ceiling.</param>
     public bool TrySpawnLocked(string? kind, PoseData pose, int owner, bool rightHand, string? payload,
-        bool inHand, out NetObjectEntry entry, out string rejectReason)
+        bool inHand, float? maxHp, out NetObjectEntry entry, out string rejectReason)
     {
         entry = null!;
         if (!_kinds.TryGet(kind, out var kindEntry))
@@ -502,12 +522,14 @@ public sealed class WorldObjectTable
             return false;
         }
 
+        float hp = maxHp.HasValue && maxHp.Value > 0f ? maxHp.Value : kindEntry.maxHp;
+
         entry = new NetObjectEntry
         {
             NetId = netId,
             Kind = kindEntry.kind,
-            MaxHp = kindEntry.maxHp,
-            Hp = kindEntry.maxHp,
+            MaxHp = hp,
+            Hp = hp,
             Owner = owner,
             Flags = owner == 0
                 ? 0

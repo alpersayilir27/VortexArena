@@ -24,12 +24,15 @@ namespace VortexArena.Modes.Zombie
         [SerializeField] private AudioClip[] deathClips;
         [Tooltip("Zombi ilk göründüğünde ve kat değiştirdiğinde çalar. Boşsa homurtu havuzu kullanılır.")]
         [SerializeField] private AudioClip[] spawnClips;
+        [Tooltip("Çığırtkan ve Dev çığlığı. Boşsa belirme havuzu kullanılır.")]
+        [SerializeField] private AudioClip[] screamClips;
 
         [Header("Seviyeler")]
         [Range(0f, 1f)] [SerializeField] private float groanVolume = 0.65f;
         [Range(0f, 1f)] [SerializeField] private float attackVolume = 0.9f;
         [Range(0f, 1f)] [SerializeField] private float deathVolume = 0.9f;
         [Range(0f, 1f)] [SerializeField] private float spawnVolume = 0.7f;
+        [Range(0f, 1f)] [SerializeField] private float screamVolume = 1f;
 
         [Tooltip("Perde sapması: her çalışta ±bu değer. Aynı klip sürüyle çalınca tek ses gibi duyulmasın.")]
         [Range(0f, 0.5f)] [SerializeField] private float pitchJitter = 0.12f;
@@ -47,6 +50,8 @@ namespace VortexArena.Modes.Zombie
         [SerializeField] private float minDistance = 1f;
         [Tooltip("Bu mesafeden sonra duyulmaz (m).")]
         [SerializeField] private float maxDistance = 12f;
+        [Tooltip("Çığlık bu mesafeye kadar duyulur (m) — kalabalığa verilen uyarı, uzaktan duyulmalı.")]
+        [SerializeField] private float screamMaxDistance = 40f;
 
         [Header("Müzik (2B, Müzik kanalı)")]
         [Tooltip("Dalgalar arası gerilim katmanı — döngü.")]
@@ -60,6 +65,8 @@ namespace VortexArena.Modes.Zombie
         [SerializeField] private AudioClip waveStartSting;
         [Tooltip("Opsiyonel: dalga temizlendi vurgusu. Boş bırakılabilir.")]
         [SerializeField] private AudioClip waveClearSting;
+        [Tooltip("Opsiyonel: Son Direniş vurgusu. Boş bırakılabilir.")]
+        [SerializeField] private AudioClip finalStandSting;
 
         public float GroanVolume => groanVolume;
 
@@ -68,6 +75,8 @@ namespace VortexArena.Modes.Zombie
         public float DeathVolume => deathVolume;
 
         public float SpawnVolume => spawnVolume;
+
+        public float ScreamVolume => screamVolume;
 
         public float PitchJitter => pitchJitter;
 
@@ -81,6 +90,8 @@ namespace VortexArena.Modes.Zombie
 
         public float MaxDistance => Mathf.Max(MinDistance + 0.1f, maxDistance);
 
+        public float ScreamMaxDistance => Mathf.Max(MaxDistance, screamMaxDistance);
+
         public AudioClip MusicTension => musicTension;
 
         public AudioClip MusicWave => musicWave;
@@ -92,6 +103,9 @@ namespace VortexArena.Modes.Zombie
 
         /// <summary>Optional.</summary>
         public AudioClip WaveClearSting => waveClearSting;
+
+        /// <summary>Optional.</summary>
+        public AudioClip FinalStandSting => finalStandSting;
 
         private static ZombieSounds live;
         private static bool resolved;
@@ -132,6 +146,14 @@ namespace VortexArena.Modes.Zombie
         {
             AudioClip clip = Pick(spawnClips);
             return clip != null ? clip : Pick(groanClips);
+        }
+
+        /// <summary>Scream; falls back to the spawn pool (itself backed by the groans), so a half-filled
+        /// asset still gives the squad an audible warning.</summary>
+        public AudioClip RandomScream()
+        {
+            AudioClip clip = Pick(screamClips);
+            return clip != null ? clip : RandomSpawn();
         }
 
         private static AudioClip Pick(AudioClip[] pool)

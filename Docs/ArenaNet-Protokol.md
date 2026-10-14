@@ -8,7 +8,7 @@ Tümü paylaşılan `ArenaProtocol` statik sınıfında tanımlanır (`Assets/_S
 
 | Sabit | Değer | Açıklama |
 |---|---|---|
-| `PROTOCOL_VERSION` | `26` | hello/welcome'da taşınır. ⚠️ **Karışık sürüm desteklenmez ve bağlantıda REDDEDİLİR:** `hello.protocolVersion` sunucununkine eşit değilse sunucu cihazı **kaydetmeden** `version_mismatch` yollar (§5.3) ve bağlantıyı `VERSION_CLOSE_REASON` sebebiyle kapatır; cihaz adını ve iki sürümü sunucu konsoluna ve `admin_state.notice` ile adminlere yazar (cihaz başına en fazla dakikada bir). Rolden bağımsızdır: uyumsuz admin de reddedilir. ⚠️ **Ret bir atma (`kicked`) DEĞİLDİR:** atma oyuncu başlığında uygulamayı kapatır, gözlüğü takan operatör ise yalnız kapanmış bir uygulama görür ve sebebi okuyamaz. Ret edilen cihaz kabuk lobide kalır (`welcome` gelmediği için sahne yönlendirmesi hiç başlamaz), bağlantı kartında sürüm uyarısını gösterir ve olağan backoff'la denemeyi sürdürür — sunucu ya da APK eşitlenince kendiliğinden bağlanır. `version_mismatch`'i tanımayan eski APK mesajı yok sayar; kapanış sebebi atma olmadığı için o da kapanmaz, lobide "bağlantı koptu" kartında kalır. Gerekçe: aşağıdaki sürümlerin çoğunda karışık kurulum hata vermez, **sessizce yanlış çalışır** — ret bunu görünür bir "bağlanamıyor"a çevirir. Sürüm artınca tüm başlıklara yeni APK + admin + sunucu aynı turda kurulur. v26 üç ekleme taşır: `reviveAnchor:"teammate"` kural değeri (§10.4/§10.5), `revive_request.by` (§5.1) ve `hit_report.zone` (§5.1). Tel düzeni **değişmez** ve üç alanın yokluğu güvenli varsayılana düşer, ama sürüm yine artar: bilinmeyen `reviveAnchor` değerini eski istemci varsayılan `"base"`e indirir, taban bölgesi olmayan bir haritada da "taban" şartı anında sağlanmış sayılır — ölen oyuncu arkadaşını beklemeden kendi kalkar, yani ekip kuralı sessizce yok olur. v24 **kat modelini** getirir (`set_floor` §5.1, `PlayerInfo.floor` §5.3, kural §10.6 "Kat modeli"): tel biçimi **değişmez** — poz kanalı kat geçişinden sonra da mutlak Y taşır, kat yalnız roster'daki bir defter alanıdır. Karışık sürümde kaybolan kozmetik DEĞİLDİR: `set_floor` göndermeyen eski APK portalı hiç kullanamaz ve roster satırı `0`'da kalır, üst kata çıkanları da izdüşüm hayaleti olarak çizmez — maç başka katta sürerken o oyuncu zemin katında kalır ve kimseyi bulamaz. v23 iskelet blob'unu **format 2**'ye taşır (§6.9): başlığa `[i16 footY]` eklenir (blob 112→114 B) ve `hipX/Y/Z`'nin ANLAMI değişir — kalça gönderenin **oran uzayında** (kendi `bodyScale`'ine bölünmüş) gider, `footY` ise kökün üstündeki en alçak bacak ekleminin **gerçek metre** yüksekliğidir. Karışık sürümde blob hem `fmt` hem uzunluk kapısına takılır: uzak gövde §6.11 yedeğine düşer, sessiz bozulma yoktur ama canlı gövde de yoktur. v22 iskelet blob'unun **içeriğini** değiştirir (§6.9): SDK'nın native serileştirmesi yerine VortexArena'nın yazdığı sabit boylu düzen (`SkeletonWire`: kalça konumu + eklem rotasyonları) tele girer; `0x07`/`0x08` başlığı, 8 B kök ve `u16` uzunluk aynıdır, sunucu blob'u yine açmaz. Karışık sürümde alıcı uyuşmayan blob'u (`fmt` · uzunluk · eklem sayısı) atar ve uzak gövde §6.11'in kafa + kol IK yedeğine düşer — bozuk gövde değil ama **canlı gövde de yok**; sürüm reddedilmediği için tüm gözlükler + admin + sunucu aynı turda dağıtılır. v21 `status`/`PlayerInfo` üzerine **`body`** (gövde izleme durumu, §5.1/§5.3) ekler; tümüyle **eklemelidir** (bilmeyen uç `0` = "bildirilmedi" okur) ama sürüm yine artar: alanı yazan **istemcidir**, yani eski APK'lı oyuncunun T-poz yedeği ya da izin reddi operatöre **hiç görünmez** — v14 ile aynı gerekçe. v20 **istemci tarafı ölü-bağlantı bekçisini** getirir (§8): sunucu her `status`'a `heartbeat` ile cevap verir (§5.3), istemci `HEARTBEAT_TIMEOUT` boyunca hiçbir WS çerçevesi almazsa soketi **kendisi** düşürüp yeniden bağlanır; bağlanma denemesi de `CONNECT_TIMEOUT` ile sınırlıdır. Tel formatı eklemelidir ama karışık sürümde kaybolan şey kozmetik DEĞİLDİR: `heartbeat` yollamayan ESKİ sunucuya karşı YENİ istemci her 15 sn'de soketi düşürür ve bağlantı hiç oturmaz — sürüm bu yüzden artar. v19 iki değişikliği birden taşır ve tel DÜZENİNİ kırar. (1) **Poz bloğu quantize edildi** (§6.2): f32 yedi alan (28 B) yerine `[u32 rot][i16 x,y,z]` (10 B) — `0x01` 95→41 B, snapshot girdisi 88→34 B, `0x09` 34→16 B, `0x05` obje girdisi 30→12 B. (2) **İskelet kökü mutlak poz olmaktan çıktı** (§6.9): `0x07`/`0x08` kökü artık `[u16 yaw][i16 dx,dy,dz]` = 8 B'dir ve poz kanalındaki kafanın zemin izdüşümüne göre OFSET taşır — alıcı kökü kendi interpolasyonlu kafasının üstüne kurar, yani iskelet kanalı geciktiğinde/koptuğunda gövde isim etiketiyle AYNI noktada kalır ("gövde başka yerde" ayrışması yapısal olarak kapanır). Karışık sürümde belirti v7'dekiyle aynıdır: eski uç yeni baytları f32 diye okur ve uzak oyuncular çöp pozlara ışınlanır; bozulma iki yönlüdür. v18 **ağ nesnesi modelinin ikinci fazını** getirir: sahiplik ve obje pozu (`object_grab`/`object_release`/`object_rest` §5.1, `object_state`'in `owner`/`pos`/`rot`/`stage` alanları §5.3, UDP `0x09 ObjectPose` §6.12 ve `0x05`'in **obje bölümü** §6.8), obje olayları (`object_event`, **iki yönlü**) ve dinamik doğuş/ölüm (`object_spawn`/`object_despawn`) — kural §10.10, `kinds[]` girdisi `grab` + `events[]` kazanır (§11). ⚠️ **Bu artış tel DÜZENİNİ bozar:** `0x05`'in başlığı 7 B'den 8 B'ye çıkar (`objectCount`), yani eski istemci o paketin **tamamını** yanlış hizalar — karışık sürümde kaybolan şey kozmetik bir obje değil **snapshot'ın kendisidir**: uzak oyuncular çöp pozlara ışınlanır. Bozulma iki yönlüdür — eski APK `object_grab` göndermediği için hiçbir tutulabilir objeyi alamaz, yenilerin taşıdığı objeyi de sahnedeki yerinde donmuş görür. v17 **ağ nesnesi modelinin ilk fazını** getirir: sunucu artık oyuncu olmayan varlıkların (kırılabilir örtü, hedef tahtası) canını da tutar — `object_state` + `world_state` (§5.3), `hit_report.targetNetId` (§5.1), kural §10.10, `maps.json`'da `objects[]` + `kinds[]` (§11). Tel formatı **eklemelidir** ama karışık sürümde kaybolan şey kozmetik DEĞİLDİR: eski APK `targetNetId` göndermediği için hiçbir objeyi kıramaz, gelen `object_state`'i de yok saydığı için başkalarının kırdığı örtüyü **sağlam görmeye devam eder** — iki oyuncu aynı duvarın iki yanında farklı şey görür, biri kendini siperde sanırken diğeri onu açıkta vurur. v16 `identify` mesajını **her iki yönden de KALDIRIR**: admin→sunucu komutu da, sunucu→istemci bildirimi de yoktur. Kırıcı değildir ama sessizdir — eski bir admin komutu yollarsa yeni sunucu tipi `default` dalında yok sayar, düğme basılır ve hiçbir şey olmaz; eski bir başlığa da artık hiç bildirim gitmez. v15 `clear_calibration`'a **`keepSaved` (bool)** ekler (§5.2/§5.3, davranış §10.6): sıfırlama iki eyleme ayrılır — *hizalamayı geçersiz kıl* (gözlükteki kayıtlı çapa ve UUID korunur, `reload_calibration` çalışmaya devam eder) ve *cihaz kaydını da sil*. ⚠️ **Alanın YOKLUĞU `keepSaved:false` demektir** (sert kip): alanı tanımayan bir uç bugünkü davranışı sürdürür, sürpriz yapmaz. Karışık sürümde kaybolan şey bozuk çizim değil, operatörün *yumuşak* seçiminin sert uygulanmasıdır — kayıtlı çapa silinir ve o oyuncuda `reload_calibration` bir daha iş görmez. v14 **alan-dışını tele taşır**: `flags` bit7 = `FLAG_OUT_OF_BOUNDS` (§6.3) + yalnız adminlere giden `violation` akışı (§5.3, §10.9). Tel formatı **değişmez** (95 B / 88 B aynı, bit rezervden alındı, bant artışı sıfır) ama sürüm yine de artar: biti yazan **istemcidir**, yani eski APK'lı oyuncu onu hiç göndermez ve adminde alan dışına çıktığı **hiç görünmez** — kaybolan şey bozuk çizim değil, operatörün göremediği bir ihlaldir. ⚠️ **Bu bit CAN ERİTMEZ** (§10.9): ceza modeli yalnız `FLAG_IN_OBSTACLE`'a bağlıdır. v13 **kalibre modunu** (`set_calibration_mode` §5.2, `admin_state.calibrationMode` + `welcome.calibrationMode` §5.3, davranış §10.6), **zemin sapması bildirimini** (`set_calibration.floorOffset` §5.1 → `PlayerInfo.floorOffset` §5.3) ve **ölçüm başarısızlığı geri bildirimini** (`set_body_scale.error` §5.1 → `PlayerInfo.scaleError` §5.3, §10.8) getirir; tümüyle **eklemelidir**. Karışık sürümde: alanları göndermeyen eski istemcinin zemin sapması ve ölçüm gerekçesi operatöre hiç görünmez, `welcome.calibrationMode`'u okumayan başlık ise modu yok sayıp bugünkü davranışta (diskten çapa geri yükleme) kalır — kaybolan kural, bozuk çizim değil. v12 iskelet blob'undan **parmak eklemlerini çıkarır** (§6.9): hedef iskeletin 40 parmak eklemi tele hiç girmez, parmakları alıcı kendi sentezler. ⚠️ **Bu değişiklik KIRICIDIR ve sessizdir** — o sürümün SDK blob'u opak olduğu için eklem listesi uyuşmayan iki uç hata vermez, yalnız gövdeyi bozuk çizer; karışık sürümde belirti "uzak oyuncular garip duruyor"dur. v11 **engel ihlalini** taşır: `flags` bit5 = `FLAG_IN_OBSTACLE` (§6.3) + sunucu tarafında saniyelik can eritme (§10.9) — tümüyle **eklemelidir** (bayt düzeni değişmedi, bit rezervden alındı). Karışık sürümde: eski istemci biti hiç göndermez (o oyuncu duvarda ceza almaz) ve gelen biti yok sayar (admin halkası yanıp sönmez). v10 kumanda durumunu taşır: `flags` bit3/bit4 = **bayat el** (§6.3) + `status`/`PlayerInfo` üzerinde `ctrlL`/`ctrlR` (§5.1/§5.3) — tümüyle **eklemelidir** (bayt düzeni değişmedi, bitler rezervden alındı), bilmeyen uç bitleri yok sayar ve alanları `0` = "bildirilmedi" okur. v10 ayrıca `clear_calibration`'a **sunucu → istemci yönü** ekler (§5.2/§5.3): sıfırlama artık roster'a yazılan bir boole değil hedef başlığa iletilen bir komuttur. Bu yön de eklemelidir — tanımayan eski istemci mesajı yok sayar ve **yarım kalmış elle kalibrasyonu** (A alındı, B alınmadı) başlığında tutmaya devam eder, yani karışık sürümde bozulan tek şey operatörün o oyuncuyu sıfırlayamamasıdır. v9 gövde ölçeğini getirdi (`measure_body_scale` · `set_body_scale` · `PlayerInfo.bodyScale`, §10.8): tümüyle **eklemelidir**, eski istemci alanı bulamayınca `0` okur ve herkesi ölçeksiz çizer — yani karışık sürümde bozulan tek şey avatar boylarıdır. v8'de `lobby_state`'in `online` (bool) alanı yerini üç değerli `connection` + `reconnectSeconds`'a bıraktı (§5.3): alanı tanımayan eski admin her satırı "bağlı" çizer, yani kopan oyuncular hiç fark edilmez. v7'yi kırıcı yapan tel DÜZENİ değil **ANLAMIDIR**: baytlar v6 ile birebir aynı, ama `0x01`/`0x02`/`0x05` pozları, `0x03` atış yönleri ve `0x07`/`0x08` iskelet kökleri artık arena uzayı = dünya uzayı çerçevesinde okunur (§3). Eski istemci aynı baytları kendi sahne marker'ına göre çözer → iki taraf birbirini metrelerce kaymış, zeminin altında veya havada görür; belirti **"uzak oyuncular rastgele yerlere ışınlanıyor"**. v6'da bozulma iki yönlüydü: `0x07`/`0x08`'i tanımayan istemci uzak gövdeleri hiç çizemez, iskelet göndermeyen istemci de gövdesiz görünür (§6.9). v5'te bozulan tek yer `0x05` birleştirmesiydi (§6.8) |
+| `PROTOCOL_VERSION` | `26` | hello/welcome'da taşınır. ⚠️ **Karışık sürüm desteklenmez ve bağlantıda REDDEDİLİR:** `hello.protocolVersion` sunucununkine eşit değilse sunucu cihazı **kaydetmeden** `version_mismatch` yollar (§5.3) ve bağlantıyı `VERSION_CLOSE_REASON` sebebiyle kapatır; cihaz adını ve iki sürümü sunucu konsoluna ve `admin_state.notice` ile adminlere yazar (cihaz başına en fazla dakikada bir). Rolden bağımsızdır: uyumsuz admin de reddedilir. ⚠️ **Ret bir atma (`kicked`) DEĞİLDİR:** atma oyuncu başlığında uygulamayı kapatır, gözlüğü takan operatör ise yalnız kapanmış bir uygulama görür ve sebebi okuyamaz. Ret edilen cihaz kabuk lobide kalır (`welcome` gelmediği için sahne yönlendirmesi hiç başlamaz), bağlantı kartında sürüm uyarısını gösterir ve olağan backoff'la denemeyi sürdürür — sunucu ya da APK eşitlenince kendiliğinden bağlanır. `version_mismatch`'i tanımayan eski APK mesajı yok sayar; kapanış sebebi atma olmadığı için o da kapanmaz, lobide "bağlantı koptu" kartında kalır. Gerekçe: aşağıdaki sürümlerin çoğunda karışık kurulum hata vermez, **sessizce yanlış çalışır** — ret bunu görünür bir "bağlanamıyor"a çevirir. Sürüm artınca tüm başlıklara yeni APK + admin + sunucu aynı turda kurulur. v26 şu eklemeleri taşır: `reviveAnchor:"teammate"` kural değeri (§10.4/§10.5), `revive_request.by` (§5.1) ve `hit_report.zone` (§5.1). Tel düzeni **değişmez** ve üç alanın yokluğu güvenli varsayılana düşer, ama sürüm yine artar: bilinmeyen `reviveAnchor` değerini eski istemci varsayılan `"base"`e indirir, taban bölgesi olmayan bir haritada da "taban" şartı anında sağlanmış sayılır — ölen oyuncu arkadaşını beklemeden kendi kalkar, yani ekip kuralı sessizce yok olur. v26 ayrıca **zombi türlerini** (`payload`'ın `t`/`c`/`n` anahtarları) ve **Son Direniş**'i (`modeState`'in `fs`/`dev`/`wx` anahtarları) taşır (§10.5): ikisi de mevcut alanların **içinde** eklemelidir, tanımayan uç bilinmeyen anahtarı atlar ve her zombiyi yürüyen gibi sürer. v24 **kat modelini** getirir (`set_floor` §5.1, `PlayerInfo.floor` §5.3, kural §10.6 "Kat modeli"): tel biçimi **değişmez** — poz kanalı kat geçişinden sonra da mutlak Y taşır, kat yalnız roster'daki bir defter alanıdır. Karışık sürümde kaybolan kozmetik DEĞİLDİR: `set_floor` göndermeyen eski APK portalı hiç kullanamaz ve roster satırı `0`'da kalır, üst kata çıkanları da izdüşüm hayaleti olarak çizmez — maç başka katta sürerken o oyuncu zemin katında kalır ve kimseyi bulamaz. v23 iskelet blob'unu **format 2**'ye taşır (§6.9): başlığa `[i16 footY]` eklenir (blob 112→114 B) ve `hipX/Y/Z`'nin ANLAMI değişir — kalça gönderenin **oran uzayında** (kendi `bodyScale`'ine bölünmüş) gider, `footY` ise kökün üstündeki en alçak bacak ekleminin **gerçek metre** yüksekliğidir. Karışık sürümde blob hem `fmt` hem uzunluk kapısına takılır: uzak gövde §6.11 yedeğine düşer, sessiz bozulma yoktur ama canlı gövde de yoktur. v22 iskelet blob'unun **içeriğini** değiştirir (§6.9): SDK'nın native serileştirmesi yerine VortexArena'nın yazdığı sabit boylu düzen (`SkeletonWire`: kalça konumu + eklem rotasyonları) tele girer; `0x07`/`0x08` başlığı, 8 B kök ve `u16` uzunluk aynıdır, sunucu blob'u yine açmaz. Karışık sürümde alıcı uyuşmayan blob'u (`fmt` · uzunluk · eklem sayısı) atar ve uzak gövde §6.11'in kafa + kol IK yedeğine düşer — bozuk gövde değil ama **canlı gövde de yok**; sürüm reddedilmediği için tüm gözlükler + admin + sunucu aynı turda dağıtılır. v21 `status`/`PlayerInfo` üzerine **`body`** (gövde izleme durumu, §5.1/§5.3) ekler; tümüyle **eklemelidir** (bilmeyen uç `0` = "bildirilmedi" okur) ama sürüm yine artar: alanı yazan **istemcidir**, yani eski APK'lı oyuncunun T-poz yedeği ya da izin reddi operatöre **hiç görünmez** — v14 ile aynı gerekçe. v20 **istemci tarafı ölü-bağlantı bekçisini** getirir (§8): sunucu her `status`'a `heartbeat` ile cevap verir (§5.3), istemci `HEARTBEAT_TIMEOUT` boyunca hiçbir WS çerçevesi almazsa soketi **kendisi** düşürüp yeniden bağlanır; bağlanma denemesi de `CONNECT_TIMEOUT` ile sınırlıdır. Tel formatı eklemelidir ama karışık sürümde kaybolan şey kozmetik DEĞİLDİR: `heartbeat` yollamayan ESKİ sunucuya karşı YENİ istemci her 15 sn'de soketi düşürür ve bağlantı hiç oturmaz — sürüm bu yüzden artar. v19 iki değişikliği birden taşır ve tel DÜZENİNİ kırar. (1) **Poz bloğu quantize edildi** (§6.2): f32 yedi alan (28 B) yerine `[u32 rot][i16 x,y,z]` (10 B) — `0x01` 95→41 B, snapshot girdisi 88→34 B, `0x09` 34→16 B, `0x05` obje girdisi 30→12 B. (2) **İskelet kökü mutlak poz olmaktan çıktı** (§6.9): `0x07`/`0x08` kökü artık `[u16 yaw][i16 dx,dy,dz]` = 8 B'dir ve poz kanalındaki kafanın zemin izdüşümüne göre OFSET taşır — alıcı kökü kendi interpolasyonlu kafasının üstüne kurar, yani iskelet kanalı geciktiğinde/koptuğunda gövde isim etiketiyle AYNI noktada kalır ("gövde başka yerde" ayrışması yapısal olarak kapanır). Karışık sürümde belirti v7'dekiyle aynıdır: eski uç yeni baytları f32 diye okur ve uzak oyuncular çöp pozlara ışınlanır; bozulma iki yönlüdür. v18 **ağ nesnesi modelinin ikinci fazını** getirir: sahiplik ve obje pozu (`object_grab`/`object_release`/`object_rest` §5.1, `object_state`'in `owner`/`pos`/`rot`/`stage` alanları §5.3, UDP `0x09 ObjectPose` §6.12 ve `0x05`'in **obje bölümü** §6.8), obje olayları (`object_event`, **iki yönlü**) ve dinamik doğuş/ölüm (`object_spawn`/`object_despawn`) — kural §10.10, `kinds[]` girdisi `grab` + `events[]` kazanır (§11). ⚠️ **Bu artış tel DÜZENİNİ bozar:** `0x05`'in başlığı 7 B'den 8 B'ye çıkar (`objectCount`), yani eski istemci o paketin **tamamını** yanlış hizalar — karışık sürümde kaybolan şey kozmetik bir obje değil **snapshot'ın kendisidir**: uzak oyuncular çöp pozlara ışınlanır. Bozulma iki yönlüdür — eski APK `object_grab` göndermediği için hiçbir tutulabilir objeyi alamaz, yenilerin taşıdığı objeyi de sahnedeki yerinde donmuş görür. v17 **ağ nesnesi modelinin ilk fazını** getirir: sunucu artık oyuncu olmayan varlıkların (kırılabilir örtü, hedef tahtası) canını da tutar — `object_state` + `world_state` (§5.3), `hit_report.targetNetId` (§5.1), kural §10.10, `maps.json`'da `objects[]` + `kinds[]` (§11). Tel formatı **eklemelidir** ama karışık sürümde kaybolan şey kozmetik DEĞİLDİR: eski APK `targetNetId` göndermediği için hiçbir objeyi kıramaz, gelen `object_state`'i de yok saydığı için başkalarının kırdığı örtüyü **sağlam görmeye devam eder** — iki oyuncu aynı duvarın iki yanında farklı şey görür, biri kendini siperde sanırken diğeri onu açıkta vurur. v16 `identify` mesajını **her iki yönden de KALDIRIR**: admin→sunucu komutu da, sunucu→istemci bildirimi de yoktur. Kırıcı değildir ama sessizdir — eski bir admin komutu yollarsa yeni sunucu tipi `default` dalında yok sayar, düğme basılır ve hiçbir şey olmaz; eski bir başlığa da artık hiç bildirim gitmez. v15 `clear_calibration`'a **`keepSaved` (bool)** ekler (§5.2/§5.3, davranış §10.6): sıfırlama iki eyleme ayrılır — *hizalamayı geçersiz kıl* (gözlükteki kayıtlı çapa ve UUID korunur, `reload_calibration` çalışmaya devam eder) ve *cihaz kaydını da sil*. ⚠️ **Alanın YOKLUĞU `keepSaved:false` demektir** (sert kip): alanı tanımayan bir uç bugünkü davranışı sürdürür, sürpriz yapmaz. Karışık sürümde kaybolan şey bozuk çizim değil, operatörün *yumuşak* seçiminin sert uygulanmasıdır — kayıtlı çapa silinir ve o oyuncuda `reload_calibration` bir daha iş görmez. v14 **alan-dışını tele taşır**: `flags` bit7 = `FLAG_OUT_OF_BOUNDS` (§6.3) + yalnız adminlere giden `violation` akışı (§5.3, §10.9). Tel formatı **değişmez** (95 B / 88 B aynı, bit rezervden alındı, bant artışı sıfır) ama sürüm yine de artar: biti yazan **istemcidir**, yani eski APK'lı oyuncu onu hiç göndermez ve adminde alan dışına çıktığı **hiç görünmez** — kaybolan şey bozuk çizim değil, operatörün göremediği bir ihlaldir. ⚠️ **Bu bit CAN ERİTMEZ** (§10.9): ceza modeli yalnız `FLAG_IN_OBSTACLE`'a bağlıdır. v13 **kalibre modunu** (`set_calibration_mode` §5.2, `admin_state.calibrationMode` + `welcome.calibrationMode` §5.3, davranış §10.6), **zemin sapması bildirimini** (`set_calibration.floorOffset` §5.1 → `PlayerInfo.floorOffset` §5.3) ve **ölçüm başarısızlığı geri bildirimini** (`set_body_scale.error` §5.1 → `PlayerInfo.scaleError` §5.3, §10.8) getirir; tümüyle **eklemelidir**. Karışık sürümde: alanları göndermeyen eski istemcinin zemin sapması ve ölçüm gerekçesi operatöre hiç görünmez, `welcome.calibrationMode`'u okumayan başlık ise modu yok sayıp bugünkü davranışta (diskten çapa geri yükleme) kalır — kaybolan kural, bozuk çizim değil. v12 iskelet blob'undan **parmak eklemlerini çıkarır** (§6.9): hedef iskeletin 40 parmak eklemi tele hiç girmez, parmakları alıcı kendi sentezler. ⚠️ **Bu değişiklik KIRICIDIR ve sessizdir** — o sürümün SDK blob'u opak olduğu için eklem listesi uyuşmayan iki uç hata vermez, yalnız gövdeyi bozuk çizer; karışık sürümde belirti "uzak oyuncular garip duruyor"dur. v11 **engel ihlalini** taşır: `flags` bit5 = `FLAG_IN_OBSTACLE` (§6.3) + sunucu tarafında saniyelik can eritme (§10.9) — tümüyle **eklemelidir** (bayt düzeni değişmedi, bit rezervden alındı). Karışık sürümde: eski istemci biti hiç göndermez (o oyuncu duvarda ceza almaz) ve gelen biti yok sayar (admin halkası yanıp sönmez). v10 kumanda durumunu taşır: `flags` bit3/bit4 = **bayat el** (§6.3) + `status`/`PlayerInfo` üzerinde `ctrlL`/`ctrlR` (§5.1/§5.3) — tümüyle **eklemelidir** (bayt düzeni değişmedi, bitler rezervden alındı), bilmeyen uç bitleri yok sayar ve alanları `0` = "bildirilmedi" okur. v10 ayrıca `clear_calibration`'a **sunucu → istemci yönü** ekler (§5.2/§5.3): sıfırlama artık roster'a yazılan bir boole değil hedef başlığa iletilen bir komuttur. Bu yön de eklemelidir — tanımayan eski istemci mesajı yok sayar ve **yarım kalmış elle kalibrasyonu** (A alındı, B alınmadı) başlığında tutmaya devam eder, yani karışık sürümde bozulan tek şey operatörün o oyuncuyu sıfırlayamamasıdır. v9 gövde ölçeğini getirdi (`measure_body_scale` · `set_body_scale` · `PlayerInfo.bodyScale`, §10.8): tümüyle **eklemelidir**, eski istemci alanı bulamayınca `0` okur ve herkesi ölçeksiz çizer — yani karışık sürümde bozulan tek şey avatar boylarıdır. v8'de `lobby_state`'in `online` (bool) alanı yerini üç değerli `connection` + `reconnectSeconds`'a bıraktı (§5.3): alanı tanımayan eski admin her satırı "bağlı" çizer, yani kopan oyuncular hiç fark edilmez. v7'yi kırıcı yapan tel DÜZENİ değil **ANLAMIDIR**: baytlar v6 ile birebir aynı, ama `0x01`/`0x02`/`0x05` pozları, `0x03` atış yönleri ve `0x07`/`0x08` iskelet kökleri artık arena uzayı = dünya uzayı çerçevesinde okunur (§3). Eski istemci aynı baytları kendi sahne marker'ına göre çözer → iki taraf birbirini metrelerce kaymış, zeminin altında veya havada görür; belirti **"uzak oyuncular rastgele yerlere ışınlanıyor"**. v6'da bozulma iki yönlüydü: `0x07`/`0x08`'i tanımayan istemci uzak gövdeleri hiç çizemez, iskelet göndermeyen istemci de gövdesiz görünür (§6.9). v5'te bozulan tek yer `0x05` birleştirmesiydi (§6.8) |
 | `UDP_BEACON_PORT` | `47820` | Sunucu → broadcast (cosmos 47800/47801 ile bilerek çakışmaz) |
 | `CONTROL_PORT` | `47821` | WS TCP, endpoint `/ws` |
 | `STATE_PORT` | `47822` | UDP poz kanalı |
@@ -2394,8 +2394,8 @@ kuralın söyleyeceği bir şey yoktur (telde yine `false` gider).
 > `allies:true`), silah sahnedeki çerçevelerden gelir ve zombiler dalga dalga gelip **yakın dövüşle**
 > vurur. Varsayılan süresi **600 sn**'dir. Kazanan takım yoktur (`shared` skor) — maçın sonucu
 > `modeState`'in `over:` anahtarıyla taşınır: süre ekip ayaktayken dolarsa `over:survived` (zafer),
-> ekip düşerse `over:lost`. `over:rescued` **ayrılmıştır** (Son Direniş'in sonu) ve bugün hiçbir yol
-> onu yazmaz; okuyan istemci onu da zafer sayar. Sonuç ekranı operatör kapatana kadar durur
+> **Son Direniş**'te Dev öldürülürse `over:rescued` (zafer, aşağıda), ekip düşerse `over:lost`.
+> Sonuç ekranı operatör kapatana kadar durur
 > (`HoldsResultForOperator`, §10.1). Canlanma `teammate`'tir ve doğma koruması 3 sn'dir
 > (`SpawnProtectionSeconds`, §10.4): oyuncu öldüğü yerde canlanır, yani zombilerin ortasında
 > canlanabilir. Canlanma canı arkadaş kaldırdığında **50**, dalga arası dirilişinde **tam**dır
@@ -2416,17 +2416,45 @@ kuralın söyleyeceği bir şey yoktur (telde yine `false` gider).
 >
 > | `kind` | `maxHp` | `grab` | `events[]` | Ne |
 > |---|---|---|---|---|
-> | `zombie` | `100` | `none` | `attack` (`policy:"owner"`, `phaseGate:"playing"`) | Dinamik doğan zombi. `stage` yalnız `0`'dır — ölüm ayrı bir aşama değil `Broken` bayrağıdır |
+> | `zombie` | `100` | `none` | `attack` (`policy:"owner"`, `phaseGate:"playing"`) | Dinamik doğan zombi. `stage` yalnız `0`'dır — ölüm ayrı bir aşama değil `Broken` bayrağıdır. ⚠️ Katalogdaki `maxHp` yalnız **yürüyenin** canıdır: mod her doğumda **türün** canını yazar (§10.10 dinamik doğuş) |
 > | `zombie_spawn` | `0` | `none` | — | Sahnede bake'li doğum noktası; görseli yoktur, hasar almaz, yalnız `netId`'si için vardır |
 >
-> **`payload` (`s`) biçimi:** `sp:<doğum noktası netId>;w:<dalga>;a:<saldırı sayacı>`. Sunucu her
-> yazışta **tam** string'i yazar (anahtar düşmez), istemci bilmediği anahtarı atlar.
+> **`payload` (`s`) biçimi:** `sp:<doğum noktası netId>;w:<dalga>;a:<saldırı sayacı>;t:<tür>` +
+> yalnız çığlıkçı ve Dev'de `;c:<çığlık sayacı>` + yalnız Dev'in çağırdığı yürüyende
+> `;n:<çağıran Dev netId>`. Sunucu bir zombinin payload'ını her yazışta **tam** yazar (o zombiye ait
+> anahtar düşmez), istemci bilmediği anahtarı atlar.
 >
 > | Anahtar | Ne |
 > |---|---|
 > | `sp` | Zombinin doğduğu `zombie_spawn` objesinin `netId`'si. ⚠️ **Konum tele girmez ve giremez:** sunucu metre bilmez (§10.10), `maps.json`'ın obje satırı yalnız `sceneId` + `kind` taşır. Beyin bu kimlikten sahnedeki transform'u kendisi çözer |
 > | `w` | Zombinin doğduğu dalga. Beyin **hızını** buradan türetir; hasarı HİÇ bilmez |
 > | `a` | Kabul edilen saldırı sayacı; her geçen saldırıda artar. İstemci saldırı animasyonunu bu sayının **değişiminden** oynatır — tek yayın, geri alma yok, `mole`'un nonce'u gibi |
+> | `t` | Zombi **türü** (aşağıdaki tablo). Anahtar yoksa **yürüyen** okunur. Türü **sunucu seçer**: can, hasar, erişim ve puan sunucudadır, beyin bu kimlikten yalnız modeli, animasyonu ve hızı çözer |
+> | `c` | Çığlık sayacı; yalnız **çığlıkçı** ve **Dev**'de bulunur. Her çığlıkta artar ve istemci çığlık animasyonunu/sesini bu sayının **değişiminden** oynatır (`a` ile aynı sözleşme). Çığlıkçının yakındaki zombileri **coşturması** (enrage) da beynin bu değişimde uyguladığı iştir |
+> | `n` | Zombiyi **çağıran Dev'in `netId`'si**; yalnız Son Direniş'te Dev'in çağırdığı yürüyenlerde bulunur. Beyin o zombiyi doğum noktası yerine **Dev'in yanına** koyar |
+>
+> **Zombi türleri — tür seçimi SUNUCUDADIR** (hasar/can/puan sunucuda, hız/davranış beyinde):
+>
+> | `t` | Can | Hasar | Bekleme | Sunucu erişim sınırı | Öldürme puanı | Ayakta tavanı |
+> |---|---|---|---|---|---|---|
+> | `walker` | 100 | dalga hasarı | 1,5 sn | 2,5 m | 1 | — |
+> | `crawler` | 60 | ×0,6 | 1,5 sn | 2,5 m | 1 | — |
+> | `runner` | 60 | ×0,75 | 1,5 sn | 2,5 m | 2 | — |
+> | `brute` | 400 | ×1,6 (tavan 60) | 1,5 sn | 2,5 m | 5 | 3 |
+> | `screamer` | 80 | ×0,5 | 1,5 sn | 2,5 m | 3 | 2 |
+> | `dev` | 2500 × max(2, `n`) | 45 | 2 sn | 3,0 m | 25 | 1 |
+>
+> Her türün canı **zorluk çarpanıyla** çarpılır: `easy` 0,7 · `normal` 1 · `hard` 1,3. Dev'in hasarı da
+> aynı çarpanla çarpılır (yuvarlanır); diğer türlerin hasarı `yuvarla(dalga hasarı × tür çarpanı)`dır ve
+> iride **60**'ta kırpılır — dalga hasarı zaten zorluğa göre geldiği için ona ikinci bir zorluk
+> çarpanı uygulanmaz. Dev'in `n`'si **Son Direniş başındaki bağlı oyuncu sayısıdır** (dalganın oyuncu
+> çarpanıyla aynı sayım). ⚠️ **Obje başına can telde YOKTUR:** `object_state` yalnız `hp` taşır
+> (§10.10), tür canı sunucunun içindedir; istemci Dev'in tavan canını `modeState`'in `dev` anahtarından
+> öğrenir.
+>
+> **Hız ve davranış beynindedir** (sunucu metre bilmez): yürüyen dalga hızında · sürünen ×0,45 ·
+> koşucu **daima** 1,2 · iri 0,6 · çığlıkçı dalga hızının ×0,9'u ve hedefinin **6–8 m**'sinde
+> durur · Dev 0,7. **1,2 m/s hız tavanı her türe uygulanır.**
 >
 > **Doğum noktası seçimi sunucudadır:** her doğumda `zombie_spawn` kimliklerinden **rastgele biri**
 > seçilir, **son kullanılan 3 nokta hariç** (üst üste aynı kapıdan akın gelmesin). Sahnede 4'ten az
@@ -2458,12 +2486,15 @@ kuralın söyleyeceği bir şey yoktur (telde yine `false` gider).
 >
 > **`object_event attack`:** `i:[hedef playerId]`, `f`/`s` boş — **hasar sayısı TAŞIMAZ.** Sunucu
 > kapıları (sırayla, düşen sessiz red): gönderen o zombinin sahibi mi (`policy:"owner"`) · faz
-> `playing` · zombi `Broken` değil · o zombinin saldırı bekleme süresi dolmuş · hedef bağlı
+> `playing` · zombi `Broken` değil · o zombinin saldırı bekleme süresi dolmuş (**türüne göre**, tür
+> tablosu) · hedef bağlı
 > **oyuncu**, canlı, kalibreli (§10.6) ve doğma koruması altında değil (§10.4) · zombinin son `0x09`
-> pozu ile hedefin son kafa pozu arasındaki **yatay** uzaklık `ATTACK_REACH_BOUND` (2,5 m) altında.
+> pozu ile hedefin son kafa pozu arasındaki **yatay** uzaklık `ATTACK_REACH_BOUND`'un **tür** değerinin
+> (tür tablosu: Dev 3,0 m, diğerleri 2,5 m) altında.
 > ⚠️ Son kapı bir **sınır**dır, doğrulama değil (§10.10 mantığı): sunucu metre bilmez, yalnız
 > mantıksız olanı düşürür — gecikme ve poz aralığı payı bu yüzden erişimin iki katıdır.
-> Geçen saldırının hasarı **dalga tablosundan** gelir, `health_update` `attackerId:0` ile yayılır ve
+> Geçen saldırının hasarı **dalga tablosu × tür çarpanından** gelir (Dev'de türün sabit hasarı),
+> `health_update` `attackerId:0` ile yayılır ve
 > ölüm **çevreseldir**: `kill_event` `killerId:0` + `weaponId:"zombie"` (`WEAPON_ID_ZOMBIE`) ile gider,
 > kimsenin `kills`'i artmaz ve `IGameMode.OnKill` skor yazmaz. Olay **relay EDİLMEZ** (`true` döner):
 > gerçeği `object_state`'in `payload`'ı (`a`) taşır.
@@ -2480,9 +2511,10 @@ kuralın söyleyeceği bir şey yoktur (telde yine `false` gider).
 > | Hasar | `12 + 4(d−1)`, tavan `32` | `15 + 4(d−1)`, tavan `40` | `20 + 5(d−1)`, tavan `50` |
 > | Boş kat tabanı (`fm`) | `2` | `3` | `4` |
 >
-> Zorluktan bağımsız olanlar: hız (istemcide) `0,7 + 0,1×(d−1)` m/s, **tavan 1,2 m/s** · saldırı
-> erişimi (istemcide) 1,2 m yatay, sunucu sınırı 2,5 m · saldırı bekleme 1,5 sn (vuruş karesi
-> animasyonun ~0,4. sn'si) · ölü zombinin silinmesi 3 sn sonra `object_despawn`.
+> Zorluktan bağımsız olanlar: **dalga hızı** (istemcide) `0,7 + 0,1×(d−1)` m/s, **tavan 1,2 m/s** —
+> tür çarpanları yukarıdaki tür tablosundadır · saldırı erişimi (istemcide) 1,2 m yatay, sunucu sınırı
+> türe göre · saldırı bekleme türe göre (vuruş karesi animasyonun ~0,4. sn'si) · ölü zombinin
+> silinmesi 3 sn sonra `object_despawn`.
 >
 > ⚠️ **Dalga arası bir nefes payıdır, boşluk değil:** düşmüş herkes o pencerede tam canla kalkar
 > (§10.4) ve silah değiştirilir, bu yüzden süre harita temposuyla bölünse de kısaltılırken bu iki
@@ -2494,12 +2526,66 @@ kuralın söyleyeceği bir şey yoktur (telde yine `false` gider).
 > **asla** aşmaz). ⚠️ Fotoğraf dalga başındadır, tik başına değil: ortada kopan/katılan bir oyuncu
 > koşan dalganın hedefini kaydırırsa dalga bitmez ya da birden boşalır.
 >
+> **Dalga dizilimi (hangi dalgada hangi tür).** Dizilim **etkin dalgadan** okunur:
+> `e = max(1, d + kayma)`, kayma `easy` −1 · `normal` 0 · `hard` +1 — yani zorluk yalnız sayıları
+> değil, türlerin **ne zaman** geldiğini de kaydırır. Önce iri ve çığlıkçı **adet** olarak ayrılır;
+> kalan **normal** kısım (toplam − iri − çığlıkçı) yürüyen/sürünen/koşucu **ağırlıklarına** göre
+> bölünür — ağırlıkların toplamı 100 olmak zorunda değildir, oranları işler:
+>
+> | `e` | yürüyen/sürünen/koşucu | iri | çığlıkçı | toplam çarpanı | özel |
+> |---|---|---|---|---|---|
+> | 1 | 100/0/0 | 0 | 0 | — | — |
+> | 2 | 85/15/0 | 0 | 0 | — | — |
+> | 3 | 70/10/20 | 0 | 0 | — | — |
+> | 4 | 65/10/25 | 1 | 0 | — | — |
+> | 5 | 30/0/70 | 0 | 0 | ×0,8 | `wx:swarm` |
+> | 6 | 55/10/25 | 2 | 1 | — | — |
+> | 7 | 50/10/30 | 2 | 1 | — | — |
+> | 8 | yalnız yürüyen | 4 | 0 | ×0,7 | `wx:heavy` |
+> | 9+ | 45/10/35 | 2 + ⌊(e−9)/2⌋ | 2 | — | — |
+>
+> **Özel dalga dönüşü** `e ≥ 11` ve `(e−11) mod 3 == 0` olan dalgalarda 9+ dizilimini ezer;
+> `k = ((e−11)/3) mod 3`:
+>
+> | `k` | Dalga | Dizilim |
+> |---|---|---|
+> | 0 | akın | `e = 5` ile aynı (`wx:swarm`) |
+> | 1 | ağır | yalnız yürüyen, iri `max(4, 9+ dizilimindeki iri + 2)`, toplam ×0,7 (`wx:heavy`) |
+> | 2 | çığlık gecesi | 9+ dizilimi, çığlıkçı **3** (`wx:scream`) |
+>
+> İri + çığlıkçı toplamı, dalgada **en az 1 normal zombi kalacak** şekilde kırpılır (önce çığlıkçı,
+> sonra iri azalır) — yoksa küçük bir dalga tamamen ağır türlerden oluşurdu. Normal kısım
+> ağırlıklarla yuvarlanarak bölünür, **artan koşucuya** yazılır; koşucu ağırlığı 0 olan dalgada artan
+> yürüyene gider (yuvarlama payı koşucusuz dalgaya koşucu sokmasın).
+>
+> **Doğumda tür seçimi:** kalan sayısı > 0 olan ve **ayakta tavanına** (iri 3, çığlıkçı 2) henüz
+> dayanmamış türler arasından, kalan sayıları ağırlık olacak şekilde rastgele biri seçilir. Uygun tür
+> yoksa o doğum **bekler** — tikin doğum hakkını harcamaz. Dalga yine ancak **bütün zombileri ölünce**
+> biter.
+>
 > **Tempo HARİTA verisidir, kod sabiti değil** (`maps.json → zombiePace`, §11): dar ya da çok katlı
 > bir arenada aynı akın boğucu olur, geniş arenada seyrek kalır. Tempo **doğum aralığını ve dalga
 > arasını böler, eşzamanlı tavanı çarpar** — ve **oyuncu çarpanından SONRA** uygulanır; kırpmalar
 > değişmez (eşzamanlı en az `1`, en çok zorluğun tavanı). `1` temel tempodur ve yukarıdaki tabloyu
 > olduğu gibi bırakır; alan yazılmamışsa (ya da `≤ 0` ise) `1` işler, yani mevcut arenalar tek satır
 > iş gerektirmez. Tempo maç başında **bir kez** okunur.
+>
+> **Son Direniş.** Maçın son bölümü ayrı bir fazdır: kalan süre **90 sn**'ye (`roundSeconds < 300` ise
+> **60 sn**'ye) indiğinde, faz `playing` ve en az bir dalga başlamışken **bir kez** açılır ve
+> `modeState`'e `fs:1` yazılır.
+>
+> | Kural | Ne |
+> |---|---|
+> | Dalga makinesi | Dalga arası iptal edilir ve **yeni dalga başlamaz**: `w` donar, `next:0`, `rem:0`. Doğum sürer — koşan dalganın ayakta tavanı ve dizilimiyle, **sonsuz**: deste boşalınca aynı dizilimden yeniden doldurulur |
+> | Dev | **Bir tane** doğar (`t:dev`); canı tür tablosundaki formüldür ve `modeState`'in `dev` anahtarıyla duyurulur |
+> | Dev'in çağrısı | Dev yaşadığı sürece **15 sn**'de bir `c`'si artar ve `n:<Dev netId>` ile **3 yürüyen** doğar. Bu doğumlar dalganın ayakta tavanını değil yalnız **mutlak tavanı (30)** gözetir |
+> | Çığlıkçı | `c`'si doğumdan **6 sn** sonra, ardından **10 sn**'de bir artar — bu normal dalgalarda da böyledir, Son Direniş'e özgü değildir |
+> | Dev öldürülürse | Öldürene **25** (+ kafadan **+1**); **yaşayan bütün zombiler aynı anda çöker** (`Broken`, puan yazılmaz), doğum durur ve **3 sn** sonra maç `over:rescued` ile biter |
+> | Süre Dev ölmeden dolarsa | `over:survived` — Son Direniş'e girmek kaybettirmez |
+> | Ekip düşerse | `over:lost` işlemeye devam eder; **Dev öldükten sonra** bu kapı kapanır (zafer sayılmış bir maçı son saniyede kaybettirmemek için) |
+>
+> İstemci tarafı: Son Direniş'te **bütün silahlar açılır** ve düşmüş oyuncular **kalkar** (istemcideki
+> canlanma penceresi, §10.4 yolu değişmez) — sunucu bunun için hiçbir şey yapmaz, `fs` yeter.
 >
 > ⚠️ **Hız tavanı bir güvenlik kuralıdır, denge ayarı değil:** free-roam alanda oyuncuyu
 > **koşturan** bir düşman onu gerçek duvara koşturur. Hızlı yürüyüş ~1,4 m/s'dir; 1,2 m/s'de oyuncu
@@ -2511,8 +2597,15 @@ kuralın söyleyeceği bir şey yoktur (telde yine `false` gider).
 > kalmak olay bölümüne de pay bırakır.
 >
 > **`modeState` biçimi:** `w:<dalga>;left:<ayakta zombi>;next:<sonraki dalgaya kalan sn|0>;rem:<bu
-> dalgada doğacak kalan zombi>;fm:<boş kat tabanı>;diff:<easy|normal|hard>` + maç biterken
+> dalgada doğacak kalan zombi>;fm:<boş kat tabanı>;diff:<easy|normal|hard>;fs:<0|1>` +
+> `;dev:<netId>/<tavan can>` + `;wx:<swarm|heavy|scream>` + maç biterken
 > `;over:<survived|rescued|lost>`. `rem` dalgalar arasında da `0`'dır.
+>
+> | Anahtar | Ne zaman | Ne |
+> |---|---|---|
+> | `fs` | daima | Son Direniş açık mı (`1`) |
+> | `dev` | Dev doğduğu andan maç sonuna kadar | Dev'in `netId`'si ve **tavan canı**; öncesinde anahtar hiç yazılmaz. İstemcinin patron can çubuğunu kurduğu tek kaynak — obje başına tavan can telde yoktur |
+> | `wx` | yalnız özel dalga koşarken | Koşan özel dalganın kimliği; dalga aralarında yazılmaz |
 > **Oyuncu başına sonuç jetonları** `zs<playerId>:<kafadan öldürme>/<kaldırma>` **yalnız bitiş
 > durumunda** yazılır (örn. `zs3:4/2`); ikisi de `0` olan oyuncu hiç yazılmayabilir, okuyan eksik
 > jetonu `0/0` sayar. Maç boyunca her tike yazılmamalarının sebebi boyuttur: sonuç ekranının
@@ -2522,7 +2615,8 @@ kuralın söyleyeceği bir şey yoktur (telde yine `false` gider).
 > gibi yazar.
 > ⚠️ `rem` ve `fm` **beynin girdisidir**, HUD süsü değil: kat kotası ikisinden hesaplanır (yukarıdaki
 > çok katlı kuralı). `start_match`'ten itibaren teldeki sıfır durumu
-> `w:0;left:0;next:0;rem:0;fm:3;diff:normal`dur (`InitialModeState`): sayaç yükleme ekranından beri
+> `w:0;left:0;next:0;rem:0;fm:3;diff:normal`dur (`InitialModeState`) — `fs` orada yazılmaz, okuyan
+> eksik anahtarı `0` sayar: sayaç yükleme ekranından beri
 > ekranda durur, ilk doğumu beklemez. ⚠️ Bu sıfır durumu **`normal` tablosunun değerlerini yazar**,
 > operatörün seçimini değil: `InitialModeState` `start_match` anında, modun maç bağlamını (dolayısıyla
 > zorluğu) aldığı `OnMatchStart`'tan önce okunur. Gerçek zorluk geri sayım bitince ilk `modeState`
@@ -2535,7 +2629,7 @@ kuralın söyleyeceği bir şey yoktur (telde yine `false` gider).
 >
 > | Olay | Puan |
 > |---|---|
-> | Zombi öldürme | türe göre; bugün tek tür var (yürüyen) ve **1**'dir |
+> | Zombi öldürme | **türe göre** (yukarıdaki tür tablosunun "öldürme puanı" kolonu) |
 > | Kafadan öldürme | **+1** (son vuruşun `hit_report.zone`'u kafa, §5.1) |
 > | Düşmüş arkadaşı kaldırma | **+3**, kaldırana (`revive_request.by`, §5.1) |
 >
@@ -3558,6 +3652,11 @@ katalogda karşılığı olmayan `kind` → obje yaratılmaz + tek satır log.
 **Doğuşun iki kaynağı vardır ve üçüncüsü yoktur:** modun kendisi (`director.SpawnObject(kind, pose)`)
 ve türün kuralı (dağıtıcı objeye gelen `take` olayı gibi). ⚠️ **İstemci spawn isteyemez** — isteyebilse
 "sunucu icat etmez" kuralı anlamını yitirir ve bozuk bir başlık arenayı objeyle doldurabilirdi.
+
+**Mod doğuşta `maxHp`'yi obje başına ezebilir** (`kinds[]`'teki değer o türün varsayılanıdır): aynı
+`kind`'ın örnekleri farklı canla doğabilir — zombi türleri bunu kullanır (§10.5). ⚠️ Bu değer
+**sunucunun içindedir**: telde tavan can taşıyan bir alan yoktur, `object_state.hp` tek yayınlanan
+sayıdır; tavanı bilmesi gereken istemci onu modun `modeState`'inden öğrenir.
 
 Obje **doğrudan bir elde** de doğabilir: aynı çağrı sahip + tutan el ile verilir, obje `Held`
 (gerekirse `HeldRight`) bayrağıyla ve `owner` dolu gelir. ⚠️ **Ayrı bir "eline ver" mesajı yoktur:**

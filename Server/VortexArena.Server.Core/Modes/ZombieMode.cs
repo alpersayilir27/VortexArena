@@ -4,8 +4,9 @@ using VortexArena.Protocol;
 namespace VortexArena.Server.Core.Modes;
 
 /// <summary>Co-op wave defence (§10.5 <c>zombie</c>): players are ONE team, zombies arrive wave by wave
-/// and hit in melee. Ends on time (<c>over:survived</c>, a win) or with the squad down
-/// (<c>over:lost</c>); there is no winner TEAM — the result travels in <c>modeState</c>.</summary>
+/// and hit in melee. Ends on time (<c>over:survived</c>), with the Last Stand's Dev killed
+/// (<c>over:rescued</c>) or with the squad down (<c>over:lost</c>); there is no winner TEAM — the result
+/// travels in <c>modeState</c>.</summary>
 /// <remarks>⚠️ A zombie is a NETWORK OBJECT (§10.10), not a player: the server spawns it, holds its
 /// health, breaks it and writes its score, while its POSE is streamed by its owner — and that owner is
 /// the admin build (§10.10 "Sunucu-atanmış sahiplik"), because the brain needs NavMesh and the server
@@ -31,13 +32,6 @@ public sealed class ZombieMode : IGameMode
 
     // ---- Balance (§10.5 "Dalga tablosu"). Playtest numbers: the rationale is in the doc. ----
 
-    /// <summary>Server-side BOUND on the attack distance (m, horizontal) — not a validation: both poses
-    /// are client-reported and one interp buffer old, so this only drops the absurd (§10.10). Twice the
-    /// client's reach (1.2 m) to cover latency and the pose interval.</summary>
-    private const float AttackReachBound = 2.5f;
-
-    private const float AttackCooldownSeconds = 1.5f;
-
     /// <summary>Absolute ceiling of zombies standing at once, whatever the difficulty, the pace and the
     /// player count produce.</summary>
     /// <remarks>⚠️ Stays UNDER <see cref="ArenaProtocol.OBJECT_MAX_ENTRIES_PER_PACKET"/> (32): an object
@@ -49,13 +43,95 @@ public sealed class ZombieMode : IGameMode
     /// <summary>How many of the last used spawn points are excluded from the next draw (§10.5).</summary>
     private const int SpawnRecency = 3;
 
-    // ---- Scoring + team rules (§10.5) ----
+    // ---- Zombie types (§10.5 "Zombi türleri"). The SERVER picks the type; the brain reads it from
+    // the payload for the model, the animation and the speed. ----
 
-    /// <summary>The only zombie type today; the kill-point table is keyed by it so a new type is one
-    /// line in <see cref="KillPoints"/>.</summary>
     private const string TypeWalker = "walker";
+    private const string TypeCrawler = "crawler";
+    private const string TypeRunner = "runner";
+    private const string TypeBrute = "brute";
+    private const string TypeScreamer = "screamer";
+    private const string TypeDev = "dev";
 
-    private const int WalkerKillPoints = 1;
+    /// <summary>Special wave ids published as <c>modeState wx</c> (§10.5).</summary>
+    private const string SpecialSwarm = "swarm";
+    private const string SpecialHeavy = "heavy";
+    private const string SpecialScream = "scream";
+
+    private const int IdxWalker = 0;
+    private const int IdxCrawler = 1;
+    private const int IdxRunner = 2;
+    private const int IdxBrute = 3;
+    private const int IdxScreamer = 4;
+    private const int IdxDev = 5;
+
+    /// <summary>Spawnable types, i.e. everything but the Dev (which only the Last Stand spawns).</summary>
+    private const int DeckSize = IdxDev;
+
+    /// <summary>One zombie type's server-side numbers (§10.5). Speed and behaviour are NOT here: those
+    /// live in the brain, which has metres.</summary>
+    private readonly struct ZombieType
+    {
+        public readonly string Id;
+
+        /// <summary>Base max HP, before the difficulty's <see cref="WaveTable.TypeScale"/>.</summary>
+        public readonly float Hp;
+
+        /// <summary>Multiplier on the wave damage; ignored when <see cref="FlatDamage"/> is set.</summary>
+        public readonly float DamageMul;
+
+        /// <summary>Damage independent of the wave (the Dev); <c>0</c> = use <see cref="DamageMul"/>.</summary>
+        public readonly float FlatDamage;
+
+        /// <summary>Damage ceiling of this type; <c>0</c> = none.</summary>
+        public readonly float DamageCap;
+
+        public readonly float Cooldown;
+
+        /// <summary>Server-side BOUND on the attack distance (m, horizontal) — not a validation: both
+        /// poses are client-reported and one interp buffer old, so this only drops the absurd (§10.10).
+        /// Twice the client's reach to cover latency and the pose interval.</summary>
+        public readonly float ReachBound;
+
+        public readonly int KillPoints;
+
+        /// <summary>How many of this type may stand at once; <c>0</c> = no per-type cap.</summary>
+        public readonly int StandingCap;
+
+        public ZombieType(string id, float hp, float damageMul, float flatDamage, float damageCap,
+            float cooldown, float reachBound, int killPoints, int standingCap)
+        {
+            Id = id;
+            Hp = hp;
+            DamageMul = damageMul;
+            FlatDamage = flatDamage;
+            DamageCap = damageCap;
+            Cooldown = cooldown;
+            ReachBound = reachBound;
+            KillPoints = killPoints;
+            StandingCap = standingCap;
+        }
+    }
+
+    // ⚠️ Order must match the Idx* constants: the composition deck is indexed by them.
+    private static readonly ZombieType[] Types =
+    {
+        new(TypeWalker, 100f, 1f, 0f, 0f, 1.5f, 2.5f, 1, 0),
+        new(TypeCrawler, 60f, 0.6f, 0f, 0f, 1.5f, 2.5f, 1, 0),
+        new(TypeRunner, 60f, 0.75f, 0f, 0f, 1.5f, 2.5f, 2, 0),
+        new(TypeBrute, 400f, 1.6f, 0f, 60f, 1.5f, 2.5f, 5, 3),
+        new(TypeScreamer, 80f, 0.5f, 0f, 0f, 1.5f, 2.5f, 3, 2),
+        new(TypeDev, 2500f, 0f, 45f, 0f, 2f, 3f, 25, 1)
+    };
+
+    /// <summary>Dev HP is per player: <c>Hp × max(DevMinPlayers, n)</c> (§10.5) — a two-player floor, or
+    /// a solo run would face a boss sized for nobody.</summary>
+    private const int DevMinPlayers = 2;
+
+    /// <summary>Gap between two tries at a rejected Dev spawn (no host, id pool full, cap 30).</summary>
+    private const float DevRetrySeconds = 1f;
+
+    // ---- Scoring + team rules (§10.5) ----
 
     /// <summary>Extra point when the killing hit was a headshot (<c>hit_report.zone</c>, §5.1).</summary>
     private const int HeadshotBonus = 1;
@@ -76,11 +152,35 @@ public sealed class ZombieMode : IGameMode
     /// teammate runs over to lift someone — would end the match.</remarks>
     private const float LossGraceSeconds = 2f;
 
-    /// <summary>Final <c>modeState over:</c> values (§10.5). <c>Rescued</c> is RESERVED (the Last Stand's
-    /// boss kill) and no path writes it yet; a reader treats it as a win like <c>Survived</c>.</summary>
+    /// <summary>Final <c>modeState over:</c> values (§10.5); <c>Rescued</c> (the Last Stand's Dev kill)
+    /// is a win like <c>Survived</c>.</summary>
     private const string OverSurvived = "survived";
     private const string OverRescued = "rescued";
     private const string OverLost = "lost";
+
+    // ---- Last Stand (§10.5 "Son Direniş") ----
+
+    /// <summary>Time left that opens the Last Stand; the short value guards a short round, where 90 s
+    /// would be most of the match.</summary>
+    private const float FinalStandSeconds = 90f;
+    private const float FinalStandShortSeconds = 60f;
+    private const int FinalStandShortRound = 300;
+
+    /// <summary>While the Dev lives it screams and summons on this period.</summary>
+    private const float DevSummonInterval = 15f;
+    private const int DevSummonCount = 3;
+
+    /// <summary>A screamer's first scream, then its period (§10.5) — in normal waves too.</summary>
+    private const float ScreamFirstSeconds = 6f;
+    private const float ScreamInterval = 10f;
+
+    /// <summary>Delay between the Dev's death and the end of the match: the collapse of every other
+    /// zombie has to be seen before the result screen covers it.</summary>
+    private const float RescueDelaySeconds = 3f;
+
+    /// <summary>Total multipliers of the special waves (§10.5): fewer but faster, fewer but heavier.</summary>
+    private const float SwarmTotalMul = 0.8f;
+    private const float HeavyTotalMul = 0.7f;
 
     /// <summary>Player-count scaling of a wave (§10.5): <c>1 + PlayerFactorStep × (n − 4)</c>, clamped.
     /// 4 players is the reference group the difficulty table is written for.</summary>
@@ -108,9 +208,16 @@ public sealed class ZombieMode : IGameMode
         /// reads it (§10.5 multi-floor rule), the server only publishes it.</summary>
         public readonly int EmptyFloorMin;
 
+        /// <summary>Shift of the EFFECTIVE wave the composition is read from (§10.5): difficulty moves
+        /// not only the numbers but WHEN each type arrives.</summary>
+        public readonly int WaveShift;
+
+        /// <summary>Multiplier on every type's max HP and on the Dev's damage (§10.5).</summary>
+        public readonly float TypeScale;
+
         public WaveTable(string id, int totalBase, int totalPerWave, int standingBase,
             int standingPerWave, int standingCap, float spawnInterval, float waveBreak, int damageBase,
-            int damagePerWave, int damageCap, int emptyFloorMin)
+            int damagePerWave, int damageCap, int emptyFloorMin, int waveShift, float typeScale)
         {
             Id = id;
             TotalBase = totalBase;
@@ -124,19 +231,21 @@ public sealed class ZombieMode : IGameMode
             DamagePerWave = damagePerWave;
             DamageCap = damageCap;
             EmptyFloorMin = emptyFloorMin;
+            WaveShift = waveShift;
+            TypeScale = typeScale;
         }
     }
 
     // ⚠️ The wave break is a BREATHER, not dead air: everyone down stands back up with full HP in that
     // window (§10.4) and weapons get swapped — shortening it breaks both.
     private static readonly WaveTable EasyTable = new(MatchDifficulty.Easy, 6, 3, 4, 1, 16,
-        1.6f, 15f, 12, 4, 32, 2);
+        1.6f, 15f, 12, 4, 32, 2, -1, 0.7f);
 
     private static readonly WaveTable NormalTable = new(MatchDifficulty.Normal, 8, 4, 6, 2, 24,
-        1.0f, 12f, 15, 4, 40, 3);
+        1.0f, 12f, 15, 4, 40, 3, 0, 1f);
 
     private static readonly WaveTable HardTable = new(MatchDifficulty.Hard, 12, 6, 10, 3, 30,
-        0.6f, 10f, 20, 5, 50, 4);
+        0.6f, 10f, 20, 5, 50, 4, 1, 1.3f);
 
     /// <summary>Pace of a map that sets none (§10.5) — exactly the base numbers of the wave table.</summary>
     private const float DefaultPace = 1f;
@@ -161,13 +270,28 @@ public sealed class ZombieMode : IGameMode
         public int SpawnNetId;
         public int Wave;
 
-        /// <summary>Zombie type — scoring reads it (§10.5). Every zombie is a walker today; the field
-        /// exists so the kill value is read from one place instead of a literal at the kill site.</summary>
+        /// <summary>Zombie type (<c>payload t</c>, §10.5): damage, reach, cooldown and kill points are
+        /// all read from it.</summary>
         public string Type = TypeWalker;
+
+        /// <summary>Max HP written into the object table at spawn — kept here because the Dev's bar
+        /// needs the ceiling and no wire field carries one.</summary>
+        public float MaxHp;
 
         /// <summary>Accepted attack counter (<c>payload a</c>): the client plays the attack animation
         /// from its CHANGE, so it is monotonic and never rolled back.</summary>
         public int AttackCounter;
+
+        /// <summary>Scream counter (<c>payload c</c>), same change-driven contract as
+        /// <see cref="AttackCounter"/>; only screamers and the Dev have one.</summary>
+        public int ScreamCounter;
+
+        /// <summary>Seconds to the next scream; <c>0</c> = this type never screams. A countdown rather
+        /// than a stamp so the host pause (which stops the tick) also stops the screams.</summary>
+        public float ScreamTimer;
+
+        /// <summary>netId of the Dev that summoned this zombie (<c>payload n</c>); <c>0</c> = none.</summary>
+        public int SummonerNetId;
 
         /// <summary>UTC instant the next attack may be accepted.</summary>
         public DateTime NextAttackAt;
@@ -210,6 +334,34 @@ public sealed class ZombieMode : IGameMode
     /// <summary>Seconds left of the between-waves break; <c>0</c> = not in a break.</summary>
     private float _breakTimer;
 
+    /// <summary>Zombies of the running wave still to be spawned, per type (§10.5 "Dalga dizilimi");
+    /// indexed by the <c>Idx*</c> constants. The spawn picker draws from it, so the composition cannot
+    /// drift from the wave total.</summary>
+    private readonly int[] _deck = new int[DeckSize];
+
+    /// <summary>Special wave id of the running wave (<c>modeState wx</c>); <c>""</c> = ordinary.</summary>
+    private string _specialId = "";
+
+    /// <summary>Last Stand open? (§10.5) Once set it never clears: no new wave starts after it.</summary>
+    private bool _finalStand;
+
+    /// <summary>The Dev's netId and max HP (<c>modeState dev</c>); <c>0</c> = not spawned yet.</summary>
+    private int _devNetId;
+    private float _devMaxHp;
+
+    /// <summary>Player count the Dev's HP is sized for — snapshotted when the Last Stand opens.</summary>
+    private int _devPlayers;
+
+    private float _devRetryTimer;
+    private bool _devDead;
+
+    /// <summary>Seconds left between the Dev's death and <c>over:rescued</c>.</summary>
+    private float _rescueTimer;
+
+    /// <summary>Walkers the Dev's scream still owes us. ⚠️ Deferred on purpose: the scream pass walks
+    /// the zombie dictionary, and spawning inside that walk would invalidate the enumerator.</summary>
+    private int _devSummonPending;
+
     /// <summary>Ring of the last <see cref="SpawnRecency"/> spawn points used — excluded from the next
     /// draw so a wave does not pour out of one door. <c>0</c> = unused slot.
     /// <para>⚠️ "Pick the point farthest from the players" is impossible here: distance is metres and the
@@ -222,8 +374,8 @@ public sealed class ZombieMode : IGameMode
     private readonly Dictionary<int, int> _headshots = new();
     private readonly Dictionary<int, int> _revives = new();
 
-    /// <summary>Result key of the match: <c>""</c> until it ends, then <see cref="OverSurvived"/> or
-    /// <see cref="OverLost"/>.</summary>
+    /// <summary>Result key of the match: <c>""</c> until it ends, then <see cref="OverSurvived"/>,
+    /// <see cref="OverRescued"/> or <see cref="OverLost"/>.</summary>
     private string _over = "";
 
     /// <summary>When the squad went fully down; <c>null</c> = somebody is alive (§10.5 loss rule).</summary>
@@ -296,6 +448,16 @@ public sealed class ZombieMode : IGameMode
             _waveTotal = 0;
             _standingCap = 0;
             _playerFactor = 1f;
+            Array.Clear(_deck, 0, _deck.Length);
+            _specialId = "";
+            _finalStand = false;
+            _devNetId = 0;
+            _devMaxHp = 0f;
+            _devPlayers = DevMinPlayers;
+            _devRetryTimer = 0f;
+            _devDead = false;
+            _rescueTimer = 0f;
+            _devSummonPending = 0;
             Array.Clear(_recentSpawns, 0, _recentSpawns.Length);
             _recentWrite = 0;
             _over = "";
@@ -373,10 +535,11 @@ public sealed class ZombieMode : IGameMode
         for (var i = 0; i < leftovers.Count; i++) director.DespawnObject(leftovers[i]);
     }
 
-    /// <summary>Two end conditions (§10.5): the clock running out with the squad standing
-    /// (<c>over:survived</c>, a WIN) and the squad being down (<c>over:lost</c>). There is no winner TEAM
-    /// either way (<c>shared</c> scoring) — the result travels in <c>modeState</c>.</summary>
-    /// <remarks>⚠️ Both are asked only in <see cref="Phase.Playing"/>: the clock is deliberately zeroed
+    /// <summary>Three end conditions (§10.5): the Dev killed in the Last Stand (<c>over:rescued</c>),
+    /// the clock running out with the squad standing (<c>over:survived</c>) and the squad being down
+    /// (<c>over:lost</c>). There is no winner TEAM either way (<c>shared</c> scoring) — the result travels
+    /// in <c>modeState</c>.</summary>
+    /// <remarks>⚠️ All are asked only in <see cref="Phase.Playing"/>: the clock is deliberately zeroed
     /// while we hold the mode pause, and a paused roster is revived by the core on the way back — judging
     /// either there would end the match while it is waiting for an admin.</remarks>
     public bool IsMatchOver(MatchDirector director, out MatchOutcome outcome)
@@ -384,12 +547,31 @@ public sealed class ZombieMode : IGameMode
         outcome = MatchOutcome.Draw;
         if (director.CurrentPhase != Phase.Playing) return false;
 
-        if (director.TimeRemaining <= 0f)
+        bool devDead;
+        bool rescued;
+        lock (_gate)
         {
-            lock (_gate) _over = OverSurvived;
+            devDead = _devDead;
+            rescued = _devDead && _rescueTimer <= 0f;
+        }
+
+        if (rescued)
+        {
+            lock (_gate) _over = OverRescued;
             PushModeState(director);
             return true;
         }
+
+        if (director.TimeRemaining <= 0f)
+        {
+            lock (_gate) _over = devDead ? OverRescued : OverSurvived;
+            PushModeState(director);
+            return true;
+        }
+
+        // ⚠️ Once the Dev is down the run is already won: a wipe inside the rescue window must not turn
+        // it into a loss.
+        if (devDead) return false;
 
         if (!IsTeamDown(director)) return false;
 
@@ -408,6 +590,7 @@ public sealed class ZombieMode : IGameMode
         lock (_gate)
         {
             TickDeadLocked(director, deltaSeconds);
+            TickScreamsLocked(director, deltaSeconds);
             TickWaveLocked(director, deltaSeconds);
         }
 
@@ -427,7 +610,6 @@ public sealed class ZombieMode : IGameMode
 
         int targetId = msg.i != null && msg.i.Length > 0 ? msg.i[0] : 0;
         float damage;
-        string payload;
 
         lock (_gate)
         {
@@ -437,23 +619,27 @@ public sealed class ZombieMode : IGameMode
             var now = DateTime.UtcNow;
             if (now < zombie.NextAttackAt) return true;
 
+            var type = TypeOf(zombie.Type);
+
             // ⚠️ A MISSING pose passes: the first attack can beat the first 0x09 packet, and rejecting it
             // would make the opening of every wave feel dead. The bound only drops what it can measure.
             if (director.TryGetObjectToPlayerDistance(netId, targetId, out float meters) &&
-                meters > AttackReachBound)
+                meters > type.ReachBound)
             {
                 return true;
             }
 
-            damage = DamageOfWave(zombie.Wave);
+            damage = DamageOfLocked(zombie, type);
             if (!director.DamagePlayerFromObject(targetId, damage, netId)) return true;
 
-            zombie.NextAttackAt = now.AddSeconds(AttackCooldownSeconds);
+            zombie.NextAttackAt = now.AddSeconds(type.Cooldown);
             zombie.AttackCounter++;
-            payload = PayloadOf(zombie);
+
+            // Written under the gate: the tick's scream writer shares this payload, and a stale
+            // string landing last would roll a counter back on the wire.
+            director.SetObjectPayload(netId, PayloadOf(zombie));
         }
 
-        director.SetObjectPayload(netId, payload);
         return true;
     }
 
@@ -469,6 +655,7 @@ public sealed class ZombieMode : IGameMode
         if (!broken || kind != ZombieKind) return;
 
         int points;
+        List<int>? collapse = null;
         lock (_gate)
         {
             if (!_zombies.TryGetValue(netId, out var zombie) || zombie.Dead) return;
@@ -482,6 +669,29 @@ public sealed class ZombieMode : IGameMode
                 points += HeadshotBonus;
                 if (attackerId > 0) Bump(_headshots, attackerId);
             }
+
+            if (netId == _devNetId && !_devDead)
+            {
+                _devDead = true;
+                _rescueTimer = RescueDelaySeconds;
+
+                // Every other zombie drops with him — no points, it is not anybody's kill.
+                collapse = new List<int>();
+                foreach (var pair in _zombies)
+                {
+                    if (pair.Value.Dead) continue;
+                    pair.Value.Dead = true;
+                    pair.Value.DeadSeconds = 0f;
+                    collapse.Add(pair.Key);
+                }
+            }
+        }
+
+        if (collapse != null)
+        {
+            for (var i = 0; i < collapse.Count; i++) director.BreakObject(collapse[i]);
+            Console.WriteLine($"[zombie] Dev öldürüldü (#{attackerId}) — {collapse.Count} zombi çöktü, " +
+                              $"{RescueDelaySeconds:0} sn sonra kurtarıldı.");
         }
 
         // Both channels at once (§10.2 "shared"): the last hit's owner and the squad total.
@@ -524,6 +734,13 @@ public sealed class ZombieMode : IGameMode
     {
         if (_spawnPoints.Count == 0) return;
 
+        TryStartFinalStandLocked(director);
+        if (_finalStand)
+        {
+            TickFinalStandLocked(director, deltaSeconds);
+            return;
+        }
+
         if (_breakTimer > 0f)
         {
             _breakTimer = MathF.Max(0f, _breakTimer - deltaSeconds);
@@ -547,13 +764,269 @@ public sealed class ZombieMode : IGameMode
             return;
         }
 
+        TrySpawnFromDeckLocked(director, deltaSeconds, _standingCap);
+    }
+
+    /// <summary>One spawn slot of the running wave: waits out the interval, honours the standing cap and
+    /// draws a type from the deck.</summary>
+    /// <remarks>⚠️ When every remaining type sits at its own standing cap the slot is NOT consumed (§10.5):
+    /// resetting the interval there would silently skip spawns and the wave could not finish.</remarks>
+    private void TrySpawnFromDeckLocked(MatchDirector director, float deltaSeconds, int standingCap)
+    {
         _spawnTimer -= deltaSeconds;
         if (_spawnTimer > 0f) return;
 
-        _spawnTimer = _spawnInterval;
-        if (StandingCountLocked() >= _standingCap) return;
+        if (StandingCountLocked() >= standingCap)
+        {
+            _spawnTimer = _spawnInterval;
+            return;
+        }
 
-        SpawnZombieLocked(director);
+        int type = PickTypeLocked();
+        if (type < 0) return;
+
+        _spawnTimer = _spawnInterval;
+        SpawnZombieLocked(director, type);
+    }
+
+    /// <summary>Draws a type from the deck, weighted by how many of it are still owed (§10.5): a type at
+    /// its standing cap is skipped. <c>-1</c> = nothing may spawn right now.</summary>
+    private int PickTypeLocked()
+    {
+        var total = 0;
+        for (var i = 0; i < _deck.Length; i++)
+        {
+            if (_deck[i] > 0 && !AtTypeCapLocked(i)) total += _deck[i];
+        }
+
+        if (total == 0) return -1;
+
+        int roll = _rng.Next(total);
+        for (var i = 0; i < _deck.Length; i++)
+        {
+            if (_deck[i] <= 0 || AtTypeCapLocked(i)) continue;
+            roll -= _deck[i];
+            if (roll < 0) return i;
+        }
+
+        return -1;
+    }
+
+    private bool AtTypeCapLocked(int typeIndex)
+    {
+        int cap = Types[typeIndex].StandingCap;
+        if (cap <= 0) return false;
+
+        var standing = 0;
+        foreach (var zombie in _zombies.Values)
+        {
+            if (!zombie.Dead && string.Equals(zombie.Type, Types[typeIndex].Id, StringComparison.Ordinal))
+            {
+                standing++;
+            }
+        }
+
+        return standing >= cap;
+    }
+
+    private bool DeckEmptyLocked()
+    {
+        for (var i = 0; i < _deck.Length; i++)
+        {
+            if (_deck[i] > 0) return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>Fills the deck from the EFFECTIVE wave (§10.5 "Dalga dizilimi") and returns the total it
+    /// sums to; also sets <see cref="_specialId"/>.</summary>
+    /// <remarks>⚠️ At least one regular zombie always remains: a small wave made only of brutes and
+    /// screamers would hit both per-type standing caps and stall on them.</remarks>
+    private int BuildDeckLocked(int wave, int total)
+    {
+        int e = Math.Max(1, wave + _table.WaveShift);
+        int weightWalker, weightCrawler, weightRunner, brutes, screamers;
+        var mul = 1f;
+        var special = "";
+
+        // Weights split the REGULAR part only (§10.5); they need not sum to 100 — brutes and screamers
+        // are counts taken off the total first.
+        switch (e)
+        {
+            case 1: weightWalker = 100; weightCrawler = 0; weightRunner = 0; brutes = 0; screamers = 0; break;
+            case 2: weightWalker = 85; weightCrawler = 15; weightRunner = 0; brutes = 0; screamers = 0; break;
+            case 3: weightWalker = 70; weightCrawler = 10; weightRunner = 20; brutes = 0; screamers = 0; break;
+            case 4: weightWalker = 65; weightCrawler = 10; weightRunner = 25; brutes = 1; screamers = 0; break;
+            case 5:
+                weightWalker = 30; weightCrawler = 0; weightRunner = 70; brutes = 0; screamers = 0;
+                mul = SwarmTotalMul;
+                special = SpecialSwarm;
+                break;
+            case 6: weightWalker = 55; weightCrawler = 10; weightRunner = 25; brutes = 2; screamers = 1; break;
+            case 7: weightWalker = 50; weightCrawler = 10; weightRunner = 30; brutes = 2; screamers = 1; break;
+            case 8:
+                weightWalker = 100; weightCrawler = 0; weightRunner = 0; brutes = 4; screamers = 0;
+                mul = HeavyTotalMul;
+                special = SpecialHeavy;
+                break;
+            default:
+                weightWalker = 45; weightCrawler = 10; weightRunner = 35;
+                brutes = 2 + (e - 9) / 2;
+                screamers = 2;
+                break;
+        }
+
+        // Special rotation overrides the 9+ shape every third wave (§10.5).
+        if (e >= 11 && (e - 11) % 3 == 0)
+        {
+            switch ((e - 11) / 3 % 3)
+            {
+                case 0:
+                    weightWalker = 30; weightCrawler = 0; weightRunner = 70; brutes = 0; screamers = 0;
+                    mul = SwarmTotalMul;
+                    special = SpecialSwarm;
+                    break;
+                case 1:
+                    weightWalker = 100; weightCrawler = 0; weightRunner = 0;
+                    brutes = Math.Max(4, brutes + 2);
+                    screamers = 0;
+                    mul = HeavyTotalMul;
+                    special = SpecialHeavy;
+                    break;
+                default:
+                    screamers = 3;
+                    special = SpecialScream;
+                    break;
+            }
+        }
+
+        _specialId = special;
+
+        int scaled = Math.Max(1, (int)MathF.Round(total * mul, MidpointRounding.AwayFromZero));
+        while (brutes + screamers > scaled - 1)
+        {
+            if (screamers > 0) screamers--;
+            else if (brutes > 0) brutes--;
+            else break;
+        }
+
+        int regular = Math.Max(0, scaled - brutes - screamers);
+        float weightSum = weightWalker + weightCrawler + weightRunner;
+        int crawlers = Math.Min(regular,
+            (int)MathF.Round(regular * weightCrawler / weightSum, MidpointRounding.AwayFromZero));
+        int walkers, runners;
+        if (weightRunner == 0)
+        {
+            walkers = regular - crawlers; // no runner wave: rounding slack must not create one
+            runners = 0;
+        }
+        else
+        {
+            walkers = Math.Min(regular - crawlers,
+                (int)MathF.Round(regular * weightWalker / weightSum, MidpointRounding.AwayFromZero));
+            runners = regular - walkers - crawlers; // the remainder, so the split always sums
+        }
+
+        Array.Clear(_deck, 0, _deck.Length);
+        _deck[IdxWalker] = walkers;
+        _deck[IdxCrawler] = crawlers;
+        _deck[IdxRunner] = runners;
+        _deck[IdxBrute] = brutes;
+        _deck[IdxScreamer] = screamers;
+        return walkers + crawlers + runners + brutes + screamers;
+    }
+
+    // ---------------------------------------------------------------- Last Stand (§10.5)
+
+    /// <summary>Opens the Last Stand once the clock is short enough: the wave break is dropped, no new
+    /// wave will start and the Dev spawns.</summary>
+    private void TryStartFinalStandLocked(MatchDirector director)
+    {
+        if (_finalStand || _wave < 1) return;
+
+        float threshold = director.RoundSeconds < FinalStandShortRound
+            ? FinalStandShortSeconds
+            : FinalStandSeconds;
+        if (director.TimeRemaining > threshold) return;
+
+        _finalStand = true;
+        _breakTimer = 0f;
+        _spawnTimer = 0f;
+        _devPlayers = Math.Max(DevMinPlayers, ConnectedCount(director)); // frozen like a wave's count
+        SpawnDevLocked(director);
+        Console.WriteLine($"[zombie] Son Direniş — dalga {_wave} dizilimi sonsuz sürüyor, " +
+                          $"Dev doğdu (can {_devMaxHp:0}).");
+    }
+
+    /// <summary>Endless spawning at the running wave's cap and composition; the deck is refilled when it
+    /// empties. After the Dev's death nothing spawns — only the rescue delay runs down.</summary>
+    private void TickFinalStandLocked(MatchDirector director, float deltaSeconds)
+    {
+        if (_devDead)
+        {
+            _rescueTimer = MathF.Max(0f, _rescueTimer - deltaSeconds);
+            return;
+        }
+
+        // A Dev rejected at spawn (no host yet / id pool) is retried: without him the Last Stand has no
+        // way to end in a rescue.
+        if (_devNetId == 0)
+        {
+            _devRetryTimer -= deltaSeconds;
+            if (_devRetryTimer <= 0f) SpawnDevLocked(director);
+        }
+
+        if (DeckEmptyLocked()) BuildDeckLocked(_wave, WaveTotalLocked(_wave));
+        TrySpawnFromDeckLocked(director, deltaSeconds, _standingCap);
+    }
+
+    private void SpawnDevLocked(MatchDirector director)
+    {
+        // Retried at most once a second: a rejected spawn logs, and 10 Hz would flood the log.
+        _devRetryTimer = DevRetrySeconds;
+
+        // The absolute cap holds for him too — a 31st object eats the packet's spare entry (§10.5).
+        if (StandingCountLocked() >= ConcurrentCapMax) return;
+
+        float hp = Types[IdxDev].Hp * _devPlayers * _table.TypeScale;
+
+        int netId = SpawnZombieLocked(director, IdxDev, hpOverride: hp);
+        if (netId == 0) return;
+
+        _devNetId = netId;
+        _devMaxHp = hp;
+    }
+
+    /// <summary>The Dev's and the screamers' scream clocks (§10.5). The Dev's scream also summons
+    /// walkers, which is why the spawns are deferred past the dictionary walk.</summary>
+    private void TickScreamsLocked(MatchDirector director, float deltaSeconds)
+    {
+        foreach (var pair in _zombies)
+        {
+            var zombie = pair.Value;
+            if (zombie.Dead || zombie.ScreamTimer <= 0f) continue;
+
+            zombie.ScreamTimer -= deltaSeconds;
+            if (zombie.ScreamTimer > 0f) continue;
+
+            zombie.ScreamCounter++;
+            bool isDev = string.Equals(zombie.Type, TypeDev, StringComparison.Ordinal);
+            zombie.ScreamTimer = isDev ? DevSummonInterval : ScreamInterval;
+            if (isDev) _devSummonPending += DevSummonCount;
+
+            director.SetObjectPayload(pair.Key, PayloadOf(zombie));
+        }
+
+        // ⚠️ Only the ABSOLUTE cap applies here, not the wave's: the summon is the Dev's pressure, and
+        // a full wave cap would silently swallow it.
+        for (var i = 0; i < _devSummonPending; i++)
+        {
+            if (StandingCountLocked() >= ConcurrentCapMax) break;
+            SpawnZombieLocked(director, IdxWalker, _devNetId);
+        }
+
+        _devSummonPending = 0;
     }
 
     /// <summary>Opens a wave and FREEZES its numbers: the player count is snapshotted here, once (§10.5).
@@ -566,11 +1039,14 @@ public sealed class ZombieMode : IGameMode
         _spawnTimer = 0f;
         _breakTimer = 0f;
         _playerFactor = PlayerFactorOf(ConnectedCount(director));
-        _waveTotal = WaveTotalLocked(_wave);
         _standingCap = ConcurrentCapLocked(_wave);
+        _waveTotal = BuildDeckLocked(_wave, WaveTotalLocked(_wave));
         Console.WriteLine($"[zombie] dalga {_wave} ({_table.Id}) — {_waveTotal} zombi, en çok " +
                           $"{_standingCap} ayakta, hasar {DamageOfWave(_wave):0}, " +
-                          $"oyuncu çarpanı ×{_playerFactor:0.##}.");
+                          $"oyuncu çarpanı ×{_playerFactor:0.##}; dizilim " +
+                          $"{_deck[IdxWalker]}/{_deck[IdxCrawler]}/{_deck[IdxRunner]}/" +
+                          $"{_deck[IdxBrute]}/{_deck[IdxScreamer]}" +
+                          (_specialId.Length > 0 ? $", özel dalga {_specialId}" : "") + ".");
     }
 
     /// <summary>Spawns one zombie OWNED by the host but not held — i.e. straight into the flight window
@@ -578,22 +1054,50 @@ public sealed class ZombieMode : IGameMode
     /// <remarks>⚠️ The spawn POSE is meaningless (identity): the server does not know where the spawn
     /// point is, so the point travels as a <c>netId</c> in the payload and the brain resolves the
     /// transform itself. Every other headset hides the zombie until its first streamed pose.</remarks>
-    private void SpawnZombieLocked(MatchDirector director)
+    /// <returns>The new object's <c>netId</c>, or <c>0</c> when there is no host or the spawn was
+    /// rejected.</returns>
+    private int SpawnZombieLocked(MatchDirector director, int typeIndex, int summonerNetId = 0,
+        float hpOverride = 0f)
     {
         int host = director.ObjectHostId;
-        if (host == 0) return;
+        if (host == 0) return 0;
 
+        var type = Types[typeIndex];
         int spawnPoint = PickSpawnPointLocked();
-        var zombie = new ZombieState { SpawnNetId = spawnPoint, Wave = _wave };
+        float maxHp = hpOverride > 0f ? hpOverride : type.Hp * _table.TypeScale;
+        var zombie = new ZombieState
+        {
+            SpawnNetId = spawnPoint,
+            Wave = _wave,
+            Type = type.Id,
+            MaxHp = maxHp,
+            SummonerNetId = summonerNetId,
+            ScreamTimer = typeIndex switch
+            {
+                IdxDev => DevSummonInterval,
+                IdxScreamer => ScreamFirstSeconds,
+                _ => 0f
+            }
+        };
 
+        // ⚠️ maxHp is written per OBJECT: the catalog's value is the walker's, every other type would
+        // otherwise die in one magazine (or never).
         int netId = director.SpawnObject(ZombieKind, default, owner: host, rightHand: false,
-            payload: PayloadOf(zombie), inHand: false);
-        if (netId == 0) return; // rejected (unknown kind / dynamic id pool exhausted) — already logged
+            payload: PayloadOf(zombie), inHand: false, maxHp: maxHp);
+        if (netId == 0) return 0; // rejected (unknown kind / dynamic id pool exhausted) — already logged
 
         _zombies[netId] = zombie;
-        _spawnedThisWave++;
+
+        // Only deck draws count against the wave: the Dev and his summons are extra (§10.5).
+        if (summonerNetId == 0 && typeIndex < _deck.Length)
+        {
+            _spawnedThisWave++;
+            if (_deck[typeIndex] > 0) _deck[typeIndex]--;
+        }
+
         _recentSpawns[_recentWrite] = spawnPoint;
         _recentWrite = (_recentWrite + 1) % _recentSpawns.Length;
+        return netId;
     }
 
     /// <summary>A random spawn point, never one of the last <see cref="SpawnRecency"/> used (§10.5) —
@@ -766,15 +1270,56 @@ public sealed class ZombieMode : IGameMode
         return pace > 0f ? Math.Clamp(pace, MinPace, MaxPace) : DefaultPace;
     }
 
-    /// <summary>Damage of one hit (§10.5) — from the difficulty table, NOT from the event, so a tampered
-    /// client cannot choose it. Pace does not touch it.</summary>
+    /// <summary>A wave's base damage (§10.5) — from the difficulty table, NOT from the event, so a
+    /// tampered client cannot choose it. Pace does not touch it; the type multiplier is applied in
+    /// <see cref="DamageOfLocked"/>.</summary>
     private float DamageOfWave(int wave) =>
         Math.Min(_table.DamageCap, _table.DamageBase + _table.DamagePerWave * (Math.Max(1, wave) - 1));
 
     /// <summary>§10.5: the server writes the WHOLE payload on every write, so no key can go missing
-    /// between two states.</summary>
-    private static string PayloadOf(ZombieState zombie) =>
-        $"sp:{zombie.SpawnNetId};w:{zombie.Wave};a:{zombie.AttackCounter}";
+    /// between two states. <c>c</c> and <c>n</c> only exist where they mean something.</summary>
+    private static string PayloadOf(ZombieState zombie)
+    {
+        string payload = $"sp:{zombie.SpawnNetId};w:{zombie.Wave};a:{zombie.AttackCounter}" +
+                         $";t:{zombie.Type}";
+        if (string.Equals(zombie.Type, TypeScreamer, StringComparison.Ordinal) ||
+            string.Equals(zombie.Type, TypeDev, StringComparison.Ordinal))
+        {
+            payload += $";c:{zombie.ScreamCounter}";
+        }
+
+        if (zombie.SummonerNetId != 0) payload += $";n:{zombie.SummonerNetId}";
+        return payload;
+    }
+
+    /// <summary>The type's row (§10.5); an unknown id reads as a walker, never as nothing.</summary>
+    private static ZombieType TypeOf(string type)
+    {
+        for (var i = 0; i < Types.Length; i++)
+        {
+            if (string.Equals(Types[i].Id, type, StringComparison.Ordinal)) return Types[i];
+        }
+
+        return Types[IdxWalker];
+    }
+
+    /// <summary>Damage of one hit (§10.5): the wave table scaled by the type, or the type's flat damage
+    /// scaled by the difficulty (the Dev). Never below 1 — a rounded-down 0 would make a type harmless.</summary>
+    /// <remarks>⚠️ The wave damage is ALREADY per-difficulty, so it gets no second difficulty
+    /// multiplier; only the flat branch does.</remarks>
+    private float DamageOfLocked(ZombieState zombie, in ZombieType type)
+    {
+        if (type.FlatDamage > 0f)
+        {
+            return MathF.Max(1f,
+                MathF.Round(type.FlatDamage * _table.TypeScale, MidpointRounding.AwayFromZero));
+        }
+
+        float value = MathF.Round(DamageOfWave(zombie.Wave) * type.DamageMul,
+            MidpointRounding.AwayFromZero);
+        if (type.DamageCap > 0f) value = MathF.Min(type.DamageCap, value);
+        return MathF.Max(1f, value);
+    }
 
     /// <summary>Team loss (§10.5): at least <see cref="LossMinPlayers"/> calibrated players in the match
     /// and NONE of them alive for <see cref="LossGraceSeconds"/> without a break.</summary>
@@ -809,18 +1354,15 @@ public sealed class ZombieMode : IGameMode
     }
 
     /// <summary>Kill points by zombie type (§10.5); an unknown type is worth a walker, never 0.</summary>
-    private static int KillPoints(string type) => type switch
-    {
-        TypeWalker => WalkerKillPoints,
-        _ => WalkerKillPoints
-    };
+    private static int KillPoints(string type) => TypeOf(type).KillPoints;
 
     private static void Bump(Dictionary<int, int> tally, int playerId) =>
         tally[playerId] = tally.TryGetValue(playerId, out var count) ? count + 1 : 1;
 
-    /// <summary>§10.5 <c>w:..;left:..;next:..;rem:..;fm:..;diff:..[;over:..][;zs&lt;id&gt;:h/r]</c>. ⚠️ Not
-    /// pushed while we hold the pause: the reason text lives in the same field there (§10.1) and would be
-    /// overwritten.</summary>
+    /// <summary>§10.5
+    /// <c>w:..;left:..;next:..;rem:..;fm:..;diff:..;fs:..[;dev:id/hp][;wx:..][;over:..][;zs&lt;id&gt;:h/r]</c>.
+    /// ⚠️ Not pushed while we hold the pause: the reason text lives in the same field there (§10.1) and
+    /// would be overwritten.</summary>
     /// <remarks><c>rem</c> and <c>fm</c> are the BRAIN's input, not HUD decoration (§10.5 multi-floor
     /// rule): the storey quota is computed from them, and <c>rem:0</c> is what drops the empty-storey
     /// minimum to 0 so a wave cannot stall on an unvisited floor.
@@ -834,10 +1376,19 @@ public sealed class ZombieMode : IGameMode
         {
             if (_paused) return;
 
-            int next = (int)MathF.Ceiling(_breakTimer);
-            int remaining = Math.Max(0, _waveTotal - _spawnedThisWave);
+            // In the Last Stand there is no next wave and no remaining count: spawning is endless, and a
+            // counting-down `next` would promise a wave that never comes.
+            int next = _finalStand ? 0 : (int)MathF.Ceiling(_breakTimer);
+            int remaining = _finalStand ? 0 : Math.Max(0, _waveTotal - _spawnedThisWave);
             state = $"w:{_wave};left:{StandingCountLocked()};next:{next};rem:{remaining};" +
-                    $"fm:{_table.EmptyFloorMin};diff:{_table.Id}";
+                    $"fm:{_table.EmptyFloorMin};diff:{_table.Id};fs:{(_finalStand ? 1 : 0)}";
+            if (_devNetId != 0)
+            {
+                state += $";dev:{_devNetId}/" +
+                         $"{(int)MathF.Round(_devMaxHp, MidpointRounding.AwayFromZero)}";
+            }
+
+            if (_specialId.Length > 0 && _wave > 0 && _breakTimer <= 0f) state += $";wx:{_specialId}";
             if (_over.Length > 0) state += $";over:{_over}{PlayerTokensLocked()}";
         }
 

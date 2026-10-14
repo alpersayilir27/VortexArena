@@ -579,10 +579,21 @@ aynı ortak kanaldan (`set_selection` → `admin_state`) gider, böylece iki ope
 > sn'dir ve bir nefes payıdır: düşmüş herkes o pencerede **tam canla** kalkar, silah da orada
 > değiştirilir. Sayılar `Docs/ArenaNet-Protokol.md` §10.5'teki zorluk tablosundadır.
 >
+> **Zombi türleri ve Son Direniş.** Türü (`walker` · `crawler` · `runner` · `brute` · `screamer` ·
+> `dev`) **sunucu seçer** ve `payload`'ın `t` anahtarıyla duyurur: can, hasar, saldırı bekleme,
+> erişim sınırı ve öldürme puanı türe bağlıdır; hız ve davranış beynindedir. Her dalganın dizilimi
+> **etkin dalgadan** (dalga numarası + zorluk kayması) okunur ve belirli dalgalar **özel**dir (akın ·
+> ağır · çığlık gecesi, `modeState wx`). Kalan süre eşiğin altına inince **Son Direniş** açılır
+> (`modeState fs`): yeni dalga başlamaz, doğum sonsuz sürer ve **Dev** doğar (`modeState dev` =
+> `netId/tavan can`). Dev öldürülürse yaşayan tüm zombiler çöker ve maç `over:rescued` ile biter;
+> süre Dev ölmeden dolarsa `over:survived`. Tür canı obje başına doğumda yazılır
+> (`MatchDirector.SpawnObject(..., maxHp:)`) ve **telde taşınmaz**. Sayılar
+> `Docs/ArenaNet-Protokol.md` §10.5'teki tür/dizilim tablolarındadır.
+>
 > **Ekip kuralları.** Düşen oyuncuyu **aynı kattaki yaşayan bir arkadaşı** kaldırır
 > (`revive_request.by`, §10.4): kaldırılan **50 canla** kalkar — canı `IGameMode.ReviveHp`'ten gelir
-> ve tam candan düşükse yenilenme normal gecikmeyi bekler. Puan: zombi öldürme **türe göre** (bugün
-> tek tür var, yürüyen = **1**), kafadan öldürme **+1** (`hit_report.zone`), arkadaş kaldırma
+> ve tam candan düşükse yenilenme normal gecikmeyi bekler. Puan: zombi öldürme **türe göre**,
+> kafadan öldürme **+1** (`hit_report.zone`), arkadaş kaldırma
 > **+3** kaldırana; öldürme ayrıca `AddKillCredit` ile öldürenin `PlayerInfo.kills`'ine yazılır
 > (zombi ölümü `kill_event` üretmez). **Yenilgi** yalnız kalibreli oyuncu sayısı **en az 2** iken ve
 > onlardan hiçbiri **2 sn boyunca kesintisiz** ayakta değilken gelir → `modeState` `over:lost`; tek

@@ -11,7 +11,7 @@ namespace VortexArena.App.Editor
 {
     /// <summary>
     /// Zombie mode's in-match HUD (<c>Docs/Gelistirici/Arayuz/zombi.html</c>, "kan damlası" theme):
-    /// head-locked strip · big between-waves countdown · short toast, built into
+    /// head-locked strip · big between-waves countdown · short toast · DEV barı, built into
     /// <c>Assets/Modes/Zombie/UI/ZombieHud.prefab</c>.
     /// <para>
     /// ⚠️ <b>Replaces the Lokanta strip copied into this prefab.</b> The new strip ADOPTS the removed
@@ -32,6 +32,7 @@ namespace VortexArena.App.Editor
         private const string ZbStripName = "ZombieStrip";
         private const string ZbNoticeName = "WaveNotice";
         private const string ZbToastName = "Toast";
+        private const string ZbBossName = "BossBar";
 
         /// <summary>The node the strip is grown from; a Lokanta-era copy sits under this name.</summary>
         private const string ZbLegacyStrip = "LokantaStrip";
@@ -73,6 +74,14 @@ namespace VortexArena.App.Editor
         /// <summary>Top margin the big toast line gets while the small line is shown.</summary>
         private const float ZbToastSmallBand = 44f;
 
+        // ---- DEV barı (final stand boss bar)
+        private const float ZbBossW = 720f;
+        private const float ZbBossH = 124f;
+        private const float ZbBossTrackH = 22f;
+
+        /// <summary>Pitch of the boss bar's head lock: above the strip, so both are readable at once.</summary>
+        private const float ZbBossPitch = 18f;
+
         [MenuItem("Tools/VortexArena/UI/Girdap/Yalnız Zombi HUD")]
         public static void BuildZombieHudMenu()
         {
@@ -107,12 +116,14 @@ namespace VortexArena.App.Editor
 
                 RectTransform notice = VhudClaim(t, ZbNoticeName);
                 RectTransform toast = VhudClaim(t, ZbToastName);
+                RectTransform boss = VhudClaim(t, ZbBossName);
 
                 // Drops the legacy strip and anything left from an earlier layout.
-                VhudKeepOnly(t, ZbStripName, ZbNoticeName, ZbToastName);
+                VhudKeepOnly(t, ZbStripName, ZbNoticeName, ZbToastName, ZbBossName);
                 VhudKeepOnly(strip);
                 VhudKeepOnly(notice);
                 VhudKeepOnly(toast);
+                VhudKeepOnly(boss);
 
                 strip.sizeDelta = new Vector2(ZbStripW, ZbContentH);
 
@@ -124,9 +135,10 @@ namespace VortexArena.App.Editor
                 ZbTeam team = ZbBuildTeamStrip(strip);
                 ZbNotice centre = ZbBuildNotice(notice);
                 ZbToast toastParts = ZbBuildToast(toast);
+                ZbBoss bossParts = ZbBuildBossBar(boss);
 
                 ZbBindHud(root, clock, time, alarmPlate, cells, healthText, healthFill, status,
-                    team, centre, toastParts);
+                    team, centre, toastParts, bossParts);
                 PrefabUtility.SaveAsPrefabAsset(root, ZbHudPrefab);
             }
             finally
@@ -502,6 +514,63 @@ namespace VortexArena.App.Editor
             };
         }
 
+        // ---------------------------------------------------------------- DEV barı
+
+        private struct ZbBoss
+        {
+            public GameObject root;
+            public TextMeshProUGUI title;
+            public TextMeshProUGUI time;
+            public UiImage fill;
+        }
+
+        /// <summary>The final stand's boss bar: DEV · its health · the clock left, above the strip. Its
+        /// own head lock for the same reason the centre notice has one — it is up for the last minute
+        /// and a half of the run and must be where the player is already looking.</summary>
+        private static ZbBoss ZbBuildBossBar(RectTransform boss)
+        {
+            Stretch(boss);
+            ZbHeadLock(boss, ZbBossPitch);
+
+            UiShape plate = Shape(boss, "Plate");
+            PlaceCenter(plate.rectTransform, 0f, 0f, ZbBossW, ZbBossH);
+            plate.Radius(Kan.PlateRadius)
+                .Outline(Kan.Border1, Kan.BloodHi)
+                .Fill(Kan.PlateA, Kan.PlateB, UiGradientMode.Vertical)
+                .Glow(30f, Kan.Drop, new Vector2(0f, -10f));
+
+            TextMeshProUGUI title = Text(plate.transform, "Title", "DEV", GirdapFont.RubikWetPaint,
+                44f, Kan.BloodHi, TextAlignmentOptions.Center, 0.06f);
+            Place(title.rectTransform, 0f, 8f, ZbBossW, 56f);
+            TextShadow(title, Kan.BloodShadow, 0.05f);
+
+            UiShape track = Shape(plate.transform, "Track");
+            Place(track.rectTransform, 24f, 64f, ZbBossW - 48f, ZbBossTrackH);
+            track.Radius(4f).Outline(2f, Kan.Border).Fill(Kan.BloodLo);
+
+            // ⚠️ Filled Image needs a SPRITE (same trap as the health bar): with a null sprite
+            // fillAmount is ignored and the bar never moves.
+            UiImage fill = Image(track.transform, "Fill", LoadSprite("HealthBar_Fill.png"),
+                Kan.BloodHi, UiImage.Type.Filled);
+            fill.fillMethod = UiImage.FillMethod.Horizontal;
+            fill.fillOrigin = (int)UiImage.OriginHorizontal.Left;
+            fill.fillAmount = 1f;
+            Stretch(fill.rectTransform, 3f, 3f, 3f, 3f);
+
+            TextMeshProUGUI time = Text(plate.transform, "Time", "SON DİRENİŞ · 01:30",
+                GirdapFont.SairaBold, 24f, Kan.Label, TextAlignmentOptions.Center, 0.14f);
+            Place(time.rectTransform, 0f, 90f, ZbBossW, 30f);
+
+            boss.gameObject.SetActive(false);
+            return new ZbBoss
+            {
+                root = boss.gameObject,
+                title = title,
+                time = time,
+                fill = fill
+            };
+        }
+
         /// <summary>Adds (or re-uses) a head lock aiming <paramref name="pitch"/> degrees above the gaze
         /// axis at the strip's distance — same apparent size as the strip at any angle.</summary>
         private static void ZbHeadLock(RectTransform rt, float pitch)
@@ -523,7 +592,7 @@ namespace VortexArena.App.Editor
 
         private static void ZbBindHud(GameObject root, RectTransform clock, TextMeshProUGUI time,
             GameObject alarmPlate, ZbCells cells, TextMeshProUGUI healthText, UiImage healthFill,
-            StatusPlate status, ZbTeam team, ZbNotice notice, ZbToast toast)
+            StatusPlate status, ZbTeam team, ZbNotice notice, ZbToast toast, ZbBoss boss)
         {
             var hud = root.GetComponent<ModeHudBase>();
             if (hud == null)
@@ -566,19 +635,26 @@ namespace VortexArena.App.Editor
             HudSet(so, "toastSmallText", toast.small);
             HudSet(so, "toastBigText", toast.big);
             HudSetFloat(so, "toastSmallBand", ZbToastSmallBand);
+            HudSet(so, "bossRoot", boss.root);
+            HudSet(so, "bossFill", boss.fill);
+            HudSet(so, "bossTitleText", boss.title);
+            HudSet(so, "bossTimeText", boss.time);
             so.ApplyModifiedPropertiesWithoutUndo();
 
             Debug.Log("[Kan] Zombi HUD üretildi: " + ZbStripName
                       + "/{Clock/{Plate,AlarmPlate,Time}, Row/{CellWave,CellRemaining,CellSquad,"
                       + "CellSelf}, Health, Status, Team/{Head,Row0..7/{Name,State}}} · "
                       + ZbNoticeName + "/{Dim,Title,Number,Sub} · "
-                      + ZbToastName + "/Plate/{Small,Big}"
+                      + ZbToastName + "/Plate/{Small,Big} · "
+                      + ZbBossName + "/Plate/{Title,Track/Fill,Time}"
                       + $" · şerit {ZbStripW}x{ZbContentH} (takım şeridi {ZbStripW}x{ZbTeamH})"
+                      + $" · DEV barı {ZbBossW}x{ZbBossH}"
                       + " · bağlanan: timeText, timeFrame, statusPlate, healthText, healthFill,"
                       + " centerNoticeRoot/Text/Dim, waveText, remainingText, squadKillsText,"
                       + " selfKillsText, clockAlarmPlate, teamStripRoot, teamRows[8],"
                       + " teamNameTexts[8], teamStateTexts[8], noticeTitleText, noticeSubText,"
-                      + " toastRoot, toastSmallText, toastBigText"
+                      + " toastRoot, toastSmallText, toastBigText, bossRoot, bossFill,"
+                      + " bossTitleText, bossTimeText"
                       + " (healthStrip/statusText/scoreText boşaltıldı).");
         }
     }

@@ -35,18 +35,24 @@ MonoBehaviour:
   spawnClips:
   - {fileID: 8300000, guid: 441a0835ad0dace4592ad82186ecd5a5, type: 3}
   - {fileID: 8300000, guid: 4bd88c5dcca87e04faf149d65bc90ba2, type: 3}
+  screamClips:
+  - {fileID: 8300000, guid: 441a0835ad0dace4592ad82186ecd5a5, type: 3}
+  - {fileID: 8300000, guid: 4bd88c5dcca87e04faf149d65bc90ba2, type: 3}
   groanVolume: 0.65
   attackVolume: 0.9
   deathVolume: 0.9
   spawnVolume: 0.7
+  screamVolume: 1
   pitchJitter: 0.12
   groanIntervalMin: 8
   groanIntervalMax: 15
   maxGroaners: 6
   minDistance: 1
   maxDistance: 12
+  screamMaxDistance: 40
   musicTension: {fileID: 8300000, guid: 02104ce7c1bb29f49a00677b79d37aa3, type: 3}
   musicWave: {fileID: 8300000, guid: 8c95a517e4614e343b87c4598b2c3f01, type: 3}
   musicVolume: 0.55
   waveStartSting: {fileID: 0}
   waveClearSting: {fileID: 0}
+  finalStandSting: {fileID: 0}

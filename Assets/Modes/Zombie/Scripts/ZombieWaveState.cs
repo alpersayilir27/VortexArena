@@ -41,6 +41,23 @@ namespace VortexArena.Modes.Zombie
         /// <summary>Difficulty the admin picked (<c>easy|normal|hard</c>); empty before the first state.</summary>
         public static string Difficulty { get; private set; } = string.Empty;
 
+        /// <summary>Raised when <see cref="FinalStand"/> FLIPS — the HUD's toast and the weapon unlocks
+        /// hang off the edge, not off the value.</summary>
+        public static event Action FinalStandChanged;
+
+        /// <summary>Final stand ("Son Direniş") is running: no more waves, every weapon is open.</summary>
+        public static bool FinalStand { get; private set; }
+
+        /// <summary>The Dev's <c>netId</c>; <c>0</c> = no Dev in the run yet.</summary>
+        public static int DevNetId { get; private set; }
+
+        /// <summary>The Dev's max hp, as the mode announced it — the boss bar divides by THIS, so a
+        /// headset that joined after the Dev spawned still draws a full bar.</summary>
+        public static int DevMaxHp { get; private set; }
+
+        /// <summary>Running special wave (<c>swarm|heavy|scream</c>); empty = a normal wave.</summary>
+        public static string Special { get; private set; } = string.Empty;
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void Install()
         {
@@ -53,6 +70,10 @@ namespace VortexArena.Modes.Zombie
             NetEvents.OnLoadMatch += _ =>
             {
                 Next = 0;
+                Special = string.Empty;
+                DevNetId = 0;
+                DevMaxHp = 0;
+                SetFinalStand(false);
                 SetWave(0);
             };
             NetEvents.OnReturnToLobby += _ => Reset();
@@ -65,6 +86,10 @@ namespace VortexArena.Modes.Zombie
             Remaining = DefaultRemaining;
             FloorMin = DefaultFloorMin;
             Difficulty = string.Empty;
+            Special = string.Empty;
+            DevNetId = 0;
+            DevMaxHp = 0;
+            SetFinalStand(false);
             SetWave(0);
         }
 
@@ -93,6 +118,13 @@ namespace VortexArena.Modes.Zombie
                 return;
             }
 
+            // ⚠️ These two are read from the ABSENCE of their key as well: a special wave and the final
+            // stand both END by the key dropping out, and a stale "fs" would keep every weapon open for
+            // the rest of the run.
+            bool sawSpecial = false;
+            bool sawFinalStand = false;
+            bool sawWave = false;
+
             string[] tokens = modeState.Split(';');
             for (int i = 0; i < tokens.Length; i++)
             {
@@ -112,6 +144,26 @@ namespace VortexArena.Modes.Zombie
                     continue;
                 }
 
+                if (string.Equals(key, ZombieKinds.StateSpecial, StringComparison.Ordinal))
+                {
+                    sawSpecial = true;
+                    Special = raw;
+                    continue;
+                }
+
+                if (string.Equals(key, ZombieKinds.StateDev, StringComparison.Ordinal))
+                {
+                    ApplyDev(raw);
+                    continue;
+                }
+
+                if (string.Equals(key, ZombieKinds.StateFinalStand, StringComparison.Ordinal))
+                {
+                    sawFinalStand = true;
+                    SetFinalStand(!string.Equals(raw, "0", StringComparison.Ordinal));
+                    continue;
+                }
+
                 if (!int.TryParse(raw, out int value) || value < 0)
                 {
                     continue;
@@ -119,6 +171,7 @@ namespace VortexArena.Modes.Zombie
 
                 if (string.Equals(key, ZombieKinds.StateWave, StringComparison.Ordinal))
                 {
+                    sawWave = true;
                     SetWave(value);
                 }
                 else if (string.Equals(key, ZombieKinds.StateNext, StringComparison.Ordinal))
@@ -134,6 +187,54 @@ namespace VortexArena.Modes.Zombie
                     FloorMin = value;
                 }
             }
+
+            // ⚠️ A mode pause replaces the whole string with its reason text (no "w"): absence there
+            // means nothing, and reading it would re-lock every weapon mid final stand.
+            if (!sawWave)
+            {
+                return;
+            }
+
+            if (!sawSpecial)
+            {
+                Special = string.Empty;
+            }
+
+            if (!sawFinalStand)
+            {
+                SetFinalStand(false);
+            }
+        }
+
+        /// <summary><c>"&lt;netId&gt;/&lt;maxHp&gt;"</c> → the boss bar's two numbers. A malformed value
+        /// leaves the previous Dev in place: half a bar is better than a bar that vanishes mid-fight.</summary>
+        private static void ApplyDev(string raw)
+        {
+            int slash = raw.IndexOf('/');
+            if (slash <= 0 || slash == raw.Length - 1)
+            {
+                return;
+            }
+
+            if (!int.TryParse(raw.Substring(0, slash), out int netId) || netId <= 0 ||
+                !int.TryParse(raw.Substring(slash + 1), out int maxHp) || maxHp <= 0)
+            {
+                return;
+            }
+
+            DevNetId = netId;
+            DevMaxHp = maxHp;
+        }
+
+        private static void SetFinalStand(bool value)
+        {
+            if (FinalStand == value)
+            {
+                return;
+            }
+
+            FinalStand = value;
+            FinalStandChanged?.Invoke();
         }
     }
 }

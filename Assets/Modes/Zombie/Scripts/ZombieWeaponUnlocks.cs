@@ -36,6 +36,7 @@ namespace VortexArena.Modes.Zombie
             ModeRuntime.Changed += Refresh;
             SceneManager.sceneLoaded += HandleSceneLoaded;
             ZombieWaveState.WaveChanged += HandleWaveChanged;
+            ZombieWaveState.FinalStandChanged += HandleFinalStandChanged;
             NetEvents.OnReturnToLobby += _ => Stop();
             NetEvents.OnDisconnected += Stop;
         }
@@ -102,8 +103,29 @@ namespace VortexArena.Modes.Zombie
 
         private static bool IsUnlocked(WeaponDefinition definition)
         {
-            return definition == null ||
+            // The final stand opens the whole arsenal (§10.5) — the wave table no longer applies.
+            return definition == null || ZombieWaveState.FinalStand ||
                    ZombieArsenal.Live.UnlockWave(definition.WeaponId) <= CurrentWave;
+        }
+
+        /// <summary>Final stand: every locked slot opens at once. No per-weapon toast — the HUD's
+        /// "SON DİRENİŞ" notice already says it, and a dozen names would bury it.</summary>
+        private static void HandleFinalStandChanged()
+        {
+            if (!_active || !ZombieWaveState.FinalStand)
+            {
+                return;
+            }
+
+            IReadOnlyList<ZombieWeaponLockView> views = ZombieWeaponLockView.All;
+            for (int i = 0; i < views.Count; i++)
+            {
+                ZombieWeaponLockView view = views[i];
+                if (view != null && view.UnlockWave > CurrentWave)
+                {
+                    view.PlayUnlock();
+                }
+            }
         }
 
         // -------------------------------------------------------------------- waves
@@ -183,6 +205,13 @@ namespace VortexArena.Modes.Zombie
         /// opened are mid-animation and ignore it, because their own wave is already reached).</summary>
         private static void ApplyAll(int wave)
         {
+            // ⚠️ Nothing is re-locked during the final stand: a scene load or a late join there would
+            // otherwise put the covers back on an arsenal the squad already has.
+            if (ZombieWaveState.FinalStand)
+            {
+                return;
+            }
+
             IReadOnlyList<ZombieWeaponLockView> views = ZombieWeaponLockView.All;
             for (int i = 0; i < views.Count; i++)
             {

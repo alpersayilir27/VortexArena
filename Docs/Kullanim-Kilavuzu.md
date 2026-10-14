@@ -935,6 +935,23 @@ Zombide takım yoktur, herkes aynı taraftadır.
 - **Sonuç ekranında** ulaşılan dalga, ekip skoru ve oyuncu satırları (puan · öldürme · kafadan ·
   kaldırma · düşme) vardır; satırlarda **En çok öldüren · Nişancı · Kurtarıcı** rozetleri yazar.
 
+**Zombi türü gözünden tanınır** — oyunculara söylenecek tek şey göz rengidir:
+
+- **Sarı:** olağan zombi (yürüyen ya da sürünen).
+- **Kırmızı:** koşucu, hızlıdır.
+- **Turuncu:** iri zombi, yavaş ama çok dayanıklı.
+- **Mor:** çığlıkçı; uzakta durup bağırır, bağırınca yakınındaki zombiler hızlanıp onun hedefine
+  yönelir.
+- **Beyaz:** **DEV** — yalnız Son Direniş'te çıkar.
+
+**Özel dalgalar** başlarken gözlükte adıyla yazar (KOŞUCU SÜRÜSÜ · AĞIR ADIMLAR · ÇIĞLIK GECESİ);
+sürüde koşucular, ağır adımlarda iri zombiler, çığlık gecesinde çığlıkçılar çoğalır.
+
+**Son Direniş** maçın **son 90 saniyesinde** başlar (kısa maçlarda son 60 saniye): gözlükte "SON
+DİRENİŞ" yazar, yeni dalga ve dalga arası kalmaz, **bütün silahlar açılır**, düşenler ayağa kalkar
+ve **DEV** doğar. Ekranın üstünde DEV'in can çubuğu ve kalan süre durur. DEV öldürülürse maç
+"KURTULDUNUZ" ile biter; süre dolarsa "DAYANDINIZ".
+
 ### Çocuk Oyunları — Hamburgerci
 
 Çocuk Oyunları ayrı bir ailedir: **silah yok, vurulma yok, ölüm yok.** Savaş modu çocuk

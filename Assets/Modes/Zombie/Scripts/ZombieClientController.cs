@@ -60,6 +60,16 @@ namespace VortexArena.Modes.Zombie
         [Tooltip("Satırdaki durum: AYAKTA · DÜŞTÜ · KALDIRILIYOR %NN.")]
         [SerializeField] private TMP_Text[] teamStateTexts = new TMP_Text[TeamRowCount];
 
+        [Header("Zombi — DEV barı")]
+        [Tooltip("DEV barının kökü — DEV doğana kadar kapalı durur.")]
+        [SerializeField] private GameObject bossRoot;
+        [Tooltip("DEV'in can dolgusu (sprite'lı Filled Image).")]
+        [SerializeField] private UnityEngine.UI.Image bossFill;
+        [Tooltip("Barın başlığı (\"DEV\").")]
+        [SerializeField] private TMP_Text bossTitleText;
+        [Tooltip("Barın alt satırı: SON DİRENİŞ · kalan süre.")]
+        [SerializeField] private TMP_Text bossTimeText;
+
         /// <summary>The HUD instance on this headset, or <c>null</c> where there is none (admin).</summary>
         /// <remarks>⚠️ The HUD prefab is the ONLY instance per headset, so a static handle is honest;
         /// it exists because the weapon locks live on the arena's boards and have no path to the HUD
@@ -78,6 +88,13 @@ namespace VortexArena.Modes.Zombie
 
         /// <summary>Seconds the weapon-unlock toast stays up.</summary>
         private const float WeaponToastSeconds = 3f;
+
+        /// <summary>Seconds the "SON DİRENİŞ" toast stays up.</summary>
+        private const float FinalStandToastSeconds = 3f;
+
+        /// <summary>Seconds the revive window stays open when the final stand opens — everyone who is
+        /// down gets up for the last fight, and after that there is no break left to wait for.</summary>
+        private const float FinalStandReviveSeconds = 3f;
 
         /// <summary>Below this the clock turns red (same threshold the diner HUD uses).</summary>
         private const float ClockAlarmSeconds = 10f;
@@ -117,6 +134,33 @@ namespace VortexArena.Modes.Zombie
         /// <summary>Unscaled time the toast closes at; negative = no toast up.</summary>
         private float _toastHideAt = -1f;
 
+        /// <summary>Final stand running (<c>fs</c>): no more waves, the Giant is on the floor.</summary>
+        private bool _finalStand;
+
+        /// <summary>Unscaled time the final stand's revive window closes; negative = closed.</summary>
+        private float _finalStandReviveUntil = -1f;
+
+        /// <summary>Special wave token (<c>wx</c>); empty on a plain wave.</summary>
+        private string _special = string.Empty;
+
+        /// <summary>The Giant's <c>netId</c> (<c>dev</c>); 0 = not spawned.</summary>
+        private int _devNetId;
+
+        private float _devMaxHp;
+
+        /// <summary>The run is over (result screen up): the boss bar must not come back on a late
+        /// state.</summary>
+        private bool _ended;
+
+        /// <summary>Clock of the last <c>match_state</c> and the unscaled time it arrived: the boss bar
+        /// counts down per frame, while the state is 1 Hz.</summary>
+        private float _clockSeconds;
+        private float _clockStamp = -1f;
+
+        /// <summary>Last string written into the boss bar's sub line; a per-frame assignment would
+        /// re-mesh the text for nothing.</summary>
+        private string _bossTimeCache = string.Empty;
+
         /// <summary>Last roster (§10.2) — the team strip's names and alive flags.</summary>
         private PlayerInfo[] _roster = Array.Empty<PlayerInfo>();
 
@@ -149,7 +193,7 @@ namespace VortexArena.Modes.Zombie
 
             // The mode owns the revive WINDOW, the core owns the revive flow (§10.4): between waves
             // everyone who is down gets up, and only this HUD knows when that gap is.
-            _reviveWindow = IsWaveBreak;
+            _reviveWindow = IsReviveWindow;
             PlayerCombatState.ModeReviveWindow = _reviveWindow;
         }
 
@@ -202,12 +246,18 @@ namespace VortexArena.Modes.Zombie
 
             RefreshDeadPrompt();
             RefreshTeamStrip();
+            RefreshBossBar();
         }
 
         /// <summary>Is the squad in the gap between two waves? That is the window the core revives
         /// everyone who is down in (<see cref="PlayerCombatState.ModeReviveWindow"/>).</summary>
         private bool IsWaveBreak() =>
             _playing && _over.Length == 0 && _wave >= 1 && _nextWaveSeconds > 0;
+
+        /// <summary>The window the core revives everyone who is down in: the gap between waves, plus a
+        /// short one when the final stand opens — after it there are no more gaps.</summary>
+        private bool IsReviveWindow() =>
+            IsWaveBreak() || Time.unscaledTime < _finalStandReviveUntil;
 
         // ------------------------------------------------------------------- toasts
 
@@ -268,6 +318,40 @@ namespace VortexArena.Modes.Zombie
             ShowToast("YENİ SİLAH AÇILDI", Girdap.Upper(weaponName), WeaponToastSeconds);
         }
 
+        /// <summary>Headline of a special wave, or empty on a plain one.</summary>
+        private static string SpecialTitle(string special)
+        {
+            if (string.Equals(special, ZombieKinds.SpecialSwarm, StringComparison.Ordinal))
+            {
+                return "KOŞUCU SÜRÜSÜ";
+            }
+
+            if (string.Equals(special, ZombieKinds.SpecialHeavy, StringComparison.Ordinal))
+            {
+                return "AĞIR ADIMLAR";
+            }
+
+            return string.Equals(special, ZombieKinds.SpecialScream, StringComparison.Ordinal)
+                ? "ÇIĞLIK GECESİ"
+                : string.Empty;
+        }
+
+        /// <summary>Final stand sting, falling back to the wave sting: silence would drop the loudest
+        /// moment of the run.</summary>
+        private static AudioClip FinalStandSting
+        {
+            get
+            {
+                ZombieSounds sounds = ZombieSounds.Live;
+                if (sounds == null)
+                {
+                    return null;
+                }
+
+                return sounds.FinalStandSting != null ? sounds.FinalStandSting : sounds.WaveStartSting;
+            }
+        }
+
         private void HideToast()
         {
             _toastHideAt = -1f;
@@ -290,9 +374,16 @@ namespace VortexArena.Modes.Zombie
             _playing = false;
             _toastedWave = 0;
             _clearedWave = 0;
+            _finalStand = false;
+            _finalStandReviveUntil = -1f;
+            _special = string.Empty;
+            _devNetId = 0;
+            _devMaxHp = 0f;
+            _clockStamp = -1f;
             _roster = Array.Empty<PlayerInfo>();
             ClearPrompt();
             HideToast();
+            HideBossBar();
             SetClockAlarm(false);
             SetCenterNotice("");
             BuildScoreLine();
@@ -315,6 +406,7 @@ namespace VortexArena.Modes.Zombie
         protected override string WinnerLine(MatchEndMsg msg)
         {
             HideToast();
+            HideBossBar();
             SetClockAlarm(false);
             SetCenterNotice("");
             ClearPrompt();
@@ -383,26 +475,57 @@ namespace VortexArena.Modes.Zombie
         {
             int previousWave = _wave;
             int previousNext = _nextWaveSeconds;
+            bool previousFinalStand = _finalStand;
             ParseState(msg.modeState);
+
+            _clockSeconds = msg.timeRemaining;
+            _clockStamp = Time.unscaledTime;
 
             SetText(waveText, _wave.ToString());
             SetText(remainingText, _remaining.ToString());
 
             bool playing = msg.phase == ArenaProtocol.PHASE_PLAYING;
             _playing = playing;
+            if (playing)
+            {
+                // A running match clears the latch the result screen set.
+                _ended = false;
+            }
+
             SetClockAlarm(playing && msg.timeRemaining > 0f
                           && msg.timeRemaining <= ClockAlarmSeconds);
 
             // Between waves the big centre number is the only thing that explains why nothing is
             // coming; the title/subtitle around it ride OnCenterNoticeRefreshed.
-            SetCenterNotice(playing && _nextWaveSeconds > 0 ? _nextWaveSeconds.ToString() : "");
+            // The final stand has no next wave: a leftover countdown there would promise one.
+            SetCenterNotice(playing && !_finalStand && _nextWaveSeconds > 0
+                ? _nextWaveSeconds.ToString()
+                : "");
 
             // A wave starts when its number goes up AND nothing is counting down any more.
             if (playing && _wave > previousWave && _nextWaveSeconds == 0 && _wave > _toastedWave)
             {
                 _toastedWave = _wave;
-                ShowToast("", $"DALGA {_wave} BAŞLADI", WaveToastSeconds);
+                string special = SpecialTitle(_special);
+                if (special.Length > 0)
+                {
+                    ShowToast($"DALGA {_wave}", special, WaveToastSeconds);
+                }
+                else
+                {
+                    ShowToast("", $"DALGA {_wave} BAŞLADI", WaveToastSeconds);
+                }
+
                 PlaySting(ZombieSounds.Live != null ? ZombieSounds.Live.WaveStartSting : null);
+            }
+
+            if (playing && _finalStand && !previousFinalStand)
+            {
+                ShowToast("BÜTÜN SİLAHLAR AÇIK", "SON DİRENİŞ", FinalStandToastSeconds);
+                PlaySting(FinalStandSting);
+
+                // The last fight starts with the squad on its feet; there is no break left to wait for.
+                _finalStandReviveUntil = Time.unscaledTime + FinalStandReviveSeconds;
             }
 
             // A break OPENING after a wave is the "you cleared it" moment; the countdown before the
@@ -462,6 +585,13 @@ namespace VortexArena.Modes.Zombie
                 return;
             }
 
+            // `wx` rides only while the special wave runs, so its absence is meaningful — but only in a
+            // TOKEN state: the pause reason travels in the same field as free text.
+            if (modeState.IndexOf(':') >= 0)
+            {
+                _special = string.Empty;
+            }
+
             string[] tokens = modeState.Split(';');
             for (int i = 0; i < tokens.Length; i++)
             {
@@ -478,6 +608,18 @@ namespace VortexArena.Modes.Zombie
                 if (string.Equals(key, ZombieKinds.StateOver, StringComparison.Ordinal))
                 {
                     _over = raw;
+                    continue;
+                }
+
+                if (string.Equals(key, ZombieKinds.StateSpecial, StringComparison.Ordinal))
+                {
+                    _special = raw;
+                    continue;
+                }
+
+                if (string.Equals(key, ZombieKinds.StateDev, StringComparison.Ordinal))
+                {
+                    ParseDev(raw);
                     continue;
                 }
 
@@ -502,11 +644,95 @@ namespace VortexArena.Modes.Zombie
                 {
                     _notSpawned = value;
                 }
+                else if (string.Equals(key, ZombieKinds.StateFinalStand, StringComparison.Ordinal))
+                {
+                    _finalStand = value != 0;
+                }
             }
 
             // KALAN = what the wave still owes the squad: on the floor plus not yet spawned.
             _remaining = _standing + _notSpawned;
         }
+
+        /// <summary><c>dev:&lt;netId&gt;/&lt;maxHp&gt;</c> → the boss bar's object and scale. A malformed
+        /// value leaves the bar closed rather than drawing an empty one.</summary>
+        private void ParseDev(string raw)
+        {
+            int slash = raw.IndexOf('/');
+            if (slash <= 0 || slash == raw.Length - 1
+                || !int.TryParse(raw.Substring(0, slash), out int netId)
+                || !float.TryParse(raw.Substring(slash + 1),
+                    System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out float maxHp))
+            {
+                return;
+            }
+
+            _devNetId = netId;
+            _devMaxHp = maxHp;
+        }
+
+        // ---------------------------------------------------------------- boss bar
+
+        /// <summary>The Giant's health and the clock left, while it is on the floor.</summary>
+        private void RefreshBossBar()
+        {
+            if (bossRoot == null)
+            {
+                return;
+            }
+
+            bool show = _playing && !_ended && _over.Length == 0 && _devNetId != 0;
+            if (bossRoot.activeSelf != show)
+            {
+                bossRoot.SetActive(show);
+                if (show)
+                {
+                    SetText(bossTitleText, "DEV");
+                }
+            }
+
+            if (!show)
+            {
+                return;
+            }
+
+            // A missing object reads as 0, not as full: a full bar on a Giant nobody can see is a lie.
+            float ratio = 0f;
+            if (_devMaxHp > 0f && NetObjectRegistry.TryGet(_devNetId, out NetObject dev) && dev != null)
+            {
+                ratio = Mathf.Clamp01(dev.Hp / _devMaxHp);
+            }
+
+            if (bossFill != null)
+            {
+                bossFill.fillAmount = ratio;
+            }
+
+            string line = $"SON DİRENİŞ · {FormatTime(ClockLeft)}";
+            if (!string.Equals(_bossTimeCache, line, StringComparison.Ordinal))
+            {
+                _bossTimeCache = line;
+                SetText(bossTimeText, line);
+            }
+        }
+
+        /// <summary>Closes the bar and keeps it closed: the result screen is up and no state follows
+        /// that would hide it on its own.</summary>
+        private void HideBossBar()
+        {
+            _ended = true;
+            _bossTimeCache = string.Empty;
+            if (bossRoot != null && bossRoot.activeSelf)
+            {
+                bossRoot.SetActive(false);
+            }
+        }
+
+        /// <summary>Seconds left on the match clock, ticked between the 1 Hz states.</summary>
+        private float ClockLeft => _clockStamp < 0f
+            ? 0f
+            : Mathf.Max(0f, _clockSeconds - (Time.unscaledTime - _clockStamp));
 
         // ------------------------------------------------------------- dead player prompt
 

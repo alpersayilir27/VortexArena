@@ -322,7 +322,7 @@ builder'a geçirilir.
 
 | Prefab | Menü | Ölçü |
 |---|---|---|
-| `Assets/Modes/Zombie/UI/ZombieHud.prefab` (kökü `ZombieClientController`) | *Yalnız Zombi HUD* | `ZombieStrip` 606×578 (kafaya kilitli; saat 240×68 · dört hücre 150×124, sayı 68 px / DALGA 84 px, etiket 26 px · can 606×44 · durum plakası 606×44 · takım şeridi 606×254: başlık 30 px + 8 satır 28 px) · `WaveNotice` görüş ortası (başlık 96 px, sayı 280 px, alt satır 40 px) · `Toast` 780×128 (büyük satır 48 px, küçük satır 26 px) |
+| `Assets/Modes/Zombie/UI/ZombieHud.prefab` (kökü `ZombieClientController`) | *Yalnız Zombi HUD* | `ZombieStrip` 606×578 (kafaya kilitli; saat 240×68 · dört hücre 150×124, sayı 68 px / DALGA 84 px, etiket 26 px · can 606×44 · durum plakası 606×44 · takım şeridi 606×254: başlık 30 px + 8 satır 28 px) · `WaveNotice` görüş ortası (başlık 96 px, sayı 280 px, alt satır 40 px) · `Toast` 780×128 (büyük satır 48 px, küçük satır 26 px) · `BossBar` 720×124 (başlık 44 px · can kuşağı 22 px · alt satır 24 px; şeridin üstünde, kendi kafa kilidi 18°) |
 | `Assets/Modes/Zombie/UI/ZombieResultOverlay.prefab` (kökü `MatchResultOverlay`) | *Yalnız Zombi sonuç ekranı* | kart 1400×860 (sonuç sözcüğü 110 px · dalga 170 px · ekip skoru 120 px · iki pil 280×88) · tablo: iki blok **alt alta** 1320×300, satır 56+8 (üst 44), beş değer hücresi 100 px, rozet 104×26, alt bant 1320×96 |
 
 Şerit aşçı şeridinin (560×176) yerine geçer ve onun RectTransform'unu, iç Canvas'ını ve kafa
@@ -346,6 +346,19 @@ sokardı. `healthFill` sprite'lı bir `Image`'dır (sebebi "Tuzaklar"da).
 
 ⚠️ **Bildirim plakası tek düzendir:** küçük satır varken büyük satıra `margin` ile üst boşluk
 verilir (`toastSmallBand`, builder'dan serileşir) — ikinci bir yerleşim ve Layout Group yoktur.
+
+**DEV barı** (`BossBar`) Son Direniş'in patronunu gösterir: başlık DEV, altında can kuşağı
+(`bossFill`, sprite'lı Filled `Image`) ve alt satırda SON DİRENİŞ · kalan süre. Yalnız `modeState`
+`dev:<netId>/<maxHp>` taşırken ve maç sürerken açılır; can `NetObjectRegistry`'den `netId` ile
+okunur, obje bulunamazsa kuşak **boş** çizilir (dolu kuşak görünmeyen bir patronu yalan söyler).
+Maç bitince ve lobide kapalıdır.
+
+**Özel dalga ve Son Direniş bildirimleri** aynı bildirim plakasını kullanır: özel dalga başında
+küçük satır DALGA N, büyük satır KOŞUCU SÜRÜSÜ · AĞIR ADIMLAR · ÇIĞLIK GECESİ (`wx` yokken olağan
+"DALGA N BAŞLADI"); Son Direniş açılınca küçük satır BÜTÜN SİLAHLAR AÇIK, büyük satır SON DİRENİŞ
+ve `finalStandSting` çalar (yoksa dalga stingi). ⚠️ Son Direniş'te **dalga arası geri sayımı
+açılmaz** — gelmeyecek bir dalga sözü verirdi; kaldırma penceresi o anda 3 saniye açılır, çünkü
+sonrasında hiç dalga arası kalmaz.
 
 **Şeridin hücreleri:** DALGA · **KALAN** · EKİP · SEN. KALAN dalganın bitmemiş zombisidir (sahadaki
 + doğmayı bekleyen); yalnız sahadakini yazan hücre doğarken bitmiş görünen dalga gösterir.

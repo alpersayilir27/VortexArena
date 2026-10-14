@@ -2741,13 +2741,15 @@ public sealed class MatchDirector
     /// in the FLIGHT window at <paramref name="pose"/> (§10.10) — the owner's physics drops it there and
     /// its <c>object_rest</c> ends the ownership. ⚠️ Spawning such an object with NO owner leaves it
     /// kinematic and hanging in the air.</para></remarks>
+    /// <param name="maxHp">Per-object health ceiling overriding the kind's; <c>null</c> = the kind's
+    /// value. Server-internal (§10.10) — no wire field carries a ceiling.</param>
     public int SpawnObject(string kind, PoseData pose, int owner = 0, bool rightHand = false,
-        string? payload = null, bool inHand = true)
+        string? payload = null, bool inHand = true, float? maxHp = null)
     {
         lock (_gate)
         {
-            if (!_objects.TrySpawnLocked(kind, pose, owner, rightHand, payload, inHand, out var entry,
-                    out var reason))
+            if (!_objects.TrySpawnLocked(kind, pose, owner, rightHand, payload, inHand, maxHp,
+                    out var entry, out var reason))
             {
                 Console.WriteLine($"[world] object_spawn reddedildi ('{kind}'): {reason}.");
                 return 0;
@@ -2806,6 +2808,20 @@ public sealed class MatchDirector
         lock (_gate)
         {
             if (!_objects.SetFlagsLocked(netId, setMask, clearMask, out var entry)) return false;
+            QueueBroadcastLocked(_pendingOutbox, JsonUtil.Serialize(WorldObjectTable.ToStateMsg(entry)));
+            return true;
+        }
+    }
+
+    /// <summary>Breaks an object with no shooter (hp 0 + <c>Broken</c>) and broadcasts the resulting
+    /// <c>object_state</c>; false = unknown id or already broken.</summary>
+    /// <remarks>⚠️ Raises NO <see cref="IGameMode.OnObjectHit"/>: the caller is the mode itself, so the
+    /// hook would re-enter it and score a kill nobody made.</remarks>
+    public bool BreakObject(int netId)
+    {
+        lock (_gate)
+        {
+            if (!_objects.BreakLocked(netId, out var entry)) return false;
             QueueBroadcastLocked(_pendingOutbox, JsonUtil.Serialize(WorldObjectTable.ToStateMsg(entry)));
             return true;
         }

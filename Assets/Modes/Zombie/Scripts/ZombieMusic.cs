@@ -158,7 +158,10 @@ namespace VortexArena.Modes.Zombie
 
         /// <summary>Wave layer while a wave is OUT: <c>next == 0</c> and the first wave has started.
         /// Before wave 1 and in the gap between waves it is the tension layer.</summary>
-        private static bool WaveLayerWanted => ZombieWaveState.Wave >= 1 && ZombieWaveState.Next <= 0;
+        /// <remarks>Final stand ("Son Direniş") forces it: there is no wave counter left to read, and the
+        /// tension layer under the run's last fight reads as "it is over".</remarks>
+        private static bool WaveLayerWanted =>
+            ZombieWaveState.FinalStand || (ZombieWaveState.Wave >= 1 && ZombieWaveState.Next <= 0);
 
         private void Update()
         {

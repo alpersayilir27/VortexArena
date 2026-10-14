@@ -44,6 +44,10 @@ namespace VortexArena.Modes.Zombie.Editor
             FillArray(serialized, "deathClips", Clips("Zombie_Death_", 1, 4));
             FillArray(serialized, "spawnClips", Clips("Zombie_Groan_", 7, 8));
 
+            // Same two clips as the spawn voice: those are the only shouted placeholders. The scream
+            // pool stays FILLED anyway, so swapping in a real cry is a drop into this one field.
+            FillArray(serialized, "screamClips", Clips("Zombie_Groan_", 7, 8));
+
             SetClip(serialized, "musicTension", Clip("Zombie_Music_Tension"));
             SetClip(serialized, "musicWave", Clip("Zombie_Music_Wave"));
 

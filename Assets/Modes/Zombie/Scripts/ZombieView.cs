@@ -8,11 +8,11 @@ namespace VortexArena.Modes.Zombie
 {
     /// <summary>The zombie's PRESENTATION on every headset: picks a body, applies the owner's streamed
     /// pose and feeds the Animator. No rules, no authority.</summary>
-    /// <remarks>⚠️ <b>Every choice is derived from the <c>netId</c></b> (look · crawler · gait set ·
-    /// size · attack and death variant) through <see cref="ZombieKinds"/>. The protocol carries none of
-    /// it: a field per zombie would cost bandwidth for something both ends can compute, and the single
-    /// rule in <c>ZombieKinds</c> is what keeps the brain's speed and this body's animation talking
-    /// about the same creature.
+    /// <remarks>⚠️ <b>Look, size, eyes and the crawl come from the TYPE</b> the server put in the payload
+    /// (<c>t</c>, §10.5); the remaining variety (gait set, size jitter, attack and death variant) is
+    /// derived from the <c>netId</c> through <see cref="ZombieKinds"/> — a field per zombie would cost
+    /// bandwidth for something both ends can compute. Either way the single rule in <c>ZombieKinds</c> is
+    /// what keeps the brain's speed and this body's animation talking about the same creature.
     /// <para>⚠️ The gait comes from the MEASURED pose delta, not from a network field: walking is then
     /// in step with the real movement on every headset, owner included, and needs no extra
     /// stream.</para>
@@ -88,9 +88,21 @@ namespace VortexArena.Modes.Zombie
 
         private const float SpawnDissolveSeconds = 1.2f;
 
+        /// <summary>SpawnIndex of <c>ZA_Scream</c> — ⚠️ mirrors ZombieLookBuilder's spawn clip order. The
+        /// scream reuses the Spawn one-shot because that state is entered from AnyState, so it is
+        /// reachable in the middle of locomotion too.</summary>
+        private const int SpawnIndexScream = 2;
+
+        /// <summary>A crawler has no attack clip: its crawl is briefly sped up instead, which reads as a
+        /// lunge from a body already on the ground.</summary>
+        private const float CrawlAttackBoost = 2f;
+
+        private const float CrawlAttackBoostSeconds = 0.4f;
+
         [Header("Görünüşler")]
-        [Tooltip("ZB_* görünüş prefabları — hangisinin çıkacağı netId'den gelir, sıra ÖNEMLİ değil " +
-                 "ama listeden eleman çıkarmak sahadaki zombilerin görünüşünü kaydırır.")]
+        [Tooltip("ZB_* görünüş prefabları — SIRA ÖNEMLİ: ZombieLookBuilder.LookNames sırasıyla " +
+                 "aynı olmalı (Ghoul · Cop · Soldier · Clown · Girl), çünkü zombi türü hangi gövdeyle " +
+                 "çıkacağını bu indekslerden okur.")]
         [SerializeField] private ZombieLook[] looks;
 
         [Header("Belirme efekti")]
@@ -112,7 +124,17 @@ namespace VortexArena.Modes.Zombie
         private float _speed;
 
         private int _attackCounter = -1;
+        private int _screamCounter;
         private float _hp;
+
+        /// <summary>Type from the payload (§10.5): look, size, eyes and the crawl all come from it.</summary>
+        private string _type = ZombieKinds.TypeWalker;
+
+        /// <summary>Brute and Dev take no flinch: a boss interrupted by every bullet reads as stunned,
+        /// and the squad empties a magazine into it.</summary>
+        private bool _noFlinch;
+
+        private float _crawlBoostUntil;
 
         private float _idleFor;
         private float _nextIdleRoll;
@@ -134,6 +156,9 @@ namespace VortexArena.Modes.Zombie
         /// prefab, and the asset is the single place they live. Stays null with no sound data.</summary>
         private AudioSource _voice;
 
+        /// <summary>Built on the first scream only: most bodies never scream.</summary>
+        private AudioSource _screamVoice;
+
         private ZombieSounds _sounds;
 
         private float _nextGroan;
@@ -152,6 +177,7 @@ namespace VortexArena.Modes.Zombie
         {
             _net.StateChanged += HandleStateChanged;
             _attackCounter = ZombieKinds.PayloadInt(_net, ZombieKinds.PayloadAttack, -1);
+            _screamCounter = ZombieKinds.PayloadInt(_net, ZombieKinds.PayloadScream);
             _hp = _net.Hp;
 
             // Re-enabled body: the budget dropped it on disable, and without this it would never
@@ -167,6 +193,10 @@ namespace VortexArena.Modes.Zombie
 
         private void HandleStateChanged(NetObject netObject, NetStateOrigin origin)
         {
+            // Re-read every state: the payload can arrive after the object does, and the body is only
+            // built on the first POSE — by then the type has to be known.
+            _type = ZombieKinds.TypeOf(_net);
+
             int counter = ZombieKinds.PayloadInt(_net, ZombieKinds.PayloadAttack, _attackCounter);
             bool broken = _net.IsBroken;
 
@@ -178,6 +208,14 @@ namespace VortexArena.Modes.Zombie
             }
 
             _attackCounter = counter;
+
+            int scream = ZombieKinds.PayloadInt(_net, ZombieKinds.PayloadScream, _screamCounter);
+            if (origin == NetStateOrigin.Live && scream > _screamCounter && !broken)
+            {
+                PlayScream();
+            }
+
+            _screamCounter = scream;
 
             // Damage is the ONLY hit signal every headset has: object_state carries hp to all of them
             // (NetObject.ApplyState), while the shooter's hit report is local to one visor.
@@ -304,7 +342,9 @@ namespace VortexArena.Modes.Zombie
             }
 
             int netId = _net.NetId;
-            ZombieLook prefab = looks[ZombieKinds.LookIndex(netId, looks.Length)];
+            _type = ZombieKinds.TypeOf(_net);
+
+            ZombieLook prefab = looks[ZombieKinds.LookIndexOf(_type, netId, looks.Length)];
             if (prefab == null)
             {
                 Debug.LogWarning("[Zombie] Görünüş listesinde boş giriş var — zombi gövdesiz kalıyor. " +
@@ -315,12 +355,14 @@ namespace VortexArena.Modes.Zombie
             _look = Instantiate(prefab, transform);
             _look.transform.SetLocalPositionAndRotation(Vector3.zero, Quaternion.identity);
 
-            // Size jitter multiplies the look's own normalising scale, it does not replace it: the
+            // The type's size multiplies the look's own normalising scale, it does not replace it: the
             // five models arrive at different heights.
-            _look.transform.localScale *= ZombieKinds.ScaleJitter(netId);
+            _look.transform.localScale *= ZombieKinds.ScaleOf(_type, netId);
+            _look.SetEyeColor(ZombieKinds.EyeColorOf(_type));
 
             _animator = _look.Animator;
-            _crawler = ZombieKinds.IsCrawler(netId);
+            _crawler = ZombieKinds.IsCrawlerType(_type);
+            _noFlinch = _type == ZombieKinds.TypeBrute || _type == ZombieKinds.TypeDev;
             _locoSet = ZombieKinds.LocoSet(netId);
             _nominalWalk = _look.WalkSpeed(_locoSet);
 
@@ -402,6 +444,12 @@ namespace VortexArena.Modes.Zombie
             float rate = _crawler
                 ? Mathf.Clamp(_speed / CrawlClipSpeed, 0.5f, 2.5f)
                 : Mathf.Clamp(_speed / Mathf.Clamp(_speed, _nominalWalk, RunClipSpeed), 0.6f, 1.8f);
+
+            if (_crawler && Time.time < _crawlBoostUntil)
+            {
+                rate *= CrawlAttackBoost;
+            }
+
             _animator.SetFloat(LocoRateParam, rate, RateDamp, dt);
 
             UpdateIdleVariant(dt);
@@ -469,11 +517,17 @@ namespace VortexArena.Modes.Zombie
         }
 
         /// <summary>⚠️ No attack animation for a crawler: the crawl is a full-body loop and cutting into
-        /// it would stand the body up for half a second.</summary>
+        /// it would stand the body up for half a second — it gets a short crawl SPEED-UP instead.</summary>
         private void PlayAttack(int counter)
         {
-            if (_animator == null || _crawler || _dead)
+            if (_animator == null || _dead)
             {
+                return;
+            }
+
+            if (_crawler)
+            {
+                _crawlBoostUntil = Time.time + CrawlAttackBoostSeconds;
                 return;
             }
 
@@ -485,13 +539,32 @@ namespace VortexArena.Modes.Zombie
         /// random draw that would differ per headset.</summary>
         private void PlayHit(float hp)
         {
-            if (_animator == null || _crawler || _dead)
+            if (_animator == null || _crawler || _dead || _noFlinch)
             {
                 return;
             }
 
             _animator.SetInteger(HitIndexParam, Mathf.Max(0, Mathf.RoundToInt(hp)) % 2);
             _animator.SetTrigger(HitParam);
+        }
+
+        /// <summary>Scream of a screamer or of the Dev (payload <c>c</c>): the <c>ZA_Scream</c> variant of
+        /// the Spawn one-shot — that state is entered from AnyState, so it cuts into locomotion — plus a
+        /// cry that carries much further than the usual voice.</summary>
+        private void PlayScream()
+        {
+            if (_dead)
+            {
+                return;
+            }
+
+            if (_animator != null && !_crawler)
+            {
+                _animator.SetInteger(SpawnIndexParam, SpawnIndexScream);
+                _animator.SetTrigger(SpawnParam);
+            }
+
+            PlayScreamVoice();
         }
 
         private void ApplyDeath()
@@ -551,6 +624,43 @@ namespace VortexArena.Modes.Zombie
             _voice.rolloffMode = AudioRolloffMode.Logarithmic;
             _voice.minDistance = _sounds.MinDistance;
             _voice.maxDistance = _sounds.MaxDistance;
+        }
+
+        /// <summary>The scream has its OWN source: it must be heard across the arena
+        /// (<see cref="ZombieSounds.ScreamMaxDistance"/>) while the groan rolls off in a few metres, and
+        /// one source cannot carry both distance curves.</summary>
+        private void PlayScreamVoice()
+        {
+            if (_sounds == null)
+            {
+                return;
+            }
+
+            AudioClip clip = _sounds.RandomScream();
+            if (clip == null)
+            {
+                return;
+            }
+
+            float channel = AudioMix.Of(AudioChannel.Ambience);
+            if (channel <= 0f)
+            {
+                return;
+            }
+
+            if (_screamVoice == null)
+            {
+                _screamVoice = gameObject.AddComponent<AudioSource>();
+                _screamVoice.playOnAwake = false;
+                _screamVoice.spatialBlend = 1f;
+                _screamVoice.rolloffMode = AudioRolloffMode.Logarithmic;
+                _screamVoice.minDistance = _sounds.MinDistance;
+                _screamVoice.maxDistance = _sounds.ScreamMaxDistance;
+            }
+
+            float jitter = _sounds.PitchJitter;
+            _screamVoice.pitch = 1f + UnityEngine.Random.Range(-jitter, jitter);
+            _screamVoice.PlayOneShot(clip, Mathf.Clamp01(_sounds.ScreamVolume * channel));
         }
 
         private void PlaySpawnVoice()

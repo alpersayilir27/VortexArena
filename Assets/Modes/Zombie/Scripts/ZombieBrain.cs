@@ -18,6 +18,9 @@ namespace VortexArena.Modes.Zombie
     /// without the rest contract.</para>
     /// <para>⚠️ The agent is DISABLED while the object is not ours: an enabled agent moves the transform
     /// and would fight the interpolated stream (<see cref="ZombieView"/>).</para>
+    /// <para>⚠️ The TYPE comes from the server's payload (<c>t</c>, §10.5) and nothing here guesses it:
+    /// speed, reach, cooldown, stop distance and placement all hang off it, and the view reads the same
+    /// key — a second rule would make a body move like a brute and look like a walker.</para>
     /// <para>Multi-floor arenas (<see cref="ArenaFloors"/>): the zombie only chases players on ITS
     /// storey — the NavMesh has no link between floors — so the whole wave is DISTRIBUTED by quota
     /// instead of by turns. Every brain on this machine registers itself, and the storey a new or a
@@ -109,6 +112,52 @@ namespace VortexArena.Modes.Zombie
         /// <summary>Shortest wander leg (m).</summary>
         private const float WanderMinStep = 1.2f;
 
+        // ------------------------------------------------------------------ per-type numbers
+
+        /// <summary>A brute's and the Dev's bodies are wide: the normal 1 m stop walks them INTO the
+        /// player and the melee then swings from inside the chest.</summary>
+        private const float BruteStoppingDistance = 1.3f;
+
+        private const float DevStoppingDistance = 1.8f;
+
+        /// <summary>A runner's spawn door is kept this far from the nearest player (m) while a better
+        /// door exists: at the cap it crosses a short gap before the squad can turn.</summary>
+        private const float RunnerSpawnMin = 10f;
+
+        /// <summary>The screamer stops this far from its target and drives the pack instead of hitting;
+        /// it picks the chase back up past <see cref="ScreamerResumeDistance"/> (m).</summary>
+        private const float ScreamerStandoffDistance = 7f;
+
+        private const float ScreamerResumeDistance = 8.5f;
+
+        /// <summary>A scream enrages the bodies this far around the screamer (m, flat, same storey).</summary>
+        private const float EnrageRadius = 8f;
+
+        private const float EnrageSeconds = 6f;
+
+        private const float EnrageSpeedScale = 1.25f;
+
+        /// <summary>The Dev stands still while it screams (s) — the summoned walkers appear in the same
+        /// moment and the roar has to be readable.</summary>
+        private const float DevScreamHoldSeconds = 1.5f;
+
+        /// <summary>A summoned walker comes out this far from the Dev (m).</summary>
+        private const float SummonRadiusMin = 1.5f;
+
+        private const float SummonRadiusMax = 3f;
+
+        private const int SummonPlaceAttempts = 8;
+
+        /// <summary>The Dev's own spawn band (m): far enough not to materialise on the squad, close
+        /// enough that it is seen coming.</summary>
+        private const float DevSpawnMin = 6f;
+
+        private const float DevSpawnMax = 15f;
+
+        /// <summary>No chaseable player on the Dev's storey for this long (s) → it moves to the busiest
+        /// one. The boss must not spend a run alone in a corridor.</summary>
+        private const float DevStrandedSeconds = 8f;
+
         /// <summary>One player visible to the brain this frame.</summary>
         /// <remarks><see cref="Chaseable"/> false = spawn protected: no target, but still keeps a spawn
         /// point away from them.</remarks>
@@ -187,9 +236,40 @@ namespace VortexArena.Modes.Zombie
         /// state message would teleport the zombie back to its door mid-wave.</summary>
         private bool _placed;
 
+        /// <summary>Type from the payload (§10.5) — the server's choice, re-read on every state because
+        /// the payload may arrive after the object does.</summary>
+        private string _type = ZombieKinds.TypeWalker;
+
+        /// <summary>Last accepted scream counter; the scream fires on its CHANGE, like the attack.</summary>
+        private int _screamCounter;
+
+        /// <summary>Player we are walking at right now — a screamer hands it to the bodies it enrages, so
+        /// the pack converges instead of scattering.</summary>
+        private int _targetId;
+
+        /// <summary>Enraged by a scream until this time, chasing <see cref="_forcedTargetId"/>
+        /// (<c>0</c> = normal targeting).</summary>
+        private float _enrageUntil;
+        private int _forcedTargetId;
+
+        /// <summary>Screamer: holding its distance instead of closing in. Hysteresis, not a threshold —
+        /// one distance would make it step in and out of the stand-off every frame.</summary>
+        private bool _standoff;
+
+        /// <summary>Dev: time its storey went empty; <c>0</c> = there is someone to chase.</summary>
+        private float _devAloneSince;
+
+        // string == is ordinal here; `using System` is deliberately absent (it would make Random
+        // ambiguous with UnityEngine.Random all over this file).
+        private bool IsDev => _type == ZombieKinds.TypeDev;
+
+        private bool IsScreamer => _type == ZombieKinds.TypeScreamer;
+
         private void Awake()
         {
             _net = GetComponent<NetObject>();
+            _type = ZombieKinds.TypeOf(_net);
+            _screamCounter = ZombieKinds.PayloadInt(_net, ZombieKinds.PayloadScream);
 
             if (agent == null)
             {
@@ -227,10 +307,13 @@ namespace VortexArena.Modes.Zombie
         private void HandleStateChanged(NetObject _, NetStateOrigin origin)
         {
             ApplyOwnership();
+            CheckScream(origin);
         }
 
         private void ApplyOwnership()
         {
+            _type = ZombieKinds.TypeOf(_net);
+
             bool mine = _net.IsMine && !_net.IsBroken;
 
             if (agent == null)
@@ -251,7 +334,7 @@ namespace VortexArena.Modes.Zombie
             }
 
             agent.speed = WaveSpeed();
-            agent.stoppingDistance = stoppingDistance;
+            agent.stoppingDistance = StoppingDistance();
             _wandering = false;
 
             if (!agent.enabled)
@@ -267,17 +350,34 @@ namespace VortexArena.Modes.Zombie
             SetLive(true);
         }
 
-        /// <summary>Walking speed for this body. ⚠️ A crawler is slowed by the SHARED rule
-        /// (<see cref="ZombieKinds.IsCrawler"/>): the view derives the crawl animation from the same
-        /// <c>netId</c>, and a body that crawls at walking speed skates across the floor.</summary>
+        /// <summary>Walking speed for this body: the type's pace in this wave, raised while a scream is
+        /// on us. ⚠️ Comes from the SHARED rule (<see cref="ZombieKinds.SpeedOf"/>) — the view stretches
+        /// the clip to the same number, and a body moving faster than its clip skates.</summary>
         private float WaveSpeed()
         {
-            float speed = ZombieKinds.SpeedOfWave(ZombieKinds.PayloadInt(_net, ZombieKinds.PayloadWave, 1));
-            return ZombieKinds.IsCrawler(_net.NetId) ? speed * ZombieKinds.CrawlerSpeedScale : speed;
+            float speed = ZombieKinds.SpeedOf(_type,
+                ZombieKinds.PayloadInt(_net, ZombieKinds.PayloadWave, 1));
+
+            if (Time.time < _enrageUntil)
+            {
+                speed = Mathf.Min(ZombieKinds.SpeedCap, speed * EnrageSpeedScale);
+            }
+
+            return speed;
+        }
+
+        private float StoppingDistance()
+        {
+            if (IsDev)
+            {
+                return DevStoppingDistance;
+            }
+
+            return _type == ZombieKinds.TypeBrute ? BruteStoppingDistance : stoppingDistance;
         }
 
         private float SpawnHold() =>
-            ZombieKinds.IsCrawler(_net.NetId) ? crawlerSpawnHoldSeconds : spawnHoldSeconds;
+            ZombieKinds.IsCrawlerType(_type) ? crawlerSpawnHoldSeconds : spawnHoldSeconds;
 
         /// <summary>Puts the body on its spawn point and onto the NavMesh; in a multi-floor arena the
         /// storey comes from the quota, not from the server. The spawn point travels as a
@@ -302,6 +402,19 @@ namespace VortexArena.Modes.Zombie
             {
                 // Stay where the body is, but still make sure the agent sits on the NavMesh.
                 MoveTo(target, MyFloor(), false, false);
+                return;
+            }
+
+            // The boss and the walkers it summons ignore the spawn doors entirely: one has to come out
+            // in front of the squad, the others next to the body that called them.
+            if (IsDev && TryPlaceDev())
+            {
+                return;
+            }
+
+            int summoner = ZombieKinds.PayloadInt(_net, ZombieKinds.PayloadSummoner);
+            if (summoner > 0 && TryPlaceNearSummoner(summoner))
+            {
                 return;
             }
 
@@ -428,7 +541,13 @@ namespace VortexArena.Modes.Zombie
 
             if (!TryFindTarget(out int targetId, out Vector3 targetFloor))
             {
-                if (ArenaFloors.Count > 1)
+                _targetId = 0;
+
+                if (IsDev)
+                {
+                    HandleDevStranded();
+                }
+                else if (ArenaFloors.Count > 1)
                 {
                     HandleStranded();
                 }
@@ -440,6 +559,9 @@ namespace VortexArena.Modes.Zombie
                 return;
             }
 
+            _targetId = targetId;
+            _devAloneSince = 0f;
+
             if (_wandering)
             {
                 _wandering = false;
@@ -450,9 +572,25 @@ namespace VortexArena.Modes.Zombie
             // the pack would relocate in the same frame.
             _relocateCheckAt = 0f;
 
-            if (_retargetTimer <= 0f)
+            Vector3 flat = targetFloor - transform.position;
+            flat.y = 0f;
+            float distance = flat.magnitude;
+
+            if (IsScreamer && UpdateStandoff(distance))
+            {
+                // Holds its ground and keeps facing the target: the scream is a crowd signal, and a
+                // screamer in the melee dies before it can give one.
+                if (!agent.isStopped)
+                {
+                    agent.isStopped = true;
+                }
+
+                FaceTarget(flat);
+            }
+            else if (_retargetTimer <= 0f)
             {
                 _retargetTimer = retargetSeconds;
+                agent.speed = WaveSpeed();
                 agent.isStopped = false;
                 agent.SetDestination(targetFloor);
             }
@@ -462,9 +600,8 @@ namespace VortexArena.Modes.Zombie
                 return;
             }
 
-            Vector3 flat = targetFloor - transform.position;
-            flat.y = 0f;
-            if (flat.sqrMagnitude > ZombieKinds.AttackReach * ZombieKinds.AttackReach)
+            float reach = ZombieKinds.ReachOf(_type);
+            if (distance > reach)
             {
                 return;
             }
@@ -474,10 +611,35 @@ namespace VortexArena.Modes.Zombie
             agent.isStopped = true;
 
             // Turn to the target: the lunge comes from the view and would otherwise swing sideways.
+            FaceTarget(flat);
+        }
+
+        private void FaceTarget(in Vector3 flat)
+        {
             if (flat.sqrMagnitude > 0.0001f)
             {
                 transform.rotation = Quaternion.LookRotation(flat.normalized, Vector3.up);
             }
+        }
+
+        /// <summary>Screamer hysteresis: <c>true</c> = hold the current spot.</summary>
+        private bool UpdateStandoff(float distance)
+        {
+            if (_standoff)
+            {
+                if (distance > ScreamerResumeDistance)
+                {
+                    _standoff = false;
+                }
+            }
+            else if (distance <= ScreamerStandoffDistance)
+            {
+                _standoff = true;
+            }
+
+            // Inside reach the stand-off is off anyway: the target walked into it, and a screamer that
+            // refuses to hit back is a free kill.
+            return _standoff && distance > ZombieKinds.ReachOf(_type);
         }
 
         /// <summary>Windup over: the attack goes out as an <c>object_event</c>. ⚠️ No damage number rides
@@ -491,7 +653,7 @@ namespace VortexArena.Modes.Zombie
             }
 
             _attackAt = 0f;
-            _cooldownUntil = Time.time + ZombieKinds.AttackCooldownSeconds;
+            _cooldownUntil = Time.time + ZombieKinds.CooldownOf(_type);
 
             if (_attackTargetId > 0)
             {
@@ -520,10 +682,15 @@ namespace VortexArena.Modes.Zombie
             int myFloor = MyFloor();
             float best = float.MaxValue;
 
+            // A scream overrides the nearest-target rule for its duration: the point of the enrage is
+            // that the pack converges on ONE player instead of each picking its own.
+            int forced = Time.time < _enrageUntil ? _forcedTargetId : 0;
+
             for (int i = 0; i < SeenPlayers.Count; i++)
             {
                 Seen seen = SeenPlayers[i];
-                if (!seen.Chaseable || (multiFloor && seen.Floor != myFloor))
+                if (!seen.Chaseable || (multiFloor && seen.Floor != myFloor) ||
+                    (forced > 0 && seen.Id != forced))
                 {
                     continue;
                 }
@@ -540,6 +707,14 @@ namespace VortexArena.Modes.Zombie
                 best = distance;
                 playerId = seen.Id;
                 floorPosition = world;
+            }
+
+            if (playerId == 0 && forced > 0)
+            {
+                // The forced target went down, upstairs or into spawn protection: back to normal
+                // targeting, or the enrage would leave the body standing for its whole duration.
+                _forcedTargetId = 0;
+                return TryFindTarget(out playerId, out floorPosition);
             }
 
             return playerId > 0;
@@ -602,6 +777,85 @@ namespace VortexArena.Modes.Zombie
 
         private int MyFloor() => ArenaFloors.Count > 1 ? ArenaFloors.FloorAt(transform.position.y) : 0;
 
+        // ------------------------------------------------------------------ scream
+
+        /// <summary>The scream counter moved (§10.5): a screamer sets the bodies around it off, the Dev
+        /// roars in place while the server drops its walkers in.</summary>
+        /// <remarks>⚠️ The counter is followed on EVERY state, ours or not, Live or snapshot — only the
+        /// reaction is Live-only. A snapshot that is not absorbed leaves the brain behind, and the next
+        /// live state then replays a scream that is long over.</remarks>
+        private void CheckScream(NetStateOrigin origin)
+        {
+            int counter = ZombieKinds.PayloadInt(_net, ZombieKinds.PayloadScream, _screamCounter);
+            if (counter <= _screamCounter)
+            {
+                return;
+            }
+
+            _screamCounter = counter;
+
+            if (origin != NetStateOrigin.Live || !_net.IsMine || _net.IsBroken)
+            {
+                return;
+            }
+
+            if (IsDev)
+            {
+                _holdUntil = Mathf.Max(_holdUntil, Time.time + DevScreamHoldSeconds);
+                _attackAt = 0f;
+                _attackTargetId = 0;
+                return;
+            }
+
+            if (IsScreamer)
+            {
+                SpreadEnrage();
+            }
+        }
+
+        /// <summary>Enrages every other body of ours within <see cref="EnrageRadius"/> on OUR storey.
+        /// The Dev is immune: a boss that sprints is not readable, and its pace is its whole
+        /// silhouette.</summary>
+        private void SpreadEnrage()
+        {
+            int myFloor = MyFloor();
+            Vector3 position = transform.position;
+
+            for (int i = 0; i < LiveBrains.Count; i++)
+            {
+                ZombieBrain brain = LiveBrains[i];
+                if (brain == null || brain == this || brain.IsDev)
+                {
+                    continue;
+                }
+
+                if (ArenaFloors.Count > 1 && brain.MyFloor() != myFloor)
+                {
+                    continue;
+                }
+
+                float dx = brain.transform.position.x - position.x;
+                float dz = brain.transform.position.z - position.z;
+                if (dx * dx + dz * dz > EnrageRadius * EnrageRadius)
+                {
+                    continue;
+                }
+
+                brain.Enrage(_targetId);
+            }
+        }
+
+        private void Enrage(int targetId)
+        {
+            _enrageUntil = Time.time + EnrageSeconds;
+            _forcedTargetId = targetId;
+
+            if (agent != null && agent.enabled && agent.isOnNavMesh)
+            {
+                agent.speed = WaveSpeed();
+            }
+        }
+
         // ------------------------------------------------------------------ stranded / quota
 
         /// <summary>Our storey has no chaseable player: the zombie WANDERS, and at its own random
@@ -648,6 +902,39 @@ namespace VortexArena.Modes.Zombie
             _attackAt = 0f;
             _attackTargetId = 0;
 
+            _wandering = false;
+            _wanderAt = 0f;
+            agent.speed = WaveSpeed();
+        }
+
+        /// <summary>The Dev has nobody to chase: it wanders, and after
+        /// <see cref="DevStrandedSeconds"/> moves itself to the storey with the most players — it is
+        /// OUTSIDE the quota, so nothing else would ever relocate it.</summary>
+        private void HandleDevStranded()
+        {
+            Wander();
+
+            float now = Time.time;
+            if (_devAloneSince <= 0f)
+            {
+                _devAloneSince = now;
+                return;
+            }
+
+            if (now - _devAloneSince < DevStrandedSeconds)
+            {
+                return;
+            }
+
+            _devAloneSince = 0f;
+
+            if (!TryPlaceDev())
+            {
+                return;
+            }
+
+            _attackAt = 0f;
+            _attackTargetId = 0;
             _wandering = false;
             _wanderAt = 0f;
             agent.speed = WaveSpeed();
@@ -724,7 +1011,10 @@ namespace VortexArena.Modes.Zombie
             for (int i = 0; i < LiveBrains.Count; i++)
             {
                 ZombieBrain brain = LiveBrains[i];
-                if (brain == null)
+
+                // ⚠️ The Dev is not part of the wave's distribution: counting it would push a normal
+                // zombie off the storey the boss is fighting on.
+                if (brain == null || brain.IsDev)
                 {
                     continue;
                 }
@@ -926,6 +1216,148 @@ namespace VortexArena.Modes.Zombie
             return true;
         }
 
+        // ------------------------------------------------------------------ dev + summons
+
+        /// <summary>Puts the Dev on the storey with the MOST players, inside its own band; <c>false</c> =
+        /// nobody to go to (then the server's spawn door stands).</summary>
+        private bool TryPlaceDev()
+        {
+            if (!CollectSeen() || !TryBusiestFloor(out int floor) ||
+                !TryPickDevPoint(floor, out Vector3 point))
+            {
+                return false;
+            }
+
+            MoveTo(point, floor, false, true);
+            return true;
+        }
+
+        /// <summary>Storey holding the most chaseable players; <c>false</c> = none anywhere.</summary>
+        private static bool TryBusiestFloor(out int floor)
+        {
+            floor = 0;
+            int floors = ArenaFloors.Count;
+
+            if (floors <= 1)
+            {
+                for (int i = 0; i < SeenPlayers.Count; i++)
+                {
+                    if (SeenPlayers[i].Chaseable)
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+
+            EnsureFloorBuffers(floors);
+
+            for (int i = 0; i < SeenPlayers.Count; i++)
+            {
+                Seen seen = SeenPlayers[i];
+                if (seen.Chaseable && seen.Floor >= 0 && seen.Floor < floors)
+                {
+                    s_playersOnFloor[seen.Floor]++;
+                }
+            }
+
+            int best = 0;
+            for (int f = 0; f < floors; f++)
+            {
+                if (s_playersOnFloor[f] > best)
+                {
+                    best = s_playersOnFloor[f];
+                    floor = f;
+                }
+            }
+
+            return best > 0;
+        }
+
+        /// <summary>Spawn point on <paramref name="floor"/> inside the Dev's band, else the farthest one.
+        /// ⚠️ Not remembered in the recency ring: the boss spawns once, and burning a door for the whole
+        /// wave would make the walkers come from somewhere else for no reason.</summary>
+        private static bool TryPickDevPoint(int floor, out Vector3 point)
+        {
+            point = Vector3.zero;
+
+            CollectCandidates(floor);
+            if (CandidateBuffer.Count == 0)
+            {
+                return false;
+            }
+
+            ValidBuffer.Clear();
+            float farthest = -1f;
+            int fallback = -1;
+
+            for (int i = 0; i < CandidateBuffer.Count; i++)
+            {
+                float nearest = NearestPlayerDistance(CandidateBuffer[i].Position, floor);
+                if (nearest >= DevSpawnMin && nearest <= DevSpawnMax)
+                {
+                    ValidBuffer.Add(CandidateBuffer[i]);
+                }
+
+                if (nearest < float.MaxValue && nearest > farthest)
+                {
+                    farthest = nearest;
+                    fallback = i;
+                }
+            }
+
+            if (ValidBuffer.Count > 0)
+            {
+                point = ValidBuffer[Random.Range(0, ValidBuffer.Count)].Position;
+                return true;
+            }
+
+            if (fallback < 0)
+            {
+                fallback = Random.Range(0, CandidateBuffer.Count);
+            }
+
+            point = CandidateBuffer[fallback].Position;
+            return true;
+        }
+
+        /// <summary>A walker the Dev summoned (<c>n</c>, §10.5) comes out right next to it, not at a
+        /// door; <c>false</c> = the Dev is already gone, so the normal placement runs.</summary>
+        private bool TryPlaceNearSummoner(int summonerNetId)
+        {
+            if (!NetObjectRegistry.TryGet(summonerNetId, out NetObject dev) || dev == null)
+            {
+                return false;
+            }
+
+            Vector3 origin = dev.transform.position;
+            int floor = ArenaFloors.Count > 1 ? ArenaFloors.FloorAt(origin.y) : 0;
+
+            for (int attempt = 0; attempt < SummonPlaceAttempts; attempt++)
+            {
+                Vector2 direction = Random.insideUnitCircle.normalized;
+                if (direction.sqrMagnitude < 0.0001f)
+                {
+                    continue;
+                }
+
+                Vector3 candidate = origin + new Vector3(direction.x, 0f, direction.y) *
+                    Random.Range(SummonRadiusMin, SummonRadiusMax);
+
+                if (!TrySample(candidate, out Vector3 sampled) ||
+                    (ArenaFloors.Count > 1 && ArenaFloors.FloorAt(sampled.y) != floor))
+                {
+                    continue;
+                }
+
+                MoveTo(sampled, floor, false, true);
+                return true;
+            }
+
+            return false;
+        }
+
         /// <summary>Spawn test at a relax level; recency is checked by the caller (the server's point
         /// goes through the same band and crowding test).</summary>
         private bool IsAcceptable(in Vector3 position, int floor, int relax)
@@ -937,6 +1369,13 @@ namespace VortexArena.Modes.Zombie
             }
 
             if (relax == 0 && nearest > spawnBandMax && nearest < float.MaxValue)
+            {
+                return false;
+            }
+
+            // A runner wants the far end of the band while one exists: at the speed cap a near door
+            // puts it on the squad before anyone can turn around. Dropped with the first relax step.
+            if (relax == 0 && _type == ZombieKinds.TypeRunner && nearest < RunnerSpawnMin)
             {
                 return false;
             }

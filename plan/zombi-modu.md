@@ -94,44 +94,15 @@ Kalan:
 
 ## Faz 9 — Zombi türleri, dalga dizilimi, Son Direniş
 
-Tür sunucuda seçilir ve zombinin payload'una `t:` anahtarıyla yazılır (bilinmeyen anahtar
-atlandığı için protokol sürümü bunun için artmaz). Hız ve davranış beyinde, görünüş istemcide,
-can ve hasar sunucuda aynı tablodan okunur. Can tür başına farklı olduğu için sunucuya **nesne
-başına en yüksek can** ataması eklenir (bugün can nesne türünden sabit 100).
+Kod, doküman ve HUD bitti (türler, dizilim ve Son Direniş'in sayıları `ArenaNet-Protokol.md`
+§10.5 "Zombi türleri" · "Dalga dizilimi" · "Son Direniş"). Kalan:
 
-| Tür | Can | Hız | Hasar | Davranış | Görünüş (göz) |
-|---|---|---|---|---|---|
-| Yürüyen | 100 | dalga hızı (0,7 → 1,2) | dalga hasarı | Temel | Ghoul, Cop (sarı) |
-| Sürünen | 60 | ×0,45 | ×0,6 | Alçak: kafası diz hizasında, aşağı nişan ister | Ghoul, Cop sürünerek (sarı) |
-| Koşucu | 60 | daima 1,2 | ×0,75 | Koşu animasyonu, uzaktan doğar | Girl (kırmızı) |
-| İri | 400 | 0,6 | ×1,6, tavan 60 | ×1,3 boy, vuruş menzili 1,5 m, vurulunca sendelemez | Soldier ×1,3 (turuncu) |
-| Çığlıkçı | 80 | dalga hızı ×0,9 | yakında ×0,5 | Hedefine 6–8 m'de durur; 10 sn'de bir çığlık: 8 m içindeki zombiler 6 sn öfkelenir (hız ×1,25, tavan 1,2) ve onun hedefine döner | Clown (mor) |
-| Dev | 2500 × oyuncu (en az 2) | 0,7 | 45, bekleme 2 sn | Yalnız Son Direniş; ×1,6 boy; 15 sn'de bir çığlıkla yanına 3 yürüyen çağırır | Soldier ×1,6 (beyaz) |
-
-Zorluk: Kolay can/hasar ×0,7 ve her tür bir dalga geç; Zor ×1,3 ve bir dalga erken. Ayakta tavanı
-30 kalır; iri en çok 3, çığlıkçı en çok 2 aynı anda.
-
-Normal dizilim (dalga toplamının payı; iri ve çığlıkçı adet):
-
-| Dalga | Yürüyen | Sürünen | Koşucu | İri | Çığlıkçı | Not |
-|---|---|---|---|---|---|---|
-| 1 | %100 | — | — | — | — | Isınma |
-| 2 | %85 | %15 | — | — | — | |
-| 3 | %70 | %10 | %20 | — | — | |
-| 4 | %65 | %10 | %25 | 1 | — | İlk iri |
-| 5 | %30 | — | %70 | — | — | **Koşucu sürüsü**, toplam ×0,8 |
-| 6 | %55 | %10 | %25 | 2 | 1 | İlk çığlıkçı |
-| 7 | %50 | %10 | %30 | 2 | 1 | |
-| 8 | geri kalan | — | — | 4 | — | **Ağır adımlar**, toplam ×0,7 |
-| 9+ | %45 | %10 | %35 | 2 + ⌊(d−9)/2⌋ | 2 | 11, 14, 17… özel dalga sırayla döner (sürü · ağır · **Çığlık gecesi**: 3 çığlıkçı) |
-
-- [ ] **Son Direniş** — kalan süre 90 sn'ye inince (300 sn'den kısa maçta 60 sn) o anki dalga
-      doğurmayı keser; "SON DİRENİŞ" bandı, bütün silahlar açılır, düşmüş herkes kalkar, Dev
-      oyuncunun en kalabalık olduğu katta doğar, normal doğum ayakta tavanında sürer, müzik en
-      yüksek katmana çıkar. Dev ölünce sahadaki zombiler çöker → "KURTULDUNUZ".
-- [ ] **HUD** — Dev can barı, Son Direniş geri sayımı, çığlıkçı çığlığı uzaktan duyulur.
-- [ ] Sürünen için Mixamo'da sürünen saldırı klibi aranır; yoksa saldırı anında sürünme klibi
-      hızlanır + ısırık sesi.
+- [ ] Gözlükte doğrulama: türler göz rengi ve boyla okunuyor mu, iri/Dev ölçeğinde vuruş kutuları
+      gövdeye oturuyor mu, çığlık uzaktan duyuluyor mu, Dev barı ve Son Direniş bildirimi okunuyor
+      mu, Dev'in canı (2500 × oyuncu) 90 sn'ye sığıyor mu.
+- [ ] Sürünen için gerçek bir sürünen saldırı klibi (bugün sürünme klibi hızlanıyor).
+- [ ] Kalıcı çığlık klipleri ve Son Direniş vurgusu (`ZombieSounds` → `screamClips`,
+      `finalStandSting`; bugün çığlık yer tutucu inlemelerden, vurgu dalga başı vurgusundan).
 
 ## Faz 10 — Kovalama ve yapay zekâ (beyin, yalnız admin build)
 
@@ -171,14 +142,11 @@ silah 5. dalgada, M4A4 M4A1'den sonra açılıyor).
 
 - [ ] `ZombieArsenal` tablosu yukarıdaki gibi; bomba bilek kılıfı zombi modunda kademeye bağlanır
       (bugün 1. dalgadan açık).
-- [ ] Son Direniş'te bütün kilitler açılır (HUD "BÜTÜN SİLAHLAR AÇIK").
 
 ## Protokol etkisi (kod yazılmadan önce `ArenaNet-Protokol.md`'ye)
 
-- Zombi payload'unda `t:` (tür), mod durum dizesinde Son Direniş, Dev canı ve `over:rescued`
-  (değer protokolde ayrıldı, üretilmiyor).
-- Nesne başına en yüksek can ataması sunucu içidir; istemciye canın kendisi bugünkü nesne
-  durumuyla akar.
+- Kaçılabilir saldırının boşa giden vuruşu (`attack` hedefsiz: sayaç artar, hasar yok) Faz 10'da
+  protokole yazılır.
 
 ## Kalıcı ses/müzik listesi (geçicilerin yerine)
 
