@@ -37,7 +37,10 @@ collider'ları, `ArenaRoof`, dekor prefabları, pratik ışıklar, ışık/yans�
 `.lighting` dosyası (Shadowmask), ışık bake'i, her katta `zombie_spawn` noktaları, bütün katları
 kaplayan collider kaynaklı NavMesh. Kalanlar:
 
-- ⚠️ **Boşluk bölgesi mekanizması yok:** üst kattaki oyuncu boşluk şeridine (Kat1 A, Kat2 A+B)
-  fiziksel olarak yürüyebilir ve havada kalır. `Obstacle` hacmi çözüm değildir — atış ışını
-  maskesizdir, balkondan/terastan avluya ateşi keser. Atışı kesmeyen bir "boşluk ihlali" yolu
-  gerekiyor; Blender bu alanları `VOID_*` işaret mesh'i olarak verir.
+- [ ] **Boşluk bölgesi:** üst kattaki oyuncu boşluk şeridine (Kat1 A, Kat2 A+B) fiziksel olarak
+      yürüyebilir ve havada kalır. `Obstacle` hacmi çözüm değildir — atış ışını maskesizdir,
+      balkondan/terastan avluya ateşi keser. Karar: Blender'ın `VOID_*` işaret mesh'leri
+      **trigger** collider olur (silah ışınları trigger'ı yok sayar, `QueryTriggerInteraction.Ignore`)
+      ve yalnız kendi katında etkinleşir; içine giren oyuncu iç engel ihlaliyle aynı sonuca
+      bağlanır (uyarı + hasar, `Docs/ArenaNet-Protokol.md` §10.9). Engel denetiminin trigger'ı
+      görmesi ve NavMesh bake'inin bu hacimleri yok sayması uygulamada doğrulanır.
