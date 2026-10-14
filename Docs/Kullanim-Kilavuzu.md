@@ -935,6 +935,10 @@ Zombide takım yoktur, herkes aynı taraftadır.
 - **Sonuç ekranında** ulaşılan dalga, ekip skoru ve oyuncu satırları (puan · öldürme · kafadan ·
   kaldırma · düşme) vardır; satırlarda **En çok öldüren · Nişancı · Kurtarıcı** rozetleri yazar.
 
+**Silahlar dalga ilerledikçe açılır:** başta yalnız iki hafif silah alınabilir, kilitli silahın
+üstünde "DALGA N" yazar. **Bilek bombası** da kilitlidir — bilek ilk dalgalarda boştur, bomba
+birkaç dalga sonra açılınca gözlükte duyurulur. Bu bir arıza değildir.
+
 **Zombi türü gözünden tanınır** — oyunculara söylenecek tek şey göz rengidir:
 
 - **Sarı:** olağan zombi (yürüyen ya da sürünen).

@@ -69,6 +69,7 @@ namespace VortexArena.Modes.Zombie
 
             _active = true;
             WeaponGranter.SelectionGate = IsUnlocked;
+            WristHolster.SelectionGate = IsThrowableUnlocked;
 
             BuildViews();
 
@@ -94,6 +95,11 @@ namespace VortexArena.Modes.Zombie
                 WeaponGranter.SelectionGate = null;
             }
 
+            if (WristHolster.SelectionGate == (Func<ThrowableDefinition, bool>)IsThrowableUnlocked)
+            {
+                WristHolster.SelectionGate = null;
+            }
+
             DestroyViews();
         }
 
@@ -106,6 +112,13 @@ namespace VortexArena.Modes.Zombie
             // The final stand opens the whole arsenal (§10.5) — the wave table no longer applies.
             return definition == null || ZombieWaveState.FinalStand ||
                    ZombieArsenal.Live.UnlockWave(definition.WeaponId) <= CurrentWave;
+        }
+
+        /// <summary>The wrist bomb rides the same table by its <c>throwableId</c>.</summary>
+        private static bool IsThrowableUnlocked(ThrowableDefinition definition)
+        {
+            return definition == null || ZombieWaveState.FinalStand ||
+                   ZombieArsenal.Live.UnlockWave(definition.ThrowableId) <= CurrentWave;
         }
 
         /// <summary>Final stand: every locked slot opens at once. No per-weapon toast — the HUD's
@@ -168,6 +181,7 @@ namespace VortexArena.Modes.Zombie
                 }
             }
 
+            AddOpenedThrowable(current);
             _announcedWave = current;
 
             // Wave 1 opens nothing: those weapons were never locked.
@@ -177,6 +191,25 @@ namespace VortexArena.Modes.Zombie
             }
 
             ApplyAll(current);
+        }
+
+        /// <summary>Adds the wrist bomb's name when it opened in (announced, current]. Looked up on the
+        /// wave change only — a rare event, so no cached holster reference to go stale.</summary>
+        private static void AddOpenedThrowable(int current)
+        {
+            WristHolster holster = UnityEngine.Object.FindFirstObjectByType<WristHolster>();
+            ThrowableDefinition throwable = holster != null ? holster.Throwable : null;
+            if (throwable == null)
+            {
+                return;
+            }
+
+            int wave = ZombieArsenal.Live.UnlockWave(throwable.ThrowableId);
+            if (wave > _announcedWave && wave <= current && !string.IsNullOrEmpty(throwable.DisplayName) &&
+                !NewNames.Contains(throwable.DisplayName))
+            {
+                NewNames.Add(throwable.DisplayName);
+            }
         }
 
         private static void Announce()

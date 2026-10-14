@@ -17,8 +17,10 @@ namespace VortexArena.Core.Editor
     /// human step the tool cannot fix (grip, fire audio, netItemId).
     /// <para>⚠️ Check logic lives in each tool's own file, not here — whoever defines the constants
     /// also answers "is it up to date". A threshold moved here would drift from the tool.</para>
+    /// <para>A mode's own row is registered through <see cref="RegisterCheck"/>: Core cannot reference
+    /// a mode assembly.</para>
     /// </remarks>
-    internal static class BuildReadiness
+    public static class BuildReadiness
     {
         /// <summary>One readiness row: state + human readable reason + optional trigger.</summary>
         internal readonly struct ReadinessRow
@@ -54,6 +56,25 @@ namespace VortexArena.Core.Editor
             /// here, not into a HelpBox.</remarks>
             internal string Tooltip { get; }
         }
+
+        /// <summary>A row registered from outside Core (see <see cref="RegisterCheck"/>).</summary>
+        private readonly struct ExtraEntry
+        {
+            internal ExtraEntry(string title, ReadinessCheck check, string tooltip)
+            {
+                Title = title;
+                Check = check;
+                Tooltip = tooltip;
+            }
+
+            internal string Title { get; }
+
+            internal ReadinessCheck Check { get; }
+
+            internal string Tooltip { get; }
+        }
+
+        private static readonly List<ExtraEntry> Extras = new List<ExtraEntry>();
 
         /// <summary>Builds every readiness row.</summary>
         /// <remarks>⚠️ Each check swallows its own exception: one tool's contract drift must not
@@ -187,6 +208,8 @@ namespace VortexArena.Core.Editor
                     "bayatken koşar (her seferinde yazmak merge gürültüsü olurdu); 'Kur' zorlar."),
             };
 
+            // Mode-owned rows last: Core knows neither their order nor their assemblies.
+            AppendExtras(rows);
             return rows;
         }
 
@@ -216,8 +239,40 @@ namespace VortexArena.Core.Editor
             return false;
         }
 
-        /// <summary>Runs a check; on exception the row becomes ✗ with the message as detail.</summary>
-        private delegate bool ReadinessCheck(out string detail);
+        /// <summary>A check: clean/not + a short human detail. ⚠️ WRITES NOTHING.</summary>
+        public delegate bool ReadinessCheck(out string detail);
+
+        /// <summary>Registers a row owned by a mode assembly, appended after the fixed rows.</summary>
+        /// <remarks>⚠️ Core cannot reference a mode (the dependency only runs the other way), so a
+        /// mode's <c>[InitializeOnLoad]</c> class pushes its check in here. Re-registering the same
+        /// title replaces it: a domain reload re-runs every initializer.</remarks>
+        public static void RegisterCheck(string title, ReadinessCheck check, string tooltip)
+        {
+            if (string.IsNullOrEmpty(title) || check == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < Extras.Count; i++)
+            {
+                if (Extras[i].Title == title)
+                {
+                    Extras[i] = new ExtraEntry(title, check, tooltip);
+                    return;
+                }
+            }
+
+            Extras.Add(new ExtraEntry(title, check, tooltip));
+        }
+
+        private static void AppendExtras(List<ReadinessRow> rows)
+        {
+            for (int i = 0; i < Extras.Count; i++)
+            {
+                ExtraEntry extra = Extras[i];
+                rows.Add(Check(extra.Title, extra.Check, null, null, extra.Tooltip));
+            }
+        }
 
         private static ReadinessRow Check(
             string title, ReadinessCheck check, string actionLabel, Action action, string tooltip)

@@ -1026,6 +1026,9 @@ sahibi admindir** (§3.6b "Sunucu-atanmış sahiplik"); örnek uygulama `Assets/
      doğum aralığını ve dalga arasını böler, aynı anda ayakta duran zombi sayısını çarpar; dalganın
      toplam zombisi ile hasar değişmez. Dar ya da çok katlı arenada akını yavaşlatmak için kullanılır.
      Export'la `maps.json`'a çıkar.
+   - Build penceresinin **"Zombi arenası hazır"** satırı açık sahne için üç şeyi birden denetler:
+     NavMesh bake'i, **her katta** en az bir `zombie_spawn` ve sahnede silah panosu. ✗ kaldıysa eksik
+     olan insan adımıdır, araç düzeltmez.
 8. **Silahlar:** zombi arenasında silah panosu `VA_WeaponCanvas_V2` **örneğidir** ve **oynanacak her
    kata bir tane** konur — zombi gibi oyuncu da kat değiştirir, tek pano üst kattaki oyuncuyu silahsız
    bırakır. ⚠️ **Pano örneği unpack EDİLMEZ** (kilit plakaları çalışma anında eklenir, prefaba yazılmaz).
@@ -1038,7 +1041,13 @@ sahibi admindir** (§3.6b "Sunucu-atanmış sahiplik"); örnek uygulama `Assets/
    - Silahlar **dalgayla açılır:** tablo `ZombieArsenal` asset'indedir (`weaponId` → açılış dalgası).
      Asset yoksa sınıfın gömülü tablosu koşar; düzenlemek için *Tools > VortexArena > Zombie >
      Cephanelik tablosunu oluştur* ile `Resources/Zombie/ZombieArsenal` üretilir, sonra Inspector'dan
-     satır eklenir/değiştirilir. `weaponId` `WeaponDefinition`'daki değerle **birebir** yazılır.
+     satır eklenir/değiştirilir. `weaponId` `WeaponDefinition`'daki değerle **birebir** yazılır;
+     bilek bombası aynı tabloda `ThrowableDefinition.throwableId`'siyle durur (kilitliyken bilek
+     **boştur**, `WristHolster.SelectionGate`). Son Direniş'te tablo işlemez, her şey açıktır.
+   - Kademe **rol** sırasıyla kurulur: her dalga yeni bir iş ekler (yakın savunma → pompalı + geniş
+     şarjör → ilk tüfekler + bomba → isabet → iri avcıları → üst kademe) ve en güçlü silah son
+     kademededir. Yeni silah eklerken rolüne göre dalgası seçilir — güçlü silahı erkene koymak sonraki
+     dalgaların açılışını değersizleştirir.
    - ⚠️ **Tabloda olmayan silah AÇIKtır** — kilitli kalması bozukluk gibi görünür, açık kalması yalnız
      eksik veridir. Geri sayım (dalga 0) **dalga 1 sayılır**.
    - Kilitli silah **alınamaz** (`WeaponGranter.SelectionGate`): koyu örtü + kilit + "DALGA N" ile durur,

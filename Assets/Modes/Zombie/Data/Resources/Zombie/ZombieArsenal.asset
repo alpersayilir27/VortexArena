@@ -17,25 +17,27 @@ MonoBehaviour:
     wave: 1
   - weaponId: ump45
     wave: 1
+  - weaponId: nova
+    wave: 2
   - weaponId: p90
     wave: 2
-  - weaponId: nova
-    wave: 3
   - weaponId: famas
     wave: 3
-  - weaponId: ak47
-    wave: 4
+  - weaponId: scarl
+    wave: 3
+  - weaponId: bomba
+    wave: 3
   - weaponId: m4a1
     wave: 4
   - weaponId: g36c
     wave: 4
-  - weaponId: scarl
-    wave: 5
+  - weaponId: m4a4
+    wave: 4
   - weaponId: xm1014
     wave: 5
-  - weaponId: m4a4
+  - weaponId: ak47
     wave: 5
-  - weaponId: aug
-    wave: 6
   - weaponId: galilar
+    wave: 6
+  - weaponId: aug
     wave: 6

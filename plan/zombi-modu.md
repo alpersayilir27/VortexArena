@@ -79,7 +79,6 @@ Kod, kilit görünümü, açılış tablosu ve doküman bitti. Kalan:
 
 - [ ] Gözlükte doğrulama: kilit plakası okunuyor mu, kilitli silah gerçekten alınamıyor mu, açılış
       nabzı + HUD bildirimi dalga başında geliyor mu.
-- [ ] Kademe tablosunun yenisi Faz 11'dedir.
 
 ## Faz 8 — Ekip kuralları ve maç sonu
 
@@ -106,47 +105,20 @@ Kod, doküman ve HUD bitti (türler, dizilim ve Son Direniş'in sayıları `Aren
 
 ## Faz 10 — Kovalama ve yapay zekâ (beyin, yalnız admin build)
 
-- [ ] **Hedef puanı** — NavMesh yol uzunluğu (zombi başına 0,5–1 sn aralıkla, kareye dağıtılmış
-      `CalculatePath`); görüş hattı yoksa ×1,5; o oyuncuyu kovalayan zombi adil payı (ayakta ÷
-      yaşayan oyuncu) aşıyorsa fazla başına +2 m; son 3 sn'de 15 m içinde ateş eden oyuncu ×0,8
-      (silah sesi çeker — biri çekerken diğerleri yandan vurur).
-- [ ] **Histerezis** — hedef en az 2 sn kilitli; yeni aday ancak %30 daha iyiyse; saldırı
-      menzilindeyken değişmez.
-- [ ] **Görüş hattı** — zombi göz hizasından oyuncu kafasına tek ışın, yalnız çevre katmanları,
-      zombi başına 0,5 sn'de bir, kare başına ışın bütçesiyle.
-- [ ] **Kaçılabilir saldırı** — 0,4 sn hazırlığın sonunda yatay mesafe 1,6 m'yi aşıyorsa vuruş
-      boşa gider (savurur, ıskalar). Free-roam'da geri adım atmak işe yarar.
-- [ ] **Hedefsiz zombi tek katta da durmaz** — çok katlıdaki gezinme tek katta da açılır, en
-      yakın oyuncu bölgesine doğru.
-- [ ] **Takılı zombi bekçisi** — yolu olduğu hâlde 8 sn'de 0,5 m ilerlemeyen zombi doğum
-      noktasına sisle ışınlanır; dalganın kilitlenmesini önler.
-- [ ] **Oyuncu bedeni** — beyin makinesinde her yaşayan oyuncunun kafa izdüşümünde oyulmayan
-      (carve kapalı) `NavMeshObstacle` kapsülü: zombi yolundaki oyuncunun içinden geçmez.
-- [ ] **Build Readiness satırı** — Zombi türündeki arenada NavMesh verisi, her katta en az bir
-      `zombie_spawn` ve silah tuvali var mı.
+Kod ve doküman bitti (kural tablosu `ArenaNet-Protokol.md` §10.5 "Hedef seçimi"; Build penceresinde
+"Zombi arenası hazır" satırı). Kalan:
+
+- [ ] Gözlükte doğrulama: zombiler tek oyuncuya yığılmadan dağılıyor mu, ateş eden oyuncu çekiyor mu,
+      geri adımla saldırıdan kaçılabiliyor mu (savurup ıskalıyor), oyuncunun içinden geçen zombi
+      kaldı mı, takılan zombi sisle yer değiştiriyor mu.
+- [ ] Admin makinesinde kare bütçesi: 30 zombiyle yol/ışın bütçeleri (`ZombieBrain`) yetiyor mu.
 
 ## Faz 11 — Silah ilerlemesi
 
-Kademe her yeni dalgaya bir **rol** ekler; en güçlü silah son kademededir (bugünkü tabloda en zayıf
-silah 5. dalgada, M4A4 M4A1'den sonra açılıyor).
+Rol tabanlı kademe ve bilek bombası kilidi bitti (tablo `ZombieArsenal`, kural Yemek Kitabı zombi
+reçetesi). Kalan:
 
-| Dalga | Açılan | Rol |
-|---|---|---|
-| 1 | mp9, ump45 | Kolay tutuş, yakın savunma |
-| 2 | nova, p90 | Pompalı (sürünen/koşucu), geniş şarjör |
-| 3 | famas, scarl, **bomba** | İlk tüfekler; bomba kalabalığa |
-| 4 | m4a1, g36c, m4a4 | İsabet — çığlıkçıyı uzaktan düşürmek |
-| 5 | xm1014, ak47 | İri avcısı: otomatik pompalı, kafada tek atış |
-| 6 | galilar, aug | Üst kademe |
-| Son Direniş | hepsi | |
-
-- [ ] `ZombieArsenal` tablosu yukarıdaki gibi; bomba bilek kılıfı zombi modunda kademeye bağlanır
-      (bugün 1. dalgadan açık).
-
-## Protokol etkisi (kod yazılmadan önce `ArenaNet-Protokol.md`'ye)
-
-- Kaçılabilir saldırının boşa giden vuruşu (`attack` hedefsiz: sayaç artar, hasar yok) Faz 10'da
-  protokole yazılır.
+- [ ] Gözlükte doğrulama: bilek 3. dalgaya kadar boş mu, bomba açılınca HUD duyuruyor mu.
 
 ## Kalıcı ses/müzik listesi (geçicilerin yerine)
 

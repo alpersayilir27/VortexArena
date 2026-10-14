@@ -601,9 +601,10 @@ public sealed class ZombieMode : IGameMode
     /// is never cosmetic, so it is never relayed — the truth is the <c>object_state</c> whose payload
     /// carries the attack counter (§10.10). A rejected attack produces nothing at all, on purpose.</summary>
     /// <remarks>The gates in order (§10.5): the object is ours and alive · its cooldown has expired ·
-    /// a target id is present · the server's reach BOUND holds · the director's player gates accept the
-    /// damage (phase, connected player, alive, calibrated, not spawn protected). ⚠️ The event carries NO
-    /// damage number — it comes from the wave table here, so a tampered client cannot choose it.</remarks>
+    /// the server's reach BOUND holds · the director's player gates accept the damage (phase, connected
+    /// player, alive, calibrated, not spawn protected). ⚠️ The event carries NO damage number — it comes
+    /// from the wave table here, so a tampered client cannot choose it. An empty target list is a WHIFF:
+    /// it spends the cooldown and bumps the counter (everyone plays the swing) but deals no damage.</remarks>
     public bool OnObjectEvent(MatchDirector director, int playerId, int netId, string kind, ObjectEventMsg msg)
     {
         if (msg.name != EventAttack || kind != ZombieKind) return false;
@@ -614,12 +615,21 @@ public sealed class ZombieMode : IGameMode
         lock (_gate)
         {
             if (!_zombies.TryGetValue(netId, out var zombie) || zombie.Dead) return true;
-            if (targetId <= 0) return true;
 
             var now = DateTime.UtcNow;
             if (now < zombie.NextAttackAt) return true;
 
             var type = TypeOf(zombie.Type);
+
+            // Whiff: the target stepped out of reach during the wind-up. The swing is still spent, so
+            // the cooldown and the counter run — only the damage is missing.
+            if (targetId <= 0)
+            {
+                zombie.NextAttackAt = now.AddSeconds(type.Cooldown);
+                zombie.AttackCounter++;
+                director.SetObjectPayload(netId, PayloadOf(zombie));
+                return true;
+            }
 
             // ⚠️ A MISSING pose passes: the first attack can beat the first 0x09 packet, and rejecting it
             // would make the opening of every wave feel dead. The bound only drops what it can measure.

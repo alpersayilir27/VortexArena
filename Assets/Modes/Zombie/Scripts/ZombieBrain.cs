@@ -158,6 +158,80 @@ namespace VortexArena.Modes.Zombie
         /// one. The boss must not spend a run alone in a corridor.</summary>
         private const float DevStrandedSeconds = 8f;
 
+        // ------------------------------------------------------------------ targeting
+
+        /// <summary>Target score is recomputed at a random interval in this band (s). ⚠️ RANDOM per
+        /// brain: one shared tick would run every path query of the wave in the same frame.</summary>
+        private const float RetargetMin = 0.5f;
+
+        private const float RetargetMax = 1f;
+
+        /// <summary>A freshly picked target is kept at least this long (s), and a rival only wins below
+        /// <see cref="SwitchFactor"/> of its score — without both, two equally close players leave the
+        /// body turning in place instead of walking.</summary>
+        private const float TargetHoldSeconds = 2f;
+
+        private const float SwitchFactor = 0.7f;
+
+        /// <summary>A target we cannot see is worth this much more walking; every chaser over the
+        /// storey's fair share costs this many metres.</summary>
+        private const float BlindPenalty = 1.5f;
+
+        private const float CrowdPenaltyMeters = 2f;
+
+        /// <summary>A player who fired near us just now wins ties: the loud member of the squad is the
+        /// one the wave should converge on.</summary>
+        private const float ShooterBonus = 0.8f;
+
+        private const float ShooterRadius = 15f;
+
+        private const float ShooterSeconds = 3f;
+
+        /// <summary>An unreachable target stays a candidate but only wins when nothing reachable
+        /// exists; a partial path pays twice the gap it could not cover.</summary>
+        private const float InvalidPathPenalty = 10f;
+
+        private const float InvalidPathFactor = 2f;
+
+        private const float PartialGapFactor = 2f;
+
+        /// <summary>Per-FRAME ceiling for the WHOLE wave: path queries and LOS rays are the two costs
+        /// that scale with zombies × players. A brain that finds the budget spent keeps its current
+        /// target and asks again next frame — it never falls back to a worse answer.</summary>
+        private const int PathBudgetPerFrame = 6;
+
+        private const int RayBudgetPerFrame = 12;
+
+        /// <summary>LOS answer is reused this long (s) per brain+player pair.</summary>
+        private const float LosCacheSeconds = 0.5f;
+
+        /// <summary>Eye height of the LOS ray (m, scaled by the body); a crawler looks along the
+        /// floor.</summary>
+        private const float EyeHeight = 1.6f;
+
+        private const float CrawlerEyeHeight = 0.4f;
+
+        /// <summary>A hit nearer than (distance − this) blocks the view; the margin keeps the wall right
+        /// behind the player from counting as cover.</summary>
+        private const float LosSkin = 0.3f;
+
+        /// <summary>Attack re-check at the end of the windup: the reach plus the step a player can take
+        /// during it. Past that the swing goes out as a MISS.</summary>
+        private const float AttackEscapeSlack = 0.4f;
+
+        /// <summary>Stuck watchdog: with a path longer than the stop distance + <see cref="StuckSlack"/>,
+        /// <see cref="StuckSampleSeconds"/> must move the body at least <see cref="StuckProgress"/>
+        /// metres.</summary>
+        private const float StuckSampleSeconds = 8f;
+
+        private const float StuckSlack = 0.5f;
+
+        private const float StuckProgress = 0.5f;
+
+        /// <summary>How strongly an idle wander leans toward the nearest player: at 1 it would walk a
+        /// straight line at someone it is not allowed to chase.</summary>
+        private const float WanderBias = 0.6f;
+
         /// <summary>One player visible to the brain this frame.</summary>
         /// <remarks><see cref="Chaseable"/> false = spawn protected: no target, but still keeps a spawn
         /// point away from them.</remarks>
@@ -197,8 +271,39 @@ namespace VortexArena.Modes.Zombie
 
         private static NavMeshPath s_pathScratch;
 
+        /// <summary>LOS ray hits and path corners, shared: both are read inside one call.</summary>
+        /// <remarks>⚠️ A truncated corner list only UNDERSTATES a very long path, which is harmless for
+        /// a comparison between candidates.</remarks>
+        private static readonly RaycastHit[] LosHits = new RaycastHit[8];
+
+        private static readonly Vector3[] PathCorners = new Vector3[64];
+
+        /// <summary>Attack with no target id = a miss (§10.5): the server applies the cooldown and bumps
+        /// the counter everyone animates, but deals no damage.</summary>
+        private static readonly int[] WhiffIds = new int[0];
+
+        // Per-frame query budgets, shared by every brain on this machine.
+        private static int s_budgetFrame = -1;
+        private static int s_pathBudget;
+        private static int s_rayBudget;
+
+        /// <summary>One cached line-of-sight answer.</summary>
+        private struct LosEntry
+        {
+            public int Id;
+            public float Until;
+            public bool Visible;
+        }
+
         private NetObject _net;
         private readonly List<int> _playerIds = new List<int>();
+        private readonly List<LosEntry> _los = new List<LosEntry>();
+
+        /// <summary>One path object per brain: <c>NavMesh.CalculatePath</c> writes into it, so a shared
+        /// one would be overwritten mid-comparison.</summary>
+        private NavMeshPath _path;
+
+        private readonly int[] _attackIds = new int[1];
 
         private float _poseTimer;
         private float _retargetTimer;
@@ -258,6 +363,18 @@ namespace VortexArena.Modes.Zombie
 
         /// <summary>Dev: time its storey went empty; <c>0</c> = there is someone to chase.</summary>
         private float _devAloneSince;
+
+        /// <summary>Score of <see cref="_targetId"/> and the time it was acquired — the hysteresis pair.</summary>
+        private float _targetScore = float.MaxValue;
+        private float _targetSince;
+
+        /// <summary>Time of the next full score pass; drawn randomly so the wave spreads its path
+        /// queries over the frames.</summary>
+        private float _targetAt;
+
+        /// <summary>Stuck watchdog: next sample time and the position at the last sample.</summary>
+        private float _stuckAt;
+        private Vector3 _stuckPos;
 
         // string == is ordinal here; `using System` is deliberately absent (it would make Random
         // ambiguous with UnityEngine.Random all over this file).
@@ -336,6 +453,13 @@ namespace VortexArena.Modes.Zombie
             agent.speed = WaveSpeed();
             agent.stoppingDistance = StoppingDistance();
             _wandering = false;
+
+            // First score pass at a random offset: taking ownership of a whole wave at once would
+            // otherwise line every brain's first pass up in one frame.
+            if (_targetAt <= 0f)
+            {
+                _targetAt = Time.time + Random.Range(0f, RetargetMax);
+            }
 
             if (!agent.enabled)
             {
@@ -507,6 +631,8 @@ namespace VortexArena.Modes.Zombie
 
             StreamPose();
 
+            RefreshBudgets();
+
             if (_navMissing || agent == null || !agent.enabled || !agent.isOnNavMesh)
             {
                 return;
@@ -521,11 +647,15 @@ namespace VortexArena.Modes.Zombie
                     agent.isStopped = true;
                 }
 
+                // ⚠️ A held body makes no progress BY DESIGN: sampling through the hold would relocate
+                // every zombie that just spawned.
+                _stuckAt = 0f;
                 return;
             }
 
             if (_attackAt > 0f)
             {
+                _stuckAt = 0f;
                 FinishAttack();
                 return;
             }
@@ -553,9 +683,13 @@ namespace VortexArena.Modes.Zombie
                 }
                 else
                 {
-                    agent.isStopped = true;
+                    // ⚠️ A single-floor arena has no quota to fall back on: with everybody protected or
+                    // downed the zombies would stand in a row, which reads as a frozen game. They drift
+                    // toward the squad instead.
+                    Wander(true);
                 }
 
+                CheckStuck();
                 return;
             }
 
@@ -586,13 +720,21 @@ namespace VortexArena.Modes.Zombie
                 }
 
                 FaceTarget(flat);
+
+                // The stand-off is a deliberate stop, not a blocked path.
+                _stuckAt = 0f;
             }
-            else if (_retargetTimer <= 0f)
+            else
             {
-                _retargetTimer = retargetSeconds;
-                agent.speed = WaveSpeed();
-                agent.isStopped = false;
-                agent.SetDestination(targetFloor);
+                if (_retargetTimer <= 0f)
+                {
+                    _retargetTimer = retargetSeconds;
+                    agent.speed = WaveSpeed();
+                    agent.isStopped = false;
+                    agent.SetDestination(targetFloor);
+                }
+
+                CheckStuck();
             }
 
             if (Time.time < _cooldownUntil)
@@ -655,19 +797,52 @@ namespace VortexArena.Modes.Zombie
             _attackAt = 0f;
             _cooldownUntil = Time.time + ZombieKinds.CooldownOf(_type);
 
-            if (_attackTargetId > 0)
+            int target = _attackTargetId;
+            _attackTargetId = 0;
+
+            if (target <= 0)
             {
-                NetObjectSync.SendEvent(_net.NetId, ZombieKinds.EventAttack, new[] { _attackTargetId });
+                return;
             }
 
-            _attackTargetId = 0;
+            // ⚠️ Re-checked AFTER the windup: those 0.4 s are the player's chance to step out, so a
+            // swing into thin air goes out WITHOUT a target id and the server reads it as a miss. The
+            // cooldown runs either way — a missed swing that cost nothing would be a free attack.
+            if (IsStillInReach(target))
+            {
+                _attackIds[0] = target;
+                NetObjectSync.SendEvent(_net.NetId, ZombieKinds.EventAttack, _attackIds);
+                return;
+            }
+
+            NetObjectSync.SendEvent(_net.NetId, ZombieKinds.EventAttack, WhiffIds);
         }
 
-        /// <summary>Nearest player who is alive, calibrated, not spawn protected and ON OUR STOREY;
-        /// their HEAD pose projected onto our own floor level (the agent walks on a plane, the head does
-        /// not).</summary>
+        /// <summary>Is the windup's target still hittable (alive, chaseable, unprotected, our storey) and
+        /// inside reach + <see cref="AttackEscapeSlack"/>?</summary>
+        private bool IsStillInReach(int playerId)
+        {
+            if (!CollectSeen() ||
+                !TryValidTarget(playerId, ArenaFloors.Count > 1, MyFloor(), out Vector3 point))
+            {
+                return false;
+            }
+
+            float dx = point.x - transform.position.x;
+            float dz = point.z - transform.position.z;
+            float reach = ZombieKinds.ReachOf(_type) + AttackEscapeSlack;
+            return dx * dx + dz * dz <= reach * reach;
+        }
+
+        /// <summary>The player this body walks at: the lowest SCORE among the chaseable players on our
+        /// storey (path length, cover, crowding and who just fired — numbers in
+        /// <c>Docs/ArenaNet-Protokol.md</c> §10.5), with hysteresis on top. The returned point is the
+        /// target's head projected onto our own floor level: the agent walks on a plane.</summary>
         /// <remarks>⚠️ Floor filter only in a multi-floor arena: there the NavMesh has no link between
-        /// storeys, so a target upstairs is a path the agent can never finish.</remarks>
+        /// storeys, so a target upstairs is a path the agent can never finish.
+        /// <para>⚠️ The score is recomputed only every <see cref="RetargetMin"/>–<see cref="RetargetMax"/>
+        /// seconds and only inside the frame's query budget; in between (and when the budget is spent)
+        /// the current target is returned unchanged.</para></remarks>
         private bool TryFindTarget(out int playerId, out Vector3 floorPosition)
         {
             playerId = 0;
@@ -675,30 +850,349 @@ namespace VortexArena.Modes.Zombie
 
             if (!CollectSeen())
             {
+                _targetId = 0;
                 return false;
             }
 
             bool multiFloor = ArenaFloors.Count > 1;
             int myFloor = MyFloor();
-            float best = float.MaxValue;
+            float now = Time.time;
 
-            // A scream overrides the nearest-target rule for its duration: the point of the enrage is
-            // that the pack converges on ONE player instead of each picking its own.
-            int forced = Time.time < _enrageUntil ? _forcedTargetId : 0;
+            // A scream overrides the score for its duration: the point of the enrage is that the pack
+            // converges on ONE player instead of each picking its own.
+            int forced = now < _enrageUntil ? _forcedTargetId : 0;
+            if (forced > 0)
+            {
+                if (TryValidTarget(forced, multiFloor, myFloor, out floorPosition))
+                {
+                    playerId = forced;
+                    return true;
+                }
+
+                // The forced target went down, upstairs or into spawn protection: back to the score, or
+                // the enrage would leave the body standing for its whole duration.
+                _forcedTargetId = 0;
+            }
+
+            bool keep = _targetId > 0 && TryValidTarget(_targetId, multiFloor, myFloor, out floorPosition);
+            if (!keep)
+            {
+                // Dead, downed, protected or upstairs: the switch is IMMEDIATE — the hold below only
+                // exists to stop a body dithering between two live players.
+                _targetId = 0;
+                _targetScore = float.MaxValue;
+            }
+
+            if (keep && (now - _targetSince < TargetHoldSeconds || now < _targetAt ||
+                         IsWithinReach(floorPosition)))
+            {
+                playerId = _targetId;
+                return true;
+            }
+
+            if (s_pathBudget <= 0)
+            {
+                // Budget spent by the rest of the wave this frame: keep what we have, ask again next
+                // frame. Only a body with no target at all falls back to flat distance.
+                if (keep)
+                {
+                    playerId = _targetId;
+                    return true;
+                }
+
+                return TryNearestTarget(multiFloor, myFloor, out playerId, out floorPosition);
+            }
+
+            _targetAt = now + Random.Range(RetargetMin, RetargetMax);
+
+            int fairShare = FairShare(multiFloor, myFloor);
+            float bestScore = float.MaxValue;
+
+            // Last pass's score stands in when the budget runs out before the current target is
+            // re-scored: comparing a rival against float.MaxValue would switch on anything.
+            float currentScore = keep ? _targetScore : float.MaxValue;
+            int best = 0;
+            Vector3 bestPoint = Vector3.zero;
 
             for (int i = 0; i < SeenPlayers.Count; i++)
             {
                 Seen seen = SeenPlayers[i];
-                if (!seen.Chaseable || (multiFloor && seen.Floor != myFloor) ||
-                    (forced > 0 && seen.Id != forced))
+                if (!seen.Chaseable || (multiFloor && seen.Floor != myFloor))
                 {
                     continue;
                 }
 
-                Vector3 world = seen.Head;
-                world.y = transform.position.y;
+                if (s_pathBudget <= 0)
+                {
+                    break;
+                }
 
-                float distance = (world - transform.position).sqrMagnitude;
+                Vector3 point = FloorPointOf(seen.Head);
+                float score = ScoreOf(seen, point, fairShare);
+
+                if (seen.Id == _targetId)
+                {
+                    currentScore = score;
+                }
+
+                if (score < bestScore)
+                {
+                    bestScore = score;
+                    best = seen.Id;
+                    bestPoint = point;
+                }
+            }
+
+            if (best == 0)
+            {
+                if (keep)
+                {
+                    playerId = _targetId;
+                    return true;
+                }
+
+                _targetId = 0;
+                return false;
+            }
+
+            // A rival has to be clearly better: an equally good one would swap back next pass.
+            if (keep && best != _targetId && bestScore >= currentScore * SwitchFactor)
+            {
+                playerId = _targetId;
+                _targetScore = currentScore;
+                return true;
+            }
+
+            if (best != _targetId)
+            {
+                _targetSince = now;
+            }
+
+            _targetId = best;
+            _targetScore = bestScore;
+            playerId = best;
+            floorPosition = bestPoint;
+            return true;
+        }
+
+        /// <summary>Score of one candidate: walking distance, doubled-ish while it is out of sight, plus
+        /// the crowding penalty, minus a bonus for the player who just fired at us. Lowest wins.</summary>
+        private float ScoreOf(in Seen seen, in Vector3 point, int fairShare)
+        {
+            float score = PathLength(point) * (HasLineOfSight(seen) ? 1f : BlindPenalty);
+
+            // Fair share: a player already chased by more than their share of the storey's bodies is
+            // worth less, so a wave spreads over the squad instead of dog-piling one headset.
+            int extra = Mathf.Max(0, ChasersOf(seen.Id) + 1 - fairShare);
+            score += CrowdPenaltyMeters * extra;
+
+            if (ZombieShotMemory.FiredNear(seen.Id, transform.position, ShooterRadius, ShooterSeconds))
+            {
+                score *= ShooterBonus;
+            }
+
+            return score;
+        }
+
+        /// <summary>Walking length to <paramref name="target"/> (m); consumes one path budget.</summary>
+        /// <remarks>⚠️ Not flat distance: the point of the whole score is that a player behind a wall is
+        /// FAR. An unreachable one still gets a number (<see cref="InvalidPathPenalty"/>) so a body with
+        /// nowhere to walk still picks somebody and keeps moving.</remarks>
+        private float PathLength(in Vector3 target)
+        {
+            Vector3 from = transform.position;
+            float dx = target.x - from.x;
+            float dz = target.z - from.z;
+            float flat = Mathf.Sqrt(dx * dx + dz * dz);
+
+            _path ??= new NavMeshPath();
+            s_pathBudget--;
+
+            if (!NavMesh.CalculatePath(from, target, agent.areaMask, _path) ||
+                _path.status == NavMeshPathStatus.PathInvalid)
+            {
+                return flat * InvalidPathFactor + InvalidPathPenalty;
+            }
+
+            int count = _path.GetCornersNonAlloc(PathCorners);
+            float length = 0f;
+            for (int i = 1; i < count; i++)
+            {
+                length += Vector3.Distance(PathCorners[i - 1], PathCorners[i]);
+            }
+
+            if (_path.status == NavMeshPathStatus.PathPartial && count > 0)
+            {
+                length += PartialGapFactor * Vector3.Distance(PathCorners[count - 1], target);
+            }
+
+            return length;
+        }
+
+        /// <summary>Can this body see the player's head? Cached per player for
+        /// <see cref="LosCacheSeconds"/>.</summary>
+        /// <remarks>⚠️ With the frame's ray budget spent the cached (or default) answer is VISIBLE: an
+        /// invented wall would send the whole wave the long way round.</remarks>
+        private bool HasLineOfSight(in Seen seen)
+        {
+            float now = Time.time;
+
+            for (int i = 0; i < _los.Count; i++)
+            {
+                if (_los[i].Id != seen.Id)
+                {
+                    continue;
+                }
+
+                if (now < _los[i].Until)
+                {
+                    return _los[i].Visible;
+                }
+
+                _los.RemoveAt(i);
+                break;
+            }
+
+            if (s_rayBudget <= 0)
+            {
+                return true;
+            }
+
+            s_rayBudget--;
+            bool visible = CastLineOfSight(seen.Head);
+            _los.Add(new LosEntry { Id = seen.Id, Until = now + LosCacheSeconds, Visible = visible });
+            return visible;
+        }
+
+        /// <summary>One eye → head ray. ⚠️ Player and zombie hitboxes sit on <c>Default</c> like the
+        /// walls do, so they are skipped explicitly — otherwise the body in front of the target (or our
+        /// own) would read as cover and nobody would ever be "seen".</summary>
+        private bool CastLineOfSight(in Vector3 head)
+        {
+            Vector3 eye = transform.position;
+            eye.y += ZombieKinds.IsCrawlerType(_type)
+                ? CrawlerEyeHeight
+                : EyeHeight * ZombieKinds.ScaleOf(_type, _net.NetId);
+
+            Vector3 delta = head - eye;
+            float distance = delta.magnitude;
+            if (distance <= LosSkin)
+            {
+                return true;
+            }
+
+            int count = Physics.RaycastNonAlloc(eye, delta / distance, LosHits, distance,
+                ArenaLayers.AreaTargetMask, QueryTriggerInteraction.Ignore);
+
+            for (int i = 0; i < count; i++)
+            {
+                if (LosHits[i].distance >= distance - LosSkin)
+                {
+                    continue;
+                }
+
+                Collider hit = LosHits[i].collider;
+                if (hit == null || hit.transform.IsChildOf(transform) ||
+                    hit.GetComponentInParent<VortexArena.Core.Player.RemoteHitBox>() != null)
+                {
+                    continue;
+                }
+
+                return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>How many OTHER bodies of ours are already walking at this player.</summary>
+        private int ChasersOf(int playerId)
+        {
+            int count = 0;
+
+            for (int i = 0; i < LiveBrains.Count; i++)
+            {
+                ZombieBrain brain = LiveBrains[i];
+                if (brain != null && brain != this && brain._targetId == playerId)
+                {
+                    count++;
+                }
+            }
+
+            return count;
+        }
+
+        /// <summary>Bodies per player on this storey, rounded up — the line above which a target counts
+        /// as crowded.</summary>
+        private static int FairShare(bool multiFloor, int floor)
+        {
+            int zombies = 0;
+            int players = 0;
+
+            for (int i = 0; i < LiveBrains.Count; i++)
+            {
+                ZombieBrain brain = LiveBrains[i];
+                if (brain != null && (!multiFloor || brain.MyFloor() == floor))
+                {
+                    zombies++;
+                }
+            }
+
+            for (int i = 0; i < SeenPlayers.Count; i++)
+            {
+                Seen seen = SeenPlayers[i];
+                if (seen.Chaseable && (!multiFloor || seen.Floor == floor))
+                {
+                    players++;
+                }
+            }
+
+            return players > 0 ? Mathf.CeilToInt(zombies / (float)players) : 1;
+        }
+
+        /// <summary>Is <paramref name="playerId"/> still a legal target (chaseable, our storey)?
+        /// Reads the buffer <see cref="CollectSeen"/> filled, which already excludes the dead.</summary>
+        private bool TryValidTarget(int playerId, bool multiFloor, int floor, out Vector3 floorPosition)
+        {
+            for (int i = 0; i < SeenPlayers.Count; i++)
+            {
+                Seen seen = SeenPlayers[i];
+                if (seen.Id != playerId)
+                {
+                    continue;
+                }
+
+                if (seen.Chaseable && (!multiFloor || seen.Floor == floor))
+                {
+                    floorPosition = FloorPointOf(seen.Head);
+                    return true;
+                }
+
+                break;
+            }
+
+            floorPosition = Vector3.zero;
+            return false;
+        }
+
+        /// <summary>Flat-nearest pick — the budget-exhausted fallback for a body that has no target at
+        /// all; standing still would read worse than walking at the wrong player.</summary>
+        private bool TryNearestTarget(bool multiFloor, int floor, out int playerId,
+            out Vector3 floorPosition)
+        {
+            playerId = 0;
+            floorPosition = Vector3.zero;
+            float best = float.MaxValue;
+
+            for (int i = 0; i < SeenPlayers.Count; i++)
+            {
+                Seen seen = SeenPlayers[i];
+                if (!seen.Chaseable || (multiFloor && seen.Floor != floor))
+                {
+                    continue;
+                }
+
+                Vector3 point = FloorPointOf(seen.Head);
+                float distance = (point - transform.position).sqrMagnitude;
                 if (distance >= best)
                 {
                     continue;
@@ -706,18 +1200,126 @@ namespace VortexArena.Modes.Zombie
 
                 best = distance;
                 playerId = seen.Id;
-                floorPosition = world;
+                floorPosition = point;
             }
 
-            if (playerId == 0 && forced > 0)
+            if (playerId > 0)
             {
-                // The forced target went down, upstairs or into spawn protection: back to normal
-                // targeting, or the enrage would leave the body standing for its whole duration.
-                _forcedTargetId = 0;
-                return TryFindTarget(out playerId, out floorPosition);
+                _targetId = playerId;
+                _targetSince = Time.time;
+                _targetScore = float.MaxValue;
             }
 
             return playerId > 0;
+        }
+
+        /// <summary>A head pose dropped onto our own floor level.</summary>
+        private Vector3 FloorPointOf(in Vector3 head)
+        {
+            Vector3 point = head;
+            point.y = transform.position.y;
+            return point;
+        }
+
+        private bool IsWithinReach(in Vector3 floorPoint)
+        {
+            float dx = floorPoint.x - transform.position.x;
+            float dz = floorPoint.z - transform.position.z;
+            float reach = ZombieKinds.ReachOf(_type);
+            return dx * dx + dz * dz <= reach * reach;
+        }
+
+        private static void RefreshBudgets()
+        {
+            if (s_budgetFrame == Time.frameCount)
+            {
+                return;
+            }
+
+            s_budgetFrame = Time.frameCount;
+            s_pathBudget = PathBudgetPerFrame;
+            s_rayBudget = RayBudgetPerFrame;
+        }
+
+        // ------------------------------------------------------------------ stuck watchdog
+
+        /// <summary>Walking but getting nowhere (another body in a doorway, a NavMesh island, a target
+        /// behind geometry the agent cannot round): the body is warped to a spawn point on its own
+        /// storey instead of pushing against the wall for the rest of the run.</summary>
+        /// <remarks>⚠️ Only while there IS a path to walk: a stopped agent, a windup, the screamer's
+        /// stand-off and every spawn hold reset the sample, or a deliberate stop would relocate the
+        /// body.</remarks>
+        private void CheckStuck()
+        {
+            if (agent.isStopped || agent.pathPending || !agent.hasPath ||
+                agent.remainingDistance <= agent.stoppingDistance + StuckSlack)
+            {
+                _stuckAt = 0f;
+                return;
+            }
+
+            float now = Time.time;
+            Vector3 position = transform.position;
+
+            if (_stuckAt <= 0f)
+            {
+                _stuckAt = now + StuckSampleSeconds;
+                _stuckPos = position;
+                return;
+            }
+
+            if (now < _stuckAt)
+            {
+                return;
+            }
+
+            _stuckAt = now + StuckSampleSeconds;
+
+            bool moved = (position - _stuckPos).sqrMagnitude >= StuckProgress * StuckProgress;
+            _stuckPos = position;
+
+            if (moved)
+            {
+                return;
+            }
+
+            Relocate();
+        }
+
+        /// <summary>Warps a stuck body back onto a spawn door of its own storey (the Dev onto its own
+        /// band) with the usual stand-up hold.</summary>
+        private void Relocate()
+        {
+            _stuckAt = 0f;
+
+            bool placed;
+            if (IsDev)
+            {
+                placed = TryPlaceDev();
+            }
+            else
+            {
+                CollectSeen();
+                int floor = MyFloor();
+                placed = TryPickSpawnPoint(floor, null, out Vector3 point);
+                if (placed)
+                {
+                    MoveTo(point, floor, true, true);
+                }
+            }
+
+            if (!placed)
+            {
+                return;
+            }
+
+            Debug.Log("[Zombie] Zombi takıldı — doğum noktasına taşındı.", this);
+
+            _attackAt = 0f;
+            _attackTargetId = 0;
+            _wandering = false;
+            _wanderAt = 0f;
+            agent.speed = WaveSpeed();
         }
 
         /// <summary>Fills <see cref="SeenPlayers"/> with every alive, calibrated player that has a pose;
@@ -940,8 +1542,10 @@ namespace VortexArena.Modes.Zombie
             agent.speed = WaveSpeed();
         }
 
-        /// <summary>Slow random walk inside <see cref="wanderRadius"/> on our own storey.</summary>
-        private void Wander()
+        /// <summary>Slow random walk inside <see cref="wanderRadius"/> on our own storey;
+        /// <paramref name="biased"/> leans the step toward the nearest player (protected or downed ones
+        /// too) so an idle wave still drifts where the squad is.</summary>
+        private void Wander(bool biased = false)
         {
             float now = Time.time;
             if (now < _wanderAt)
@@ -964,8 +1568,18 @@ namespace VortexArena.Modes.Zombie
                 agent.speed = WaveSpeed() * WanderSpeedScale;
             }
 
+            Vector2 direction = Random.insideUnitCircle.normalized;
+            if (biased && TryNearestDirection(out Vector2 toward))
+            {
+                Vector2 leaning = direction + toward * WanderBias;
+                if (leaning.sqrMagnitude > 0.0001f)
+                {
+                    direction = leaning.normalized;
+                }
+            }
+
             // At least a few strides: a shuffle of a few centimetres is a start-stop jerk.
-            Vector2 offset = Random.insideUnitCircle.normalized *
+            Vector2 offset = direction *
                              Random.Range(Mathf.Min(WanderMinStep, wanderRadius), wanderRadius);
             Vector3 candidate = transform.position + new Vector3(offset.x, 0f, offset.y);
             if (!TrySample(candidate, out Vector3 sampled) ||
@@ -977,6 +1591,76 @@ namespace VortexArena.Modes.Zombie
 
             agent.isStopped = false;
             agent.SetDestination(sampled);
+        }
+
+        /// <summary>Flat unit direction to the nearest player on our storey, chaseable or not;
+        /// <c>false</c> = nobody there.</summary>
+        /// <remarks>Reads the buffer <see cref="CollectSeen"/> filled, and falls back to the DOWNED
+        /// players (which that buffer drops): with the whole squad on the floor they are the only thing
+        /// left to drift toward.</remarks>
+        private bool TryNearestDirection(out Vector2 direction)
+        {
+            direction = Vector2.zero;
+            float best = float.MaxValue;
+            bool multiFloor = ArenaFloors.Count > 1;
+            int myFloor = MyFloor();
+
+            for (int i = 0; i < SeenPlayers.Count; i++)
+            {
+                Seen seen = SeenPlayers[i];
+                if (multiFloor && seen.Floor != myFloor)
+                {
+                    continue;
+                }
+
+                Lean(seen.Head, ref best, ref direction);
+            }
+
+            if (best < float.MaxValue)
+            {
+                return true;
+            }
+
+            ArenaClient client = ArenaClient.Instance;
+            RemotePlayerRegistry remotes = client != null ? client.Remotes : null;
+            if (remotes == null)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < _playerIds.Count; i++)
+            {
+                int id = _playerIds[i];
+                if (!ZombieRoster.CanBeChased(id) ||
+                    !remotes.GetInterpolatedPose(id, out Pose head, out _, out _))
+                {
+                    continue;
+                }
+
+                Vector3 world = ArenaSpace.ArenaToWorld(head.position);
+                if (multiFloor && FloorOf(id, world) != myFloor)
+                {
+                    continue;
+                }
+
+                Lean(world, ref best, ref direction);
+            }
+
+            return best < float.MaxValue;
+        }
+
+        private void Lean(in Vector3 point, ref float best, ref Vector2 direction)
+        {
+            float dx = point.x - transform.position.x;
+            float dz = point.z - transform.position.z;
+            float distance = dx * dx + dz * dz;
+            if (distance >= best || distance < 0.0001f)
+            {
+                return;
+            }
+
+            best = distance;
+            direction = new Vector2(dx, dz).normalized;
         }
 
         /// <summary>Fills the per-storey quota for <paramref name="liveCount"/> zombies;
@@ -1545,10 +2229,24 @@ namespace VortexArena.Modes.Zombie
             if (value)
             {
                 LiveBrains.Add(this);
+
+                // The player obstacles only make sense where agents run: this machine (§10.10).
+                ZombiePlayerObstacles.Ensure();
             }
             else
             {
                 LiveBrains.Remove(this);
+
+                // ⚠️ Our target is cleared too: a dead brain left in the chaser count would keep
+                // pushing the others off a player nobody is chasing any more.
+                _targetId = 0;
+                _stuckAt = 0f;
+                _los.Clear();
+
+                if (LiveBrains.Count == 0)
+                {
+                    ZombiePlayerObstacles.Release();
+                }
             }
         }
 

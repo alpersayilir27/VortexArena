@@ -36,9 +36,17 @@ namespace VortexArena.Core.Combat
         /// thrown, just straight out of the hand.</summary>
         private const float MinThrowSpeed = 0.01f;
 
+        /// <summary>Optional mode gate: <c>false</c> = the holster stays empty (zombie wave unlocks). The
+        /// throwable counterpart of <see cref="WeaponGranter.SelectionGate"/>; the mode that sets it
+        /// clears only its own.</summary>
+        public static System.Func<ThrowableDefinition, bool> SelectionGate;
+
         [Header("Eşya")]
         [Tooltip("Kılıfın taşıdığı atılabilir (bomba). Boşsa kılıf hiçbir şey yapmaz.")]
         [SerializeField] private ThrowableDefinition throwable;
+
+        /// <summary>The throwable this holster carries (may be null).</summary>
+        public ThrowableDefinition Throwable => throwable;
 
         // Both fields feed the runtime GripSocket (EnsureSocket); they stay serialized HERE so no rig
         // prefab has to be re-wired.
@@ -124,7 +132,10 @@ namespace VortexArena.Core.Combat
             // and would leave the wrist item visible on a family that has nothing to throw.
             // A children's session waiting in a MILITARY lobby is the same family, seen from the
             // selection instead of the rules (WeaponGranter.IsKidsPlayground).
-            if (ModeRuntime.IsWeaponless || WeaponGranter.IsKidsPlayground)
+            // A locked throwable (SelectionGate) is the same empty wrist, until the gate opens.
+            System.Func<ThrowableDefinition, bool> gate = SelectionGate;
+            if (ModeRuntime.IsWeaponless || WeaponGranter.IsKidsPlayground ||
+                (gate != null && !gate(throwable)))
             {
                 ClearForWeaponless();
                 return;

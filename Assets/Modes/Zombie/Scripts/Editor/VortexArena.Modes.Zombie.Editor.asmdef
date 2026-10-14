@@ -4,6 +4,7 @@
     "references": [
         "VortexArena.Modes.Zombie",
         "VortexArena.Core",
+        "VortexArena.Core.Editor",
         "VortexArena.Net",
         "VortexArena.Protocol"
     ],

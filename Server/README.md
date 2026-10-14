@@ -570,6 +570,8 @@ aynı ortak kanaldan (`set_selection` → `admin_state`) gider, böylece iki ope
 > oyuncu değil, **nesne sahibi admin**'dir (§10.10). Sunucu metre bilmez, NavMesh yoktur: dalga
 > makinesi, hasar tablosu, ortak skor ve bitiş koşulu sunucudadır; yürüme/hedef seçme/vuruş anı admin
 > derlemesindedir ve `object_event{attack}` ile bildirilir (hasarı mod yazar, olay taşımaz).
+> Aynı olayın **hedefsiz** biçimi (`i:[]`) boşa vuruştur: saldırı kaçılabilir, hedefi tutturamayan
+> zombi bekleme süresini ve vuruş sayacını harcar ama hasar vermez.
 > Doğum noktaları haritanın `zombie_spawn` nesneleridir, mod onları maç başında `ObjectIdsOfKind` ile
 > öğrenir — **haritada nokta yoksa konsola uyarı düşer ve zombi çıkmaz**. Dalga tablosunu operatörün
 > **zorluk** seçimi belirler (`start_match.difficulty`: `easy`/`normal`/`hard`; eksik/tanınmayan =

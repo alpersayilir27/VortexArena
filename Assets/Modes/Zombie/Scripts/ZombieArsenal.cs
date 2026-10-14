@@ -3,7 +3,8 @@ using UnityEngine;
 
 namespace VortexArena.Modes.Zombie
 {
-    /// <summary>Which wave opens which weapon on the zombie boards: <c>weaponId</c> → wave number.</summary>
+    /// <summary>Which wave opens which weapon on the zombie boards — and the wrist bomb: <c>weaponId</c> /
+    /// <c>throwableId</c> → wave number.</summary>
     /// <remarks>Lives in an asset so balancing is a data edit, not a code edit — see
     /// <c>Docs/Gelistirici/Yemek-Kitabi.md</c> for the recipe.
     /// <para>⚠️ A weapon the table does not list is UNLOCKED. The safe direction: a board carrying a
@@ -20,7 +21,8 @@ namespace VortexArena.Modes.Zombie
         [Serializable]
         public struct Entry
         {
-            [Tooltip("WeaponDefinition.weaponId — birebir aynı yazılır (ak47, ump45 …).")]
+            [Tooltip("WeaponDefinition.weaponId ya da ThrowableDefinition.throwableId — birebir aynı " +
+                     "yazılır (ak47, ump45, bomba …).")]
             public string weaponId;
 
             [Tooltip("Silahın açıldığı dalga. 1 = maçın başından itibaren açık.")]
@@ -32,22 +34,25 @@ namespace VortexArena.Modes.Zombie
 
         /// <summary>Built-in table, used when no asset has been created yet (and as the asset's own
         /// starting content). ⚠️ Kept so a fresh clone plays the mode correctly without a data step;
-        /// the asset, once present, is the only source.</summary>
+        /// the asset, once present, is the only source.
+        /// <para>Each wave adds a ROLE (Yemek-Kitabi zombie recipe): close defence, shotgun + big
+        /// magazine, first rifles + bomb, precision, brute hunters, top tier.</para></summary>
         public static Entry[] DefaultEntries() => new[]
         {
             new Entry { weaponId = "mp9", wave = 1 },
             new Entry { weaponId = "ump45", wave = 1 },
+            new Entry { weaponId = "nova", wave = 2 },
             new Entry { weaponId = "p90", wave = 2 },
-            new Entry { weaponId = "nova", wave = 3 },
             new Entry { weaponId = "famas", wave = 3 },
-            new Entry { weaponId = "ak47", wave = 4 },
+            new Entry { weaponId = "scarl", wave = 3 },
+            new Entry { weaponId = "bomba", wave = 3 },
             new Entry { weaponId = "m4a1", wave = 4 },
             new Entry { weaponId = "g36c", wave = 4 },
-            new Entry { weaponId = "scarl", wave = 5 },
+            new Entry { weaponId = "m4a4", wave = 4 },
             new Entry { weaponId = "xm1014", wave = 5 },
-            new Entry { weaponId = "m4a4", wave = 5 },
-            new Entry { weaponId = "aug", wave = 6 },
+            new Entry { weaponId = "ak47", wave = 5 },
             new Entry { weaponId = "galilar", wave = 6 },
+            new Entry { weaponId = "aug", wave = 6 },
         };
 
         private static ZombieArsenal live;
