@@ -111,6 +111,13 @@ namespace VortexArena.Protocol
         public string weaponId;
         public float damage;
         public float[] hitPos;
+
+        /// <summary>Body zone of the hit (<c>HitZone</c>: 0 = body, 1 = head, 2 = stomach, 3 = leg);
+        /// absent = <c>0</c>.
+        /// <para>⚠️ Does NOT affect damage — the multiplier is already baked into <see cref="damage"/>.
+        /// It only feeds mode scoring (§10.5 zombie headshot) and stats, so an unknown value is clamped
+        /// to body instead of being rejected.</para></summary>
+        public int zone;
     }
 
     /// The headset reporting its OWN calibration step (§10.6 "Kalibrasyon adımı"). Players only; the
@@ -135,12 +142,18 @@ namespace VortexArena.Protocol
         public string team = "";
     }
 
-    /// A dead player's revive request (§10.4): sent once respawn.delaySeconds elapsed AND the player is
-    /// in their own base; the server verifies. Carries no fields.
+    /// A dead player's revive request (§10.4): sent once respawn.delaySeconds elapsed AND the mode's
+    /// revive condition is met (own base, standstill, or a teammate lifting); the server verifies.
     [Serializable]
     public class ReviveRequestMsg
     {
         public string type = MessageTypes.ReviveRequest;
+
+        /// <summary>playerId of the teammate who lifted this player; <c>0</c> = nobody (stood up alone).
+        /// <para>⚠️ SCORING ONLY — it never opens a revive gate. The server checks it (different,
+        /// connected, calibrated, alive, teammate, same floor) so the revive point cannot be written to
+        /// the wrong player, and treats a failed check as <c>0</c>.</para></summary>
+        public int by;
     }
 
     /// The headset reporting its OWN alignment state (§10.6). Players only. <c>source</c> ∈ "manual" |

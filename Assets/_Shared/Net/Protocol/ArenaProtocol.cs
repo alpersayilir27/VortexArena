@@ -21,6 +21,11 @@ namespace VortexArena.Protocol
         /// an old client sends no <c>targetNetId</c>, so it can break nothing, and it ignores
         /// <c>object_state</c>, so it keeps seeing a cover others already broke — two players on either
         /// side of the same wall see different worlds.</para>
+        /// <para>v26 adds <c>reviveAnchor:"teammate"</c> (§10.4/§10.5), <c>revive_request.by</c> and
+        /// <c>hit_report.zone</c> (§5.1). The wire layout is unchanged and every missing field falls back
+        /// to a safe default, but mixed versions silently LOSE the team rule: an old client maps the
+        /// unknown anchor to <c>"base"</c>, and with no BaseZone in the scene the condition counts as met
+        /// at once — the downed player stands up alone instead of waiting for a teammate.</para>
         /// <para>v25 adds <c>client_log</c> (§5.1): additive and inert — an old APK never sends it, an old
         /// server logs it as an unknown type and ignores it. Mixed versions cost only diagnostics: the
         /// headset that does not send it stays unreadable in the field.</para>
@@ -54,7 +59,7 @@ namespace VortexArena.Protocol
         /// <para>v5 net telemetry + packet combining (<c>0x05</c>) · v4 held item on the wire, shot
         /// events moved to UDP · v3 phase machine · v2 <c>set_identity</c>.</para>
         /// </summary>
-        public const int PROTOCOL_VERSION = 25;
+        public const int PROTOCOL_VERSION = 26;
         public const string APP_ID = "VortexArena";
 
         // ---- Calibration mode (§5.2/§10.6): how headsets align AT STARTUP. ----
@@ -470,6 +475,19 @@ namespace VortexArena.Protocol
         /// <summary>Full player health; server-authoritative (health_update cannot exceed it).</summary>
         public const float PLAYER_MAX_HP = 100f;
 
+        // ---- hit_report.zone (§5.1) — the numeric mirror of the client's HitZone enum. The server
+        // cannot reference that enum (it compiles only this folder), so the two values it reasons about
+        // live here; anything outside 0..HIT_ZONE_MAX is clamped to body. ----
+
+        /// <summary>Chest/arms and everything unreported (<c>hit_report.zone</c> absent).</summary>
+        public const int HIT_ZONE_BODY = 0;
+
+        /// <summary>Head — the only zone a mode scores on today (§10.5 zombie).</summary>
+        public const int HIT_ZONE_HEAD = 1;
+
+        /// <summary>Highest zone value the wire may carry (leg).</summary>
+        public const int HIT_ZONE_MAX = 3;
+
         /// <summary>Delay after the LAST damage before health starts refilling (s, §10.3).</summary>
         /// <remarks>⚠️ EVERY path that lowers health restarts it — the hit line and the obstacle drain
         /// alike: a player under fire must not heal, and a drain that healed faster than it drained
@@ -566,6 +584,14 @@ namespace VortexArena.Protocol
         /// <summary>reviveAnchor="standstill": moving beyond this radius (m) from the death anchor
         /// resets both the timer and the anchor.</summary>
         public const float REVIVE_HOLD_RADIUS = 1f;
+
+        /// <summary>reviveAnchor="teammate" (§10.4/§10.5): max HORIZONTAL distance (m) between the downed
+        /// player and the reviving teammate. Floors are separated by PlayerInfo.floor, not by distance
+        /// (§10.6) — two players above each other are never in range.</summary>
+        public const float REVIVE_TEAMMATE_RADIUS = 1.2f;
+
+        /// <summary>reviveAnchor="teammate": uninterrupted seconds the teammate must stay in range.</summary>
+        public const float REVIVE_TEAMMATE_SECONDS = 3f;
 
         /// <summary>Match duration options for the admin UI (seconds, 1 min … 1 h). <b>A UI list, not a
         /// protocol limit</b> — the server accepts any positive roundSeconds (§5.2). In EVERY mode the

@@ -516,7 +516,7 @@ aynı ortak kanaldan (`set_selection` → `admin_state`) gider, böylece iki ope
 | `tournament` | `Modes/TournamentMode.cs` | TDM varsayılanından farkı: **canlanma yok** (`Revive = None`, gecikme 0) + **yedek mermi sınırlı** (`LimitedReserve = true`; yedek sınırını yazan tek mod). Tur tabanlı takım elemesi | 120 sn (**turun** süresi) / 4 tur (operatör **sınırsız** da seçebilir) |
 | `burger` | `Modes/BurgerMode.cs` | **Oyun tipi `kids`** · silah yok (`Weapons = None`, dolayısıyla hasar yok) · takımsız ama **tek ekip** (`Allies = true`: kırmızı/mavi yok, herkes birbirinin takım arkadaşı) · canlanma yok (gecikme 0) · ortak skor (`PlayerAndShared`) · denge `server.json → burger` | 600 sn / **sınırsız** (limit yok) |
 | `mole` | `Modes/MoleMode.cs` | **Oyun tipi `kids`** · silah yok (`Weapons = None`, dolayısıyla hasar yok) · **iki takım + takım skoru** · canlanma yok (gecikme 0) · köstebek yoğunluğu harita başına (`maps.json → moleDensity`; yazılmamışsa modun varsayılanı) | 300 sn / **sınırsız** (limit yok) |
-| `zombie` | `Modes/ZombieMode.cs` | **Oyun tipi `zombie`** · takımsız ama **tek ekip** (`Allies = true`) · **silah kanvası** · ortak skor (`PlayerAndShared`) · **sabit durarak canlanma** (gecikme 0, 3 sn doğum koruması) · zombiler ağ nesnesi, beyni **nesne sahibi admin**'de · dalga tablosu operatörün **zorluk** seçiminden (`start_match.difficulty`) · akın temposu harita başına (`maps.json → zombiePace`; yazılmamışsa `1`) | 300 sn / **sınırsız** (limit yok) |
+| `zombie` | `Modes/ZombieMode.cs` | **Oyun tipi `zombie`** · takımsız ama **tek ekip** (`Allies = true`) · **silah kanvası** · ortak skor (`PlayerAndShared`) · **arkadaşın kaldırmasıyla canlanma** (`Revive = Teammate`, gecikme 0, 3 sn doğum koruması) · zombiler ağ nesnesi, beyni **nesne sahibi admin**'de · dalga tablosu operatörün **zorluk** seçiminden (`start_match.difficulty`) · akın temposu harita başına (`maps.json → zombiePace`; yazılmamışsa `1`) | 600 sn / **sınırsız** (limit yok) |
 
 > `ffa` skoru `AddPlayerScore(killerId, 1)` ile yazar ve kazananı `TryGetLeader` ile bulur;
 > eşitlikte `TryGetLeader` false döndüğü için maç berabere biter. Oyuncusuz başlatılan maçta
@@ -575,11 +575,20 @@ aynı ortak kanaldan (`set_selection` → `admin_state`) gider, böylece iki ope
 > **zorluk** seçimi belirler (`start_match.difficulty`: `easy`/`normal`/`hard`; eksik/tanınmayan =
 > `normal`) ve dalga başına bağlı oyuncu sayısıyla ölçeklenir. Doğum aralığı, dalga arası ve aynı anda
 > ayakta duran zombi sayısı ayrıca haritanın `zombiePace` çarpanıyla ölçeklenir (maç başında bir kez
-> okunur, `1` temel tempo); hasar tablosu tempodan etkilenmez. Sayılar `Docs/ArenaNet-Protokol.md`
-> §10.5'teki zorluk tablosundadır.
-> Maç ya süre dolunca
-> ("dayanıldı") ya bağlı tüm oyuncular aynı anda yerdeyken ("kayıp") biter; kazanan yoktur ve sonuç
-> ekranı `HoldsResultForOperator` ile operatörü bekler.
+> okunur, `1` temel tempo); hasar tablosu tempodan etkilenmez. Dalga arası zorluğa göre 15/12/10
+> sn'dir ve bir nefes payıdır: düşmüş herkes o pencerede **tam canla** kalkar, silah da orada
+> değiştirilir. Sayılar `Docs/ArenaNet-Protokol.md` §10.5'teki zorluk tablosundadır.
+>
+> **Ekip kuralları.** Düşen oyuncuyu **aynı kattaki yaşayan bir arkadaşı** kaldırır
+> (`revive_request.by`, §10.4): kaldırılan **50 canla** kalkar — canı `IGameMode.ReviveHp`'ten gelir
+> ve tam candan düşükse yenilenme normal gecikmeyi bekler. Puan: zombi öldürme **türe göre** (bugün
+> tek tür var, yürüyen = **1**), kafadan öldürme **+1** (`hit_report.zone`), arkadaş kaldırma
+> **+3** kaldırana; öldürme ayrıca `AddKillCredit` ile öldürenin `PlayerInfo.kills`'ine yazılır
+> (zombi ölümü `kill_event` üretmez). **Yenilgi** yalnız kalibreli oyuncu sayısı **en az 2** iken ve
+> onlardan hiçbiri **2 sn boyunca kesintisiz** ayakta değilken gelir → `modeState` `over:lost`; tek
+> oyunculu maçta yenilgi yoktur. Süre ekip ayaktayken dolarsa `over:survived` (zafer). Her iki bitiş
+> durumunda oyuncu başına `zs<playerId>:<kafadan>/<kaldırma>` jetonları da `modeState`'e yazılır.
+> Kazanan **takım** yoktur ve sonuç ekranı `HoldsResultForOperator` ile operatörü bekler.
 
 > **Nesne sahibi admin = sunucu-atanmış sahiplik** (§10.10; `MatchDirector.ObjectHostId`, hepsine
 > `admin_state.objectHostId` ile duyurulur): sahip, **en eski bağlanmış** admindir. ⚠️ Admin `0x01`

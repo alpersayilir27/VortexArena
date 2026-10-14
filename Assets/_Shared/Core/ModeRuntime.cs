@@ -276,6 +276,11 @@ namespace VortexArena.Core
                 return ModeReviveAnchor.StandStill;
             }
 
+            if (Matches(value, "teammate"))
+            {
+                return ModeReviveAnchor.Teammate;
+            }
+
             return Matches(value, "none") ? ModeReviveAnchor.None : ModeReviveAnchor.OwnBase;
         }
 

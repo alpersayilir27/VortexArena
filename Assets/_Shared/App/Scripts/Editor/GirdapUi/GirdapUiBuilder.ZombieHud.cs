@@ -48,7 +48,15 @@ namespace VortexArena.App.Editor
         private const float ZbHealthH = 44f;
         private const float ZbStatusY = ZbHealthY + ZbHealthH + 12f;
         private const float ZbStatusH = 44f;
-        private const float ZbContentH = ZbStatusY + ZbStatusH; // 312
+
+        // ---- team strip (.zs team list): header + one row per OTHER player
+        private const int ZbTeamRows = 8;
+        private const float ZbTeamRowH = 28f;
+        private const float ZbTeamHeadH = 30f;
+        private const float ZbTeamH = ZbTeamHeadH + ZbTeamRowH * ZbTeamRows; // 254
+        private const float ZbTeamY = ZbStatusY + ZbStatusH + 12f;
+        private const float ZbTeamNameW = 330f;
+        private const float ZbContentH = ZbTeamY + ZbTeamH; // 578
 
         // Fallback rect for a re-run after the legacy strip is gone AND this one was deleted by hand;
         // matches what the copied Lokanta strip carried.
@@ -113,11 +121,12 @@ namespace VortexArena.App.Editor
                 ZbCells cells = ZbBuildRow(strip);
                 ZbBuildHealth(strip, out TextMeshProUGUI healthText, out UiImage healthFill);
                 StatusPlate status = ZbBuildStatus(strip);
+                ZbTeam team = ZbBuildTeamStrip(strip);
                 ZbNotice centre = ZbBuildNotice(notice);
                 ZbToast toastParts = ZbBuildToast(toast);
 
                 ZbBindHud(root, clock, time, alarmPlate, cells, healthText, healthFill, status,
-                    centre, toastParts);
+                    team, centre, toastParts);
                 PrefabUtility.SaveAsPrefabAsset(root, ZbHudPrefab);
             }
             finally
@@ -162,12 +171,12 @@ namespace VortexArena.App.Editor
         private struct ZbCells
         {
             public TextMeshProUGUI wave;
-            public TextMeshProUGUI standing;
+            public TextMeshProUGUI remaining;
             public TextMeshProUGUI squad;
             public TextMeshProUGUI self;
         }
 
-        /// <summary>CSS <c>.za .row</c>: DALGA (blood cell) · AYAKTA · EKİP · SEN on one rusted plate.</summary>
+        /// <summary>CSS <c>.za .row</c>: DALGA (blood cell) · KALAN · EKİP · SEN on one rusted plate.</summary>
         private static ZbCells ZbBuildRow(Transform parent)
         {
             RectTransform row = Node(parent, "Row");
@@ -196,13 +205,15 @@ namespace VortexArena.App.Editor
             ZbDivider(row, "DividerWave", x);
             x += ZbDividerW;
 
-            RectTransform standing = Node(row, "CellStanding");
-            Place(standing, x, 0f, ZbCellW, ZbCellH);
-            cells.standing = ZbCellContent(standing, "AYAKTA", "14", GirdapFont.SairaBold,
+            // KALAN, not "ayakta": the number the squad reacts to is what the wave still OWES them
+            // (on the floor + not spawned yet), otherwise a wave looks finished while it is spawning.
+            RectTransform remaining = Node(row, "CellRemaining");
+            Place(remaining, x, 0f, ZbCellW, ZbCellH);
+            cells.remaining = ZbCellContent(remaining, "KALAN", "14", GirdapFont.SairaBold,
                 GirdapFont.SairaExtraBold, 68f, Kan.Label, Kan.Alive, false);
             x += ZbCellW;
 
-            ZbDivider(row, "DividerStanding", x);
+            ZbDivider(row, "DividerRemaining", x);
             x += ZbDividerW;
 
             RectTransform squad = Node(row, "CellSquad");
@@ -336,6 +347,68 @@ namespace VortexArena.App.Editor
             return comp;
         }
 
+        // -------------------------------------------------------------- team strip
+
+        private struct ZbTeam
+        {
+            public GameObject root;
+            public Object[] rows;
+            public Object[] names;
+            public Object[] states;
+        }
+
+        /// <summary>EKİP list: one row per OTHER player with their name and state (AYAKTA · DÜŞTÜ ·
+        /// KALDIRILIYOR %NN). Rows are built EMPTY and fixed in place — the controller only writes
+        /// text and toggles them, so there is no layout group to re-flow (Yapma-Listesi).</summary>
+        private static ZbTeam ZbBuildTeamStrip(Transform parent)
+        {
+            RectTransform team = Node(parent, "Team");
+            PlaceTopCenter(team, ZbTeamY, ZbStripW, ZbTeamH);
+
+            UiShape plate = Shape(team, "Plate");
+            Stretch(plate.rectTransform);
+            plate.Radius(Kan.PlateRadius)
+                .Outline(Kan.Border1, Kan.Border)
+                .Fill(Kan.PlateA, Kan.PlateB, UiGradientMode.Vertical);
+
+            TextMeshProUGUI head = Text(team, "Head", "EKİP", GirdapFont.SairaBold, 22f, Kan.Label,
+                TextAlignmentOptions.MidlineLeft, 0.14f);
+            Place(head.rectTransform, 16f, 4f, ZbStripW - 32f, ZbTeamHeadH - 4f);
+
+            var rows = new Object[ZbTeamRows];
+            var names = new Object[ZbTeamRows];
+            var states = new Object[ZbTeamRows];
+
+            for (int i = 0; i < ZbTeamRows; i++)
+            {
+                RectTransform rowRt = Node(team, "Row" + i);
+                Place(rowRt, 0f, ZbTeamHeadH + i * ZbTeamRowH, ZbStripW, ZbTeamRowH);
+
+                TextMeshProUGUI name = Text(rowRt, "Name", "OYUNCU", GirdapFont.SairaBold, 22f,
+                    Kan.Bone, TextAlignmentOptions.MidlineLeft);
+                Place(name.rectTransform, 16f, 0f, ZbTeamNameW, ZbTeamRowH);
+
+                TextMeshProUGUI state = Text(rowRt, "State", "AYAKTA", GirdapFont.SairaExtraBold,
+                    22f, Kan.Bone, TextAlignmentOptions.MidlineRight, 0.08f);
+                Place(state.rectTransform, ZbTeamNameW + 16f, 0f,
+                    ZbStripW - ZbTeamNameW - 32f, ZbTeamRowH);
+
+                rowRt.gameObject.SetActive(false);
+                rows[i] = rowRt.gameObject;
+                names[i] = name;
+                states[i] = state;
+            }
+
+            team.gameObject.SetActive(false);
+            return new ZbTeam
+            {
+                root = team.gameObject,
+                rows = rows,
+                names = names,
+                states = states
+            };
+        }
+
         // ------------------------------------------------------- centre countdown
 
         private struct ZbNotice
@@ -450,7 +523,7 @@ namespace VortexArena.App.Editor
 
         private static void ZbBindHud(GameObject root, RectTransform clock, TextMeshProUGUI time,
             GameObject alarmPlate, ZbCells cells, TextMeshProUGUI healthText, UiImage healthFill,
-            StatusPlate status, ZbNotice notice, ZbToast toast)
+            StatusPlate status, ZbTeam team, ZbNotice notice, ZbToast toast)
         {
             var hud = root.GetComponent<ModeHudBase>();
             if (hud == null)
@@ -479,10 +552,14 @@ namespace VortexArena.App.Editor
             HudSet(so, "scoreText", null);
 
             HudSet(so, "waveText", cells.wave);
-            HudSet(so, "standingText", cells.standing);
+            HudSet(so, "remainingText", cells.remaining);
             HudSet(so, "squadKillsText", cells.squad);
             HudSet(so, "selfKillsText", cells.self);
             HudSet(so, "clockAlarmPlate", alarmPlate);
+            HudSet(so, "teamStripRoot", team.root);
+            HudSetArray(so, "teamRows", team.rows);
+            HudSetArray(so, "teamNameTexts", team.names);
+            HudSetArray(so, "teamStateTexts", team.states);
             HudSet(so, "noticeTitleText", notice.title);
             HudSet(so, "noticeSubText", notice.sub);
             HudSet(so, "toastRoot", toast.root);
@@ -492,13 +569,15 @@ namespace VortexArena.App.Editor
             so.ApplyModifiedPropertiesWithoutUndo();
 
             Debug.Log("[Kan] Zombi HUD üretildi: " + ZbStripName
-                      + "/{Clock/{Plate,AlarmPlate,Time}, Row/{CellWave,CellStanding,CellSquad,"
-                      + "CellSelf}, Health, Status} · " + ZbNoticeName + "/{Dim,Title,Number,Sub} · "
+                      + "/{Clock/{Plate,AlarmPlate,Time}, Row/{CellWave,CellRemaining,CellSquad,"
+                      + "CellSelf}, Health, Status, Team/{Head,Row0..7/{Name,State}}} · "
+                      + ZbNoticeName + "/{Dim,Title,Number,Sub} · "
                       + ZbToastName + "/Plate/{Small,Big}"
-                      + $" · şerit {ZbStripW}x{ZbContentH}"
+                      + $" · şerit {ZbStripW}x{ZbContentH} (takım şeridi {ZbStripW}x{ZbTeamH})"
                       + " · bağlanan: timeText, timeFrame, statusPlate, healthText, healthFill,"
-                      + " centerNoticeRoot/Text/Dim, waveText, standingText, squadKillsText,"
-                      + " selfKillsText, clockAlarmPlate, noticeTitleText, noticeSubText,"
+                      + " centerNoticeRoot/Text/Dim, waveText, remainingText, squadKillsText,"
+                      + " selfKillsText, clockAlarmPlate, teamStripRoot, teamRows[8],"
+                      + " teamNameTexts[8], teamStateTexts[8], noticeTitleText, noticeSubText,"
                       + " toastRoot, toastSmallText, toastBigText"
                       + " (healthStrip/statusText/scoreText boşaltıldı).");
         }

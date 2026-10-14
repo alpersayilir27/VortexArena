@@ -16,12 +16,12 @@ MonoBehaviour:
   displayName: Klasik
   gameType: 2
   lobbyProfile: 0
-  roundSeconds: 300
+  roundSeconds: 600
   scoreLimit: 0
   teamMode: 1
   scoring: 2
   friendlyFire: 0
-  revive: 1
+  revive: 3
   weapons: 0
   respawnDelay: 0
   allies: 1
@@ -29,7 +29,7 @@ MonoBehaviour:
   maps: []
   loadout: []
   hudPrefab: {fileID: 3415840267267884003, guid: 775863e2ce41c15449e4bff9f101978d, type: 3}
-  resultScreenPrefab: {fileID: 0}
+  resultScreenPrefab: {fileID: 6918826168885168538, guid: 9d6982c861feb2549b79192a0be7a529, type: 3}
   bodyPrefab: {fileID: 0}
   redBodyPrefab: {fileID: 0}
   altBodyPrefab: {fileID: 0}

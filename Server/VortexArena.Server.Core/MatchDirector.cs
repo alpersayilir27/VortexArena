@@ -578,6 +578,22 @@ public sealed class MatchDirector
         }
     }
 
+    /// <summary>Credits one kill to <c>PlayerInfo.kills</c> (§5.3) for a mode whose kills are not player
+    /// deaths (§10.5 <c>zombie</c>: a broken zombie object raises no <c>kill_event</c>).</summary>
+    /// <remarks>⚠️ Kills and score are SEPARATE ledgers (see <c>PlayerState.Score</c>): a mode that wants
+    /// both calls both — the point value is the mode's, the kill count is one.</remarks>
+    public void AddKillCredit(int playerId)
+    {
+        if (playerId <= 0) return;
+        lock (_gate)
+        {
+            if (!_registry.TryGetByPlayerId(playerId, out var player)) return;
+            if (player.Role != "player") return;
+            player.Kills++;
+            _rosterRefreshFor = player;
+        }
+    }
+
     /// <summary>A player's individual score; 0 when the player is unknown.</summary>
     public int ScoreOf(int playerId)
     {
@@ -2199,7 +2215,9 @@ public sealed class MatchDirector
         // ⚠️ AFTER the state went out, outside the lock (hook contract): the mode may write score or
         // spawn/despawn from here, and the core writes none for a broken object itself (§10.10).
         // `broken` is THIS hit's doing — a second hit on a broken object never passes the gates.
-        mode?.OnObjectHit(this, shooter.PlayerId, msg.targetNetId, kind, appliedDamage, broken);
+        // Unknown zone → body (§5.1): the field only feeds mode scoring, so it is clamped, not rejected.
+        var zone = msg.zone is >= 0 and <= ArenaProtocol.HIT_ZONE_MAX ? msg.zone : 0;
+        mode?.OnObjectHit(this, shooter.PlayerId, msg.targetNetId, kind, appliedDamage, broken, zone);
         FlushRosterRefresh(); // the hook may have written a shared score (§10.2)
     }
 
@@ -2862,9 +2880,11 @@ public sealed class MatchDirector
     /// <c>reviveAnchor:"none"</c> §10.5, delay, obstacle §10.9). There is deliberately no operator
     /// override: a ban does not exist until every path changing that state is closed, so any second
     /// revive path would have to carry those gates along.</para></remarks>
-    public async Task HandleReviveRequestAsync(PlayerState player)
+    public async Task HandleReviveRequestAsync(PlayerState player, int byPlayerId = 0)
     {
         var outbox = new List<Outgoing>();
+        IGameMode? mode;
+        int validBy;
         lock (_gate)
         {
             if (_phase != Phase.Playing || player.Role != "player" || player.Alive) return;
@@ -2877,11 +2897,34 @@ public sealed class MatchDirector
             // §10.9: no revive INSIDE an obstacle — the player must step out first. The client does not
             // send the request anyway; closing it here keeps the rule off the client's trust.
             if (IsObstacleReviveBlockedLocked(player, now)) return;
-            RevivePlayerLocked(outbox, player);
-            Console.WriteLine($"[match] canlandı: {player.Name}");
+            mode = _mode;
+            validBy = ResolveReviverLocked(player, byPlayerId);
+            var hp = mode?.ReviveHp(this, player.PlayerId, validBy) ?? ArenaProtocol.PLAYER_MAX_HP;
+            RevivePlayerLocked(outbox, player, hp: hp);
+            Console.WriteLine(validBy > 0
+                ? $"[match] canlandı: {player.Name} (kaldıran playerId {validBy})"
+                : $"[match] canlandı: {player.Name}");
         }
         await FlushAsync(outbox);
         FlushRosterRefresh(); // hp/alive changed → refresh the roster for the admin table (§5.3)
+
+        // Outside the lock (hook contract): the mode may score the revive from here.
+        mode?.OnPlayerRevived(this, player.PlayerId, validBy);
+        FlushRosterRefresh();
+    }
+
+    /// <summary><c>revive_request.by</c> → the reviver's playerId, or <c>0</c> when it does not hold up
+    /// (§5.1). SCORING ONLY: the revive itself already passed its gates.</summary>
+    /// <remarks>⚠️ A failing check is NOT a rejection: an honest client can race the state (the teammate
+    /// died in the same tick), so the revive stands and only the point is dropped. Same floor is part of
+    /// it because the teammate rule is a floor rule (§10.6) and distance is not knowable here.</remarks>
+    private int ResolveReviverLocked(PlayerState revived, int byPlayerId)
+    {
+        if (byPlayerId <= 0 || byPlayerId == revived.PlayerId) return 0;
+        if (!_registry.TryGetByPlayerId(byPlayerId, out var by)) return 0;
+        if (by.Role != "player" || !by.IsConnected || !by.Calibrated || !by.Alive) return 0;
+        if (!AreTeammates(by, revived) || by.Floor != revived.Floor) return 0;
+        return byPlayerId;
     }
 
     // ---- Phase transitions (all called under _gate) ----
@@ -3174,10 +3217,15 @@ public sealed class MatchDirector
 
     /// <summary><paramref name="spawnProtect"/> is passed <c>false</c> only at match/round start (§10.4):
     /// there the revive answers no DEATH, it is the match being set up.</summary>
-    private void RevivePlayerLocked(List<Outgoing> outbox, PlayerState player, bool spawnProtect = true)
+    /// <remarks><paramref name="hp"/> is the mode's revive HP (<see cref="IGameMode.ReviveHp"/>); below
+    /// full it also RESTARTS the regen delay, because a half-health revive that refilled at once would
+    /// make the mode's number meaningless — the revive counts as the last damage moment.</remarks>
+    private void RevivePlayerLocked(List<Outgoing> outbox, PlayerState player, bool spawnProtect = true,
+        float hp = ArenaProtocol.PLAYER_MAX_HP)
     {
-        player.Hp = ArenaProtocol.PLAYER_MAX_HP;
+        player.Hp = Math.Clamp(hp, 1f, ArenaProtocol.PLAYER_MAX_HP);
         player.Alive = true;
+        if (player.Hp < ArenaProtocol.PLAYER_MAX_HP) DelayRegenLocked(player, DateTime.UtcNow);
         StampSpawnProtectionLocked(player, spawnProtect);
         _rosterRefreshFor = player;
         // attackerId=0: a revive is not the result of an attack (§10.4/3).

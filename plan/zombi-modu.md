@@ -83,32 +83,14 @@ Kod, kilit görünümü, açılış tablosu ve doküman bitti. Kalan:
 
 ## Faz 8 — Ekip kuralları ve maç sonu
 
-Ekip birlikte kazanır ya da birlikte kaybeder. Bugün ölen oyuncu 5 sn sabit durup kendi kalkıyor,
-bu yüzden yenilgi pratikte imkânsız ve ekibin birbirine ihtiyacı yok.
+Kod, doküman ve prefab'lar bitti (arkadaşın kaldırması, dalga arası diriliş, ekip yenilgisi,
+süre dolunca zafer, türe göre puan, moda özel sonuç ekranı, takım şeridi + düşen arkadaş işareti).
+Kalan:
 
-- [ ] **Kaldırma** — yeni canlanma şartı `reviveAnchor:"teammate"` (§10.4 akışı korunur, ikinci
-      bir sunucu canlandırma yolu AÇILMAZ): aynı kattaki yaşayan bir arkadaş düşenin 1,2 m
-      içinde 3 sn kesintisiz kalınca düşenin istemcisi `revive_request` gönderir; isteğe kaldıranın
-      kimliği eklenir (`by`, yalnız puan için). Kaldırılan 50 canla, 3 sn korumayla kalkar.
-- [ ] **Dalga arası diriliş** — dalga arası başlayınca düşmüş herkesin istemcisi aynı yoldan
-      `revive_request` gönderir (tam can). Kaldırılmayan oyuncu en geç bir dalga bekler.
-- [ ] **Yenilgi** — kalibreli en az iki oyuncunun olduğu maçta yaşayan kimse kalmayınca (2 sn
-      tolerans) `over:lost`. Kalibresiz oyuncu yaşayan sayılmaz (bugün yenilgiyi engelliyor).
-      Tek oyunculu maçta bugünkü 5 sn sabit durma kuralı geçerli, yenilgi yok.
-- [ ] **Zafer** — süre dolduğunda ekip ayaktaysa "DAYANDINIZ", Son Direniş'te Dev ölürse
-      "KURTULDUNUZ" (Faz 9). İkisi de zaferdir; sonuç berabere değil `over:won`.
-- [ ] **Puan** — öldürme türe göre (yürüyen 1 · sürünen 1 · koşucu 2 · çığlıkçı 3 · iri 5 · Dev 25),
-      kafadan öldürme +1, kaldırma +3. Ekip skoru toplamdır. Kafadan sayımı için nesne vuruş
-      raporuna bölge alanı eklenir.
-- [ ] **Sonuç ekranı** (moda özel, `Yemek-Kitabi.md` "Moda özel maç sonu ekranı" yol B):
-      KURTULDUNUZ / DAYANDINIZ / YENİLDİNİZ, ulaşılan dalga, ekip skoru; oyuncu satırı puan ·
-      öldürme · kafadan · kaldırma · düşme; rozetler En çok öldüren · Nişancı · Kurtarıcı.
-- [ ] **HUD** — takım şeridi (her arkadaşın adı + ayakta/düştü + kaldırma ilerlemesi), düşen
-      arkadaşın üstünde duvar arkasından görünen işaret + yerde halka, düşen oyuncuya
-      "ARKADAŞIN SENİ KALDIRSIN · dalga arasında kalkacaksın", dalganın kalan zombi sayısı,
-      "DALGA TEMİZLENDİ" bildirimi + vurgu sesi.
-- [ ] **Süre ve mola** — zombi modunun varsayılan süresi 600 sn; dalga arası Kolay 15 · Normal 12 ·
-      Zor 10 sn (diriliş ve silah değişimi için nefes payı; harita temposu yine böler).
+- [ ] Gözlükte doğrulama: kaldırma mesafesi/süresi doğal mı, düşen arkadaş işareti duvar arkasından
+      okunuyor mu, sonuç ekranı 8'den fazla oyuncuda taşıyor mu (tablo 8 satır).
+- [ ] Takım şeridi ve zombi sonuç ekranı için `Docs/Gelistirici/Arayuz/zombi.html` maketi
+      (ölçüler builder'da tahminle verildi).
 
 ## Faz 9 — Zombi türleri, dalga dizilimi, Son Direniş
 
@@ -193,12 +175,10 @@ silah 5. dalgada, M4A4 M4A1'den sonra açılıyor).
 
 ## Protokol etkisi (kod yazılmadan önce `ArenaNet-Protokol.md`'ye)
 
-- `reviveAnchor:"teammate"` değeri, `revive_request.by` (isteğe bağlı), nesne vuruş raporunda bölge
-  alanı, zombi payload'unda `t:`, mod durum dizesinde Son Direniş / Dev canı / takım durumu.
+- Zombi payload'unda `t:` (tür), mod durum dizesinde Son Direniş, Dev canı ve `over:rescued`
+  (değer protokolde ayrıldı, üretilmiyor).
 - Nesne başına en yüksek can ataması sunucu içidir; istemciye canın kendisi bugünkü nesne
   durumuyla akar.
-- `PROTOCOL_VERSION` artışı gerekip gerekmediği protokol dokümanında karara bağlanır; artarsa
-  `lisans-ve-izleme.md`'nin 25→26 artışıyla çakışır, önce çıkan 26'yı alır.
 
 ## Kalıcı ses/müzik listesi (geçicilerin yerine)
 

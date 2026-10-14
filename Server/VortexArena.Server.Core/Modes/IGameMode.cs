@@ -6,7 +6,7 @@ namespace VortexArena.Server.Core.Modes;
 /// <summary>Implemented by every game mode and plugged into the MatchDirector.</summary>
 /// <remarks>ModeId matches start_match.modeId and the Unity mode box key exactly (e.g. "tdm"); a new
 /// modId is recorded in Docs/ArenaNet-Protokol.md.
-/// <para>All hooks are called OUTSIDE the MatchDirector's lock, so the director's public API
+/// <para>All hooks but <see cref="ReviveHp"/> are called OUTSIDE the MatchDirector's lock, so the director's public API
 /// (ScoreRed/AddScore/TimeRemaining/ConnectedPlayers…) is free to use — it takes its own lock. Do no
 /// blocking work inside a hook (the match tick is 10 Hz).</para>
 /// <para>⚠️ New hooks get a DEFAULT BODY so existing modes stay untouched; a dead hook every mode must
@@ -102,6 +102,29 @@ public interface IGameMode
     /// was the one that broke it (a second hit on a broken object never reaches the gates).</para></remarks>
     void OnObjectHit(MatchDirector director, int attackerId, int netId, string kind, float damage,
         bool broken) { }
+
+    /// <summary><inheritdoc cref="OnObjectHit(MatchDirector, int, int, string, float, bool)"/>
+    /// <paramref name="zone"/> is the hit's body zone (<c>hit_report.zone</c>, §5.1; 0 = body).</summary>
+    /// <remarks>The core calls ONLY this overload; its default body forwards to the 6-arg one, so a mode
+    /// that does not care about the zone stays untouched. A mode overriding this one must NOT also score
+    /// in the 6-arg body — it would count twice.</remarks>
+    void OnObjectHit(MatchDirector director, int attackerId, int netId, string kind, float damage,
+        bool broken, int zone) => OnObjectHit(director, attackerId, netId, kind, damage, broken);
+
+    /// <summary>A player was revived through <c>revive_request</c> (§10.4);
+    /// <paramref name="byPlayerId"/> = the teammate who lifted them, <c>0</c> = nobody.</summary>
+    /// <remarks>Called outside the lock, after the revive is published. <paramref name="byPlayerId"/> is
+    /// already validated by the director (teammate, alive, calibrated, same floor), so a mode may score
+    /// it without re-checking.</remarks>
+    void OnPlayerRevived(MatchDirector director, int playerId, int byPlayerId) { }
+
+    /// <summary>Revive HP for an accepted <c>revive_request</c> (§10.4); default = full HP.</summary>
+    /// <remarks>A co-op mode may lift a player with partial HP when a teammate carried them
+    /// (<paramref name="byPlayerId"/> &gt; 0) and full HP in its own revive window.
+    /// <para>⚠️ The ONLY hook called INSIDE the director's lock (the HP is needed before the revive is
+    /// written): it must be a pure decision — no director call, no mode lock, or the lock order inverts
+    /// and deadlocks.</para></remarks>
+    float ReviveHp(MatchDirector director, int playerId, int byPlayerId) => ArenaProtocol.PLAYER_MAX_HP;
 
     /// <summary>The server-assigned object host changed (§10.10); <c>0</c> = there is none.</summary>
     /// <remarks>A mode whose objects are DRIVEN by that host (§10.5 <c>zombie</c>) learns from here that

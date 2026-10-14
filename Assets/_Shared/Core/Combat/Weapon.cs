@@ -865,14 +865,17 @@ namespace VortexArena.Core.Combat
                 // server applies hit_report.damage verbatim (§10.3).
                 // ⚠️ Damage is PER PELLET and never divided: WeaponDefinition.Damage is already one
                 // pellet's damage (CS2 model); total damage comes from how many pellets connect.
-                float damage = definition.Damage * definition.GetZoneMultiplier(ArenaCombat.GetHitZone(hit.collider));
+                HitZone zone = ArenaCombat.GetHitZone(hit.collider);
+                float damage = definition.Damage * definition.GetZoneMultiplier(zone);
 
                 // Damage is NEVER applied locally: health is server-authoritative and comes back
                 // as health_update. A non-networked target (decor, wall) does nothing beyond the
                 // impact FX above.
                 // ⚠️ Pellets hitting the same target are NOT merged into one report: the server
                 // processes each separately and the zone multiplier differs per pellet.
-                ArenaCombat.ReportRaycastHit(hit, damage, WeaponId);
+                // The zone rides along: the server scores headshots from the report, and nothing else
+                // on the wire says where the round landed.
+                ArenaCombat.ReportRaycastHit(hit, damage, WeaponId, zone);
             }
 
             if (tracerCount > 0)

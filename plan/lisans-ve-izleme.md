@@ -342,7 +342,7 @@ Bu kaynaklar yapı taşlarını açıklar; yukarıdaki uçtan uca güvenlik tasa
 - [ ] `install_updater.bat`: `adb get-serialno` → gözlüğe dosya olarak bırakılır → updater
       aktivasyonda seri etiketi olarak gönderir.
 
-## Faz 3 — Sunucu, launcher, oyun zorlaması (⚠️ `PROTOCOL_VERSION` 25 → 26)
+## Faz 3 — Sunucu, launcher, oyun zorlaması (⚠️ `PROTOCOL_VERSION` 26 → 27)
 
 ⚠️ Sürüm artışı = tüm gözlüklere + admin'e + sunucuya **aynı turda** yeni sürüm (`plan/README.md`
 dağıtım kuralı). Bu faz zaten yapılacak bir sürüm turuna bindirilir.
@@ -462,7 +462,7 @@ JSONL veya sıradan uygulama logu lisans/kullanım kaydının doğruluk kaynağ�
 ## Doküman işleri (her faz kendi commit'inde)
 
 - `Docs/ArenaNet-Protokol.md`: Güvenlik bölümü yeniden yazılır (kimlik doğrulama artık var); Lisans
-  bölümü (token/lease/olay/makbuz/kurtarma formatı); sürüm 26; red nedenleri; sürüm uyumsuzluğunun
+  bölümü (token/lease/olay/makbuz/kurtarma formatı); sürüm 27; red nedenleri; sürüm uyumsuzluğunun
   reddi; maç isteği tekilleştirme ve gerçek maç izni.
 - `Docs/Sistem-Ozeti.md`: repo haritasına `Backend/`; bileşen sözlüğüne lisans bileşenleri;
   Tuzaklar'a tek keystore / ANDROID_ID bağı ve "atlama bayrağı yok" gerekçesi.

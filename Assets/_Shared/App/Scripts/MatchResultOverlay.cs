@@ -44,6 +44,11 @@ namespace VortexArena.App
     /// drop the combat columns the same way, off <see cref="ModeRuntime.HidesCombatStats"/>.
     /// </para>
     /// <para>
+    /// ⚠️ The wave-run extras (outcome word, reached wave, headshot/revive cells, row badges) hang
+    /// off the <c>modeState</c> TOKENS (§10.1) and the prefab's nodes, not off a mode name: a second
+    /// mode publishing the same tokens gets the same readout.
+    /// </para>
+    /// <para>
     /// <b>Per-mode look:</b> <c>ModeDefinition.ResultScreenPrefab</c> may point at a VARIANT of this
     /// prefab; at match end the singleton swaps itself for it (<see cref="SwapTo"/>). The variant
     /// overrides only art and wording — bindings are inherited, so behaviour stays identical.
@@ -82,6 +87,9 @@ namespace VortexArena.App
 
         /// <summary>Blocks per table — one per team; FFA splits its single ranking across both.</summary>
         public const int BlockCount = 2;
+
+        /// <summary>Badge slots per row: top killer · marksman · rescuer.</summary>
+        public const int BadgeCount = 3;
 
         /// <summary>Sorting offset (<see cref="UiDrawOnTop"/>) — above the HUD range.</summary>
         private const int ResultSortingOffset = 20;
@@ -203,6 +211,12 @@ namespace VortexArena.App
         [SerializeField] private TextMeshProUGUI boardSelfScoreText;
         [SerializeField] private TextMeshProUGUI boardRankText;
 
+        [Header("Dalgalı ko-op (modeState w: · over: · zs — token geldiyse çizilir)")]
+        [Tooltip("Sonuç kartındaki ulaşılan dalga sayısı.")]
+        [SerializeField] private TextMeshProUGUI coopWaveText;
+        [Tooltip("Skor tablosundaki ulaşılan dalga sayısı.")]
+        [SerializeField] private TextMeshProUGUI boardWaveText;
+
         [Header("Satır derisi (varsayılanlar = Girdap teması)")]
         [SerializeField] private float rowHeight = RowHeight;
         [SerializeField] private float rowGap = RowGap;
@@ -245,6 +259,18 @@ namespace VortexArena.App
         [SerializeField] private string drawTitle = "BERABERE";
         [Tooltip("Ko-op sonuç başlığı — rakip yok, kazandın/kaybettin okunmaz.")]
         [SerializeField] private string coopTitle = "OYUN BİTTİ";
+
+        [Tooltip("Dalgalı ko-op: süreyi ekip ayakta bitirdi (over:survived).")]
+        [SerializeField] private string runSurvivedTitle = "DAYANDINIZ";
+        [Tooltip("Dalgalı ko-op: kurtarma koşulu sağlandı (over:rescued).")]
+        [SerializeField] private string runRescuedTitle = "KURTULDUNUZ";
+        [Tooltip("Dalgalı ko-op: ekipten ayakta kimse kalmadı (over:lost).")]
+        [SerializeField] private string runLostTitle = "YENİLDİNİZ";
+
+        [Tooltip("Satır rozetleri — en çok öldüren · en çok kafadan · en çok kaldıran.")]
+        [SerializeField] private string badgeTopKillerLabel = "En çok öldüren";
+        [SerializeField] private string badgeMarksmanLabel = "Nişancı";
+        [SerializeField] private string badgeRescuerLabel = "Kurtarıcı";
         [Tooltip("Skor kolonunun başlığı.")]
         [SerializeField] private string scoreHeader = "SKOR";
         [Tooltip("Ko-op'ta skor kolonunun başlığı (ortak toplama katkı).")]
@@ -283,6 +309,11 @@ namespace VortexArena.App
         private Stage _stage = Stage.Hidden;
         private float _scoreboardAt;
 
+        // Badge holders, resolved per refresh; 0 = nobody earned it.
+        private int _topKillerId;
+        private int _marksmanId;
+        private int _rescuerId;
+
         /// <summary>Prefab this instance was spawned from; compared against the running mode's screen
         /// at match end.</summary>
         private MatchResultOverlay _source;
@@ -309,6 +340,16 @@ namespace VortexArena.App
             /// <summary>K · D · K/D — the cells the kids' modes drop.</summary>
             public readonly TextMeshProUGUI[] Combat = new TextMeshProUGUI[3];
 
+            /// <summary>Extra cells a mode publishing per-player tallies fills (headshots · revives);
+            /// absent in the generic prefab, so both stay null there.</summary>
+            public TextMeshProUGUI Headshots;
+            public TextMeshProUGUI Revives;
+
+            /// <summary>Row badges (<c>Badge0..2</c>, each with a <c>Label</c> child) — shown one per
+            /// category the player leads.</summary>
+            public readonly GameObject[] Badges = new GameObject[BadgeCount];
+            public readonly TextMeshProUGUI[] BadgeLabels = new TextMeshProUGUI[BadgeCount];
+
             public static Row Bind(GameObject go)
             {
                 Transform t = go.transform;
@@ -329,6 +370,18 @@ namespace VortexArena.App
                 row.Combat[0] = Find<TextMeshProUGUI>(t, "Kills");
                 row.Combat[1] = Find<TextMeshProUGUI>(t, "Deaths");
                 row.Combat[2] = Find<TextMeshProUGUI>(t, "Kd");
+                row.Headshots = Find<TextMeshProUGUI>(t, "Headshots");
+                row.Revives = Find<TextMeshProUGUI>(t, "Revives");
+
+                for (int i = 0; i < BadgeCount; i++)
+                {
+                    Transform badge = t.Find("Badge" + i);
+                    row.Badges[i] = badge != null ? badge.gameObject : null;
+                    row.BadgeLabels[i] = badge != null
+                        ? Find<TextMeshProUGUI>(badge, "Label")
+                        : null;
+                }
+
                 return row;
             }
 
@@ -592,8 +645,12 @@ namespace VortexArena.App
             {
                 // ⚠️ Co-op has no opponent: the server ends it with no winner, which the generic
                 // branch would read as "BERABERE" — a draw against nobody. The shift simply ends.
-                SetText(resultTitleText, coopTitle);
-                ApplyResultTone(coopColor);
+                // A wave run DOES end in a win or a loss, and says so through its own token.
+                Admin.AdminModeState.RunOutcome outcome =
+                    Admin.AdminModeState.ReadOutcome(_modeState);
+
+                SetText(resultTitleText, RunTitle(outcome));
+                ApplyResultTone(RunTone(outcome));
 
                 SetText(resultWinnerText, $"EKİP SKORU {msg.scoreRed}");
                 SetScoreLine(CoopResultLines(), msg);
@@ -665,10 +722,65 @@ namespace VortexArena.App
             }
         }
 
+        /// <summary>Result word of a co-op run: the outcome token when the mode published one, else
+        /// the neutral co-op title (nothing to win or lose, e.g. an aborted match).</summary>
+        private string RunTitle(Admin.AdminModeState.RunOutcome outcome)
+        {
+            switch (outcome)
+            {
+                case Admin.AdminModeState.RunOutcome.Survived: return runSurvivedTitle;
+                case Admin.AdminModeState.RunOutcome.Rescued: return runRescuedTitle;
+                case Admin.AdminModeState.RunOutcome.Lost: return runLostTitle;
+                default: return coopTitle;
+            }
+        }
+
+        private Color RunTone(Admin.AdminModeState.RunOutcome outcome)
+        {
+            switch (outcome)
+            {
+                case Admin.AdminModeState.RunOutcome.Survived:
+                case Admin.AdminModeState.RunOutcome.Rescued: return wonColor;
+                case Admin.AdminModeState.RunOutcome.Lost: return lostColor;
+                default: return coopColor;
+            }
+        }
+
+        /// <summary>Does the state carry per-player tallies? That is what opens the extra row cells and
+        /// the badges — never a <c>modeId</c> check (Yapma-Listesi).</summary>
+        private bool HasRunStats => Admin.AdminModeState.HasPlayerRunStats(_modeState);
+
+        /// <summary>Reached wave into both cards; an unbound target or a mode with no waves draws
+        /// nothing.</summary>
+        private void RefreshWaveCells()
+        {
+            if (coopWaveText == null && boardWaveText == null)
+            {
+                return;
+            }
+
+            bool waves = Admin.AdminModeState.TryWave(_modeState, out int wave);
+            string text = waves ? wave.ToString() : "";
+
+            if (coopWaveText != null)
+            {
+                SetPanel(coopWaveText.gameObject, waves);
+                coopWaveText.text = text;
+            }
+
+            if (boardWaveText != null)
+            {
+                SetPanel(boardWaveText.gameObject, waves);
+                boardWaveText.text = text;
+            }
+        }
+
         /// <summary>Co-op result card's separate number targets (skin). The composite strings above
         /// stay written, so a prefab with none of these bound is unaffected.</summary>
         private void RefreshCoopCard(MatchEndMsg msg)
         {
+            RefreshWaveCells();
+
             SetText(coopSharedScoreText, (msg != null ? msg.scoreRed : 0).ToString());
 
             Admin.AdminModeState.TryCustomerCounts(_modeState, out int happy, out int unhappy);
@@ -786,6 +898,7 @@ namespace VortexArena.App
         /// <see cref="RefreshCoopCard"/>.</summary>
         private void RefreshCoopBoard()
         {
+            RefreshWaveCells();
             SetText(boardSharedScoreText, (_lastEnd != null ? _lastEnd.scoreRed : 0).ToString());
 
             Admin.AdminModeState.TryCustomerCounts(_modeState, out int happy, out int unhappy);
@@ -879,7 +992,7 @@ namespace VortexArena.App
         private void RefreshColumnLayout()
         {
             bool coop = ModeRuntime.IsCoop;
-            bool hideCombat = ModeRuntime.HidesCombatStats;
+            bool hideCombat = HideCombatCells;
             bool rows = boardRowTemplate != null;
 
             if (!rows)
@@ -995,11 +1108,20 @@ namespace VortexArena.App
 
         // --------------------------------------------------------------- row blocks
 
+        /// <summary>
+        /// Are the kill/death cells dropped? Co-op and the kids' modes print zeros there, EXCEPT where
+        /// the mode publishes per-player tallies: a wave run counts kills and downs and the table is
+        /// the only place they are read.
+        /// </summary>
+        private bool HideCombatCells => ModeRuntime.HidesCombatStats && !HasRunStats;
+
         private void RefreshBlocks()
         {
             bool teamless = ModeRuntime.IsTeamless;
-            bool hideCombat = ModeRuntime.HidesCombatStats;
+            bool hideCombat = HideCombatCells;
+            bool runStats = HasRunStats;
             int self = ArenaCombat.LocalPlayerId;
+            ResolveBadgeLeaders(runStats);
 
             for (int b = 0; b < BlockCount; b++)
             {
@@ -1034,7 +1156,7 @@ namespace VortexArena.App
                     Row row = RowAt(b, i);
                     if (row != null)
                     {
-                        FillRow(row, list[i], rankBase + i + 1, self, hideCombat);
+                        FillRow(row, list[i], rankBase + i + 1, self, hideCombat, runStats);
                     }
                 }
 
@@ -1073,7 +1195,114 @@ namespace VortexArena.App
             return pool[index];
         }
 
-        private void FillRow(Row row, PlayerInfo info, int rank, int selfId, bool hideCombat)
+        /// <summary>Who wears which badge: the first player in SORT order holding the maximum, and
+        /// only while that maximum is above zero (a "Nişancı" with no headshots is a lie).</summary>
+        private void ResolveBadgeLeaders(bool runStats)
+        {
+            _topKillerId = 0;
+            _marksmanId = 0;
+            _rescuerId = 0;
+
+            if (!runStats)
+            {
+                return;
+            }
+
+            int kills = 0;
+            int headshots = 0;
+            int revives = 0;
+
+            for (int i = 0; i < _ranked.Count; i++)
+            {
+                PlayerInfo info = _ranked[i];
+                if (info.kills > kills)
+                {
+                    kills = info.kills;
+                    _topKillerId = info.playerId;
+                }
+
+                if (!Admin.AdminModeState.TryPlayerRunStats(_modeState, info.playerId,
+                        out int head, out int rev))
+                {
+                    continue;
+                }
+
+                if (head > headshots)
+                {
+                    headshots = head;
+                    _marksmanId = info.playerId;
+                }
+
+                if (rev > revives)
+                {
+                    revives = rev;
+                    _rescuerId = info.playerId;
+                }
+            }
+        }
+
+        /// <summary>Row's extra tally cells and badges; both are prefab-driven — an unbound cell or a
+        /// skin without badge nodes simply draws neither.</summary>
+        private void FillRunCells(Row row, PlayerInfo info, bool runStats, Color sub)
+        {
+            int headshots = 0;
+            int revives = 0;
+            bool stats = runStats && Admin.AdminModeState.TryPlayerRunStats(_modeState,
+                info.playerId, out headshots, out revives);
+
+            if (row.Headshots != null)
+            {
+                SetCell(row.Headshots, stats ? headshots.ToString() : "", sub);
+                SetPanel(row.Headshots.gameObject, stats);
+            }
+
+            if (row.Revives != null)
+            {
+                SetCell(row.Revives, stats ? revives.ToString() : "", sub);
+                SetPanel(row.Revives.gameObject, stats);
+            }
+
+            int slot = 0;
+            if (info.playerId == _topKillerId)
+            {
+                slot = SetBadge(row, slot, badgeTopKillerLabel);
+            }
+
+            if (info.playerId == _marksmanId)
+            {
+                slot = SetBadge(row, slot, badgeMarksmanLabel);
+            }
+
+            if (info.playerId == _rescuerId)
+            {
+                slot = SetBadge(row, slot, badgeRescuerLabel);
+            }
+
+            // Pooled rows: an unused slot is closed, else last match's badge rides along.
+            for (int i = slot; i < BadgeCount; i++)
+            {
+                SetPanel(row.Badges[i], false);
+            }
+        }
+
+        private static int SetBadge(Row row, int slot, string label)
+        {
+            if (slot >= BadgeCount || row.Badges[slot] == null)
+            {
+                return slot;
+            }
+
+            if (row.BadgeLabels[slot] != null)
+            {
+                row.BadgeLabels[slot].text = label;
+            }
+
+            SetPanel(row.Badges[slot], true);
+            return slot + 1;
+        }
+
+        private void FillRow(Row row, PlayerInfo info, int rank, int selfId, bool hideCombat,
+            bool runStats)
         {
             bool mine = selfId != 0 && info.playerId == selfId;
             bool left = info.connection == ArenaProtocol.CONNECTION_LEFT;
@@ -1119,6 +1348,8 @@ namespace VortexArena.App
                 SetCell(row.Combat[c], RawCellText(info, c + 3), sub);
                 SetPanel(row.Combat[c] != null ? row.Combat[c].gameObject : null, !hideCombat);
             }
+
+            FillRunCells(row, info, runStats, sub);
 
             if (row.Tag != null)
             {
@@ -1390,7 +1621,19 @@ namespace VortexArena.App
 
             SetPanel(footStatsGroup, boxes);
 
-            if (coopBoxes)
+            if (coopBoxes && HasRunStats)
+            {
+                // PUAN · SIRA · KAFADAN · KALDIRMA · EKİP SKORU (labels are static in the prefab):
+                // a wave run has no customers to count in boxes 2-3.
+                Admin.AdminModeState.TryPlayerRunStats(_modeState, self.playerId, out int headshots,
+                    out int revives);
+                SetText(footStatValues[0], self.score.ToString());
+                SetText(footStatValues[1], RankLine());
+                SetText(footStatValues[2], headshots.ToString());
+                SetText(footStatValues[3], revives.ToString());
+                SetText(footStatValues[4], (_lastEnd != null ? _lastEnd.scoreRed : 0).ToString());
+            }
+            else if (coopBoxes)
             {
                 // KATKI · SIRA · MUTLU · MUTSUZ · EKİP SKORU (labels are static in the prefab).
                 Admin.AdminModeState.TryCustomerCounts(_modeState, out int happy, out int unhappy);

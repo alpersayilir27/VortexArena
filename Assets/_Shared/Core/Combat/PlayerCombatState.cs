@@ -121,6 +121,15 @@ namespace VortexArena.Core.Combat
         /// <see cref="LocalTeamChanged"/>.</summary>
         public static event Action<bool> LocalAliveChanged;
 
+        /// <summary>Optional MODE window that satisfies the revive condition on its own (zombie: the
+        /// wave break raises everyone who is still down). Null = no window.
+        /// <para>⚠️ The mode sets and CLEARS this (<c>OnDestroy</c>) — a stale delegate from a finished
+        /// mode would revive players in the next match. It exists so no
+        /// <c>if (modeId == …)</c> is ever written here (§10.5).</para>
+        /// <para>Still only a CONDITION on the one revive path: the request itself is unchanged.</para>
+        /// </summary>
+        public static Func<bool> ModeReviveWindow;
+
         /// <summary>Can the trigger be pulled: alive + (phase <c>playing</c> OR the mode allows
         /// free fire — <see cref="ModeRuntime.FireWhilePaused"/>, §10.5).
         /// <para>⚠️ A MODE rule, not a phase rule. Never write <c>if (modeId == "lobby")</c> here —
@@ -270,6 +279,11 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
+            // Before the revive tick: the condition below reads this frame's proximity result. The
+            // head is resolved only for that anchor — with no rig ResolveHead costs a Camera.main
+            // lookup every frame, and null makes Tick clear itself anyway.
+            TeammateRevive.Tick(
+                ModeRuntime.Revive == ModeReviveAnchor.Teammate ? ResolveHead() : null, IsAlive);
             TickHoldAnchor();
             RefreshZoneState();
             TickRevive();
@@ -288,7 +302,7 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
-            if (!IsReviveConditionMet())
+            if (!IsReviveConditionMet(out int reviverId))
             {
                 return;
             }
@@ -299,6 +313,10 @@ namespace VortexArena.Core.Combat
             }
 
             _nextReviveSendAt = Time.time + ReviveRepeatSeconds;
+
+            // ⚠️ ALWAYS assigned: _reviveMsg is one reused instance, so a leftover id from an earlier
+            // death would credit the save to someone who was not there.
+            _reviveMsg.by = reviverId;
             ArenaClient.Instance?.Send(_reviveMsg);
         }
 
@@ -309,7 +327,7 @@ namespace VortexArena.Core.Combat
         /// would revive the player on exit and obstacles would become shelters.</para></summary>
         private void TickHoldAnchor()
         {
-            if (IsAlive || ModeRuntime.Revive != ModeReviveAnchor.StandStill)
+            if (IsAlive || !UsesStandStillHold)
             {
                 _hasHoldAnchor = false;
                 return;
@@ -352,8 +370,12 @@ namespace VortexArena.Core.Combat
         /// server has no timer-based revive, so a dead player is raised only by the
         /// <c>revive_request</c> sent from here — staying silent would leave them dead for the rest
         /// of the match.</summary>
-        private bool IsReviveConditionMet()
+        /// <param name="reviverId">Teammate who lifted us (<c>revive_request.by</c>, scoring only);
+        /// 0 on every other path.</param>
+        private bool IsReviveConditionMet(out int reviverId)
         {
+            reviverId = 0;
+
             // §10.5 reviveAnchor:"none" — no revive in round-based elimination. The server
             // rejects it anyway; gating here avoids a pointless request every second and a
             // "reviving" text that will never come true.
@@ -369,13 +391,43 @@ namespace VortexArena.Core.Combat
                 return false;
             }
 
+            if (ModeRuntime.Revive == ModeReviveAnchor.Teammate)
+            {
+                // The mode's own window (zombie: wave break) raises whoever is still down. No
+                // reviver id — nobody earned the save.
+                if (ModeReviveWindow != null && ModeReviveWindow())
+                {
+                    return true;
+                }
+
+                if (TeammateRevive.LocalProgress >= 1f)
+                {
+                    reviverId = TeammateRevive.LocalReviverId;
+                    return true;
+                }
+
+                // Alone in the arena nobody can lift us, so the mode falls back to the stand-still
+                // rule — otherwise a solo session would end the match on the first death.
+                return !TeammateRevive.HasOtherCalibratedPlayer && IsStandStillHoldDone;
+            }
+
             if (ModeRuntime.Revive == ModeReviveAnchor.StandStill)
             {
-                return !_hasHoldAnchor || HoldRemaining <= 0f;
+                return IsStandStillHoldDone;
             }
 
             return !HasOpenBaseZone || IsInsideOwnBase;
         }
+
+        /// <summary>Does the stand-still hold rule drive this death: the <c>standstill</c> anchor, or
+        /// <c>teammate</c> with no teammate to do the lifting.</summary>
+        private bool UsesStandStillHold =>
+            ModeRuntime.Revive == ModeReviveAnchor.StandStill ||
+            (ModeRuntime.Revive == ModeReviveAnchor.Teammate && !TeammateRevive.HasOtherCalibratedPlayer);
+
+        /// <summary>⚠️ An unmeasurable hold (no head) counts as DONE — the fail-open of
+        /// <see cref="IsReviveConditionMet"/>.</summary>
+        private bool IsStandStillHoldDone => !_hasHoldAnchor || HoldRemaining <= 0f;
 
         private float HoldRemaining =>
             !_hasHoldAnchor
@@ -439,13 +491,38 @@ namespace VortexArena.Core.Combat
                         text = $"Öldün! Canlanmaya {Mathf.CeilToInt(remaining)} sn";
                         kind = CombatStatusKind.DeadCountdown;
                     }
-                    else if (ModeRuntime.Revive == ModeReviveAnchor.StandStill)
+                    else if (UsesStandStillHold)
                     {
+                        // Covers the solo fallback of reviveAnchor:"teammate" too: with nobody to
+                        // lift us the rule IS the stand-still one, so the text must be too.
                         float hold = HoldRemaining;
                         text = hold > 0f
                             ? $"Canlanmak için sabit dur — {Mathf.CeilToInt(hold)} sn"
                             : "Canlanılıyor...";
                         kind = hold > 0f ? CombatStatusKind.HoldStill : CombatStatusKind.Reviving;
+                    }
+                    else if (ModeRuntime.Revive == ModeReviveAnchor.Teammate)
+                    {
+                        // GENERIC line: what else the mode offers (a wave break that raises
+                        // everyone) is written by the mode itself through SetModePrompt, which
+                        // overrides this.
+                        float progress = TeammateRevive.LocalProgress;
+                        float left = (1f - progress) * ArenaProtocol.REVIVE_TEAMMATE_SECONDS;
+                        if (progress >= 1f)
+                        {
+                            text = "Canlanılıyor...";
+                            kind = CombatStatusKind.Reviving;
+                        }
+                        else if (progress > 0f)
+                        {
+                            text = $"Arkadaşın seni kaldırıyor — {Mathf.CeilToInt(left)} sn";
+                            kind = CombatStatusKind.WaitTeammate;
+                        }
+                        else
+                        {
+                            text = "Arkadaşın seni kaldırsın";
+                            kind = CombatStatusKind.WaitTeammate;
+                        }
                     }
                     else
                     {

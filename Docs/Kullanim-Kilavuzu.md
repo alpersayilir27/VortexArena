@@ -921,6 +921,20 @@ kalır. Bir ailenin modu başka ailenin haritasında başlamaz.
 - **Zombi:** silahlı işbirliği; modun adı **Klasik**'tir.
 - **Çocuk Oyunları:** silahsız çocuk oyunları (aşağıda).
 
+### Zombi — ekip birlikte kazanır
+
+Zombide takım yoktur, herkes aynı taraftadır.
+
+- **Düşen oyuncuyu arkadaşı kaldırır:** yanına gidip **3 saniye** yanında durması yeterlidir.
+  Düşen oyuncu gözlüğünde "ARKADAŞIN SENİ KALDIRSIN" yazar; şeritte ve düşenin üstündeki
+  işarette kaldırma ilerlemesi görünür.
+- **Kimse kaldırmazsa** düşen oyuncu **dalga arasında** kendiliğinden kalkar — en fazla bir dalga
+  bekler.
+- **Ayakta kimse kalmazsa maç kaybedilir** ve ekran "YENİLDİNİZ" der.
+- **Süre ekip ayaktayken dolarsa kazanılır:** "DAYANDINIZ".
+- **Sonuç ekranında** ulaşılan dalga, ekip skoru ve oyuncu satırları (puan · öldürme · kafadan ·
+  kaldırma · düşme) vardır; satırlarda **En çok öldüren · Nişancı · Kurtarıcı** rozetleri yazar.
+
 ### Çocuk Oyunları — Hamburgerci
 
 Çocuk Oyunları ayrı bir ailedir: **silah yok, vurulma yok, ölüm yok.** Savaş modu çocuk

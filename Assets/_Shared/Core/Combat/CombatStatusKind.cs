@@ -13,5 +13,9 @@ namespace VortexArena.Core.Combat
         Reviving,
         ReturnBase,
         SpawnProtection,
+
+        /// <summary>Downed, waiting for a teammate to lift us (<see cref="ModeReviveAnchor.Teammate"/>).
+        /// ⚠️ Appended at the END (serialized enum rule).</summary>
+        WaitTeammate,
     }
 }

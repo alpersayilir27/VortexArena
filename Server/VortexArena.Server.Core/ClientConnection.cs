@@ -400,7 +400,9 @@ public sealed class ClientConnection
                     Console.WriteLine($"[ClientConnection] revive_request yalnız player içindir ({State.Name}) — yok sayıldı.");
                     return;
                 }
-                await _director.HandleReviveRequestAsync(State);
+                // 'by' is optional (§5.1): a malformed body still revives, it just scores nobody.
+                var revive = JsonUtil.Deserialize<ReviveRequestMsg>(json);
+                await _director.HandleReviveRequestAsync(State, revive?.by ?? 0);
                 return;
             }
             default:

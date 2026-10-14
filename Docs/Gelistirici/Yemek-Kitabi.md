@@ -1434,7 +1434,9 @@ ebeveynlenir — yeri kayan ya da override'ı artık tutmayan bir süs hata verm
 
 Prefab sıfırdan üretilir, yani varyant zinciri hiç kurulmaz: görünüm kodda yaşar ve tabanın yeniden
 üretilmesi bu ekranı etkilemez. Aşçı modunun sonuç ekranı bu yolun örneğidir
-(`GirdapUiBuilder.LokantaResult.cs`).
+(`GirdapUiBuilder.LokantaResult.cs`); zombi modunun sonuç ekranı ikinci örnektir
+(`GirdapUiBuilder.ZombieResult.cs` — satıra kendi hücrelerini ve rozetlerini ekler, veri
+`modeState` tokenlarından gelir).
 
 **1. Partial aç.** `Assets/_Shared/App/Scripts/Editor/GirdapUi/GirdapUiBuilder.<Mod>Result.cs`,
 `partial static class GirdapUiBuilder`. Ekranı kuran metodu `BuildAll`'ın çağırdığı yere ekle ve

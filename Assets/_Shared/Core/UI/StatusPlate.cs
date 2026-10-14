@@ -85,6 +85,7 @@ namespace VortexArena.Core.UI
                 case CombatStatusKind.Reviving: return "Refresh";
                 case CombatStatusKind.ReturnBase: return "Home";
                 case CombatStatusKind.SpawnProtection: return "Shield";
+                case CombatStatusKind.WaitTeammate: return "Refresh";
                 default: return null;
             }
         }

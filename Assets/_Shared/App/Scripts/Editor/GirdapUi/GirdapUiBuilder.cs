@@ -62,6 +62,7 @@ namespace VortexArena.App.Editor
             BuildPlayerHud();
             BuildLokanta(); // after the shared strip: it replaces HealthHud inside BurgerHud
             BuildZombieHud(); // same: replaces the strip copied into ZombieHud
+            BuildZombieResult();
             AssetDatabase.SaveAssets();
         }
 

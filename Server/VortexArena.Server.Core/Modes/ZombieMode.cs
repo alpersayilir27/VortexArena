@@ -4,8 +4,8 @@ using VortexArena.Protocol;
 namespace VortexArena.Server.Core.Modes;
 
 /// <summary>Co-op wave defence (§10.5 <c>zombie</c>): players are ONE team, zombies arrive wave by wave
-/// and hit in melee. Ends on time ("dayanıldı") or when every connected player is down at the same
-/// moment ("kayıp"); there is no winner.</summary>
+/// and hit in melee. Ends on time (<c>over:survived</c>, a win) or with the squad down
+/// (<c>over:lost</c>); there is no winner TEAM — the result travels in <c>modeState</c>.</summary>
 /// <remarks>⚠️ A zombie is a NETWORK OBJECT (§10.10), not a player: the server spawns it, holds its
 /// health, breaks it and writes its score, while its POSE is streamed by its owner — and that owner is
 /// the admin build (§10.10 "Sunucu-atanmış sahiplik"), because the brain needs NavMesh and the server
@@ -48,6 +48,39 @@ public sealed class ZombieMode : IGameMode
 
     /// <summary>How many of the last used spawn points are excluded from the next draw (§10.5).</summary>
     private const int SpawnRecency = 3;
+
+    // ---- Scoring + team rules (§10.5) ----
+
+    /// <summary>The only zombie type today; the kill-point table is keyed by it so a new type is one
+    /// line in <see cref="KillPoints"/>.</summary>
+    private const string TypeWalker = "walker";
+
+    private const int WalkerKillPoints = 1;
+
+    /// <summary>Extra point when the killing hit was a headshot (<c>hit_report.zone</c>, §5.1).</summary>
+    private const int HeadshotBonus = 1;
+
+    /// <summary>Points for lifting a downed teammate — worth more than a kill: the squad survives on it.</summary>
+    private const int RevivePoints = 3;
+
+    /// <summary>HP a teammate-lifted player stands up with (§10.4); the wave break gives full HP.</summary>
+    private const float TeammateReviveHp = 50f;
+
+    /// <summary>Calibrated players a match needs before a team loss is possible (§10.5).</summary>
+    /// <remarks>⚠️ Below it nobody can lift anybody (the revive condition needs a teammate), so a solo run
+    /// would be unlosable-by-design turned into instantly lost.</remarks>
+    private const int LossMinPlayers = 2;
+
+    /// <summary>Nobody alive for this long = loss (§10.5).</summary>
+    /// <remarks>⚠️ Without the grace the single frame where everyone is down — the normal moment a
+    /// teammate runs over to lift someone — would end the match.</remarks>
+    private const float LossGraceSeconds = 2f;
+
+    /// <summary>Final <c>modeState over:</c> values (§10.5). <c>Rescued</c> is RESERVED (the Last Stand's
+    /// boss kill) and no path writes it yet; a reader treats it as a win like <c>Survived</c>.</summary>
+    private const string OverSurvived = "survived";
+    private const string OverRescued = "rescued";
+    private const string OverLost = "lost";
 
     /// <summary>Player-count scaling of a wave (§10.5): <c>1 + PlayerFactorStep × (n − 4)</c>, clamped.
     /// 4 players is the reference group the difficulty table is written for.</summary>
@@ -94,14 +127,16 @@ public sealed class ZombieMode : IGameMode
         }
     }
 
+    // ⚠️ The wave break is a BREATHER, not dead air: everyone down stands back up with full HP in that
+    // window (§10.4) and weapons get swapped — shortening it breaks both.
     private static readonly WaveTable EasyTable = new(MatchDifficulty.Easy, 6, 3, 4, 1, 16,
-        1.6f, 8f, 12, 4, 32, 2);
+        1.6f, 15f, 12, 4, 32, 2);
 
     private static readonly WaveTable NormalTable = new(MatchDifficulty.Normal, 8, 4, 6, 2, 24,
-        1.0f, 6f, 15, 4, 40, 3);
+        1.0f, 12f, 15, 4, 40, 3);
 
     private static readonly WaveTable HardTable = new(MatchDifficulty.Hard, 12, 6, 10, 3, 30,
-        0.6f, 5f, 20, 5, 50, 4);
+        0.6f, 10f, 20, 5, 50, 4);
 
     /// <summary>Pace of a map that sets none (§10.5) — exactly the base numbers of the wave table.</summary>
     private const float DefaultPace = 1f;
@@ -125,6 +160,10 @@ public sealed class ZombieMode : IGameMode
     {
         public int SpawnNetId;
         public int Wave;
+
+        /// <summary>Zombie type — scoring reads it (§10.5). Every zombie is a walker today; the field
+        /// exists so the kill value is read from one place instead of a literal at the kill site.</summary>
+        public string Type = TypeWalker;
 
         /// <summary>Accepted attack counter (<c>payload a</c>): the client plays the attack animation
         /// from its CHANGE, so it is monotonic and never rolled back.</summary>
@@ -178,7 +217,19 @@ public sealed class ZombieMode : IGameMode
     private readonly int[] _recentSpawns = new int[SpawnRecency];
     private int _recentWrite;
 
-    private bool _lost;
+    /// <summary>Per-player headshot kills / teammate revives of this match — published only in the FINAL
+    /// modeState (<c>zs</c> tokens, §10.5), because the result screen's numbers are not a per-tick field.</summary>
+    private readonly Dictionary<int, int> _headshots = new();
+    private readonly Dictionary<int, int> _revives = new();
+
+    /// <summary>Result key of the match: <c>""</c> until it ends, then <see cref="OverSurvived"/> or
+    /// <see cref="OverLost"/>.</summary>
+    private string _over = "";
+
+    /// <summary>When the squad went fully down; <c>null</c> = somebody is alive (§10.5 loss rule).</summary>
+    /// <remarks>A wall-clock stamp rather than a counted-down timer: the check lives in
+    /// <see cref="IsMatchOver"/>, which gets no delta.</remarks>
+    private DateTime? _allDownSince;
 
     /// <summary>Do WE hold the mode pause right now (§10.1)?</summary>
     private bool _paused;
@@ -198,22 +249,22 @@ public sealed class ZombieMode : IGameMode
     public string GameType => MapTable.ZombieGameType;
 
     /// <summary>Co-op shape: no red/blue but everyone is an ally, so friendly fire and the teamkill
-    /// penalty treat the whole squad as one team (§10.5). Revive is <c>standstill</c> — the player
-    /// stands back up where they fell, which can be in the middle of a pack, hence the 3 s spawn
-    /// protection (§10.4).</summary>
+    /// penalty treat the whole squad as one team (§10.5). Revive is <c>teammate</c> — only a living
+    /// teammate (or the wave break) lifts the downed player, who stands back up where they fell, which
+    /// can be in the middle of a pack, hence the 3 s spawn protection (§10.4).</summary>
     public ModeRules Rules => new()
     {
         Teams = TeamMode.None,
         Allies = true,
         Scoring = ScoreKind.PlayerAndShared,
-        Revive = ReviveAnchor.StandStill,
+        Revive = ReviveAnchor.Teammate,
         Weapons = WeaponSource.WeaponCanvas,
         RespawnDelay = 0f,
         FireWhilePaused = false,
         SpawnProtectionSeconds = 3f
     };
 
-    public int DefaultRoundSeconds => 300;
+    public int DefaultRoundSeconds => 600;
 
     /// <summary>No score limit: a co-op run is bounded by the clock (or by everyone dying), and a target
     /// score would end it early with no winner to declare.</summary>
@@ -247,7 +298,10 @@ public sealed class ZombieMode : IGameMode
             _playerFactor = 1f;
             Array.Clear(_recentSpawns, 0, _recentSpawns.Length);
             _recentWrite = 0;
-            _lost = false;
+            _over = "";
+            _allDownSince = null;
+            _headshots.Clear();
+            _revives.Clear();
             _paused = false;
             _resuming = false;
             _savedRemaining = 0f;
@@ -273,7 +327,8 @@ public sealed class ZombieMode : IGameMode
         {
             Console.WriteLine($"[zombie] maç başladı — {director.RoundSeconds} sn, zorluk {_table.Id}, " +
                               $"{_spawnPoints.Count} doğum noktası, tempo ×{_pace:0.##}; süre bitince " +
-                              "dayanıldı, tüm oyuncular aynı anda ölürse kayıp.");
+                              $"dayanıldı, {LossMinPlayers} kalibreli oyuncudan hiçbiri " +
+                              $"{LossGraceSeconds:0} sn boyunca ayakta değilse kayıp.");
         }
 
         // No host = no brain: pause before the first wave rather than spawning zombies nobody drives.
@@ -318,8 +373,9 @@ public sealed class ZombieMode : IGameMode
         for (var i = 0; i < leftovers.Count; i++) director.DespawnObject(leftovers[i]);
     }
 
-    /// <summary>Two end conditions (§10.5): the clock ("dayanıldı") and every connected player being
-    /// down at the same moment ("kayıp"). There is no winner either way (<c>shared</c> scoring).</summary>
+    /// <summary>Two end conditions (§10.5): the clock running out with the squad standing
+    /// (<c>over:survived</c>, a WIN) and the squad being down (<c>over:lost</c>). There is no winner TEAM
+    /// either way (<c>shared</c> scoring) — the result travels in <c>modeState</c>.</summary>
     /// <remarks>⚠️ Both are asked only in <see cref="Phase.Playing"/>: the clock is deliberately zeroed
     /// while we hold the mode pause, and a paused roster is revived by the core on the way back — judging
     /// either there would end the match while it is waiting for an admin.</remarks>
@@ -327,10 +383,17 @@ public sealed class ZombieMode : IGameMode
     {
         outcome = MatchOutcome.Draw;
         if (director.CurrentPhase != Phase.Playing) return false;
-        if (director.TimeRemaining <= 0f) return true;
-        if (!AllPlayersDown(director)) return false;
 
-        lock (_gate) _lost = true;
+        if (director.TimeRemaining <= 0f)
+        {
+            lock (_gate) _over = OverSurvived;
+            PushModeState(director);
+            return true;
+        }
+
+        if (!IsTeamDown(director)) return false;
+
+        lock (_gate) _over = OverLost;
         PushModeState(director);
         return true;
     }
@@ -396,23 +459,54 @@ public sealed class ZombieMode : IGameMode
 
     /// <summary>A shot landed on a zombie. Breaking a network object is normally a world state with no
     /// score (§10.10) — here it is also a KILL, so the shared ledger is written from this hook.</summary>
+    /// <remarks>⚠️ Only the 7-arg overload is implemented: the core calls this one and the 6-arg default
+    /// body would make the same kill score twice.
+    /// <para><c>kills</c> is credited separately (<see cref="MatchDirector.AddKillCredit"/>): a broken
+    /// zombie raises no <c>kill_event</c>, so nothing else would count it.</para></remarks>
     public void OnObjectHit(MatchDirector director, int attackerId, int netId, string kind, float damage,
-        bool broken)
+        bool broken, int zone)
     {
         if (!broken || kind != ZombieKind) return;
 
+        int points;
         lock (_gate)
         {
             if (!_zombies.TryGetValue(netId, out var zombie) || zombie.Dead) return;
 
             zombie.Dead = true;
             zombie.DeadSeconds = 0f;
+
+            points = KillPoints(zombie.Type);
+            if (zone == ArenaProtocol.HIT_ZONE_HEAD)
+            {
+                points += HeadshotBonus;
+                if (attackerId > 0) Bump(_headshots, attackerId);
+            }
         }
 
-        // Both channels at once (§10.2 <c>shared</c>): the last hit's owner and the squad total.
-        director.AddSharedScore(attackerId, 1);
+        // Both channels at once (§10.2 "shared"): the last hit's owner and the squad total.
+        director.AddSharedScore(attackerId, points);
+        director.AddKillCredit(attackerId);
         PushModeState(director);
     }
+
+    /// <summary>A teammate lifted a downed player (§10.4): the reviver gets <see cref="RevivePoints"/>
+    /// and the revive is counted for the result screen.</summary>
+    /// <remarks><paramref name="byPlayerId"/> is already validated by the director; <c>0</c> = the wave
+    /// break stood them up, which rewards nobody.</remarks>
+    public void OnPlayerRevived(MatchDirector director, int playerId, int byPlayerId)
+    {
+        if (byPlayerId <= 0) return;
+
+        lock (_gate) Bump(_revives, byPlayerId);
+        director.AddSharedScore(byPlayerId, RevivePoints);
+    }
+
+    /// <summary>Revive HP (§10.4): a teammate lift is half health, the wave break is full.</summary>
+    /// <remarks>The partial revive is what makes lifting a risk rather than a reset — and the break is
+    /// full HP because nobody is there to carry the downed player then.</remarks>
+    public float ReviveHp(MatchDirector director, int playerId, int byPlayerId) =>
+        byPlayerId > 0 ? TeammateReviveHp : ArenaProtocol.PLAYER_MAX_HP;
 
     /// <summary>The brain moved to another admin, or there is none (§10.10).</summary>
     /// <remarks>⚠️ With no host the core writes <c>owner = 0</c> on every zombie, so a returning host
@@ -682,29 +776,57 @@ public sealed class ZombieMode : IGameMode
     private static string PayloadOf(ZombieState zombie) =>
         $"sp:{zombie.SpawnNetId};w:{zombie.Wave};a:{zombie.AttackCounter}";
 
-    /// <summary>Is every connected player down at the same moment (the mode's only fail state)?</summary>
-    /// <remarks>An empty roster is NOT a loss: an admin map preview has nobody to lose, and its exit is
-    /// the operator's <c>end_match</c>/<c>abort_match</c>.
-    /// <para>An uncalibrated player can never be damaged (§10.6), so they can never die and the run
-    /// cannot be lost while they are connected — the safe direction.</para></remarks>
-    private static bool AllPlayersDown(MatchDirector director)
+    /// <summary>Team loss (§10.5): at least <see cref="LossMinPlayers"/> calibrated players in the match
+    /// and NONE of them alive for <see cref="LossGraceSeconds"/> without a break.</summary>
+    /// <remarks>Only calibrated participants are counted: an uncalibrated headset is not playing, so it
+    /// may neither count as alive nor keep the squad from losing (it used to do the latter — it can never
+    /// be damaged, §10.6).
+    /// <para>A solo run NEVER loses: with nobody to lift them the player's revive falls back to the
+    /// standstill rule (§10.4), so "everybody down" is a normal five seconds there.</para></remarks>
+    private bool IsTeamDown(MatchDirector director)
     {
-        bool any = false;
+        var counted = 0;
+        var anyAlive = false;
         foreach (var player in director.ConnectedPlayers())
         {
-            any = true;
-            if (player.Alive) return false;
+            if (!player.MatchParticipant || !player.Calibrated) continue;
+            counted++;
+            if (player.Alive) anyAlive = true;
         }
 
-        return any;
+        if (anyAlive || counted < LossMinPlayers)
+        {
+            lock (_gate) _allDownSince = null;
+            return false;
+        }
+
+        var now = DateTime.UtcNow;
+        lock (_gate)
+        {
+            _allDownSince ??= now;
+            return (now - _allDownSince.Value).TotalSeconds >= LossGraceSeconds;
+        }
     }
 
-    /// <summary>§10.5 <c>w:..;left:..;next:..;rem:..;fm:..;diff:..[;over:lost]</c>. ⚠️ Not pushed while we
-    /// hold the pause: the reason text lives in the same field there (§10.1) and would be
+    /// <summary>Kill points by zombie type (§10.5); an unknown type is worth a walker, never 0.</summary>
+    private static int KillPoints(string type) => type switch
+    {
+        TypeWalker => WalkerKillPoints,
+        _ => WalkerKillPoints
+    };
+
+    private static void Bump(Dictionary<int, int> tally, int playerId) =>
+        tally[playerId] = tally.TryGetValue(playerId, out var count) ? count + 1 : 1;
+
+    /// <summary>§10.5 <c>w:..;left:..;next:..;rem:..;fm:..;diff:..[;over:..][;zs&lt;id&gt;:h/r]</c>. ⚠️ Not
+    /// pushed while we hold the pause: the reason text lives in the same field there (§10.1) and would be
     /// overwritten.</summary>
     /// <remarks><c>rem</c> and <c>fm</c> are the BRAIN's input, not HUD decoration (§10.5 multi-floor
     /// rule): the storey quota is computed from them, and <c>rem:0</c> is what drops the empty-storey
-    /// minimum to 0 so a wave cannot stall on an unvisited floor.</remarks>
+    /// minimum to 0 so a wave cannot stall on an unvisited floor.
+    /// <para>The per-player <c>zs</c> tokens ride ONLY the final state: the result screen reads them once,
+    /// and a 10 Hz field has no room for a row per player. A player with both counts at 0 is omitted —
+    /// the reader treats a missing token as <c>0/0</c>.</para></remarks>
     private void PushModeState(MatchDirector director)
     {
         string state;
@@ -716,9 +838,33 @@ public sealed class ZombieMode : IGameMode
             int remaining = Math.Max(0, _waveTotal - _spawnedThisWave);
             state = $"w:{_wave};left:{StandingCountLocked()};next:{next};rem:{remaining};" +
                     $"fm:{_table.EmptyFloorMin};diff:{_table.Id}";
-            if (_lost) state += ";over:lost";
+            if (_over.Length > 0) state += $";over:{_over}{PlayerTokensLocked()}";
         }
 
         director.SetModeState(state);
+    }
+
+    /// <summary><c>zs&lt;playerId&gt;:&lt;headshots&gt;/&lt;revives&gt;</c> for every player with a
+    /// non-zero count (§10.5).</summary>
+    private string PlayerTokensLocked()
+    {
+        if (_headshots.Count == 0 && _revives.Count == 0) return "";
+
+        var tokens = new System.Text.StringBuilder();
+        foreach (var playerId in PlayersWithTalliesLocked())
+        {
+            _headshots.TryGetValue(playerId, out var heads);
+            _revives.TryGetValue(playerId, out var revives);
+            tokens.Append($";zs{playerId}:{heads}/{revives}");
+        }
+
+        return tokens.ToString();
+    }
+
+    private IEnumerable<int> PlayersWithTalliesLocked()
+    {
+        var seen = new HashSet<int>(_headshots.Keys);
+        seen.UnionWith(_revives.Keys);
+        return seen;
     }
 }

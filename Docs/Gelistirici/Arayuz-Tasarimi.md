@@ -322,7 +322,8 @@ builder'a geçirilir.
 
 | Prefab | Menü | Ölçü |
 |---|---|---|
-| `Assets/Modes/Zombie/UI/ZombieHud.prefab` (kökü `ZombieClientController`) | *Yalnız Zombi HUD* | `ZombieStrip` 606×312 (kafaya kilitli; saat 240×68 · dört hücre 150×124, sayı 68 px / DALGA 84 px, etiket 26 px · can 606×44 · durum plakası 606×44) · `WaveNotice` görüş ortası (başlık 96 px, sayı 280 px, alt satır 40 px) · `Toast` 780×128 (büyük satır 48 px, küçük satır 26 px) |
+| `Assets/Modes/Zombie/UI/ZombieHud.prefab` (kökü `ZombieClientController`) | *Yalnız Zombi HUD* | `ZombieStrip` 606×578 (kafaya kilitli; saat 240×68 · dört hücre 150×124, sayı 68 px / DALGA 84 px, etiket 26 px · can 606×44 · durum plakası 606×44 · takım şeridi 606×254: başlık 30 px + 8 satır 28 px) · `WaveNotice` görüş ortası (başlık 96 px, sayı 280 px, alt satır 40 px) · `Toast` 780×128 (büyük satır 48 px, küçük satır 26 px) |
+| `Assets/Modes/Zombie/UI/ZombieResultOverlay.prefab` (kökü `MatchResultOverlay`) | *Yalnız Zombi sonuç ekranı* | kart 1400×860 (sonuç sözcüğü 110 px · dalga 170 px · ekip skoru 120 px · iki pil 280×88) · tablo: iki blok **alt alta** 1320×300, satır 56+8 (üst 44), beş değer hücresi 100 px, rozet 104×26, alt bant 1320×96 |
 
 Şerit aşçı şeridinin (560×176) yerine geçer ve onun RectTransform'unu, iç Canvas'ını ve kafa
 kilidini **devralır** — yazı iki katına çıkarken panelin durduğu yer değişmez.
@@ -345,3 +346,36 @@ sokardı. `healthFill` sprite'lı bir `Image`'dır (sebebi "Tuzaklar"da).
 
 ⚠️ **Bildirim plakası tek düzendir:** küçük satır varken büyük satıra `margin` ile üst boşluk
 verilir (`toastSmallBand`, builder'dan serileşir) — ikinci bir yerleşim ve Layout Group yoktur.
+
+**Şeridin hücreleri:** DALGA · **KALAN** · EKİP · SEN. KALAN dalganın bitmemiş zombisidir (sahadaki
++ doğmayı bekleyen); yalnız sahadakini yazan hücre doğarken bitmiş görünen dalga gösterir.
+
+**Takım şeridi** şeridin en altındadır: başlık + 8 satır, her satır ad (sol) + durum (sağ) —
+AYAKTA · DÜŞTÜ · KALDIRILIYOR %NN. Satırlar builder'da **boş ve kapalı** doğar, çalışma anında
+yalnız metni yazılır ve açılıp kapanır; ölçü sabit anchor'dadır, Layout Group yoktur. Tek oyunculu
+maçta şeridin kökü hiç açılmaz.
+
+**Düşen arkadaşın işaretçisi** HUD'ın parçası değildir, arenada duran dünya uzayı plakasıdır
+(`ZombieDownedMarkers`, çalışma anında kurulur): kafasının üstünde "YARDIM" + mesafe + kaldırma
+ilerleme çubuğu, ayağının dibinde 0,9 m halka (yalnız aynı kattayken). Mockup'ı yoktur. ⚠️ Kökü
+`UiDrawOnTop`'tan geçer — duvar arkasında görünmesi işin **amacıdır**.
+
+## Zombi — maç sonu ekranı
+
+Zombi modunun sonuç ekranı moda özeldir ve **koddan üretilir** (Yemek Kitabı 13.2 **yol B**):
+`GirdapUiBuilder.ZombieResult.cs` → `Assets/Modes/Zombie/UI/ZombieResultOverlay.prefab`, menü
+*Tools > VortexArena > UI > Girdap > Yalnız Zombi sonuç ekranı*. Palet yine `Kan`, kökünde
+**paylaşılan `MatchResultOverlay`** durur ve bütün alanlar ad üstünden bağlanır.
+
+- **Sonuç kartı:** sonuç sözcüğü (DAYANDINIZ / KURTULDUNUZ / YENİLDİNİZ, token yoksa OYUN BİTTİ) ·
+  ULAŞILAN DALGA · EKİP SKORU · PUANIN ve SIRA pilleri.
+- **EKİP RAPORU tablosu:** başlıkta DALGA ve EKİP SKORU pilleri; satır **ad · PUAN · ÖLDÜRME ·
+  KAFADAN · KALDIRMA · DÜŞME**; adın sağında en çok üç rozet (En çok öldüren · Nişancı ·
+  Kurtarıcı); altta SEN bandı ve beş kutu (PUAN · SIRA · KAFADAN · KALDIRMA · EKİP SKORU).
+- ⚠️ **Bloklar alt altadır ve tam genişliktedir:** altı değer hücresi + rozetler yan yana duran iki
+  yarım karta sığmaz. Blok başına 4 satır vardır (iki blok = 8 oyuncu).
+- ⚠️ **Hücre ADLARI sözleşmedir** (`MatchResultOverlay.Row`): `Bg` · `Rank` · `Name` · `Tag` ·
+  `Small` · `Score` · `Kills` · `Deaths` · `Headshots` · `Revives` · `Badge0..2`/`Label`. Adı
+  değişen düğüm hata vermeden hiç doldurulmaz.
+- ⚠️ Prefab **var olan yolun üstüne** kaydedilir (GUID korunsun) ve üretimin sonunda
+  `Data/ZOMBIE.asset` → `resultScreenPrefab` bağı doğrulanır; elle düzenlenmez.

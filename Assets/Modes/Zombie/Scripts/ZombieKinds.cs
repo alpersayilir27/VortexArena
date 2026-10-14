@@ -55,10 +55,21 @@ namespace VortexArena.Modes.Zombie
         /// <summary>Difficulty the admin picked: <c>easy|normal|hard</c>.</summary>
         public const string StateDifficulty = "diff";
 
-        /// <summary>Present only when the run is over: <c>over:lost</c>.</summary>
+        /// <summary>Present only when the run is over: <c>over:survived|rescued|lost</c>.</summary>
         public const string StateOver = "over";
 
         public const string OverLost = "lost";
+
+        /// <summary>Clock ran out with the squad standing.</summary>
+        public const string OverSurvived = "survived";
+
+        /// <summary>Last Stand's Giant went down — also a win, but a different sentence.</summary>
+        public const string OverRescued = "rescued";
+
+        /// <summary>Per-player final tallies: <c>zs&lt;playerId&gt;:&lt;headshots&gt;/&lt;revives&gt;</c>,
+        /// published only in the final state. ⚠️ The id is part of the KEY (one token per player), so
+        /// the parser matches on this PREFIX, not on a fixed key.</summary>
+        public const string StatePlayerStatsPrefix = "zs";
 
         // ------------------------------------------------------------------- client-side numbers
 

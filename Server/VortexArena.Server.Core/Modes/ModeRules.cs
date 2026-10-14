@@ -35,7 +35,13 @@ public enum ReviveAnchor
 
     /// <summary>NO revive (round based elimination, <c>tournament</c>): <c>revive_request</c> is
     /// rejected, only the mode's new round revives the dead (§10.4).</summary>
-    None
+    None,
+
+    /// <summary>Only a living teammate on the SAME floor can lift the downed player
+    /// (REVIVE_TEAMMATE_RADIUS / REVIVE_TEAMMATE_SECONDS), or the mode's revive window (§10.4).
+    /// <para>⚠️ Appended at the end: the value is carried as a string on the wire but the enum is
+    /// serialized elsewhere, and inserting would shift every mode's rule.</para></summary>
+    Teammate
 }
 
 /// <summary>Where the weapon comes from (§10.5 <c>weaponSource</c>) — entirely client presentation,
@@ -152,6 +158,7 @@ public sealed record ModeRules
         reviveAnchor = Revive switch
         {
             ReviveAnchor.StandStill => "standstill",
+            ReviveAnchor.Teammate => "teammate",
             ReviveAnchor.None => "none",
             _ => "base"
         },

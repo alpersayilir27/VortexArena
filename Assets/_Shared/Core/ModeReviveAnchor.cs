@@ -24,6 +24,11 @@ namespace VortexArena.Core
         /// <para>⚠ Appended at the END of the enum (serialized enum rule) — inserting it in the middle
         /// would have shifted the values in every <see cref="ModeDefinition"/> asset.</para>
         /// </summary>
-        None
+        None,
+
+        /// <summary>A living teammate stands within <c>REVIVE_TEAMMATE_RADIUS</c> of the downed
+        /// player for <c>REVIVE_TEAMMATE_SECONDS</c> (<see cref="Combat.TeammateRevive"/>); alone in
+        /// the arena it falls back to <see cref="StandStill"/>.</summary>
+        Teammate
     }
 }

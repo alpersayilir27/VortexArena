@@ -49,9 +49,10 @@ fiziksel dünyada sabittir, sanal işaretler sahneden gelir.
 ekranından kalibrasyonu sıfırlayabilir ve o an başlık hâlâ kendini hizalı sanıyor olabilir.
 
 Aynı sebeple: bir oyuncu durumuna savaş kapısı eklerken **o durumu değiştiren tüm yolları ara**.
-Kalibrasyon yasağı canlandırmanın **iki yolunda birden** duruyor (oyuncunun `revive_request`'i ve
-yalnızca `revive_request`); ikinci bir yol eklenip yasak orada tekrarlanmazsa kural sessizce
-işlevsizleşir — hata da vermez.
+Canlandırmanın tek yolu `revive_request`'tir ve kalibrasyon yasağı **o yolda** durur; modun
+canlanma penceresi (`PlayerCombatState.ModeReviveWindow`) ve arkadaş kaldırması (`TeammateRevive`)
+yeni yol değil, aynı isteğin istemci tarafındaki şartlarıdır. İkinci bir sunucu canlandırma yolu
+açılıp yasak orada tekrarlanmazsa kural sessizce işlevsizleşir — hata da vermez.
 
 ⚠️ Editördeki dev hizalama bir **yerel ezme değildir**: o da `Calibrated` → `set_calibration`
 yolundan `source:"dev"` ile bildirir, kapı yine sunucudadır. `IsCalibrated` / `ManualAllowed`
@@ -244,6 +245,16 @@ değiştirir ve dört ayrı yerde ayrı ayrı bayatlar.
 ### ⚠️ `RespawnDelay == 0` geçerli bir değerdir
 
 FFA'da öyle: bekleme yerine "sabit dur" şartı işler. `if (delay > 0)` deyip varsayılana düşme.
+
+### ⛔ Arkadaş kaldırmalı modda ölüyü katından indirme
+
+`reviveAnchor:"teammate"` modunda düşen oyuncu **bulunduğu katta kalır** (`FloorState`): canlanma
+arkadaşın yanına yürümesidir, taban katına indirilmiş bir ölüye kimse ulaşamaz. Taban katına indirme
+yalnız `OwnBase` şartının gereğidir.
+
+Aynı modda canlanma penceresini (dalga arası gibi) `if (modeId == …)` ile açma: mod kendi
+penceresini `PlayerCombatState.ModeReviveWindow`'a takar ve **yok edilirken temizler** — kalan bir
+delege sonraki maçta ölüleri kaldırır.
 
 ### ⚠️ Kazanan iki kanaldan biriyle gelir
 
@@ -443,7 +454,7 @@ Bileşeni kapatmak görsel taban şeridini ekranda bırakır. Gizlemen gerekiyor
 
 İkinci yüzü: **kapalı bir `BaseZone` canlanma için açık sayılmaz.** `Update` koşmadığı için
 `IsPlayerInside` donar — açık sayılsaydı oyuncu bölgeye girse de hiç canlanamazdı (sunucuda
-kendiliğinden işleyen bir emniyet ağı yok; geriye kalan tek çare operatörün elle canlandırmasıdır).
+kendiliğinden işleyen bir emniyet ağı yok, oyuncu maçın kalanını ölü geçirir).
 
 ### ⛔ Takımsız haritaya taban bölgesi koyma
 

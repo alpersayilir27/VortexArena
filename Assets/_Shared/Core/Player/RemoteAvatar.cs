@@ -80,6 +80,9 @@ namespace VortexArena.Core.Player
         // ⚠️ There is NO friend/teammate marker above the head and none will be added: a
         // viewer-dependent marker makes heads readable from anywhere in the arena. Team identity is
         // already readable from the label colour and the red team's separate body, both depth-tested.
+        // The ONLY exception is the DOWNED-ally marker of teammate-revive modes (reviveAnchor
+        // "teammate"), and it lives in the mode HUD — not here: it is drawn only while that ally is
+        // down, so it is a mode rule, not an avatar feature.
 
         [Tooltip("İlk poz gelene dek gizlenecek görsel kök. Boşsa teamRenderers listesi kullanılır.")]
         [SerializeField] private GameObject visualRoot;

@@ -445,7 +445,11 @@ namespace VortexArena.Core.Combat
         /// <param name="worldHitPoint">World position of the hit (for FX/stats).</param>
         /// <param name="damage">Damage to apply — <b>must be positive and finite</b>.</param>
         /// <param name="weaponId">Kill feed label; may be empty (only the label is lost).</param>
-        public static void ReportHit(int targetPlayerId, Vector3 worldHitPoint, float damage, string weaponId)
+        /// <param name="zone">Where it landed (§10.3 <c>zone</c>) — STATISTICS only (headshot count):
+        /// the multiplier is already inside <paramref name="damage"/> and the server never
+        /// recomputes it. Default <see cref="HitZone.Body"/> for sources with no zone (blast).</param>
+        public static void ReportHit(int targetPlayerId, Vector3 worldHitPoint, float damage, string weaponId,
+            HitZone zone = HitZone.Body)
         {
             if (targetPlayerId <= 0)
             {
@@ -472,6 +476,7 @@ namespace VortexArena.Core.Combat
             Hit.targetNetId = 0;
             Hit.weaponId = weaponId ?? "";
             Hit.damage = damage;
+            Hit.zone = (int)zone;
             Write(Hit.hitPos, ArenaSpace.WorldToArena(worldHitPoint));
             client.Send(Hit);
 
@@ -494,7 +499,10 @@ namespace VortexArena.Core.Combat
         /// <param name="worldHitPoint">World position of the hit (for FX/stats).</param>
         /// <param name="damage">Damage to apply — <b>must be positive and finite</b>.</param>
         /// <param name="weaponId">Label; may be empty.</param>
-        public static void ReportObjectHit(int targetNetId, Vector3 worldHitPoint, float damage, string weaponId)
+        /// <param name="zone">Where it landed (§10.3 <c>zone</c>) — the zombie's headshot count reads
+        /// it; an object with no hit boxes reports <see cref="HitZone.Body"/>.</param>
+        public static void ReportObjectHit(int targetNetId, Vector3 worldHitPoint, float damage, string weaponId,
+            HitZone zone = HitZone.Body)
         {
             if (targetNetId <= 0)
             {
@@ -521,6 +529,7 @@ namespace VortexArena.Core.Combat
             Hit.targetPlayerId = 0;
             Hit.weaponId = weaponId ?? "";
             Hit.damage = damage;
+            Hit.zone = (int)zone;
             Write(Hit.hitPos, ArenaSpace.WorldToArena(worldHitPoint));
             client.Send(Hit);
 
@@ -546,11 +555,15 @@ namespace VortexArena.Core.Combat
         /// <see cref="ReportImpact"/> resolves from the surface.
         /// </para>
         /// </summary>
-        public static bool ReportRaycastHit(in RaycastHit hit, float damage, string weaponId)
+        /// <param name="zone">Zone the caller already resolved with <see cref="GetHitZone"/> to scale
+        /// the damage — passed on so the hit box is not resolved a second time. Omitting it reports
+        /// <see cref="HitZone.Body"/> and the headshot statistic silently loses the hit.</param>
+        public static bool ReportRaycastHit(in RaycastHit hit, float damage, string weaponId,
+            HitZone zone = HitZone.Body)
         {
             if (TryGetTargetPlayerId(hit.collider, out int playerId))
             {
-                ReportHit(playerId, hit.point, damage, weaponId);
+                ReportHit(playerId, hit.point, damage, weaponId, zone);
                 return true;
             }
 
@@ -558,7 +571,7 @@ namespace VortexArena.Core.Combat
             // return value stays false, so every caller's blood/spark choice keeps its old meaning.
             if (TryGetTargetNetId(hit.collider, out int netId))
             {
-                ReportObjectHit(netId, hit.point, damage, weaponId);
+                ReportObjectHit(netId, hit.point, damage, weaponId, zone);
             }
 
             return false;

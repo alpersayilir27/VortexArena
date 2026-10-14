@@ -398,10 +398,18 @@ namespace VortexArena.Core.Arena
         }
 
         /// <summary>On death the player is taken to their base's floor: reviving means walking into
-        /// the base zone, and a corpse left on an upper floor could never reach it.</summary>
+        /// the base zone, and a corpse left on an upper floor could never reach it. Teammate revive is
+        /// the exception — see below.</summary>
         private void HandleLocalAliveChanged(bool alive)
         {
             if (alive)
+            {
+                return;
+            }
+
+            // reviveAnchor:"teammate" — the downed player STAYS on their floor: the revive is a
+            // teammate walking up to them, and a corpse dropped to the base floor is unreachable.
+            if (ModeRuntime.Revive == ModeReviveAnchor.Teammate)
             {
                 return;
             }
