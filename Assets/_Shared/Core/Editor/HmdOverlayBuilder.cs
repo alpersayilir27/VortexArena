@@ -6,8 +6,8 @@ using VortexArena.Core.Player;
 namespace VortexArena.Core.Editor
 {
     /// <summary>Installs the two warning texts (inside an obstacle + out of bounds), the damage
-    /// vignette and the scene transition fade quad onto <c>CenterEyeAnchor</c> inside
-    /// <c>VA_CameraRig.prefab</c>. Idempotent.</summary>
+    /// vignette, the portal iris and the scene transition fade quad onto <c>CenterEyeAnchor</c>
+    /// inside <c>VA_CameraRig.prefab</c>. Idempotent.</summary>
     /// <remarks>
     /// <b>Why in the rig prefab:</b> the infrastructure prefab is instanced in every arena, so an
     /// overlay put here reaches all of them for free and adds no per-arena setup step. Same reason
@@ -19,9 +19,10 @@ namespace VortexArena.Core.Editor
     /// infrastructure, so one broken line takes them all down. ⚠️ The font is bound here too:
     /// <c>AddComponent&lt;TextMesh&gt;</c> assigns none and a fontless <c>TextMesh</c> generates no
     /// mesh, so the warning would silently never draw.</para>
-    /// <para>Draw order comes from the DISTANCE in the prefab (texts 0.42 · vignette 0.44 · scene
-    /// transition quad 0.5 · out-of-bounds fade quad 0.5) — keep that order when changing numbers. The vignette is additionally in the
-    /// <c>Overlay</c> queue; reason in <see cref="DamageVignette"/>.</para>
+    /// <para>Draw order comes from the DISTANCE in the prefab (texts 0.42 · vignette 0.44 · portal
+    /// iris 0.46 · scene transition quad 0.5 · out-of-bounds fade quad 0.5) — keep that order when
+    /// changing numbers. The vignette is additionally in the <c>Overlay</c> queue; reason in
+    /// <see cref="DamageVignette"/>.</para>
     /// <para>⚠️ Both texts can be on at once (the boundary counts scene <c>ArenaObstacle</c>s as out
     /// of bounds → <see cref="VortexArena.Core.Arena.ArenaBoundary"/>), so they are stacked
     /// vertically instead of overlapping: obstacle warning slightly above centre, out-of-bounds
@@ -40,7 +41,11 @@ namespace VortexArena.Core.Editor
         private const string WarningObjectName = "ObstacleWarningText";
         private const string BoundaryWarningObjectName = "BoundaryWarningText";
         private const string VignetteObjectName = "DamageVignette";
+        private const string IrisObjectName = "PortalIris";
         private const string TransitionObjectName = "SceneTransitionFade";
+
+        private const string IrisMaterialPath = "Assets/_Shared/Materials/M_PortalIris.mat";
+        private const string IrisShaderName = "VortexArena/ScreenIris";
 
         private const string TransitionMaterialPath = "Assets/_Shared/Materials/M_SceneTransitionFade.mat";
 
@@ -93,6 +98,14 @@ namespace VortexArena.Core.Editor
         /// <summary>Edge of the vignette quad (m): covers ~130° at 0.44 m, i.e. the whole FOV.</summary>
         private const float VignetteSize = 1.9f;
 
+        /// <summary>Distance of the portal iris from the camera (m) — behind the vignette, in front of
+        /// the transition quad. ⚠️ The shader's radius numbers are read as ANGLES at this distance and
+        /// this edge length; moving either invalidates them.</summary>
+        private const float IrisZ = 0.46f;
+
+        /// <summary>Edge of the iris quad (m): covers ~128° at 0.46 m, i.e. the whole FOV.</summary>
+        private const float IrisSize = 1.9f;
+
         /// <summary>Distance of the scene transition quad from the camera (m) — FARTHER than the
         /// warnings and the vignette, same as the out-of-bounds fade quad.</summary>
         private const float TransitionZ = 0.5f;
@@ -117,6 +130,12 @@ namespace VortexArena.Core.Editor
         {
             Material vignetteMaterial = LoadOrCreateVignetteMaterial();
             if (vignetteMaterial == null)
+            {
+                return;
+            }
+
+            Material irisMaterial = LoadOrCreateIrisMaterial();
+            if (irisMaterial == null)
             {
                 return;
             }
@@ -153,6 +172,7 @@ namespace VortexArena.Core.Editor
                 ConfigureObstacleWarning(anchor, font);
                 ConfigureBoundaryWarning(anchor, font);
                 ConfigureVignette(anchor, vignetteMaterial);
+                ConfigureIris(anchor, irisMaterial);
                 ConfigureSceneTransitionFade(anchor, transitionMaterial);
 
                 PrefabUtility.SaveAsPrefabAsset(root, RigPrefabPath);
@@ -165,12 +185,12 @@ namespace VortexArena.Core.Editor
             AssetDatabase.SaveAssets();
             Debug.Log($"[HmdOverlay] Kuruldu: {RigPrefabPath} → {AnchorName}/{WarningObjectName} + " +
                       $"{AnchorName}/{BoundaryWarningObjectName} + {AnchorName}/{VignetteObjectName} + " +
-                      $"{AnchorName}/{TransitionObjectName}.");
+                      $"{AnchorName}/{IrisObjectName} + {AnchorName}/{TransitionObjectName}.");
         }
 
         // ------------------------------------------------------------------ check
 
-        /// <summary>Whether the rig prefab's four overlays still match this tool's output —
+        /// <summary>Whether the rig prefab's five overlays still match this tool's output —
         /// <b>WRITES NOTHING</b> (read by the build readiness panel; the user pulls the write
         /// trigger).</summary>
         /// <remarks>⚠️ The prefab is loaded read-only (<see cref="AssetDatabase.LoadAssetAtPath"/>);
@@ -232,6 +252,33 @@ namespace VortexArena.Core.Editor
                 return false;
             }
 
+            Transform iris = anchor.Find(IrisObjectName);
+            if (iris == null)
+            {
+                detail = $"{IrisObjectName} yok — portalda bekleme karartması hiç çizilmez.";
+                return false;
+            }
+
+            if (iris.GetComponent<PortalIris>() == null)
+            {
+                detail = $"{IrisObjectName} üstünde {nameof(PortalIris)} bileşeni yok.";
+                return false;
+            }
+
+            var irisRenderer = iris.GetComponent<MeshRenderer>();
+            if (irisRenderer == null || irisRenderer.sharedMaterial == null)
+            {
+                detail = $"{IrisObjectName} materyalsiz — iris Quest'te pembe çizilir " +
+                         "(materyali bu araç üretir).";
+                return false;
+            }
+
+            if (iris.GetComponent<Collider>() != null)
+            {
+                detail = $"{IrisObjectName} üstünde collider var — ISDK ışını takılır.";
+                return false;
+            }
+
             Transform transition = anchor.Find(TransitionObjectName);
             if (transition == null)
             {
@@ -253,7 +300,8 @@ namespace VortexArena.Core.Editor
                 return false;
             }
 
-            detail = "4 katman güncel (engel uyarısı · sınır uyarısı · hasar vinyeti · geçiş karartması).";
+            detail = "5 katman güncel (engel uyarısı · sınır uyarısı · hasar vinyeti · portal irisi · " +
+                     "geçiş karartması).";
             return true;
         }
 
@@ -455,6 +503,82 @@ namespace VortexArena.Core.Editor
             }
 
             AssignReference(vignette, "vignetteRenderer", renderer);
+        }
+
+        // ------------------------------------------------------------------ portal iris
+
+        /// <summary>Iris of the floor portal dwell, driven by <see cref="PortalIris"/>.</summary>
+        private static void ConfigureIris(Transform anchor, Material material)
+        {
+            Transform existing = anchor.Find(IrisObjectName);
+            GameObject go;
+
+            if (existing != null)
+            {
+                go = existing.gameObject;
+            }
+            else
+            {
+                go = GameObject.CreatePrimitive(PrimitiveType.Quad);
+                go.name = IrisObjectName;
+                go.transform.SetParent(anchor, false);
+            }
+
+            // Removed on every run: a screen overlay has no business in physics and an ISDK ray would
+            // snag on it.
+            var collider = go.GetComponent<Collider>();
+            if (collider != null)
+            {
+                Object.DestroyImmediate(collider);
+            }
+
+            go.transform.localPosition = new Vector3(0f, 0f, IrisZ);
+            go.transform.localRotation = Quaternion.identity;
+            go.transform.localScale = new Vector3(IrisSize, IrisSize, 1f);
+
+            var renderer = go.GetComponent<MeshRenderer>();
+            if (renderer == null)
+            {
+                Debug.LogError($"[HmdOverlay] '{IrisObjectName}' üstünde MeshRenderer yok.");
+                return;
+            }
+
+            renderer.sharedMaterial = material;
+            renderer.enabled = false; // nothing to draw while open; the component decides on frame one
+            StripLighting(renderer);
+
+            PortalIris iris = go.GetComponent<PortalIris>();
+            if (iris == null)
+            {
+                iris = go.AddComponent<PortalIris>();
+            }
+
+            AssignReference(iris, "irisRenderer", renderer);
+        }
+
+        /// <summary>Iris material. ⚠️ Generated by the tool for the same reason as the vignette's: a
+        /// shader's GUID is unknown before import, so a hand written <c>.mat</c> would open with a
+        /// silently empty shader reference.</summary>
+        private static Material LoadOrCreateIrisMaterial()
+        {
+            var existing = AssetDatabase.LoadAssetAtPath<Material>(IrisMaterialPath);
+            if (existing != null)
+            {
+                return existing;
+            }
+
+            Shader shader = Shader.Find(IrisShaderName);
+            if (shader == null)
+            {
+                Debug.LogError($"[HmdOverlay] Shader bulunamadı: {IrisShaderName}. " +
+                               "Assets/_Shared/Shaders/ScreenIris.shader import edilmiş mi?");
+                return null;
+            }
+
+            var material = new Material(shader) { name = "M_PortalIris" };
+            AssetDatabase.CreateAsset(material, IrisMaterialPath);
+            Debug.Log($"[HmdOverlay] İris materyali üretildi: {IrisMaterialPath}");
+            return material;
         }
 
         // ------------------------------------------------------------------ scene transition fade

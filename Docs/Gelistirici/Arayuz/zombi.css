@@ -15,9 +15,9 @@
 .zvr::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 55%, rgba(90, 105, 125, .18) 80%, rgba(110, 125, 145, .28)); }
 .zvr .ph { position: absolute; left: 50%; top: 40px; transform: translateX(-50%); font: 500 17px/1 var(--fb); color: rgba(255, 255, 255, .35); }
 
-/* ---------------------------------------------------------------- şerit (606 × 312) */
+/* --------------------- şerit (606 × 640; bu karede takım şeridi çizilmez, üst 374 px) */
 
-.zs { position: absolute; left: 50%; top: 50%; width: 606px; height: 312px; margin: -156px 0 0 -303px; }
+.zs { position: absolute; left: 50%; top: 50%; width: 606px; height: 374px; margin: -187px 0 0 -303px; }
 .zs * { box-sizing: border-box; }
 
 .zs .clock { position: absolute; left: 183px; top: 0; width: 240px; height: 68px; background: linear-gradient(180deg, var(--z-clock-a), var(--z-clock-b)); border: 3px solid var(--z-border); border-radius: 8px; color: var(--z-bone); font: 500 46px/62px var(--fb); text-align: center; }
@@ -38,16 +38,37 @@
 .zs .cell.wave b { font-size: 84px; }
 .zs .cell.alive b { color: var(--z-alive); }
 
-/* can — aşçı şeridinde yok; zombiler oyuncuya vurduğu için burada var */
-.zs .hp { position: absolute; left: 0; top: 212px; width: 606px; height: 44px; background: linear-gradient(180deg, var(--z-plate-a), var(--z-plate-b)); border: 3px solid var(--z-border); border-radius: 8px; }
-.zs .hp em { position: absolute; left: 16px; top: 0; width: 170px; height: 44px; font: 800 28px/44px var(--fd2); font-style: normal; color: var(--z-bone); }
-.zs .hp .track { position: absolute; left: 190px; top: 13px; width: 400px; height: 18px; background: var(--z-blood-lo); border: 2px solid var(--z-border); border-radius: 4px; }
-.zs .hp .track i { position: absolute; left: 3px; top: 3px; height: 12px; background: var(--z-blood-hi); border-radius: 2px; }
-
-.zs .durum { position: absolute; left: 0; top: 268px; width: 606px; height: 44px; background: linear-gradient(180deg, var(--z-clock-a), var(--z-clock-b)); border: 3px solid var(--z-border); border-radius: 8px; font: 700 24px/38px var(--fd2); color: var(--z-label); }
+.zs .durum { position: absolute; left: 0; top: 330px; width: 606px; height: 44px; background: linear-gradient(180deg, var(--z-clock-a), var(--z-clock-b)); border: 3px solid var(--z-border); border-radius: 8px; font: 700 24px/38px var(--fd2); color: var(--z-label); }
 .zs .durum .ikon { position: absolute; left: 14px; top: 11px; width: 22px; height: 22px; }
 .zs .durum .ikon svg { display: block; width: 22px; height: 22px; }
 .zs .durum span { position: absolute; left: 44px; top: 0; height: 38px; }
+
+/* ------------------- can paneli (606 × 104, şeridin içinde skor satırının altındaki sıra) */
+/* Hücre değil kendi sırası: can kavga ortasında göz ucuyla bakılan tek değerdir, hücre
+   boyundaki ince bir kuşak o anda bulunmuyordu. */
+
+.zhp { position: absolute; left: 50%; top: 50%; width: 606px; height: 104px; margin: -52px 0 0 -303px; background: linear-gradient(180deg, var(--z-plate-a), var(--z-plate-b)); border: 3px solid var(--z-border); border-radius: 10px; box-shadow: 0 10px 30px rgba(0, 0, 0, .7), inset 0 0 40px rgba(120, 10, 10, .35); }
+.zhp * { box-sizing: border-box; }
+/* şeridin içindeyken yeri sabittir; tek başına gösterilen kare onu ortalar */
+.zs .zhp { left: 0; top: 214px; margin: 0; }
+.zhp em { position: absolute; left: 18px; top: 6px; width: 140px; height: 24px; font: 700 22px/24px var(--fd2); font-style: normal; letter-spacing: .14em; color: var(--z-bone-warm); }
+.zhp b { position: absolute; left: 18px; top: 30px; width: 140px; height: 66px; font: 400 72px/66px var(--fz); color: var(--z-bone); text-shadow: 0 3px 0 rgba(0, 0, 0, .5); }
+.zhp .track { position: absolute; left: 162px; top: 35px; width: 426px; height: 34px; background: var(--z-blood-lo); border: 3px solid var(--z-border); border-radius: 10px; }
+/* iz dolgunun ARKASINDA durur: hasarın bıraktığı yer o kadar süre kemik rengi kalır */
+.zhp .track u { position: absolute; left: 0; top: 0; height: 28px; background: rgba(255, 233, 224, .8); border-radius: 7px; }
+.zhp .track i { position: absolute; left: 0; top: 0; height: 28px; background: var(--z-blood-hi); border-radius: 7px; }
+/* dikey koyulaşma — dolgu altta Blood'a iner (kodda ayrı Shape, Kan.BloodLo .55) */
+.zhp .track::after { content: ''; position: absolute; left: 0; top: 0; right: 0; height: 28px; border-radius: 7px; background: linear-gradient(180deg, transparent, rgba(58, 5, 5, .55)); }
+/* %10'luk dilim çizgileri */
+.zhp .track s { position: absolute; left: 42px; top: 0; right: 0; height: 28px; background: repeating-linear-gradient(90deg, rgba(58, 5, 5, .6) 0 2px, transparent 2px 42px); }
+
+/* az can (< %30): panel parıltısı ve bar 1,4 Hz nabız atar; 0'da nabız durur */
+.zhp.az { animation: zhp-nabiz .714s infinite; }
+.zhp.az .track { border-color: var(--z-blood-hi); }
+@keyframes zhp-nabiz {
+  0%, 100% { box-shadow: 0 10px 30px rgba(0, 0, 0, .7), inset 0 0 40px rgba(120, 10, 10, .35), 0 0 0 rgba(209, 31, 31, 0); }
+  50% { box-shadow: 0 10px 30px rgba(0, 0, 0, .7), inset 0 0 40px rgba(120, 10, 10, .35), 0 0 34px rgba(209, 31, 31, .65); }
+}
 
 /* ----------------------------------------------- dalga arası geri sayım (görüş ortası) */
 
@@ -55,6 +76,8 @@
 .zcd .t { position: absolute; left: 0; right: 0; top: -255px; height: 130px; font: 400 96px/130px var(--fz); color: var(--z-blood-hi); text-shadow: 0 6px 0 var(--z-blood-sh); }
 .zcd .n { position: absolute; left: 0; right: 0; top: -170px; height: 340px; font: 400 280px/340px var(--fz); color: var(--z-bone-bright); text-shadow: 0 10px 0 var(--z-blood-lo); }
 .zcd .s { position: absolute; left: 0; right: 0; top: 180px; height: 60px; font: 700 40px/60px var(--fd2); letter-spacing: .18em; color: var(--z-label); }
+/* temizlik fazının silah satırı — geri sayımda boş durur */
+.zcd .u { position: absolute; left: 0; right: 0; top: 250px; height: 80px; font: 800 56px/80px var(--fd2); letter-spacing: .04em; color: var(--z-bone-bright); }
 .zdim { position: absolute; inset: 0; background: rgba(0, 0, 0, .35); }
 
 /* ------------------------------------------------------------ kısa bildirim (780 × 128) */

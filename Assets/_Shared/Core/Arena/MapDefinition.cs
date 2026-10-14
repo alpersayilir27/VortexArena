@@ -55,6 +55,18 @@ namespace VortexArena.Core.Arena
         // Default on: existing assets keep the warning WITHOUT being touched.
         [SerializeField] private bool timeWarningSound = true;
 
+        [Header("Admin görünümü")]
+        [Tooltip("Yalnız admin/izleyici bilgisayarının ekranını aydınlatır, kaskta HİÇBİR etkisi yoktur. " +
+                 "0 = dokunma; 1.5 karanlık bir arenayı tepeden izlenebilir yapar.")]
+        // Default 0: every existing map stays exactly as authored.
+        [SerializeField] private float adminPostExposure;
+        [Tooltip("Admin ekranında sis mesafesi bu kadar katlanır (üstel siste yoğunluk bölünür). " +
+                 "1 = dokunma. Kaskta hiçbir etkisi yoktur.")]
+        [SerializeField] private float adminFogScale = 1f;
+        [Tooltip("Admin ekranında ortam ışığı çarpanı; 1 = dokunma. Çoğunlukla ışık haritası olmayan " +
+                 "nesneleri etkiler. Kaskta hiçbir etkisi yoktur.")]
+        [SerializeField] private float adminAmbientScale = 1f;
+
         /// <summary>Scene name in the build list (the catalog key).</summary>
         public string SceneName => sceneName;
 
@@ -91,6 +103,15 @@ namespace VortexArena.Core.Arena
 
         /// <summary>Whether the round/match end time warning plays on this map.</summary>
         public bool TimeWarningSound => timeWarningSound;
+
+        /// <summary>Extra EV on the admin spectator view (0 = untouched). Admin build only.</summary>
+        public float AdminPostExposure => adminPostExposure;
+
+        /// <summary>Fog distance multiplier on the admin view (1 = untouched).</summary>
+        public float AdminFogScale => adminFogScale;
+
+        /// <summary>Ambient intensity multiplier on the admin view (1 = untouched).</summary>
+        public float AdminAmbientScale => adminAmbientScale;
 
         /// <summary>Can the given mode be played on this map. An empty/missing list counts as no
         /// restriction, so a field forgotten on a new map does not hide the mode.</summary>

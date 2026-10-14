@@ -99,7 +99,7 @@ namespace VortexArena.Modes.Zombie.Editor
             new Trim("ZA_StandUp_A", 105, 189, false),
             new Trim("ZA_StandUp_B", 110, 195, false),
             new Trim("ZA_Scream", 0, -1, false),
-            // ⚠️ Skips the opening sway: the body must be down well before the 2.2 s dissolve
+            // ⚠️ Skips the opening sway: the body must be down well before the dissolve starts
             // (ZombieView.DeathDissolveDelay), or it fades out while still falling.
             new Trim("ZA_Death", 18, -1, false),
             // ZA_Stumble is NOT used: it staggers 3.5 m sideways and only drops at its last frame.
@@ -731,12 +731,48 @@ namespace VortexArena.Modes.Zombie.Editor
             // ⚠️ Every offset and size below is in REAL metres, with no scale factor: the root was just
             // normalised to 1.80 m, so world units are human units from here on. Multiplying by the
             // look's scale again would shrink the tall models' boxes by a fifth.
-            GameObject headBox = BuildHitbox(root.transform, head, "Hit_Head",
+            var hitboxes = new List<GameObject>(13);
+
+            Add(hitboxes, BuildHitbox(root.transform, head, "Hit_Head",
                 head.position + root.transform.up * 0.085f + root.transform.forward * 0.015f,
-                new Vector3(0.24f, 0.24f, 0.24f), 1, HeadSurfacePath);
-            GameObject bodyBox = BuildHitbox(root.transform, chest, "Hit_Body",
-                (hips.position + neck.position) * 0.5f,
-                new Vector3(0.42f, 0.62f, 0.30f), 0, FleshSurfacePath);
+                new Vector3(0.24f, 0.24f, 0.24f), HitZone.Head, HeadSurfacePath));
+
+            // ⚠️ Chest and pelvis SHARE the torso instead of one tall box: the box is also the
+            // ragdoll's chest body, and one running down to the hips sweeps through the thighs — the
+            // corpse then shakes itself apart on the floor.
+            Add(hitboxes, BuildHitbox(root.transform, chest, "Hit_Body",
+                Vector3.Lerp(hips.position, neck.position, 0.68f),
+                new Vector3(0.42f, 0.42f, 0.30f), HitZone.Body, FleshSurfacePath));
+
+            Add(hitboxes, BuildHitbox(root.transform, hips, "Hit_Hips",
+                Vector3.Lerp(hips.position, neck.position, 0.18f),
+                new Vector3(0.36f, 0.30f, 0.28f), HitZone.Stomach, FleshSurfacePath));
+
+            // Limbs: the whole body takes hits like a player's does, and the same capsules are the
+            // ragdoll's arms and legs.
+            Limb armUpperLeft = BuildLimb(root.transform, animator, hitboxes, "Hit_UpperArm_L",
+                HumanBodyBones.LeftUpperArm, HumanBodyBones.LeftLowerArm, 0.055f, HitZone.Body);
+            Limb armLowerLeft = BuildLimb(root.transform, animator, hitboxes, "Hit_ForeArm_L",
+                HumanBodyBones.LeftLowerArm, HumanBodyBones.LeftHand, 0.045f, HitZone.Body);
+            Limb armUpperRight = BuildLimb(root.transform, animator, hitboxes, "Hit_UpperArm_R",
+                HumanBodyBones.RightUpperArm, HumanBodyBones.RightLowerArm, 0.055f, HitZone.Body);
+            Limb armLowerRight = BuildLimb(root.transform, animator, hitboxes, "Hit_ForeArm_R",
+                HumanBodyBones.RightLowerArm, HumanBodyBones.RightHand, 0.045f, HitZone.Body);
+
+            Limb legUpperLeft = BuildLimb(root.transform, animator, hitboxes, "Hit_UpLeg_L",
+                HumanBodyBones.LeftUpperLeg, HumanBodyBones.LeftLowerLeg, 0.085f, HitZone.Leg);
+            Limb legLowerLeft = BuildLimb(root.transform, animator, hitboxes, "Hit_Leg_L",
+                HumanBodyBones.LeftLowerLeg, HumanBodyBones.LeftFoot, 0.065f, HitZone.Leg);
+            Limb legUpperRight = BuildLimb(root.transform, animator, hitboxes, "Hit_UpLeg_R",
+                HumanBodyBones.RightUpperLeg, HumanBodyBones.RightLowerLeg, 0.085f, HitZone.Leg);
+            Limb legLowerRight = BuildLimb(root.transform, animator, hitboxes, "Hit_Leg_R",
+                HumanBodyBones.RightLowerLeg, HumanBodyBones.RightFoot, 0.065f, HitZone.Leg);
+
+            BuildRagdoll(root.transform, animator, hitboxes, hips, chest, head, neck,
+                armUpperLeft, armLowerLeft, armUpperRight, armLowerRight,
+                legUpperLeft, legLowerLeft, legUpperRight, legLowerRight);
+
+            BuildFlinch(root, animator, hips, chest, head, neck);
 
             var dissolve = root.AddComponent<ZombieDissolve>();
             var dissolveObject = new SerializedObject(dissolve);
@@ -758,10 +794,12 @@ namespace VortexArena.Modes.Zombie.Editor
             lookObject.FindProperty("leftEyeOffset").vector3Value = leftOffset;
             lookObject.FindProperty("rightEyeOffset").vector3Value = rightOffset;
 
-            SerializedProperty hitboxes = lookObject.FindProperty("hitboxes");
-            hitboxes.arraySize = 2;
-            hitboxes.GetArrayElementAtIndex(0).objectReferenceValue = headBox;
-            hitboxes.GetArrayElementAtIndex(1).objectReferenceValue = bodyBox;
+            SerializedProperty hitboxProperty = lookObject.FindProperty("hitboxes");
+            hitboxProperty.arraySize = hitboxes.Count;
+            for (int i = 0; i < hitboxes.Count; i++)
+            {
+                hitboxProperty.GetArrayElementAtIndex(i).objectReferenceValue = hitboxes[i];
+            }
 
             SerializedProperty walks = lookObject.FindProperty("walkSpeeds");
             walks.arraySize = WalkSpeeds.Length;
@@ -870,10 +908,9 @@ namespace VortexArena.Modes.Zombie.Editor
         }
 
         private static GameObject BuildHitbox(Transform root, Transform bone, string name,
-            Vector3 worldCentre, Vector3 worldSize, int zone, string surfacePath)
+            Vector3 worldCentre, Vector3 worldSize, HitZone zone, string surfacePath)
         {
-            var box = new GameObject(name);
-            box.transform.SetParent(bone, false);
+            GameObject box = NewHitbox(bone, name, zone, surfacePath);
             box.transform.localPosition = bone.InverseTransformPoint(worldCentre);
 
             // Axis-aligned with the BODY, not with the bone: the sizes above are body measurements,
@@ -883,12 +920,68 @@ namespace VortexArena.Modes.Zombie.Editor
             var collider = box.AddComponent<BoxCollider>();
             collider.size = worldSize / BoneScale(bone);
 
+            return box;
+        }
+
+        /// <summary>One limb segment: the bone and the bone it runs to. ⚠️ A segment missing EITHER
+        /// of them stays all-null, so the ragdoll never builds a body it has no collider for.</summary>
+        private struct Limb
+        {
+            public Transform Bone;
+            public Transform End;
+        }
+
+        /// <summary>Capsule hit box along a bone — the ragdoll's arm/leg body at the same time.</summary>
+        private static Limb BuildLimb(Transform root, Animator animator, List<GameObject> hitboxes,
+            string name, HumanBodyBones bone, HumanBodyBones end, float worldRadius, HitZone zone)
+        {
+            var limb = new Limb
+            {
+                Bone = FindBone(animator, bone),
+                End = FindBone(animator, end),
+            };
+
+            if (limb.Bone == null || limb.End == null)
+            {
+                // Not fatal: a rig missing a forearm still fights with the rest of its boxes.
+                Debug.LogWarning($"[ZombieLookBuilder] {bone}/{end} kemiği çözülemedi — {name} " +
+                                 "kutusu ve ragdoll parçası atlandı.");
+                limb.Bone = null;
+                limb.End = null;
+                return limb;
+            }
+
+            GameObject box = NewHitbox(limb.Bone, name, zone, FleshSurfacePath);
+
+            // On the bone's OWN axes (unlike the body boxes): a capsule only has to run along the
+            // limb, and the bone's axes are the one frame that stays aligned with it in every pose.
+            box.transform.localPosition = Vector3.zero;
+            box.transform.localRotation = Quaternion.identity;
+
+            Vector3 toEnd = limb.Bone.InverseTransformPoint(limb.End.position);
+            float radius = worldRadius / BoneScale(limb.Bone);
+
+            var collider = box.AddComponent<CapsuleCollider>();
+            collider.direction = DominantAxis(toEnd);
+            collider.center = toEnd * 0.5f;
+            collider.radius = radius;
+            collider.height = Mathf.Max(toEnd.magnitude, radius * 2f);
+
+            Add(hitboxes, box);
+            return limb;
+        }
+
+        private static GameObject NewHitbox(Transform bone, string name, HitZone zone, string surfacePath)
+        {
+            var box = new GameObject(name);
+            box.transform.SetParent(bone, false);
+
             var hitBox = box.AddComponent<RemoteHitBox>();
             var hitObject = new SerializedObject(hitBox);
 
             // ⚠️ `avatar` stays empty: this is a NETWORK OBJECT box, the hit is reported with
             // targetNetId, not with a playerId.
-            hitObject.FindProperty("zone").enumValueIndex = zone;
+            hitObject.FindProperty("zone").enumValueIndex = (int)zone;
             hitObject.ApplyModifiedPropertiesWithoutUndo();
 
             var tag = box.AddComponent<SurfaceTag>();
@@ -900,12 +993,240 @@ namespace VortexArena.Modes.Zombie.Editor
             return box;
         }
 
+        private static void Add(List<GameObject> hitboxes, GameObject box)
+        {
+            if (box != null)
+            {
+                hitboxes.Add(box);
+            }
+        }
+
+        /// <summary>Index of the longest component of <paramref name="local"/> (0 = x, 1 = y, 2 = z) —
+        /// the axis a capsule on this bone runs along.</summary>
+        private static int DominantAxis(Vector3 local)
+        {
+            float x = Mathf.Abs(local.x);
+            float y = Mathf.Abs(local.y);
+            float z = Mathf.Abs(local.z);
+
+            if (x >= y && x >= z)
+            {
+                return 0;
+            }
+
+            return y >= z ? 1 : 2;
+        }
+
         /// <summary>Accumulated scale on a bone. Uniform on these rigs; the x component is enough and
         /// keeps the box sizes isotropic.</summary>
         private static float BoneScale(Transform bone)
         {
             float value = bone.lossyScale.x;
             return Mathf.Abs(value) > 0.0001f ? value : 1f;
+        }
+
+        // ------------------------------------------------------------------ 5b. ragdoll + flinch
+
+        /// <summary>Mass (kg) per ragdoll body, in the order of <c>BuildRagdoll</c>'s bone array —
+        /// ~60 kg in total, split the way Unity's own ragdoll builder splits it.</summary>
+        private static readonly float[] RagdollMasses =
+            { 11f, 11f, 5f, 3f, 2.5f, 3f, 2.5f, 6f, 5f, 6f, 5f };
+
+        /// <summary>Index of each body's parent body; <c>-1</c> = the root (hips).</summary>
+        private static readonly int[] RagdollParents = { -1, 0, 1, 1, 3, 1, 5, 0, 7, 0, 9 };
+
+        // Joint limits (deg). Twist runs ALONG the bone, swing1 around the body's across axis (the
+        // elbow/knee bend) and swing2 is the sideways spread — 5° on a hinge, never 0: a perfectly
+        // rigid constraint makes the solver ring.
+        private static readonly float[] RagdollTwistLow = { 0f, -20f, -40f, -40f, -10f, -40f, -10f, -20f, -10f, -20f, -10f };
+        private static readonly float[] RagdollTwistHigh = { 0f, 20f, 25f, 40f, 10f, 40f, 10f, 20f, 10f, 20f, 10f };
+        private static readonly float[] RagdollSwing1 = { 0f, 25f, 35f, 70f, 80f, 70f, 80f, 60f, 80f, 60f, 80f };
+        private static readonly float[] RagdollSwing2 = { 0f, 15f, 25f, 40f, 5f, 40f, 5f, 25f, 5f, 25f, 5f };
+
+        /// <summary>Builds the corpse's physics: a rigidbody per bone and a character joint to its
+        /// parent. The hit boxes above double as its colliders.</summary>
+        /// <remarks>⚠️ Bodies are created KINEMATIC: a live zombie is driven by the Animator, and a
+        /// dynamic skeleton would fight it from the first frame. <see cref="ZombieRagdoll"/> releases
+        /// them at death and freezes them again before the dissolve.</remarks>
+        private static void BuildRagdoll(Transform root, Animator animator, List<GameObject> hitboxes,
+            Transform hips, Transform chest, Transform head, Transform neck,
+            Limb armUpperLeft, Limb armLowerLeft, Limb armUpperRight, Limb armLowerRight,
+            Limb legUpperLeft, Limb legLowerLeft, Limb legUpperRight, Limb legLowerRight)
+        {
+            // ⚠️ Order is the contract shared by the mass/parent/limit tables above.
+            Transform[] bones =
+            {
+                hips, chest, head,
+                armUpperLeft.Bone, armLowerLeft.Bone, armUpperRight.Bone, armLowerRight.Bone,
+                legUpperLeft.Bone, legLowerLeft.Bone, legUpperRight.Bone, legLowerRight.Bone,
+            };
+
+            // Where each bone RUNS TO: the joint's twist axis and nothing else. The head has no child
+            // bone, so the crown is estimated.
+            Vector3[] ends =
+            {
+                chest.position,
+                neck.position,
+                head.position + root.up * 0.17f,
+                EndOf(armLowerLeft.Bone), EndOf(armLowerLeft.End),
+                EndOf(armLowerRight.Bone), EndOf(armLowerRight.End),
+                EndOf(legLowerLeft.Bone), EndOf(legLowerLeft.End),
+                EndOf(legLowerRight.Bone), EndOf(legLowerRight.End),
+            };
+
+            var bodies = new Rigidbody[bones.Length];
+
+            for (int i = 0; i < bones.Length; i++)
+            {
+                if (bones[i] == null)
+                {
+                    continue;
+                }
+
+                var body = bones[i].gameObject.AddComponent<Rigidbody>();
+                body.mass = RagdollMasses[i];
+                body.isKinematic = true;
+
+                // Interpolation and continuous detection are per-body costs on Quest and buy nothing
+                // on a corpse that is frozen again after a couple of seconds.
+                body.interpolation = RigidbodyInterpolation.None;
+                body.collisionDetectionMode = CollisionDetectionMode.Discrete;
+                bodies[i] = body;
+            }
+
+            for (int i = 1; i < bones.Length; i++)
+            {
+                if (bones[i] == null || bodies[i] == null)
+                {
+                    continue;
+                }
+
+                Rigidbody parent = ParentBody(bodies, i);
+                if (parent == null)
+                {
+                    continue;
+                }
+
+                var joint = bones[i].gameObject.AddComponent<CharacterJoint>();
+                joint.connectedBody = parent;
+                joint.anchor = Vector3.zero;
+                joint.autoConfigureConnectedAnchor = true;
+
+                // ⚠️ Collision between jointed parts OFF: neighbouring capsules overlap by design and
+                // with it on the corpse pushes itself apart the moment it goes dynamic.
+                joint.enableCollision = false;
+                joint.enablePreprocessing = false;
+
+                // Vector3.zero = the segment this bone runs to was not resolved (EndOf) — the joint
+                // then twists around the body's up instead of around a garbage direction.
+                Vector3 along = ends[i] != Vector3.zero ? ends[i] - bones[i].position : Vector3.zero;
+                Vector3 twist = along.sqrMagnitude > 1e-6f ? along.normalized : root.up;
+                joint.axis = bones[i].InverseTransformDirection(twist);
+                joint.swingAxis = bones[i].InverseTransformDirection(PerpendicularAxis(root, twist));
+
+                joint.lowTwistLimit = new SoftJointLimit { limit = RagdollTwistLow[i] };
+                joint.highTwistLimit = new SoftJointLimit { limit = RagdollTwistHigh[i] };
+                joint.swing1Limit = new SoftJointLimit { limit = RagdollSwing1[i] };
+                joint.swing2Limit = new SoftJointLimit { limit = RagdollSwing2[i] };
+            }
+
+            var ragdoll = root.gameObject.AddComponent<ZombieRagdoll>();
+            var ragdollObject = new SerializedObject(ragdoll);
+            ragdollObject.FindProperty("animator").objectReferenceValue = animator;
+            ragdollObject.FindProperty("hips").objectReferenceValue = hips;
+
+            SerializedProperty bodyList = ragdollObject.FindProperty("bodies");
+            int written = 0;
+            bodyList.arraySize = bones.Length;
+            for (int i = 0; i < bodies.Length; i++)
+            {
+                if (bodies[i] != null)
+                {
+                    bodyList.GetArrayElementAtIndex(written++).objectReferenceValue = bodies[i];
+                }
+            }
+
+            bodyList.arraySize = written;
+
+            SerializedProperty colliderList = ragdollObject.FindProperty("colliders");
+            colliderList.arraySize = hitboxes.Count;
+            for (int i = 0; i < hitboxes.Count; i++)
+            {
+                colliderList.GetArrayElementAtIndex(i).objectReferenceValue =
+                    hitboxes[i].GetComponent<Collider>();
+            }
+
+            ragdollObject.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        private static Vector3 EndOf(Transform bone) => bone != null ? bone.position : Vector3.zero;
+
+        /// <summary>Nearest EXISTING ancestor body: a rig missing a forearm must hang its hand bones
+        /// off the upper arm instead of losing the joint altogether.</summary>
+        private static Rigidbody ParentBody(Rigidbody[] bodies, int index)
+        {
+            int parent = RagdollParents[index];
+            while (parent >= 0 && bodies[parent] == null)
+            {
+                parent = RagdollParents[parent];
+            }
+
+            return parent >= 0 ? bodies[parent] : null;
+        }
+
+        /// <summary>A body axis as perpendicular to <paramref name="along"/> as possible — the joint's
+        /// swing axis. ⚠️ Picked, not fixed: a T-posed arm runs along the body's right, and a fixed
+        /// right axis would collapse onto the twist axis and leave the elbow unconstrained.</summary>
+        private static Vector3 PerpendicularAxis(Transform root, Vector3 along)
+        {
+            float right = Mathf.Abs(Vector3.Dot(along, root.right));
+            float up = Mathf.Abs(Vector3.Dot(along, root.up));
+            float forward = Mathf.Abs(Vector3.Dot(along, root.forward));
+
+            if (right <= up && right <= forward)
+            {
+                return root.right;
+            }
+
+            return forward <= up ? root.forward : root.up;
+        }
+
+        /// <summary>Bone handles for the procedural hit reaction.</summary>
+        private static void BuildFlinch(GameObject root, Animator animator, Transform hips,
+            Transform chest, Transform head, Transform neck)
+        {
+            // The chest is already the highest spine bone the rig has; spine1 is the one below it.
+            Transform spine1 = FindBone(animator, HumanBodyBones.Chest);
+            if (spine1 == null || spine1 == chest)
+            {
+                spine1 = FindBone(animator, HumanBodyBones.Spine);
+            }
+
+            if (spine1 == chest)
+            {
+                spine1 = null;
+            }
+
+            var flinch = root.AddComponent<ZombieFlinch>();
+            var flinchObject = new SerializedObject(flinch);
+            flinchObject.FindProperty("spine1").objectReferenceValue = spine1;
+            flinchObject.FindProperty("spine2").objectReferenceValue = chest;
+            flinchObject.FindProperty("neck").objectReferenceValue = neck;
+            flinchObject.FindProperty("head").objectReferenceValue = head;
+            flinchObject.FindProperty("shoulderLeft").objectReferenceValue =
+                FindBone(animator, HumanBodyBones.LeftShoulder);
+            flinchObject.FindProperty("upperArmLeft").objectReferenceValue =
+                FindBone(animator, HumanBodyBones.LeftUpperArm);
+            flinchObject.FindProperty("shoulderRight").objectReferenceValue =
+                FindBone(animator, HumanBodyBones.RightShoulder);
+            flinchObject.FindProperty("upperArmRight").objectReferenceValue =
+                FindBone(animator, HumanBodyBones.RightUpperArm);
+            flinchObject.FindProperty("hips").objectReferenceValue = hips;
+            flinchObject.FindProperty("upperLegLeft").objectReferenceValue =
+                FindBone(animator, HumanBodyBones.LeftUpperLeg);
+            flinchObject.FindProperty("upperLegRight").objectReferenceValue =
+                FindBone(animator, HumanBodyBones.RightUpperLeg);
+            flinchObject.ApplyModifiedPropertiesWithoutUndo();
         }
 
         // ------------------------------------------------------------------ 6. NO_zombie

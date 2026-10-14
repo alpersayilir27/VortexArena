@@ -195,6 +195,10 @@ namespace VortexArena.Core.Editor
             /// Rounds per burst. <b>0 or 1 = full auto</b>; in-burst cadence is <see cref="Rpm"/>.
             public int Burst;
 
+            /// One shot per trigger pull; <see cref="Rpm"/> still caps the cadence. Ignored when
+            /// <see cref="Burst"/> &gt; 1 (a burst is already one pull).
+            public bool SemiAuto;
+
             /// Minimum pause from a burst's last round to the next burst (seconds) — a new burst also
             /// needs a fresh trigger pull; read only when <see cref="Burst"/> &gt; 1.
             public float BurstCooldown;
@@ -483,6 +487,41 @@ namespace VortexArena.Core.Editor
                 SmokeSizeMin = 0.085f, SmokeSizeMax = 0.140f, SmokeLifetime = 1.9f, SmokeAlpha = 0.46f,
                 CasingFamily = "12gauge",
             },
+            // Pistol_G — MAGNUM: the heavy sidearm. Semi-auto with a six-round cylinder: the slowest
+            // trigger in the game paid back as the hardest single hit, so a miss really costs.
+            // ⚠️ Headshot stays at a TWO-hit 2× — at 45 damage the default 4× would make it a
+            // one-shot head kill, a role that belongs to the AK alone.
+            // ⚠️ Ids start at 16: the netItemId space spans EVERY ItemDefinition, not just weapons,
+            // and 14-15 are already taken (wrist bomb, mole hammer) — NetItemIdGuard errors on a clash.
+            new WeaponSpec
+            {
+                Name = "MAGNUM", PackPrefab = "Pistol_G", WeaponId = "magnum", DisplayName = "MAGNUM",
+                NetItemId = 16, HoldMode = "OneHand",
+                Damage = 45, Headshot = 2f, Rpm = 120, Magazine = 6, Reload = 2.40f, SemiAuto = true,
+                SpareMags = 4,
+                Range = 30f, BaseSpread = 0.80f, BloomPerShot = 0.50f,
+                MaxBloom = 2.5f, BloomRecovery = 4.0f, Kick = 4.5f, KickBack = 0.04f, RecoverSpeed = 7.0f,
+                PitchBase = 0.92f, Volume = 1.0f,
+                FlashColorMin = new Color(1f, 0.80f, 0.42f), FlashColorMax = new Color(1f, 0.40f, 0.10f),
+                FlashSizeMin = 0.045f, FlashSizeMax = 0.080f, FlashLifetime = 0.080f, FlashConeAngle = 32f,
+                SmokeSizeMin = 0.045f, SmokeSizeMax = 0.075f, SmokeLifetime = 1.3f, SmokeAlpha = 0.34f,
+                CasingFamily = "9x19",
+            },
+            // Pistol_O — GLOCK: the light sidearm. The magnum's opposite — fast trigger, weak round,
+            // big magazine; four body hits or three headshots.
+            new WeaponSpec
+            {
+                Name = "GLOCK", PackPrefab = "Pistol_O", WeaponId = "glock", DisplayName = "GLOCK",
+                NetItemId = 17, HoldMode = "OneHand",
+                Damage = 22, Headshot = 2.5f, Rpm = 420, Magazine = 15, Reload = 1.60f, SemiAuto = true,
+                SpareMags = 4,
+                Range = 22f, BaseSpread = 0.95f, BloomPerShot = 0.35f,
+                MaxBloom = 2.8f, BloomRecovery = 5.5f, Kick = 1.6f, PitchBase = 1.05f, Volume = 0.92f,
+                FlashColorMin = new Color(1f, 0.90f, 0.66f), FlashColorMax = new Color(1f, 0.60f, 0.26f),
+                FlashSizeMin = 0.026f, FlashSizeMax = 0.048f, FlashLifetime = 0.050f, FlashConeAngle = 26f,
+                SmokeSizeMin = 0.026f, SmokeSizeMax = 0.046f, SmokeLifetime = 0.85f, SmokeAlpha = 0.22f,
+                CasingFamily = "9x19",
+            },
         };
 
         private enum BuildOutcome { Rebound, Failed }
@@ -662,6 +701,7 @@ namespace VortexArena.Core.Editor
             SetNumber(so, "fireRateRpm", spec.Rpm, ctx);
             SetNumber(so, "range", spec.Range, ctx);
             SetNumber(so, "pelletCount", spec.Pellets > 0 ? spec.Pellets : 1, ctx);
+            SetBool(so, "semiAuto", spec.SemiAuto && spec.Burst <= 1, ctx);
             SetNumber(so, "burstCount", spec.Burst > 1 ? spec.Burst : 1, ctx);
             SetNumber(so, "burstCooldown", spec.Burst > 1 ? spec.BurstCooldown : 0f, ctx);
             SetNumber(so, "baseSpreadDegrees", spec.BaseSpread, ctx);
@@ -1480,6 +1520,23 @@ namespace VortexArena.Core.Editor
                     Warn(ctx + ": '" + field + "' sayısal değil (" + p.propertyType + ").");
                     break;
             }
+        }
+
+        private static void SetBool(SerializedObject so, string field, bool value, string ctx)
+        {
+            SerializedProperty p = FindProp(so, field, ctx);
+            if (p == null)
+            {
+                return;
+            }
+
+            if (p.propertyType != SerializedPropertyType.Boolean)
+            {
+                Warn(ctx + ": '" + field + "' bool değil (" + p.propertyType + ").");
+                return;
+            }
+
+            p.boolValue = value;
         }
 
         /// <summary>Writes an object reference. If <paramref name="value"/> is null and

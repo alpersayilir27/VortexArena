@@ -247,6 +247,10 @@ public sealed class ZombieMode : IGameMode
     private static readonly WaveTable HardTable = new(MatchDifficulty.Hard, 12, 6, 10, 3, 30,
         0.6f, 10f, 20, 5, 50, 4, 1, 1.3f);
 
+    /// <summary>First part of the between-waves gap (§10.5): the "wave cleared" phase the HUD shows the
+    /// next wave's new weapons in. ⚠️ NOT divided by the map pace — it is a reading window, not pressure.</summary>
+    private const float ClearSeconds = 5f;
+
     /// <summary>Pace of a map that sets none (§10.5) — exactly the base numbers of the wave table.</summary>
     private const float DefaultPace = 1f;
 
@@ -256,8 +260,11 @@ public sealed class ZombieMode : IGameMode
     private const float MaxPace = 2f;
 
     /// <summary>How long a broken zombie stays in the world before <c>object_despawn</c> — the death
-    /// animation's length. ⚠️ Removing it at once would cut the animation on every headset.</summary>
-    private const float DespawnDelaySeconds = 3f;
+    /// animation plus the time the corpse ragdoll needs to settle. ⚠️ Removing it at once would cut the
+    /// animation on every headset; shortening it makes bodies vanish mid-fall.
+    /// <para>Purely visual: the wave ends on the last STANDING zombie, so the corpses run this timer out
+    /// inside the wave gap.</para></summary>
+    private const float DespawnDelaySeconds = 4.5f;
 
     /// <summary>Pause reason shown while there is no object host; it rides <c>modeState</c>
     /// (§10.1) and the HUD prints it verbatim.</summary>
@@ -331,8 +338,14 @@ public sealed class ZombieMode : IGameMode
     private float _spawnInterval = NormalTable.SpawnInterval;
     private float _waveBreak = NormalTable.WaveBreak;
 
-    /// <summary>Seconds left of the between-waves break; <c>0</c> = not in a break.</summary>
+    /// <summary>Seconds left of the WHOLE between-waves gap (clear phase + break); <c>0</c> = not in a
+    /// break. ⚠️ Everything downstream (<c>next</c>, the revive window, the music) reads this one total:
+    /// the clear phase is a part of the gap, not a state beside it.</summary>
     private float _breakTimer;
+
+    /// <summary>Seconds left of the clear phase (<c>modeState clr</c>), running inside
+    /// <see cref="_breakTimer"/>; <c>0</c> = the countdown part.</summary>
+    private float _clearTimer;
 
     /// <summary>Zombies of the running wave still to be spawned, per type (§10.5 "Dalga dizilimi");
     /// indexed by the <c>Idx*</c> constants. The spawn picker draws from it, so the composition cannot
@@ -445,6 +458,7 @@ public sealed class ZombieMode : IGameMode
             _spawnedThisWave = 0;
             _spawnTimer = 0f;
             _breakTimer = 0f;
+            _clearTimer = 0f;
             _waveTotal = 0;
             _standingCap = 0;
             _playerFactor = 1f;
@@ -530,6 +544,7 @@ public sealed class ZombieMode : IGameMode
             leftovers = new List<int>(_zombies.Keys);
             _zombies.Clear();
             _breakTimer = 0f;
+            _clearTimer = 0f;
         }
 
         for (var i = 0; i < leftovers.Count; i++) director.DespawnObject(leftovers[i]);
@@ -557,14 +572,14 @@ public sealed class ZombieMode : IGameMode
 
         if (rescued)
         {
-            lock (_gate) _over = OverRescued;
+            SetOver(OverRescued);
             PushModeState(director);
             return true;
         }
 
         if (director.TimeRemaining <= 0f)
         {
-            lock (_gate) _over = devDead ? OverRescued : OverSurvived;
+            SetOver(devDead ? OverRescued : OverSurvived);
             PushModeState(director);
             return true;
         }
@@ -575,9 +590,20 @@ public sealed class ZombieMode : IGameMode
 
         if (!IsTeamDown(director)) return false;
 
-        lock (_gate) _over = OverLost;
+        SetOver(OverLost);
         PushModeState(director);
         return true;
+    }
+
+    /// <summary>Writes the outcome token and closes the clear phase with it: a gap that was running when
+    /// the clock ran out must not keep announcing a wave the squad will never see.</summary>
+    private void SetOver(string over)
+    {
+        lock (_gate)
+        {
+            _over = over;
+            _clearTimer = 0f;
+        }
     }
 
     public void OnTick(MatchDirector director, float deltaSeconds)
@@ -754,6 +780,7 @@ public sealed class ZombieMode : IGameMode
         if (_breakTimer > 0f)
         {
             _breakTimer = MathF.Max(0f, _breakTimer - deltaSeconds);
+            _clearTimer = MathF.Max(0f, _clearTimer - deltaSeconds);
             if (_breakTimer > 0f) return;
 
             StartWaveLocked(director);
@@ -768,9 +795,14 @@ public sealed class ZombieMode : IGameMode
 
         if (_spawnedThisWave >= _waveTotal)
         {
-            // The wave is over only once the last CORPSE is gone: the despawn delay is the death
-            // animation's window, and the break must not start on top of it.
-            if (_zombies.Count == 0) _breakTimer = _waveBreak;
+            // ⚠️ STANDING count, not the table size: waiting for the corpses to despawn would push the
+            // "wave cleared" cue 4.5 s past the kill that earned it. They clear during the gap.
+            if (StandingCountLocked() == 0)
+            {
+                _clearTimer = ClearSeconds;
+                _breakTimer = ClearSeconds + _waveBreak;
+            }
+
             return;
         }
 
@@ -962,6 +994,7 @@ public sealed class ZombieMode : IGameMode
 
         _finalStand = true;
         _breakTimer = 0f;
+        _clearTimer = 0f;
         _spawnTimer = 0f;
         _devPlayers = Math.Max(DevMinPlayers, ConnectedCount(director)); // frozen like a wave's count
         SpawnDevLocked(director);
@@ -1048,6 +1081,7 @@ public sealed class ZombieMode : IGameMode
         _spawnedThisWave = 0;
         _spawnTimer = 0f;
         _breakTimer = 0f;
+        _clearTimer = 0f;
         _playerFactor = PlayerFactorOf(ConnectedCount(director));
         _standingCap = ConcurrentCapLocked(_wave);
         _waveTotal = BuildDeckLocked(_wave, WaveTotalLocked(_wave));
@@ -1370,7 +1404,7 @@ public sealed class ZombieMode : IGameMode
         tally[playerId] = tally.TryGetValue(playerId, out var count) ? count + 1 : 1;
 
     /// <summary>§10.5
-    /// <c>w:..;left:..;next:..;rem:..;fm:..;diff:..;fs:..[;dev:id/hp][;wx:..][;over:..][;zs&lt;id&gt;:h/r]</c>.
+    /// <c>w:..;left:..;next:..;rem:..;fm:..;diff:..;fs:..[;dev:id/hp][;wx:..][;clr:..][;over:..][;zs&lt;id&gt;:h/r]</c>.
     /// ⚠️ Not pushed while we hold the pause: the reason text lives in the same field there (§10.1) and
     /// would be overwritten.</summary>
     /// <remarks><c>rem</c> and <c>fm</c> are the BRAIN's input, not HUD decoration (§10.5 multi-floor
@@ -1399,6 +1433,14 @@ public sealed class ZombieMode : IGameMode
             }
 
             if (_specialId.Length > 0 && _wave > 0 && _breakTimer <= 0f) state += $";wx:{_specialId}";
+
+            // Only while it runs: its absence is what tells the HUD the countdown part has begun.
+            // ⚠️ Never beside `over`: the result screen would get a "dalga tamamlandı" layer on top.
+            if (!_finalStand && _clearTimer > 0f && _over.Length == 0)
+            {
+                state += $";clr:{(int)MathF.Ceiling(_clearTimer)}";
+            }
+
             if (_over.Length > 0) state += $";over:{_over}{PlayerTokensLocked()}";
         }
 

@@ -22,9 +22,6 @@ namespace VortexArena.Modes.Zombie
         /// <summary>Missing <c>fm</c> → the <c>normal</c> value of the difficulty table.</summary>
         private const int DefaultFloorMin = 3;
 
-        /// <summary>Raised when <see cref="Wave"/> CHANGES (main thread), with the new wave.</summary>
-        public static event Action<int> WaveChanged;
-
         /// <summary>Running wave; <c>0</c> before the first wave (the pre-start countdown).</summary>
         public static int Wave { get; private set; }
 
@@ -34,6 +31,52 @@ namespace VortexArena.Modes.Zombie
         /// <summary>Seconds to the next wave; <c>0</c> = a wave is RUNNING. The music layer hangs off
         /// this, so missing it reads as "wave running" — same safe direction as the HUD.</summary>
         public static int Next { get; private set; }
+
+        /// <summary>Seconds left of the CLEAR phase (the first part of the wave gap); <c>0</c> = not in
+        /// it. Contained in <see cref="Next"/>, never added to it.</summary>
+        public static int ClearLeft { get; private set; }
+
+        /// <summary>The wave gap's "dalga tamamlandı" part is running.</summary>
+        public static bool InClearPhase => ClearLeft > 0;
+
+        /// <summary>Is the run in <c>playing</c>? Read from the PHASE of the last state, so the
+        /// countdown and the result screen both read as "not running".</summary>
+        public static bool Playing { get; private set; }
+
+        /// <summary>Outcome token (<c>survived|rescued|lost</c>); empty while the run is on.</summary>
+        public static string Over { get; private set; } = string.Empty;
+
+        /// <summary>Clear phase of the wave in the argument has just opened (the wave the squad
+        /// finished).</summary>
+        public static event Action<int> ClearStarted;
+
+        /// <summary>A wave is on the floor from this instant (its number in the argument).</summary>
+        public static event Action<int> WaveStarted;
+
+        /// <summary>The Dev appeared; raised once per run.</summary>
+        public static event Action GiantAppeared;
+
+        /// <summary>A mode state was parsed (1 Hz). For what is read from the VALUES rather than from
+        /// an edge — the between-waves countdown tick.</summary>
+        public static event Action StateApplied;
+
+        /// <summary>Wave <see cref="ClearStarted"/> was raised for; 0 = none.</summary>
+        private static int _clearedWave;
+
+        /// <summary>Wave <see cref="WaveStarted"/> was raised for; 0 = none.</summary>
+        private static int _startedWave;
+
+        /// <summary>⚠️ Latch as well as an edge: <c>dev</c> rides every state while the Dev lives, so a
+        /// reconnect would read its first state as a fresh arrival.</summary>
+        private static bool _giantAnnounced;
+
+        /// <summary>Raised when <see cref="UnlockWave"/> CHANGES (main thread), with the new value.</summary>
+        public static event Action<int> UnlockWaveChanged;
+
+        /// <summary>Wave the weapon locks are judged by: during a wave gap it is already the NEXT wave's
+        /// number, because the gap is when the squad swaps weapons — the arsenal must be open before the
+        /// wave it belongs to lands. Never below 1 (the pre-start countdown counts as wave 1).</summary>
+        public static int UnlockWave { get; private set; } = 1;
 
         /// <summary>How many zombies the empty storeys may hold while the wave is still spawning.</summary>
         public static int FloorMin { get; private set; } = DefaultFloorMin;
@@ -70,41 +113,52 @@ namespace VortexArena.Modes.Zombie
             NetEvents.OnLoadMatch += _ =>
             {
                 Next = 0;
+                ClearLeft = 0;
                 Special = string.Empty;
                 DevNetId = 0;
                 DevMaxHp = 0;
+                ResetRunLatches();
                 SetFinalStand(false);
                 SetWave(0);
+                RefreshUnlockWave();
             };
             NetEvents.OnReturnToLobby += _ => Reset();
             NetEvents.OnDisconnected += Reset;
+
+            // With domain reload disabled the statics survive the previous session: a lingering wave
+            // (or final stand) would open the boards before the next run's first state.
+            Reset();
         }
 
         private static void Reset()
         {
             Next = 0;
+            ClearLeft = 0;
             Remaining = DefaultRemaining;
             FloorMin = DefaultFloorMin;
             Difficulty = string.Empty;
             Special = string.Empty;
             DevNetId = 0;
             DevMaxHp = 0;
+            ResetRunLatches();
             SetFinalStand(false);
             SetWave(0);
+            RefreshUnlockWave();
         }
 
-        /// <summary>Writes the wave and announces a CHANGE — including the drop back to 0 on returning
-        /// to the lobby, which is how the weapon locks go back up for the next run.</summary>
-        private static void SetWave(int wave)
+        /// <summary>Drops the one-off edges of a run: the next run clears its own wave 1 again.</summary>
+        private static void ResetRunLatches()
         {
-            if (Wave == wave)
-            {
-                return;
-            }
-
-            Wave = wave;
-            WaveChanged?.Invoke(wave);
+            Playing = false;
+            Over = string.Empty;
+            _clearedWave = 0;
+            _startedWave = 0;
+            _giantAnnounced = false;
         }
+
+        /// <summary>Writes the wave. ⚠️ The drop back to 0 on returning to the lobby matters: it is what
+        /// puts <see cref="UnlockWave"/> back to 1 for the next run.</summary>
+        private static void SetWave(int wave) => Wave = wave;
 
         /// <summary><c>"w:3;left:5;next:0;rem:2;fm:3;diff:normal"</c> → the cached numbers.</summary>
         /// <remarks>⚠️ Tolerant like the HUD's parser: a partial or malformed string leaves the previous
@@ -113,10 +167,19 @@ namespace VortexArena.Modes.Zombie
         private static void Apply(MatchStateMsg msg)
         {
             string modeState = msg?.modeState;
+
+            // Read from EVERY state, token or pause reason: the phase is the core's field and the
+            // announcer's gate hangs on it.
+            Playing = msg != null &&
+                      string.Equals(msg.phase, ArenaProtocol.PHASE_PLAYING, StringComparison.Ordinal);
+
             if (string.IsNullOrEmpty(modeState))
             {
                 return;
             }
+
+            int previousWave = Wave;
+            int previousDev = DevNetId;
 
             // ⚠️ These two are read from the ABSENCE of their key as well: a special wave and the final
             // stand both END by the key dropping out, and a stale "fs" would keep every weapon open for
@@ -124,6 +187,7 @@ namespace VortexArena.Modes.Zombie
             bool sawSpecial = false;
             bool sawFinalStand = false;
             bool sawWave = false;
+            bool sawClear = false;
 
             string[] tokens = modeState.Split(';');
             for (int i = 0; i < tokens.Length; i++)
@@ -141,6 +205,12 @@ namespace VortexArena.Modes.Zombie
                 if (string.Equals(key, ZombieKinds.StateDifficulty, StringComparison.Ordinal))
                 {
                     Difficulty = raw;
+                    continue;
+                }
+
+                if (string.Equals(key, ZombieKinds.StateOver, StringComparison.Ordinal))
+                {
+                    Over = raw;
                     continue;
                 }
 
@@ -178,6 +248,11 @@ namespace VortexArena.Modes.Zombie
                 {
                     Next = value;
                 }
+                else if (string.Equals(key, ZombieKinds.StateClear, StringComparison.Ordinal))
+                {
+                    sawClear = true;
+                    ClearLeft = value;
+                }
                 else if (string.Equals(key, ZombieKinds.StateRemaining, StringComparison.Ordinal))
                 {
                     Remaining = value;
@@ -204,6 +279,61 @@ namespace VortexArena.Modes.Zombie
             {
                 SetFinalStand(false);
             }
+
+            // Same absence rule as `wx`: the clear phase ENDS by its key dropping out.
+            if (!sawClear)
+            {
+                ClearLeft = 0;
+            }
+
+            RefreshUnlockWave();
+            RaiseEdges(previousWave, previousDev);
+            StateApplied?.Invoke();
+        }
+
+        /// <summary>The three one-off moments of a run, read from this state against the previous one.
+        /// Kept here and not in every listener: a dozen components re-deriving the same edge drift
+        /// apart.</summary>
+        private static void RaiseEdges(int previousWave, int previousDev)
+        {
+            if (!Playing || Over.Length > 0)
+            {
+                return;
+            }
+
+            if (ClearLeft > 0 && !FinalStand && Wave >= 1 && Wave > _clearedWave)
+            {
+                _clearedWave = Wave;
+                ClearStarted?.Invoke(Wave);
+            }
+
+            // A wave is out when its number goes up AND nothing is counting down any more.
+            if (Wave > previousWave && Next == 0 && Wave > _startedWave)
+            {
+                _startedWave = Wave;
+                WaveStarted?.Invoke(Wave);
+            }
+
+            if (!_giantAnnounced && DevNetId != 0 && previousDev == 0)
+            {
+                _giantAnnounced = true;
+                GiantAppeared?.Invoke();
+            }
+        }
+
+        /// <summary>Recomputes <see cref="UnlockWave"/> and announces a change. Called after every parse,
+        /// not only on a wave change: the gap opening is itself an unlock moment.</summary>
+        private static void RefreshUnlockWave()
+        {
+            int wave = Mathf.Max(1, Wave);
+            int value = Wave >= 1 && Next > 0 ? wave + 1 : wave;
+            if (UnlockWave == value)
+            {
+                return;
+            }
+
+            UnlockWave = value;
+            UnlockWaveChanged?.Invoke(value);
         }
 
         /// <summary><c>"&lt;netId&gt;/&lt;maxHp&gt;"</c> → the boss bar's two numbers. A malformed value

@@ -42,9 +42,9 @@ namespace VortexArena.Core.Editor
         /// instance, this is only the prefab's starting point.</summary>
         private const float DefaultUpperHeight = 3f;
 
-        // Plate geometry. Unity's cylinder primitive is 1 m across and 2 m tall, so 0.5 scale = a
-        // 0.5 m wide disc and 0.01 = a 2 cm thick plate.
-        private const float DiscRadiusScale = 0.5f;
+        // Plate geometry. Unity's cylinder primitive is 1 m across and 2 m tall, so the XZ scale equals
+        // the disc diameter and 0.01 = a 2 cm thick plate. Diameter comes from the trigger radius.
+        private const float DiscRadiusScale = 2f * FloorPortal.RadiusMeters;
         private const float PlateThicknessScale = 0.01f;
         private const float PlateHalfThickness = PlateThicknessScale; // 2 m primitive × scale / 2
         private const float FillThicknessScale = 0.012f;
@@ -57,16 +57,16 @@ namespace VortexArena.Core.Editor
         private const float FillLift = 0.006f;
 
         // Band: open tube just outside the disc edge, fading out upwards.
-        private const float BandRadius = 0.27f;
+        private const float BandRadius = FloorPortal.RadiusMeters + 0.02f;
         private const float BandHeight = 0.35f;
         private const int BandSegments = 48;
         private const int BandTextureHeight = 32;
 
         // Arrow (pointing +Y, pivot at its centre): two crossed flat outlines, visible from any side.
-        private const float ArrowShaftHalfWidth = 0.05f;
-        private const float ArrowShaftHeight = 0.2f;
-        private const float ArrowHeadHalfWidth = 0.14f;
-        private const float ArrowTotalHeight = 0.36f;
+        private const float ArrowShaftHalfWidth = 0.075f;
+        private const float ArrowShaftHeight = 0.3f;
+        private const float ArrowHeadHalfWidth = 0.21f;
+        private const float ArrowTotalHeight = 0.54f;
 
         private static readonly Color RingColor = new Color(0.35f, 0.85f, 1f, 0.6f);
         private static readonly Color FillColor = new Color(0.9f, 1f, 1f, 0.7f);

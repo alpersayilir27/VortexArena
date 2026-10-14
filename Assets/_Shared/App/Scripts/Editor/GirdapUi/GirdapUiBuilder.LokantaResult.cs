@@ -599,6 +599,10 @@ namespace VortexArena.App.Editor
                     target.additionalShaderChannels = source.additionalShaderChannels;
                 }
             }
+
+            // ⚠️ The world-space canvas is authored in pixels; without the generic root scale a
+            // 1400 px card is drawn 1400 m wide and fills the view with its frame.
+            root.transform.localScale = generic.transform.localScale;
         }
 
         // ----------------------------------------------------------------- helpers

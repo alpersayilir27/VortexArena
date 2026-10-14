@@ -1,0 +1,158 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 55accdfacbb64ab428182bb5c93442d3, type: 3}
+  m_Name: WD_GLOCK
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.WeaponDefinition
+  displayName: GLOCK
+  netItemId: 17
+  prefab: {fileID: 8917929639311514391, guid: ce297327aa7420a41b70de2ccf95ad71, type: 3}
+  holdMode: 0
+  grabPath: 0
+  instancing: 0
+  releaseMode: 0
+  hideGrabIndicator: 0
+  primaryGripRight:
+    authored: 1
+    position: {x: 0.04139025, y: -0.055208445, z: -0.07119813}
+    fingerJoints:
+    - joint: HandThumb1
+      rotation: {x: -0.1903693, y: -0.21393101, z: 0.53368145, w: 0.79572415}
+    - joint: HandThumb2
+      rotation: {x: 0.04363273, y: 0.06650922, z: -0.083212234, w: 0.99335206}
+    - joint: HandThumb3
+      rotation: {x: -0.012792035, y: -0.06136993, z: 0.08259432, w: 0.9946096}
+    - joint: HandIndex1
+      rotation: {x: 0.059186105, y: 0.048330106, z: 0.030712647, w: 0.99660295}
+    - joint: HandIndex2
+      rotation: {x: 0.08036022, y: 0.005101026, z: -0.026168559, w: 0.99640906}
+    - joint: HandIndex3
+      rotation: {x: -0.04147642, y: 0.026691299, z: -0.016234282, w: 0.99865085}
+    - joint: HandMiddle1
+      rotation: {x: 0.22040975, y: 0.02337629, z: -0.014367589, w: 0.97502136}
+    - joint: HandMiddle2
+      rotation: {x: 0.43072763, y: -0.00091044017, z: -0.012917866, w: 0.90238875}
+    - joint: HandMiddle3
+      rotation: {x: 0.19671854, y: -0.008048792, z: -0.062040843, w: 0.9784618}
+    - joint: HandRing1
+      rotation: {x: 0.27819356, y: 0.076436184, z: -0.071901344, w: 0.95477533}
+    - joint: HandRing2
+      rotation: {x: 0.4909464, y: -0.013856435, z: -0.041574206, w: 0.8700867}
+    - joint: HandRing3
+      rotation: {x: 0.2993715, y: -0.029348338, z: -0.018483192, w: 0.9535059}
+    - joint: HandPinky0
+      rotation: {x: 0.01831184, y: 0.14034285, z: -0.20703591, w: 0.96804154}
+    - joint: HandPinky1
+      rotation: {x: 0.019745743, y: 0.039856963, z: 0.099583544, w: 0.9940345}
+    - joint: HandPinky2
+      rotation: {x: 0.44026434, y: 0.020911973, z: -0.07342248, w: 0.8946167}
+    - joint: HandPinky3
+      rotation: {x: 0.3459786, y: -0.045879297, z: 0.0018761301, w: 0.9371183}
+    wristAuthored: 1
+    wristPosition: {x: 0.004563519, y: -0.01373589, z: -0.04560643}
+    wristRotation: {x: -0.066789225, y: -0.123201504, z: -0.72247905, w: 0.67704105}
+  primaryGripLeft:
+    authored: 1
+    position: {x: -0.04139025, y: -0.055208445, z: -0.07119813}
+    fingerJoints:
+    - joint: HandThumb1
+      rotation: {x: -0.19036925, y: 0.21393102, z: -0.53368145, w: 0.79572433}
+    - joint: HandThumb2
+      rotation: {x: 0.043632735, y: -0.066509224, z: 0.08321225, w: 0.9933522}
+    - joint: HandThumb3
+      rotation: {x: -0.012792036, y: 0.06136993, z: -0.08259432, w: 0.99460965}
+    - joint: HandIndex1
+      rotation: {x: 0.059186094, y: -0.048330095, z: -0.03071264, w: 0.9966032}
+    - joint: HandIndex2
+      rotation: {x: 0.08036021, y: -0.005101024, z: 0.026168555, w: 0.9964093}
+    - joint: HandIndex3
+      rotation: {x: -0.04147642, y: -0.026691299, z: 0.01623428, w: 0.99865097}
+    - joint: HandMiddle1
+      rotation: {x: 0.22040972, y: -0.02337629, z: 0.014367587, w: 0.9750214}
+    - joint: HandMiddle2
+      rotation: {x: 0.43072757, y: 0.00091044285, z: 0.012917867, w: 0.9023891}
+    - joint: HandMiddle3
+      rotation: {x: 0.19671848, y: 0.008048796, z: 0.062040832, w: 0.97846204}
+    - joint: HandRing1
+      rotation: {x: 0.27819356, y: -0.076436184, z: 0.07190135, w: 0.9547754}
+    - joint: HandRing2
+      rotation: {x: 0.49094635, y: 0.013856442, z: 0.041574202, w: 0.87008697}
+    - joint: HandRing3
+      rotation: {x: 0.29937148, y: 0.029348336, z: 0.018483188, w: 0.95350605}
+    - joint: HandPinky0
+      rotation: {x: 0.018311845, y: -0.14034283, z: 0.20703591, w: 0.9680417}
+    - joint: HandPinky1
+      rotation: {x: 0.019745743, y: -0.039856955, z: -0.099583544, w: 0.9940345}
+    - joint: HandPinky2
+      rotation: {x: 0.44026434, y: -0.020911975, z: 0.07342248, w: 0.8946167}
+    - joint: HandPinky3
+      rotation: {x: 0.34597862, y: 0.045879297, z: -0.0018761245, w: 0.9371181}
+    wristAuthored: 1
+    wristPosition: {x: -0.004563519, y: -0.01373589, z: -0.04560643}
+    wristRotation: {x: -0.06678922, y: 0.12320151, z: 0.7224791, w: 0.67704105}
+  secondaryGripRight:
+    authored: 0
+    position: {x: 0, y: 0, z: 0}
+    fingerJoints: []
+    wristAuthored: 0
+    wristPosition: {x: 0, y: 0, z: 0}
+    wristRotation: {x: 0, y: 0, z: 0, w: 0}
+  secondaryGripLeft:
+    authored: 0
+    position: {x: 0, y: 0, z: 0}
+    fingerJoints: []
+    wristAuthored: 0
+    wristPosition: {x: 0, y: 0, z: 0}
+    wristRotation: {x: 0, y: 0, z: 0, w: 0}
+  tracerColor: {r: 1, g: 0.85, b: 0.4, a: 0.9}
+  tracerWidth: 0.02
+  tracerLifetime: 0.1
+  tracerEveryNthRound: 3
+  teamTintChildren: []
+  weaponId: glock
+  damage: 22
+  headshotMultiplier: 2.5
+  stomachMultiplier: 1
+  legMultiplier: 0.75
+  fireRateRpm: 420
+  range: 22
+  pelletCount: 1
+  semiAuto: 1
+  burstCount: 1
+  burstCooldown: 0
+  baseSpreadDegrees: 0.95
+  bloomPerShotDegrees: 0.35
+  maxBloomDegrees: 2.8
+  bloomRecoveryPerSecond: 5.5
+  kickDegrees: 1.6
+  kickBackMeters: 0.02
+  recoilRecoverSpeed: 10
+  oneHandSpreadMultiplier: 1
+  oneHandRecoilMultiplier: 1
+  oneHandRecoveryPenalty: 0.75
+  hapticAmplitude: 0.8
+  hapticDuration: 0.05
+  dryFireHapticAmplitude: 0.45
+  dryFireHapticDuration: 0.06
+  magazineSize: 15
+  spareMagazines: 4
+  reserveMode: 0
+  reloadTime: 1.6
+  fireClips:
+  - {fileID: 8300000, guid: aa324abf4bc763a43a54cca27a61031d, type: 3}
+  magOutClip: {fileID: 8300000, guid: d773cab74f320f4478da8af613af1dcb, type: 3}
+  magInClip: {fileID: 0}
+  perShellReloadAudio: 0
+  dryFireClip: {fileID: 8300000, guid: 2800b6db8e9a8784ea34a81590ae6dcb, type: 3}
+  pickupClip: {fileID: 8300000, guid: c53982eeae2ed2f4888f44165b40dd77, type: 3}
+  firePitchBase: 1.05
+  firePitchJitter: 0.05
+  fireVolume: 0.92

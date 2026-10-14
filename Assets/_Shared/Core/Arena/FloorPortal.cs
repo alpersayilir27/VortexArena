@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using VortexArena.Core.Combat;
+using VortexArena.Core.Player;
 using VortexArena.Core.UI;
 using VortexArena.Net;
 
@@ -19,11 +20,14 @@ namespace VortexArena.Core.Arena
     /// they step off it, otherwise the dwell would immediately send them back.</para>
     /// <para>Dead players may use portals: the death fade already moves them to their base floor and
     /// blocking the hop would strand a corpse walking back.</para>
+    /// <para>The dwell drives the HMD iris (<see cref="PortalIris"/>): the view closes from every edge
+    /// and is fully black exactly at the hop, so the floor swap itself is never seen.</para>
     /// </remarks>
     public class FloorPortal : MonoBehaviour
     {
-        /// <summary>Disc radius (m) — a 50 cm disc: one person, not two.</summary>
-        public const float RadiusMeters = 0.25f;
+        /// <summary>Disc radius (m) — a 75 cm disc: easy to find, still one person. The kit builder
+        /// sizes the plate from this, so the drawn disc and the trigger never drift apart.</summary>
+        public const float RadiusMeters = 0.375f;
 
         /// <summary>Uninterrupted standing time that triggers the hop (s).</summary>
         private const float DwellSeconds = 2f;
@@ -199,6 +203,8 @@ namespace VortexArena.Core.Arena
                 _idleVisuals = false;
                 Paint(disc, Color.Lerp(IdleColor, ChargedColor, progress));
                 SetFill(disc, progress);
+                // Heartbeat: silence = stepped off, and the iris opens by itself.
+                PortalIris.ReportDwell(progress);
                 int remaining = Mathf.CeilToInt(DwellSeconds - _dwell);
                 SetNotice(target > myFloor
                     ? $"Üst kata geçiliyor… {remaining}"
@@ -206,14 +212,18 @@ namespace VortexArena.Core.Arena
                 return;
             }
 
-            if (!FloorState.MoveWithFade(target, "portal", 0.25f, 0.1f, 0.4f))
+            // ⚠️ Moved WITHOUT the fade helper: the iris is already fully black at this point (the
+            // dwell closed it), so a second blackout would only add a blink on top of it.
+            if (!FloorState.Request(target, "portal"))
             {
                 ResetDwell(); // nothing moved: do not spend the portal, do not play the sound
                 return;
             }
 
-            // Disarmed once the move is accepted: the fade puts the player on the paired disc, which
-            // is inside this portal too.
+            PortalIris.ReportHop(); // hold the black, then open on the new floor
+
+            // Disarmed once the move is accepted: the player lands on the paired disc, which is
+            // inside this portal too.
             _armed = false;
             ResetDwell();
             if (teleportSound != null)

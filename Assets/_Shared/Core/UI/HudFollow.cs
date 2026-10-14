@@ -1,4 +1,6 @@
 using UnityEngine;
+using VortexArena.Core.Arena;
+using VortexArena.Core.Player;
 
 namespace VortexArena.Core.UI
 {
@@ -136,9 +138,13 @@ namespace VortexArena.Core.UI
 
         /// <summary>
         /// Fraction of the full offset the panel may keep before it would sit behind the nearest
-        /// solid surface on the head→panel line (1 = nothing in the way). Triggers, the player's own
-        /// rig (weapon, hands, overlays under the same root) and the panel itself are ignored.
+        /// WALL on the head→panel line (1 = nothing in the way). Triggers, the player's own rig
+        /// (weapon, hands, overlays under the same root), the panel itself and every actor
+        /// (<see cref="IsActor"/>) are ignored.
         /// </summary>
+        /// <remarks>⚠️ Only architecture may pull the panel in. A crowd around the player (zombie hit
+        /// boxes, corpses, remote avatars) would otherwise collapse the end-of-match card into the
+        /// player's face exactly when it is being read.</remarks>
         private float WallPull(Transform reference, float yaw)
         {
             Vector3 offset = PanelOffset(yaw);
@@ -150,13 +156,16 @@ namespace VortexArena.Core.UI
 
             float floor = distance > 0f ? Mathf.Clamp01(minDistance / distance) : 1f;
             Transform self = reference.root;
+            // Geometry layers only; a corpse is scenery and never pulls the panel.
+            int mask = ArenaLayers.AreaTargetMask & ~ArenaLayers.ZombieRagdollMask;
             int count = Physics.RaycastNonAlloc(reference.position, offset / length, _hits, length,
-                Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+                mask, QueryTriggerInteraction.Ignore);
             float nearest = length;
             for (int i = 0; i < count; i++)
             {
-                Transform hit = _hits[i].collider.transform;
-                if (hit.IsChildOf(self) || hit.IsChildOf(transform))
+                Collider collider = _hits[i].collider;
+                Transform hit = collider.transform;
+                if (hit.IsChildOf(self) || hit.IsChildOf(transform) || IsActor(collider))
                 {
                     continue;
                 }
@@ -165,6 +174,22 @@ namespace VortexArena.Core.UI
             }
 
             return nearest >= length ? 1f : Mathf.Clamp((nearest - wallClearance) / length, floor, 1f);
+        }
+
+        /// <summary>Is this collider a living/moving body rather than architecture?</summary>
+        /// <remarks>Two tests, because neither alone covers the crowd: hit boxes hang on bones with no
+        /// body of their own (hand placed, <see cref="RemoteHitBox"/>), while a simulated actor or
+        /// thrown prop carries a non-kinematic <c>Rigidbody</c>. A static wall has neither.
+        /// Allocation-free: both return a single component reference.</remarks>
+        private static bool IsActor(Collider collider)
+        {
+            Rigidbody body = collider.attachedRigidbody;
+            if (body != null && !body.isKinematic)
+            {
+                return true;
+            }
+
+            return collider.GetComponentInParent<RemoteHitBox>() != null;
         }
 
         /// <summary>Same ratio as the pull, so the panel keeps its angular size when it comes closer.</summary>

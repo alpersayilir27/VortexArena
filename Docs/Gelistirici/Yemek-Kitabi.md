@@ -453,7 +453,8 @@ Okunabilir alanlar: `ModeId`, `Teams`, `Allies`, `Scoring`, `FriendlyFire`, `Rev
 2. `WeaponDefinition` SO'sunu `Assets/_Shared/Arsenal/Data/` altına oluştur
    (*Create → VortexArena → Weapon Definition*): `weaponId`, hasar, atış hızı, menzil, saçılım,
    şarjör, seri atış (`burstCount` 1 = tam otomatik, >1 = seri başına mermi + `burstCooldown`
-   seriler arası bekleme), haptik (`hapticAmplitude` 0-1 + `hapticDuration` sn — atış başına kumanda titreşimi;
+   seriler arası bekleme; `semiAuto` = tetik başına **tek** atış — sonraki atış için tetik bırakılır,
+   `fireRateRpm` yine üst sınırdır ve `burstCount` >1 iken okunmaz), haptik (`hapticAmplitude` 0-1 + `hapticDuration` sn — atış başına kumanda titreşimi;
    `dryFireHapticAmplitude` + `dryFireHapticDuration` — boş şarjörde tetiğe basınca; her çiftte
    ikisinden biri 0 ise o ipucunun haptiği yoktur), `prefab`.
 3. **Tek el cezası** (*Tek El Cezası* başlığı): `oneHandSpreadMultiplier` ·
@@ -470,7 +471,9 @@ Okunabilir alanlar: `ModeId`, `Teams`, `Allies`, `Scoring`, `FriendlyFire`, `Rev
 > ⚠️ **`ModeDefinition.loadout` ELLE DÜZENLENMEZ** — eşitleme onu `WeaponCatalog`'a göre geri
 > yazar. Rastgele silah veren modların havuzu **arsenalin tamamıdır**; mod başına silah kısıtı
 > diye bir şey yoktur ve elle kırpılan liste bir sonraki koşuda dolar. Kısıt gerçekten
-> gerekirse önce onu taşıyacak alan tasarlanır. `weaponSource:"weaponcanvas"` modlarında
+> gerekirse önce onu taşıyacak alan tasarlanır. Sonucu: **tek bir mod için eklenen silah da**
+> (zombi kademesine giren bir tabanca gibi) rastgele dağıtan PvP modlarının havuzuna girer —
+> silah kataloğa girdiği anda her moda girmiş sayılır. `weaponSource:"weaponcanvas"` modlarında
 > `loadout` zaten hiç okunmaz — sahnede hangi silahın duracağını arena belirler.
 
 > Silahın elde **nerede** durduğunu `WD_*`'taki kavrama kayıtları belirler (§11.0); dördü de el
@@ -999,6 +1002,9 @@ sahibi admindir** (§3.6b "Sunucu-atanmış sahiplik"); örnek uygulama `Assets/
      `ArenaRoof` kökünün altındaki plakalar bu bake'in **içindedir** — üst katın zemini odur.
      ⚠️ Duvar FBX'leri collider'sız gelir: oyun alanının içindeki **her duvar hattına** (kapı/gedik
      açıklıkları hariç) `Obstacle` kutusu konmazsa NavMesh o duvarı görmez ve zombi içinden geçer.
+     Aynısı çit, parmaklık ve **kapı kanadı** için de geçerlidir — göz için var olan sanat, zombi
+     için collider'ı kadardır. ⚠️ Ters yönü de kural: **zemin collider kutusu kapalı bir kapının
+     dışına taşmaz**, taşan kutu NavMesh'i kapının içinden bağlar ve zombiler kapalı kapıdan akar.
      Bake'ten sonra duvar hattı boyunca `NavMesh.Raycast` ile tarayıp yalnız açıklıkların geçirdiğini
      doğrula.
    - ⚠️ **Çok katlı arenada her `zombie_spawn` noktası KENDİ katının döşeme NavMesh'inin ÜSTÜNDE
@@ -1007,9 +1013,11 @@ sahibi admindir** (§3.6b "Sunucu-atanmış sahiplik"); örnek uygulama `Assets/
      konur (zombi balkon/teras kenarında ya da oda köşesinde belirir).
    - **Zemin kat yaklaşma koridoru:** sınırın dışından kapıya uzanan ince bir box collider
      (`Default` layer) — zombi oyun alanına dışarıdan yürür.
-   - ⚠️ **Ajan tipi `Zombie`'dir** (0,3 m yarıçap, 1,8 m boy — `Navigation > Agents`); yüzey ve
-     prefabın `NavMeshAgent`'ı **aynı** tipi seçer. Tip tutmazsa ajan NavMesh'i bulamaz ve zombi
-     doğduğu yerde durur; varsayılan `Humanoid` (0,5 m) dar kapıda tıkar.
+   - ⚠️ **Ajan tipi `Zombie`'dir** (0,4 m yarıçap, 1,8 m boy — `Navigation > Agents`); yüzey ve
+     prefabın `NavMeshAgent`'ı **aynı** tipi ve **aynı yarıçapı** seçer. Tip ya da yarıçap tutmazsa
+     ajan NavMesh'i bulamaz ve zombi doğduğu yerde durur; varsayılan `Humanoid` (0,5 m) dar kapıda
+     tıkar. ⚠️ Yarıçap değişirse **her zombi haritası yeniden bake edilir** — eski bake yeni
+     yarıçapla uyuşmaz ve bozukluk yalnız bazı dar geçitlerde görünür.
    - Bake sonrası her doğum noktasından oyun alanına yol çıkmalı, çitin dışındaki bir noktadan giden
      yol ise **kapıdan** dolaşmalıdır — dolaşmıyorsa çit bake'e engel olarak girmemiştir.
    - Kırılabilir siper `NavMeshObstacle` (carve) taşır, `Broken` olunca kapanır.
@@ -1019,6 +1027,10 @@ sahibi admindir** (§3.6b "Sunucu-atanmış sahiplik"); örnek uygulama `Assets/
      koridor başları): beyin son 3 kullanılmış noktayı atlar ve oyuncudan **3–15 m** bandında nokta
      arar, yani tek bir kümede duran iki üç nokta her dalgada aynı kapıyı tekrarlar ya da hiçbiri
      bandı tutmadığı için koşullar bırakılıp zombi oyuncunun dibinde belirir.
+   - ⚠️ **Her noktayı duvardan/çitten ~1 m açıkta tut:** zombi YATARAK doğar (~1,5 m gövde) ve
+     ayağa kalkarken dönemez; beyin noktanın 1,3 m çevresinde NavMesh kenarına **en az 0,9 m**
+     açıkta bir yer arar, hiç bulamazsa en ferah yere razı olur ve gövde duvarı deler. Hazırlık satırı NavMesh kenarına 0,6 m'den
+     yakın noktayı adıyla bildirir.
    - **Tek katlı arenada noktaların bir kısmı UZAK, bir kısmı YAKIN olsun:** dış yaklaşma
      koridorunun ucundakiler mesafeyi, çitin 4–6 m dışındakiler ise dalganın ilk zombilerinin
      oyuncuya **hızla ulaşmasını** verir — hepsi uzaktaysa dalganın başı boş geçer.
@@ -1029,46 +1041,101 @@ sahibi admindir** (§3.6b "Sunucu-atanmış sahiplik"); örnek uygulama `Assets/
    - Build penceresinin **"Zombi arenası hazır"** satırı açık sahne için üç şeyi birden denetler:
      NavMesh bake'i, **her katta** en az bir `zombie_spawn` ve sahnede silah panosu. ✗ kaldıysa eksik
      olan insan adımıdır, araç düzeltmez.
-8. **Silahlar:** zombi arenasında silah panosu `VA_WeaponCanvas_V2` **örneğidir** ve **oynanacak her
-   kata bir tane** konur — zombi gibi oyuncu da kat değiştirir, tek pano üst kattaki oyuncuyu silahsız
-   bırakır. ⚠️ **Pano örneği unpack EDİLMEZ** (kilit plakaları çalışma anında eklenir, prefaba yazılmaz).
-   - ⚠️ **Gece arenasında panonun üstüne lamba asılır:** pano ve silahlar hareketlidir, lightmap almaz,
-     yalnız ışık problarından beslenir; karanlık arenada problar neredeyse siyahtır ve pano gözlükte
-     hiç görünmez. Kalıp: panonun üst kenarına konağın dökme demir/lamba camı malzemesiyle tablo
-     lambası + **Baked** sıcak spot ışık (gerçek zamanlı ışık YASAK), panonun önüne 0,35 ve 1 m'de sık
-     ışık probu, sonra bake. Pano materyali örnekte `M_ZB_WeaponBoard`'a (hafif öz-ışık) çevrilir —
-     ortak `M_Arsenal_Board` diğer arenaların panolarıyla paylaşılır, ona dokunulmaz.
+8. **Silahlar:** zombi arenasında silah panosu `VA_WeaponCanvas_Zombie` **örneğidir** ve **oynanacak
+   her kata bir tane** konur — zombi gibi oyuncu da kat değiştirir, tek pano üst kattaki oyuncuyu
+   silahsız bırakır. ⚠️ **Pano örneği unpack EDİLMEZ** (kilit plakaları çalışma anında eklenir,
+   prefaba yazılmaz).
+   - **Panoda dalga başına bir modül vardır.** Modülün başlığını ("N. DALGA") kimse elle yazmaz:
+     `ZombieWaveModuleLabel` çalışma anında modülün altındaki **ilk silahtan** `ZombieArsenal`'a
+     sorar. Bir silahı bir dalgaya eklemek = `WPN_*` prefab **örneğini** o modülün bir `Slot`'unun
+     altına koymak + `ZombieArsenal`'da satırını yazmak; dalgayı belirleyen tablodur, modülün adı
+     değil, yani satır değişince başlık da değişir.
+   - **Panoyu kendi ışıkları aydınlatır:** prefabın içinde kenarlardan aydınlatan gizli gerçek
+     zamanlı spot ışıklar (`BoardLights`) vardır, görünür lamba modeli yoktur — pano ve silahlar
+     hareketlidir, lightmap almaz ve karanlık arenada yalnız problardan beslenen pano gözlükte hiç
+     görünmez. ⚠️ **Panonun yakınına başka gerçek zamanlı ışık konmaz:** Quest'in Forward
+     yolunda nesne başına düşen ek ışık sayısı sınırlıdır, panonun kendi ışıkları o bütçeyi zaten
+     doldurur ve fazlası sessizce düşer. Pano materyali örnekte `M_ZB_WeaponBoard`'a (hafif
+     öz-ışık) çevrilir — ortak `M_Arsenal_Board` diğer arenaların panolarıyla paylaşılır, ona
+     dokunulmaz.
    - Silahlar **dalgayla açılır:** tablo `ZombieArsenal` asset'indedir (`weaponId` → açılış dalgası).
      Asset yoksa sınıfın gömülü tablosu koşar; düzenlemek için *Tools > VortexArena > Zombie >
      Cephanelik tablosunu oluştur* ile `Resources/Zombie/ZombieArsenal` üretilir, sonra Inspector'dan
      satır eklenir/değiştirilir. `weaponId` `WeaponDefinition`'daki değerle **birebir** yazılır;
      bilek bombası aynı tabloda `ThrowableDefinition.throwableId`'siyle durur (kilitliyken bilek
      **boştur**, `WristHolster.SelectionGate`). Son Direniş'te tablo işlemez, her şey açıktır.
-   - Kademe **rol** sırasıyla kurulur: her dalga yeni bir iş ekler (yakın savunma → pompalı + geniş
-     şarjör → ilk tüfekler + bomba → isabet → iri avcıları → üst kademe) ve en güçlü silah son
+   - Kademe **rol** sırasıyla kurulur: her dalga yeni bir iş ekler (yan silah → yakın savunma →
+     ilk tüfekler + bomba → pompalı ve iri avcıları → isabet → üst kademe) ve en güçlü silah son
      kademededir. Yeni silah eklerken rolüne göre dalgası seçilir — güçlü silahı erkene koymak sonraki
      dalgaların açılışını değersizleştirir.
    - ⚠️ **Tabloda olmayan silah AÇIKtır** — kilitli kalması bozukluk gibi görünür, açık kalması yalnız
-     eksik veridir. Geri sayım (dalga 0) **dalga 1 sayılır**.
+     eksik veridir. Maç başlamadan önceki her hâl (arena sahnelenmiş bekleme, geri sayım, dalga 0)
+     **dalga 1 sayılır** — kilit arena yüklenir yüklenmez işler, `start_match` beklenmez.
    - Kilitli silah **alınamaz** (`WeaponGranter.SelectionGate`): koyu örtü + kilit + "DALGA N" ile durur,
-     nişan ışını/retikülü bile çizilmez. Dalgası gelince kızıl nabız atar ve HUD "YENİ SİLAH AÇILDI"
-     bildirimi verir — kod tarafı için `Docs/Sistem-Ozeti.md` §4 (`ZombieWeaponUnlocks`).
+     nişan ışını/retikülü bile çizilmez. **Kilit, bir önceki dalganın temizlik evresi başlarken
+     açılır** (ekip silahını o boşlukta değiştirir): plaka kızıl nabız atar ve HUD'ın temizlik
+     yazısı "DALGA N TAMAMLANDI" + açılan silahların adlarını ("YENİ SİLAHLAR …") sıralar, ayrı bir
+     bildirim yoktur — kod tarafı için `Docs/Sistem-Ozeti.md` §4 (`ZombieWeaponUnlocks`).
+   - **Hasar yalnız zombi modunda ayrı ayarlanır:** aynı satırda `bodyDamage` (gövde hasarı, saçmalıda
+     **saçma başına**) ve `headMultiplier` (kafa çarpanı) durur. **0 = üstüne yazma** — o alanda
+     `WeaponDefinition`'ın kendi değeri geçerli olur; karın/bacak çarpanları her hâlde silahın
+     kendisinden gelir ve yeni gövde hasarına uygulanır. Kanca modun açılışında kurulur ve mod
+     bitince bırakılır (`ZombieDamageTuning` → `Weapon.DamageOverride`), yani **PvP dengesi
+     değişmez** — `WD_*.asset`'i zombi için düzenlemek PvP'yi sessizce bozardı.
+   - ⚠️ Hasar tavanı: 100 can'lık sıradan zombi **en güçlü silahla bile iki kafa vuruşu** ister,
+     geri kalanla üç ve daha fazla. Tek vuruşta kafadan öldüren silah dalga ilerlemesini duyulmaz
+     hâle getirir.
    - Tablo tamamen istemci tarafıdır: sunucu silah doğrulaması yapmaz, yani denge değişikliği **sunucu
      dağıtımı istemez**.
 9. **Kan efekti:** `NO_zombie`'nin `Hit_Body` ve `Hit_Head` kutularında `SurfaceTag` durur (`SUR_ZombieFlesh`
    / `SUR_ZombieHead`). ⚠️ Zombi modeli değişip vuruş kutuları yeniden kurulursa etiketler de yeni
-   kutulara taşınır — etiketsiz kutu `default` tozunu çıkarır ve kan "kaybolur".
-10. **Ses ve müzik:** yaratık sesleri ile modun iki müzik katmanı tek asset'te durur — `ZombieSounds`
-    (`Resources/Zombie/ZombieSounds`), *Tools > VortexArena > Zombie > Ses verisini oluştur* ile
-    üretilir ve yer tutucu klipler bağlanmış gelir.
+   kutulara taşınır — etiketsiz kutu `default` tozunu çıkarır ve kan "kaybolur". Efektin kendisi
+   `_Shared/FX/FX_Impact_ZombieBlood` / `…_ZombieHead` prefablarıdır (sıçrama flipbook'u + damlalar),
+   ölüm birikintisi `Resources/Zombie/FX_ZombieBloodPool`. ⚠️ **Materyali kırmızıya doğru
+   renklendirme:** renk dokuya pişirilmiştir (`blender/ZombieBlood/`), üstüne verilen parlak kırmızı
+   karanlık arenada boya lekesi gibi okunur — değişecekse doku yeniden üretilir.
+10. **Ses ve müzik:** yaratık sesleri, adım sesleri, 2B vurgu/arayüz sesleri (Müzik kanalından çalar —
+    mikserde ayrı bir arayüz kanalı yoktur), modun iki müzik katmanı ve modun kendi anons satırları tek
+    asset'te durur — `ZombieSounds` (`Resources/Zombie/ZombieSounds`),
+    *Tools > VortexArena > Zombie > Ses verisini oluştur* ile üretilir ve `Audio/` kökündeki klipler
+    bağlanmış gelir.
     - **Kalıcı sesle değiştirmek = asset'i düzenlemek:** Inspector'da ilgili havuza/alana yeni klibi
       sürükle. Kod değişmez, menü öğesi var olan asset'i **yeniden doldurmaz**. Alanlar: inleme ·
       saldırı · ölüm · doğuş havuzları, seviyeler, perde sapması, inleme aralığı, aynı anda inleyen
       tavanı, 3B mesafe, `musicTension` (dalga arası döngü) · `musicWave` (dalga döngüsü); vurgu
       alanları opsiyoneldir, boş kalabilir.
-    - Yer tutucular `Assets/Modes/Zombie/Audio/Placeholder/` altındadır, kaynakları aynı klasördeki
-      `KAYNAKLAR.txt`'de listelidir — kalıcı klip gelince yer tutucu dosya silinir ve satırı
-      `KAYNAKLAR.txt`'den çıkarılır.
+    - **Opsiyonel kancaların tamamı boş kalabilir — boş = eski davranış, uyarı yok.** Geri düşüşleri:
+      `runnerGroanClips` → inleme havuzu · `giantRoarClips` → çığlık havuzu · `giantSlamClips` →
+      saldırı havuzu · `giantDeathClips` → ölüm havuzu · `giantStepClips` → `footstepClips` ·
+      `rescueClip` → `victoryClip`. `footstepClips` boşsa **hiç adım sesi çalmaz**; `countdownTick`
+      (dalga arası geri sayımın son saniyeleri) · `weaponUnlockClip` (temizlik evresinde açılan silah
+      varsa) · `reviveProgressClip` (kaldırma sürerken döngü) · `reviveCompleteClip` · `defeatClip`
+      geri düşüşsüzdür, boşsa sessizdir.
+    - **Anons satırları (`Anons` başlığı, Voiceover kanalı):** `waveClearVoice` (dalga temizlendi) ·
+      `newWeaponsVoice` (yalnız gerçekten silah açılınca, temizlik satırının arkasına kuyruklanır) ·
+      `finalStandVoice` · `giantIncomingVoice` (Dev ilk göründüğünde, koşuda bir kez) ·
+      `mateDownedVoice` (ekip arkadaşı düştüğünde; en çok 4 saniyede bir) · `survivedVoice` ·
+      `rescuedVoice` (boşsa `survivedVoice`) · `lostVoice`, seviyesi `voiceVolume`. Hepsi
+      opsiyoneldir, boş = sessiz. ⚠️ **Anonslar `GameAudio`'nun TEK anons kanalından çalar**
+      (`GameAudio.PlayAnnouncement`) — modun kendi kaynağından çalsalardı çekirdeğin satırlarıyla üst
+      üste binerdi; vurgular (sting) modun kaynağında kalır, çünkü sözün **altında** duymaları gerekir.
+      Maç düzeyindeki vurgu ve replikleri (dalga temizlendi · yeni silahlar · geri sayım tik'i · dalga
+      başı · Son Direniş · Dev) `ZombieAnnouncer` çalar, yani **adminde de** duyulur; HUD'da yalnız
+      kişisel olanlar kalır (arkadaş düştü · kaldırma · kendi sonucun).
+    - **Dalga başlangıcı anonsu burada DEĞİL:** 2. dalgadan itibaren her dalga `RoundStart` olarak
+      çekirdeğe gider, klipleri `ModeAudioRegistry`'nin zombi kuralından gelir (aşağıdaki mod kuralı
+      bölümü).
+    - Kalıcı klipler `Assets/Modes/Zombie/Audio/` kökündedir — müzik ve anonslar dâhil, alt klasör
+      yoktur; havuzlar `_01`, `_02` … diye numaralanır ve menü öğesi **ilk boşluğa kadar** tarar —
+      yeni varyant klasöre bırakılınca kod değişmez.
+    - **3B mesafe logaritmik düşümdür:** `minDistance`'a kadar tam seviye, ondan sonra kısılarak
+      devam eder ve `maxDistance`'ta **kesilmez** — orada kısılmayı bırakır, yani uzaktaki zombi hâlâ
+      duyulur. Sesi uzaktan yükseltmenin yolu `maxDistance`'ı büyütmek değil, `minDistance`'ı
+      büyütmektir.
+    - **Çığlığın kendi mesafesi vardır** (`screamMinDistance` / `screamMaxDistance`, ayrı kaynaktan
+      çalar): kalabalığa verilen uyarı olduğu için homurtudan daha geniş bir alanda tam seviyede
+      durur. Seviye alanları 1'in üstüne çıkabilir (`screamVolume` 2'ye kadar) — `PlayOneShot`
+      klibi yükseltir.
     - ⚠️ **İsabet sesi bu asset'te DEĞİL:** et/kafa isabeti `SUR_ZombieFlesh` / `SUR_ZombieHead`
       yüzey tanımlarından gelir. Buraya da konursa her isabet iki kez duyulur.
     - ⚠️ **Harita ambiyansı da burada değil:** o sahnenin `MapDefinition.ambienceClip`'idir ve
@@ -1300,6 +1367,12 @@ sonu: takımlı modda `TeamRedWon` · `TeamBlueWon` · `MatchDraw`, co-op modda 
 modun `Audio/` klasöründe `VO_<Mod>_*` adıyla durur. ⚠️ Satırı yazılmayan an ortak Hızlı Savaş
 klibine ("hadi hadi", agresif kazanan anonsu) düşer; co-op modda maç sonu satırı yoksa maç sessiz
 biter.
+
+Oyuncunun kendi anları da aynı yerden değiştirilir: `LocalDowned` (sen düştün) · `LocalRespawn` (sen
+ayağa kalktın) · `TeammateEliminated` (arkadaşını vurdun) satırları ortak bankanın aynı kliplerinin
+**yerine** geçer — düşme davulu alttan çalmayı sürdürür, düşman öldürme anonsunun mod karşılığı
+yoktur. ⚠️ **Eşleşen satır o anın sahibidir:** kliplerini boş bırakmak o anı susturur, bankaya geri
+düşmez (geri sayım kuralıyla aynı mantık) — iki ses üst üste binmesin diye.
 
 ⚠️ **Bir olayı KİM bildirir?** `policy:"anyone"` olan bir olayı herkes gönderebilir, ama aynı
 gerçeği N istemcinin bildirmesi sunucuda aynı sayacı N kez başlatır. Seçici sahnede aranır ve tek
@@ -1665,8 +1738,12 @@ Betik koşturulur (`blender/Zombies/README.md`): çıktı `Assets/Modes/Zombie/M
 
 **3. Üret:** `Tools > VortexArena > Zombie > Zombi görünüşlerini üret`. Araç gövdeyi, `Idle_A`
 bekleme pozunda kafa kemiği **1,60 m**'ye gelecek şekilde ölçekler, `M_ZB_<Ad>` materyalini bağlar,
-göz kürelerini ve `Hit_Head`/`Hit_Body` kutularını **kemiklere** takar, `ZB_<Ad>.prefab`'ı yazar ve
+göz kürelerini, vuruş kutularını ve ragdoll'u **kemiklere** takar, `ZB_<Ad>.prefab`'ı yazar ve
 `NO_zombie`'nin `looks` dizisini tazeler.
+- ⚠️ **Vuruş kutuları ve ragdoll elle kurulmaz:** kafa/gövde/kalça kutularını, kol-bacak
+  kapsüllerini, kemik rigidbody'lerini ve `CharacterJoint`'leri araç üretir; **kutular aynı zamanda
+  ragdoll collider'larıdır** (ikinci bir collider seti iskeleti iki kere ödetir). Inspector'dan
+  eklenen kutu bir sonraki koşuda yoktur; ölçü/kütle değişecekse yeri `ZombieLookBuilder`'dır.
 - ⚠️ **Boy T-pozdan ölçülmez:** zombi klipleri kambur; T-pozda 1,80 m'lik gövde yürürken kafası
   ~1,35 m'de durur ve 1,5 m'lik biri gibi okunur.
 - ⚠️ **Materyalde soluk öz-ışık vardır** (`_EmissionMap` = albedo × 0,2; `_EMISSION` asset'te sabit):
@@ -1923,6 +2000,11 @@ hiçbir yerde hata vermez: harita yalnız kendi ailesinin modlarıyla başlatıl
 belirler (`1` = temel yoğunluk) ve alanın varsayılanı yeni bir mekanın başlayacağı değerdir. Delikleri
 seyrek ya da salonu büyük bir mekanda yükselt, dar mekanda düşür; değer 6. adımda `maps.json`'a girer
 (protokol §10.5). Diğer arenalarda alana **dokunulmaz**, oralarda hiçbir şeye bağlı değildir.
+
+⚠️ **Karanlık arenada "Admin görünümü" üçlüsü doldurulur** — `adminPostExposure` (varsayılan `0` =
+dokunma), `adminFogScale` ve `adminAmbientScale` (varsayılan `1` = dokunma) yalnız admin/izleyici
+bilgisayarının ekranını aydınlatır, kaskta ve `maps.json`'da karşılığı yoktur. Tepeden bakan kamera
+sis rengine boğuluyorsa yükselt; aydınlık arenada ve lobide **nötr bırakılır**, yoksa ekran patlar.
 
 ⚠️ **Arena sildiysen/taşıdıysan aynı pencereden `Hepsini Çalıştır`** — sahne açık olmadan da koşar
 (o durumda `MapDefinition` adımı atlanır) ve kalıntı kayıtları temizler; kayıtlar elle düzenlenmez.

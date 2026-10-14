@@ -15,10 +15,7 @@ MonoBehaviour:
   surfaceId: zombi eti
   impactPrefab: {fileID: 8663040313134015330, guid: fb886b92e5a4b9d44ae0a72015d4b0cd, type: 3}
   impactClips:
-  - {fileID: 8300000, guid: bc47372a2d2d8c94abcff28444722a5b, type: 3}
-  - {fileID: 8300000, guid: ec00a150299921a459293624092b7ac7, type: 3}
-  - {fileID: 8300000, guid: b99ea67d1f3a6d34085b39cea5c6c30d, type: 3}
-  - {fileID: 8300000, guid: f392dd3c88e9af242bc2f0742c965cfa, type: 3}
+  - {fileID: 8300000, guid: bbdfae289a45c2343b96fb50000a33a3, type: 3}
   volume: 0.7
   pitchRange: {x: 0.94, y: 1.06}
   lifetimeSeconds: 1.2

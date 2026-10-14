@@ -271,6 +271,15 @@ namespace VortexArena.Core.Combat
 
         public static event Action ActiveChanged;
 
+        /// <summary>MODE hook over the computed hit damage: <c>(definition, zone, defaultDamage) →
+        /// damage</c>; <c>null</c> = the weapon's own table. Applied PER PELLET, after the zone
+        /// multiplier.
+        /// <para>⚠️ The installer owns the lifecycle and must clear it when its mode ends (and only
+        /// if the delegate is still its own) — a stale hook would retune every later match.</para>
+        /// <para>⚠️ Damage stays client-authoritative (§10.3): this changes what goes into
+        /// <c>hit_report.damage</c>, not how the server reads it, so no protocol change.</para></summary>
+        public static Func<WeaponDefinition, HitZone, float, float> DamageOverride;
+
         // HeldItems collector state (§6.6): the hook is installed once and warnings fire once —
         // a broken setup would otherwise log on every grab.
         private static bool heldItemsHooked;
@@ -286,7 +295,7 @@ namespace VortexArena.Core.Combat
         private float nextFireTime;
         // Rounds still owed by the running burst; 0 = none.
         private int burstShotsLeft;
-        // One burst per pull: set when a burst starts, cleared on trigger release.
+        // One burst (or one semi-auto shot) per pull: set when it starts, cleared on trigger release.
         private bool burstAwaitsRelease;
         private float nextBlockedCueTime;
         private float nextDryCueTime;
@@ -785,6 +794,10 @@ namespace VortexArena.Core.Combat
             }
             else
             {
+                // Semi-auto reuses the burst's "one pull" latch: the next round needs the trigger to
+                // fall below TriggerReleaseThreshold first, while rpm still caps the cadence.
+                if (definition.SemiAuto) burstAwaitsRelease = true;
+
                 nextFireTime = NextDueTime(definition.SecondsPerShot);
             }
 
@@ -868,6 +881,15 @@ namespace VortexArena.Core.Combat
                 HitZone zone = ArenaCombat.GetHitZone(hit.collider);
                 float damage = definition.Damage * definition.GetZoneMultiplier(zone);
 
+                // A mode may retune damage without touching the PvP table (zombie progression). The
+                // hook gets the default result and returns it unchanged for anything it does not
+                // override — the definition rides along so it can rebuild the value per zone.
+                Func<WeaponDefinition, HitZone, float, float> damageOverride = DamageOverride;
+                if (damageOverride != null)
+                {
+                    damage = damageOverride(definition, zone, damage);
+                }
+
                 // Damage is NEVER applied locally: health is server-authoritative and comes back
                 // as health_update. A non-networked target (decor, wall) does nothing beyond the
                 // impact FX above.
@@ -875,7 +897,9 @@ namespace VortexArena.Core.Combat
                 // processes each separately and the zone multiplier differs per pellet.
                 // The zone rides along: the server scores headshots from the report, and nothing else
                 // on the wire says where the round landed.
-                ArenaCombat.ReportRaycastHit(hit, damage, WeaponId, zone);
+                // The pellet's OWN direction rides along (§5.1 hitDir): the impact presentation needs
+                // where the round came from, and the hit normal is the surface, not the shot.
+                ArenaCombat.ReportRaycastHit(hit, damage, WeaponId, zone, direction);
             }
 
             if (tracerCount > 0)

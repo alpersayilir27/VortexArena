@@ -112,6 +112,10 @@ namespace VortexArena.Modes.Zombie
         /// <summary>Special wave in progress: <c>wx:swarm|heavy|scream</c>; absent on a normal wave.</summary>
         public const string StateSpecial = "wx";
 
+        /// <summary>Clear phase of the wave gap: <c>clr:&lt;kalan sn&gt;</c>, written only while it runs.
+        /// ⚠️ <c>next</c> CONTAINS it (it is the first part of the same gap), so the two are not added.</summary>
+        public const string StateClear = "clr";
+
         public const string SpecialSwarm = "swarm";
 
         public const string SpecialHeavy = "heavy";

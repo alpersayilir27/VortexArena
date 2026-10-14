@@ -33,6 +33,9 @@ namespace VortexArena.App.Admin
     /// screen; the same info is in the HUD roster).</item>
     /// <item>The EventSystem is taken over (arena scenes have none, the Lobby has one).</item>
     /// </list></para>
+    ///
+    /// <para>View brightness (exposure, vignette, fog, ambient) is <see cref="AdminViewTuning"/>'s
+    /// job — admin only, scene assets are never re-authored.</para>
     /// </summary>
     public class AdminSpectator : MonoBehaviour
     {
@@ -175,6 +178,10 @@ namespace VortexArena.App.Admin
 
             // The disabled rig leaves no listener in the scene ("no audio listener" warning).
             cameraGo.AddComponent<AudioListener>();
+
+            // Exposure/vignette + fog/ambient relaxation. Added AFTER the camera so the volume
+            // is sampled on the first frame it renders.
+            gameObject.AddComponent<AdminViewTuning>();
 
             _cameraDriver = cameraGo.AddComponent<AdminSpectatorCamera>();
             gameObject.AddComponent<AdminPlayerMarkers>();

@@ -15,8 +15,7 @@ MonoBehaviour:
   surfaceId: "zombi kafas\u0131"
   impactPrefab: {fileID: 8663040313134015330, guid: a2371c38757d2e142a7891653defdc48, type: 3}
   impactClips:
-  - {fileID: 8300000, guid: 3e72c59449e71394e99b64dd5e9ebd72, type: 3}
-  - {fileID: 8300000, guid: bc47372a2d2d8c94abcff28444722a5b, type: 3}
+  - {fileID: 8300000, guid: 63f3367f0797afa4b8e3cb5c464ee263, type: 3}
   volume: 0.9
   pitchRange: {x: 0.94, y: 1.06}
   lifetimeSeconds: 1.2

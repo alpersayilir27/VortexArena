@@ -43,7 +43,9 @@ namespace VortexArena.Core.Combat
         // the call (JsonUtility.ToJson is synchronous), so the object is free once send returns.
         // Array fields are allocated once too.
         // (No shot-event DTO here: the UDP channel uses its own pre-allocated buffer.)
-        private static readonly HitReportMsg Hit = new HitReportMsg { hitPos = new float[3] };
+        private static readonly HitReportMsg Hit =
+            new HitReportMsg { hitPos = new float[3], hitDir = new float[3] };
+
         private static int _seq;
 
         /// <summary>Overlap buffer for <see cref="ReportAreaHit"/> — avoids a new array per blast.
@@ -183,10 +185,11 @@ namespace VortexArena.Core.Combat
         /// sound/flash). This branch is a <b>second line of defence</b> for a damage source that has
         /// no trigger or does not know the gate.</para>
         ///
-        /// <para>⚠️ The main ray stays <b>maskless</b> (remote hit boxes are on Default) but MUST
-        /// discard triggers: <c>Queries Hit Triggers</c> is on in project settings and the ISDK grab
-        /// volumes of scene weapons are triggers — otherwise a round fired past the bench stops in a
-        /// grab volume.</para>
+        /// <para>⚠️ The main ray is <b>everything minus corpses</b> (<see cref="ArenaLayers.ShotMask"/>):
+        /// remote hit boxes are on Default, so a target list would drop silently, while a dead body
+        /// must not swallow rounds. It MUST discard triggers too: <c>Queries Hit Triggers</c> is on in
+        /// project settings and the ISDK grab volumes of scene weapons are triggers — otherwise a round
+        /// fired past the bench stops in a grab volume.</para>
         /// </summary>
         /// <param name="muzzleWorld">World position of the muzzle tip.</param>
         /// <param name="direction">Round direction, <b>unit length</b> (distances rely on it).</param>
@@ -199,7 +202,7 @@ namespace VortexArena.Core.Combat
             }
 
             return Physics.Raycast(muzzleWorld, direction, out RaycastHit hit, range,
-                       ~0, QueryTriggerInteraction.Ignore)
+                       ArenaLayers.ShotMask, QueryTriggerInteraction.Ignore)
                 ? ShotTrace.HitShot(hit)
                 : ShotTrace.Miss(range);
         }
@@ -448,8 +451,10 @@ namespace VortexArena.Core.Combat
         /// <param name="zone">Where it landed (§10.3 <c>zone</c>) — STATISTICS only (headshot count):
         /// the multiplier is already inside <paramref name="damage"/> and the server never
         /// recomputes it. Default <see cref="HitZone.Body"/> for sources with no zone (blast).</param>
+        /// <param name="worldDirection">World direction the hit came FROM→TO (bullet ray, centre →
+        /// target); <c>default</c> = unknown. Presentation only (§5.1 <c>hitDir</c>).</param>
         public static void ReportHit(int targetPlayerId, Vector3 worldHitPoint, float damage, string weaponId,
-            HitZone zone = HitZone.Body)
+            HitZone zone = HitZone.Body, Vector3 worldDirection = default)
         {
             if (targetPlayerId <= 0)
             {
@@ -478,6 +483,7 @@ namespace VortexArena.Core.Combat
             Hit.damage = damage;
             Hit.zone = (int)zone;
             Write(Hit.hitPos, ArenaSpace.WorldToArena(worldHitPoint));
+            WriteDirection(Hit.hitDir, worldDirection);
             client.Send(Hit);
 
             // Hit marker — deliberately AFTER the send: drawing an X for an unreported hit would lie
@@ -501,8 +507,11 @@ namespace VortexArena.Core.Combat
         /// <param name="weaponId">Label; may be empty.</param>
         /// <param name="zone">Where it landed (§10.3 <c>zone</c>) — the zombie's headshot count reads
         /// it; an object with no hit boxes reports <see cref="HitZone.Body"/>.</param>
+        /// <param name="worldDirection">World direction the hit came FROM→TO (bullet ray, blast centre
+        /// → target); <c>default</c> = unknown. It rides to everyone in the server's <c>hit</c> relay
+        /// (§5.2) and is what a directional impact presentation reads.</param>
         public static void ReportObjectHit(int targetNetId, Vector3 worldHitPoint, float damage, string weaponId,
-            HitZone zone = HitZone.Body)
+            HitZone zone = HitZone.Body, Vector3 worldDirection = default)
         {
             if (targetNetId <= 0)
             {
@@ -531,10 +540,17 @@ namespace VortexArena.Core.Combat
             Hit.damage = damage;
             Hit.zone = (int)zone;
             Write(Hit.hitPos, ArenaSpace.WorldToArena(worldHitPoint));
+            WriteDirection(Hit.hitDir, worldDirection);
             client.Send(Hit);
 
             // Same rationale as ReportHit: the marker says a report was made, not that damage landed.
             HitMarker.Shared.Play(worldHitPoint);
+
+            // ⚠️ Raised HERE and not from the server's relay: the shooter's own presentation must not
+            // wait a round trip, and the relay deliberately skips its sender (§5.2). Killed is false —
+            // this side does not know the result, the object's broken state arrives as object_state.
+            RaiseObjectHit(new ObjectHitInfo(targetNetId, worldHitPoint, worldDirection, (int)zone,
+                LocalPlayerId, false, true));
         }
 
         /// <summary>
@@ -558,12 +574,15 @@ namespace VortexArena.Core.Combat
         /// <param name="zone">Zone the caller already resolved with <see cref="GetHitZone"/> to scale
         /// the damage — passed on so the hit box is not resolved a second time. Omitting it reports
         /// <see cref="HitZone.Body"/> and the headshot statistic silently loses the hit.</param>
+        /// <param name="worldDirection">The ray's own direction; <c>default</c> = unknown. The caller
+        /// already has it — it cannot be recovered from <see cref="RaycastHit"/> (the surface normal is
+        /// not the shot direction).</param>
         public static bool ReportRaycastHit(in RaycastHit hit, float damage, string weaponId,
-            HitZone zone = HitZone.Body)
+            HitZone zone = HitZone.Body, Vector3 worldDirection = default)
         {
             if (TryGetTargetPlayerId(hit.collider, out int playerId))
             {
-                ReportHit(playerId, hit.point, damage, weaponId, zone);
+                ReportHit(playerId, hit.point, damage, weaponId, zone, worldDirection);
                 return true;
             }
 
@@ -571,7 +590,7 @@ namespace VortexArena.Core.Combat
             // return value stays false, so every caller's blood/spark choice keeps its old meaning.
             if (TryGetTargetNetId(hit.collider, out int netId))
             {
-                ReportObjectHit(netId, hit.point, damage, weaponId, zone);
+                ReportObjectHit(netId, hit.point, damage, weaponId, zone, worldDirection);
             }
 
             return false;
@@ -645,7 +664,9 @@ namespace VortexArena.Core.Combat
                 if (TryScoreBody(worldCenter, radius, damage, edgeScale, requireLineOfSight,
                         avatar.PlayerId, avatar.HeadWorld, out Vector3 playerPoint, out float applied))
                 {
-                    ReportHit(avatar.PlayerId, playerPoint, applied, weaponId);
+                    // A blast has no ray: its direction is the one it pushed the target in.
+                    ReportHit(avatar.PlayerId, playerPoint, applied, weaponId, HitZone.Body,
+                        playerPoint - worldCenter);
                     reported++;
                 }
             }
@@ -711,7 +732,8 @@ namespace VortexArena.Core.Combat
                     continue;
                 }
 
-                ReportObjectHit(netId, point, appliedToObject, weaponId);
+                ReportObjectHit(netId, point, appliedToObject, weaponId, HitZone.Body,
+                    point - worldCenter);
             }
 
             return reported;
@@ -754,7 +776,7 @@ namespace VortexArena.Core.Combat
                 return false;
             }
 
-            ReportHit(playerId, self, applied, weaponId);
+            ReportHit(playerId, self, applied, weaponId, HitZone.Body, self - worldCenter);
             return true;
         }
 
@@ -934,6 +956,124 @@ namespace VortexArena.Core.Combat
             target[0] = value.x;
             target[1] = value.y;
             target[2] = value.z;
+        }
+
+        /// <summary>Writes a DIRECTION (never <see cref="Write"/>: §5.1 <c>hitDir</c> is unit length and
+        /// uses the direction conversion). An unusable vector goes out as <c>[0,0,0]</c> = "unknown" —
+        /// the field is reused across reports, so it must be written on EVERY path.</summary>
+        private static void WriteDirection(float[] target, in Vector3 worldDirection)
+        {
+            Vector3 arena = worldDirection.sqrMagnitude > 1e-6f
+                ? ArenaSpace.WorldToArenaDirection(worldDirection)
+                : Vector3.zero;
+
+            Write(target, arena);
+        }
+
+        // ------------------------------------------------------- object hit presentation (§5.2)
+
+        /// <summary>One hit on a network object, for PRESENTATION (blood, impact, ragdoll impulse) —
+        /// everything the wire carries about where and how the round landed.</summary>
+        public readonly struct ObjectHitInfo
+        {
+            public readonly int NetId;
+
+            /// <summary>World hit point.</summary>
+            public readonly Vector3 Point;
+
+            /// <summary>World direction of the hit; <b>may be <see cref="Vector3.zero"/></b> (unknown)
+            /// — never normalize it without checking.</summary>
+            public readonly Vector3 Direction;
+
+            /// <summary><c>HitZone</c> as an int (0 = body, 1 = head …).</summary>
+            public readonly int Zone;
+
+            /// <summary>Shooter's player id; <c>0</c> = unknown.</summary>
+            public readonly int ShooterId;
+
+            /// <summary>This hit broke the object. <b>Always false on the shooter's own headset</b>: the
+            /// local raise happens before the server answers.</summary>
+            public readonly bool Killed;
+
+            /// <summary><c>true</c> = raised locally by our own report, <c>false</c> = relayed.</summary>
+            public readonly bool Local;
+
+            public ObjectHitInfo(int netId, Vector3 point, Vector3 direction, int zone, int shooterId,
+                bool killed, bool local)
+            {
+                NetId = netId;
+                Point = point;
+                Direction = direction;
+                Zone = zone;
+                ShooterId = shooterId;
+                Killed = killed;
+                Local = local;
+            }
+        }
+
+        /// <summary>
+        /// <b>A network object took a hit</b> — raised on EVERY headset exactly once per hit: locally
+        /// the moment the shooter reports it, elsewhere from the server's <c>object_event "hit"</c>
+        /// relay (§5.2).
+        /// <para>⚠️ Presentation only. It is not authority: health, the broken flag and despawn still
+        /// come from <c>object_state</c>, and a listener must not change world state from here.</para>
+        /// <para>⚠️ The object may already be gone (the relay can lose the race with
+        /// <c>object_despawn</c>); resolve the <c>netId</c> defensively.</para>
+        /// </summary>
+        public static event System.Action<ObjectHitInfo> ObjectHit;
+
+        private static void RaiseObjectHit(in ObjectHitInfo info)
+        {
+            ObjectHit?.Invoke(info);
+        }
+
+        // Subscribed once per process, never unsubscribed: both sides are static, so there is nothing
+        // to leak and no scene load may drop the hook.
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        private static void HookObjectEvents()
+        {
+            NetEvents.OnObjectEvent -= HandleRelayedObjectEvent;
+            NetEvents.OnObjectEvent += HandleRelayedObjectEvent;
+        }
+
+        /// <summary>The server's <c>hit</c> relay (§5.2) → <see cref="ObjectHit"/>.
+        /// <para>⚠️ OUR OWN hit is skipped: <see cref="ReportObjectHit"/> already raised it without a
+        /// round trip, and playing it twice would double every blood burst on the shooter's screen.</para></summary>
+        private static void HandleRelayedObjectEvent(ObjectEventMsg msg)
+        {
+            if (msg == null || msg.name != ArenaProtocol.OBJECT_EVENT_HIT)
+            {
+                return;
+            }
+
+            int zone = msg.i != null && msg.i.Length > 0 ? msg.i[0] : 0;
+            int shooterId = msg.i != null && msg.i.Length > 1 ? msg.i[1] : 0;
+            bool killed = msg.i != null && msg.i.Length > 2 && msg.i[2] != 0;
+
+            int localId = LocalPlayerId;
+            if (shooterId != 0 && shooterId == localId)
+            {
+                return;
+            }
+
+            Vector3 point = Vector3.zero;
+            Vector3 direction = Vector3.zero;
+            if (msg.f != null && msg.f.Length >= 3)
+            {
+                point = ArenaSpace.ArenaToWorld(new Vector3(msg.f[0], msg.f[1], msg.f[2]));
+            }
+
+            if (msg.f != null && msg.f.Length >= 6)
+            {
+                Vector3 arenaDir = new Vector3(msg.f[3], msg.f[4], msg.f[5]);
+                // ⚠️ Zero stays zero: ArenaToWorldDirection answers `forward` for an unusable vector,
+                // which would invent a direction the shooter never had.
+                direction = arenaDir.sqrMagnitude > 1e-6f
+                    ? ArenaSpace.ArenaToWorldDirection(arenaDir)
+                    : Vector3.zero;
+            }
+
+            RaiseObjectHit(new ObjectHitInfo(msg.netId, point, direction, zone, shooterId, killed, false));
         }
     }
 }

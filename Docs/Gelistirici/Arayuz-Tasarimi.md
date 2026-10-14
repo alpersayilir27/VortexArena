@@ -316,17 +316,20 @@ büyük geri sayım, bildirimler — damlayan kan harfleri), Saira Condensed Ext
 sayılar), Barlow Medium (saat). Girdap ve Lokanta bu palete dokunmaz, tersi de geçerli.
 
 **Ölçünün kaynağı mockup'tır ve kalıcıdır:** `Docs/Gelistirici/Arayuz/zombi.html` (+ kendi
-`zombi.css`'i; gezinme `tema.css`/`tema.js` ile ortaktır). Kareleri: dalga şeridi · dalga arası
-geri sayım · kısa bildirim · durumlar. Görsel değişiklik **önce mockup'ta** yapılır, sonra
-builder'a geçirilir.
+`zombi.css`'i; gezinme `tema.css`/`tema.js` ile ortaktır). Kareleri: dalga şeridi · can paneli ·
+dalga arası temizlik fazı · dalga arası geri sayım · kısa bildirim · durumlar. Görsel değişiklik
+**önce mockup'ta** yapılır, sonra builder'a geçirilir.
 
 | Prefab | Menü | Ölçü |
 |---|---|---|
-| `Assets/Modes/Zombie/UI/ZombieHud.prefab` (kökü `ZombieClientController`) | *Yalnız Zombi HUD* | `ZombieStrip` 606×578 (kafaya kilitli; saat 240×68 · dört hücre 150×124, sayı 68 px / DALGA 84 px, etiket 26 px · can 606×44 · durum plakası 606×44 · takım şeridi 606×254: başlık 30 px + 8 satır 28 px) · `WaveNotice` görüş ortası (başlık 96 px, sayı 280 px, alt satır 40 px) · `Toast` 780×128 (büyük satır 48 px, küçük satır 26 px) · `BossBar` 720×124 (başlık 44 px · can kuşağı 22 px · alt satır 24 px; şeridin üstünde, kendi kafa kilidi 18°) |
+| `Assets/Modes/Zombie/UI/ZombieHud.prefab` (kökü `ZombieClientController`) | *Yalnız Zombi HUD* | `ZombieStrip` 606×640 (kafaya kilitli; saat 240×68 · dört hücre 150×124, sayı 68 px / DALGA 84 px, etiket 26 px · `HealthPanel` 606×104: CAN etiketi 22 px + sayı 72 px, kuşak 426×34, iç kenar 3 px, %10'luk dokuz dilim çizgisi · durum plakası 606×44 · takım şeridi 606×254: başlık 30 px + 8 satır 28 px) · `WaveNotice` görüş ortası (başlık 96 px, sayı 280 px, alt satır 40 px, silah satırı 56 px) · `Toast` 780×128 (büyük satır 48 px, küçük satır 26 px) · `BossBar` 720×124 (başlık 44 px · can kuşağı 22 px · alt satır 24 px; şeridin üstünde, kendi kafa kilidi 18°) |
 | `Assets/Modes/Zombie/UI/ZombieResultOverlay.prefab` (kökü `MatchResultOverlay`) | *Yalnız Zombi sonuç ekranı* | kart 1400×860 (sonuç sözcüğü 110 px · dalga 170 px · ekip skoru 120 px · iki pil 280×88) · tablo: iki blok **alt alta** 1320×300, satır 56+8 (üst 44), beş değer hücresi 100 px, rozet 104×26, alt bant 1320×96 |
 
 Şerit aşçı şeridinin (560×176) yerine geçer ve onun RectTransform'unu, iç Canvas'ını ve kafa
-kilidini **devralır** — yazı iki katına çıkarken panelin durduğu yer değişmez.
+kilidini **devralır** — yazı iki katına çıkarken panelin durduğu yer değişmez. ⚠️ Devralınan
+RectTransform'un pivotu **ortadadır**: şeride eklenen her yükseklik üst kenarı da yukarı
+kaldırırdı, bu yüzden fark aşağı kaydırma olarak geri verilir — saat ve skor satırı bakış
+ekseninde kalır.
 
 **Panodaki silah kilidi** HUD'ın parçası değil, yuvanın üstündeki dünya uzayı plakasıdır
 (`ZombieWeaponLockView`, çalışma anında kurulur): silahın arkasında soluk kemik zemin (karanlıkta
@@ -334,15 +337,42 @@ silüet okunsun, açıldıktan sonra da kalır), kilitliyken önünde koyu ört�
 (Rubik Wet Paint, `Kan.BloodHi`); açılınca örtü silinir ve "AÇILDI" kısa bir kızıl nabız atar.
 Mockup'ı yoktur, ölçüsü silahın kendi kutusundan türer.
 
-⚠️ **Geri sayımın sayısı tabanın merkez bildirimidir** (`centerNoticeText`), başlığı ve alt satırı
+⚠️ **Geri sayımın sayısı tabanın merkez bildirimidir** (`centerNoticeText`), başlığı ve alt satırları
 modun kendi alanlarıdır: taban ne zaman görüneceğine karar verir, mod `OnCenterNoticeRefreshed`
 kancasında yalnız çevresini yazar. Süslemeyi ayrı açıp kapatan bir mod onları sayıdan uzun
 yaşatırdı.
 
-⚠️ **Zombi HUD'ı `HealthHud` örneği TAŞIMAZ** (aşçı şeridinden kopyalandığı için canı hiç yoktu);
-canı tabanın `healthFill` + `healthText` çifti çizer, `healthStrip` bilerek boştur. Gerekçe:
-`HealthStrip` eşik renklerini `Girdap` paletinden verir ve kan temalı şeride ikinci bir kırmızı
-sokardı. `healthFill` sprite'lı bir `Image`'dır (sebebi "Tuzaklar"da).
+**Dalga arası iki ekrandır, ikisi de aynı `WaveNotice`:** önce temizlik fazı (`modeState clr`) —
+başlık "DALGA N TAMAMLANDI", **sayı yok**, alt satır YENİ SİLAHLAR ve altında sıradaki dalganın
+açtığı silah adları `" · "` ile dizili (açılan yoksa iki satır da boş) —, sonra olağan geri sayım
+("DALGA N+1" · sayı · HAZIRLAN). ⚠️ Taban merkez bildirimini **boş metinde kapattığı** için
+temizlik fazında sayı alanına boşluk yazılır: başlık ile silah satırı o yüzden ayakta kalır.
+Açılan silahların adları `WeaponDefinition`'ın görünen adından gelir, büyük harfe çevrilir — ayrı
+bir "yeni silah" bildirimi yoktur, duyuru bu ekrandır.
+
+**Can paneli şeridin içindedir** (`HealthPanel`, skor satırının hemen altında, tam genişlik):
+kendi kafa kilidi yoktur, şeridinkiyle gelir. Beşinci bir hücre değil kendi sırasıdır — can,
+kavga ortasında göz ucuyla bakılan tek değerdir ve hücre boyunda bir kuşağa sığmaz.
+Solda CAN etiketi + büyük sayı, sağda kuşak: koyu yatak, `Kan.BloodHi` dolgu, üstünde dikey
+koyulaşma (dolgu altta `Kan.Blood` okunur) ve %10'luk dilim çizgileri.
+
+⚠️ **Zombi HUD'ı `HealthHud` örneği TAŞIMAZ**; canı tabanın `healthFill`'i sürer, `healthStrip`
+bilerek boştur. Gerekçe: `HealthStrip` eşik renklerini `Girdap` paletinden verir ve kan temalı
+panele ikinci bir kırmızı sokardı. `healthFill` sprite'lı bir `Image`'dır (sebebi "Tuzaklar"da);
+⚠️ sprite **beyaz** olmalıdır — `Image` rengi sprite'ı çarpar, yeşil sprite üstünde kırmızı
+kahverengiye düşer.
+
+⚠️ **`healthText` zombide bilerek BOŞTUR:** taban "CAN 72" biçiminde tek satır yazar, panelde
+etiket ile sayı iki ayrı puntoda ve iki ayrı fonttadır. Sayıyı `ZombieHealthPanel` yazar — aynı
+alana iki yazıcı bağlanırsa son yazan kazanır.
+
+**`ZombieHealthPanel`** (mod derlemesinde, builder tipi **ad üstünden** bulup ekler: editör
+derlemesi zombi derlemesini referans almaz) değeri `healthFill.fillAmount`'tan okur ve iki şey
+çizer: dolgunun arkasındaki **hasar izi** (kemik rengi katman — vuruşta eski canda kalır, ~0,6
+saniyede güncel cana iner; can artarken iz beklemez, yoksa iyileşme hasar gibi okunur) ve **az
+can nabzı** (< %30, 1,4 Hz; 0 canda nabız durur — atan bir 0 arıza gibi görünür). ⚠️ Nabız
+`CanvasRenderer.SetAlpha` ile verilir (mesh yeniden kurulmaz) ve sayı önceden hazırlanmış etiket
+tablosundan gelir: 72 Hz'de kare başına ayırma yapılmaz.
 
 ⚠️ **Bildirim plakası tek düzendir:** küçük satır varken büyük satıra `margin` ile üst boşluk
 verilir (`toastSmallBand`, builder'dan serileşir) — ikinci bir yerleşim ve Layout Group yoktur.

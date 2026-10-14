@@ -55,11 +55,12 @@ Kan efekti bitti (gövde + kafada iki kat, herkes görür). Kalan:
 
 ## Faz 4 — Ses ve müzik
 
-- [ ] Yer tutucu klipleri **kalıcı seslerle değiştir** (`ZombieSounds` asset'i; yer tutucular ve
-      kaynakları `Assets/Modes/Zombie/Audio/Placeholder/`); istenen liste aşağıda.
+- [ ] Eksik sesleri ve varyantları tamamla — liste aşağıda ("Kalan ses/müzik/anons işi"); klipler
+      `Assets/Modes/Zombie/Audio/` kökünde durur.
 - [ ] Gözlükte alan doğrulaması: inleme aralığı ve aynı anda inleyen tavanı, 3B mesafe, klip
       seviyeleri/perde sapması, müzik seviyesi ve geçiş süresi — hepsi `ZombieSounds` üstünden.
-- [ ] Zombi `ModeAudioRegistry` kuralları (`ModeAudioGameType`'a `Zombie` sona eklenir).
+- [ ] `ModeAudioGameType`'a `Zombie` sona eklenir (zombi kuralları şu an `modeId=zombie` ile
+      seçiliyor).
 
 ## Faz 5 — Atmosfer
 
@@ -120,32 +121,18 @@ reçetesi). Kalan:
 
 - [ ] Gözlükte doğrulama: bilek 3. dalgaya kadar boş mu, bomba açılınca HUD duyuruyor mu.
 
-## Kalıcı ses/müzik listesi (geçicilerin yerine)
+## Kalan ses/müzik/anons işi
 
-Efekt mono WAV 48 kHz; müzik/ambiyans stereo, dikişsiz döngü.
+Efekt mono; müzik/ambiyans stereo, dikişsiz döngü. Kalıcı klipler `Assets/Modes/Zombie/Audio/`
+kökünde, havuz varyantı `_02`, `_03` … diye eklenir ve `ZombieSounds` havuzuna bağlanır.
 
-| Ses | Adet | Uzunluk |
+| Ses | Eksik adet | Kanca |
 |---|---|---|
-| İnleme/hırıltı | 8–10 | 1,5–4 sn |
-| Doğuş çığlığı | 3 | 1–2 sn |
-| Doğuş sisi | 2 | 1–1,5 sn |
-| Saldırı (hırlama + savurma) | 4 | 0,6–1,2 sn |
-| Oyuncuya darbe | 3 | 0,3–0,6 sn |
-| Zombiye kurşun (et) | 5 | 0,2–0,4 sn |
-| Kafadan vuruş | 2 | 0,3–0,5 sn |
-| Ölüm | 4 | 1–2 sn |
-| Ayak sürüme (isteğe bağlı) | 4–6 | 0,4–0,8 sn |
-| Müzik: dalga arası gerilim | 1 | 60–90 sn |
-| Müzik: dalga aksiyonu (aynı tempo/ton) | 1 | 90–120 sn |
-| Dalga başladı / temizlendi | 1 + 1 | 2–4 sn |
-| Maç kaybı | 1 | 4–6 sn |
-| Zafer (Kurtuldunuz / Dayandınız) | 1 + 1 | 4–6 sn |
-| Son Direniş bandı | 1 | 2–3 sn |
-| Çığlıkçı çığlığı (uzaktan seçilir) | 2 | 1,5–2,5 sn |
-| Dev: kükreme · adım · darbe · ölüm | 2 + 3 + 2 + 1 | 0,5–4 sn |
-| Koşucu hırıltısı (yürüyenden tiz) | 3 | 1–2 sn |
-| Kaldırma (ilerleme + kalktı) | 1 + 1 | 0,5–3 sn |
-| Yeni silah açıldı | 1 | 1–2 sn |
-| Geri sayım tıkı | 1 | 0,5 sn |
-| Ambiyans: mezarlık · konak | 1 + 1 | 2–3 dk |
-| Türkçe anons (isteğe bağlı) | 6–10 | ~1 sn |
+| Havuz varyantları: inleme · saldırı · ölüm · doğuş · çığlık · koşucu · ayak · Dev kükreme/adım/darbe · kurşun et/kafa | +7 · +3 · +3 · +2 · +1 · +2 · +3 · +1/+2/+1 · +4/+1 | var |
+| Zafer: Kurtuldunuz | 1 | var (`rescueClip`, boşken `victoryClip`) |
+| Ambiyans mezarlık · konak 2–3 dk dikişsiz | 1 + 1 | var (30 sn'lik klip bağlı) |
+| Oyuncuya darbe | 3 | **yok** — kod gerekir |
+| Kurşun duvar/zemin (`SUR_Default`, tüm modlar, isteğe bağlı) | 3 | var |
+| Anons: geri sayım saniyeleri (`Countdown`, saniyeye göre) | 3 | var (`ModeAudioRegistry`, `modeId=zombie` kuralı) |
+| Anons: özel dalga duyuruları (koşucu sürüsü · ağır adımlar · çığlık gecesi) | 3 | **yok** — kod gerekir |
+| Anons: dost ateşi (`TeammateEliminated`) | 1 | var (`ModeAudioRegistry` satırı) |

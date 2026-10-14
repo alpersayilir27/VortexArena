@@ -24,6 +24,8 @@ MonoBehaviour:
   revive: 0
   weapons: 1
   respawnDelay: 5
+  allies: 0
+  limitedReserve: 0
   maps:
   - {fileID: 11400000, guid: a0d89b3444595f049bd3d1ed05c21d8c, type: 2}
   - {fileID: 11400000, guid: fc938a3fe0a02b843a9d24f28ab8a2aa, type: 2}
@@ -44,4 +46,11 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 54e2fb1461388fd498eeff8dfd33bd47, type: 2}
   - {fileID: 11400000, guid: 4cbbfae87263a724b9a07e1f59744962, type: 2}
   - {fileID: 11400000, guid: 5eca3b2d226a8e6429680e472ae49813, type: 2}
+  - {fileID: 11400000, guid: 44133b603625d34409c3af01ceb70dbf, type: 2}
+  - {fileID: 11400000, guid: 6ba3d0f1bd1fb6846a15fd2abcefb84c, type: 2}
   hudPrefab: {fileID: 0}
+  resultScreenPrefab: {fileID: 0}
+  bodyPrefab: {fileID: 0}
+  redBodyPrefab: {fileID: 0}
+  altBodyPrefab: {fileID: 0}
+  gloveSkin: {fileID: 0}

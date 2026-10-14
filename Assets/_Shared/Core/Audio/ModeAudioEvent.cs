@@ -55,6 +55,20 @@ namespace VortexArena.Core.Audio
 
         /// <summary>Match ended in a draw — in place of the shared
         /// <see cref="GameSoundId.MatchDraw"/>.</summary>
-        MatchDraw = 8
+        MatchDraw = 8,
+
+        /// <summary>The LOCAL player went down — in place of <see cref="GameSoundId.LocalDeath"/>.
+        /// <para>⚠️ A matching rule owns the moment even with no clip (like
+        /// <see cref="Countdown"/>): the bank line would be a second voice on the same death. The
+        /// death drum is a separate instant layer and keeps playing.</para></summary>
+        LocalDowned = 9,
+
+        /// <summary>The local player is back on their feet — in place of
+        /// <see cref="GameSoundId.LocalRespawn"/>.</summary>
+        LocalRespawn = 10,
+
+        /// <summary>The local player killed a TEAMMATE (friendly fire) — in place of
+        /// <see cref="GameSoundId.TeammateEliminated"/>. Killing an enemy has no mode trigger.</summary>
+        TeammateEliminated = 11
     }
 }

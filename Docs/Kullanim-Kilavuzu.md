@@ -1094,7 +1094,9 @@ Bazı arenalar birden çok kattan oynanır. Oyuncu **hiçbir zaman yerinden oyna
 yürüdüğü yer aynı kalır, değişen yalnız gözlükte gördüğü kattır.
 
 - Zeminde **yuvarlak bir portal** vardır. Oyuncu onun üstünde **2 saniye** durur: daire dolar,
-  ekranın ortasında geri sayım yazar, sonra ekran kısa süre kararır ve diğer katta açılır.
+  ekranın ortasında geri sayım yazar ve görüş kenarlardan ortaya doğru kapanır; tam kapandığı anda
+  diğer kata geçilir, ekran orada geri açılır. Oyuncu daireden erken çıkarsa görüş yumuşakça geri
+  açılır, geçiş olmaz.
 - **Aynı anda tek kişi geçer.** İkinci kişi beklerken dairesi **kırmızı** olur ve "Portal meşgul"
   yazar — sırayla geçmeleri gerekir. Oyuncuya söylenecek cümle: **"Daire kırmızıysa bekle, sıra
   sende değil."**

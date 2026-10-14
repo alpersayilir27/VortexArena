@@ -350,6 +350,18 @@ namespace VortexArena.Protocol
         /// <summary><c>events[].policy</c>: only the object's owner may raise the event.</summary>
         public const string OBJECT_EVENT_POLICY_OWNER = "owner";
 
+        /// <summary>The ONE object event the SERVER itself raises (§5.2): an accepted <c>hit_report</c>
+        /// on a network object, relayed to everyone with <c>i:[zone, shooterId, killed]</c> and
+        /// <c>f:[hitPos xyz, hitDir xyz]</c>.
+        /// <para>⚠️ NOT checked against the kind's <c>events[]</c> list — that gate exists so the wire
+        /// carries no free text from CLIENTS; this name is written by the server.</para></summary>
+        public const string OBJECT_EVENT_HIT = "hit";
+
+        /// <summary>Relay window (ms) of <see cref="OBJECT_EVENT_HIT"/> per (shooter, netId): a shotgun
+        /// trigger sends one <c>hit_report</c> per pellet and nine blood bursts at one point is noise,
+        /// not detail. Damage is untouched — only the relay is thinned.</summary>
+        public const int OBJECT_HIT_RELAY_MS = 50;
+
         /// <summary><c>events[].phaseGate</c>: accepted only while <see cref="PHASE_PLAYING"/>.</summary>
         public const string OBJECT_PHASE_GATE_PLAYING = "playing";
 

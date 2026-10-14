@@ -2,6 +2,7 @@ using System;
 using UnityEngine;
 using VortexArena.Core.Arena;
 using VortexArena.Core.Audio;
+using VortexArena.Core.Combat;
 using VortexArena.Net;
 
 namespace VortexArena.Modes.Zombie
@@ -78,13 +79,47 @@ namespace VortexArena.Modes.Zombie
         /// its rate is clamped wide.</summary>
         private const float CrawlClipSpeed = 0.25f;
 
-        /// <summary>Death animation gets this long before the body starts to fade.
+        /// <summary>Death animation (or the ragdoll's fall) gets this long before the body starts to
+        /// fade.
         /// <para>⚠️ <see cref="DeathDissolveDelay"/> + <see cref="DeathDissolveSeconds"/> must stay
-        /// UNDER the server's despawn delay (3 s, protocol §10.5): otherwise the corpse pops out of
+        /// UNDER the server's despawn delay (4,5 s, protocol §10.5): otherwise the corpse pops out of
         /// existence mid-fade.</para></summary>
-        private const float DeathDissolveDelay = 2.2f;
+        private const float DeathDissolveDelay = 3.3f;
 
         private const float DeathDissolveSeconds = 0.8f;
+
+        /// <summary>The ragdoll is frozen this long after death, so the dissolve runs on a settled
+        /// pose instead of a body still sliding — and the budget comes back before the next wave.</summary>
+        private const float RagdollFreezeSeconds = 2.6f;
+
+        /// <summary>Delay before the blood pool is laid: the body has to be roughly where it will
+        /// end up, or the pool appears next to the corpse.</summary>
+        private const float BloodPoolDelay = 0.8f;
+
+        /// <summary>A hit report older than this is not the killing shot any more — the corpse then
+        /// falls with a neutral push instead of being thrown by a stale direction.</summary>
+        private const float HitMemorySeconds = 0.6f;
+
+        /// <summary>The hit report and the hp drop are two signals for ONE round (the report is local
+        /// and instant, the hp comes back from the server): within this window the second one must not
+        /// retrigger the flinch clip.</summary>
+        private const float HitAnimDedupeSeconds = 0.3f;
+
+        // Death impulse (N·s) per zone: a headshot throws the body, a leg shot sweeps it.
+        private const float HeadImpulse = 45f;
+        private const float BodyImpulse = 32f;
+        private const float StomachImpulse = 30f;
+        private const float LegImpulse = 25f;
+
+        /// <summary>How far BEHIND the hit point the blood ray starts (m): it has to begin outside the
+        /// hit box it is about to test, or the collider reports no hit at all.</summary>
+        private const float BloodRayBackMeters = 0.25f;
+
+        /// <summary>Flinch amplitude scale of the bosses — a body shrugged by every round reads as
+        /// stunned, and the squad empties a magazine into it.</summary>
+        private const float BruteFlinchScale = 0.5f;
+
+        private const float DevFlinchScale = 0.3f;
 
         private const float SpawnDissolveSeconds = 1.2f;
 
@@ -98,6 +133,23 @@ namespace VortexArena.Modes.Zombie
         private const float CrawlAttackBoost = 2f;
 
         private const float CrawlAttackBoostSeconds = 0.4f;
+
+        /// <summary>Under this measured speed (m/s) the body counts as standing: a step on a zombie that
+        /// only sways in place would be heard as a stuck loop.</summary>
+        private const float FootstepSpeed = 0.3f;
+
+        /// <summary>Speed (m/s) the step interval is at its shortest from on.</summary>
+        private const float FootstepFullSpeed = 2.2f;
+
+        // Step interval (s) walking → running. The Giant's stride is longer, so its steps stay apart.
+        private const float FootstepIntervalSlow = 0.9f;
+        private const float FootstepIntervalFast = 0.35f;
+        private const float GiantStepIntervalSlow = 1.2f;
+        private const float GiantStepIntervalFast = 0.6f;
+
+        /// <summary>Lead-in (s) given when a standing body starts moving — the first step then lands
+        /// after a stride instead of on the frame it sets off.</summary>
+        private const float FootstepLeadIn = 0.2f;
 
         [Header("Görünüşler")]
         [Tooltip("ZB_* görünüş prefabları — SIRA ÖNEMLİ: ZombieLookBuilder.LookNames sırasıyla " +
@@ -144,6 +196,26 @@ namespace VortexArena.Modes.Zombie
         private float _deadAt;
         private bool _fadedOut;
 
+        private ZombieRagdoll _ragdoll;
+        private ZombieFlinch _flinch;
+
+        private bool _ragdolled;
+        private bool _ragdollFrozen;
+        private bool _bloodPlaced;
+
+        /// <summary>Last hit report for THIS body: where it landed, which way it was going and which
+        /// zone it took. The death state arrives separately (and a little later), so the killing
+        /// shot's direction has to be remembered to throw the corpse with it.</summary>
+        private Vector3 _lastHitPoint;
+        private Vector3 _lastHitDirection;
+        private HitZone _lastHitZone;
+        private float _lastHitAt = -99f;
+
+        /// <summary>When the flinch CLIP was last triggered — the dedupe window's anchor.</summary>
+        private float _hitAnimAt = -99f;
+
+        private int _hitVariant;
+
         /// <summary>Have we ever had a pose for this zombie? Until then there is NO body at all: the
         /// server spawns it with a meaningless pose (§10.5), and a model standing at the arena origin
         /// would be visible to the whole squad.</summary>
@@ -162,6 +234,7 @@ namespace VortexArena.Modes.Zombie
         private ZombieSounds _sounds;
 
         private float _nextGroan;
+        private float _nextStep;
         private bool _deathPlayed;
         private bool _groanRegistered;
 
@@ -176,6 +249,11 @@ namespace VortexArena.Modes.Zombie
         private void OnEnable()
         {
             _net.StateChanged += HandleStateChanged;
+
+            // ⚠️ On EVERY headset, not only the shooter's: the hit report is relayed (Local == false)
+            // and the flinch, the stagger and the blood have to read the same event everywhere.
+            ArenaCombat.ObjectHit += HandleObjectHit;
+
             _attackCounter = ZombieKinds.PayloadInt(_net, ZombieKinds.PayloadAttack, -1);
             _screamCounter = ZombieKinds.PayloadInt(_net, ZombieKinds.PayloadScream);
             _hp = _net.Hp;
@@ -188,6 +266,7 @@ namespace VortexArena.Modes.Zombie
         private void OnDisable()
         {
             _net.StateChanged -= HandleStateChanged;
+            ArenaCombat.ObjectHit -= HandleObjectHit;
             SetGroanRegistered(false);
         }
 
@@ -203,8 +282,7 @@ namespace VortexArena.Modes.Zombie
             if (origin == NetStateOrigin.Live && counter > _attackCounter && !broken)
             {
                 PlayAttack(counter);
-                PlayVoice(_sounds != null ? _sounds.RandomAttack() : null,
-                    _sounds != null ? _sounds.AttackVolume : 0f);
+                PlayVoice(AttackClip(), _sounds != null ? _sounds.AttackVolume : 0f);
             }
 
             _attackCounter = counter;
@@ -235,8 +313,7 @@ namespace VortexArena.Modes.Zombie
                 // zombie would otherwise scream a death cry the moment the arena appears.
                 if (origin == NetStateOrigin.Live)
                 {
-                    PlayVoice(_sounds != null ? _sounds.RandomDeath() : null,
-                        _sounds != null ? _sounds.DeathVolume : 0f);
+                    PlayVoice(DeathClip(), _sounds != null ? _sounds.DeathVolume : 0f);
                 }
             }
 
@@ -260,12 +337,13 @@ namespace VortexArena.Modes.Zombie
 
             if (_dead)
             {
-                FadeOutCorpse();
+                UpdateCorpse();
                 return;
             }
 
             DriveGait(dt);
             UpdateGroan();
+            UpdateFootsteps();
         }
 
         /// <summary>Puts the body on the owner's interpolated pose. ⚠️ Not applied on the OWNER's machine:
@@ -274,6 +352,14 @@ namespace VortexArena.Modes.Zombie
         private void ApplyStream()
         {
             if (_net.NetId <= 0)
+            {
+                return;
+            }
+
+            // ⚠️ A corpse is never posed again: the ragdoll owns the body from here on and writing the
+            // root pose on top of it drags the whole skeleton back under the agent's last position.
+            // Only a body that has NEVER been posed still needs one (a late joiner's dead snapshot).
+            if (_dead && _posed)
             {
                 return;
             }
@@ -366,11 +452,29 @@ namespace VortexArena.Modes.Zombie
             _locoSet = ZombieKinds.LocoSet(netId);
             _nominalWalk = _look.WalkSpeed(_locoSet);
 
+            _ragdoll = _look.GetComponent<ZombieRagdoll>();
+            _flinch = _look.GetComponent<ZombieFlinch>();
+
+            if (_flinch != null)
+            {
+                _flinch.Configure(_crawler, FlinchScaleOf(_type));
+            }
+
             if (_animator != null)
             {
                 _animator.SetInteger(LocoSetParam, _locoSet);
                 _animator.SetBool(CrawlerParam, _crawler);
             }
+        }
+
+        private static float FlinchScaleOf(string type)
+        {
+            if (type == ZombieKinds.TypeDev)
+            {
+                return DevFlinchScale;
+            }
+
+            return type == ZombieKinds.TypeBrute ? BruteFlinchScale : 1f;
         }
 
         /// <summary>First pose: the body appears — and becomes audible. The groan phase starts at a
@@ -535,17 +639,124 @@ namespace VortexArena.Modes.Zombie
             _animator.SetTrigger(AttackParam);
         }
 
-        /// <summary>Upper-body flinch. The variant follows the remaining hp, so it alternates without a
-        /// random draw that would differ per headset.</summary>
+        /// <summary>Upper-body flinch from the HP DROP. ⚠️ The second of the two signals for one round:
+        /// the hit report usually got here first and already played it, so a fresh one is skipped —
+        /// otherwise every round restarts the clip twice and the arms never finish a reaction.</summary>
         private void PlayHit(float hp)
+        {
+            if (Time.time - _hitAnimAt < HitAnimDedupeSeconds)
+            {
+                return;
+            }
+
+            // The variant follows the remaining hp, so it alternates without a random draw that would
+            // differ per headset.
+            TriggerHitClip(Mathf.Max(0, Mathf.RoundToInt(hp)) % 2);
+        }
+
+        private void TriggerHitClip(int variant)
         {
             if (_animator == null || _crawler || _dead || _noFlinch)
             {
                 return;
             }
 
-            _animator.SetInteger(HitIndexParam, Mathf.Max(0, Mathf.RoundToInt(hp)) % 2);
+            _hitAnimAt = Time.time;
+            _animator.SetInteger(HitIndexParam, variant);
             _animator.SetTrigger(HitParam);
+        }
+
+        // ------------------------------------------------------------------------- hit reports
+
+        /// <summary>A round landed on a network object: the flinch, the blood and the corpse's push
+        /// all hang off this. Fires on EVERY headset — the shooter's immediately
+        /// (<c>Local</c>), the others through the server's relay.</summary>
+        private void HandleObjectHit(ArenaCombat.ObjectHitInfo info)
+        {
+            if (info.NetId != _net.NetId || info.NetId <= 0)
+            {
+                return;
+            }
+
+            _lastHitPoint = info.Point;
+            _lastHitDirection = info.Direction;
+            _lastHitZone = (HitZone)info.Zone;
+            _lastHitAt = Time.time;
+
+            if (!_dead)
+            {
+                if (_flinch != null)
+                {
+                    _flinch.Hit(_lastHitZone, info.Direction, info.Point);
+                }
+
+                TriggerHitClip(_hitVariant++ & 1);
+            }
+
+            // The shooter already played their own impact locally (ArenaCombat.ReportImpact); this is
+            // what gives the REST of the squad blood on the body they are watching.
+            if (!info.Local && (!_dead || Time.time - _deadAt < 0.5f))
+            {
+                PlayRemoteBlood(info);
+            }
+        }
+
+        /// <summary>Impact FX for a hit somebody else reported. The surface comes from the hit box the
+        /// ray crosses, so the head bleeds differently from the body — exactly as on the shooter's
+        /// headset.</summary>
+        /// <remarks>⚠️ Tested against THIS body's colliders one by one, not with a scene raycast: a
+        /// scene ray would stop on the wall behind, on another zombie, or on the shooter's own hand,
+        /// and the blood would appear on the wrong thing.</remarks>
+        private void PlayRemoteBlood(in ArenaCombat.ObjectHitInfo info)
+        {
+            Collider[] parts = _ragdoll != null ? _ragdoll.Colliders : null;
+            if (parts == null)
+            {
+                return;
+            }
+
+            Vector3 direction = info.Direction;
+            if (direction.sqrMagnitude < 1e-6f)
+            {
+                // No direction on the wire: aim at the body's middle, which is close enough for a
+                // surface lookup.
+                Transform hips = _ragdoll.Hips;
+                direction = (hips != null ? hips.position : transform.position) - info.Point;
+            }
+
+            if (direction.sqrMagnitude < 1e-6f)
+            {
+                return;
+            }
+
+            direction.Normalize();
+            var ray = new Ray(info.Point - direction * BloodRayBackMeters, direction);
+
+            float best = float.MaxValue;
+            RaycastHit bestHit = default;
+            bool found = false;
+
+            for (int i = 0; i < parts.Length; i++)
+            {
+                Collider part = parts[i];
+                if (part == null || !part.enabled || !part.gameObject.activeInHierarchy)
+                {
+                    continue;
+                }
+
+                if (part.Raycast(ray, out RaycastHit hit, BloodRayBackMeters * 2f) &&
+                    hit.distance < best)
+                {
+                    best = hit.distance;
+                    bestHit = hit;
+                    found = true;
+                }
+            }
+
+            if (found)
+            {
+                ArenaCombat.ReportImpact(bestHit);
+            }
         }
 
         /// <summary>Scream of a screamer or of the Dev (payload <c>c</c>): the <c>ZA_Scream</c> variant of
@@ -572,10 +783,22 @@ namespace VortexArena.Modes.Zombie
             _dead = true;
             _deadAt = Time.time;
 
+            if (_flinch != null)
+            {
+                // The spring would keep bending bones the ragdoll solver owns from here on.
+                _flinch.enabled = false;
+            }
+
+            if (TryCollapse())
+            {
+                return;
+            }
+
             if (_look != null)
             {
                 // Hit boxes go down with the first broken state: a corpse that still reports hits lets
-                // the squad farm score off it for the whole despawn delay.
+                // the squad farm score off it for the whole despawn delay. (The ragdoll path does this
+                // with the layer instead — those colliders have to stay on to carry the body.)
                 _look.SetHitboxesActive(false);
             }
 
@@ -584,16 +807,88 @@ namespace VortexArena.Modes.Zombie
                 return;
             }
 
-            // Crawler always takes index 0: one variant is enough for a body already on the ground.
-            _animator.SetInteger(DeathIndexParam, _crawler ? 0 : _net.NetId % 2);
+            if (_crawler)
+            {
+                // ⚠️ A crawler NEVER plays the standing death clip: it is already on the ground and the
+                // clip stands it up to drop it again. Its current pose is frozen instead.
+                _animator.speed = 0f;
+                return;
+            }
+
+            _animator.SetInteger(DeathIndexParam, _net.NetId % 2);
             _animator.SetBool(DeadParam, true);
         }
 
-        /// <summary>Starts the fade once the death animation has played. The server despawns the object
-        /// itself — this only has to finish BEFORE it does.</summary>
-        private void FadeOutCorpse()
+        /// <summary>Hands the corpse to physics and throws it along the killing shot. <c>false</c> =
+        /// the animated death runs instead (budget spent, no ragdoll on this body, or the Dev, whose
+        /// end is staged).</summary>
+        private bool TryCollapse()
         {
-            if (_fadedOut || Time.time - _deadAt < DeathDissolveDelay)
+            if (_ragdoll == null || _type == ZombieKinds.TypeDev || !ZombieRagdoll.HasBudget)
+            {
+                return false;
+            }
+
+            bool fresh = Time.time - _lastHitAt < HitMemorySeconds;
+            Vector3 direction = fresh ? _lastHitDirection : Vector3.zero;
+
+            if (direction.sqrMagnitude < 1e-6f)
+            {
+                // No usable shot (blast, bleed-out, a late joiner's corpse): a small shove backwards,
+                // which at least drops the body away from the squad instead of straight down.
+                direction = -transform.forward * 0.6f + Vector3.up * 0.35f;
+            }
+
+            Transform hips = _ragdoll.Hips;
+            Vector3 point = fresh
+                ? _lastHitPoint
+                : hips != null ? hips.position : transform.position;
+
+            float impulse = fresh ? ImpulseOf(_lastHitZone) : BodyImpulse * 0.4f;
+
+            if (!_ragdoll.Collapse(point, direction.normalized, impulse))
+            {
+                return false;
+            }
+
+            _ragdolled = true;
+            return true;
+        }
+
+        private static float ImpulseOf(HitZone zone) => zone switch
+        {
+            HitZone.Head => HeadImpulse,
+            HitZone.Stomach => StomachImpulse,
+            HitZone.Leg => LegImpulse,
+            _ => BodyImpulse,
+        };
+
+        /// <summary>The corpse's own clock: settle, bleed, fade. The server despawns the object
+        /// itself — all of this only has to finish BEFORE it does.</summary>
+        private void UpdateCorpse()
+        {
+            float since = Time.time - _deadAt;
+
+            if (_ragdolled && !_ragdollFrozen && since >= RagdollFreezeSeconds)
+            {
+                _ragdollFrozen = true;
+                _ragdoll.Freeze();
+            }
+
+            if (!_bloodPlaced && since >= BloodPoolDelay)
+            {
+                _bloodPlaced = true;
+
+                Transform hips = _ragdoll != null ? _ragdoll.Hips : null;
+                ZombieBloodPool.Shared.Place(hips != null ? hips.position : transform.position);
+            }
+
+            FadeOutCorpse(since);
+        }
+
+        private void FadeOutCorpse(float since)
+        {
+            if (_fadedOut || since < DeathDissolveDelay)
             {
                 return;
             }
@@ -624,6 +919,9 @@ namespace VortexArena.Modes.Zombie
             _voice.rolloffMode = AudioRolloffMode.Logarithmic;
             _voice.minDistance = _sounds.MinDistance;
             _voice.maxDistance = _sounds.MaxDistance;
+            // Below the default 128: a late wave has dozens of bodies, and Unity culls the lowest
+            // priority virtual sources first.
+            _voice.priority = 100;
         }
 
         /// <summary>The scream has its OWN source: it must be heard across the arena
@@ -636,7 +934,11 @@ namespace VortexArena.Modes.Zombie
                 return;
             }
 
-            AudioClip clip = _sounds.RandomScream();
+            // The Dev roars, the screamer cries: one pool for both would give the boss the same voice
+            // as the body the squad learned to shoot on sight.
+            AudioClip clip = _type == ZombieKinds.TypeDev
+                ? _sounds.RandomGiantRoar()
+                : _sounds.RandomScream();
             if (clip == null)
             {
                 return;
@@ -654,13 +956,17 @@ namespace VortexArena.Modes.Zombie
                 _screamVoice.playOnAwake = false;
                 _screamVoice.spatialBlend = 1f;
                 _screamVoice.rolloffMode = AudioRolloffMode.Logarithmic;
-                _screamVoice.minDistance = _sounds.MinDistance;
+                _screamVoice.minDistance = _sounds.ScreamMinDistance;
                 _screamVoice.maxDistance = _sounds.ScreamMaxDistance;
+                // Above the voices and the music: the scream is the warning, it may never be the
+                // source Unity culls.
+                _screamVoice.priority = 40;
             }
 
             float jitter = _sounds.PitchJitter;
             _screamVoice.pitch = 1f + UnityEngine.Random.Range(-jitter, jitter);
-            _screamVoice.PlayOneShot(clip, Mathf.Clamp01(_sounds.ScreamVolume * channel));
+            // Clamp to 2, not 1: PlayOneShot's volumeScale amplifies above unity gain.
+            _screamVoice.PlayOneShot(clip, Mathf.Clamp(_sounds.ScreamVolume * channel, 0f, 2f));
         }
 
         private void PlaySpawnVoice()
@@ -690,7 +996,83 @@ namespace VortexArena.Modes.Zombie
             }
 
             _nextGroan = Time.time + GroanInterval();
-            PlayVoice(_sounds.RandomGroan(), _sounds.GroanVolume);
+            PlayVoice(GroanClip(), _sounds.GroanVolume);
+        }
+
+        private AudioClip GroanClip() =>
+            _type == ZombieKinds.TypeRunner ? _sounds.RandomRunnerGroan() : _sounds.RandomGroan();
+
+        private AudioClip AttackClip()
+        {
+            if (_sounds == null)
+            {
+                return null;
+            }
+
+            return _type == ZombieKinds.TypeDev ? _sounds.RandomGiantSlam() : _sounds.RandomAttack();
+        }
+
+        private AudioClip DeathClip()
+        {
+            if (_sounds == null)
+            {
+                return null;
+            }
+
+            return _type == ZombieKinds.TypeDev ? _sounds.RandomGiantDeath() : _sounds.RandomDeath();
+        }
+
+        /// <summary>Steps while the body WALKS, paced from the measured speed. Optional: with no step
+        /// clips nothing is played and nothing is warned about.</summary>
+        /// <remarks>⚠️ Shares the groan budget (the nearest N bodies) and the voice's own earshot: a
+        /// late wave has dozens of walkers, and steps from across the arena would both drone and steal
+        /// virtual sources from the near ones.</remarks>
+        private void UpdateFootsteps()
+        {
+            if (_voice == null || !_posed || _dead || _sounds == null || !_sounds.HasFootsteps)
+            {
+                return;
+            }
+
+            if (_speed < FootstepSpeed)
+            {
+                _nextStep = Time.time + FootstepLeadIn;
+                return;
+            }
+
+            if (Time.time < _nextStep)
+            {
+                return;
+            }
+
+            bool giant = _type == ZombieKinds.TypeDev;
+            float pace = Mathf.InverseLerp(FootstepSpeed, FootstepFullSpeed, _speed);
+            _nextStep = Time.time + Mathf.Lerp(
+                giant ? GiantStepIntervalSlow : FootstepIntervalSlow,
+                giant ? GiantStepIntervalFast : FootstepIntervalFast,
+                pace);
+
+            if (!ZombieGroanBudget.MayGroan(this, _sounds.MaxGroaners) || !InEarshot())
+            {
+                return;
+            }
+
+            PlayVoice(giant ? _sounds.RandomGiantStep() : _sounds.RandomFootstep(),
+                _sounds.FootstepVolume);
+        }
+
+        /// <summary>Is the listener inside the voice's roll-off? Past it the step is inaudible but would
+        /// still cost a voice.</summary>
+        private bool InEarshot()
+        {
+            Camera listener = Camera.main;
+            if (listener == null)
+            {
+                return false;
+            }
+
+            float range = _sounds.MaxDistance;
+            return (listener.transform.position - transform.position).sqrMagnitude <= range * range;
         }
 
         private float GroanInterval() =>
@@ -735,7 +1117,7 @@ namespace VortexArena.Modes.Zombie
 
             // PlayOneShot: a groan may still be sounding when the zombie is hit, and the two must
             // overlap rather than cut each other off.
-            _voice.PlayOneShot(clip, Mathf.Clamp01(volume * channel));
+            _voice.PlayOneShot(clip, Mathf.Clamp(volume * channel, 0f, 2f));
         }
     }
 }

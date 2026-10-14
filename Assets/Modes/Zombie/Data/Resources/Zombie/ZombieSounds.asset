@@ -13,46 +13,60 @@ MonoBehaviour:
   m_Name: ZombieSounds
   m_EditorClassIdentifier: VortexArena.Modes.Zombie::VortexArena.Modes.Zombie.ZombieSounds
   groanClips:
-  - {fileID: 8300000, guid: e1ed2b74b7fe5414abe28d9ff07c0a7f, type: 3}
-  - {fileID: 8300000, guid: d3a07eae1ad8ab94099f4a39f7782850, type: 3}
-  - {fileID: 8300000, guid: 58c7b0cfb8ce4bb43831b6d632961342, type: 3}
-  - {fileID: 8300000, guid: 38972955b789e55419b1a91833581b59, type: 3}
-  - {fileID: 8300000, guid: 48c02295da06bdb4b95f83f817fbf0f4, type: 3}
-  - {fileID: 8300000, guid: d8ba12039e08fcd4a8f46c57321efe4b, type: 3}
+  - {fileID: 8300000, guid: d1914598a8aef1a46ae626cfa3ee9e05, type: 3}
   attackClips:
-  - {fileID: 8300000, guid: 75e3b791870b16b4d89bf29db2ae4fae, type: 3}
-  - {fileID: 8300000, guid: ddf925006a111e1408bbcf43b8f3c50b, type: 3}
-  - {fileID: 8300000, guid: df7d81bd41454174f9778fb0ab04c94c, type: 3}
-  - {fileID: 8300000, guid: 5e3aee5a61b9d364a9ca9cf41efe8e7b, type: 3}
-  - {fileID: 8300000, guid: ad96ab7942af25847a6bf67db36288cb, type: 3}
-  - {fileID: 8300000, guid: 1775f331d4b852d4191a125ee4d4438c, type: 3}
-  - {fileID: 8300000, guid: 635a827d749c3fd48afefe540b6a07d8, type: 3}
+  - {fileID: 8300000, guid: 8e8af3354ef894643807cc1fa0efb555, type: 3}
   deathClips:
-  - {fileID: 8300000, guid: 5649c518b8a536e498260c8f45215203, type: 3}
-  - {fileID: 8300000, guid: e8aba357864ba754a8c34c924d87e764, type: 3}
-  - {fileID: 8300000, guid: ce274cc84e7987a4b82cdc5dc1fb6e99, type: 3}
-  - {fileID: 8300000, guid: d033920d97eaa1443aec81d3f77ed9ce, type: 3}
+  - {fileID: 8300000, guid: 444265505b13a1f48b30761e999fa82f, type: 3}
   spawnClips:
-  - {fileID: 8300000, guid: 441a0835ad0dace4592ad82186ecd5a5, type: 3}
-  - {fileID: 8300000, guid: 4bd88c5dcca87e04faf149d65bc90ba2, type: 3}
+  - {fileID: 8300000, guid: 8c5be699a3aaf164abe12e46197cd18c, type: 3}
   screamClips:
-  - {fileID: 8300000, guid: 441a0835ad0dace4592ad82186ecd5a5, type: 3}
-  - {fileID: 8300000, guid: 4bd88c5dcca87e04faf149d65bc90ba2, type: 3}
+  - {fileID: 8300000, guid: b9222b5f81f767d479cc3585718fc384, type: 3}
   groanVolume: 0.65
   attackVolume: 0.9
   deathVolume: 0.9
   spawnVolume: 0.7
-  screamVolume: 1
+  screamVolume: 1.5
   pitchJitter: 0.12
   groanIntervalMin: 8
   groanIntervalMax: 15
   maxGroaners: 6
-  minDistance: 1
-  maxDistance: 12
+  minDistance: 2
+  maxDistance: 20
+  screamMinDistance: 5
   screamMaxDistance: 40
-  musicTension: {fileID: 8300000, guid: 02104ce7c1bb29f49a00677b79d37aa3, type: 3}
-  musicWave: {fileID: 8300000, guid: 8c95a517e4614e343b87c4598b2c3f01, type: 3}
-  musicVolume: 0.55
-  waveStartSting: {fileID: 0}
-  waveClearSting: {fileID: 0}
-  finalStandSting: {fileID: 0}
+  musicTension: {fileID: 8300000, guid: a3f68a41475ee7143a17e944a1ad88c7, type: 3}
+  musicWave: {fileID: 8300000, guid: 207d4c5f57bd6bf43ae914663edfbbf5, type: 3}
+  musicVolume: 0.4
+  waveStartSting: {fileID: 8300000, guid: 46b36dd1eab5dfb41a59fad09904e2ed, type: 3}
+  waveClearSting: {fileID: 8300000, guid: 7179e8d638d2ec443a836f455ace1bc6, type: 3}
+  finalStandSting: {fileID: 8300000, guid: a4487c8e45eb0ff4b800f1f9f6c0f331, type: 3}
+  runnerGroanClips:
+  - {fileID: 8300000, guid: 8806802d34ab55c43a3564cf6ff99794, type: 3}
+  giantRoarClips:
+  - {fileID: 8300000, guid: 3a7e7e140e55356459d27e7227ada228, type: 3}
+  giantSlamClips:
+  - {fileID: 8300000, guid: c230f69ca3b888645bc2f602db6754a9, type: 3}
+  giantDeathClips:
+  - {fileID: 8300000, guid: 8a4dcc0402a614847a5e60663ad296fe, type: 3}
+  footstepClips:
+  - {fileID: 8300000, guid: b768c6d6128488c41bfaaac3a119766c, type: 3}
+  giantStepClips:
+  - {fileID: 8300000, guid: d10eeaadbcf9c3b4c95bf6ebc8370d22, type: 3}
+  footstepVolume: 0.5
+  countdownTick: {fileID: 8300000, guid: 42cc857368029714d84534a170a0b6ab, type: 3}
+  weaponUnlockClip: {fileID: 8300000, guid: 3660bfd72a399c441a558f7f65422f46, type: 3}
+  reviveProgressClip: {fileID: 8300000, guid: 84d2ac1dd8af1ac4aa9ba5cf3af2a98f, type: 3}
+  reviveCompleteClip: {fileID: 8300000, guid: 96e9c7af226f35c4d93835c092213a52, type: 3}
+  victoryClip: {fileID: 8300000, guid: f51cb4cb89118c9439c14ae378d56396, type: 3}
+  rescueClip: {fileID: 0}
+  defeatClip: {fileID: 8300000, guid: 1d5db1f4ba856a64cae74f9ffc9d3baa, type: 3}
+  voiceVolume: 1
+  waveClearVoice: {fileID: 8300000, guid: 75fca80418f2e6f43bb1131df8629078, type: 3}
+  newWeaponsVoice: {fileID: 8300000, guid: 4505b937df03f1a448e352c11d400940, type: 3}
+  finalStandVoice: {fileID: 8300000, guid: 82c451d96ba11304084e47338d1d8996, type: 3}
+  giantIncomingVoice: {fileID: 8300000, guid: c3b9f30425cda9d44bb4cc03f85cad07, type: 3}
+  mateDownedVoice: {fileID: 8300000, guid: 82535bb94e860e44fbc029dffefa02fc, type: 3}
+  survivedVoice: {fileID: 8300000, guid: 99ea23f73a51f21478ff358f9c7bee7e, type: 3}
+  rescuedVoice: {fileID: 8300000, guid: 7f07bc3477507594aa1b4704e09f41ac, type: 3}
+  lostVoice: {fileID: 8300000, guid: 6012961845b279046a18953f14b47259, type: 3}

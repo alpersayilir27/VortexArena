@@ -5,13 +5,14 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using VortexArena.Core;
 using VortexArena.Core.Combat;
+using VortexArena.Core.UI;
 using VortexArena.Net;
 
 namespace VortexArena.Modes.Zombie
 {
     /// <summary>Wave-by-wave weapon progression on the zombie boards: installs the selection gate while
     /// the running mode is zombie, dresses every board slot with a <see cref="ZombieWeaponLockView"/>
-    /// and announces each wave's new weapons on the HUD.</summary>
+    /// and names each wave's new weapons for the HUD's clear-phase notice.</summary>
     /// <remarks>⚠️ Entirely CLIENT-side: the server validates no weapon (§10.5), so the progression adds
     /// no message and no protocol version.
     /// <para>ONE static installer for the whole mode (the <see cref="ZombieRoster"/> pattern): the gate
@@ -20,7 +21,8 @@ namespace VortexArena.Modes.Zombie
     /// board.</para></remarks>
     internal static class ZombieWeaponUnlocks
     {
-        /// <summary>Waves already announced; the toast must not repeat on every <c>match_state</c>.</summary>
+        /// <summary>Wave the plates were last opened for; the unlock animation must not repeat on every
+        /// <c>match_state</c>.</summary>
         private static int _announcedWave;
 
         private static bool _active;
@@ -34,28 +36,55 @@ namespace VortexArena.Modes.Zombie
             // Static handler on static events: nothing to unsubscribe, and the gate outlives scene
             // loads exactly like the match it belongs to.
             ModeRuntime.Changed += Refresh;
+
+            // The staged arena is announced by the SELECTION, not by the rules: without this the
+            // boards stay open until start_match.
+            ModeSelection.Changed += Refresh;
             SceneManager.sceneLoaded += HandleSceneLoaded;
-            ZombieWaveState.WaveChanged += HandleWaveChanged;
+            ZombieWaveState.UnlockWaveChanged += HandleUnlockWaveChanged;
             ZombieWaveState.FinalStandChanged += HandleFinalStandChanged;
-            NetEvents.OnReturnToLobby += _ => Stop();
+            // Re-judged, not stopped: the squad usually returns to the lobby INSIDE the same zombie
+            // arena, where the boards must go back to wave 1 instead of opening up.
+            NetEvents.OnReturnToLobby += _ => Refresh();
             NetEvents.OnDisconnected += Stop;
         }
 
         private static void HandleSceneLoaded(Scene scene, LoadSceneMode mode) => Refresh();
 
-        /// <summary>Is the progression this machine's business: zombie rules, and a headset (the admin
-        /// has no boards to look at and no HUD to toast on).</summary>
+        /// <summary>Is the progression this machine's business: a zombie arena underfoot, and a headset
+        /// (the admin has no boards to look at and no HUD to toast on).</summary>
         private static bool ShouldRun
         {
             get
             {
-                if (!string.Equals(ModeRuntime.ModeId, ZombieKinds.Zombie, StringComparison.Ordinal))
+                if (!IsZombieHere)
                 {
                     return false;
                 }
 
                 ArenaClient client = ArenaClient.Instance;
                 return client == null || !client.IsAdminRole;
+            }
+        }
+
+        /// <summary>Zombie rules are running, OR a zombie arena is merely STAGED.</summary>
+        /// <remarks>⚠️ The second branch is what locks the boards BEFORE the match: while the arena is
+        /// staged (the in-arena wait before start_match) the running rule is still the lobby profile
+        /// (§10.7), so judging by the rules alone handed the squad every weapon until the run began.
+        /// <para>⚠️ The scene's spawn markers are the "which arena" half: a zombie selection made while
+        /// the squad waits in the real lobby scene must lock nothing there.</para></remarks>
+        private static bool IsZombieHere
+        {
+            get
+            {
+                if (string.Equals(ModeRuntime.ModeId, ZombieKinds.Zombie, StringComparison.Ordinal))
+                {
+                    return true;
+                }
+
+                return string.Equals(ModeSelection.ModeId, ZombieKinds.Zombie, StringComparison.Ordinal) &&
+                       UnityEngine.Object.FindFirstObjectByType<ZombieSpawnPoint>(
+                           FindObjectsInactive.Include) != null;
             }
         }
 
@@ -103,9 +132,9 @@ namespace VortexArena.Modes.Zombie
             DestroyViews();
         }
 
-        /// <summary>Wave the locks are judged by — the pre-start countdown (<c>0</c>) counts as wave 1,
-        /// so the starter weapons are takeable while the players are still being placed.</summary>
-        private static int CurrentWave => Mathf.Max(1, ZombieWaveState.Wave);
+        /// <summary>Wave the locks are judged by: the wave gap already counts as the NEXT wave, because
+        /// the gap is when the squad swaps weapons (<see cref="ZombieWaveState.UnlockWave"/>).</summary>
+        private static int CurrentWave => ZombieWaveState.UnlockWave;
 
         private static bool IsUnlocked(WeaponDefinition definition)
         {
@@ -125,8 +154,17 @@ namespace VortexArena.Modes.Zombie
         /// "SON DİRENİŞ" notice already says it, and a dozen names would bury it.</summary>
         private static void HandleFinalStandChanged()
         {
-            if (!_active || !ZombieWaveState.FinalStand)
+            if (!_active)
             {
+                return;
+            }
+
+            // The final stand ENDS with the run: the covers go straight back on, or the next run
+            // starts with the whole arsenal open.
+            if (!ZombieWaveState.FinalStand)
+            {
+                _announcedWave = CurrentWave;
+                ApplyAll(_announcedWave);
                 return;
             }
 
@@ -143,7 +181,7 @@ namespace VortexArena.Modes.Zombie
 
         // -------------------------------------------------------------------- waves
 
-        private static void HandleWaveChanged(int wave)
+        private static void HandleUnlockWaveChanged(int wave)
         {
             if (!_active)
             {
@@ -153,27 +191,45 @@ namespace VortexArena.Modes.Zombie
             int current = Mathf.Max(1, wave);
             if (current <= _announcedWave)
             {
-                // Wave went back (a new run on the same arena): re-lock without announcing anything.
+                // Wave went back (a new run on the same arena): re-lock without animating anything.
                 _announcedWave = current;
                 ApplyAll(current);
                 return;
             }
 
             // Everything opened between the last announced wave and this one — a dropped match_state
-            // must not swallow a weapon's announcement.
-            NewNames.Clear();
+            // must not swallow a plate's unlock.
             IReadOnlyList<ZombieWeaponLockView> views = ZombieWeaponLockView.All;
             for (int i = 0; i < views.Count; i++)
             {
                 ZombieWeaponLockView view = views[i];
-                if (view == null || view.UnlockWave <= _announcedWave || view.UnlockWave > current)
+                if (view != null && view.UnlockWave > _announcedWave && view.UnlockWave <= current)
+                {
+                    view.PlayUnlock();
+                }
+            }
+
+            _announcedWave = current;
+            ApplyAll(current);
+        }
+
+        /// <summary>Display names of everything that opens EXACTLY at <paramref name="wave"/>, joined
+        /// with <c>" · "</c>; empty when that wave opens nothing. The HUD's clear-phase notice reads it.</summary>
+        /// <remarks>Looked up on demand (once per wave gap), so no cached holster or board reference can
+        /// go stale. Two boards can carry the same weapon (one per playable storey) — it is named once.</remarks>
+        internal static string UnlockedNamesAt(int wave)
+        {
+            NewNames.Clear();
+
+            IReadOnlyList<ZombieWeaponLockView> views = ZombieWeaponLockView.All;
+            for (int i = 0; i < views.Count; i++)
+            {
+                ZombieWeaponLockView view = views[i];
+                if (view == null || view.UnlockWave != wave)
                 {
                     continue;
                 }
 
-                view.PlayUnlock();
-
-                // Two boards can carry the same weapon (one per playable storey) — the toast says it once.
                 string label = view.DisplayName;
                 if (!string.IsNullOrEmpty(label) && !NewNames.Contains(label))
                 {
@@ -181,44 +237,7 @@ namespace VortexArena.Modes.Zombie
                 }
             }
 
-            AddOpenedThrowable(current);
-            _announcedWave = current;
-
-            // Wave 1 opens nothing: those weapons were never locked.
-            if (current >= 2 && NewNames.Count > 0)
-            {
-                Announce();
-            }
-
-            ApplyAll(current);
-        }
-
-        /// <summary>Adds the wrist bomb's name when it opened in (announced, current]. Looked up on the
-        /// wave change only — a rare event, so no cached holster reference to go stale.</summary>
-        private static void AddOpenedThrowable(int current)
-        {
-            WristHolster holster = UnityEngine.Object.FindFirstObjectByType<WristHolster>();
-            ThrowableDefinition throwable = holster != null ? holster.Throwable : null;
-            if (throwable == null)
-            {
-                return;
-            }
-
-            int wave = ZombieArsenal.Live.UnlockWave(throwable.ThrowableId);
-            if (wave > _announcedWave && wave <= current && !string.IsNullOrEmpty(throwable.DisplayName) &&
-                !NewNames.Contains(throwable.DisplayName))
-            {
-                NewNames.Add(throwable.DisplayName);
-            }
-        }
-
-        private static void Announce()
-        {
-            ZombieClientController hud = ZombieClientController.Live;
-            if (hud == null)
-            {
-                return;
-            }
+            AddThrowableAt(wave);
 
             Joined.Clear();
             for (int i = 0; i < NewNames.Count; i++)
@@ -231,7 +250,25 @@ namespace VortexArena.Modes.Zombie
                 Joined.Append(NewNames[i]);
             }
 
-            hud.ShowWeaponUnlockedToast(Joined.ToString());
+            return Joined.ToString();
+        }
+
+        /// <summary>Adds the wrist bomb's name when it opens exactly at <paramref name="wave"/>.</summary>
+        private static void AddThrowableAt(int wave)
+        {
+            WristHolster holster = UnityEngine.Object.FindFirstObjectByType<WristHolster>();
+            ThrowableDefinition throwable = holster != null ? holster.Throwable : null;
+            if (throwable == null)
+            {
+                return;
+            }
+
+            string label = Girdap.Upper(throwable.DisplayName);
+            if (ZombieArsenal.Live.UnlockWave(throwable.ThrowableId) == wave &&
+                !string.IsNullOrEmpty(label) && !NewNames.Contains(label))
+            {
+                NewNames.Add(label);
+            }
         }
 
         /// <summary>Pushes the locked/open state onto every view WITHOUT animation (the views that just

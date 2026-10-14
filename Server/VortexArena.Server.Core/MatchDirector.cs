@@ -175,6 +175,14 @@ public sealed class MatchDirector
     /// it — its last ticks would be rejected silently.</para></summary>
     private const double PosthumousDamageSeconds = 10.0;
 
+    /// <summary>Last <c>object_event "hit"</c> relay per (shooter, netId) — the thinning window of
+    /// §5.2. Guarded by <see cref="_gate"/>; entries expire by time, pruning only caps the size.</summary>
+    private readonly Dictionary<(int Shooter, int NetId), (DateTime At, int Zone)> _lastHitRelay = new();
+
+    /// <summary>Prune threshold of <see cref="_lastHitRelay"/>: well above (shooters × live objects)
+    /// within one 50 ms window, so pruning is rare and never runs per hit.</summary>
+    private const int HitRelayPruneAt = 256;
+
     // Log state — NOT match state, hence kept here (not in PlayerState) under its own small lock.
     // _rejectLogGate NEVER takes _gate (only the _gate → _rejectLogGate direction exists).
     private readonly object _rejectLogGate = new();
@@ -2184,6 +2192,11 @@ public sealed class MatchDirector
         string kind;
         float appliedDamage;
         bool broken;
+
+        // Unknown zone → body (§5.1): the field only feeds mode scoring and the hit relay, so it is
+        // clamped, not rejected. Resolved before the lock since both consumers read the same value.
+        var zone = msg.zone is >= 0 and <= ArenaProtocol.HIT_ZONE_MAX ? msg.zone : 0;
+
         lock (_gate)
         {
             // ⚠️ WIDER than the player path's "playing only" gate (§10.3): with fireWhilePaused a target
@@ -2209,16 +2222,99 @@ public sealed class MatchDirector
             mode = _mode;
             // To EVERYONE (§10.10): a broken cover is everyone's cover.
             QueueBroadcastLocked(outbox, JsonUtil.Serialize(WorldObjectTable.ToStateMsg(entry)));
+
+            // AFTER the state and in the same outbox: the impact presentation must not reach a headset
+            // before the health it belongs to.
+            QueueHitRelayLocked(outbox, shooter.PlayerId, msg, zone, broken);
         }
         await FlushAsync(outbox);
 
         // ⚠️ AFTER the state went out, outside the lock (hook contract): the mode may write score or
         // spawn/despawn from here, and the core writes none for a broken object itself (§10.10).
         // `broken` is THIS hit's doing — a second hit on a broken object never passes the gates.
-        // Unknown zone → body (§5.1): the field only feeds mode scoring, so it is clamped, not rejected.
-        var zone = msg.zone is >= 0 and <= ArenaProtocol.HIT_ZONE_MAX ? msg.zone : 0;
         mode?.OnObjectHit(this, shooter.PlayerId, msg.targetNetId, kind, appliedDamage, broken, zone);
         FlushRosterRefresh(); // the hook may have written a shared score (§10.2)
+    }
+
+    /// <summary>Queues the <c>object_event "hit"</c> relay of an ACCEPTED object hit (§5.2):
+    /// <c>i:[zone, shooterId, killed]</c>, <c>f:[hitPos xyz, hitDir xyz]</c>, copied from the report.</summary>
+    /// <remarks>⚠️ This is the one event the SERVER raises, so the kind's <c>events[]</c> list is not
+    /// consulted (§10.10) and the kind is not filtered on: which objects have a hit presentation is the
+    /// CLIENT's business, and a mode name baked into the core would be a second mode list.
+    /// <para>⚠️ It does not duplicate <c>object_state</c>: that carries the STATE, this carries the
+    /// impact (where, from which direction, which zone) — facts the state has no field for.</para></remarks>
+    private void QueueHitRelayLocked(List<Outgoing> outbox, int shooterId, HitReportMsg msg, int zone,
+        bool killed)
+    {
+        if (!HitRelayDueLocked(shooterId, msg.targetNetId, zone, killed)) return;
+
+        var f = new float[6];
+        CopyTriplet(msg.hitPos, f, 0);
+        CopyTriplet(msg.hitDir, f, 3);
+
+        QueueBroadcastLocked(outbox, JsonUtil.Serialize(new ObjectEventMsg
+        {
+            netId = msg.targetNetId,
+            name = ArenaProtocol.OBJECT_EVENT_HIT,
+            i = new[] { zone, shooterId, killed ? 1 : 0 },
+            f = f,
+            s = ""
+        }));
+    }
+
+    /// <summary>The thinning window of the hit relay (§5.2): at most one per (shooter, netId) per
+    /// <see cref="ArenaProtocol.OBJECT_HIT_RELAY_MS"/>.</summary>
+    /// <remarks>⚠️ Only the RELAY is thinned, never the damage — every pellet of a shotgun is applied.
+    /// Two things always get through even inside the window, because they change what the presentation
+    /// means: the killing hit, and a body hit upgrading to a HEAD hit.</remarks>
+    private bool HitRelayDueLocked(int shooterId, int netId, int zone, bool killed)
+    {
+        var now = DateTime.UtcNow;
+        var key = (shooterId, netId);
+
+        if (_lastHitRelay.TryGetValue(key, out var last) &&
+            (now - last.At).TotalMilliseconds < ArenaProtocol.OBJECT_HIT_RELAY_MS &&
+            !killed &&
+            !(zone == ArenaProtocol.HIT_ZONE_HEAD && last.Zone != ArenaProtocol.HIT_ZONE_HEAD))
+        {
+            return false;
+        }
+
+        _lastHitRelay[key] = (now, zone);
+
+        if (_lastHitRelay.Count > HitRelayPruneAt)
+        {
+            PruneHitRelaysLocked(now);
+        }
+
+        return true;
+    }
+
+    /// <summary>Drops entries older than the window — an expired entry decides nothing, and without
+    /// this the table would grow with every (shooter, netId) pair a round ever produced.</summary>
+    private void PruneHitRelaysLocked(DateTime now)
+    {
+        var stale = new List<(int Shooter, int NetId)>();
+        foreach (var pair in _lastHitRelay)
+        {
+            if ((now - pair.Value.At).TotalMilliseconds >= ArenaProtocol.OBJECT_HIT_RELAY_MS)
+            {
+                stale.Add(pair.Key);
+            }
+        }
+
+        for (var i = 0; i < stale.Count; i++) _lastHitRelay.Remove(stale[i]);
+    }
+
+    /// <summary>Copies three floats of a report array into <paramref name="target"/> at
+    /// <paramref name="offset"/>; a missing/short source leaves zeros ("unknown", §5.1).</summary>
+    private static void CopyTriplet(float[]? source, float[] target, int offset)
+    {
+        if (source == null || source.Length < 3) return;
+
+        target[offset] = source[0];
+        target[offset + 1] = source[1];
+        target[offset + 2] = source[2];
     }
 
     // ---- Object ownership, events, dynamic spawn (§10.10) ----
@@ -2552,11 +2648,11 @@ public sealed class MatchDirector
         return true;
     }
 
-    /// <summary>Has the host stopped streaming (§10.10)? Asked ONLY while it owns something: an admin
-    /// driving nothing has no pose to send and must not be demoted for the silence.</summary>
+    /// <summary>Has the host stopped streaming (§10.10)? Asked ONLY while it owns an UNBROKEN object: an
+    /// admin driving nothing — or only corpses, whose pose it no longer sends — must not be demoted.</summary>
     private bool IsObjectHostSilentLocked(PlayerState host, DateTime now)
     {
-        if (!AnyObjectOwnedBy(host.PlayerId)) return false;
+        if (!AnyLiveObjectOwnedByLocked(host.PlayerId)) return false;
 
         var last = new DateTime(Interlocked.Read(ref _lastHostPoseTicks));
         return (now - last).TotalMilliseconds >= ArenaProtocol.OBJECT_HOST_SILENCE_MS;
@@ -2611,6 +2707,25 @@ public sealed class MatchDirector
         foreach (var pair in _objectOwners)
         {
             if (pair.Value.PlayerId == playerId) return true;
+        }
+
+        return false;
+    }
+
+    /// <summary><see cref="AnyObjectOwnedBy"/> without broken objects: a corpse's pose is not streamed,
+    /// so it says nothing about the owner being alive (§10.10).</summary>
+    private bool AnyLiveObjectOwnedByLocked(int playerId)
+    {
+        foreach (var pair in _objectOwners)
+        {
+            if (pair.Value.PlayerId != playerId) continue;
+            if (_objects.TryGetLocked(pair.Key, out var entry) &&
+                (entry.Flags & ArenaProtocol.OBJECT_FLAG_BROKEN) != 0)
+            {
+                continue;
+            }
+
+            return true;
         }
 
         return false;

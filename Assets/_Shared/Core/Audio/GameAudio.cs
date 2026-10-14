@@ -45,7 +45,11 @@ namespace VortexArena.Core.Audio
         /// <para>A late announcement is a wrong announcement — hearing "enemy eliminated" in the
         /// middle of the between-rounds gathering makes the player think it just
         /// happened.</para></summary>
-        private const float AnnouncementTtlSeconds = 4f;
+        public const float DefaultMaxWaitSeconds = 4f;
+
+        /// <summary>Wait that never expires (<see cref="PlayAnnouncement"/>) — for lines whose meaning
+        /// does not spoil while another line is speaking.</summary>
+        public const float NeverExpires = float.PositiveInfinity;
 
         /// <summary>Breathing gap between two lines (s): back-to-back sentences are heard as
         /// one.</summary>
@@ -141,6 +145,41 @@ namespace VortexArena.Core.Audio
             return Instance != null &&
                    TryResolve(trigger, out ModeAudioRegistry.Rule rule) &&
                    Instance.PlayRule(rule);
+        }
+
+        /// <summary>Mode/map-specific line for a moment the SHARED BANK also has a clip for.
+        /// <c>true</c> = the bank must stay quiet.</summary>
+        /// <remarks>⚠️ A MATCHED rule returns <c>true</c> even with no clip — same ownership rule as
+        /// <see cref="ModeAudioEvent.Countdown"/>: the row was written for that moment and chose
+        /// silence there, while the bank line would be a second voice on the same event.
+        /// <para>Only for triggers that REPLACE a bank clip. A trigger with no bank counterpart
+        /// (<see cref="ModeAudioEvent.RoundEnd"/>) needs <see cref="PlayModeEvent"/> instead, whose
+        /// <c>false</c> means "nothing played".</para></remarks>
+        public static bool PlayOwningModeEvent(ModeAudioEvent trigger)
+        {
+            if (Instance == null || !TryResolve(trigger, out ModeAudioRegistry.Rule rule))
+            {
+                return false;
+            }
+
+            Instance.PlayRule(rule);
+            return true;
+        }
+
+        /// <summary>Queues a line that lives in a MODE's own data instead of the bank or the registry,
+        /// on the one announcement channel — so it never overlaps another line.
+        /// <para><paramref name="volume"/> is the mode's own level; the voiceover channel is applied on
+        /// top. A null clip or a missing singleton is a no-op (<c>false</c>).</para></summary>
+        /// <remarks><paramref name="maxWaitSeconds"/> is how long the line may sit behind another one;
+        /// <see cref="NeverExpires"/> for a line that describes a PHASE rather than an instant ("yeni
+        /// silahlar", the match outcome) — with the default it is dropped while the line before it is
+        /// still speaking.</remarks>
+        public static bool PlayAnnouncement(AudioClip clip, float volume = 1f,
+            float maxWaitSeconds = DefaultMaxWaitSeconds)
+        {
+            return Instance != null &&
+                   Instance.Announce(clip, Mathf.Clamp01(Mathf.Max(0f, volume) * AudioMix.Voiceover),
+                       maxWaitSeconds);
         }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -280,7 +319,8 @@ namespace VortexArena.Core.Audio
         /// syllable.</para>
         /// <para><c>false</c> = the sound will never play (no clip, or the queue overflowed); the
         /// caller may fall back.</para></summary>
-        private bool Announce(AudioClip clip, float volume)
+        private bool Announce(AudioClip clip, float volume,
+            float maxWaitSeconds = DefaultMaxWaitSeconds)
         {
             if (clip == null || _source == null)
             {
@@ -299,7 +339,7 @@ namespace VortexArena.Core.Audio
                 return false;
             }
 
-            _announcements.Enqueue(new PendingAnnouncement(clip, volume, now + AnnouncementTtlSeconds));
+            _announcements.Enqueue(new PendingAnnouncement(clip, volume, now + maxWaitSeconds));
             return true;
         }
 
@@ -367,16 +407,28 @@ namespace VortexArena.Core.Audio
             {
                 // Drum is an instant layer under the line; the line itself queues as before.
                 Play(GameSoundId.LocalDeathDrum);
-                Play(GameSoundId.LocalDeath);
+
+                if (!PlayOwningModeEvent(ModeAudioEvent.LocalDowned))
+                {
+                    Play(GameSoundId.LocalDeath);
+                }
+
                 return;
             }
 
             // killerId == victimId: suicide/environmental death (§10.9) — no killer, no announcement.
             if (msg.killerId == local && msg.killerId != msg.victimId)
             {
-                Play(IsTeammate(msg.victimId)
-                    ? GameSoundId.TeammateEliminated
-                    : GameSoundId.EnemyEliminated);
+                if (!IsTeammate(msg.victimId))
+                {
+                    Play(GameSoundId.EnemyEliminated);
+                    return;
+                }
+
+                if (!PlayOwningModeEvent(ModeAudioEvent.TeammateEliminated))
+                {
+                    Play(GameSoundId.TeammateEliminated);
+                }
             }
         }
 
@@ -481,7 +533,12 @@ namespace VortexArena.Core.Audio
         private void HandleRespawn(RespawnMsg msg)
         {
             int local = ArenaCombat.LocalPlayerId;
-            if (msg != null && local > 0 && msg.playerId == local)
+            if (msg == null || local <= 0 || msg.playerId != local)
+            {
+                return;
+            }
+
+            if (!PlayOwningModeEvent(ModeAudioEvent.LocalRespawn))
             {
                 Play(GameSoundId.LocalRespawn);
             }

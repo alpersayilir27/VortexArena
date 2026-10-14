@@ -37,6 +37,7 @@ Tümü paylaşılan `ArenaProtocol` statik sınıfında tanımlanır (`Assets/_S
 | `OBJECT_OWNER_SILENCE_MS` | `1000` | Sahibin poz kanalı (`0x01`) bu süredir susmuşsa sunucu onu **obje sahipliği için kopmuş** sayar ve tuttuğu/uçurduğu objeleri zemine indirir (§10.10). Poz kanalı 20 Hz akar, yani eşik 20 paketlik kayba dayanır; istemcilerin kendi bayatlık pencereleriyle (uzak obje akışı ve uzak poz gövdesi, 1 sn) **aynı** tutulur — sunucu objeyi indirmeden önce obje başkalarının ekranında bırakıldığı noktaya geri sıçramaz |
 | `OBJECT_HOST_SILENCE_MS` | `1500` | **Admin sahipli** objeler için susma eşiği (§10.10 "Sunucu-atanmış sahiplik"): nesne sahibi admin en az bir objeye sahipken bu süre boyunca hiçbirinden `0x09` göndermezse sahiplik sıradaki admin'e devredilir. ⚠️ `OBJECT_OWNER_SILENCE_MS` burada **kullanılamaz**: o eşik `0x01` poz kanalını ölçer ve admin `0x01` hiç göndermez (§2), yani admin sahipli her obje ilk taramada zemine inerdi. Eşik obje poz kanalının kendi frekansına (`OBJECT_POSE_RATE_HZ`) göre 30 paketlik kayba dayanır |
 | `OBJECT_GRAB_CONFIRM_SECONDS` | `1.0` | İyimser kavramanın (`object_grab`) kendisini sahip + `Held` gösteren bir `object_state` ile onaylanması için istemcinin beklediği süre (§10.10). Dolunca yerel kavrama geri alınır: sessiz red (elde olan obje, eski sunucu) başka hiçbir mesajla gelmez; süre olmasaydı el, objeyi hiç tutmadığı hâlde dolu kalırdı |
+| `OBJECT_HIT_RELAY_MS` | `50` | `object_event "hit"` relay'inin (§5.2) **(atıcı, `netId`) başına** inceltme penceresi. Pompalı tek tetikte saçma başına bir `hit_report` yollar; hasar hepsinde uygulanır, relay'de pencere içindeki tekrarlar düşer (istisna: öldüren vuruş ve kafaya yükselen bölge). Yalnız sunucuda yaşar, telde görünmez |
 | `OBJECT_MAX_ENTRIES_PER_PACKET` | `32` | Tek `0x05` datagramının obje bölümüne yazılan en fazla girdi (§6.8). En kötü hâl 16 oyuncu + 32 obje: 8 + 16×34 + 32×12 = 936 B, yani 1200 B bütçesine (`COMBINED_MAX_BYTES`) sığar — ama olay bölümü aynı bütçeyi paylaşır, dolayısıyla **gerçek kapı yine boyut kapısıdır**; bu sayı `objectCount`'un `u8` olmasının tavanı ve bir emniyettir. ⚠️ Boyut kapısı düşerse o tikin obje pozlarının **tamamı** düşer (§6.8), bir kısmı değil |
 | `PLAYER_NUMBER_MIN` / `PLAYER_NUMBER_MAX` | `1` / `99` | Forma numarası aralığı (§2). `0` = atanmamış ve aralığın dışındadır. Numara **tüm kayıtlı cihazlar** arasında benzersizdir |
 | `CALIB_MODE_TWO_ANCHOR` / `CALIB_MODE_SAVED_ANCHOR` / `CALIB_MODE_ANCHOR_CLOUD` | `"two_anchor"` / `"saved_anchor"` / `"anchor_cloud"` | Kalibre modunun geçerli değerleri (§5.2/§10.6). Sunucu açılış varsayılanı `saved_anchor`. ⚠️ `anchor_cloud` **rezervdir** — sunucu kabul etmez, loglayıp durumu değiştirmez; bilinmeyen/boş değer de aynı şekilde reddedilir (sessizce varsayılana düşmez: mod bir operatör kararıdır, tahmin edilmez) |
@@ -211,11 +212,14 @@ kalıcı yazılır.
 **`hit_report`** — istemci bir oyuncuya **ya da bir ağ nesnesine** hasar verdiğinde (mermi, balta, ok, patlama, çevre — kaynağı fark etmez):
 ```json
 { "type":"hit_report", "seq":124, "targetPlayerId":5, "targetNetId":0, "weaponId":"ak47",
-  "damage":25.0, "hitPos":[0.4,1.5,2.2], "zone":1 }
+  "damage":25.0, "hitPos":[0.4,1.5,2.2], "hitDir":[0.0,-0.1,1.0], "zone":1 }
 ```
 İki hedef alanı **XOR'dur**: `targetNetId != 0` ise hedef bir ağ nesnesidir ve `targetPlayerId` okunmaz (§10.10). Tek mesaj olmasının sebebi hasarın **kaynağının** ikisinde de aynı olmasıdır — aynı mermi, aynı patlama, aynı istemci hesabı; ayrı bir `object_hit_report` aynı kapı listesini ikinci kez yazdırırdı.
 
 `hitPos` arena uzayında. **`damage` istemcinin hesapladığı değerdir ve sunucu onu aynen uygular** — sunucuda silah tablosu YOKTUR (§10.3). `weaponId` yalnız bir etikettir (kill feed / istatistik), doğrulanmaz: yeni bir silah/hasar kaynağı eklemek için sunucuya hiçbir şey tanıtmak gerekmez. Sunucu yalnız durum tutarlılığını kontrol eder (faz, atıcı/hedef canlı mı, dost ateşi). Geçerse hasarı uygular ve `health_update` yayınlar. **İstemci hasarı yerel uygulamaz** — `health_update` bekler.
+
+`hitDir` **vuruşun yönüdür** (arena uzayında, birim boy): mermide namlunun ışın yönü, patlamada merkezden hedefe. Yönü olmayan kaynak `[0,0,0]` yazar, alan hiç gönderilmeyebilir — ikisi de "yön yok" demektir. **Hasarı etkilemez ve doğrulanmaz**; sunucu yalnız `object_event hit` relay'ine (§5.2) kopyalar, yani kaybı bir sunum ayrıntısıdır. Yön bir **nokta değildir**: istemci onu konum dönüşümünden ayrı çevirir, yoksa uzaylar ayrıştığı gün sessizce ötelenir.
+⚠️ **`PROTOCOL_VERSION` bu alan ve `object_event "hit"` için ARTMAZ:** ikisi de eklemeli ve isteğe bağlıdır — alanı tanımayan eski sunucu onu okumaz, olayı tanımayan eski istemci adı yok sayar; kaybolan yalnız bir sunum ayrıntısıdır, kural değil (`sceneElapsed` ile aynı sözleşme).
 
 `zone` isabetin gövde bölgesidir (`HitZone`: `0` = gövde, `1` = kafa, `2` = karın, `3` = bacak); alanın yokluğu `0` = gövde demektir. **Hasarı etkilemez** — çarpan `damage`'ın içinde zaten uygulanmıştır; alan yalnız modun bölgeye göre puanlaması (§10.5 zombi: kafadan öldürme) ve istatistik içindir. İstemci hem oyuncu hem ağ nesnesi hedefinde yazar; patlama gibi bölgesi olmayan kaynaklar `0` gönderir.
 
@@ -684,6 +688,17 @@ Fazlar ve alanların anlamı §10.1'de. `phase` yalnız üç değer alır: `paus
 **`object_despawn`** `{ "type":"object_despawn", "netId":40001 }` — obje dünyadan kalkar; istemci örneği yok eder. Sahne objesi **despawn edilmez** (kimliği sahnede bake'li, karşılığı silinemez) — mesaj yalnız dinamik kimlikler içindir.
 
 **`object_event`** — istemciden gelenle **aynı gövde** (§5.1), sunucudan **herkese** relay edilir (§10.10). Yalnız durumu değiştirmeyen **kozmetik** olaylar bu yolu kullanır; durumu değiştiren bir olayın sonucu `object_state`'tir ve aynı olay ayrıca yayınlanmaz — tek doğruluk.
+
+**`object_event name:"hit"`** — **sunucunun kendi ürettiği** tek obje olayı: kabul edilen her `hit_report` (§5.1) ağ nesnesi hedefinde, `object_state` yayınlandıktan **sonra** herkese gider.
+```json
+{ "type":"object_event", "netId":40012, "name":"hit", "i":[1,5,0],
+  "f":[0.4,1.5,2.2,0.0,-0.1,1.0], "s":"" }
+```
+`i` = `[zone, atıcı playerId, öldürdü mü (0/1)]`; `f` = `[hitPos xyz, hitDir xyz]` (arena uzayı, yön birim boy ya da `[0,0,0]`). Alanlar `hit_report`'tan **olduğu gibi** kopyalanır; sunucu hiçbirini hesaplamaz.
+- ⚠️ **`object_state`'i tekrarlamaz, onun taşıyamadığını taşır:** durum `hp`/`flags`'tir, bu olay ise **isabetin kendisidir** (nerede, hangi yönden, hangi bölge). İkisi aynı gerçeği iki kez duyurmaz — biri "nesne şu kadar canlı", diğeri "şuraya şu yönden girdi". Durumu değiştiren olay relay edilmez kuralının (§10.10) tek istisnası budur ve sebebi budur.
+- **Türün `kinds[].events[]` listesine bakılmaz** (§11): o kapı *istemcinin* yazdığı adlar içindir, sunucunun ürettiği olayın adı serbest metin değildir. Tanımayan istemci adı yok sayar.
+- ⚠️ **Atıcının kendi başlığı bunu beklemez:** vuruşu bildiren istemci sunumu `hit_report`'u yollarken **yerel** olarak oynatır (gidiş-dönüş kadar gecikme sunumu geç bırakır), gelen relay'de `i[1]` kendi `playerId`'si olan olayı atar. `i[2]` (öldürdü) bu yüzden yalnız diğer başlıklarda okunur.
+- ⚠️ **Relay saçma kapısı: (atıcı, `netId`) çifti başına 50 ms'de bir.** Bir pompalı tetiği tek hedefe 9 `hit_report` yollar (saçma başına bir, §5.1 — hasar semantiği aynen korunur); 9 relay aynı anda aynı kan efektini dokuz kez oynatırdı. Pencere içindeki tekrarlar **düşer**, tek istisna gerçeği değiştirenlerdir: öldüren vuruş ve gövdeden **kafaya** yükselen bölge her zaman gider.
 
 **`world_state`** `{ "type":"world_state", "sceneName":"<Arena>", "objects":[ … ] }` — `objects` girdileri `object_state` gövdesidir; **üç anda** gönderilir (§10.10): sahne sahnelenirken herkese, maç ortasında bağlanana `welcome`'dan hemen sonra yalnız ona, ve tur başı sıfırlamasında herkese. Sıfırlamanın da bu mesajla gitmesinin sebebi taşıdığı bilginin **aynı** olmasıdır — obje başına `object_state` yayınlamak aynı tabloyu N mesaja bölerdi. Sahnede hiç ağ nesnesi yoksa mesaj **hiç** gönderilmez.
 > ⚠️ İstemci mesajı **yalnız `sceneName` yüklü sahneyle eşleşiyorsa uygular**; eşleşmiyorsa atmaz, **tamponlar** ve sahne yüklenince yeniden dener. Mesaj sahne yüklemesinden önce varabilir ve o an `netId`'lerin karşılığı yoktur — tamponlanmazsa geç katılan oyuncu kırık örtüleri sağlam görür.
@@ -2529,11 +2544,21 @@ kuralın söyleyeceği bir şey yoktur (telde yine `false` gider).
 > Zorluktan bağımsız olanlar: **dalga hızı** (istemcide) `0,7 + 0,1×(d−1)` m/s, **tavan 1,2 m/s** —
 > tür çarpanları yukarıdaki tür tablosundadır · saldırı erişimi (istemcide) 1,2 m yatay, sunucu sınırı
 > türe göre · saldırı bekleme türe göre (vuruş karesi animasyonun ~0,4. sn'si) · ölü zombinin
-> silinmesi 3 sn sonra `object_despawn`.
+> silinmesi **4,5 sn** sonra `object_despawn` — ceset ragdoll'u bu sürede durulur; kısaltılırsa
+> bedenler havada/kaymakta yok olur. ⚠️ Dalga **son AYAKTA zombi düştüğü an** biter (hepsi doğmuş ve
+> ayakta kimse kalmamış): cesetler kendi 4,5 sn'lik sayaçlarıyla dalga arasında kalkar. Ceset
+> beklenseydi "dalga bitti" sesi ölümden saniyeler sonra gelirdi.
 >
 > ⚠️ **Dalga arası bir nefes payıdır, boşluk değil:** düşmüş herkes o pencerede tam canla kalkar
 > (§10.4) ve silah değiştirilir, bu yüzden süre harita temposuyla bölünse de kısaltılırken bu iki
 > işin sığdığı gözden kaçırılmaz.
+>
+> **Dalga arası İKİ parçadır:** önce sabit **5 sn temizlik fazı** (`clr`), ardından yukarıdaki
+> zorluk tablosunun süresi. Temizlik fazı harita temposuyla **bölünmez** — HUD orada "dalga
+> tamamlandı" ve sıradaki dalganın açtığı silahları yazar, geri sayım ancak o bittikten sonra
+> görünür. İkisi de dalga arasıdır: `next` toplamı (temizlik + kalan ara, yukarı yuvarlı) taşır,
+> yani canlanma penceresi ve müzik katmanı iki parçada da açıktır. İlk dalganın önünde temizlik
+> fazı yoktur (`playing`'e geçince hemen başlar).
 >
 > **Oyuncu sayısıyla ölçekleme:** sunucu **her dalga başında** bağlı oyuncu sayısını (`n`, en az `1`)
 > bir kez **fotoğraflar** ve `çarpan = clamp(1 + 0,15×(n−4); 0,55; 1,9)` ile dalganın **toplam
@@ -2613,14 +2638,15 @@ kuralın söyleyeceği bir şey yoktur (telde yine `false` gider).
 >
 > **`modeState` biçimi:** `w:<dalga>;left:<ayakta zombi>;next:<sonraki dalgaya kalan sn|0>;rem:<bu
 > dalgada doğacak kalan zombi>;fm:<boş kat tabanı>;diff:<easy|normal|hard>;fs:<0|1>` +
-> `;dev:<netId>/<tavan can>` + `;wx:<swarm|heavy|scream>` + maç biterken
-> `;over:<survived|rescued|lost>`. `rem` dalgalar arasında da `0`'dır.
+> `;dev:<netId>/<tavan can>` + `;wx:<swarm|heavy|scream>` + `;clr:<temizlik fazında kalan sn>` +
+> maç biterken `;over:<survived|rescued|lost>`. `rem` dalgalar arasında da `0`'dır.
 >
 > | Anahtar | Ne zaman | Ne |
 > |---|---|---|
 > | `fs` | daima | Son Direniş açık mı (`1`) |
 > | `dev` | Dev doğduğu andan maç sonuna kadar | Dev'in `netId`'si ve **tavan canı**; öncesinde anahtar hiç yazılmaz. İstemcinin patron can çubuğunu kurduğu tek kaynak — obje başına tavan can telde yoktur |
 > | `wx` | yalnız özel dalga koşarken | Koşan özel dalganın kimliği; dalga aralarında yazılmaz |
+> | `clr` | yalnız temizlik fazı koşarken (`> 0`) ve maç **bitmemişken** | Temizlik fazında kalan saniye (yukarı yuvarlı). `next` bunu **içerir**; `clr` yazılıyken HUD geri sayım sayısını değil "dalga tamamlandı" ekranını çizer. ⚠️ `over` yazılan durumda `clr` **hiç yazılmaz**: sonuç ekranının üstüne "dalga tamamlandı" düşerdi |
 > **Oyuncu başına sonuç jetonları** `zs<playerId>:<kafadan öldürme>/<kaldırma>` **yalnız bitiş
 > durumunda** yazılır (örn. `zs3:4/2`); ikisi de `0` olan oyuncu hiç yazılmayabilir, okuyan eksik
 > jetonu `0/0` sayar. Maç boyunca her tike yazılmamalarının sebebi boyuttur: sonuç ekranının
@@ -2988,7 +3014,7 @@ ofseti uygular, ama yankı `FLOOR_CONFIRM_SECONDS` içinde gelmezse **yerel kat�
 ya da düşen bir bildirimin ardından kendini yanlış katta sanmasın). Yeniden bağlandıktan sonra
 sunucudaki kayıt `0` olduğu için istemci yerel katını **yeniden bildirir**.
 
-**Portal kuralı (tümüyle istemci tarafı — sunucu portal bilmez).** Oyuncu 50 cm'lik portal diskinin
+**Portal kuralı (tümüyle istemci tarafı — sunucu portal bilmez).** Oyuncu 75 cm'lik portal diskinin
 içinde **2 sn** kesintisiz durursa diğer kata taşınır. Aynı anda **tek oyuncu** geçer: çemberin
 içindeki en düşük `playerId` sahiptir, diğerleri bekler. Sunucuda portal diye bir varlık, süre
 sayacı ya da kilit yoktur.
@@ -3605,10 +3631,13 @@ istemez. Şekli:
   duraklatır (§10.5 `zombie`).
 - ⚠️ **`OBJECT_OWNER_SILENCE_MS` bekçisi admin sahipli objede KOŞMAZ.** O eşik sahibin `0x01` poz
   kanalını ölçer ve admin `0x01` hiç göndermez (§2) → muafiyet olmasa her sunucu-sürülen obje ilk
-  taramada zemine inerdi. Admin'in susması **`0x09` ile** ölçülür: sahip en az bir objeye sahipken
+  taramada zemine inerdi. Admin'in susması **`0x09` ile** ölçülür: sahip en az bir **kırılmamış** objeye sahipken
   `OBJECT_HOST_SILENCE_MS` (§1) boyunca hiçbirinden obje pozu gelmezse "sustu" sayılır, sıranın
   sonuna alınır ve devir yapılır. Susmuş admin **kendini kanıtlayana kadar** yeniden seçilmez
   (`status` heartbeat'i, §5.1) — yoksa donmuş tek admin 10 Hz'de sahip olup sahipliğini kaybederdi.
+  ⚠️ Kırık obje sayılmaz: istemci kırık objenin pozunu göndermez (ceset kendi yerinde durur). Sayılsaydı
+  son zombi ölüp cesedi kalkana kadar geçen sürede sahip "susmuş" görünür, mod sahipsizlik duraklatmasına
+  girip çıkar ve faz geçişi her dalga sonunda bir tur başı sesi çaldırırdı.
 - **Gönderen kapısı ikiye ayrılır:** `object_grab`/`object_release`/`object_rest` yalnız
   `role=player`a açıktır (admin'in eli yoktur); `object_event` admin'e de açıktır ama **yalnız sahibi
   olduğu objede**. Kapı toptan açılsaydı admin sahadaki eşyayı kavrayabilirdi. `0x09` kapısı role hiç
@@ -3639,6 +3668,14 @@ diğerleri iki başlıkta farklı görünürdü.
 
 Olayı yorumlayan **moddur**: `IGameMode.OnObjectEvent(...)` — kırılabilir objeler bu kancaya hiç
 ihtiyaç duymaz, kanca ilk tüketicisiyle birlikte doğar.
+
+⚠️ **Üç kapı yalnız İSTEMCİDEN gelen olay içindir.** Sunucunun kendi ürettiği olay (`name:"hit"`,
+§5.2) `kinds[].events[]` listesine sorulmaz: o liste telde serbest metin bırakmamak içindir, sunucu
+ise adı kendisi yazar. Aynı sebeple o olay "durum değişti → relay etme" kuralının **tek istisnasıdır**
+— taşıdığı şey durumun kendisi değil, `object_state`'te karşılığı olmayan **isabet ayrıntısıdır**
+(nokta, yön, bölge). Çekirdek bunu **türe bakmadan** yapar: hangi nesnenin vuruş sunumu olduğu modun
+bilgisidir ve çekirdeğe mod adı gömmek ikinci bir mod listesi açardı; hacim kapısı tür filtresi değil,
+(atıcı, `netId`) başına 50 ms'lik relay penceresidir (§5.2).
 
 ⚠️ **Güvenilmez/kozmetik bir olay için WS kullanılmaz** (sıçrama sesi, kıvılcım): oranın kanalı UDP
 `0x04`'tür. WS güvenilir ve sıralıdır; kaybı zararsız olan bir şeyi oraya koymak hasar/faz

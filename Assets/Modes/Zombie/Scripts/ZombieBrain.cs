@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
 using VortexArena.Core.Arena;
+using VortexArena.Core.Combat;
 using VortexArena.Net;
 using VortexArena.Protocol;
 
@@ -95,11 +96,53 @@ namespace VortexArena.Modes.Zombie
         /// doorway push each other off the NavMesh.</summary>
         private const float SpawnCrowdRadius = 1f;
 
-        /// <summary>Jitter around the chosen spawn point (m): enough that two zombies from the same door
-        /// do not overlap, short enough to stay in the doorway.</summary>
-        private const float JitterMin = 0.5f;
+        /// <summary>Wanted free space around the spawn spot (m): the body spawns LYING (~1.5 m long)
+        /// and a marker set against a wall pokes the model through it during the stand-up.</summary>
+        private const float SpawnEdgeClearance = 0.9f;
 
-        private const float JitterMax = 1f;
+        /// <summary>Ring offsets searched around the marker (m) — also the spawn jitter: two zombies
+        /// from the same door must not overlap, but the spot has to stay in the doorway.</summary>
+        private static readonly float[] SpawnRingRadii = { 0.5f, 0.9f, 1.3f };
+
+        private const int SpawnRingDirections = 8;
+
+        /// <summary>Two spots this close count as the same one (m).</summary>
+        private const float SpawnSpotMerge = 0.2f;
+
+        /// <summary>NavMesh search radius of a ring sample (m) — short on purpose: a wide search pulls
+        /// the offset back onto the marker's own tile and the ring stops spreading.</summary>
+        private const float SpawnSpotSampleRadius = 0.6f;
+
+        /// <summary>Height a spot may differ from the marker (m): past this it is a ramp or the mesh
+        /// under a balcony, not the marker's own floor.</summary>
+        private const float SpawnSpotRise = 0.5f;
+
+        /// <summary>Rise facing: axes tested and how far down each one free space is measured (m) — the
+        /// lying body is ~1.5 m long, so anything past that buys nothing.</summary>
+        private const int RiseFacingAxes = 8;
+
+        private const float RiseFacingProbe = 1.6f;
+
+        /// <summary>Free lengths this close count as a tie, and the nearest player breaks it.</summary>
+        private const float RiseFacingTie = 0.15f;
+
+        /// <summary>Avoidance priority band: every zombie gets its own number inside it, because equal
+        /// priorities make the local avoidance treat the pair as one blob and they walk through
+        /// each other.</summary>
+        private const int AvoidancePriorityBase = 40;
+
+        private const int AvoidancePrioritySpread = 20;
+
+        /// <summary>Separation: bodies closer than the two radii plus this skin (m) push each other
+        /// apart; the push is <see cref="SeparationStrength"/> m/s per metre of overlap, never more
+        /// than <see cref="SeparationSpeedCap"/>.</summary>
+        /// <remarks>⚠️ Local avoidance alone does not open a stack that is already overlapping — it
+        /// steers, it does not separate.</remarks>
+        private const float SeparationSkin = 0.1f;
+
+        private const float SeparationStrength = 2f;
+
+        private const float SeparationSpeedCap = 0.6f;
 
         /// <summary>Speed multiplier while wandering an empty storey: it must read as "lost", not as
         /// "hunting something I cannot see".</summary>
@@ -136,6 +179,23 @@ namespace VortexArena.Modes.Zombie
         private const float EnrageSeconds = 6f;
 
         private const float EnrageSpeedScale = 1.25f;
+
+        /// <summary>Stagger: how much pace a round costs and for how long. A leg hit costs the most —
+        /// it is the one zone with a reason to slow a body down, and it gives the squad something to
+        /// aim at besides the head.
+        /// <para>⚠️ Short on purpose: a longer stagger plus a burst of fire pins a zombie in place,
+        /// and the wave then never reaches the squad.</para></summary>
+        private const float LegStaggerScale = 0.35f;
+
+        private const float LegStaggerSeconds = 0.45f;
+
+        private const float BodyStaggerScale = 0.7f;
+
+        private const float BodyStaggerSeconds = 0.25f;
+
+        private const float BossStaggerScale = 0.85f;
+
+        private const float BossStaggerSeconds = 0.2f;
 
         /// <summary>The Dev stands still while it screams (s) — the summoned walkers appear in the same
         /// moment and the roar has to be readable.</summary>
@@ -251,11 +311,19 @@ namespace VortexArena.Modes.Zombie
             public Vector3 Position;
         }
 
+        /// <summary>A spot around the chosen marker with its distance to the nearest NavMesh edge.</summary>
+        private struct SpawnSpot
+        {
+            public Vector3 Position;
+            public float Clearance;
+        }
+
         // Shared buffers: filled and read inside ONE call, so every brain can use the same lists
         // instead of allocating per frame.
         private static readonly List<Seen> SeenPlayers = new List<Seen>();
         private static readonly List<SpawnCandidate> CandidateBuffer = new List<SpawnCandidate>();
         private static readonly List<SpawnCandidate> ValidBuffer = new List<SpawnCandidate>();
+        private static readonly List<SpawnSpot> SpotBuffer = new List<SpawnSpot>();
 
         /// <summary>Every brain that is ours, alive and placed — the only way to know how the wave is
         /// spread over the storeys, because the server counts no floors (§10.10).</summary>
@@ -304,6 +372,11 @@ namespace VortexArena.Modes.Zombie
         private NavMeshPath _path;
 
         private readonly int[] _attackIds = new int[1];
+
+        /// <summary>Agent radius as the prefab/agent type carries it, before the per-type scale: the
+        /// scale is re-applied on every state, and scaling the already scaled value would grow the
+        /// body a little further each time.</summary>
+        private float _baseRadius;
 
         private float _poseTimer;
         private float _retargetTimer;
@@ -376,6 +449,16 @@ namespace VortexArena.Modes.Zombie
         private float _stuckAt;
         private Vector3 _stuckPos;
 
+        /// <summary>Stagger: a round briefly slows the body. Time it expires and the factor
+        /// <see cref="WaveSpeed"/> multiplies into the pace while it runs.</summary>
+        private float _staggerUntil;
+        private float _staggerScale = 1f;
+
+        /// <summary>Is the stagger currently reflected in <c>agent.speed</c>? The speed is only written
+        /// at a few points (retarget, wander, hunt) — without this the slowdown would start and end
+        /// whenever the next of those happens to run, up to a retarget period late.</summary>
+        private bool _staggerApplied;
+
         // string == is ordinal here; `using System` is deliberately absent (it would make Random
         // ambiguous with UnityEngine.Random all over this file).
         private bool IsDev => _type == ZombieKinds.TypeDev;
@@ -395,6 +478,7 @@ namespace VortexArena.Modes.Zombie
 
             if (agent != null)
             {
+                _baseRadius = agent.radius;
                 agent.enabled = false;
             }
         }
@@ -403,6 +487,7 @@ namespace VortexArena.Modes.Zombie
         {
             _net.OwnerChanged += HandleOwnerChanged;
             _net.StateChanged += HandleStateChanged;
+            ArenaCombat.ObjectHit += HandleObjectHit;
             ApplyOwnership();
         }
 
@@ -410,7 +495,62 @@ namespace VortexArena.Modes.Zombie
         {
             _net.OwnerChanged -= HandleOwnerChanged;
             _net.StateChanged -= HandleStateChanged;
+            ArenaCombat.ObjectHit -= HandleObjectHit;
             SetLive(false);
+        }
+
+        /// <summary>A round landed on this body: it loses pace for a moment. Owner side only — the
+        /// agent exists nowhere else, and the others see the slowdown through the pose stream.</summary>
+        /// <remarks>⚠️ Never during the spawn hold or an attack windup: both are LOCKED poses (the
+        /// view is playing a stand-up or a lunge), and slowing the agent there slides the body out from
+        /// under its own animation.</remarks>
+        private void HandleObjectHit(ArenaCombat.ObjectHitInfo info)
+        {
+            if (info.NetId != _net.NetId || !_net.IsMine || _net.IsBroken)
+            {
+                return;
+            }
+
+            if (Time.time < _holdUntil || _attackAt > 0f)
+            {
+                return;
+            }
+
+            if (IsDev || _type == ZombieKinds.TypeBrute)
+            {
+                // A boss staggered like a walker is a boss the squad can pin against a wall.
+                _staggerScale = BossStaggerScale;
+                _staggerUntil = Time.time + BossStaggerSeconds;
+            }
+            else if ((HitZone)info.Zone == HitZone.Leg)
+            {
+                _staggerScale = LegStaggerScale;
+                _staggerUntil = Time.time + LegStaggerSeconds;
+            }
+            else
+            {
+                _staggerScale = BodyStaggerScale;
+                _staggerUntil = Time.time + BodyStaggerSeconds;
+            }
+
+            UpdateStagger();
+        }
+
+        /// <summary>Writes the stagger into the agent when it starts and takes it out when it ends.</summary>
+        private void UpdateStagger()
+        {
+            bool active = Time.time < _staggerUntil;
+            if (active == _staggerApplied)
+            {
+                return;
+            }
+
+            _staggerApplied = active;
+
+            if (agent != null && agent.enabled)
+            {
+                agent.speed = _wandering ? WaveSpeed() * WanderSpeedScale : WaveSpeed();
+            }
         }
 
         private void HandleOwnerChanged(NetObject _, int previousOwner)
@@ -452,6 +592,7 @@ namespace VortexArena.Modes.Zombie
 
             agent.speed = WaveSpeed();
             agent.stoppingDistance = StoppingDistance();
+            ApplyBodySize();
             _wandering = false;
 
             // First score pass at a random offset: taking ownership of a whole wave at once would
@@ -474,6 +615,23 @@ namespace VortexArena.Modes.Zombie
             SetLive(true);
         }
 
+        /// <summary>Agent width and crowd behaviour for this type. ⚠️ The scale comes from the SHARED
+        /// rule (<see cref="ZombieKinds.ScaleOf"/>) the view uses: a brute drawn at 1.3 and steered at
+        /// 1.0 walks its shoulders through doorframes and into the bodies next to it.</summary>
+        private void ApplyBodySize()
+        {
+            if (_baseRadius > 0f)
+            {
+                agent.radius = _baseRadius * ZombieKinds.ScaleOf(_type, _net.NetId);
+            }
+
+            // ⚠️ Equal priorities make the local avoidance merge the pair instead of steering around
+            // it, so every body gets its own number out of the band.
+            agent.obstacleAvoidanceType = ObstacleAvoidanceType.HighQualityObstacleAvoidance;
+            agent.avoidancePriority = AvoidancePriorityBase +
+                Mathf.Abs(_net.NetId) % AvoidancePrioritySpread;
+        }
+
         /// <summary>Walking speed for this body: the type's pace in this wave, raised while a scream is
         /// on us. ⚠️ Comes from the SHARED rule (<see cref="ZombieKinds.SpeedOf"/>) — the view stretches
         /// the clip to the same number, and a body moving faster than its clip skates.</summary>
@@ -485,6 +643,14 @@ namespace VortexArena.Modes.Zombie
             if (Time.time < _enrageUntil)
             {
                 speed = Mathf.Min(ZombieKinds.SpeedCap, speed * EnrageSpeedScale);
+            }
+
+            // ⚠️ Multiplied in HERE, not written over agent.speed somewhere else: the pace is set from
+            // half a dozen places (retarget, wander, scream, relocate) and any of them would wipe a
+            // separately written slowdown within a frame.
+            if (Time.time < _staggerUntil)
+            {
+                speed *= _staggerScale;
             }
 
             return speed;
@@ -577,14 +743,14 @@ namespace VortexArena.Modes.Zombie
             MoveTo(target, floor, true, true);
         }
 
-        /// <summary>Warps onto <paramref name="point"/>, jittered when the jitter stays reachable on the
-        /// same storey. <paramref name="hold"/> freezes the body for <see cref="SpawnHold"/> so the
-        /// view's spawn animation has room — a hand-over must NOT hold, the body there is already
-        /// mid-walk and would stall in front of the squad.</summary>
-        private void MoveTo(in Vector3 point, int floor, bool jitter, bool hold)
+        /// <summary>Warps onto <paramref name="point"/>; <paramref name="spread"/> first looks for a spot
+        /// around it with room to stand up in. <paramref name="hold"/> freezes the body for
+        /// <see cref="SpawnHold"/> so the view's spawn animation has room — a hand-over must NOT hold,
+        /// the body there is already mid-walk and would stall in front of the squad.</summary>
+        private void MoveTo(in Vector3 point, int floor, bool spread, bool hold)
         {
-            Vector3 destination = jitter && TryJitter(point, floor, out Vector3 jittered)
-                ? jittered
+            Vector3 destination = spread && TryClearSpawnSpot(point, floor, out Vector3 clear)
+                ? clear
                 : point;
 
             if (hold)
@@ -599,6 +765,13 @@ namespace VortexArena.Modes.Zombie
             else
             {
                 transform.position = destination;
+            }
+
+            if (hold)
+            {
+                // Facing is decided HERE and then stays: the stand-up holds the body still and nothing
+                // rotates it until the first chase step, so a bad yaw lies in a wall for ~3 s.
+                ApplyRiseFacing();
             }
 
             // ⚠️ Zombies arrive from OUTSIDE the play area, so "is it on the NavMesh" is the only sane
@@ -660,7 +833,80 @@ namespace VortexArena.Modes.Zombie
                 return;
             }
 
+            UpdateStagger();
             Hunt();
+            Separate();
+        }
+
+        /// <summary>Pushes overlapping bodies apart by hand, on top of the agents' own avoidance.</summary>
+        /// <remarks>⚠️ Local avoidance only STEERS: two bodies that are already inside each other
+        /// (fresh spawns, a doorway, a crowd around one player) stay merged without this nudge.
+        /// <para>O(n²) over the brains on this machine — the wave cap keeps that in the tens — and the
+        /// loop allocates nothing, so it can run every frame.</para></remarks>
+        private void Separate()
+        {
+            // An attack is a locked pose: shoving the body mid-windup makes the swing come from the side.
+            if (_attackAt > 0f || !agent.enabled || !agent.isOnNavMesh)
+            {
+                return;
+            }
+
+            Vector3 position = transform.position;
+            int myFloor = MyFloor();
+            float myRadius = agent.radius;
+            Vector3 push = Vector3.zero;
+
+            for (int i = 0; i < LiveBrains.Count; i++)
+            {
+                ZombieBrain other = LiveBrains[i];
+                if (other == null || other == this || other.agent == null || !other.agent.enabled)
+                {
+                    continue;
+                }
+
+                Vector3 theirs = other.transform.position;
+                if (ArenaFloors.Count > 1 && ArenaFloors.FloorAt(theirs.y) != myFloor)
+                {
+                    continue;
+                }
+
+                float dx = position.x - theirs.x;
+                float dz = position.z - theirs.z;
+                float limit = myRadius + other.agent.radius + SeparationSkin;
+                float squared = dx * dx + dz * dz;
+                if (squared >= limit * limit)
+                {
+                    continue;
+                }
+
+                float distance = Mathf.Sqrt(squared);
+                Vector3 away = distance > 0.0001f
+                    ? new Vector3(dx / distance, 0f, dz / distance)
+                    // Exactly stacked: any direction will do, as long as the two pick different ones.
+                    : DirectionOf(_net.NetId);
+
+                push += away * (limit - distance);
+            }
+
+            if (push.sqrMagnitude < 0.0001f)
+            {
+                return;
+            }
+
+            Vector3 velocity = push * SeparationStrength;
+            if (velocity.magnitude > SeparationSpeedCap)
+            {
+                velocity = velocity.normalized * SeparationSpeedCap;
+            }
+
+            agent.Move(velocity * Time.deltaTime);
+        }
+
+        /// <summary>Stable flat direction out of a netId.</summary>
+        private static Vector3 DirectionOf(int netId)
+        {
+            float angle = netId * 2.39996f;
+            return new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle));
         }
 
         /// <summary>Walks toward the nearest chaseable player ON OUR STOREY and starts a melee when
@@ -2157,43 +2403,239 @@ namespace VortexArena.Modes.Zombie
 
         // ------------------------------------------------------------------ navmesh helpers
 
-        /// <summary>A point <see cref="JitterMin"/>–<see cref="JitterMax"/> away from the spawn point;
-        /// <c>false</c> = no jitter, use the point itself.</summary>
-        /// <remarks>⚠️ Only accepted when it stays on the SAME storey and a complete path runs back to
-        /// the unjittered point: a jitter through a wall drops the zombie into the next room, and 1.5 m of
-        /// NavMesh search reaches over a 3 m thin floor.</remarks>
-        private bool TryJitter(in Vector3 point, int floor, out Vector3 jittered)
+        /// <summary>Spawn spot around <paramref name="point"/>: the marker itself plus a ring of offsets
+        /// (<see cref="SpawnRingRadii"/>), scored by how far the NavMesh edge is. <c>false</c> = nothing
+        /// landed on the mesh, use the marker as it came.</summary>
+        /// <remarks>⚠️ A spot is only accepted when it stays on the SAME storey and a COMPLETE path runs
+        /// back to the marker: an offset through a wall drops the zombie into the next room, and 1.5 m of
+        /// NavMesh search reaches over a 3 m thin floor.
+        /// <para>The pick stays random among the spots that are roomy enough — a deterministic "best"
+        /// would send every zombie of the door to the same tile. Spawn-time only; the ring costs ~25
+        /// NavMesh queries.</para></remarks>
+        private bool TryClearSpawnSpot(in Vector3 point, int floor, out Vector3 spot)
         {
-            jittered = point;
+            spot = point;
+            SpotBuffer.Clear();
 
-            Vector2 direction = Random.insideUnitCircle.normalized;
-            if (direction.sqrMagnitude < 0.0001f)
+            // The ring is measured from the SNAPPED marker: a marker that sits off the mesh (outside
+            // the fence) would otherwise put its whole ring off the mesh too.
+            Vector3 origin = TrySample(point, out Vector3 snapped) ? snapped : point;
+
+            AddSpawnSpot(origin, origin.y, floor);
+
+            // Random start angle: the ring order itself must not favour one side of the door.
+            float turn = Random.value * Mathf.PI * 2f;
+            float step = Mathf.PI * 2f / SpawnRingDirections;
+
+            for (int r = 0; r < SpawnRingRadii.Length; r++)
+            {
+                for (int d = 0; d < SpawnRingDirections; d++)
+                {
+                    float angle = turn + d * step;
+                    Vector3 offset = new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) *
+                        SpawnRingRadii[r];
+                    AddSpawnSpot(origin + offset, origin.y, floor);
+                }
+            }
+
+            if (SpotBuffer.Count == 0)
             {
                 return false;
             }
 
-            float distance = Random.Range(JitterMin, JitterMax);
-            Vector3 candidate = point + new Vector3(direction.x, 0f, direction.y) * distance;
+            // Roomy and nobody standing there · roomy · roomiest left (narrow balconies never reach the
+            // clearance, and standing the body in the corner there is still the best we have).
+            return TryTakeSpot(origin, SpawnEdgeClearance, true, out spot) ||
+                   TryTakeSpot(origin, SpawnEdgeClearance, false, out spot) ||
+                   TryTakeRoomiestSpot(origin, out spot);
+        }
 
-            if (!TrySample(candidate, out Vector3 sampled))
+        /// <summary>Samples one candidate onto the NavMesh and files it with its edge distance.</summary>
+        private static void AddSpawnSpot(in Vector3 candidate, float baseHeight, int floor)
+        {
+            if (!NavMesh.SamplePosition(candidate, out NavMeshHit sample, SpawnSpotSampleRadius,
+                    NavMesh.AllAreas))
             {
-                return false;
+                return;
             }
 
-            if (ArenaFloors.Count > 1 && ArenaFloors.FloorAt(sampled.y) != floor)
+            Vector3 position = sample.position;
+
+            // Same storey AND same level: a ring sample may land on a ramp or on the mesh under a
+            // balcony, and a zombie dropped there spawns somewhere nobody expects.
+            if (Mathf.Abs(position.y - baseHeight) > SpawnSpotRise ||
+                (ArenaFloors.Count > 1 && ArenaFloors.FloorAt(position.y) != floor))
             {
-                return false;
+                return;
+            }
+
+            for (int i = 0; i < SpotBuffer.Count; i++)
+            {
+                if ((SpotBuffer[i].Position - position).sqrMagnitude <
+                    SpawnSpotMerge * SpawnSpotMerge)
+                {
+                    return;
+                }
+            }
+
+            // No edge found at all = open floor, which is as clear as it gets.
+            float clearance = NavMesh.FindClosestEdge(position, out NavMeshHit edge, NavMesh.AllAreas)
+                ? edge.distance
+                : SpawnEdgeClearance;
+
+            SpotBuffer.Add(new SpawnSpot { Position = position, Clearance = clearance });
+        }
+
+        /// <summary>First spot (from a random index on) that clears <paramref name="minClearance"/>, is
+        /// optionally free of other bodies and has a path back to <paramref name="origin"/>.</summary>
+        private bool TryTakeSpot(in Vector3 origin, float minClearance, bool uncrowded, out Vector3 spot)
+        {
+            spot = origin;
+            int count = SpotBuffer.Count;
+            int start = Random.Range(0, count);
+
+            for (int i = 0; i < count; i++)
+            {
+                SpawnSpot candidate = SpotBuffer[(start + i) % count];
+                if (candidate.Clearance < minClearance ||
+                    (uncrowded && HasZombieNear(candidate.Position)) ||
+                    !HasPathBack(candidate.Position, origin))
+                {
+                    continue;
+                }
+
+                spot = candidate.Position;
+                return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>Last resort: the reachable spot with the largest edge distance.</summary>
+        private static bool TryTakeRoomiestSpot(in Vector3 origin, out Vector3 spot)
+        {
+            spot = origin;
+
+            // Path checks are the expensive part, so they run only on the current best, and a spot that
+            // fails one drops out instead of being re-tested.
+            while (true)
+            {
+                float best = -1f;
+                int index = -1;
+                for (int i = 0; i < SpotBuffer.Count; i++)
+                {
+                    if (SpotBuffer[i].Clearance > best)
+                    {
+                        best = SpotBuffer[i].Clearance;
+                        index = i;
+                    }
+                }
+
+                if (index < 0)
+                {
+                    return false;
+                }
+
+                SpawnSpot candidate = SpotBuffer[index];
+                if (HasPathBack(candidate.Position, origin))
+                {
+                    spot = candidate.Position;
+                    return true;
+                }
+
+                SpotBuffer.RemoveAt(index);
+            }
+        }
+
+        private static bool HasPathBack(in Vector3 from, in Vector3 to)
+        {
+            if ((from - to).sqrMagnitude < 0.0001f)
+            {
+                return true;
             }
 
             s_pathScratch ??= new NavMeshPath();
-            if (!NavMesh.CalculatePath(sampled, point, NavMesh.AllAreas, s_pathScratch) ||
-                s_pathScratch.status != NavMeshPathStatus.PathComplete)
+            return NavMesh.CalculatePath(from, to, NavMesh.AllAreas, s_pathScratch) &&
+                   s_pathScratch.status == NavMeshPathStatus.PathComplete;
+        }
+
+        /// <summary>Turns the body onto the axis with the most free NavMesh around it before the
+        /// stand-up starts; a near-tie goes to the axis that looks at the nearest player.</summary>
+        /// <remarks>⚠️ The zombie spawns LYING (~1.5 m of body): facing a wall pushes the model through
+        /// it for the whole hold, and this rotation is also what the pose stream carries to the other
+        /// headsets.</remarks>
+        private void ApplyRiseFacing()
+        {
+            if (!agent.isOnNavMesh)
             {
-                return false;
+                return;
             }
 
-            jittered = sampled;
-            return true;
+            Vector3 origin = transform.position;
+            Vector3 toPlayer = NearestPlayerDirection(origin);
+
+            float bestFree = -1f;
+            float bestFacing = float.MinValue;
+            Vector3 bestDirection = transform.forward;
+            float step = Mathf.PI / RiseFacingAxes;
+
+            // Half a turn is enough: an axis is tested in BOTH directions, and the sign is picked
+            // afterwards.
+            for (int i = 0; i < RiseFacingAxes; i++)
+            {
+                float angle = i * step;
+                Vector3 axis = new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle));
+                float free = Mathf.Min(FreeLength(origin, axis), FreeLength(origin, -axis));
+
+                Vector3 direction = Vector3.Dot(axis, toPlayer) < 0f ? -axis : axis;
+                float facing = Vector3.Dot(direction, toPlayer);
+
+                bool better = free > bestFree + RiseFacingTie ||
+                              (free > bestFree - RiseFacingTie && facing > bestFacing);
+                if (!better)
+                {
+                    continue;
+                }
+
+                bestFree = Mathf.Max(bestFree, free);
+                bestFacing = facing;
+                bestDirection = direction;
+            }
+
+            transform.rotation = Quaternion.LookRotation(bestDirection, Vector3.up);
+        }
+
+        /// <summary>How far the NavMesh runs from <paramref name="origin"/> along
+        /// <paramref name="direction"/>, capped at <see cref="RiseFacingProbe"/>.</summary>
+        private static float FreeLength(in Vector3 origin, in Vector3 direction)
+        {
+            Vector3 target = origin + direction * RiseFacingProbe;
+            return NavMesh.Raycast(origin, target, out NavMeshHit hit, NavMesh.AllAreas)
+                ? Mathf.Min(hit.distance, RiseFacingProbe)
+                : RiseFacingProbe;
+        }
+
+        /// <summary>Flat direction to the nearest player; zero when nobody is visible.</summary>
+        private Vector3 NearestPlayerDirection(in Vector3 origin)
+        {
+            CollectSeen();
+
+            float best = float.MaxValue;
+            Vector3 direction = Vector3.zero;
+
+            for (int i = 0; i < SeenPlayers.Count; i++)
+            {
+                Vector3 flat = SeenPlayers[i].Head - origin;
+                flat.y = 0f;
+                float distance = flat.sqrMagnitude;
+                if (distance < best && distance > 0.0001f)
+                {
+                    best = distance;
+                    direction = flat.normalized;
+                }
+            }
+
+            return direction;
         }
 
         /// <summary>Puts a point onto the NavMesh; <c>false</c> = nothing within the search radius.</summary>

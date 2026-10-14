@@ -12,7 +12,8 @@
         "Unity.XR.Management",
         "Unity.Multiplayer.Playmode",
         "Unity.ProBuilder",
-        "Unity.RenderPipelines.Universal.Runtime"
+        "Unity.RenderPipelines.Universal.Runtime",
+        "Unity.RenderPipelines.Core.Runtime"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

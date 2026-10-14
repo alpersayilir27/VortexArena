@@ -469,8 +469,11 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
+            // Same mask as the shooter's own ray (ArenaCombat.TraceShot): a corpse the shooter's round
+            // flew through must not catch the remote impact either, or one shot marks two surfaces.
             if (Physics.Raycast(origin, worldDir, out RaycastHit hit,
-                    distanceMeters + ImpactRayMarginMeters, ~0, QueryTriggerInteraction.Ignore))
+                    distanceMeters + ImpactRayMarginMeters, ArenaLayers.ShotMask,
+                    QueryTriggerInteraction.Ignore))
             {
                 ArenaCombat.ReportImpact(hit);
             }

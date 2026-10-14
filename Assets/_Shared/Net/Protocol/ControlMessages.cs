@@ -112,6 +112,13 @@ namespace VortexArena.Protocol
         public float damage;
         public float[] hitPos;
 
+        /// <summary>Direction of the hit in arena space, UNIT length (bullet: the ray; blast: centre →
+        /// target); <c>[0,0,0]</c> or absent = unknown.
+        /// <para>⚠️ Presentation only: the server copies it into the <c>object_event "hit"</c> relay
+        /// (§5.2) and never validates it. A DIRECTION, not a point — converted with the direction
+        /// conversion, or the day arena and world space part it silently gains the translation.</para></summary>
+        public float[] hitDir;
+
         /// <summary>Body zone of the hit (<c>HitZone</c>: 0 = body, 1 = head, 2 = stomach, 3 = leg);
         /// absent = <c>0</c>.
         /// <para>⚠️ Does NOT affect damage — the multiplier is already baked into <see cref="damage"/>.

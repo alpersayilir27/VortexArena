@@ -91,6 +91,60 @@ namespace VortexArena.Core.Arena
         /// </summary>
         public static int AreaTargetMask => DefaultMask | ObstacleMask;
 
+        /// <summary>
+        /// The layer a DEAD network body (zombie ragdoll) is moved to. Its contract is one sentence —
+        /// <b>"this is scenery, not a target"</b>: it keeps colliding with the world so the body can
+        /// settle, but no damage query may find it.
+        /// <para>⚠️ The corpse keeps the <c>netId</c> of a living object for the despawn delay
+        /// (§10.5). Left on <c>Default</c>, the next round would stop in it and spend a whole burst on
+        /// a body that cannot take damage — and the shooter would see no hit anywhere.</para>
+        /// </summary>
+        public const string ZombieRagdollName = "ZombieRagdoll";
+
+        private static int ragdollMask;
+        private static bool ragdollResolved;
+
+        /// <summary>
+        /// The mask <b>a hitscan shot queries</b>: everything EXCEPT <see cref="ZombieRagdollName"/>.
+        /// <para>Deliberately "everything minus one" and not a target list: remote hit boxes, network
+        /// objects and plain geometry all sit on <c>Default</c>, and a positive list would silently drop
+        /// the first surface that gets its own layer.</para>
+        /// <para>Falls back to <c>~0</c> (the old behaviour) when the layer is undefined — a corpse is
+        /// then shootable again, which is a look problem, while a <c>0</c> mask would stop every shot
+        /// in the game.</para>
+        /// </summary>
+        public static int ShotMask => ~ZombieRagdollMask;
+
+        /// <summary>Mask of <see cref="ZombieRagdollName"/>; <c>0</c> when the layer is not defined.</summary>
+        public static int ZombieRagdollMask
+        {
+            get
+            {
+                if (ragdollResolved)
+                {
+                    return ragdollMask;
+                }
+
+                ragdollResolved = true;
+
+                int layer = LayerMask.NameToLayer(ZombieRagdollName);
+                if (layer < 0)
+                {
+                    // A WARNING, not an error (unlike ObstacleMask): the fallback keeps every shot
+                    // working, only corpses stay shootable.
+                    Debug.LogWarning(
+                        $"[ArenaLayers] '{ZombieRagdollName}' layer'ı projede tanımlı değil — ölü " +
+                        "bedenler mermiyi durdurmaya devam edecek. Project Settings > Tags and Layers " +
+                        "altında bu adla bir user layer açılmalı.");
+                    ragdollMask = 0;
+                    return ragdollMask;
+                }
+
+                ragdollMask = 1 << layer;
+                return ragdollMask;
+            }
+        }
+
         /// <summary>Unity's built-in <c>Default</c> layer (index 0) — always defined.</summary>
         private const int DefaultMask = 1;
     }

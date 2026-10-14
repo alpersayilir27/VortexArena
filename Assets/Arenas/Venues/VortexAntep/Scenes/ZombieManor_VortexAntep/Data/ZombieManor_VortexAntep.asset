@@ -19,8 +19,11 @@ MonoBehaviour:
   - zombie
   moleDensity: 1.5
   zombiePace: 1
-  ambienceClip: {fileID: 8300000, guid: 76a9890b5b469ca4a9f8d5a31cb1e3d1, type: 3}
+  ambienceClip: {fileID: 8300000, guid: 12c96b52a7db4db42aa6d2d5cc0b3ec3, type: 3}
   ambienceVolume: 0.2
   musicClip: {fileID: 0}
   musicVolume: 0.5
   timeWarningSound: 1
+  adminPostExposure: 1.5
+  adminFogScale: 4
+  adminAmbientScale: 1.6

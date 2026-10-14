@@ -26,8 +26,9 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 54e2fb1461388fd498eeff8dfd33bd47, type: 2}
   - {fileID: 11400000, guid: 4cbbfae87263a724b9a07e1f59744962, type: 2}
   - {fileID: 11400000, guid: 5eca3b2d226a8e6429680e472ae49813, type: 2}
+  - {fileID: 11400000, guid: 44133b603625d34409c3af01ceb70dbf, type: 2}
+  - {fileID: 11400000, guid: 6ba3d0f1bd1fb6846a15fd2abcefb84c, type: 2}
   remoteShotFxPrefab: {fileID: 6439128782644113794, guid: f04edde40b30f634e8e36f02340ebcbc, type: 3}
-  secondaryGripIndicatorPrefab: {fileID: 7854560880376907916, guid: c8100365a9515e243868583b240b9804, type: 3}
   nearMissClips:
   - {fileID: 8300000, guid: a1b87d66560445338f89d9f97ba47833, type: 3}
   - {fileID: 8300000, guid: 3d68d192237d4ccbbfaf5d6f45a9fb2d, type: 3}

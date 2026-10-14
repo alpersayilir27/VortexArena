@@ -111,3 +111,55 @@ MonoBehaviour:
     - {fileID: 8300000, guid: 2566cfdc5849f6648989ac570b23e675, type: 3}
     volume: 1
     warningSeconds: 5
+  - modeId: zombie
+    sceneName: 
+    gameType: 0
+    trigger: 4
+    clips:
+    - {fileID: 8300000, guid: 42cc857368029714d84534a170a0b6ab, type: 3}
+    - {fileID: 8300000, guid: 42cc857368029714d84534a170a0b6ab, type: 3}
+    - {fileID: 8300000, guid: 42cc857368029714d84534a170a0b6ab, type: 3}
+    - {fileID: 8300000, guid: 42cc857368029714d84534a170a0b6ab, type: 3}
+    - {fileID: 8300000, guid: 42cc857368029714d84534a170a0b6ab, type: 3}
+    - {fileID: 8300000, guid: 42cc857368029714d84534a170a0b6ab, type: 3}
+    - {fileID: 8300000, guid: 42cc857368029714d84534a170a0b6ab, type: 3}
+    - {fileID: 8300000, guid: 42cc857368029714d84534a170a0b6ab, type: 3}
+    - {fileID: 8300000, guid: 42cc857368029714d84534a170a0b6ab, type: 3}
+    - {fileID: 8300000, guid: 42cc857368029714d84534a170a0b6ab, type: 3}
+    volume: 0.8
+    warningSeconds: 5
+  - modeId: zombie
+    sceneName: 
+    gameType: 0
+    trigger: 0
+    clips:
+    - {fileID: 8300000, guid: 4377805a9718e2242876ed246e67bba9, type: 3}
+    - {fileID: 8300000, guid: 8d9fc3fb0a803f044bf7ccd9d0a8e592, type: 3}
+    - {fileID: 8300000, guid: 9b7f258583086dc40b955a8bc29eba2d, type: 3}
+    - {fileID: 8300000, guid: f7a759cf919b4f24cab4086459a8e053, type: 3}
+    volume: 1
+    warningSeconds: 5
+  - modeId: zombie
+    sceneName: 
+    gameType: 0
+    trigger: 2
+    clips:
+    - {fileID: 8300000, guid: 6f9bf703fe75d934595234c4fb62220a, type: 3}
+    volume: 1
+    warningSeconds: 5
+  - modeId: zombie
+    sceneName: 
+    gameType: 0
+    trigger: 9
+    clips:
+    - {fileID: 8300000, guid: 11a756154227fa84ba3405640cb9c5d1, type: 3}
+    volume: 1
+    warningSeconds: 5
+  - modeId: zombie
+    sceneName: 
+    gameType: 0
+    trigger: 10
+    clips:
+    - {fileID: 8300000, guid: 1b6ed7605248c414f8be0a3a0b2dc351, type: 3}
+    volume: 1
+    warningSeconds: 5

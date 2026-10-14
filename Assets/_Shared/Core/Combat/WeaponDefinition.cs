@@ -46,6 +46,10 @@ namespace VortexArena.Core.Combat
         [SerializeField] private int pelletCount = 1;
 
         [Header("Seri Atış")]
+        [Tooltip("Yarı otomatik: tetik başına TEK atış — sonraki atış için tetik bırakılıp yeniden " +
+                 "çekilir. fireRateRpm yine üst sınırdır. burstCount > 1 iken okunmaz (seri zaten " +
+                 "tetik başına tek seridir).")]
+        [SerializeField] private bool semiAuto;
         [Min(1)]
         [Tooltip("Tetik başına atılan seri. 1 = tam otomatik (seri yok), 3 = 3'lü seri — sonraki seri için tetik bırakılıp " +
                  "yeniden çekilir. Seri içi aralık fireRateRpm'den gelir.")]
@@ -163,6 +167,10 @@ namespace VortexArena.Core.Combat
 
         /// <summary>Rounds per burst; 1 = full auto.</summary>
         public int BurstCount => Mathf.Max(1, burstCount);
+
+        /// <summary>One shot per trigger pull. Ignored while <see cref="BurstCount"/> &gt; 1 — a burst
+        /// already costs one pull, and two "per pull" rules would fight over the same release.</summary>
+        public bool SemiAuto => semiAuto;
 
         /// <summary>Gap to the next burst's first round (seconds); never below SecondsPerShot.</summary>
         public float BurstCooldown => Mathf.Max(SecondsPerShot, burstCooldown);

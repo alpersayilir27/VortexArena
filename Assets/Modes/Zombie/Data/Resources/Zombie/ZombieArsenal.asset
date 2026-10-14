@@ -13,31 +13,63 @@ MonoBehaviour:
   m_Name: ZombieArsenal
   m_EditorClassIdentifier: VortexArena.Modes.Zombie::VortexArena.Modes.Zombie.ZombieArsenal
   entries:
-  - weaponId: mp9
+  - weaponId: glock
     wave: 1
+    bodyDamage: 20
+    headMultiplier: 1.75
+  - weaponId: magnum
+    wave: 1
+    bodyDamage: 30
+    headMultiplier: 1.9
+  - weaponId: g36c
+    wave: 2
+    bodyDamage: 22
+    headMultiplier: 1.6
   - weaponId: ump45
-    wave: 1
-  - weaponId: nova
     wave: 2
-  - weaponId: p90
-    wave: 2
-  - weaponId: famas
-    wave: 3
+    bodyDamage: 24
+    headMultiplier: 1.5
   - weaponId: scarl
     wave: 3
+    bodyDamage: 26
+    headMultiplier: 1.65
+  - weaponId: famas
+    wave: 3
+    bodyDamage: 24
+    headMultiplier: 1.6
   - weaponId: bomba
     wave: 3
-  - weaponId: m4a1
+    bodyDamage: 0
+    headMultiplier: 0
+  - weaponId: ak47
     wave: 4
-  - weaponId: g36c
+    bodyDamage: 32
+    headMultiplier: 1.7
+  - weaponId: nova
     wave: 4
+    bodyDamage: 10
+    headMultiplier: 1.5
   - weaponId: m4a4
-    wave: 4
+    wave: 5
+    bodyDamage: 28
+    headMultiplier: 1.65
   - weaponId: xm1014
     wave: 5
-  - weaponId: ak47
-    wave: 5
-  - weaponId: galilar
-    wave: 6
+    bodyDamage: 11
+    headMultiplier: 1.5
   - weaponId: aug
     wave: 6
+    bodyDamage: 28
+    headMultiplier: 1.7
+  - weaponId: p90
+    wave: 6
+    bodyDamage: 20
+    headMultiplier: 1.6
+  - weaponId: m4a1
+    wave: 7
+    bodyDamage: 29
+    headMultiplier: 1.7
+  - weaponId: mp9
+    wave: 7
+    bodyDamage: 18
+    headMultiplier: 1.6

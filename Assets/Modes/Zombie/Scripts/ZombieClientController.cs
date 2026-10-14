@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using VortexArena.Core.Audio;
@@ -19,7 +20,10 @@ namespace VortexArena.Modes.Zombie
     /// <c>match_state.scoreRed</c> (<c>scoreBlue</c> always 0) and your own kills ride
     /// <c>lobby_state → PlayerInfo.score</c> (§10.2) — there is no winner.</para>
     /// <para>The wave state rides <c>modeState</c> (<c>"w:3;left:5;next:0"</c>); the core never
-    /// interprets that string (§10.1), the mode both writes and reads it.</para></remarks>
+    /// interprets that string (§10.1), the mode both writes and reads it.</para>
+    /// <para>⚠️ Only PERSONAL sounds live here (a mate going down, a pick-up, your own result): the
+    /// run's match-level cues are <see cref="ZombieAnnouncer"/>'s, because this prefab does not exist
+    /// on the admin. Playing one in both places doubles it on a headset.</para></remarks>
     public class ZombieClientController : ModeHudBase
     {
         [Header("Zombi — şerit hücreleri")]
@@ -37,13 +41,15 @@ namespace VortexArena.Modes.Zombie
         [Header("Zombi — dalga arası geri sayım")]
         [Tooltip("Geri sayımın üstündeki başlık (\"DALGA 5\"). Sayının kendisi tabanın merkez bildirimidir.")]
         [SerializeField] private TMP_Text noticeTitleText;
-        [Tooltip("Geri sayımın altındaki alt satır (\"HAZIRLAN\").")]
+        [Tooltip("Geri sayımın altındaki alt satır (\"HAZIRLAN\" / \"YENİ SİLAHLAR\").")]
         [SerializeField] private TMP_Text noticeSubText;
+        [Tooltip("Temizlik fazında açılan silahların adları (\" · \" ile dizili); başka zaman boş durur.")]
+        [SerializeField] private TMP_Text noticeUnlockText;
 
         [Header("Zombi — kısa bildirim")]
         [Tooltip("Bildirim kökü — boşken kapalı durur.")]
         [SerializeField] private GameObject toastRoot;
-        [Tooltip("Bildirimin küçük üst satırı (\"YENİ SİLAH AÇILDI\").")]
+        [Tooltip("Bildirimin küçük üst satırı (\"DALGA N\").")]
         [SerializeField] private TMP_Text toastSmallText;
         [Tooltip("Bildirimin büyük satırı.")]
         [SerializeField] private TMP_Text toastBigText;
@@ -83,11 +89,10 @@ namespace VortexArena.Modes.Zombie
         /// <summary>Seconds the "DALGA N BAŞLADI" toast stays up.</summary>
         private const float WaveToastSeconds = 2f;
 
-        /// <summary>Seconds the "DALGA TEMİZLENDİ" toast stays up.</summary>
-        private const float ClearToastSeconds = 2.5f;
-
-        /// <summary>Seconds the weapon-unlock toast stays up.</summary>
-        private const float WeaponToastSeconds = 3f;
+        /// <summary>Centre-notice text during the clear phase: there is no countdown number then, but the
+        /// notice root follows the base's "empty text = hidden" rule — a blank keeps the title and the
+        /// weapon line up without drawing a digit.</summary>
+        private const string ClearNoticeBlank = " ";
 
         /// <summary>Seconds the "SON DİRENİŞ" toast stays up.</summary>
         private const float FinalStandToastSeconds = 3f;
@@ -98,6 +103,10 @@ namespace VortexArena.Modes.Zombie
 
         /// <summary>Below this the clock turns red (same threshold the diner HUD uses).</summary>
         private const float ClockAlarmSeconds = 10f;
+
+        /// <summary>Shortest gap (s) between two "arkadaşın düştü" lines: a swarm can drop the whole
+        /// squad in one second and the queue would then say it three times in a row.</summary>
+        private const float MateDownedVoiceGap = 4f;
 
         /// <summary>Own kills from the last <c>lobby_state</c>; cached so the 1 Hz <c>match_state</c> can
         /// redraw the score cells without a roster.</summary>
@@ -128,8 +137,15 @@ namespace VortexArena.Modes.Zombie
         /// <summary>Wave the start toast was last fired for; 0 = none yet.</summary>
         private int _toastedWave;
 
-        /// <summary>Wave the "DALGA TEMİZLENDİ" toast was last fired for; 0 = none yet.</summary>
+        /// <summary>Wave the clear-phase notice was last built for; 0 = none yet.</summary>
         private int _clearedWave;
+
+        /// <summary>Seconds left of the clear phase (<c>clr</c>); 0 = not in it.</summary>
+        private int _clearLeft;
+
+        /// <summary>Names the next wave opens, resolved ONCE when the clear phase starts: the board
+        /// scan behind it must not run on every <c>match_state</c>.</summary>
+        private string _unlockNames = string.Empty;
 
         /// <summary>Unscaled time the toast closes at; negative = no toast up.</summary>
         private float _toastHideAt = -1f;
@@ -176,6 +192,24 @@ namespace VortexArena.Modes.Zombie
         /// <summary>2D source for the wave stings; created on first use (most runs have no clips).</summary>
         private AudioSource _sting;
 
+        /// <summary>2D looping source for the pick-up; separate from <see cref="_sting"/> because a
+        /// loop would hold that source for the next one-shot.</summary>
+        private AudioSource _reviveLoop;
+
+        /// <summary>Was the local player down on the previous frame? The rise out of it is the cue.</summary>
+        private bool _wasDowned;
+
+        /// <summary>The outcome cue was played for this run. ⚠️ A latch, because the outcome is read in
+        /// <see cref="WinnerLine"/>, which the base may ask for more than once.</summary>
+        private bool _outcomeCuePlayed;
+
+        /// <summary>Alive flag per squad mate from the last roster: the DROP (alive → down) is the cue,
+        /// so a mate first seen already down must not trigger it.</summary>
+        private readonly Dictionary<int, bool> _mateAlive = new Dictionary<int, bool>();
+
+        /// <summary>Unscaled time the next mate-down line may play at.</summary>
+        private float _mateDownedVoiceAt;
+
         /// <summary>World-space markers over downed mates; owned by this HUD (one per headset).</summary>
         private ZombieDownedMarkers _markers;
 
@@ -213,6 +247,9 @@ namespace VortexArena.Modes.Zombie
             }
 
             _reviveWindow = null;
+
+            // A looping source on a disabled HUD would keep sounding with nothing left to update it.
+            SetReviveLoop(null, null);
             ClearPrompt();
         }
 
@@ -247,6 +284,7 @@ namespace VortexArena.Modes.Zombie
             RefreshDeadPrompt();
             RefreshTeamStrip();
             RefreshBossBar();
+            RefreshReviveAudio();
         }
 
         /// <summary>Is the squad in the gap between two waves? That is the window the core revives
@@ -286,8 +324,11 @@ namespace VortexArena.Modes.Zombie
             _toastHideAt = Time.unscaledTime + Mathf.Max(0.1f, seconds);
         }
 
-        /// <summary>Wave sting (2D, Müzik kanalı). Optional clips: a missing one is silence, not a
-        /// warning — the toast already carries the message.</summary>
+        /// <summary>The PERSONAL 2D cues (2D, Müzik kanalı): the pick-up and your own result. Optional
+        /// clips: a missing one is silence, not a warning — the toast already carries the
+        /// message.</summary>
+        /// <remarks>Müzik kanalı because the mix has no UI/SFX channel (<c>AudioChannel</c>): these
+        /// cues belong with the stings rather than with the weapons or the ambience.</remarks>
         private void PlaySting(AudioClip clip)
         {
             ZombieSounds sounds = ZombieSounds.Live;
@@ -311,11 +352,21 @@ namespace VortexArena.Modes.Zombie
             _sting.PlayOneShot(clip, sounds.MusicVolume * AudioMix.Of(AudioChannel.Music));
         }
 
-        /// <summary>Weapon progression toast, raised by <see cref="ZombieWeaponUnlocks"/> when a wave
-        /// opens new weapons on the boards.</summary>
-        public void ShowWeaponUnlockedToast(string weaponName)
+        /// <summary>A PERSONAL voice line of the mode (a mate going down, your own result); the
+        /// match-level lines belong to <see cref="ZombieAnnouncer"/>, which the admin hears too.
+        /// Optional clip: a missing one is silence, not a warning.</summary>
+        /// <remarks>⚠️ Through <see cref="GameAudio.PlayAnnouncement"/> and not
+        /// <see cref="PlaySting"/>: there is ONE announcement channel, so this line queues behind the
+        /// core's lines instead of talking over them. The stings stay on the mode's own source — they
+        /// are meant to sound UNDER the words.</remarks>
+        private static void PlayVoice(AudioClip clip,
+            float maxWaitSeconds = GameAudio.DefaultMaxWaitSeconds)
         {
-            ShowToast("YENİ SİLAH AÇILDI", Girdap.Upper(weaponName), WeaponToastSeconds);
+            ZombieSounds sounds = ZombieSounds.Live;
+            if (clip != null && sounds != null)
+            {
+                GameAudio.PlayAnnouncement(clip, sounds.VoiceVolume, maxWaitSeconds);
+            }
         }
 
         /// <summary>Headline of a special wave, or empty on a plain one.</summary>
@@ -336,20 +387,116 @@ namespace VortexArena.Modes.Zombie
                 : string.Empty;
         }
 
-        /// <summary>Final stand sting, falling back to the wave sting: silence would drop the loudest
-        /// moment of the run.</summary>
-        private static AudioClip FinalStandSting
+        /// <summary>The pick-up loop and the "you are up" one-shot — both only for revives the LOCAL
+        /// player is part of (being picked up, or picking a mate up).</summary>
+        private void RefreshReviveAudio()
         {
-            get
+            PlayerCombatState combat = PlayerCombatState.Instance;
+            ZombieSounds sounds = ZombieSounds.Live;
+            if (combat == null || sounds == null)
             {
-                ZombieSounds sounds = ZombieSounds.Live;
-                if (sounds == null)
+                return;
+            }
+
+            bool running = _playing && !_ended && _over.Length == 0;
+            bool reviving = running && (TeammateRevive.LocalProgress > 0f || IsRevivingMate());
+            SetReviveLoop(reviving ? sounds.ReviveProgressClip : null, sounds);
+
+            bool downed = !combat.IsAlive;
+            if (_wasDowned && !downed && running)
+            {
+                PlaySting(sounds.ReviveCompleteClip);
+            }
+
+            _wasDowned = downed;
+        }
+
+        /// <summary>Are WE holding a downed mate? <see cref="TeammateRevive.AllyProgress"/> is the
+        /// reviver-side estimate, so a non-zero one on this headset is our own hold.</summary>
+        private bool IsRevivingMate()
+        {
+            int self = LocalPlayerId;
+            for (int i = 0; i < _roster.Length; i++)
+            {
+                PlayerInfo info = _roster[i];
+                if (IsSquadMate(info, self) && !info.alive && TeammateRevive.AllyProgress(info.playerId) > 0f)
                 {
-                    return null;
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private void SetReviveLoop(AudioClip clip, ZombieSounds sounds)
+        {
+            if (clip == null)
+            {
+                if (_reviveLoop != null && _reviveLoop.isPlaying)
+                {
+                    _reviveLoop.Stop();
                 }
 
-                return sounds.FinalStandSting != null ? sounds.FinalStandSting : sounds.WaveStartSting;
+                return;
             }
+
+            if (_reviveLoop == null)
+            {
+                _reviveLoop = gameObject.AddComponent<AudioSource>();
+                _reviveLoop.playOnAwake = false;
+                _reviveLoop.loop = true;
+                _reviveLoop.spatialBlend = 0f;
+                _reviveLoop.spatialize = false;
+            }
+
+            if (_reviveLoop.clip != clip)
+            {
+                _reviveLoop.clip = clip;
+            }
+
+            // Re-read per frame: the operator may pull the channel down mid-wave.
+            _reviveLoop.volume = sounds.MusicVolume * AudioMix.Of(AudioChannel.Music);
+
+            if (!_reviveLoop.isPlaying)
+            {
+                _reviveLoop.Play();
+            }
+        }
+
+        /// <summary>Outcome cue, once per run: the result screen's sound.</summary>
+        private void PlayOutcomeCue()
+        {
+            ZombieSounds sounds = ZombieSounds.Live;
+            if (_outcomeCuePlayed || sounds == null)
+            {
+                return;
+            }
+
+            _outcomeCuePlayed = true;
+            SetReviveLoop(null, sounds);
+
+            // The sting is the result screen's sound, the line rides the announcement channel behind
+            // it — the two are separate channels and do not mask each other.
+            // The result line never expires: it describes the screen that stays up, so waiting behind
+            // the last wave's line is right and being dropped is not.
+            if (string.Equals(_over, ZombieKinds.OverSurvived, StringComparison.Ordinal))
+            {
+                PlaySting(sounds.VictoryClip);
+                PlayVoice(sounds.SurvivedVoice, GameAudio.NeverExpires);
+            }
+            else if (string.Equals(_over, ZombieKinds.OverRescued, StringComparison.Ordinal))
+            {
+                PlaySting(sounds.RescueClip);
+                PlayVoice(sounds.RescuedVoice, GameAudio.NeverExpires);
+            }
+            else if (string.Equals(_over, ZombieKinds.OverLost, StringComparison.Ordinal))
+            {
+                PlaySting(sounds.DefeatClip);
+                PlayVoice(sounds.LostVoice, GameAudio.NeverExpires);
+            }
+
+            // No outcome token (an aborted match): no cue either — a victory or a defeat sound would
+            // claim something that did not happen.
         }
 
         private void HideToast()
@@ -374,6 +521,8 @@ namespace VortexArena.Modes.Zombie
             _playing = false;
             _toastedWave = 0;
             _clearedWave = 0;
+            _clearLeft = 0;
+            _unlockNames = string.Empty;
             _finalStand = false;
             _finalStandReviveUntil = -1f;
             _special = string.Empty;
@@ -381,6 +530,11 @@ namespace VortexArena.Modes.Zombie
             _devMaxHp = 0f;
             _clockStamp = -1f;
             _roster = Array.Empty<PlayerInfo>();
+            _wasDowned = false;
+            _outcomeCuePlayed = false;
+            _mateAlive.Clear();
+            _mateDownedVoiceAt = 0f;
+            SetReviveLoop(null, null);
             ClearPrompt();
             HideToast();
             HideBossBar();
@@ -410,6 +564,13 @@ namespace VortexArena.Modes.Zombie
             SetClockAlarm(false);
             SetCenterNotice("");
             ClearPrompt();
+
+            // The run's last clear phase dies with the result screen: its notice and weapon list would
+            // otherwise come back on the next centre-notice refresh.
+            _clearLeft = 0;
+            _clearedWave = 0;
+            _unlockNames = string.Empty;
+            PlayOutcomeCue();
 
             int wave = Mathf.Max(1, _wave);
             if (string.Equals(_over, ZombieKinds.OverSurvived, StringComparison.Ordinal))
@@ -460,6 +621,7 @@ namespace VortexArena.Modes.Zombie
             PlayerInfo self = FindSelf(msg);
             _selfScore = self != null ? self.score : 0;
             _roster = msg?.players ?? Array.Empty<PlayerInfo>();
+            TrackMatesDowned();
 
             if (_markers != null)
             {
@@ -469,12 +631,47 @@ namespace VortexArena.Modes.Zombie
             SetText(scoreText, BuildScoreLine());
         }
 
+        /// <summary>"Arkadaşın düştü" line when a squad mate flips alive → down.</summary>
+        /// <remarks>Read from the ROSTER and not from <c>kill_event</c>: a mate goes down to things
+        /// that are not a kill of ours to hear about, and the alive flag is the one truth the strip and
+        /// the markers already use.
+        /// <para>The flags are updated for everyone even while the line is throttled or the run is not
+        /// running — otherwise the next drop would compare against a stale frame.</para></remarks>
+        private void TrackMatesDowned()
+        {
+            bool running = _playing && !_ended && _over.Length == 0;
+            int self = LocalPlayerId;
+            float now = Time.unscaledTime;
+            bool said = false;
+
+            for (int i = 0; i < _roster.Length; i++)
+            {
+                PlayerInfo info = _roster[i];
+                if (!IsSquadMate(info, self))
+                {
+                    continue;
+                }
+
+                bool known = _mateAlive.TryGetValue(info.playerId, out bool wasAlive);
+                _mateAlive[info.playerId] = info.alive;
+
+                // A mate first seen already down is not a fresh drop: the line would announce the past.
+                if (said || !running || !known || !wasAlive || info.alive || now < _mateDownedVoiceAt)
+                {
+                    continue;
+                }
+
+                said = true;
+                _mateDownedVoiceAt = now + MateDownedVoiceGap;
+                PlayVoice(ZombieSounds.Live != null ? ZombieSounds.Live.MateDownedVoice : null);
+            }
+        }
+
         /// <summary>Feeds the wave cells, the clock alarm and the between-waves countdown from
         /// <c>modeState</c>.</summary>
         protected override void OnMatchStateApplied(MatchStateMsg msg)
         {
             int previousWave = _wave;
-            int previousNext = _nextWaveSeconds;
             bool previousFinalStand = _finalStand;
             ParseState(msg.modeState);
 
@@ -490,17 +687,27 @@ namespace VortexArena.Modes.Zombie
             {
                 // A running match clears the latch the result screen set.
                 _ended = false;
+                _outcomeCuePlayed = false;
             }
 
             SetClockAlarm(playing && msg.timeRemaining > 0f
                           && msg.timeRemaining <= ClockAlarmSeconds);
 
+            // The clear phase is the "you cleared it" screen; a finished run says it with the result
+            // screen instead. The names are resolved ONCE here — the notice is redrawn every state.
+            bool inClear = playing && !_finalStand && _over.Length == 0 && _clearLeft > 0 && _wave >= 1;
+            if (inClear && _wave > _clearedWave)
+            {
+                _clearedWave = _wave;
+                _unlockNames = ZombieWeaponUnlocks.UnlockedNamesAt(_wave + 1);
+            }
+
             // Between waves the big centre number is the only thing that explains why nothing is
             // coming; the title/subtitle around it ride OnCenterNoticeRefreshed.
             // The final stand has no next wave: a leftover countdown there would promise one.
-            SetCenterNotice(playing && !_finalStand && _nextWaveSeconds > 0
-                ? _nextWaveSeconds.ToString()
-                : "");
+            SetCenterNotice(inClear
+                ? ClearNoticeBlank
+                : (playing && !_finalStand && _nextWaveSeconds > 0 ? _nextWaveSeconds.ToString() : ""));
 
             // A wave starts when its number goes up AND nothing is counting down any more.
             if (playing && _wave > previousWave && _nextWaveSeconds == 0 && _wave > _toastedWave)
@@ -515,32 +722,20 @@ namespace VortexArena.Modes.Zombie
                 {
                     ShowToast("", $"DALGA {_wave} BAŞLADI", WaveToastSeconds);
                 }
-
-                PlaySting(ZombieSounds.Live != null ? ZombieSounds.Live.WaveStartSting : null);
             }
 
             if (playing && _finalStand && !previousFinalStand)
             {
                 ShowToast("BÜTÜN SİLAHLAR AÇIK", "SON DİRENİŞ", FinalStandToastSeconds);
-                PlaySting(FinalStandSting);
 
                 // The last fight starts with the squad on its feet; there is no break left to wait for.
                 _finalStandReviveUntil = Time.unscaledTime + FinalStandReviveSeconds;
             }
-
-            // A break OPENING after a wave is the "you cleared it" moment; the countdown before the
-            // FIRST wave is not (wave 0), and a finished run says it with the result screen.
-            if (playing && _over.Length == 0 && _wave >= 1 && previousNext == 0
-                && _nextWaveSeconds > 0 && _wave > _clearedWave)
-            {
-                _clearedWave = _wave;
-                ShowToast("", "DALGA TEMİZLENDİ", ClearToastSeconds);
-                PlaySting(ZombieSounds.Live != null ? ZombieSounds.Live.WaveClearSting : null);
-            }
         }
 
         /// <summary>Dresses the base's single centre text: the number is the base's, the wave title and
-        /// the "HAZIRLAN" line are this mode's.</summary>
+        /// the lines around it are this mode's — "dalga tamamlandı" + the new weapons in the clear
+        /// phase, "DALGA N" + "HAZIRLAN" over the countdown after it.</summary>
         protected override void OnCenterNoticeRefreshed(string text, bool countdown)
         {
             if (string.IsNullOrEmpty(text))
@@ -548,10 +743,21 @@ namespace VortexArena.Modes.Zombie
                 return;
             }
 
+            // Same gate as the clear phase itself: a finished run says it with the result screen, and
+            // a stale `clr` must not put "tamamlandı" over it.
+            if (_clearLeft > 0 && !_finalStand && _playing && _over.Length == 0)
+            {
+                SetText(noticeTitleText, $"DALGA {_wave} TAMAMLANDI");
+                SetText(noticeSubText, _unlockNames.Length > 0 ? "YENİ SİLAHLAR AÇILDI" : "");
+                SetText(noticeUnlockText, _unlockNames);
+                return;
+            }
+
             // Both cases count down to the SAME thing (the next wave starting), so one formula: at
             // match start the wave is still 0 and the countdown belongs to wave 1.
             SetText(noticeTitleText, $"DALGA {Mathf.Max(1, _wave + 1)}");
             SetText(noticeSubText, "HAZIRLAN");
+            SetText(noticeUnlockText, "");
         }
 
         // ---------------------------------------------------------------- internals
@@ -585,11 +791,12 @@ namespace VortexArena.Modes.Zombie
                 return;
             }
 
-            // `wx` rides only while the special wave runs, so its absence is meaningful — but only in a
+            // `wx` and `clr` ride only while they run, so their absence is meaningful — but only in a
             // TOKEN state: the pause reason travels in the same field as free text.
             if (modeState.IndexOf(':') >= 0)
             {
                 _special = string.Empty;
+                _clearLeft = 0;
             }
 
             string[] tokens = modeState.Split(';');
@@ -639,6 +846,10 @@ namespace VortexArena.Modes.Zombie
                 else if (string.Equals(key, ZombieKinds.StateNext, StringComparison.Ordinal))
                 {
                     _nextWaveSeconds = value;
+                }
+                else if (string.Equals(key, ZombieKinds.StateClear, StringComparison.Ordinal))
+                {
+                    _clearLeft = value;
                 }
                 else if (string.Equals(key, ZombieKinds.StateRemaining, StringComparison.Ordinal))
                 {
@@ -741,6 +952,14 @@ namespace VortexArena.Modes.Zombie
         /// send them to a base that cannot revive them.</summary>
         private void RefreshDeadPrompt()
         {
+            // The run is over: the result screen is up and "arkadaşın seni kaldırsın" would ask for a
+            // pick-up that can no longer happen.
+            if (_ended || _over.Length > 0)
+            {
+                ClearPrompt();
+                return;
+            }
+
             PlayerCombatState combat = PlayerCombatState.Instance;
             if (combat == null)
             {
