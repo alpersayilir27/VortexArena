@@ -111,6 +111,24 @@ public interface IGameMode
     void OnObjectHit(MatchDirector director, int attackerId, int netId, string kind, float damage,
         bool broken, int zone) => OnObjectHit(director, attackerId, netId, kind, damage, broken);
 
+    /// <summary>Does THIS hit write a lasting MODE state onto the object (§10.5 zombie crippling)?
+    /// <c>true</c> + the object's whole new <c>payload</c>; the CORE writes it, so the
+    /// <c>object_state</c> of the very same hit already carries it and the hit relay's <c>i[3]</c>
+    /// reports the transition.</summary>
+    /// <remarks>⚠️ Called INSIDE the director's lock, like <see cref="ReviveHp"/> and for the same
+    /// reason (the answer is needed before the state goes out): it must be a PURE decision — no director
+    /// call and no lock this mode also takes outside the director, or the lock order inverts and
+    /// deadlocks. <paramref name="payload"/> and <paramref name="maxHp"/> are handed in so the hook
+    /// needs no table of its own to read.
+    /// <para>⚠️ The mode must NOT write through <c>SetObjectPayload</c> here: that would publish a second
+    /// <c>object_state</c> and the relay bit would already be gone.</para></remarks>
+    bool OnObjectDamagedLocked(int netId, string kind, int zone, float damage, bool broken, float maxHp,
+        string payload, out string newPayload)
+    {
+        newPayload = "";
+        return false;
+    }
+
     /// <summary>A player was revived through <c>revive_request</c> (§10.4);
     /// <paramref name="byPlayerId"/> = the teammate who lifted them, <c>0</c> = nobody.</summary>
     /// <remarks>Called outside the lock, after the revive is published. <paramref name="byPlayerId"/> is

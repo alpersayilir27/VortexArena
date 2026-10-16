@@ -280,6 +280,15 @@ namespace VortexArena.Core.Combat
         /// <c>hit_report.damage</c>, not how the server reads it, so no protocol change.</para></summary>
         public static Func<WeaponDefinition, HitZone, float, float> DamageOverride;
 
+        /// <summary>MODE hook REPLACING the built-in recoil kick on <see cref="ModelPivot"/> and the
+        /// FIRE haptic (<see cref="IWeaponFeel"/>); <c>null</c> = the weapon's own kick and pulse,
+        /// unchanged.
+        /// <para>⚠️ Same lifecycle rule as <see cref="DamageOverride"/>: the installer clears it when
+        /// its mode ends (and only if the delegate is still its own).</para>
+        /// <para>⚠️ Only the FIRE pulse moves to the hook: dry-fire, blocked-muzzle and reload cues
+        /// stay with the weapon — they answer a rejected input, not the shot's weight.</para></summary>
+        public static IWeaponFeel FeelOverride;
+
         // HeldItems collector state (§6.6): the hook is installed once and warnings fire once —
         // a broken setup would otherwise log on every grab.
         private static bool heldItemsHooked;
@@ -309,6 +318,10 @@ namespace VortexArena.Core.Combat
         private Vector3 modelBasePosition;
         private Quaternion modelBaseRotation;
         private Coroutine hapticRoutine;
+
+        // Hook this weapon currently runs with; compared against FeelOverride to catch an install /
+        // removal / swap (SyncFeel).
+        private IWeaponFeel appliedFeel;
         private bool triggerHeld;
         private bool aliveSubscribed;
         private int reserveRounds;
@@ -416,6 +429,8 @@ namespace VortexArena.Core.Combat
             if (wasHeld)
                 HeldChanged?.Invoke(false);
 
+            NotifyFeelReleased();
+
             Active.Remove(this);
             ActiveChanged?.Invoke();
 
@@ -444,6 +459,9 @@ namespace VortexArena.Core.Combat
             if (!aliveSubscribed)
                 TrySubscribeAlive();
 
+            // Before the trigger: a hook installed between frames must own this frame's shot too.
+            SyncFeel();
+
             // A reload completes even if the weapon was dropped (the duration is not physical).
             if (IsReloading && Time.time >= reloadEndTime)
                 FinishReload();
@@ -462,6 +480,21 @@ namespace VortexArena.Core.Combat
             currentBloom = Mathf.MoveTowards(currentBloom, 0f,
                 (definition != null ? definition.BloomRecoveryPerSecond : 0f) * Time.deltaTime);
 
+            if (appliedFeel != null)
+            {
+                // The hook REPLACES the kick: the built-in accumulators were zeroed on install and
+                // stay zero, so nothing here races it.
+                if (modelPivot != null &&
+                    appliedFeel.TryGetPivotOffset(this, Time.deltaTime, out Vector3 feelPosition,
+                        out Quaternion feelRotation))
+                {
+                    modelPivot.localRotation = modelBaseRotation * feelRotation;
+                    modelPivot.localPosition = modelBasePosition + modelBaseRotation * feelPosition;
+                }
+
+                return;
+            }
+
             float recoverSpeed = GripRecoverSpeed;
             currentKick = Mathf.MoveTowards(currentKick, 0f, recoverSpeed * Time.deltaTime);
             currentKickBack = Mathf.MoveTowards(currentKickBack, 0f, recoverSpeed * 0.02f * Time.deltaTime);
@@ -470,6 +503,57 @@ namespace VortexArena.Core.Combat
             {
                 modelPivot.localRotation = modelBaseRotation * Quaternion.Euler(-currentKick, 0f, 0f);
                 modelPivot.localPosition = modelBasePosition + modelPivot.localRotation * (Vector3.back * currentKickBack);
+            }
+        }
+
+        /// <summary>Picks up an installed / removed / swapped <see cref="FeelOverride"/>.
+        /// <para>⚠️ The accumulators are zeroed and the pivot is returned to its base pose on every
+        /// change: handing a half-recovered kick over to (or back from) a hook would jump the model
+        /// by whatever was left in it.</para></summary>
+        private void SyncFeel()
+        {
+            IWeaponFeel feel = FeelOverride;
+            if (ReferenceEquals(feel, appliedFeel))
+            {
+                return;
+            }
+
+            appliedFeel?.OnReleased(this);
+            appliedFeel = feel;
+
+            currentKick = 0f;
+            currentKickBack = 0f;
+            ResetPivotToBase();
+
+            // A pulse cut by the swap would otherwise be left running on the controller: whichever
+            // side owns the haptic now, it starts from silence.
+            if (hapticRoutine != null)
+            {
+                StopCoroutine(hapticRoutine);
+                hapticRoutine = null;
+                SetHeldVibration(0f, 0f);
+            }
+        }
+
+        /// <summary>Clears the hook's state for this weapon (released, revoked, disabled) and parks
+        /// the model. No-op while no hook is installed.</summary>
+        private void NotifyFeelReleased()
+        {
+            if (appliedFeel == null)
+            {
+                return;
+            }
+
+            appliedFeel.OnReleased(this);
+            ResetPivotToBase();
+        }
+
+        private void ResetPivotToBase()
+        {
+            if (modelPivot != null)
+            {
+                modelPivot.localRotation = modelBaseRotation;
+                modelPivot.localPosition = modelBasePosition;
             }
         }
 
@@ -907,6 +991,15 @@ namespace VortexArena.Core.Combat
                 DrawLocalTracer(tracerCount);
             }
 
+            if (appliedFeel != null)
+            {
+                // The hook owns BOTH the kick and the fire vibration: adding either here would stack
+                // on top of a spring profile that already overshoots.
+                appliedFeel.OnShot(new WeaponShotContext(this, definition, IsTwoHanded, MainHand,
+                    SecondaryHand, recoilScale));
+                return;
+            }
+
             currentKick = Mathf.Min(currentKick + definition.KickDegrees * recoilScale, definition.KickDegrees * 4f);
             currentKickBack = Mathf.Min(currentKickBack + definition.KickBackMeters * recoilScale, definition.KickBackMeters * 3f);
 
@@ -1015,7 +1108,11 @@ namespace VortexArena.Core.Combat
             burstAwaitsRelease = false;
 
             if (wasHeld && !IsHeld)
+            {
                 HeldChanged?.Invoke(false);
+                NotifyFeelReleased();
+            }
+
             ActiveChanged?.Invoke();
         }
 
@@ -1233,6 +1330,7 @@ namespace VortexArena.Core.Combat
                 if (heldPoints.Count == 0)
                 {
                     HeldChanged?.Invoke(false);
+                    NotifyFeelReleased();
                 }
 
                 // Unconditional — rationale in AddHeldPoint.

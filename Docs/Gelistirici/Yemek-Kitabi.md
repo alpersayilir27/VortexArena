@@ -32,6 +32,7 @@ Her reçetenin altında *neden böyle* kutusu var — orayı okumazsan çalış�
 | Zombiye yeni gövde (görünüş + animasyon) | [13.6](#136-zombi-gövdesi-görünüş-ekleme) |
 | Yeni arena eklemek | [14](#14-yeni-arena-eklemek) |
 | Hazır bir environment'ın içinde arena bölgesi kurmak | [14.1](#141-hazır-bir-environmentın-içinde-arena-bölgesi-kurmak) |
+| Bir haritayı başka bir mekana taşımak | [14.1.1](#1411-bir-haritayı-başka-bir-mekana-taşımak) |
 | Gökyüzü ekleme / değiştirme | [14.3](#143-gökyüzü-ekleme--değiştirme) |
 | Gözlüksüz test (dev penceresi) | [15](#15-gözlüksüz-test-dev-penceresi) |
 | Bir konumu ağdan paylaşmak | [16](#16-bir-konumu-ağ-üzerinden-paylaşmak-arena-uzayı) |
@@ -1082,9 +1083,11 @@ sahibi admindir** (§3.6b "Sunucu-atanmış sahiplik"); örnek uygulama `Assets/
      kendisinden gelir ve yeni gövde hasarına uygulanır. Kanca modun açılışında kurulur ve mod
      bitince bırakılır (`ZombieDamageTuning` → `Weapon.DamageOverride`), yani **PvP dengesi
      değişmez** — `WD_*.asset`'i zombi için düzenlemek PvP'yi sessizce bozardı.
-   - ⚠️ Hasar tavanı: 100 can'lık sıradan zombi **en güçlü silahla bile iki kafa vuruşu** ister,
-     geri kalanla üç ve daha fazla. Tek vuruşta kafadan öldüren silah dalga ilerlemesini duyulmaz
-     hâle getirir.
+   - ⚠️ Kafa merdiveni: 100 can'lık sıradan zombi ilk dalgaların hafif silahlarıyla **iki** kafa
+     vuruşu ister (kafa hasarı ~50); magnum, AK ve 5. dalgadan sonra açılan tüfekler kafayı **tek**
+     vuruşta indirir (~101). Dalga ilerlemesi kafa başına vuruş sayısının düşmesiyle hissedilir;
+     bu yüzden yeni silah ya 50'lik ya 101'lik basamağa oturtulur, arası (ör. 70) iki basamağı da
+     bulanıklaştırır. Ölümcül kafa vuruşu kafayı patlatır.
    - Tablo tamamen istemci tarafıdır: sunucu silah doğrulaması yapmaz, yani denge değişikliği **sunucu
      dağıtımı istemez**.
 9. **Kan efekti:** `NO_zombie`'nin `Hit_Body` ve `Hit_Head` kutularında `SurfaceTag` durur (`SUR_ZombieFlesh`
@@ -1143,6 +1146,38 @@ sahibi admindir** (§3.6b "Sunucu-atanmış sahiplik"); örnek uygulama `Assets/
     - Klipler **mono** olur ve 3B sesler `Decompress On Load` ile içe aktarılır (kısa tek seferlik
       ses her çalışta çözülürse kare düşer); müzik döngüleri uzun olduğu için sıkıştırılmış kalır.
     - Asset hiç yoksa mod sessizdir ve konsola **tek** uyarı düşer — yarım sesli koşmaz.
+11. **Vuruş hissini ayarlamak** — kodda sayı değiştirmeden, iki asset üzerinden. ⚠️ Hepsi **yalnız
+    zombi modundadır** ve ortak koda varsayılanı `null` olan kancayla girer; ortak silah/savaş
+    yoluna dokunmak Hızlı Savaş'ı sessizce değiştirir (`Yapma-Listesi.md`).
+    - **Hangi asset neyi tutuyor:** vuranın tarafı `ZombieFeel` (`Resources/Zombie/ZombieFeel`) —
+      geri tepme, haptic klipleri ve öncelikleri, 2B onay sesleri, hitmarker varyantları; zombinin
+      tarafı `ZombieReactionTuning` (`Resources/Zombie/ZombieReactionTuning`) — sarsılma, mikro
+      duraklama, sendeleme + geri itme, ölüm itkisi, uzuv kopması eşiği, et parçaları, kan izleri,
+      gore mesh/materyalleri ve kopma sesleri; vurulan zombinin **acı sesi** ise `ZombieSounds`'un
+      `painClips` havuzundadır. Tepki asset'i *Tools > VortexArena > Zombie > Tepki ayarlarını
+      oluştur* ile üretilir (yeniden koşmak **yalnız boş yuvaları** doldurur). Asset hiç yoksa
+      gömülü varsayılanlar koşar: his çalışır, ses ve titreşim sessizdir.
+    - **Ses klibi eklemek = asset'i düzenlemek.** İlgili havuza klibi sürükle; **boş yuva sessizdir,
+      uyarı üretmez**. 2B onaylar (isabet tıkı · kafa çatırtısı · öldürme onayı · oyuncunun acı sesi
+      · yakın atış katmanı) `ZombieFeel`'de, kopma sesleri (kafa patlaması · uzuv · parça sıçraması
+      · sürünene çökme) `ZombieReactionTuning`'de durur. ⚠️ Onay sesleri **2B'dir ve öyle kalır** —
+      uzamsallaştırılırsa vuranın onayı zombiden gelir.
+    - **Haptic klibi eklemek:** `.haptic` dosyasını `Assets/Modes/Zombie/Haptics/` altına koy ve
+      `ZombieFeel`'in ilgili yuvasına bağla (atış klipleri silah sınıfı başına, ayrıca isabet · kafa
+      · öldürme · kafa patlaması · uzuv kopması · oyuncunun darbesi). ⚠️ **Otomatik silahın atış
+      klibi `hitConfirmDelaySeconds`'tan kısa olmak zorundadır:** SDK bir kumandada yalnız en yüksek
+      öncelikli klibi çalar, uzun bir atış klibi isabet onayını **hiç duyulmaz** yapar (belirtisi
+      "seri atışta isabet titreşimi yok"). Önceliklerin sırası da veridir: darbe > öldürme > atış >
+      isabet.
+    - **Silaha özel geri tepme:** sınıf profilleri (tabanca · magnum · hafif makineli · tüfek ·
+      pompalı) `ZombieFeel`'de durur; bir silah sınıfından farklı davranacaksa `recoilOverrides`
+      dizisine `weaponId`'siyle bir satır eklenir ve o satır sınıf profilinin üstüne yazar.
+      `weaponId` `WeaponDefinition`'daki değerle **birebir** yazılır; eşlemede olmayan kimlik tüfek
+      profiline düşer. Değerler **tepe** açılarıdır (tek el referansı), itki değil — yay sertliğini
+      değiştirmek silahları yeniden ölçeklemez.
+    - **Yeni silahın kafa basamağı** yukarıdaki cephanelik maddesindeki kuralla seçilir; geri tepme
+      profili de o rolle tutarlı olmalıdır — kafayı tek vuruşta indiren bir silahın tepmesi hafif
+      kalırsa güç hiç hissedilmez.
 
 ---
 
@@ -1828,9 +1863,10 @@ sessizce hiçbir şey göstermez**), taban şeritlerini takım rengine boyar ve 
 **3. adımın sırası serbest ama kendisi ZORUNLUDUR** — sahnenin `anchor_a`/`anchor_b`
 işaretçileri maketle gelir, maketsiz sahne kalibre edilemez. Maket sahnedeki `ArenaBoundary`'nin
 **altına**, yerel konum/dönüş sıfırda kurulur (muhafaza yoksa sahne köküne, dünya orijininde ve
-dönüşsüz): arenayı yerleştirmek için yalnız `VA_ArenaBoundary` örneğini taşırsın/döndürürsün, maket
-ve işaretçiler onu izler. Geri okuma maketin kendi kökünü referans aldığı için bundan etkilenmez.
-⚠️ **Ölçeğini değiştirme** — plan metre cinsindendir.
+dönüşsüz). ⚠️ **Muhafazayı taşıma/döndürme** — arena uzayı dünya uzayıdır, muhafaza dünya
+orijininde durur; arenayı hazır bir sanatın içine oturtmanın yolu **sanatı muhafazanın üstüne
+taşımaktır** ([14.1](#141-hazır-bir-environmentın-içinde-arena-bölgesi-kurmak)).
+⚠️ **Ölçeğini de değiştirme** — plan metre cinsindendir.
 
 ⚠️ **Maket oynanan geometri DEĞİLDİR:** taban + kolonlar + kalibrasyon işaretçilerinden ibarettir
 ve **duvar üretmez**. Build'e yalnız kök + kalibrasyon işaretçileri girer (onlar çalışma anında
@@ -2039,9 +2075,9 @@ Fiziksel oda değişmedi: ölçü aynı, kalibrasyon bantları aynı yerde.
 
 | # | Yaptığın |
 |---|---|
-| 1 | Environment'ı **import edildiği yerde bırak** — orijini bozuk olabilir, önemsiz; hiçbir şeyini taşıma |
-| 2 | [Reçete 14](#14-yeni-arena-eklemek)'teki normal altı adımı uygula (altyapı → maket → ölçü düzeltme → sanat → kayıtlar) |
-| 3 | `VA_ArenaBoundary` örneğini oynatmak istediğin bölgenin üstüne **taşı ve döndür** (ölçek **1** kalır). Maket ve `anchor_a`/`anchor_b` onun altındadır, birlikte gelirler |
+| 1 | Environment'ın tamamını **tek bir kökün altına topla** (sanat, terrain, dekor, ışık probu kökü) — taşınacak olan tek obje odur |
+| 2 | [Reçete 14](#14-yeni-arena-eklemek)'teki normal altı adımı uygula (altyapı → maket → ölçü düzeltme → sanat → kayıtlar). `VA_ArenaBoundary` **dünya orijininde ve dönüşsüz** kalır; maket ve `anchor_a`/`anchor_b` onun altında yerel sıfırdadır |
+| 3 | **Environment kökünü taşı/döndür** (ölçek **1** kalır) ki oynatmak istediğin bölge muhafazanın üstüne otursun. Oynanan zemin **dünya y=0**'da durmalı — kök yüksekliğini buna göre ayarla |
 | 4 | `BaseZone`'ları (yalnız takımlı modu olan haritada; takımsız haritada hiç yok), silahları (`WPN_*` örnekleri / `VA_WeaponCanvas`) ve `ArenaObstacle`'ları **elle o bölgeye** yerleştir |
 
 - **Pano `VA_WeaponCanvas*` prefabının ÖRNEĞİ olarak konur, unpack edilmez** — kökündeki
@@ -2051,16 +2087,45 @@ Fiziksel oda değişmedi: ölçü aynı, kalibrasyon bantları aynı yerde.
   fiziksel oda değişmedi, ikinci bir ölçü dosyası açılmaz.
 - **Birden çok bölge oynatacaksan her bölge ayrı bir arena kutusudur** (kendi sahnesi + kendi
   `MapDefinition`'ı). Aynı sahnede iki muhafaza olmaz — hangi ölçünün geçerli olduğu belirsizleşir.
-- Kalibresiz açılışta oyuncu **o sahnenin A-B ortasında** başlar, yani taşıdığın bölgenin içinde
+- Kalibresiz açılışta oyuncu **o sahnenin A-B ortasında** başlar, yani muhafazanın içinde
   ([API: ArenaCalibrator](API-Referansi.md#arenacalibrator--kalibresiz-ön-hizalama)).
+- ⚠️ **Taşınmış environment'ın bake'i taşıma SONRASI yeniden üretilir:** lightmap, ışık probu
+  verisi, occlusion ve (zombi haritasıysa) NavMesh konuma bağlıdır — taşımadan önce alınan bake
+  eski yerinde kalır ve hata vermez.
 
-> **Neden böyle?** Taşınan tek obje muhafaza olduğu için "arena nerede" sorusunun tek bir cevabı
-> kalır: ölçü kutusu, kalibrasyon işaretçileri ve muhafaza mesafesi hep aynı transformdan türer.
-> Environment'ı arenaya taşımak ise tersi olurdu — hazır sahnelerin içinde LOD, ışık probu, bake
-> edilmiş aydınlatma ve navigasyon verisi kendi konumlarına bağlıdır.
-> Ağ koordinatları **dünya uzayındadır** ve muhafaza onların sıfırı DEĞİLDİR
-> ([Reçete 16](#16-bir-konumu-ağ-üzerinden-paylaşmak-arena-uzayı)); bölgeyi kaydırmak kimsenin
-> koordinatını bozmaz, çünkü oyuncu da admin de aynı sahneyi yükler.
+> **Neden böyle?** Arena uzayı **dünya uzayıdır**: ağa giden/gelen pozların sıfırı sahnenin dünya
+> sıfırıdır ve telde bunu telafi eden bir origin yoktur ([Reçete
+> 16](#16-bir-konumu-ağ-üzerinden-paylaşmak-arena-uzayı)) — bu yüzden taşınan taraf sanattır,
+> muhafaza değil. Muhafaza, kalibrasyon işaretçileri ve admin kadrajı boundary'yi izler, sanat
+> izlemez: ayrışırlarsa oyuncu fiziksel alanda yanlış yere göre kalibre olur ve belirti ancak
+> sahada görünür. Döndürülmüş bir kökte maketin geri okuması da hassasiyet kaybeder, ölçü dosyası
+> her gidiş-dönüşte biraz daha kayar ([Yapma Listesi](Yapma-Listesi.md) —
+> "`VA_ArenaBoundary`'yi taşımak / döndürmek"). `Configure All Build Elements` sağlık raporu
+> orijinden kaymış ya da döndürülmüş muhafazayı **uyarı** ile yazar.
+
+---
+
+### 14.1.1 Bir haritayı başka bir mekana taşımak
+
+Aynı harita (sanatı, modları, yerleşimi) ikinci bir işletmede oynanacak. Taşınan şey **sahnedir**;
+ölçü, kalibrasyon ve bake hedef mekanın kendisinden gelir.
+
+| # | Yaptığın | Neden? |
+|---|---|---|
+| 1 | Kaynak sahneyi `Venues/<HedefMekan>/Scenes/<Harita>_<HedefMekan>/<Harita>_<HedefMekan>.unity` olarak kopyala; klasör · sahne · `MapDefinition` **aynı adı** taşır. `MapDefinition` kaynağınkinden **kopyalanıp** yeni adla `Data/` altına konur. Kaynağın `_objects.json`'u ve lightmap klasörü **kopyalanmaz** | 8. adımdaki araç eksik tanımı boş üretir ve yalnız ad + modları yazar: `gameType`, ortam sesi ve admin görünümü varsayılanda kalır, Çocuk Oyunları haritası sessizce Hızlı Savaş olur. Ağ nesnesi listesini yeni sahne kendi kaydında yazar |
+| 2 | `.lighting` dosyasını yeni sahnenin klasörüne al, **iç adını (`m_Name`) dosya adına eşitle**, sonra kendi bake'ini çalıştır ([Sahne Kurulumu](Sahne-Kurulumu.md#aydınlatma)) | `LightingData` ve occlusion bağlantısı kopyada **kaynak sahneyi** göstermeye devam eder: kendi bake'i alınana kadar harita başka bir yerleşimin ışık ve görünürlük verisiyle çalışır |
+| 3 | `ArenaBoundary.dimensionsJson`'ı **hedef mekanın** boyut dosyasına bağla → `… > Arena > JSON'dan DimensionMesh Üret` (eski maket silinir). Muhafaza **dünya orijininde ve dönüşsüz** kalır | Ölçünün tek kaynağı mekanın boyut dosyasıdır ([Reçete 17](#17-arena-ölçüsü-boyut-dosyası)); kaynak mekanın maketi yeni odayı tarif etmez |
+| 4 | Sanatı **tek kök** altında hedef planın üstüne taşı/döndür — 90° döndürmek meşrudur, **ölçek yoktur**. Hedef plan kaynaktan büyükse boşluğu **siperle** doldur, küçükse obje yerleşimini daralt | Ölçekleme elle düzeltilecek bir yalancı-doğru üretir: silah menzili, kavrama yüksekliği ve oyuncunun boyu ölçeklenmez |
+| 5 | ⚠️ Hedef mekandaki **her kolonun izdüşümünü görünen bir objeyle ört** ve o objeye engel hacmi (`Obstacle`) ver | Oyuncu fiziksel kolondan ancak sanatta görürse kaçınır; muhafazanın kolon uyarısı tek başına yetmez — uyarı geldiğinde oyuncu kolona çoktan girmiştir |
+| 6 | Mekana bağlı objeleri yeniden yerleştir: taban bölgeleri · silah panoları · `ArenaRoof` · `VA_LightProbes` (yeni sınırı yatayda **+3 m** payla kaplar, [Sahne Kurulumu](Sahne-Kurulumu.md#aydınlatma)) · güneş (sınır merkezinin üstü) · mod istasyonları (Burger için [13.1.1](#1311-bir-oyun-istasyonunu-ikinci-bir-mekana-kurmak)) | Bunların yeri mekanın ölçüsüne bağlıdır, kaynak sahnedeki konumları yeni odada anlamsızdır |
+| 7 | Taşınan/eklenen her objenin collider'ını engel kuralına göre denet ([14](#14-yeni-arena-eklemek) 5. adım — `Obstacle` / `<Obje>_BulletCollider`), sonra `… > Arena > Engel Hacimlerini Denetle` | Layer değeri **sahne objesinde** durur: kopyada da arena başına elle yapılır, atlanırsa o haritada ihlal hiç çalışmaz ve hata vermez |
+| 8 | Işık + occlusion bake, sonra `… > Build > Configure All Build Elements` → **Hepsini Çalıştır** | Mod listeleri, `GameCatalog`, Build Settings ve `maps.json` yeni `sceneName`'i ancak bu adımda görür; atlanırsa `start_match` sessizce reddedilir |
+
+- **Eski bir sürümün yerine yenisi konuyorsa aynı sahne adı ve aynı `MapDefinition` asset'i
+  korunur** — sahne adı katalog anahtarıdır, yeni ad lobideki ve `maps.json`'daki eski satırı
+  yalan yapar.
+- Fiziksel oda değiştiği için boyut dosyası da değişir: hedef mekanın `Data/` klasöründeki dosya
+  kullanılır, kaynağın dosyası kopyalanmaz ([17.2](#172-adım-adım)).
 
 ---
 
@@ -2360,11 +2425,11 @@ işletmede oyunu tümden oynanamaz kılardı. Yeni bir arena sahnesini ilk açt�
    ölçersin — araç ürettiği ölçüyü ayrıca konsola basar. Araç **idempotenttir**: dosya değişince
    yeniden çalıştır, aynı mekanın eski maketi silinip yenisi kurulur.
 
-   > **Arenayı yerleştirmek = `VA_ArenaBoundary` örneğini taşımak/döndürmek** — maket ve
-   > işaretçiler onun altındadır, birlikte gelirler; geri okuma maketin KENDİ kökünü referans
-   > aldığı için taşınmış/döndürülmüş maket de doğru çevrilir
-   > ([14.1](#141-hazır-bir-environmentın-içinde-arena-bölgesi-kurmak)).
-   > ⚠️ Ama **ölçeğini değiştirme**: plan metre cinsindendir, ölçek onu sessizce yalan yapar.
+   > **Arenayı yerleştirmek = sanatı muhafazanın üstüne taşımak** — `VA_ArenaBoundary` dünya
+   > orijininde ve dönüşsüz kalır, maket ve işaretçiler onun altında yerel sıfırdadır; taşınan
+   > taraf environment köküdür ([14.1](#141-hazır-bir-environmentın-içinde-arena-bölgesi-kurmak)).
+   > ⚠️ Muhafazanın **ölçeğini de değiştirme**: plan metre cinsindendir, ölçek onu sessizce yalan
+   > yapar.
    >
    > ⚠️ *Ölçüyü seçim kutusundan okuma:* Inspector, seçim kutusu ve ProBuilder ölçü göstergesi hep
    > **dünya eksenine hizalı** kutuyu gösterir. Döndürülmüş bir kökün altında kusursuz bir 12×12

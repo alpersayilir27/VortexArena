@@ -2220,12 +2220,20 @@ public sealed class MatchDirector
             broken = (entry.Flags & ArenaProtocol.OBJECT_FLAG_BROKEN) != 0;
             appliedDamage = msg.damage;
             mode = _mode;
+
+            // BEFORE the state goes out (§10.5 crippling): the mode's lasting mark must ride the SAME
+            // object_state, or the client would read the hit and the mark from two messages.
+            var marked = mode != null
+                         && mode.OnObjectDamagedLocked(msg.targetNetId, kind, zone, appliedDamage,
+                             broken, entry.MaxHp, entry.Payload, out var markedPayload)
+                         && _objects.SetPayloadLocked(msg.targetNetId, markedPayload, out entry);
+
             // To EVERYONE (§10.10): a broken cover is everyone's cover.
             QueueBroadcastLocked(outbox, JsonUtil.Serialize(WorldObjectTable.ToStateMsg(entry)));
 
             // AFTER the state and in the same outbox: the impact presentation must not reach a headset
             // before the health it belongs to.
-            QueueHitRelayLocked(outbox, shooter.PlayerId, msg, zone, broken);
+            QueueHitRelayLocked(outbox, shooter.PlayerId, msg, zone, broken, marked);
         }
         await FlushAsync(outbox);
 
@@ -2237,16 +2245,17 @@ public sealed class MatchDirector
     }
 
     /// <summary>Queues the <c>object_event "hit"</c> relay of an ACCEPTED object hit (§5.2):
-    /// <c>i:[zone, shooterId, killed]</c>, <c>f:[hitPos xyz, hitDir xyz]</c>, copied from the report.</summary>
+    /// <c>i:[zone, shooterId, killed, marked]</c>, <c>f:[hitPos xyz, hitDir xyz]</c>, copied from the
+    /// report. <paramref name="marked"/> = this hit wrote a lasting mode state (§10.5 crippling).</summary>
     /// <remarks>⚠️ This is the one event the SERVER raises, so the kind's <c>events[]</c> list is not
     /// consulted (§10.10) and the kind is not filtered on: which objects have a hit presentation is the
     /// CLIENT's business, and a mode name baked into the core would be a second mode list.
     /// <para>⚠️ It does not duplicate <c>object_state</c>: that carries the STATE, this carries the
     /// impact (where, from which direction, which zone) — facts the state has no field for.</para></remarks>
     private void QueueHitRelayLocked(List<Outgoing> outbox, int shooterId, HitReportMsg msg, int zone,
-        bool killed)
+        bool killed, bool marked)
     {
-        if (!HitRelayDueLocked(shooterId, msg.targetNetId, zone, killed)) return;
+        if (!HitRelayDueLocked(shooterId, msg.targetNetId, zone, killed, marked)) return;
 
         var f = new float[6];
         CopyTriplet(msg.hitPos, f, 0);
@@ -2256,7 +2265,7 @@ public sealed class MatchDirector
         {
             netId = msg.targetNetId,
             name = ArenaProtocol.OBJECT_EVENT_HIT,
-            i = new[] { zone, shooterId, killed ? 1 : 0 },
+            i = new[] { zone, shooterId, killed ? 1 : 0, marked ? 1 : 0 },
             f = f,
             s = ""
         }));
@@ -2265,9 +2274,10 @@ public sealed class MatchDirector
     /// <summary>The thinning window of the hit relay (§5.2): at most one per (shooter, netId) per
     /// <see cref="ArenaProtocol.OBJECT_HIT_RELAY_MS"/>.</summary>
     /// <remarks>⚠️ Only the RELAY is thinned, never the damage — every pellet of a shotgun is applied.
-    /// Two things always get through even inside the window, because they change what the presentation
-    /// means: the killing hit, and a body hit upgrading to a HEAD hit.</remarks>
-    private bool HitRelayDueLocked(int shooterId, int netId, int zone, bool killed)
+    /// Three things always get through even inside the window, because they change what the presentation
+    /// means: the killing hit, a body hit upgrading to a HEAD hit, and the hit that wrote a lasting mode
+    /// state (§10.5 crippling) — a dropped transition never comes back.</remarks>
+    private bool HitRelayDueLocked(int shooterId, int netId, int zone, bool killed, bool marked)
     {
         var now = DateTime.UtcNow;
         var key = (shooterId, netId);
@@ -2275,6 +2285,7 @@ public sealed class MatchDirector
         if (_lastHitRelay.TryGetValue(key, out var last) &&
             (now - last.At).TotalMilliseconds < ArenaProtocol.OBJECT_HIT_RELAY_MS &&
             !killed &&
+            !marked &&
             !(zone == ArenaProtocol.HIT_ZONE_HEAD && last.Zone != ArenaProtocol.HIT_ZONE_HEAD))
         {
             return false;
@@ -2799,12 +2810,15 @@ public sealed class MatchDirector
 
             target.Hp = MathF.Max(0f, target.Hp - damage);
             DelayRegenLocked(target, now);
-            // attackerId = 0: environmental damage, not an attack (§10.9/§10.5).
+            // attackerId = 0: environmental damage, not an attack (§10.9/§10.5) — srcNetId carries the
+            // source instead, so the victim's bearing arc has something to aim at without the indicator
+            // reading this as a player attack.
             QueueHealthUpdateLocked(_pendingOutbox, target, JsonUtil.Serialize(new HealthUpdateMsg
             {
                 playerId = target.PlayerId,
                 hp = target.Hp,
-                attackerId = 0
+                attackerId = 0,
+                srcNetId = sourceNetId
             }));
 
             if (target.Hp > 0f) return true;

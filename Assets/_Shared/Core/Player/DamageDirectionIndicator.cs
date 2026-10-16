@@ -98,6 +98,11 @@ namespace VortexArena.Core.Player
         private float _hapticUntil;
         private int _hapticChannel;
 
+        /// <summary>The live indicator, for sources with no reference to the rig (a mode's own damage
+        /// feedback). Written in <c>OnEnable</c> / cleared in <c>OnDisable</c>, so a disabled rig
+        /// answers <c>null</c> instead of a stale component.</summary>
+        private static DamageDirectionIndicator _instance;
+
         private void Awake()
         {
             if (indicatorRenderer == null)
@@ -119,11 +124,17 @@ namespace VortexArena.Core.Player
             // Reseeded here, not in Awake: a stale value across a disable would read as a phantom hit.
             _lastHp = ArenaCombat.LocalHp;
             NetEvents.OnHealthUpdate += HandleHealthUpdate;
+            _instance = this;
         }
 
         private void OnDisable()
         {
             NetEvents.OnHealthUpdate -= HandleHealthUpdate;
+
+            if (_instance == this)
+            {
+                _instance = null;
+            }
 
             if (_hapticChannel != ChannelNone)
             {
@@ -177,19 +188,55 @@ namespace VortexArena.Core.Player
                 return; // no arc without a direction — a guessed one is worse than none
             }
 
+            float intensity = fullIntensityDamage > 0f
+                ? Mathf.Clamp01((previous - msg.hp) / fullIntensityDamage)
+                : 1f;
+
+            Aim(bearing, intensity);
+        }
+
+        /// <summary>Turns the arc to a bearing and refreshes the envelope (never stacked).</summary>
+        private void Aim(float bearing, float intensity)
+        {
             // Screen angle: the arc is authored at the TOP of the quad (bearing 0 = straight ahead).
             // Rotating about local Z by -bearing carries the top toward +X, i.e. screen right, so
             // +90 lands on the right edge.
             transform.localRotation = Quaternion.Euler(0f, 0f, -bearing);
 
-            float intensity = fullIntensityDamage > 0f
-                ? Mathf.Clamp01((previous - msg.hp) / fullIntensityDamage)
-                : 1f;
-
             float current = HitEnvelope();
             _hitFrom = current;
             _hitPeak = Mathf.Max(current, intensity);
             _hitTime = Time.unscaledTime;
+        }
+
+        /// <summary>Lights the arc toward a WORLD point (a melee attacker, a blast centre) — for
+        /// damage sources that know where the hit came from without a <c>health_update</c> attacker.
+        /// <para>⚠️ NO haptic: this path is driven by a mode that plays its own vibration, and a
+        /// second buzz written behind the arbiter's back would fight it. The health-update path keeps
+        /// its own buzz.</para>
+        /// <para>Silent no-op with no live rig (admin, no scene) or no usable bearing.</para></summary>
+        /// <param name="damage">Damage for the intensity (HP); <c>0</c> or less = full intensity.</param>
+        public static void ShowFromWorldPoint(Vector3 worldPoint, float damage = 0f)
+        {
+            DamageDirectionIndicator indicator = _instance;
+            if (indicator != null)
+            {
+                indicator.ShowFrom(worldPoint, damage);
+            }
+        }
+
+        private void ShowFrom(Vector3 worldPoint, float damage)
+        {
+            if (!effectEnabled || !TryGetBearingTo(worldPoint, out float bearing))
+            {
+                return;
+            }
+
+            float intensity = damage > 0f && fullIntensityDamage > 0f
+                ? Mathf.Clamp01(damage / fullIntensityDamage)
+                : 1f;
+
+            Aim(bearing, intensity);
         }
 
         /// <summary>Opens the buzz window on one channel. A hit on a DIFFERENT channel while one is
@@ -259,7 +306,22 @@ namespace VortexArena.Core.Player
                 return false;
             }
 
-            Vector3 toAttacker = ArenaSpace.ArenaToWorld(attackerHead.position) - view.position;
+            return TryGetBearingTo(ArenaSpace.ArenaToWorld(attackerHead.position), out bearing);
+        }
+
+        /// <summary>Signed YAW bearing to a WORLD point, same rule as
+        /// <see cref="TryGetBearing"/>.</summary>
+        private bool TryGetBearingTo(Vector3 worldPoint, out float bearing)
+        {
+            bearing = 0f;
+
+            Transform view = head;
+            if (view == null)
+            {
+                return false;
+            }
+
+            Vector3 toAttacker = worldPoint - view.position;
             toAttacker.y = 0f;
 
             Vector3 forward = view.forward;

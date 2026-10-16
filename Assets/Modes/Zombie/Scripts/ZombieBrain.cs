@@ -459,6 +459,28 @@ namespace VortexArena.Modes.Zombie
         /// whenever the next of those happens to run, up to a retarget period late.</summary>
         private bool _staggerApplied;
 
+        private ZombieReactionTuning _tuning;
+
+        /// <summary>Direction of the last RELAYED hit report (§5.2) — the knockback travels along it,
+        /// which is away from whoever fired.</summary>
+        private Vector3 _lastHitDir;
+
+        /// <summary>Burst accumulator: when the window opened and how much health has been lost in it.
+        /// ⚠️ Measured on the hp the SERVER reports, not on hit reports: the admin never sees a damage
+        /// number, and hp is the one signal that is authoritative anyway.</summary>
+        private float _damageAt;
+        private float _damageAccum;
+        private float _lastSeenHp;
+
+        /// <summary>Crippled (payload <c>cr</c>): the body crawls from here on — the crawler's pace and
+        /// its eye height, while look, size and reach stay the type's own.</summary>
+        private bool _crippled;
+
+        /// <summary>Knockback in progress: direction (flat), speed and when it ends.</summary>
+        private Vector3 _knockDir;
+        private float _knockSpeed;
+        private float _knockUntil;
+
         // string == is ordinal here; `using System` is deliberately absent (it would make Random
         // ambiguous with UnityEngine.Random all over this file).
         private bool IsDev => _type == ZombieKinds.TypeDev;
@@ -470,6 +492,7 @@ namespace VortexArena.Modes.Zombie
             _net = GetComponent<NetObject>();
             _type = ZombieKinds.TypeOf(_net);
             _screamCounter = ZombieKinds.PayloadInt(_net, ZombieKinds.PayloadScream);
+            _tuning = ZombieReactionTuning.Live;
 
             if (agent == null)
             {
@@ -509,6 +532,13 @@ namespace VortexArena.Modes.Zombie
             if (info.NetId != _net.NetId || !_net.IsMine || _net.IsBroken)
             {
                 return;
+            }
+
+            // Remembered even mid-windup: the burst stagger reads it from the hp drop, which arrives in
+            // a separate message and carries no direction of its own.
+            if (info.Direction.sqrMagnitude > 1e-6f)
+            {
+                _lastHitDir = info.Direction;
             }
 
             if (Time.time < _holdUntil || _attackAt > 0f)
@@ -565,6 +595,143 @@ namespace VortexArena.Modes.Zombie
         {
             ApplyOwnership();
             CheckScream(origin);
+            CheckCripple();
+            AccumulateDamage();
+        }
+
+        /// <summary>Crippled (§10.5 <c>cr</c>): the leg is gone, so this body now moves like a crawler.
+        /// ⚠️ Only the PACE and the eye height change — the look, the size and the reach stay the
+        /// type's, because the server still calls it a walker.</summary>
+        private void CheckCripple()
+        {
+            if (_crippled || ZombieKinds.PayloadInt(_net, ZombieKinds.PayloadCrippled) != 1)
+            {
+                return;
+            }
+
+            _crippled = true;
+
+            if (agent != null && agent.enabled)
+            {
+                agent.speed = WaveSpeed();
+            }
+        }
+
+        /// <summary>Burst stagger: enough damage in a short window stops the body, cancels a swing and
+        /// shoves it back a step. ⚠️ Fed by the hp the server reports, the only damage signal the admin
+        /// has (hit reports carry no number off the shooter's headset).</summary>
+        private void AccumulateDamage()
+        {
+            float hp = _net.Hp;
+
+            if (!_net.IsMine || _net.IsBroken || _lastSeenHp <= 0f)
+            {
+                _lastSeenHp = hp;
+                return;
+            }
+
+            float drop = _lastSeenHp - hp;
+            _lastSeenHp = hp;
+
+            if (drop <= 0.01f)
+            {
+                return;
+            }
+
+            float now = Time.time;
+            if (now - _damageAt > _tuning.StaggerWindowSeconds)
+            {
+                // The window opens on the FIRST round of the burst, not on the last: it is "this much
+                // damage this fast", not a rolling average.
+                _damageAt = now;
+                _damageAccum = 0f;
+            }
+
+            _damageAccum += drop;
+
+            if (_damageAccum < StaggerThreshold())
+            {
+                return;
+            }
+
+            _damageAccum = 0f;
+            Stagger();
+        }
+
+        /// <summary>Damage that staggers this body. The Dev never staggers — a boss the squad can pin
+        /// against a wall is not a boss.</summary>
+        private float StaggerThreshold()
+        {
+            if (IsDev)
+            {
+                return float.MaxValue;
+            }
+
+            return _type == ZombieKinds.TypeBrute
+                ? _tuning.BruteStaggerDamage
+                : _tuning.StaggerDamage;
+        }
+
+        private void Stagger()
+        {
+            // The spawn hold is a LOCKED pose (the view is playing a stand-up): shoving the body there
+            // slides it out from under its own animation.
+            if (Time.time < _holdUntil)
+            {
+                return;
+            }
+
+            // ⚠️ Cancelled BEFORE the windup ends, which is also before the event goes out: the attack
+            // animation plays off the server's accepted counter (§10.5), so nothing is cut mid-swing —
+            // the swing simply never happens, and the cooldown postpones the next one.
+            if (_attackAt > 0f)
+            {
+                _attackAt = 0f;
+                _attackTargetId = 0;
+                _cooldownUntil = Time.time + _tuning.StaggerSeconds;
+            }
+
+            _staggerScale = _tuning.StaggerSpeedScale;
+            _staggerUntil = Time.time + _tuning.StaggerSeconds;
+
+            // Forces the write: a zone stagger may already be running, and UpdateStagger only touches
+            // the agent when the ON/OFF state itself changes.
+            _staggerApplied = false;
+            UpdateStagger();
+
+            StartKnockback();
+        }
+
+        private void StartKnockback()
+        {
+            Vector3 flat = _lastHitDir;
+            flat.y = 0f;
+
+            if (flat.sqrMagnitude < 1e-6f)
+            {
+                return;
+            }
+
+            _knockDir = flat.normalized;
+            _knockSpeed = Mathf.Min(_tuning.KnockbackMeters / _tuning.KnockbackSeconds,
+                _tuning.KnockbackSpeedCap);
+            _knockUntil = Time.time + _tuning.KnockbackSeconds;
+        }
+
+        /// <summary>Slides the body back along the shot while the knockback lasts.</summary>
+        /// <remarks>⚠️ Through <c>agent.Move</c>, never <c>transform.position</c>: Move keeps the body
+        /// ON the NavMesh, so a push next to a ledge can never drop it off the mesh.
+        /// <para>⚠️ Above the wave's 1,2 m/s pace on purpose (capped at
+        /// <see cref="ZombieReactionTuning.KnockbackSpeedCap"/>): the speed cap exists so a zombie
+        /// cannot outrun the squad, and this displacement moves AWAY from the players.</para></remarks>
+        private void UpdateKnockback()
+        {
+            if (Time.time >= _knockUntil)
+            {
+                return;
+            }
+
+            agent.Move(_knockDir * (_knockSpeed * Time.deltaTime));
         }
 
         private void ApplyOwnership()
@@ -637,7 +804,8 @@ namespace VortexArena.Modes.Zombie
         /// the clip to the same number, and a body moving faster than its clip skates.</summary>
         private float WaveSpeed()
         {
-            float speed = ZombieKinds.SpeedOf(_type,
+            // A crippled body drags itself: the crawler's pace, so the view's crawl cycle does not skate.
+            float speed = ZombieKinds.SpeedOf(_crippled ? ZombieKinds.TypeCrawler : _type,
                 ZombieKinds.PayloadInt(_net, ZombieKinds.PayloadWave, 1));
 
             if (Time.time < _enrageUntil)
@@ -810,6 +978,8 @@ namespace VortexArena.Modes.Zombie
             {
                 return;
             }
+
+            UpdateKnockback();
 
             // ⚠️ Before the attack windup too: a zombie that spawns inside reach would otherwise hit
             // on the first frame, while the view is still fading it in.
@@ -1316,7 +1486,9 @@ namespace VortexArena.Modes.Zombie
         private bool CastLineOfSight(in Vector3 head)
         {
             Vector3 eye = transform.position;
-            eye.y += ZombieKinds.IsCrawlerType(_type)
+            // A crippled body is on the ground too: its eye line has to come from there, or it "sees"
+            // over the cover it is lying behind.
+            eye.y += ZombieKinds.IsCrawlerType(_type) || _crippled
                 ? CrawlerEyeHeight
                 : EyeHeight * ZombieKinds.ScaleOf(_type, _net.NetId);
 

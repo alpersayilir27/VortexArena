@@ -21,6 +21,11 @@ namespace VortexArena.Protocol
         /// an old client sends no <c>targetNetId</c>, so it can break nothing, and it ignores
         /// <c>object_state</c>, so it keeps seeing a cover others already broke — two players on either
         /// side of the same wall see different worlds.</para>
+        /// <para>v27 adds the zombie hit-feel fields (§10.5): <see cref="HealthUpdateMsg.srcNetId"/>,
+        /// the zombie payload's <c>cr</c> (crippled) key and the hit relay's <c>i[3]</c>. All additive and
+        /// absent = safe default, but mixed versions LOSE the crippling: an old headset keeps driving a
+        /// zombie with its legs shot out at full speed, so two headsets draw the same zombie
+        /// differently.</para>
         /// <para>v26 adds <c>reviveAnchor:"teammate"</c> (§10.4/§10.5), <c>revive_request.by</c> and
         /// <c>hit_report.zone</c> (§5.1). The wire layout is unchanged and every missing field falls back
         /// to a safe default, but mixed versions silently LOSE the team rule: an old client maps the
@@ -59,7 +64,7 @@ namespace VortexArena.Protocol
         /// <para>v5 net telemetry + packet combining (<c>0x05</c>) · v4 held item on the wire, shot
         /// events moved to UDP · v3 phase machine · v2 <c>set_identity</c>.</para>
         /// </summary>
-        public const int PROTOCOL_VERSION = 26;
+        public const int PROTOCOL_VERSION = 27;
         public const string APP_ID = "VortexArena";
 
         // ---- Calibration mode (§5.2/§10.6): how headsets align AT STARTUP. ----
@@ -351,7 +356,8 @@ namespace VortexArena.Protocol
         public const string OBJECT_EVENT_POLICY_OWNER = "owner";
 
         /// <summary>The ONE object event the SERVER itself raises (§5.2): an accepted <c>hit_report</c>
-        /// on a network object, relayed to everyone with <c>i:[zone, shooterId, killed]</c> and
+        /// on a network object, relayed to everyone with <c>i:[zone, shooterId, killed, marked]</c>
+        /// (<c>marked</c> = this hit wrote a lasting mode state, §10.5 crippling; optional, v27) and
         /// <c>f:[hitPos xyz, hitDir xyz]</c>.
         /// <para>⚠️ NOT checked against the kind's <c>events[]</c> list — that gate exists so the wire
         /// carries no free text from CLIENTS; this name is written by the server.</para></summary>
@@ -488,7 +494,7 @@ namespace VortexArena.Protocol
         public const float PLAYER_MAX_HP = 100f;
 
         // ---- hit_report.zone (§5.1) — the numeric mirror of the client's HitZone enum. The server
-        // cannot reference that enum (it compiles only this folder), so the two values it reasons about
+        // cannot reference that enum (it compiles only this folder), so the values it reasons about
         // live here; anything outside 0..HIT_ZONE_MAX is clamped to body. ----
 
         /// <summary>Chest/arms and everything unreported (<c>hit_report.zone</c> absent).</summary>
@@ -496,6 +502,9 @@ namespace VortexArena.Protocol
 
         /// <summary>Head — the only zone a mode scores on today (§10.5 zombie).</summary>
         public const int HIT_ZONE_HEAD = 1;
+
+        /// <summary>Leg — the zone the zombie crippling rule sums damage on (§10.5).</summary>
+        public const int HIT_ZONE_LEG = 3;
 
         /// <summary>Highest zone value the wire may carry (leg).</summary>
         public const int HIT_ZONE_MAX = 3;

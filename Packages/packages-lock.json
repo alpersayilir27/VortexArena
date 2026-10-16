@@ -39,6 +39,15 @@
       },
       "url": "https://packages.unity.com"
     },
+    "com.meta.xr.sdk.haptics": {
+      "version": "203.0.0",
+      "depth": 0,
+      "source": "registry",
+      "dependencies": {
+        "com.meta.xr.sdk.core": "203.0.0"
+      },
+      "url": "https://packages.unity.com"
+    },
     "com.meta.xr.sdk.interaction": {
       "version": "203.0.0",
       "depth": 0,

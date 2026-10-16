@@ -648,11 +648,19 @@ OVRCameraRig rig = FindFirstObjectByType<OVRCameraRig>();
 Transform kafa = rig != null ? rig.centerEyeAnchor : null;
 ```
 
-### ⚠️ Layer 11 (`Breakable`) ve 12 (`PlayerHitbox`) boş DEĞİL, REZERVE
+### ⚠️ Layer 11 (`ZombieRagdoll`) yeniden adlandırılmaz, 12 boş bırakılır
 
-İkisi de adı konmuş sonraki işlere aittir. "Boş görünüyor" diye başka bir amaç için kullanırsan o
-iş geldiğinde sahnelerdeki katman numaraları sessizce yanlış şeyi işaretler — katman numarası
-sahnelerde sayı olarak saklanır, yeniden adlandırmak eski sahneleri düzeltmez.
+`ZombieRagdoll` **ölü bir gövdenin** katmanıdır: ceset yalnız `Default` ve `Obstacle` ile çarpışır
+(cesetler birbirini ve oyuncuyu itmez) ve atış ışını onu maskeden atar (`ArenaLayers.ShotMask` =
+"her şey eksi cesetler"). Sözleşmesi tek cümledir — *"bu dekordur, hedef değil"*: gövde yerleşene
+kadar dünyayla çarpışmaya devam eder, ama hiçbir hasar sorgusu onu bulamaz.
+
+- Katman **adı** değiştirilmez: `ZombieRagdoll` çalışma anında **adıyla** çözülür (`ArenaLayers` ve
+  `ZombieRagdoll.LayerName`, bilerek iki yerde ad olarak), ad kaybolunca uyarı basar ve cesetler
+  mermiyi durdurmaya devam eder — maç yine koşar, belirti yalnız "mermi ölü zombide kesiliyor"dur.
+- Katman **numarası** sahnelerde ve prefablarda sayı olarak saklanır: 12'yi "boş görünüyor" diye
+  geçici bir amaçla kullanmak, o numara sonra gerçek bir işe verildiğinde eski sahnelerdeki
+  objeleri sessizce yanlış şeyle işaretler. Yeniden adlandırmak eski sahneleri düzeltmez.
 
 ### ⛔ `NetIdentity.sceneId` override'ını prefaba Apply etme
 
@@ -817,6 +825,16 @@ yaprağın yere düşen gölgesinin sallanmamasıdır ve tepeden 10° güneşte 
 ortama yapıştırılmış görünür ve gerçek zamanlı gölge maliyetini ödemeye devam edersin.
 ⚠️ Ayrımı **Animator/Rigidbody** yapar, rüzgâr değil: gerçek controller'ı olan obje (yel değirmeni,
 testere) ve ağ nesneleri static işaretlenmez. Kurulum → [Sahne Kurulumu](Sahne-Kurulumu.md).
+
+### ⛔ İndeksi bozuk mesh'i `Contribute GI`'a sokma
+
+İçe aktarılan bir mesh'te (özellikle `.glb`) üçgen indeksi vertex sayısını aşabilir. Böyle bir mesh
+bake'e girerse **GPU lightmapper editörü çökertir** (çökme raporunda `RadeonRays` / ışık probu adımı),
+**CPU lightmapper** ise anında `Light baking failed ... 'AddGeometry' failed with exit code: 5` verir.
+İkisi de **hangi obje olduğunu söylemez**. Teşhis: CPU'ya geçip `Contribute GI`'lı objeleri yarı yarıya
+dışarıda bırakarak bake et — hata anında döndüğü için arama dakikalar sürer. Bulunan objede
+`Contribute GI` kapatılır (ışık problarından aydınlanır) ya da mesh düzeltilir. Aynı mesh'i kullanan
+başka sahneler de aynı riski taşır.
 
 ### ⚠️ `VA_CameraRig`'in el küreleri editörde çizilir, Quest'te çizilmez
 
@@ -1065,6 +1083,18 @@ sıkılı elle yanından geçilen her eşya ele yapışır, silahlı el yanında
 alır. Yakalanabilirlik için prefab yarıçapını da büyütme — uçuş yarıçapı koddaki
 `GripSocket.CatchRadius`'tır, prefabdaki yarıçap **duran** objenin kabul hacmidir.
 
+### ⛔ Moda özel vuruş hissini ortak silah/savaş yoluna yazma
+
+Zombi modunun geri tepmesi, titreşimi, isabet sesi ve hitmarker varyantı `Assets/Modes/Zombie/`
+altında yaşar; ortak koda (`_Shared/Core/Combat`) yalnız **varsayılanı `null` olan kanca** girer
+(`Weapon.FeelOverride`, `ArenaCombat.ObjectHitMarkerOverride`, `Weapon.DamageOverride` deseni) ve
+kancayı yalnız modun kurucusu takar, mod bitince **yalnız kendi delegesiyse** düşürür. Ortak yola
+`if (mod == zombie)` dalı, moda özel sayı ya da "nasılsa hepsinde iyi olur" diye genel bir
+davranış değişikliği KOYULMAZ: Hızlı Savaş'ın silah hissi o anda sessizce değişir, kimse de
+zombiye dokunduğunu bildiği için orada aramaz. Yeni bir his parçası ortak bir kanca gerektiriyorsa
+kanca boş varsayılanıyla eklenir — kanca `null` iken ortak yol bugünküyle birebir aynı kalmak
+zorundadır.
+
 ---
 
 ## Serialize edilen veriler
@@ -1127,7 +1157,9 @@ Her karede değil. Akıcı geri sayım istiyorsan son değeri kendin azalt.
 ### ⛔ Meta umbrella paketini (`com.meta.xr.sdk.all`) ekleme
 
 Meta Project Setup Tool önerse bile. Çektiği `voice` paketi Android namespace çakışmasıyla build'i
-kırar. Bireysel paketler kullanılır: core + interaction + interaction.ovr @203.0.0, audio @85.0.0.
+kırar. Bireysel paketler kullanılır: core + interaction + interaction.ovr + haptics @203.0.0,
+audio @85.0.0. ⚠️ Aynı sürüm kuralı: `203.0.0` ailesindeki paketler **birlikte** yükseltilir, biri
+tek başına güncellenmez.
 
 ### ⛔ Uzamsal veri (`USE_SCENE`) iznini kaldırma
 

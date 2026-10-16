@@ -8,7 +8,6 @@
     { "sceneId": 6, "kind": "dispenser_onion" },
     { "sceneId": 7, "kind": "dispenser_pickle" },
     { "sceneId": 8, "kind": "dispenser_tomato" },
-    { "sceneId": 9, "kind": "dispenser_sauce" },
     { "sceneId": 19, "kind": "knife" },
     { "sceneId": 20, "kind": "spatula" },
     { "sceneId": 21, "kind": "knife" },
@@ -29,6 +28,8 @@
     { "sceneId": 42, "kind": "cutting_board" },
     { "sceneId": 43, "kind": "cutting_board" },
     { "sceneId": 44, "kind": "cutting_board" },
-    { "sceneId": 45, "kind": "cutting_board" }
+    { "sceneId": 45, "kind": "cutting_board" },
+    { "sceneId": 46, "kind": "ketchup_bottle" },
+    { "sceneId": 47, "kind": "ketchup_bottle" }
   ]
 }

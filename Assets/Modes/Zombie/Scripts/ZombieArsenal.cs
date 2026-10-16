@@ -46,26 +46,26 @@ namespace VortexArena.Modes.Zombie
         /// the asset, once present, is the only source.
         /// <para>Each wave adds a ROLE (Yemek-Kitabi zombie recipe): sidearms, close defence, first
         /// rifles + bomb, shotgun + brute hunter, precision, top tier.</para>
-        /// <para>⚠️ Damage ceiling: against a 100 HP walker the strongest pair (ak47, magnum) needs TWO
-        /// headshots and everything else three or more — nothing one-shots a head, or the wave
-        /// progression stops being felt.</para></summary>
+        /// <para>⚠️ Head ladder against a 100 HP walker: light weapons ~50 per head (TWO headshots),
+        /// magnum, ak47 and the wave 5+ rifles ~101 (ONE). Progression is felt as fewer shots per head;
+        /// a value between the two steps blurs both.</para></summary>
         public static Entry[] DefaultEntries() => new[]
         {
-            new Entry { weaponId = "glock", wave = 1, bodyDamage = 20f, headMultiplier = 1.75f },
-            new Entry { weaponId = "magnum", wave = 1, bodyDamage = 30f, headMultiplier = 1.9f },
-            new Entry { weaponId = "g36c", wave = 2, bodyDamage = 22f, headMultiplier = 1.6f },
-            new Entry { weaponId = "ump45", wave = 2, bodyDamage = 24f, headMultiplier = 1.5f },
-            new Entry { weaponId = "scarl", wave = 3, bodyDamage = 26f, headMultiplier = 1.65f },
-            new Entry { weaponId = "famas", wave = 3, bodyDamage = 24f, headMultiplier = 1.6f },
+            new Entry { weaponId = "glock", wave = 1, bodyDamage = 20f, headMultiplier = 2.5f },
+            new Entry { weaponId = "magnum", wave = 1, bodyDamage = 30f, headMultiplier = 3.4f },
+            new Entry { weaponId = "g36c", wave = 2, bodyDamage = 22f, headMultiplier = 2.3f },
+            new Entry { weaponId = "ump45", wave = 2, bodyDamage = 24f, headMultiplier = 2.1f },
+            new Entry { weaponId = "scarl", wave = 3, bodyDamage = 26f, headMultiplier = 2.0f },
+            new Entry { weaponId = "famas", wave = 3, bodyDamage = 24f, headMultiplier = 2.1f },
             new Entry { weaponId = "bomba", wave = 3 },
-            new Entry { weaponId = "ak47", wave = 4, bodyDamage = 32f, headMultiplier = 1.7f },
-            new Entry { weaponId = "nova", wave = 4, bodyDamage = 10f, headMultiplier = 1.5f },
-            new Entry { weaponId = "m4a4", wave = 5, bodyDamage = 28f, headMultiplier = 1.65f },
-            new Entry { weaponId = "xm1014", wave = 5, bodyDamage = 11f, headMultiplier = 1.5f },
-            new Entry { weaponId = "aug", wave = 6, bodyDamage = 28f, headMultiplier = 1.7f },
-            new Entry { weaponId = "p90", wave = 6, bodyDamage = 20f, headMultiplier = 1.6f },
-            new Entry { weaponId = "m4a1", wave = 7, bodyDamage = 29f, headMultiplier = 1.7f },
-            new Entry { weaponId = "mp9", wave = 7, bodyDamage = 18f, headMultiplier = 1.6f },
+            new Entry { weaponId = "ak47", wave = 4, bodyDamage = 32f, headMultiplier = 3.2f },
+            new Entry { weaponId = "nova", wave = 4, bodyDamage = 10f, headMultiplier = 2.0f },
+            new Entry { weaponId = "m4a4", wave = 5, bodyDamage = 28f, headMultiplier = 3.6f },
+            new Entry { weaponId = "xm1014", wave = 5, bodyDamage = 11f, headMultiplier = 2.0f },
+            new Entry { weaponId = "aug", wave = 6, bodyDamage = 28f, headMultiplier = 3.6f },
+            new Entry { weaponId = "p90", wave = 6, bodyDamage = 20f, headMultiplier = 2.5f },
+            new Entry { weaponId = "m4a1", wave = 7, bodyDamage = 29f, headMultiplier = 3.5f },
+            new Entry { weaponId = "mp9", wave = 7, bodyDamage = 18f, headMultiplier = 2.8f },
         };
 
         private static ZombieArsenal live;

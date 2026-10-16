@@ -700,6 +700,15 @@ namespace VortexArena.Protocol
         /// the snapshot registry, so the bearing costs NOTHING on the wire — do not add a position or
         /// direction field here for it.</para></summary>
         public int attackerId;
+
+        /// <summary>netId of the NETWORK OBJECT the damage came from (§10.5 zombie); <c>0</c> = not an
+        /// object.
+        /// <para>⚠️ It does not replace <see cref="attackerId"/>, it sits beside it: object damage keeps
+        /// <c>attackerId = 0</c> (environmental, §10.9) so the directional indicator of a client that
+        /// does not know this field stays silent instead of blaming a player. The bearing again costs
+        /// nothing on the wire — the object's pose is already in the receiver's <c>0x09</c> stream.</para>
+        /// </summary>
+        public int srcNetId;
     }
 
     [Serializable]

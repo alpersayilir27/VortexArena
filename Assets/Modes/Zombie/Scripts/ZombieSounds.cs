@@ -131,6 +131,13 @@ namespace VortexArena.Modes.Zombie
         [Tooltip("Opsiyonel: yenilgi anonsu. Boş bırakılabilir.")]
         [SerializeField] private AudioClip lostVoice;
 
+        // ⚠️ Appended at the END: the asset already exists and Unity matches serialized fields by name,
+        // but keeping new rows last also keeps the Inspector's reading order honest.
+        [Header("Opsiyonel — acı sesleri")]
+        [Tooltip("Opsiyonel: zombi vurulunca çalar. Boşsa acı sesi çalmaz.")]
+        [SerializeField] private AudioClip[] painClips;
+        [Range(0f, 1.5f)] [SerializeField] private float painVolume = 0.8f;
+
         public float GroanVolume => groanVolume;
 
         public float AttackVolume => attackVolume;
@@ -226,6 +233,12 @@ namespace VortexArena.Modes.Zombie
 
         /// <summary>Optional.</summary>
         public AudioClip LostVoice => lostVoice;
+
+        public float PainVolume => painVolume;
+
+        /// <summary>Pain cry; NO fallback to the groan pool — a groan on every round would read as the
+        /// zombie being bored, not hurt.</summary>
+        public AudioClip RandomPain() => Pick(painClips);
 
         private static ZombieSounds live;
         private static bool resolved;

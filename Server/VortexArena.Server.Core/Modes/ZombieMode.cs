@@ -16,7 +16,8 @@ namespace VortexArena.Server.Core.Modes;
 /// and <see cref="OnObjectHit"/> run on WS connection threads CONCURRENTLY with
 /// <see cref="OnTick"/> — the zombie table and the attack cooldowns cannot live in an unguarded
 /// collection. Lock order is always this gate → the director's (the director raises hooks outside its
-/// own lock), never the reverse.</para>
+/// own lock), never the reverse — so the one hook raised INSIDE that lock
+/// (<see cref="OnObjectDamagedLocked"/>) uses <see cref="_crippleGate"/>, a leaf lock of its own.</para>
 /// <para>⚠️ The wave machine advances only in <see cref="Phase.Playing"/>: the core ticks a mode during
 /// the countdown and during a mode pause as well (§10.1).</para></remarks>
 public sealed class ZombieMode : IGameMode
@@ -42,6 +43,21 @@ public sealed class ZombieMode : IGameMode
 
     /// <summary>How many of the last used spawn points are excluded from the next draw (§10.5).</summary>
     private const int SpawnRecency = 3;
+
+    // ---- Crippling (§10.5 "Sakatlanma"): leg damage drops a zombie onto its belly. ----
+
+    /// <summary>Share of a zombie's own max HP that has to land on its LEGS before it is crippled.</summary>
+    private const float CrippleLegRatio = 0.4f;
+
+    /// <summary>Types whose legs can be shot out. A crawler already crawls, and the Brute and the Dev
+    /// may not be slowed down this cheaply.</summary>
+    private static readonly string[] CrippleTypes = { TypeWalker, TypeRunner, TypeScreamer };
+
+    /// <summary>Payload key of the crippled state (§10.5); written only once it is true.</summary>
+    private const string CrippleKey = "cr";
+
+    /// <summary>Payload key of the type (§10.5), read back by the crippling hook.</summary>
+    private const string TypeKey = "t:";
 
     // ---- Zombie types (§10.5 "Zombi türleri"). The SERVER picks the type; the brain reads it from
     // the payload for the model, the animation and the speed. ----
@@ -309,8 +325,23 @@ public sealed class ZombieMode : IGameMode
         public float DeadSeconds;
     }
 
+    /// <summary>One zombie's leg-damage ledger (§10.5 crippling).</summary>
+    private sealed class LegRecord
+    {
+        public float Damage;
+        public bool Crippled;
+    }
+
     private readonly object _gate = new();
     private readonly Dictionary<int, ZombieState> _zombies = new();
+
+    /// <summary>Leg ledgers, keyed like <see cref="_zombies"/>.</summary>
+    /// <remarks>⚠️ Guarded by its OWN lock, not <see cref="_gate"/>: the decision runs INSIDE the
+    /// director's lock (<see cref="OnObjectDamagedLocked"/>), and taking the mode gate from there would
+    /// invert this mode's lock order (gate → director) and deadlock. Nothing called under this lock
+    /// touches the zombie table or the director, so it stays a leaf.</remarks>
+    private readonly object _crippleGate = new();
+    private readonly Dictionary<int, LegRecord> _legs = new();
     private readonly List<int> _spawnPoints = new();
     private readonly Random _rng = new();
 
@@ -453,6 +484,7 @@ public sealed class ZombieMode : IGameMode
         lock (_gate)
         {
             _zombies.Clear();
+            lock (_crippleGate) _legs.Clear();
             _spawnPoints.Clear();
             _wave = 0;
             _spawnedThisWave = 0;
@@ -543,6 +575,7 @@ public sealed class ZombieMode : IGameMode
         {
             leftovers = new List<int>(_zombies.Keys);
             _zombies.Clear();
+            lock (_crippleGate) _legs.Clear();
             _breakTimer = 0f;
             _clearTimer = 0f;
         }
@@ -653,7 +686,7 @@ public sealed class ZombieMode : IGameMode
             {
                 zombie.NextAttackAt = now.AddSeconds(type.Cooldown);
                 zombie.AttackCounter++;
-                director.SetObjectPayload(netId, PayloadOf(zombie));
+                director.SetObjectPayload(netId, PayloadOf(netId, zombie));
                 return true;
             }
 
@@ -673,7 +706,7 @@ public sealed class ZombieMode : IGameMode
 
             // Written under the gate: the tick's scream writer shares this payload, and a stale
             // string landing last would roll a counter back on the wire.
-            director.SetObjectPayload(netId, PayloadOf(zombie));
+            director.SetObjectPayload(netId, PayloadOf(netId, zombie));
         }
 
         return true;
@@ -734,6 +767,71 @@ public sealed class ZombieMode : IGameMode
         director.AddSharedScore(attackerId, points);
         director.AddKillCredit(attackerId);
         PushModeState(director);
+    }
+
+    /// <summary>Leg damage summed per zombie (§10.5): at <see cref="CrippleLegRatio"/> of its max HP a
+    /// walker/runner/screamer that SURVIVED the hit is crippled — once, irreversibly, HP untouched. The
+    /// core writes the returned payload, so the hit's own <c>object_state</c> carries <c>cr:1</c>.</summary>
+    /// <remarks>⚠️ Runs inside the DIRECTOR's lock (hook contract): no director call, no
+    /// <see cref="_gate"/> — the type comes from the payload and the ceiling from
+    /// <paramref name="maxHp"/> exactly so this needs neither.
+    /// <para>Speed is not touched here and cannot be: the server knows no metres (§10.10), so the brain
+    /// switches the zombie to crawler locomotion when it sees the key.</para></remarks>
+    public bool OnObjectDamagedLocked(int netId, string kind, int zone, float damage, bool broken,
+        float maxHp, string payload, out string newPayload)
+    {
+        newPayload = "";
+        if (broken || kind != ZombieKind || zone != ArenaProtocol.HIT_ZONE_LEG) return false;
+        if (maxHp <= 0f || !float.IsFinite(damage) || damage <= 0f) return false;
+        if (!IsCrippleType(PayloadType(payload))) return false;
+
+        lock (_crippleGate)
+        {
+            if (!_legs.TryGetValue(netId, out var record) || record.Crippled) return false;
+
+            record.Damage += damage;
+            if (record.Damage < maxHp * CrippleLegRatio) return false;
+
+            record.Crippled = true;
+        }
+
+        newPayload = $"{payload};{CrippleKey}:1";
+        return true;
+    }
+
+    /// <summary>Is this zombie crippled? Read while the payload is rebuilt, so a later attack or scream
+    /// write cannot drop the key.</summary>
+    private bool IsCrippled(int netId)
+    {
+        lock (_crippleGate) return _legs.TryGetValue(netId, out var record) && record.Crippled;
+    }
+
+    private static bool IsCrippleType(string type)
+    {
+        for (var i = 0; i < CrippleTypes.Length; i++)
+        {
+            if (string.Equals(CrippleTypes[i], type, StringComparison.Ordinal)) return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>The payload's <c>t</c> key; an unknown/missing key reads as a walker, like the brain's
+    /// own fallback (§10.5).</summary>
+    private static string PayloadType(string payload)
+    {
+        if (string.IsNullOrEmpty(payload)) return TypeWalker;
+
+        var parts = payload.Split(';');
+        for (var i = 0; i < parts.Length; i++)
+        {
+            if (parts[i].StartsWith(TypeKey, StringComparison.Ordinal))
+            {
+                return parts[i].Substring(TypeKey.Length);
+            }
+        }
+
+        return TypeWalker;
     }
 
     /// <summary>A teammate lifted a downed player (§10.4): the reviver gets <see cref="RevivePoints"/>
@@ -1058,7 +1156,7 @@ public sealed class ZombieMode : IGameMode
             zombie.ScreamTimer = isDev ? DevSummonInterval : ScreamInterval;
             if (isDev) _devSummonPending += DevSummonCount;
 
-            director.SetObjectPayload(pair.Key, PayloadOf(zombie));
+            director.SetObjectPayload(pair.Key, PayloadOf(pair.Key, zombie));
         }
 
         // ⚠️ Only the ABSOLUTE cap applies here, not the wave's: the summon is the Dev's pressure, and
@@ -1127,10 +1225,11 @@ public sealed class ZombieMode : IGameMode
         // ⚠️ maxHp is written per OBJECT: the catalog's value is the walker's, every other type would
         // otherwise die in one magazine (or never).
         int netId = director.SpawnObject(ZombieKind, default, owner: host, rightHand: false,
-            payload: PayloadOf(zombie), inHand: false, maxHp: maxHp);
+            payload: PayloadOf(0, zombie), inHand: false, maxHp: maxHp);
         if (netId == 0) return 0; // rejected (unknown kind / dynamic id pool exhausted) — already logged
 
         _zombies[netId] = zombie;
+        lock (_crippleGate) _legs[netId] = new LegRecord();
 
         // Only deck draws count against the wave: the Dev and his summons are extra (§10.5).
         if (summonerNetId == 0 && typeIndex < _deck.Length)
@@ -1191,6 +1290,7 @@ public sealed class ZombieMode : IGameMode
         for (var i = 0; i < _despawnScratch.Count; i++)
         {
             _zombies.Remove(_despawnScratch[i]);
+            lock (_crippleGate) _legs.Remove(_despawnScratch[i]);
             director.DespawnObject(_despawnScratch[i]);
         }
     }
@@ -1321,8 +1421,10 @@ public sealed class ZombieMode : IGameMode
         Math.Min(_table.DamageCap, _table.DamageBase + _table.DamagePerWave * (Math.Max(1, wave) - 1));
 
     /// <summary>§10.5: the server writes the WHOLE payload on every write, so no key can go missing
-    /// between two states. <c>c</c> and <c>n</c> only exist where they mean something.</summary>
-    private static string PayloadOf(ZombieState zombie)
+    /// between two states. <c>c</c>, <c>n</c> and <c>cr</c> only exist where they mean something.</summary>
+    /// <remarks><paramref name="netId"/> is <c>0</c> at spawn, where the id does not exist yet and no
+    /// zombie is crippled anyway.</remarks>
+    private string PayloadOf(int netId, ZombieState zombie)
     {
         string payload = $"sp:{zombie.SpawnNetId};w:{zombie.Wave};a:{zombie.AttackCounter}" +
                          $";t:{zombie.Type}";
@@ -1333,6 +1435,7 @@ public sealed class ZombieMode : IGameMode
         }
 
         if (zombie.SummonerNetId != 0) payload += $";n:{zombie.SummonerNetId}";
+        if (IsCrippled(netId)) payload += $";{CrippleKey}:1";
         return payload;
     }
 

@@ -40,6 +40,10 @@ namespace VortexArena.Modes.Zombie
         private bool _collapsed;
         private bool _counted;
 
+        /// <summary>Hit box layers before <see cref="Collapse"/> moved them — the local kill prediction
+        /// can be wrong, and the body then has to become a target again.</summary>
+        private int[] _layersBefore;
+
         public Transform Hips => hips;
 
         /// <summary>This body's own hit-box colliders — the blood raycast is restricted to them.</summary>
@@ -94,10 +98,13 @@ namespace VortexArena.Modes.Zombie
 
             if (colliders != null)
             {
+                _layersBefore ??= new int[colliders.Length];
+
                 for (int i = 0; i < colliders.Length; i++)
                 {
                     if (colliders[i] != null)
                     {
+                        _layersBefore[i] = colliders[i].gameObject.layer;
                         colliders[i].gameObject.layer = layer;
                     }
                 }
@@ -136,6 +143,127 @@ namespace VortexArena.Modes.Zombie
             }
 
             return true;
+        }
+
+        /// <summary>Takes the corpse back: the body stands up again because the LOCAL kill prediction
+        /// was wrong (the server still reports it alive). The Animator owns the pose from here on.</summary>
+        /// <remarks>⚠️ A chain already severed does NOT come back to physics (its rigidbodies were
+        /// destroyed) — only its hit boxes do, so the limb can be shot again.</remarks>
+        public void Restore()
+        {
+            if (!_collapsed)
+            {
+                return;
+            }
+
+            _collapsed = false;
+
+            if (bodies != null)
+            {
+                for (int i = 0; i < bodies.Length; i++)
+                {
+                    if (bodies[i] != null)
+                    {
+                        bodies[i].linearVelocity = Vector3.zero;
+                        bodies[i].angularVelocity = Vector3.zero;
+                        bodies[i].isKinematic = true;
+                    }
+                }
+            }
+
+            if (colliders != null && _layersBefore != null)
+            {
+                for (int i = 0; i < colliders.Length && i < _layersBefore.Length; i++)
+                {
+                    if (colliders[i] != null)
+                    {
+                        colliders[i].gameObject.layer = _layersBefore[i];
+                    }
+                }
+            }
+
+            if (animator != null)
+            {
+                animator.enabled = true;
+            }
+
+            Release();
+        }
+
+        /// <summary>Takes a severed chain out of physics: its joints and rigidbodies are DESTROYED and
+        /// its hit boxes disabled. ⚠️ Called before the bone is scaled to nothing — PhysX reports a
+        /// degenerate collider every frame, and a joint to a zero-scale body shakes the corpse.</summary>
+        public void DetachChain(Transform chainRoot)
+        {
+            if (chainRoot == null)
+            {
+                return;
+            }
+
+            if (colliders != null)
+            {
+                for (int i = 0; i < colliders.Length; i++)
+                {
+                    Collider part = colliders[i];
+                    if (part != null && part.transform.IsChildOf(chainRoot))
+                    {
+                        part.enabled = false;
+                    }
+                }
+            }
+
+            if (bodies == null)
+            {
+                return;
+            }
+
+            // Joints first: a joint whose connected body is already gone logs an error.
+            for (int i = 0; i < bodies.Length; i++)
+            {
+                Rigidbody body = bodies[i];
+                if (body == null || !body.transform.IsChildOf(chainRoot))
+                {
+                    continue;
+                }
+
+                if (body.TryGetComponent(out CharacterJoint joint))
+                {
+                    Destroy(joint);
+                }
+            }
+
+            for (int i = 0; i < bodies.Length; i++)
+            {
+                Rigidbody body = bodies[i];
+                if (body == null || !body.transform.IsChildOf(chainRoot))
+                {
+                    continue;
+                }
+
+                // ⚠️ The slot is cleared NOW, not when the Destroy lands at the end of the frame: the
+                // sever and the collapse happen in the SAME frame on a lethal hit, and a doomed body
+                // would otherwise be the one the killing impulse is spent on.
+                bodies[i] = null;
+                Destroy(body);
+            }
+        }
+
+        /// <summary>Re-enables a detached chain's hit boxes (prediction rollback).</summary>
+        public void EnableChainColliders(Transform chainRoot)
+        {
+            if (chainRoot == null || colliders == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < colliders.Length; i++)
+            {
+                Collider part = colliders[i];
+                if (part != null && part.transform.IsChildOf(chainRoot))
+                {
+                    part.enabled = true;
+                }
+            }
         }
 
         /// <summary>Stops the simulation and gives the budget back — the dissolve then runs on a

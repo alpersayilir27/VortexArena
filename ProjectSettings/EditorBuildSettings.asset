@@ -83,6 +83,9 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Arenas/Venues/VortexAntep/Scenes/Graveyard_VortexAntep/Graveyard_VortexAntep.unity
     guid: b80b811ef7b0b9c4496a02205f494d20
+  - enabled: 1
+    path: Assets/Arenas/Venues/VortexAntep/Scenes/Japan_VortexAntep/Japan_VortexAntep.unity
+    guid: 7b66469e11680ca46a03e595f0e10f6a
   m_configObjects:
     com.unity.dt.app-ui: {fileID: 11400000, guid: 1b1c20d82303e4b5781c3ef50ac1449f, type: 2}
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}

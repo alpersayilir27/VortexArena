@@ -16,27 +16,27 @@ MonoBehaviour:
   - weaponId: glock
     wave: 1
     bodyDamage: 20
-    headMultiplier: 1.75
+    headMultiplier: 2.5
   - weaponId: magnum
     wave: 1
     bodyDamage: 30
-    headMultiplier: 1.9
+    headMultiplier: 3.4
   - weaponId: g36c
     wave: 2
     bodyDamage: 22
-    headMultiplier: 1.6
+    headMultiplier: 2.3
   - weaponId: ump45
     wave: 2
     bodyDamage: 24
-    headMultiplier: 1.5
+    headMultiplier: 2.1
   - weaponId: scarl
     wave: 3
     bodyDamage: 26
-    headMultiplier: 1.65
+    headMultiplier: 2
   - weaponId: famas
     wave: 3
     bodyDamage: 24
-    headMultiplier: 1.6
+    headMultiplier: 2.1
   - weaponId: bomba
     wave: 3
     bodyDamage: 0
@@ -44,32 +44,32 @@ MonoBehaviour:
   - weaponId: ak47
     wave: 4
     bodyDamage: 32
-    headMultiplier: 1.7
+    headMultiplier: 3.2
   - weaponId: nova
     wave: 4
     bodyDamage: 10
-    headMultiplier: 1.5
+    headMultiplier: 2
   - weaponId: m4a4
     wave: 5
     bodyDamage: 28
-    headMultiplier: 1.65
+    headMultiplier: 3.6
   - weaponId: xm1014
     wave: 5
     bodyDamage: 11
-    headMultiplier: 1.5
+    headMultiplier: 2
   - weaponId: aug
     wave: 6
     bodyDamage: 28
-    headMultiplier: 1.7
+    headMultiplier: 3.6
   - weaponId: p90
     wave: 6
     bodyDamage: 20
-    headMultiplier: 1.6
+    headMultiplier: 2.5
   - weaponId: m4a1
     wave: 7
     bodyDamage: 29
-    headMultiplier: 1.7
+    headMultiplier: 3.5
   - weaponId: mp9
     wave: 7
     bodyDamage: 18
-    headMultiplier: 1.6
+    headMultiplier: 2.8

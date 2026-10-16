@@ -96,6 +96,21 @@ namespace VortexArena.Core.Combat
             /// <summary>Birth time (<c>Time.unscaledTime</c>) so a paused match does not freeze the
             /// marker on screen.</summary>
             public float StartAt;
+
+            // ---- variant (PlayVariant); the default Play leaves all three neutral ----
+
+            /// <summary>Variant color; ignored while <see cref="HasColor"/> is false.</summary>
+            public Color Color;
+
+            /// <summary>Is <see cref="Color"/> used instead of the style color (the outline keeps the
+            /// style's — it only exists to separate the mark from the background).</summary>
+            public bool HasColor;
+
+            /// <summary>Size multiplier over the style size; <c>1</c> = style size.</summary>
+            public float SizeScale;
+
+            /// <summary>Lifetime (s); <c>0</c> or less = the style's lifetime.</summary>
+            public float Lifetime;
         }
 
         private readonly MarkerNode[] _pool = new MarkerNode[PoolSize];
@@ -169,6 +184,22 @@ namespace VortexArena.Core.Combat
         /// <returns>Whether the marker was actually queued (<c>false</c> if no node could be built).</returns>
         public bool Play(Vector3 worldPoint) => Begin(worldPoint, 0f);
 
+        /// <summary>Same marker with an explicit color, size and lifetime — a MODE variant (zombie
+        /// headshot/kill mark) over the one pool and the one style.
+        /// <para>⚠️ Only these three are overridden: curves, outline, thickness, lift and the
+        /// material still come from <see cref="HitMarkerStyle"/>, so a variant stays the same mark in
+        /// a different weight instead of becoming a second look to tune.</para>
+        /// <para>⚠️ On the PREFAB path <paramref name="color"/> has no effect (the prefab owns its
+        /// look); size and lifetime still apply.</para>
+        /// <para>Caller rule is unchanged (<see cref="Play"/>): a marker is shown only where a hit
+        /// was reported — here that is <see cref="ArenaCombat.ObjectHitMarkerOverride"/>, which runs
+        /// inside the report.</para></summary>
+        /// <param name="sizeMultiplier">Multiplier over the style size; <c>1</c> = default size.</param>
+        /// <param name="lifetimeSeconds">Lifetime (s); <c>0</c> or less = the style's lifetime.</param>
+        public bool PlayVariant(Vector3 worldPoint, Color color, float sizeMultiplier = 1f,
+            float lifetimeSeconds = 0f) =>
+            Begin(worldPoint, 0f, true, color, sizeMultiplier, lifetimeSeconds);
+
         /// <summary>Draws one marker in front of the eye so the style load, the prefab
         /// <c>Instantiate</c> and the <c>Shader.Find</c> material are paid behind the loading cover
         /// instead of on the first hit. ⚠️ Not a hit: nothing is reported, so the "only
@@ -180,7 +211,11 @@ namespace VortexArena.Core.Combat
 
         /// <param name="visibleSeconds">Warmup only: the marker is born already aged, so it expires
         /// within the cover instead of living the style's full lifetime. 0 = a real hit.</param>
-        private bool Begin(Vector3 worldPoint, float visibleSeconds)
+        private bool Begin(Vector3 worldPoint, float visibleSeconds) =>
+            Begin(worldPoint, visibleSeconds, false, default, 1f, 0f);
+
+        private bool Begin(Vector3 worldPoint, float visibleSeconds, bool hasColor, Color color,
+            float sizeScale, float lifetimeSeconds)
         {
             MarkerNode node = TakeNode();
             if (node == null)
@@ -189,6 +224,10 @@ namespace VortexArena.Core.Combat
             }
 
             node.Anchor = worldPoint;
+            node.HasColor = hasColor;
+            node.Color = color;
+            node.SizeScale = sizeScale;
+            node.Lifetime = lifetimeSeconds;
             node.StartAt = visibleSeconds > 0f
                 ? Time.unscaledTime - Mathf.Max(0f, Style.LifetimeSeconds - visibleSeconds)
                 : Time.unscaledTime;
@@ -217,7 +256,7 @@ namespace VortexArena.Core.Combat
             Camera eye = ResolveEye();
             HitMarkerStyle style = Style;
             float now = Time.unscaledTime;
-            float lifetime = style.LifetimeSeconds;
+            float styleLifetime = style.LifetimeSeconds;
 
             for (int i = 0; i < _pool.Length; i++)
             {
@@ -233,6 +272,8 @@ namespace VortexArena.Core.Combat
                     continue;
                 }
 
+                // Per node: a variant may outlive (kill mark) or undercut the style lifetime.
+                float lifetime = node.Lifetime > 0f ? node.Lifetime : styleLifetime;
                 float t = (now - node.StartAt) / lifetime;
 
                 // With no camera (scene change, admin rig disabled) the marker is hidden: leaving an
@@ -268,7 +309,7 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
-            float size = style.SizeAt(distance) * Mathf.Max(0f, style.SizeScaleAt(t));
+            float size = style.SizeAt(distance) * Mathf.Max(0f, style.SizeScaleAt(t)) * node.SizeScale;
             Vector3 center = node.Anchor + (toEye / distance) * style.SurfaceLiftMeters;
 
             if (node.UsesPrefab)
@@ -295,7 +336,10 @@ namespace VortexArena.Core.Combat
             float thickness = style.ThicknessFor(size);
             Material material = EnsureMaterial(style);
 
-            Color color = style.Color;
+            // The variant color replaces the style's hue but keeps the style alpha as the ceiling:
+            // a mode passing an opaque color must not get a mark more solid than the tuned one.
+            Color color = node.HasColor ? new Color(node.Color.r, node.Color.g, node.Color.b,
+                node.Color.a * style.Color.a) : style.Color;
             color.a *= alpha;
             Apply(node.ArmA, material, center - diagonalA, center + diagonalA, color, thickness);
             Apply(node.ArmB, material, center - diagonalB, center + diagonalB, color, thickness);

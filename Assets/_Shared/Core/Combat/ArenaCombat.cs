@@ -510,8 +510,11 @@ namespace VortexArena.Core.Combat
         /// <param name="worldDirection">World direction the hit came FROM→TO (bullet ray, blast centre
         /// → target); <c>default</c> = unknown. It rides to everyone in the server's <c>hit</c> relay
         /// (§5.2) and is what a directional impact presentation reads.</param>
+        /// <param name="hitCollider">Collider the ray struck; <c>null</c> = unknown (blast, no
+        /// raycast). Rides on <see cref="ObjectHitInfo.HitCollider"/> for LOCAL listeners only —
+        /// nothing about it goes on the wire.</param>
         public static void ReportObjectHit(int targetNetId, Vector3 worldHitPoint, float damage, string weaponId,
-            HitZone zone = HitZone.Body, Vector3 worldDirection = default)
+            HitZone zone = HitZone.Body, Vector3 worldDirection = default, Collider hitCollider = null)
         {
             if (targetNetId <= 0)
             {
@@ -543,14 +546,23 @@ namespace VortexArena.Core.Combat
             WriteDirection(Hit.hitDir, worldDirection);
             client.Send(Hit);
 
+            // ⚠️ Built BEFORE the marker: the mode's own marker decision reads the same hit data the
+            // event carries (damage, zone, hit box), so it cannot disagree with the listener.
+            // Killed/Crippled are false — this side does not know the result, the object's broken
+            // state arrives as object_state.
+            var info = new ObjectHitInfo(targetNetId, worldHitPoint, worldDirection, (int)zone,
+                LocalPlayerId, false, true, damage, weaponId, hitCollider, false);
+
             // Same rationale as ReportHit: the marker says a report was made, not that damage landed.
-            HitMarker.Shared.Play(worldHitPoint);
+            System.Func<ObjectHitInfo, bool> markerOverride = ObjectHitMarkerOverride;
+            if (markerOverride == null || !markerOverride(info))
+            {
+                HitMarker.Shared.Play(worldHitPoint);
+            }
 
             // ⚠️ Raised HERE and not from the server's relay: the shooter's own presentation must not
-            // wait a round trip, and the relay deliberately skips its sender (§5.2). Killed is false —
-            // this side does not know the result, the object's broken state arrives as object_state.
-            RaiseObjectHit(new ObjectHitInfo(targetNetId, worldHitPoint, worldDirection, (int)zone,
-                LocalPlayerId, false, true));
+            // wait a round trip, and the relay deliberately skips its sender (§5.2).
+            RaiseObjectHit(info);
         }
 
         /// <summary>
@@ -590,7 +602,9 @@ namespace VortexArena.Core.Combat
             // return value stays false, so every caller's blood/spark choice keeps its old meaning.
             if (TryGetTargetNetId(hit.collider, out int netId))
             {
-                ReportObjectHit(netId, hit.point, damage, weaponId, zone, worldDirection);
+                // The hit box rides along: a local listener needs the bone that was struck and
+                // RaycastHit cannot be rebuilt from the event.
+                ReportObjectHit(netId, hit.point, damage, weaponId, zone, worldDirection, hit.collider);
             }
 
             return false;
@@ -998,8 +1012,30 @@ namespace VortexArena.Core.Combat
             /// <summary><c>true</c> = raised locally by our own report, <c>false</c> = relayed.</summary>
             public readonly bool Local;
 
+            /// <summary>Damage sent in this hit report; <c>0</c> on a relayed hit (the wire does not
+            /// carry it — only the shooter knows what it sent).</summary>
+            public readonly float Damage;
+
+            /// <summary>Kill feed label of the weapon that fired; <b>LOCAL only</b> (<c>null</c> when
+            /// relayed).</summary>
+            public readonly string WeaponId;
+
+            /// <summary>Collider the ray actually struck — the hit box, so a listener can find the
+            /// bone without a second raycast. <b>LOCAL only</b> (<c>null</c> when relayed).</summary>
+            public readonly Collider HitCollider;
+
+            /// <summary>This hit turned the target into a crawler (§5.2 <c>hit</c> relay, 4th int).
+            /// <b>RELAYED only</b>: the local raise happens before the server decides.</summary>
+            public readonly bool Crippled;
+
             public ObjectHitInfo(int netId, Vector3 point, Vector3 direction, int zone, int shooterId,
                 bool killed, bool local)
+                : this(netId, point, direction, zone, shooterId, killed, local, 0f, null, null, false)
+            {
+            }
+
+            public ObjectHitInfo(int netId, Vector3 point, Vector3 direction, int zone, int shooterId,
+                bool killed, bool local, float damage, string weaponId, Collider hitCollider, bool crippled)
             {
                 NetId = netId;
                 Point = point;
@@ -1008,8 +1044,21 @@ namespace VortexArena.Core.Combat
                 ShooterId = shooterId;
                 Killed = killed;
                 Local = local;
+                Damage = damage;
+                WeaponId = weaponId;
+                HitCollider = hitCollider;
+                Crippled = crippled;
             }
         }
+
+        /// <summary>MODE hook over the LOCAL object hit marker: <c>true</c> = the mode drew its own,
+        /// so the default X is skipped; <c>null</c> or <c>false</c> = the default marker as always.
+        /// <para>⚠️ Called BEFORE <see cref="ObjectHit"/> and only on the shooter's own path, so the
+        /// "a marker means a report went out" rule stands either way — the hook chooses the look, not
+        /// whether a hit is confirmed.</para>
+        /// <para>⚠️ Same lifecycle rule as <see cref="Weapon.DamageOverride"/>: the installer clears
+        /// it when its mode ends.</para></summary>
+        public static System.Func<ObjectHitInfo, bool> ObjectHitMarkerOverride;
 
         /// <summary>
         /// <b>A network object took a hit</b> — raised on EVERY headset exactly once per hit: locally
@@ -1049,6 +1098,9 @@ namespace VortexArena.Core.Combat
             int zone = msg.i != null && msg.i.Length > 0 ? msg.i[0] : 0;
             int shooterId = msg.i != null && msg.i.Length > 1 ? msg.i[1] : 0;
             bool killed = msg.i != null && msg.i.Length > 2 && msg.i[2] != 0;
+            // 4th int is optional (protocol 27): a 3-element array from an older server reads as
+            // "not crippled" instead of throwing.
+            bool crippled = msg.i != null && msg.i.Length > 3 && msg.i[3] != 0;
 
             int localId = LocalPlayerId;
             if (shooterId != 0 && shooterId == localId)
@@ -1073,7 +1125,9 @@ namespace VortexArena.Core.Combat
                     : Vector3.zero;
             }
 
-            RaiseObjectHit(new ObjectHitInfo(msg.netId, point, direction, zone, shooterId, killed, false));
+            // Damage, weapon label and hit box stay empty on this path: none of them is on the wire.
+            RaiseObjectHit(new ObjectHitInfo(msg.netId, point, direction, zone, shooterId, killed, false,
+                0f, null, null, crippled));
         }
     }
 }

@@ -1,0 +1,110 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0b99dc5b2799ec74a833e7260ae9b850, type: 3}
+  m_Name: ZombieReactionTuning
+  m_EditorClassIdentifier: VortexArena.Modes.Zombie::VortexArena.Modes.Zombie.ZombieReactionTuning
+  headFlinchAmplitude: 18
+  bodyFlinchAmplitude: 11
+  stomachFlinchAmplitude: 9
+  legFlinchAmplitude: 7
+  flinchStiffness: 140
+  flinchDamping: 16
+  flinchMaxAngle: 26
+  bruteFlinchScale: 0.5
+  devFlinchScale: 0.3
+  hitClipCooldownSeconds: 0.35
+  hitAnimDedupeSeconds: 0.3
+  headImpulse: 45
+  bodyImpulse: 32
+  stomachImpulse: 30
+  legImpulse: 25
+  impulseDamageReference: 25
+  impulseScaleMin: 0.8
+  impulseScaleMax: 2.2
+  hitMemorySeconds: 0.6
+  ragdollFreezeSeconds: 2.6
+  deathDissolveDelay: 3.3
+  deathDissolveSeconds: 0.8
+  bloodPoolDelay: 0.8
+  predictionRestoreSeconds: 1.5
+  hitStopAnimatorSpeed: 0.05
+  hitStopSeconds: 0.06
+  hitStopDamage: 30
+  staggerWindowSeconds: 0.35
+  staggerDamage: 45
+  bruteStaggerDamage: 150
+  staggerSeconds: 0.6
+  staggerSpeedScale: 0.15
+  knockbackMeters: 0.35
+  knockbackSeconds: 0.15
+  knockbackSpeedCap: 2.5
+  limbSeverDamage: 22
+  neckStumpRadius: 0.055
+  upperArmStumpRadius: 0.055
+  foreArmStumpRadius: 0.045
+  thighStumpRadius: 0.085
+  shinStumpRadius: 0.065
+  stumpMeshRadius: 0.05
+  neckStumpPrefab: {fileID: 919132149155446097, guid: ac321b577dd4f73488c1731a7d4c9230, type: 3}
+  limbStumpPrefab: {fileID: 919132149155446097, guid: 0900a91c94a8aa840b837dc878b37258, type: 3}
+  fleshGibPrefabs:
+  - {fileID: 919132149155446097, guid: bbcd104760083c24a874e8aa45204c42, type: 3}
+  - {fileID: 919132149155446097, guid: 1fe4adddd47ff6143a0e7b3e03693ff0, type: 3}
+  - {fileID: 919132149155446097, guid: c33fb22018617c24280a16d8beb8360e, type: 3}
+  boneGibPrefabs:
+  - {fileID: 919132149155446097, guid: 8133da8c2b9f37f44b8d4bf76d3c7f0d, type: 3}
+  skullGibPrefabs:
+  - {fileID: 919132149155446097, guid: ac19a91b7e66399439758d7f998218b9, type: 3}
+  - {fileID: 919132149155446097, guid: ed8f0cb369ca4d14e92ba52837f4775d, type: 3}
+  fleshMaterial: {fileID: 2100000, guid: 514fac6ae44d440489c3d98ef7ad2f0a, type: 2}
+  boneMaterial: {fileID: 2100000, guid: b619e2ea32811e0498229d600fca0f0d, type: 2}
+  headBurstPrefab: {fileID: 8663040313134015330, guid: a2371c38757d2e142a7891653defdc48, type: 3}
+  severBurstPrefab: {fileID: 8663040313134015330, guid: fb886b92e5a4b9d44ae0a72015d4b0cd, type: 3}
+  gibPoolSize: 24
+  gibsPerSever: 4
+  gibsPerHeadPop: 6
+  gibLifetimeSeconds: 4
+  gibShrinkSeconds: 0.5
+  gibEjectSpeedMin: 1.5
+  gibEjectSpeedMax: 4
+  gibUpBias: 0.45
+  gibSpinDegrees: 540
+  gibRadius: 0.04
+  splatChanceHead: 0.8
+  splatChanceOther: 0.4
+  splatRayMeters: 2.5
+  splatSizeMin: 0.3
+  splatSizeMax: 0.7
+  splatLifetimeSeconds: 25
+  splatFadeSeconds: 5
+  splatPoolSize: 48
+  woundSizeMin: 0.06
+  woundSizeMax: 0.12
+  woundsPerZombie: 5
+  woundPoolSize: 80
+  bloodDecalMaterial: {fileID: 2100000, guid: f874f8280e6c8d945b64c503ec243e6d, type: 2}
+  painChance: 0.7
+  painCooldownSeconds: 0.6
+  painConcurrent: 3
+  headPopClips:
+  - {fileID: 8300000, guid: 2a0257d94f2f2314292f058ab371970a, type: 3}
+  - {fileID: 8300000, guid: 9f05436868c1295449f4b11ec860f4cd, type: 3}
+  limbSeverClips:
+  - {fileID: 8300000, guid: 50b7758b4a89b0e49941156464cf4547, type: 3}
+  - {fileID: 8300000, guid: ea2ff509ed2428d469ebaa6ab39008e4, type: 3}
+  gibSplatClips:
+  - {fileID: 8300000, guid: cdc16ebfed23e794e9a1cc91f62e8b9b, type: 3}
+  - {fileID: 8300000, guid: e132f74e39f3f964dbe9b0ccacfb2d3d, type: 3}
+  crawlCollapseClips:
+  - {fileID: 8300000, guid: 5f26609c1ee0b624f811cfffab4059da, type: 3}
+  - {fileID: 8300000, guid: 23e715393ddccf147aedeee47790f6e8, type: 3}
+  goreVolume: 1

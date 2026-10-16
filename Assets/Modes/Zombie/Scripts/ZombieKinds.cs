@@ -48,6 +48,11 @@ namespace VortexArena.Modes.Zombie
         /// Dev instead of at a spawn door.</summary>
         public const string PayloadSummoner = "n";
 
+        /// <summary>Crippled (<c>cr:1</c>): the leg is gone and the body crawls from here on.
+        /// ⚠️ IRREVERSIBLE and hp-neutral — the server never clears it, so the client may treat the
+        /// transition as one-way and needs no "healed" branch.</summary>
+        public const string PayloadCrippled = "cr";
+
         // ------------------------------------------------------------------- types
 
         public const string TypeWalker = "walker";

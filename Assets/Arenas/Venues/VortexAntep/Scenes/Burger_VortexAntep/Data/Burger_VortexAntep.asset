@@ -18,8 +18,12 @@ MonoBehaviour:
   supportedModeIds:
   - burger
   moleDensity: 1.5
+  zombiePace: 1
   ambienceClip: {fileID: 0}
   ambienceVolume: 0.175
   musicClip: {fileID: 8300000, guid: 1eb91edaf5cd6b64e8d29f07cf3e8885, type: 3}
   musicVolume: 0.3
   timeWarningSound: 1
+  adminPostExposure: 0
+  adminFogScale: 1
+  adminAmbientScale: 1

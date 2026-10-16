@@ -16,29 +16,11 @@ namespace VortexArena.Modes.Zombie
     [DisallowMultipleComponent]
     public class ZombieFlinch : MonoBehaviour
     {
-        private const float Stiffness = 140f;
-
-        private const float Damping = 16f;
-
         /// <summary>Below this (deg / deg per s) the chain is parked: an endlessly ticking spring
         /// would keep writing bone rotations for the body's whole life.</summary>
         private const float RestAngle = 0.05f;
 
         private const float RestVelocity = 0.5f;
-
-        /// <summary>Hard cap (deg) on the total bend: a burst stacks kicks, and without this the neck
-        /// folds backwards.</summary>
-        private const float MaxAngle = 26f;
-
-        // Amplitudes (deg) per zone.
-        private const float HeadAmplitude = 18f;
-        private const float BodyAmplitude = 11f;
-        private const float StomachAmplitude = 9f;
-        private const float LegAmplitude = 7f;
-
-        /// <summary>A kick is given as VELOCITY, not as an instant angle: an instant one pops on the
-        /// first frame. Scaled so the damped peak lands on the requested amplitude.</summary>
-        private static readonly float ImpulseGain = Mathf.Sqrt(Stiffness) * 1.8f;
 
         private const int ChainCount = 4;
         private const int ChainTorso = 0;
@@ -75,8 +57,17 @@ namespace VortexArena.Modes.Zombie
         /// <summary>A crawler has no standing chain to bend: everything goes into spine + head.</summary>
         private bool _crawler;
 
+        private ZombieReactionTuning _tuning;
+
+        /// <summary>A kick is given as VELOCITY, not as an instant angle: an instant one pops on the
+        /// first frame. Scaled so the damped peak lands on the requested amplitude.</summary>
+        private float _impulseGain;
+
         private void Awake()
         {
+            _tuning = ZombieReactionTuning.Live;
+            _impulseGain = Mathf.Sqrt(_tuning.FlinchStiffness) * 1.8f;
+
             // Allocated once, here: the per-chain arrays are walked every frame.
             _bones[ChainTorso] = new[] { spine1, spine2, neck, head };
             _weights[ChainTorso] = new[] { 0.30f, 0.30f, 0.25f, 0.15f };
@@ -104,7 +95,7 @@ namespace VortexArena.Modes.Zombie
         /// <param name="pointWorld">World hit point — picks the arm side.</param>
         public void Hit(HitZone zone, Vector3 directionWorld, Vector3 pointWorld)
         {
-            float amplitude = AmplitudeOf(zone) * _scale;
+            float amplitude = _tuning.FlinchAmplitudeOf(zone) * _scale;
             if (amplitude < 0.5f)
             {
                 return;
@@ -145,6 +136,10 @@ namespace VortexArena.Modes.Zombie
                 return;
             }
 
+            float stiffness = _tuning.FlinchStiffness;
+            float damping = _tuning.FlinchDamping;
+            float maxAngle = _tuning.FlinchMaxAngle;
+
             for (int chain = 0; chain < ChainCount; chain++)
             {
                 float angle = _angle[chain];
@@ -156,8 +151,8 @@ namespace VortexArena.Modes.Zombie
                 }
 
                 // Semi-implicit Euler: stable at this stiffness and one multiply cheaper than RK.
-                velocity += (-Stiffness * angle - Damping * velocity) * dt;
-                angle = Mathf.Clamp(angle + velocity * dt, -MaxAngle, MaxAngle);
+                velocity += (-stiffness * angle - damping * velocity) * dt;
+                angle = Mathf.Clamp(angle + velocity * dt, -maxAngle, maxAngle);
 
                 if (Mathf.Abs(angle) < RestAngle && Mathf.Abs(velocity) < RestVelocity)
                 {
@@ -198,7 +193,7 @@ namespace VortexArena.Modes.Zombie
             // The newest hit owns the axis: averaging two directions cancels a pair of crossfire
             // rounds into no reaction at all.
             _axis[chain] = axis;
-            _velocity[chain] += amplitude * ImpulseGain;
+            _velocity[chain] += amplitude * _impulseGain;
         }
 
         /// <summary>Which chain a hit bends. Arms are <see cref="HitZone.Body"/> like the chest, so the
@@ -234,13 +229,5 @@ namespace VortexArena.Modes.Zombie
 
             return leftDistance <= rightDistance ? ChainArmLeft : ChainArmRight;
         }
-
-        private static float AmplitudeOf(HitZone zone) => zone switch
-        {
-            HitZone.Head => HeadAmplitude,
-            HitZone.Stomach => StomachAmplitude,
-            HitZone.Leg => LegAmplitude,
-            _ => BodyAmplitude,
-        };
     }
 }

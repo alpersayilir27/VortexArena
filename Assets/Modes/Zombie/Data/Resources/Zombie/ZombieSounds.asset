@@ -70,3 +70,10 @@ MonoBehaviour:
   survivedVoice: {fileID: 8300000, guid: 99ea23f73a51f21478ff358f9c7bee7e, type: 3}
   rescuedVoice: {fileID: 8300000, guid: 7f07bc3477507594aa1b4704e09f41ac, type: 3}
   lostVoice: {fileID: 8300000, guid: 6012961845b279046a18953f14b47259, type: 3}
+  painClips:
+  - {fileID: 8300000, guid: e0b9a63b0b5950045b7030926df78c01, type: 3}
+  - {fileID: 8300000, guid: a841df6f18d43a547bee45469bec5816, type: 3}
+  - {fileID: 8300000, guid: 53e8d6e6fa3e9be49b99a744eb2aef4f, type: 3}
+  - {fileID: 8300000, guid: ba207015c30ee694c8e231bab7e39969, type: 3}
+  - {fileID: 8300000, guid: 7bc6a80530b10c24eb72b6ecad15053d, type: 3}
+  painVolume: 0.8

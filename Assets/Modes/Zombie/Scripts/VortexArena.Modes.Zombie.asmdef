@@ -5,6 +5,8 @@
         "VortexArena.Core",
         "VortexArena.Net",
         "VortexArena.Protocol",
+        "Oculus.Haptics",
+        "Oculus.VR",
         "Unity.TextMeshPro",
         "UnityEngine.UI"
     ],
