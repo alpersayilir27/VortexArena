@@ -658,6 +658,7 @@ Yönetim ekranındaki dashboard'da elindeki kontroller:
 | **Maçı İptal** (alt ortadaki kırmızı **✕ İPTAL**) | Maçı erken keser, herkesi lobiye döndürür — sonuç ekranı çıkmaz | Acil durum, oyuncu değişimi, yanlış harita. Lobide sönüktür (iptal edilecek maç yok) |
 | **Maçı Bitir** (alt ortadaki **■ BİTİR**) | Maçı **normal yoldan** kapatır: o anki skora göre kazanan ilan edilir, sonuç ekranı ve skor tablosu çıkar | Doğal yoldan bitmeyen maçlarda. **İki kez basılır** (aşağıda) |
 | **Duraklat / Devam et** (alt ortadaki **⏸ DURAKLAT** — duraklattığında **▶ DEVAM** olur) | Koşan maçı dondurur, aynı düğme kaldığı yerden sürdürür | Aşağıdaki "Maçı geçici olarak durdurmak" bölümü |
+| **Zorluk kaydırıcısı** (alt barın sağ ucunda, kat seçicinin üstünde) | Zombi maçının zorluğu: **KOLAY · NORMAL · ZOR**. Hem sıradaki maça hem **koşan maça** işler | **Yalnız zombi modunda** anlamlıdır; maç sırasında da kaydırılabilir, etkisi anında geçer (yukarıdaki "Zombi" kutusu) |
 | **Kat seçici** (alt barın sağ ucundaki **KAT** düğmeleri) | İzlediğin katı seçer; kuş bakışında yalnız o kat görünür | **Yalnız çok katlı arenada görünür** — tek katlı arenada şerit İPTAL'de biter |
 | **Dost ateşi** | Takım arkadaşının da vurulup vurulamayacağını belirler (Tercihler → **MAÇ** sekmesi). **Kapalı** (varsayılan): takım arkadaşına ateş etsen de canı azalmaz. **Açık**: azalır. Satırdaki iki düğmeden hangisine bassan aç/kapa yapar; açıkken değer kırmızı yanar | Diğer satırların aksine **maç sırasında da değiştirilebilir** — maçı iptal etmen gerekmez, etkisi anında geçer. Takım arkadaşını öldürmek **puan kazandırmaz, tersine öldürenden 1 öldürme ve 1 puan siler** (Counter-Strike kuralı; sayı eksiye düşebilir, takım skoru değişmez, öldürme listesinde yine görünür). Ayar sunucu kapanana kadar kalır: maç bitince, harita değişince kendiliğinden kapanmaz |
 | **Skor ve öldürme akışı** | Üst ortada canlı skor ve süre; **sağ yanda** "kim kimi vurdu" listesi, **sol yanda** ihlal listesi (oyun alanının dışına çıkan ya da engele giren oyuncular) | Maç sırasında takip. İki liste bilerek karşı yanlardadır: biri maçın hikâyesi, diğeri senin iş listen. **İkisi de kendiliğinden temizlenir:** vuruş satırları birkaç saniye sonra solup gider; ihlal listesinde **süren** bir ihlal duruyor olduğu sürece kalır, bitenler kısa süre sonra düşer — yani soldaki listede duran satır "şu an müdahale edilecek" demektir |
@@ -773,7 +774,7 @@ Sorun yaşandığında ilk bakılacak yer burasıdır ve sana üç şeyi ayırt 
 | Takım | Kırmızı ve mavi (sistem otomatik dengeler) | **Yok** — herkes herkesi vurabilir | Kırmızı ve mavi |
 | Skor | Takım puanı (dost ateşi açıkken takım arkadaşını öldürmek takım puanı yazmaz, öldürene −1) | **Kişi başına puan**; her öldürme öldürene +1 | **Kazanılan tur sayısı** — öldürme puan yazmaz |
 | Kazanan | Puan limitine ilk ulaşan takım; süre biterse önde olan | Puan limitine ilk ulaşan **oyuncu**; süre biterse en yüksek puanlı. Tepede eşitlik varsa berabere | **4 tur** kazanan takım (en fazla 7 tur oynanır) |
-| Silah | Arenaya yerleştirilmiş silahlardan seçilir: oyuncu silaha ~2 metreye kadar yaklaşıp nişan alır, yan tuşa (grip) basınca silahın bir kopyası eline gelir. Silah yerinden kaybolmaz, sınırsız kez alınabilir. ⚠️ Silahların arenaya konması **haritayı yapan kişinin işidir** — konmamış bir arenada oyuncunun eline silah gelmez | Oyuncu kumandanın **yan tuşunu (grip) basılı tutunca** eline rastgele bir silah gelir; bıraktığında silah kaybolur, tekrar bastığında **başka** bir silah gelir | Takım Ölüm Maçı ile aynı (arenadaki silahlardan seçilir) |
+| Silah | Arenaya yerleştirilmiş silahlardan seçilir: oyuncu silaha **1,5 metreye** kadar yaklaşıp nişan alır (silahla arasında duvar olmamalı), yan tuşa (grip) basınca silahın bir kopyası eline gelir. Silah yerinden kaybolmaz, sınırsız kez alınabilir. ⚠️ Silahların arenaya konması **haritayı yapan kişinin işidir** — konmamış bir arenada oyuncunun eline silah gelmez | Oyuncu kumandanın **yan tuşunu (grip) basılı tutunca** eline rastgele bir silah gelir; bıraktığında silah kaybolur, tekrar bastığında **başka** bir silah gelir | Takım Ölüm Maçı ile aynı (arenadaki silahlardan seçilir) |
 | Mermi | **Tükenmez** — şarjör boşalınca yenisi gelir, sayaç `30/∞` gibi görünür | **Tükenmez** (`30/∞`); oyuncu dilerse silahı bırakıp başka bir silah da çeker | **Sınırlı** — her silahın belli sayıda yedek şarjörü var, sayaç kalan yedeği gösterir; her **tur başında** herkes tam dolu başlar |
 | Ölünce | 5 saniye bekle, sonra **kendi renkli tabanına yürü** | Tabana gitmek yok: **5 saniye boyunca olduğun yerde kıpırdamadan dur** (1 metreden fazla yürürsen sayaç başa döner) | **Canlanma yok** — tur bitene kadar beklersin, yeni tur herkesi tam canla ayağa kaldırır |
 | Varsayılan süre / puan | 300 sn (5 dk) / 30 | 300 sn (5 dk) / 20 | 600 sn (10 dk) / **4 tur** |
@@ -930,13 +931,18 @@ Zombide takım yoktur, herkes aynı taraftadır.
   işarette kaldırma ilerlemesi görünür.
 - **Kimse kaldırmazsa** düşen oyuncu **dalga arasında** kendiliğinden kalkar — en fazla bir dalga
   bekler.
-- **Ayakta kimse kalmazsa maç kaybedilir** ve ekran "YENİLDİNİZ" der.
-- **Süre ekip ayaktayken dolarsa kazanılır:** "DAYANDINIZ".
+- **Ayakta kimse kalmazsa maç bitmez:** gözlüklerde "EKİP DÜŞTÜ" yazar, birkaç saniye geri sayar,
+  oyuncuların çevresindeki zombiler çöker ve **herkes birlikte ayağa kalkar**. Oyun kaldığı yerden
+  sürer; zombi maçında yenilgi ekranı yoktur, kaybedilen tek şey zamandır.
+- **Süre dolunca maç kazanılır:** "DAYANDINIZ".
+- **Her dalga saatle koşar:** ilk dalga 2 dakika, sonraki ikisi 3, dördüncüden sonrası 4 dakika.
+  Şeritteki **SÜRE** hücresi dalganın kalanını gösterir; süre boyunca zombi gelmeye devam eder,
+  süre dolunca yenisi çıkmaz ve sahadakiler temizlenince dalga biter.
 - **Sonuç ekranında** ulaşılan dalga, ekip skoru ve oyuncu satırları (puan · öldürme · kafadan ·
   kaldırma · düşme) vardır; satırlarda **En çok öldüren · Nişancı · Kurtarıcı** rozetleri yazar.
 
-**Silahlar dalga ilerledikçe açılır:** başta yalnız iki hafif silah alınabilir, kilitli silahın
-üstünde "DALGA N" yazar. **Bilek bombası** da kilitlidir — bilek ilk dalgalarda boştur, bomba
+**Silahlar dalga ilerledikçe açılır:** başta panoda yalnız **bir** silah (tabanca) alınabilir,
+her dalga bir silah daha açar ve en güçlüsü sona kalır; kilitli silahın üstünde "DALGA N" yazar. **Bilek bombası** da kilitlidir — bilek ilk dalgalarda boştur, bomba
 birkaç dalga sonra açılınca gözlükte duyurulur. Bu bir arıza değildir.
 
 **Zombi türü gözünden tanınır** — oyunculara söylenecek tek şey göz rengidir:
@@ -945,16 +951,21 @@ birkaç dalga sonra açılınca gözlükte duyurulur. Bu bir arıza değildir.
 - **Kırmızı:** koşucu, hızlıdır.
 - **Turuncu:** iri zombi, yavaş ama çok dayanıklı.
 - **Mor:** çığlıkçı; uzakta durup bağırır, bağırınca yakınındaki zombiler hızlanıp onun hedefine
-  yönelir.
+  yönelir; çığlığı bitince kendisi de en yakın oyuncuya koşarak saldırır.
 - **Beyaz:** **DEV** — yalnız Son Direniş'te çıkar.
 
 **Özel dalgalar** başlarken gözlükte adıyla yazar (KOŞUCU SÜRÜSÜ · AĞIR ADIMLAR · ÇIĞLIK GECESİ);
 sürüde koşucular, ağır adımlarda iri zombiler, çığlık gecesinde çığlıkçılar çoğalır.
 
 **Son Direniş** maçın **son 90 saniyesinde** başlar (kısa maçlarda son 60 saniye): gözlükte "SON
-DİRENİŞ" yazar, yeni dalga ve dalga arası kalmaz, **bütün silahlar açılır**, düşenler ayağa kalkar
+DİRENİŞ" yazar, yeni dalga ve dalga arası kalmaz, **panodaki bütün silahlar açılır**, düşenler ayağa kalkar
 ve **DEV** doğar. Ekranın üstünde DEV'in can çubuğu ve kalan süre durur. DEV öldürülürse maç
 "KURTULDUNUZ" ile biter; süre dolarsa "DAYANDINIZ".
+
+**Zorluğu maç sırasında değiştirebilirsin:** alt bardaki kat seçicinin üstündeki **zorluk
+kaydırıcısı** (KOLAY · NORMAL · ZOR) hem sıradaki maçın zorluğunu hem **koşan maçın** zorluğunu
+yazar; değişiklik anında geçer — zombiler daha sık/kalabalık gelir ve daha çok vurur. Sahada
+duran zombilerin canı değişmez, yani kaydırmak ekranı bir anda boşaltmaz.
 
 ### Çocuk Oyunları — Hamburgerci
 
@@ -1189,7 +1200,7 @@ ekranın alt ortasındaki **⏸ DURAKLAT** düğmesi (BAŞLAT ile BİTİR'in ara
 | Ateş ediyor ama can azalmıyor | Aynı takımdalar (dost ateşi kapalı) ya da maç henüz başlamadı | Takımları kontrol et; geri sayım bitmiş mi bak. Takım arkadaşlarının birbirini vurabilmesini istiyorsan Tercihler → MAÇ → **Dost ateşi**'ni aç |
 | Turnuvada ekranda **"TOPLANMA 4/6"** yazıyor, yeni tur bir türlü başlamıyor | Bir ya da iki oyuncu kendi tabanına dönmedi (takıldı, koptu, oyundan çıktı) | Ekranda kimin eksik olduğunu bul: listedeki "yeniden bağlanıyor" / "ayrıldı" satırını ya da tabanına yürümeyen oyuncuyu **AT** ile çıkar → kalanlar hazırsa tur hemen başlar. Vazgeçtiysen **İPTAL**. Tur eksik oyuncuyla kendiliğinden başlamaz |
 | Turnuvada geri sayım başlıyor ama hep iptal oluyor | Biri sayım bitmeden tabanından çıkıyor | Oyunculara "sayım bitene kadar kendi renginin köşesinden çıkmayın" de |
-| Ölen oyuncu canlanmıyor | Kendi takımının tabanına girmemiş | Oyuncuya **kendi renginin köşesine yürümesini** söyle — **kendiliğinden canlanmaz**, mutlaka tabana girmeli. Elle canlandırma düğmesi yoktur; şartı yerine getiremiyorsa maçı **İPTAL** edip yeniden başlat (maç başında herkes canlı kalkar) |
+| Ölen oyuncu canlanmıyor | Kendi takımının tabanına girmemiş ya da geri sayım bitmeden tabandan çıkmış | Oyuncuya **kendi renginin köşesine yürümesini** ve geri sayım bitene kadar **tabanın içinde beklemesini** söyle — sayım tabana girince başlar, tabandan çıkarsa baştan başlar. **Kendiliğinden canlanmaz**, mutlaka tabana girmeli. Elle canlandırma düğmesi yoktur; şartı yerine getiremiyorsa maçı **İPTAL** edip yeniden başlat (maç başında herkes canlı kalkar) |
 | Oyuncu tabana girdi ama yine canlanmıyor | Oyuncu kalibresiz ya da bir engelin/duvarın içinde duruyor | Satırı kırmızıysa önce kalibre olsun (Bölüm 4); halkası kırmızı yanıp sönüyorsa oyuncuya **engelin içinden çıkmasını** söyle. İkisi de değilse launcher'daki günlüğün son satırını teknik ekibe ilet |
 | Maç başlamıyor | Bağlı oyuncu yok ya da bir gözlükte eski sürüm var | Listede oyuncu var mı bak; varsa launcher'daki günlüğün son satırını teknik ekibe ilet |
 | Ses gelmiyor | Gözlüğün sesi kısık | Gözlüğün ses seviyesini aç |

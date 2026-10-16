@@ -156,7 +156,6 @@ namespace VortexArena.Modes.Zombie
 
         private bool _dead;
         private float _deadAt;
-        private bool _fadedOut;
 
         private ZombieRagdoll _ragdoll;
         private ZombieFlinch _flinch;
@@ -1227,7 +1226,6 @@ namespace VortexArena.Modes.Zombie
             _predictedDeath = false;
             _dead = false;
             _killRaised = false;
-            _fadedOut = false;
             _bloodPlaced = false;
             _ragdolled = false;
             _ragdollFrozen = false;
@@ -1399,8 +1397,8 @@ namespace VortexArena.Modes.Zombie
             return true;
         }
 
-        /// <summary>The corpse's own clock: settle, bleed, fade. The server despawns the object
-        /// itself — all of this only has to finish BEFORE it does.</summary>
+        /// <summary>The corpse's own clock: settle, bleed. No fade — the body is simply gone when the
+        /// server despawns the object.</summary>
         private void UpdateCorpse()
         {
             float since = Time.time - _deadAt;
@@ -1417,23 +1415,6 @@ namespace VortexArena.Modes.Zombie
 
                 Transform hips = _ragdoll != null ? _ragdoll.Hips : null;
                 ZombieBloodPool.Shared.Place(hips != null ? hips.position : transform.position);
-            }
-
-            FadeOutCorpse(since);
-        }
-
-        private void FadeOutCorpse(float since)
-        {
-            if (_fadedOut || since < _tuning.DeathDissolveDelay)
-            {
-                return;
-            }
-
-            _fadedOut = true;
-
-            if (_look.Dissolve != null)
-            {
-                _look.Dissolve.Vanish(_tuning.DeathDissolveSeconds);
             }
         }
 

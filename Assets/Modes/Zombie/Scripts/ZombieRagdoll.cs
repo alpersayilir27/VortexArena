@@ -266,8 +266,8 @@ namespace VortexArena.Modes.Zombie
             }
         }
 
-        /// <summary>Stops the simulation and gives the budget back — the dissolve then runs on a
-        /// settled pose instead of a body still sliding.</summary>
+        /// <summary>Stops the simulation and gives the budget back — the corpse lies settled until
+        /// the server despawns it.</summary>
         public void Freeze()
         {
             if (bodies != null)

@@ -37,6 +37,9 @@ namespace VortexArena.Modes.Burger
         [Tooltip("Eşikler henüz gelmemişken yeşil çizginin çizildiği yer (0-1).")]
         [SerializeField] private float fallbackCookMark = 0.5f;
 
+        [Tooltip("Izgaradaki köfte elle alınmaya çalışılınca 'SPATULA' uyarısının kaldığı süre (sn).")]
+        [SerializeField] private float spatulaHintSeconds = 1.5f;
+
         // ------------------------------------------------------------ lokanta ui
 
         [Tooltip("Arayüz göstergesinin kökü. Bağlıysa renderer yerine bu sürülür.")]
@@ -92,6 +95,7 @@ namespace VortexArena.Modes.Burger
         private float _progress;
 
         private float _lastCookingTime = float.NegativeInfinity;
+        private float _spatulaHintUntil = float.NegativeInfinity;
         private float _visibility;
         private float _heat;
 
@@ -126,6 +130,7 @@ namespace VortexArena.Modes.Burger
             _visibility = 0f;
             _heat = 0f;
             _lastCookingTime = float.NegativeInfinity;
+            _spatulaHintUntil = float.NegativeInfinity;
             _zoneSpan = new Vector2(-1f, -1f);
 
             _net.StateChanged += HandleStateChanged;
@@ -143,6 +148,15 @@ namespace VortexArena.Modes.Burger
         }
 
         private void HandleStateChanged(NetObject net, NetStateOrigin origin) => ApplyState();
+
+        /// <summary>Bare hand reached for a patty on the grill: the card says "SPATULA" for a moment.
+        /// LOCAL only — the player who reached is the only one who needs telling.</summary>
+        public void ShowSpatulaHint()
+        {
+            _spatulaHintUntil = Time.time + spatulaHintSeconds;
+        }
+
+        private bool SpatulaHint => Time.time < _spatulaHintUntil;
 
         /// <summary>Reads the payload when it changed, then clamps the local guess to the stage.</summary>
         private void ApplyState()
@@ -235,7 +249,7 @@ namespace VortexArena.Modes.Burger
 
             ClampToStage();
 
-            float visible = cooking || Time.time < _lastCookingTime + lingerSeconds ? 1f : 0f;
+            float visible = cooking || SpatulaHint || Time.time < _lastCookingTime + lingerSeconds ? 1f : 0f;
             float step = fadeSeconds > 0f ? Time.deltaTime / fadeSeconds : 1f;
             _visibility = Mathf.MoveTowards(_visibility, visible, step);
             _heat = Mathf.MoveTowards(_heat, cooking ? 1f : 0f, step);
@@ -313,7 +327,20 @@ namespace VortexArena.Modes.Burger
             Color iconColor;
             string word;
 
-            if (burnt)
+            // Over every doneness state: the hint answers a gesture just made and lasts a moment.
+            if (SpatulaHint)
+            {
+                mercuryA = Lokanta.MercuryHotA;
+                mercuryB = Lokanta.MercuryHotB;
+                card = Mathf.Repeat(Time.unscaledTime * BlinkHz, 1f) < 0.5f
+                    ? Lokanta.HotCard
+                    : Lokanta.Cream;
+                labelColor = Lokanta.Red2;
+                iconSprite = iconFlame;
+                iconColor = Lokanta.Red2;
+                word = "SPATULA";
+            }
+            else if (burnt)
             {
                 mercuryA = Lokanta.MercuryBurntA;
                 mercuryB = Lokanta.MercuryBurntB;
@@ -473,7 +500,8 @@ namespace VortexArena.Modes.Burger
             _block.SetFloat(FillId, fill);
             _block.SetFloat(CookMarkId, cookMark);
             _block.SetFloat(HeatId, _heat);
-            _block.SetFloat(WarnId, warn ? 1f : 0f);
+            // The quad cannot write a word; the warning blink is the closest it has to the hint.
+            _block.SetFloat(WarnId, warn || SpatulaHint ? 1f : 0f);
             _block.SetFloat(BurntId, burnt ? 1f : 0f);
             _block.SetFloat(VisibilityId, Mathf.Clamp01(_visibility));
             gauge.SetPropertyBlock(_block);

@@ -11,7 +11,7 @@
 </head>
 <body>
 
-<p class="vcap"><b>Admin HUD</b> — maç içi, takımlı kip. Arkadaki arena yer tutucudur. Alt şeritteki KAT seçici yalnız birden çok katlı arenada görünür; tek katlı arenada şerit İPTAL'de biter.</p>
+<p class="vcap"><b>Admin HUD</b> — maç içi, takımlı kip. Arkadaki arena yer tutucudur. Alt şeritteki KAT seçici yalnız birden çok katlı arenada görünür; tek katlı arenada şerit İPTAL'de biter. ZORLUK kaydırıcısı yalnız zombi maçında çizilir ve koşan maçı anında değiştirir.</p>
 <div class="frame"><div class="stage hud">
 
   <div class="arena">
@@ -86,6 +86,20 @@
     <div class="seg">
       <button class="btn on">Zemin</button>
       <button class="btn">1. kat</button>
+    </div>
+
+    <!-- zorluk: yalnız zombi maçında, şeridin sağ ucunun üstünde (koşan maçı anında değiştirir) -->
+    <div style="position:absolute;right:0;bottom:100%;margin-bottom:40px;width:268px;height:72px;clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px);border:1px solid rgba(170,205,255,.30);background:linear-gradient(180deg,rgba(22,32,60,.97),rgba(8,12,24,.97))">
+      <span class="lbl" style="position:absolute;left:30px;top:8px;line-height:14px">ZORLUK</span>
+      <div style="position:absolute;left:30px;top:26px;width:208px;height:10px;border:1px solid rgba(170,205,255,.26);background:var(--track)">
+        <span style="position:absolute;left:0;top:0;width:104px;height:100%;background:linear-gradient(90deg,#6FD8F7,#C9F4FF)"></span>
+        <span style="position:absolute;left:96px;top:-6px;width:16px;height:20px;border:1px solid var(--on-bd);background:linear-gradient(180deg,#C9F4FF,#6FD8F7)"></span>
+      </div>
+      <div style="position:absolute;left:0;top:44px;width:100%;font:700 14px/18px var(--fd);letter-spacing:.04em;color:var(--muted)">
+        <span style="position:absolute;left:0;width:76px;text-align:center">KOLAY</span>
+        <span style="position:absolute;left:96px;width:76px;text-align:center;color:var(--acc-hi)">NORMAL</span>
+        <span style="position:absolute;left:192px;width:76px;text-align:center">ZOR</span>
+      </div>
     </div>
   </div>
 

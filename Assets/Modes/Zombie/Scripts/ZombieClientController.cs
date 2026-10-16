@@ -29,7 +29,7 @@ namespace VortexArena.Modes.Zombie
         [Header("Zombi — şerit hücreleri")]
         [Tooltip("DALGA hücresinin sayısı.")]
         [SerializeField] private TMP_Text waveText;
-        [Tooltip("KALAN hücresi — dalganın bitmemiş zombisi (sahadaki + doğmayı bekleyen).")]
+        [Tooltip("SÜRE hücresi — koşan dalganın kalan süresi (m:ss), dalga arasında sıradaki dalgaya kalan.")]
         [SerializeField] private TMP_Text remainingText;
         [Tooltip("EKİP hücresi — ortak leş toplamı.")]
         [SerializeField] private TMP_Text squadKillsText;
@@ -118,14 +118,14 @@ namespace VortexArena.Modes.Zombie
 
         private int _wave;
 
-        /// <summary>Zombies on the floor right now (<c>left</c>).</summary>
-        private int _standing;
+        /// <summary>Seconds left of the running wave's clock (<c>wl</c>); 0 = no wave is spawning.</summary>
+        private int _waveLeft;
 
-        /// <summary>Zombies of the running wave the server has not spawned yet (<c>rem</c>).</summary>
-        private int _notSpawned;
+        /// <summary>Seconds to the squad rescue (<c>wp</c>); 0 = no wipe countdown.</summary>
+        private int _wipeLeft;
 
-        /// <summary>Zombies of the wave that are not dealt with yet: standing + not spawned.</summary>
-        private int _remaining;
+        /// <summary>Seconds left of the squad rescue's revive window (<c>rv</c>); 0 = closed.</summary>
+        private int _wipeReviveLeft;
 
         private int _nextWaveSeconds;
 
@@ -292,10 +292,12 @@ namespace VortexArena.Modes.Zombie
         private bool IsWaveBreak() =>
             _playing && _over.Length == 0 && _wave >= 1 && _nextWaveSeconds > 0;
 
-        /// <summary>The window the core revives everyone who is down in: the gap between waves, plus a
-        /// short one when the final stand opens — after it there are no more gaps.</summary>
+        /// <summary>The window the core revives everyone who is down in: the gap between waves, the
+        /// squad rescue's window (<c>rv</c>) and a short one when the final stand opens — after that
+        /// there are no more gaps.</summary>
         private bool IsReviveWindow() =>
-            IsWaveBreak() || Time.unscaledTime < _finalStandReviveUntil;
+            IsWaveBreak() || (_wipeReviveLeft > 0 && _playing && _over.Length == 0) ||
+            Time.unscaledTime < _finalStandReviveUntil;
 
         // ------------------------------------------------------------------- toasts
 
@@ -515,7 +517,9 @@ namespace VortexArena.Modes.Zombie
             _selfScore = 0;
             _sharedTotal = 0;
             _wave = 0;
-            _remaining = 0;
+            _waveLeft = 0;
+            _wipeLeft = 0;
+            _wipeReviveLeft = 0;
             _nextWaveSeconds = 0;
             _over = string.Empty;
             _playing = false;
@@ -679,7 +683,7 @@ namespace VortexArena.Modes.Zombie
             _clockStamp = Time.unscaledTime;
 
             SetText(waveText, _wave.ToString());
-            SetText(remainingText, _remaining.ToString());
+            SetText(remainingText, WaveTimeCell());
 
             bool playing = msg.phase == ArenaProtocol.PHASE_PLAYING;
             _playing = playing;
@@ -705,9 +709,15 @@ namespace VortexArena.Modes.Zombie
             // Between waves the big centre number is the only thing that explains why nothing is
             // coming; the title/subtitle around it ride OnCenterNoticeRefreshed.
             // The final stand has no next wave: a leftover countdown there would promise one.
-            SetCenterNotice(inClear
-                ? ClearNoticeBlank
-                : (playing && !_finalStand && _nextWaveSeconds > 0 ? _nextWaveSeconds.ToString() : ""));
+            // ⚠️ The wipe countdown comes FIRST: being down as a squad is the more urgent message and
+            // it can run while a wave gap does not.
+            SetCenterNotice(playing && _wipeLeft > 0 && _over.Length == 0
+                ? _wipeLeft.ToString()
+                : inClear
+                    ? ClearNoticeBlank
+                    : (playing && !_finalStand && _nextWaveSeconds > 0
+                        ? _nextWaveSeconds.ToString()
+                        : ""));
 
             // A wave starts when its number goes up AND nothing is counting down any more.
             if (playing && _wave > previousWave && _nextWaveSeconds == 0 && _wave > _toastedWave)
@@ -743,6 +753,15 @@ namespace VortexArena.Modes.Zombie
                 return;
             }
 
+            // The squad is down: the number above is the rescue countdown, not a wave's.
+            if (_wipeLeft > 0 && _playing && _over.Length == 0)
+            {
+                SetText(noticeTitleText, "EKİP DÜŞTÜ");
+                SetText(noticeSubText, "SN SONRA HEP BERABER KALKIYORSUNUZ");
+                SetText(noticeUnlockText, "");
+                return;
+            }
+
             // Same gate as the clear phase itself: a finished run says it with the result screen, and
             // a stale `clr` must not put "tamamlandı" over it.
             if (_clearLeft > 0 && !_finalStand && _playing && _over.Length == 0)
@@ -762,6 +781,27 @@ namespace VortexArena.Modes.Zombie
 
         // ---------------------------------------------------------------- internals
 
+        /// <summary>SÜRE cell: the running wave's clock, or the countdown to the next wave between
+        /// waves. Dash while neither counts (the wave's tail waiting for the last zombie, the final
+        /// stand) — a frozen 0:00 would read as a stopped clock.</summary>
+        private string WaveTimeCell()
+        {
+            if (_waveLeft > 0)
+            {
+                return WaveClock(_waveLeft);
+            }
+
+            return _nextWaveSeconds > 0 ? WaveClock(_nextWaveSeconds) : "—";
+        }
+
+        /// <summary><c>m:ss</c>, not the base's <c>mm:ss</c>: the cell is 150 px wide and the leading
+        /// zero costs a glyph the value font does not have room for.</summary>
+        private static string WaveClock(int seconds)
+        {
+            int total = Mathf.Max(0, seconds);
+            return $"{total / 60}:{total % 60:00}";
+        }
+
         private void SetClockAlarm(bool on)
         {
             if (clockAlarmPlate != null && clockAlarmPlate.activeSelf != on)
@@ -779,7 +819,7 @@ namespace VortexArena.Modes.Zombie
             return $"ÖLDÜRDÜĞÜN: {_selfScore}\nEKİP: {_sharedTotal}";
         }
 
-        /// <summary><c>"w:3;left:5;next:0;rem:2"</c> (+ optional <c>over:…</c>) → the cached cells.</summary>
+        /// <summary><c>"w:3;left:5;next:0;wl:88"</c> (+ optional <c>over:…</c>) → the cached cells.</summary>
         /// <remarks>⚠️ Tolerant on purpose: an empty, partial or malformed string must leave the counters
         /// where they were rather than break the HUD — the mode's contract can gain tokens later and an
         /// unknown token is skipped, not treated as an error. The pause reason rides the same field as
@@ -791,12 +831,14 @@ namespace VortexArena.Modes.Zombie
                 return;
             }
 
-            // `wx` and `clr` ride only while they run, so their absence is meaningful — but only in a
-            // TOKEN state: the pause reason travels in the same field as free text.
+            // `wx`, `clr`, `wp` and `rv` ride only while they run, so their absence is meaningful — but
+            // only in a TOKEN state: the pause reason travels in the same field as free text.
             if (modeState.IndexOf(':') >= 0)
             {
                 _special = string.Empty;
                 _clearLeft = 0;
+                _wipeLeft = 0;
+                _wipeReviveLeft = 0;
             }
 
             string[] tokens = modeState.Split(';');
@@ -839,10 +881,6 @@ namespace VortexArena.Modes.Zombie
                 {
                     _wave = value;
                 }
-                else if (string.Equals(key, ZombieKinds.StateLeft, StringComparison.Ordinal))
-                {
-                    _standing = value;
-                }
                 else if (string.Equals(key, ZombieKinds.StateNext, StringComparison.Ordinal))
                 {
                     _nextWaveSeconds = value;
@@ -851,18 +889,23 @@ namespace VortexArena.Modes.Zombie
                 {
                     _clearLeft = value;
                 }
-                else if (string.Equals(key, ZombieKinds.StateRemaining, StringComparison.Ordinal))
+                else if (string.Equals(key, ZombieKinds.StateWaveLeft, StringComparison.Ordinal))
                 {
-                    _notSpawned = value;
+                    _waveLeft = value;
+                }
+                else if (string.Equals(key, ZombieKinds.StateWipe, StringComparison.Ordinal))
+                {
+                    _wipeLeft = value;
+                }
+                else if (string.Equals(key, ZombieKinds.StateWipeRevive, StringComparison.Ordinal))
+                {
+                    _wipeReviveLeft = value;
                 }
                 else if (string.Equals(key, ZombieKinds.StateFinalStand, StringComparison.Ordinal))
                 {
                     _finalStand = value != 0;
                 }
             }
-
-            // KALAN = what the wave still owes the squad: on the floor plus not yet spawned.
-            _remaining = _standing + _notSpawned;
         }
 
         /// <summary><c>dev:&lt;netId&gt;/&lt;maxHp&gt;</c> → the boss bar's object and scale. A malformed
@@ -971,6 +1014,13 @@ namespace VortexArena.Modes.Zombie
             if (combat.IsAlive || !TeammateRevive.HasOtherCalibratedPlayer)
             {
                 ClearPrompt();
+                return;
+            }
+
+            // The squad is down: nobody can lift anybody, the rescue is on its way.
+            if (_wipeLeft > 0)
+            {
+                SetPrompt($"EKİP DÜŞTÜ · {_wipeLeft} sn sonra hep beraber kalkıyorsunuz");
                 return;
             }
 

@@ -128,6 +128,10 @@ namespace VortexArena.Core.Combat
                  "Kapalıyken klip reload başında bir kez çalar.")]
         [SerializeField] private bool perShellReloadAudio;
         [SerializeField] private AudioClip dryFireClip;
+        [Range(0f, 3f)]
+        [Tooltip("Boş tetik sesinin seviyesi. 1'in üstü klibi yükseltir — \"mermi bitti\" " +
+                 "atış sesleri arasında duyulmalı.")]
+        [SerializeField] private float dryFireVolume = 1.6f;
         [SerializeField] private AudioClip pickupClip;
         [Tooltip("Ateş sesinin taban pitch'i.")]
         [SerializeField] private float firePitchBase = 1f;
@@ -281,6 +285,9 @@ namespace VortexArena.Core.Combat
 
         /// <summary>Dry fire sound.</summary>
         public AudioClip DryFireClip => dryFireClip;
+
+        /// <summary>Dry fire level; above 1 amplifies the clip (PlayOneShot volumeScale).</summary>
+        public float DryFireVolume => Mathf.Max(0f, dryFireVolume);
 
         /// <summary>Weapon pickup sound.</summary>
         public AudioClip PickupClip => pickupClip;

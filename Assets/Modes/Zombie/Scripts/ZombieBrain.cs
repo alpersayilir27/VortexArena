@@ -173,6 +173,10 @@ namespace VortexArena.Modes.Zombie
 
         private const float ScreamerResumeDistance = 8.5f;
 
+        /// <summary>The screamer stands still for its scream (s) — ⚠️ the length of <c>ZA_Scream</c>, or it
+        /// slides off mid-cry; then it charges (<see cref="_charging"/>).</summary>
+        private const float ScreamerScreamHoldSeconds = 2.8f;
+
         /// <summary>A scream enrages the bodies this far around the screamer (m, flat, same storey).</summary>
         private const float EnrageRadius = 8f;
 
@@ -433,6 +437,11 @@ namespace VortexArena.Modes.Zombie
         /// <summary>Screamer: holding its distance instead of closing in. Hysteresis, not a threshold —
         /// one distance would make it step in and out of the stand-off every frame.</summary>
         private bool _standoff;
+
+        /// <summary>Screamer after its first scream: no more stand-off — it runs at the speed cap at
+        /// <see cref="_chargeTargetId"/>, the nearest player when the scream ended.</summary>
+        private bool _charging;
+        private int _chargeTargetId;
 
         /// <summary>Dev: time its storey went empty; <c>0</c> = there is someone to chase.</summary>
         private float _devAloneSince;
@@ -805,8 +814,11 @@ namespace VortexArena.Modes.Zombie
         private float WaveSpeed()
         {
             // A crippled body drags itself: the crawler's pace, so the view's crawl cycle does not skate.
-            float speed = ZombieKinds.SpeedOf(_crippled ? ZombieKinds.TypeCrawler : _type,
-                ZombieKinds.PayloadInt(_net, ZombieKinds.PayloadWave, 1));
+            // A charging screamer runs: the cap is the run clip's pace, so the view does not skate.
+            float speed = _charging && !_crippled
+                ? ZombieKinds.SpeedCap
+                : ZombieKinds.SpeedOf(_crippled ? ZombieKinds.TypeCrawler : _type,
+                    ZombieKinds.PayloadInt(_net, ZombieKinds.PayloadWave, 1));
 
             if (Time.time < _enrageUntil)
             {
@@ -1126,7 +1138,7 @@ namespace VortexArena.Modes.Zombie
             flat.y = 0f;
             float distance = flat.magnitude;
 
-            if (IsScreamer && UpdateStandoff(distance))
+            if (IsScreamer && !_charging && UpdateStandoff(distance))
             {
                 // Holds its ground and keeps facing the target: the scream is a crowd signal, and a
                 // screamer in the melee dies before it can give one.
@@ -1273,6 +1285,28 @@ namespace VortexArena.Modes.Zombie
             bool multiFloor = ArenaFloors.Count > 1;
             int myFloor = MyFloor();
             float now = Time.time;
+
+            // A charging screamer keeps its pick until that player drops out (down, protected,
+            // upstairs), then takes the next nearest — no score, no path budget.
+            if (_charging)
+            {
+                if (_chargeTargetId > 0 &&
+                    TryValidTarget(_chargeTargetId, multiFloor, myFloor, out floorPosition))
+                {
+                    playerId = _chargeTargetId;
+                    return true;
+                }
+
+                if (TryNearestTarget(multiFloor, myFloor, out playerId, out floorPosition))
+                {
+                    _chargeTargetId = playerId;
+                    return true;
+                }
+
+                _chargeTargetId = 0;
+                _targetId = 0;
+                return false;
+            }
 
             // A scream overrides the score for its duration: the point of the enrage is that the pack
             // converges on ONE player instead of each picking its own.
@@ -1830,6 +1864,16 @@ namespace VortexArena.Modes.Zombie
             if (IsScreamer)
             {
                 SpreadEnrage();
+
+                // Cries in place, then charges the player nearest at the END of the cry: the target is
+                // re-picked once the hold is over.
+                _holdUntil = Mathf.Max(_holdUntil, Time.time + ScreamerScreamHoldSeconds);
+                _attackAt = 0f;
+                _attackTargetId = 0;
+                _charging = true;
+                _standoff = false;
+                _chargeTargetId = 0;
+                _retargetTimer = 0f;
             }
         }
 
@@ -2137,7 +2181,9 @@ namespace VortexArena.Modes.Zombie
                 }
             }
 
-            int emptyMin = ZombieWaveState.Remaining > 0 ? ZombieWaveState.FloorMin : 0;
+            // Only while the wave CLOCK runs: once it is out the wave closes on its last standing
+            // zombie, and a floor nobody visits would hold that zombie forever.
+            int emptyMin = ZombieWaveState.WaveLeft > 0 ? ZombieWaveState.FloorMin : 0;
             int perEmpty = emptyFloors > 0
                 ? Mathf.Min(emptyMin, Mathf.FloorToInt(EmptyFloorShare * liveCount / emptyFloors))
                 : 0;

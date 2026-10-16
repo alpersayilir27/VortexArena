@@ -16,7 +16,7 @@ MonoBehaviour:
   displayName: Klasik
   gameType: 2
   lobbyProfile: 0
-  roundSeconds: 600
+  roundSeconds: 900
   scoreLimit: 0
   teamMode: 1
   scoring: 2

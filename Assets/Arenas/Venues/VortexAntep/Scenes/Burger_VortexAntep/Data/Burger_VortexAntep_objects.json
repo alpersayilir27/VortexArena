@@ -30,6 +30,8 @@
     { "sceneId": 44, "kind": "cutting_board" },
     { "sceneId": 45, "kind": "cutting_board" },
     { "sceneId": 46, "kind": "ketchup_bottle" },
-    { "sceneId": 47, "kind": "ketchup_bottle" }
+    { "sceneId": 47, "kind": "ketchup_bottle" },
+    { "sceneId": 48, "kind": "fridge_door" },
+    { "sceneId": 49, "kind": "fridge_door" }
   ]
 }

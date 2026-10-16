@@ -241,7 +241,7 @@ namespace VortexArena.App.Editor
             public TextMeshProUGUI self;
         }
 
-        /// <summary>CSS <c>.za .row</c>: DALGA (blood cell) · KALAN · EKİP · SEN on one rusted plate.</summary>
+        /// <summary>CSS <c>.za .row</c>: DALGA (blood cell) · SÜRE · EKİP · SEN on one rusted plate.</summary>
         private static ZbCells ZbBuildRow(Transform parent)
         {
             RectTransform row = Node(parent, "Row");
@@ -270,12 +270,13 @@ namespace VortexArena.App.Editor
             ZbDivider(row, "DividerWave", x);
             x += ZbDividerW;
 
-            // KALAN, not "ayakta": the number the squad reacts to is what the wave still OWES them
-            // (on the floor + not spawned yet), otherwise a wave looks finished while it is spawning.
+            // SÜRE, not a zombie count: a wave ends on its CLOCK, and the number the squad plans around
+            // is how long the pressure lasts. ⚠️ Smaller value font than the other cells — `m:ss` is four
+            // glyphs in a 150 px cell.
             RectTransform remaining = Node(row, "CellRemaining");
             Place(remaining, x, 0f, ZbCellW, ZbCellH);
-            cells.remaining = ZbCellContent(remaining, "KALAN", "14", GirdapFont.SairaBold,
-                GirdapFont.SairaExtraBold, 68f, Kan.Label, Kan.Alive, false);
+            cells.remaining = ZbCellContent(remaining, "SÜRE", "2:30", GirdapFont.SairaBold,
+                GirdapFont.SairaExtraBold, 56f, Kan.Label, Kan.Alive, false);
             x += ZbCellW;
 
             ZbDivider(row, "DividerRemaining", x);

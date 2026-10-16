@@ -3,18 +3,18 @@ using VortexArena.Core.Combat;
 
 namespace VortexArena.Core.Player
 {
-    /// <summary>Resolves a hand's finger chains <b>once in bind pose</b>, then applies
-    /// <see cref="HandPoseProfile"/> curl ratios on that skeleton's OWN axes.</summary>
+    /// <summary>Resolves a hand's finger chains <b>once in bind pose</b>, then RETARGETS the authored
+    /// ISDK joint array onto those bones (<see cref="HandPoseLibrary.TryResolveRetargetBones"/>).</summary>
     /// <remarks>
-    /// ⚠️ The bend axis is MEASURED, not hard-coded (same rationale as <c>HandGripConvention</c>): a
-    /// different model must not require a line change here. Axis = bone direction × palm normal, both
-    /// read in bind pose, with its sign settled by a self-check.
+    /// The authored pose crosses between the two skeletons as two measured quantities per bone —
+    /// wrist-space ORIENTATION and bone DIRECTION — each read from its OWN skeleton's bind pose. So
+    /// curl, spread and thumb opposition all survive, while a raw ISDK quaternion is still never
+    /// written onto a humanoid bone (the project's learned rule).
     /// <para>⚠️ The left/right handedness of the palm normal does NOT come from here —
-    /// <see cref="HandGripConvention"/> is the single implementation of the cross-product order; only
-    /// the palm normal is read out of the basis it returns.</para>
-    /// <para>⚠️ Setup MUST happen in bind pose (in <c>Awake</c>, before the retargeter writes bones): an
-    /// axis measured on a posed skeleton bakes in that frame's curl and the fingers bend wrong
-    /// forever.</para>
+    /// <see cref="HandGripConvention"/> is the single implementation of the cross-product order.</para>
+    /// <para>⚠️ Setup MUST happen in bind pose (in <c>Awake</c>, before the retargeter writes bones): a
+    /// direction/offset measured on a posed skeleton bakes in that frame's curl and the fingers stay
+    /// wrong forever.</para>
     /// </remarks>
     public class HandFingerRig
     {
@@ -23,10 +23,8 @@ namespace VortexArena.Core.Player
 
         private const int FingerCount = 5;
 
-        /// <summary>Small probe angle used for the bend-axis sign self-check (degrees).</summary>
-        private const float SignProbeDegrees = 10f;
-
-        /// <summary>Finger suffixes in bone names — same order as <see cref="HandPoseProfile.Get"/>.</summary>
+        /// <summary>Finger suffixes in bone names — same order as ISDK's <c>HandFinger</c>, which is
+        /// the order <see cref="HandPoseLibrary.TryResolveRetargetBones"/> fills its slots in.</summary>
         private static readonly string[] FingerNames = { "Thumb", "Index", "Middle", "Ring", "Pinky" };
 
         /// <summary>Wrist bone name (Mixamo humanoid). ⚠️ Finger bones append to this name
@@ -37,14 +35,19 @@ namespace VortexArena.Core.Player
         /// <inheritdoc cref="LeftWristBoneName"/>
         public const string RightWristBoneName = "mixamorig:RightHand";
 
-        /// <summary>Degrees per joint at full curl. The thumb differs: anatomically it curls less and
-        /// lies on top of the grip rather than wrapping it.</summary>
-        private static readonly float[] FingerMaxAngles = { 50f, 60f, 40f };
-        private static readonly float[] ThumbMaxAngles = { 25f, 35f, 30f };
-
         private readonly Transform[] _bones = new Transform[FingerCount * JointsPerFinger];
-        private readonly Quaternion[] _bindLocalRotations = new Quaternion[FingerCount * JointsPerFinger];
-        private readonly Vector3[] _bendAxes = new Vector3[FingerCount * JointsPerFinger];
+
+        /// <summary>Each bone's own direction toward the next joint, in BONE space (bind pose).</summary>
+        private readonly Vector3[] _localDirections = new Vector3[FingerCount * JointsPerFinger];
+
+        /// <summary>Bind-pose difference between the ISDK bone and this bone, in the ISDK wrist frame.</summary>
+        private readonly Quaternion[] _offsets = new Quaternion[FingerCount * JointsPerFinger];
+
+        // Per-frame retarget output (instance buffers: Apply must not allocate).
+        private readonly Quaternion[] _rot = new Quaternion[HandPoseLibrary.RetargetBoneCount];
+        private readonly Vector3[] _dir = new Vector3[HandPoseLibrary.RetargetBoneCount];
+
+        private bool _rightHand;
 
         /// <summary>This hand's wrist bone.</summary>
         public Transform Wrist { get; private set; }
@@ -79,9 +82,10 @@ namespace VortexArena.Core.Player
             return null;
         }
 
-        /// <summary>Resolves the finger chains under the wrist and measures their bend axes.</summary>
-        /// <remarks>Returns <c>null</c> if even one joint cannot be resolved — better than a half-built
-        /// hand that silently animates some fingers and freezes others.</remarks>
+        /// <summary>Resolves the finger chains under the wrist and measures their bind-pose
+        /// directions and retarget offsets.</summary>
+        /// <remarks>Returns <c>null</c> if even one joint or the SDK bind array cannot be resolved —
+        /// better than a half-built hand that silently poses some fingers and freezes others.</remarks>
         /// <param name="wrist">Wrist bone (e.g. <c>mixamorig:LeftHand</c>).</param>
         /// <param name="rightHand">Right hand? (sign of the palm normal).</param>
         public static HandFingerRig TryBuild(Transform wrist, bool rightHand)
@@ -110,16 +114,19 @@ namespace VortexArena.Core.Player
                 return null;
             }
 
-            Vector3 palmNormalWorld = wrist.TransformDirection(boneBasis * Vector3.up);
-            if (palmNormalWorld.sqrMagnitude < 1e-8f)
+            // The SDK side of the pairing, measured in ITS bind pose: the offsets below are the
+            // difference between the two skeletons' rest hands, nothing else.
+            if (!HandPoseLibrary.TryResolveRetargetBones(
+                    HandPoseLibrary.BindJointRotations(rightHand), rightHand, rig._rot, rig._dir))
             {
                 return null;
             }
 
-            palmNormalWorld = palmNormalWorld.normalized;
-
             rig.Wrist = wrist;
+            rig._rightHand = rightHand;
             rig.WristCorrection = HandGripConvention.Correction(rightHand, boneBasis);
+
+            Quaternion toWrist = Quaternion.Inverse(wrist.rotation);
 
             for (int finger = 0; finger < FingerCount; finger++)
             {
@@ -130,71 +137,60 @@ namespace VortexArena.Core.Player
                     int slot = finger * JointsPerFinger + joint;
 
                     Vector3 boneDirection = next.position - bone.position;
-                    if (boneDirection.sqrMagnitude < 1e-8f || bone.parent == null)
+                    if (boneDirection.sqrMagnitude < 1e-8f)
                     {
                         return null;
-                    }
-
-                    boneDirection = boneDirection.normalized;
-
-                    Vector3 axisWorld = Vector3.Cross(boneDirection, palmNormalWorld);
-                    if (axisWorld.sqrMagnitude < 1e-8f)
-                    {
-                        return null;
-                    }
-
-                    axisWorld = axisWorld.normalized;
-
-                    // ⚠️ The sign is fixed by SELF-CHECK, never by cross-product order — the same rule
-                    // as HandPoseLibrary's hinge table and for the same reason: a positive rotation
-                    // must carry the fingertip INTO the palm, and an order taken on trust bends every
-                    // finger toward the BACK of the hand. That failure raises no error and reads on
-                    // site as "the remote player's hand opens inside out".
-                    Vector3 probed = Quaternion.AngleAxis(SignProbeDegrees, axisWorld) * boneDirection;
-                    if (Vector3.Dot(probed - boneDirection, palmNormalWorld) <= 0f)
-                    {
-                        axisWorld = -axisWorld;
                     }
 
                     rig._bones[slot] = bone;
-                    rig._bindLocalRotations[slot] = bone.localRotation;
-
-                    // Stored in PARENT space: a hinge axis is fixed in the joint and turns with the
-                    // parent — exactly like a real finger joint.
-                    rig._bendAxes[slot] = bone.parent.InverseTransformDirection(axisWorld).normalized;
+                    rig._localDirections[slot] =
+                        bone.InverseTransformDirection(boneDirection).normalized;
+                    rig._offsets[slot] = Quaternion.Inverse(rig._rot[slot]) * rig.WristCorrection *
+                                         (toWrist * bone.rotation);
                 }
             }
 
             return rig;
         }
 
-        /// <summary>Applies the pose. Called per frame; writes only, never measures.</summary>
-        public void Apply(in HandPoseProfile profile)
+        /// <summary>Retargets an authored ISDK joint array onto this hand. Called per frame; writes
+        /// only, never measures.</summary>
+        /// <remarks>⚠️ MUST run AFTER the wrist's final rotation for this frame is written: every bone
+        /// is derived from the wrist.
+        /// <para>Derivation: the Mixamo wrist is <c>sdkWrist * WristCorrection</c>, so
+        /// <c>candidate</c> carries the ISDK bone's bind→pose rotation onto this bone's bind rotation;
+        /// <c>FromToRotation</c> then pins the exact bone direction, absorbing the two skeletons'
+        /// differing bind poses (finger length/spread).</para>
+        /// <para>World rotation is written on purpose: <see cref="SkeletonPoseMirror"/> (order 30100)
+        /// copies <c>localRotation</c> afterwards, so the second body follows for free.</para></remarks>
+        public void Apply(Quaternion[] jointRotations)
         {
-            for (int finger = 0; finger < FingerCount; finger++)
+            if (Wrist == null ||
+                !HandPoseLibrary.TryResolveRetargetBones(jointRotations, _rightHand, _rot, _dir))
             {
-                float curl = Mathf.Clamp01(profile.Get(finger));
-                float[] maxAngles = finger == 0 ? ThumbMaxAngles : FingerMaxAngles;
+                return;
+            }
 
-                for (int joint = 0; joint < JointsPerFinger; joint++)
+            Quaternion sdkWrist = Wrist.rotation * Quaternion.Inverse(WristCorrection);
+
+            for (int slot = 0; slot < _bones.Length; slot++)
+            {
+                Transform bone = _bones[slot];
+                if (bone == null)
                 {
-                    int slot = finger * JointsPerFinger + joint;
-                    Transform bone = _bones[slot];
-                    if (bone == null)
-                    {
-                        continue; // may have been destroyed on a scene change
-                    }
-
-                    bone.localRotation =
-                        Quaternion.AngleAxis(curl * maxAngles[joint], _bendAxes[slot]) *
-                        _bindLocalRotations[slot];
+                    continue; // may have been destroyed on a scene change
                 }
+
+                Quaternion candidate = sdkWrist * _rot[slot] * _offsets[slot];
+                Vector3 target = sdkWrist * _dir[slot];
+                bone.rotation =
+                    Quaternion.FromToRotation(candidate * _localDirections[slot], target) * candidate;
             }
         }
 
         /// <summary>Resolves the <c>&lt;wrist&gt;/…Thumb1/…Thumb2/…Thumb3/…Thumb4</c> chain.</summary>
         /// <remarks>Four bones are required: the last one is not rotated but is needed to MEASURE
-        /// direction — a joint's bend axis is only defined by the point after it.
+        /// direction — a joint's bone direction is only defined by the point after it.
         /// <para>⚠️ The lookup searches the whole subtree by exact name, NOT via two levels of
         /// <c>Find</c>: some models insert intermediate nodes, and silently applying no pose is the
         /// hardest failure to diagnose.</para></remarks>

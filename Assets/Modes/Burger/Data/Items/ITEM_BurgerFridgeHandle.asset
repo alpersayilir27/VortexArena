@@ -1,0 +1,119 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ce8397c73e29fe44daba1538ea3c98a1, type: 3}
+  m_Name: ITEM_BurgerFridgeHandle
+  m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.PropDefinition
+  displayName: "Buzdolab\u0131 kap\u0131s\u0131"
+  netItemId: 0
+  prefab: {fileID: 0}
+  holdMode: 0
+  grabPath: 1
+  instancing: 1
+  releaseMode: 0
+  hideGrabIndicator: 1
+  primaryGripRight:
+    authored: 1
+    position: {x: 0.10100008, y: 0.013962507, z: -0.12879016}
+    fingerJoints:
+    - joint: HandThumb1
+      rotation: {x: -0.085503995, y: -0.35385713, z: 0.57795817, w: 0.7303685}
+    - joint: HandThumb2
+      rotation: {x: 0.06165498, y: 0.06494101, z: -0.08317396, w: 0.9925034}
+    - joint: HandThumb3
+      rotation: {x: -0.14735411, y: -0.07178871, z: 0.08478967, w: 0.9828243}
+    - joint: HandIndex1
+      rotation: {x: 0.1545132, y: 0.13708957, z: 0.019557739, w: 0.9782378}
+    - joint: HandIndex2
+      rotation: {x: 0.18900849, y: 0.0021864583, z: -0.026349569, w: 0.98161936}
+    - joint: HandIndex3
+      rotation: {x: 0.07825275, y: 0.024664223, z: -0.016784688, w: 0.99648696}
+    - joint: HandMiddle1
+      rotation: {x: 0.23186363, y: 0.12735675, z: -0.032456875, w: 0.96382856}
+    - joint: HandMiddle2
+      rotation: {x: 0.1542966, y: 0.0025698268, z: -0.0120998025, w: 0.9879469}
+    - joint: HandMiddle3
+      rotation: {x: 0.036777712, y: -0.00105367, z: -0.047199585, w: 0.99820745}
+    - joint: HandRing1
+      rotation: {x: 0.10296994, y: 0.08985324, z: -0.058610957, w: 0.98888236}
+    - joint: HandRing2
+      rotation: {x: 0.1274827, y: -0.0013162135, z: -0.036437474, w: 0.9911703}
+    - joint: HandRing3
+      rotation: {x: 0.06704729, y: -0.029550195, z: -0.007787839, w: 0.99728173}
+    - joint: HandPinky0
+      rotation: {x: 0.018311791, y: 0.14034277, z: -0.20703599, w: 0.96804154}
+    - joint: HandPinky1
+      rotation: {x: -0.020661056, y: 0.042519122, z: 0.0979407, w: 0.9940687}
+    - joint: HandPinky2
+      rotation: {x: 0.1127933, y: 0.03776073, z: -0.04843465, w: 0.9917184}
+    - joint: HandPinky3
+      rotation: {x: 0.027112078, y: -0.04912966, z: 0.00082101044, w: 0.9984238}
+    wristAuthored: 1
+    wristPosition: {x: 0.024426432, y: 0.031606317, z: -0.026340785}
+    wristRotation: {x: -0.44719562, y: -0.17225775, z: 0.73374677, w: -0.48162118}
+  primaryGripLeft:
+    authored: 1
+    position: {x: -0.10100008, y: 0.013962507, z: -0.12879016}
+    fingerJoints:
+    - joint: HandThumb1
+      rotation: {x: -0.08550391, y: 0.35385713, z: -0.57795817, w: 0.73036885}
+    - joint: HandThumb2
+      rotation: {x: 0.061654966, y: -0.064941, z: 0.083173946, w: 0.99250364}
+    - joint: HandThumb3
+      rotation: {x: -0.14735411, y: 0.07178872, z: -0.08478968, w: 0.98282444}
+    - joint: HandIndex1
+      rotation: {x: 0.15451318, y: -0.13708954, z: -0.019557731, w: 0.97823805}
+    - joint: HandIndex2
+      rotation: {x: 0.1890085, y: -0.0021864579, z: 0.026349569, w: 0.9816195}
+    - joint: HandIndex3
+      rotation: {x: 0.07825274, y: -0.02466422, z: 0.016784685, w: 0.9964871}
+    - joint: HandMiddle1
+      rotation: {x: 0.2318636, y: -0.12735674, z: 0.032456886, w: 0.96382886}
+    - joint: HandMiddle2
+      rotation: {x: 0.15429659, y: -0.0025698256, z: 0.012099802, w: 0.98794717}
+    - joint: HandMiddle3
+      rotation: {x: 0.0367777, y: 0.0010536703, z: 0.04719958, w: 0.9982076}
+    - joint: HandRing1
+      rotation: {x: 0.10296993, y: -0.08985323, z: 0.05861095, w: 0.9888824}
+    - joint: HandRing2
+      rotation: {x: 0.12748267, y: 0.0013162146, z: 0.03643747, w: 0.9911704}
+    - joint: HandRing3
+      rotation: {x: 0.0670473, y: 0.029550198, z: 0.0077878404, w: 0.99728173}
+    - joint: HandPinky0
+      rotation: {x: 0.018311799, y: -0.14034277, z: 0.20703599, w: 0.9680417}
+    - joint: HandPinky1
+      rotation: {x: -0.020661054, y: -0.042519115, z: -0.09794068, w: 0.99406886}
+    - joint: HandPinky2
+      rotation: {x: 0.11279328, y: -0.03776072, z: 0.048434637, w: 0.9917187}
+    - joint: HandPinky3
+      rotation: {x: 0.027112074, y: 0.049129657, z: -0.00082101073, w: 0.99842405}
+    wristAuthored: 1
+    wristPosition: {x: -0.024426432, y: 0.031606317, z: -0.026340785}
+    wristRotation: {x: 0.44719565, y: -0.17225775, z: 0.7337468, w: 0.48162124}
+  secondaryGripRight:
+    authored: 0
+    position: {x: 0, y: 0, z: 0}
+    fingerJoints: []
+    wristAuthored: 0
+    wristPosition: {x: 0, y: 0, z: 0}
+    wristRotation: {x: 0, y: 0, z: 0, w: 0}
+  secondaryGripLeft:
+    authored: 0
+    position: {x: 0, y: 0, z: 0}
+    fingerJoints: []
+    wristAuthored: 0
+    wristPosition: {x: 0, y: 0, z: 0}
+    wristRotation: {x: 0, y: 0, z: 0, w: 0}
+  tracerColor: {r: 1, g: 0.85, b: 0.4, a: 0.9}
+  tracerWidth: 0.02
+  tracerLifetime: 0.1
+  tracerEveryNthRound: 3
+  teamTintChildren: []

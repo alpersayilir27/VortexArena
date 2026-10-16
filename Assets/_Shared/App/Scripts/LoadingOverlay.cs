@@ -22,6 +22,9 @@ namespace VortexArena.App
     /// ⚠️ **VR safety rule** (as in `ConnectionOverlay` — the player walks 1:1 physically): the
     /// world-space variant has NO full-screen scrim, only a semi-transparent card. Darkening the
     /// view is dangerous in free-roam.
+    ///
+    /// ⚠️ The world card must sort above the transition black (<c>SceneTransitionFade</c> quad, order
+    /// 25) — the prefab canvas order (4500) must not be lowered below it.
     /// </summary>
     public class LoadingOverlay : MonoBehaviour
     {
@@ -121,6 +124,13 @@ namespace VortexArena.App
             }
 
             _instance = this;
+
+            // World-space card is otherwise depth-tested: a wall nearer than the card would cut it out
+            // of the transition black. Offset 0 — the prefab's 4500 already clears the black (25).
+            if (_worldSpace)
+            {
+                UiDrawOnTop.Apply(gameObject, 0);
+            }
 
             // `_visible = true` on purpose: ApplyVisible skips same-value writes, and a prefab saved
             // with an enabled canvas must still be turned off here.

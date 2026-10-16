@@ -64,6 +64,26 @@ PrefabInstance:
       propertyPath: m_ConstrainProportionsScale
       value: 1
       objectReference: {fileID: 0}
+    - target: {fileID: -8157319429370466352, guid: 78b2e390ab883bf4994fb39d0c058217, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: a09ad360c41c7464398c4b80f1ebcb95, type: 2}
+    - target: {fileID: -2187729162648236829, guid: 78b2e390ab883bf4994fb39d0c058217, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: a09ad360c41c7464398c4b80f1ebcb95, type: 2}
+    - target: {fileID: -1810934479150309671, guid: 78b2e390ab883bf4994fb39d0c058217, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: a09ad360c41c7464398c4b80f1ebcb95, type: 2}
+    - target: {fileID: -784845896428568377, guid: 78b2e390ab883bf4994fb39d0c058217, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: a09ad360c41c7464398c4b80f1ebcb95, type: 2}
+    - target: {fileID: -118523380282564760, guid: 78b2e390ab883bf4994fb39d0c058217, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 3492e66ff8184754ca20d1d697639df3, type: 2}
     - target: {fileID: 919132149155446097, guid: 78b2e390ab883bf4994fb39d0c058217, type: 3}
       propertyPath: m_Name
       value: MolePrefab

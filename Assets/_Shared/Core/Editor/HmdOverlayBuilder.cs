@@ -20,9 +20,9 @@ namespace VortexArena.Core.Editor
     /// <c>AddComponent&lt;TextMesh&gt;</c> assigns none and a fontless <c>TextMesh</c> generates no
     /// mesh, so the warning would silently never draw.</para>
     /// <para>Draw order comes from the DISTANCE in the prefab (texts 0.42 · vignette 0.44 · portal
-    /// iris 0.46 · scene transition quad 0.5 · out-of-bounds fade quad 0.5) — keep that order when
-    /// changing numbers. The vignette is additionally in the <c>Overlay</c> queue; reason in
-    /// <see cref="DamageVignette"/>.</para>
+    /// iris 0.46 · out-of-bounds fade quad 0.5) — keep that order when changing numbers. The
+    /// vignette is additionally in the <c>Overlay</c> queue; reason in <see cref="DamageVignette"/>.
+    /// The scene transition quad is the exception: it sorts by <see cref="TransitionSortingOrder"/>.</para>
     /// <para>⚠️ Both texts can be on at once (the boundary counts scene <c>ArenaObstacle</c>s as out
     /// of bounds → <see cref="VortexArena.Core.Arena.ArenaBoundary"/>), so they are stacked
     /// vertically instead of overlapping: obstacle warning slightly above centre, out-of-bounds
@@ -48,9 +48,7 @@ namespace VortexArena.Core.Editor
         private const string IrisShaderName = "VortexArena/ScreenIris";
 
         private const string TransitionMaterialPath = "Assets/_Shared/Materials/M_SceneTransitionFade.mat";
-
-        /// <summary>Source of the transition material: URP/Unlit · Transparent · black.</summary>
-        private const string TransitionSourceMaterialPath = "Assets/Materials/M_ScreenFade.mat";
+        private const string TransitionShaderName = "VortexArena/SceneTransitionFade";
 
         /// <summary>Distance of the warning texts from the camera (m) — must be NEARER than the fade
         /// quad.</summary>
@@ -114,11 +112,14 @@ namespace VortexArena.Core.Editor
         /// where FOV coverage at this distance is already verified.</summary>
         private const float TransitionSize = 1.8f;
 
-        /// <summary>⚠️ Deliberately BELOW UI (3000): the loading and connection cards (world-space
-        /// canvases) must draw ON TOP of the black, so the player can read them while faded.</summary>
-        private const int TransitionRenderQueue = 2990;
+        /// <summary>Sorting order of the transition quad (same queue as UI, 3000): ABOVE every in-game
+        /// world UI (ammo panel 0 · mode HUD 9–11 · match result 20), BELOW the connection card (30),
+        /// the calibration card (40) and the loading card (4500).</summary>
+        /// <remarks>⚠️ Under the UI the ammo text and the on-top HUDs stayed lit on the black for the
+        /// whole load; above the cards the player could not read the load progress.</remarks>
+        internal const int TransitionSortingOrder = 25;
 
-        private static readonly int QueueOffsetId = Shader.PropertyToID("_QueueOffset");
+        private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
 
         /// <summary>Check tolerance. ⚠️ Not <c>Mathf.Approximately</c>: its epsilon scales with
         /// magnitude and the numbers compared here (0.012 m, 0.01 scale) are tiny — a text nudged by
@@ -291,6 +292,15 @@ namespace VortexArena.Core.Editor
             {
                 detail = $"{TransitionObjectName} materyalsiz — geçiş karartması Quest'te pembe " +
                          "çizilir (materyali bu araç üretir).";
+                return false;
+            }
+
+            if (transitionRenderer.sharedMaterial.shader == null ||
+                transitionRenderer.sharedMaterial.shader.name != TransitionShaderName ||
+                transitionRenderer.sortingOrder != TransitionSortingOrder)
+            {
+                detail = $"{TransitionObjectName} eski kurulumda — silah yazısı ve HUD geçiş " +
+                         "karartmasının üstünde kalır.";
                 return false;
             }
 
@@ -622,6 +632,7 @@ namespace VortexArena.Core.Editor
             }
 
             renderer.sharedMaterial = material;
+            renderer.sortingOrder = TransitionSortingOrder;
             renderer.enabled = false; // nothing to draw at alpha 0; the driver turns it on
             StripLighting(renderer);
         }
@@ -656,50 +667,38 @@ namespace VortexArena.Core.Editor
             return material;
         }
 
-        /// <summary>Scene transition material — a copy of <c>M_ScreenFade</c> (URP/Unlit ·
-        /// Transparent · black) with its queue pushed under UI.</summary>
-        /// <remarks>Copied by the tool, not hand written: a shader's GUID is unknown before import,
-        /// so a hand written <c>.mat</c> would open with a silently empty shader reference.</remarks>
+        /// <summary>Scene transition material on <c>VortexArena/SceneTransitionFade</c> (ZTest Always ·
+        /// queue 3000 · black). An existing material on another shader is switched over in place, so
+        /// the prefab reference survives.</summary>
+        /// <remarks>Generated by the tool for the same reason as the vignette's: a shader's GUID is
+        /// unknown before import, so a hand written <c>.mat</c> would open with a silently empty shader
+        /// reference.</remarks>
         private static Material LoadOrCreateSceneTransitionMaterial()
         {
+            Shader shader = Shader.Find(TransitionShaderName);
+            if (shader == null)
+            {
+                Debug.LogError($"[HmdOverlay] Shader bulunamadı: {TransitionShaderName}. " +
+                               "Assets/_Shared/Shaders/SceneTransitionFade.shader import edilmiş mi?");
+                return null;
+            }
+
             var material = AssetDatabase.LoadAssetAtPath<Material>(TransitionMaterialPath);
 
             if (material == null)
             {
-                if (AssetDatabase.LoadAssetAtPath<Material>(TransitionSourceMaterialPath) == null)
-                {
-                    Debug.LogError($"[HmdOverlay] Kaynak materyal bulunamadı: " +
-                                   $"{TransitionSourceMaterialPath}. Geçiş karartması kurulamadı.");
-                    return null;
-                }
-
-                if (!AssetDatabase.CopyAsset(TransitionSourceMaterialPath, TransitionMaterialPath))
-                {
-                    Debug.LogError($"[HmdOverlay] Materyal kopyalanamadı: " +
-                                   $"{TransitionSourceMaterialPath} → {TransitionMaterialPath}");
-                    return null;
-                }
-
-                AssetDatabase.ImportAsset(TransitionMaterialPath);
-                material = AssetDatabase.LoadAssetAtPath<Material>(TransitionMaterialPath);
-
-                if (material == null)
-                {
-                    Debug.LogError($"[HmdOverlay] Kopyalanan materyal açılamadı: {TransitionMaterialPath}");
-                    return null;
-                }
-
+                material = new Material(shader) { name = "M_SceneTransitionFade" };
+                AssetDatabase.CreateAsset(material, TransitionMaterialPath);
                 Debug.Log($"[HmdOverlay] Geçiş materyali üretildi: {TransitionMaterialPath}");
             }
-
-            // ⚠️ URP shaders derive the queue from _QueueOffset, so the offset and renderQueue are
-            // written together; otherwise the shader would overwrite the queue on the next import.
-            if (material.HasProperty(QueueOffsetId))
+            else if (material.shader != shader)
             {
-                material.SetFloat(QueueOffsetId, -10f);
+                material.shader = shader;
+                material.shaderKeywords = System.Array.Empty<string>(); // URP/Unlit leftovers
             }
 
-            material.renderQueue = TransitionRenderQueue;
+            material.renderQueue = -1; // the shader's own Transparent (3000) — see TransitionSortingOrder
+            material.SetColor(BaseColorId, new Color(0f, 0f, 0f, 0f));
             EditorUtility.SetDirty(material);
             return material;
         }

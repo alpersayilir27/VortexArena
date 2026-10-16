@@ -7,8 +7,9 @@ using VortexArena.Net;
 
 namespace VortexArena.Modes.Zombie
 {
-    /// <summary>Installs the zombie mode's OWN weapon damage (<see cref="ZombieArsenal"/> rows) over
-    /// <see cref="Weapon.DamageOverride"/> while zombie rules are running, and drops it otherwise.</summary>
+    /// <summary>Installs the zombie mode's OWN weapon damage, reload time and dry-click level
+    /// (<see cref="ZombieArsenal"/>) over the <see cref="Weapon"/> mode hooks while zombie rules are
+    /// running, and drops them otherwise.</summary>
     /// <remarks>⚠️ Separate from the PvP table on purpose: zombies are 100 HP sacks shot for a whole
     /// match, PvP damage is tuned against players — one shared number cannot serve both, and editing
     /// <c>WD_*.asset</c> for the mode would retune PvP silently.
@@ -56,6 +57,8 @@ namespace VortexArena.Modes.Zombie
 
             _active = true;
             Weapon.DamageOverride = Resolve;
+            Weapon.ReloadTimeOverride = ResolveReloadTime;
+            Weapon.DryFireVolumeOverride = ResolveDryFireVolume;
         }
 
         private static void Stop()
@@ -72,7 +75,23 @@ namespace VortexArena.Modes.Zombie
             {
                 Weapon.DamageOverride = null;
             }
+
+            if (Weapon.ReloadTimeOverride == (Func<WeaponDefinition, float>)ResolveReloadTime)
+            {
+                Weapon.ReloadTimeOverride = null;
+            }
+
+            if (Weapon.DryFireVolumeOverride == (Func<WeaponDefinition, float>)ResolveDryFireVolume)
+            {
+                Weapon.DryFireVolumeOverride = null;
+            }
         }
+
+        private static float ResolveReloadTime(WeaponDefinition definition) =>
+            definition.ReloadTime * ZombieArsenal.Live.ReloadTimeScale;
+
+        private static float ResolveDryFireVolume(WeaponDefinition definition) =>
+            ZombieArsenal.Live.DryFireVolumeScale;
 
         /// <summary>Damage of one hit (one PELLET on a shotgun). A row that overrides only the body
         /// number keeps the weapon's own stomach/leg ratios, applied to the new body damage.</summary>

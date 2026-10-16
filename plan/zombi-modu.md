@@ -20,8 +20,8 @@ Görsel seçim gereken adımda (HUD maketi, ışık varyantı, zombi adayı) kul
 | Kan | Koyu kırmızı; kafadan vuruşta 2× |
 | Müzik | Dinamik iki katman: dalga arası gerilim · dalga sırası aksiyon, crossfade + vurgu sesleri |
 | Atmosfer | Ay ışığı, mavi-gri sis, sıcak fener adacıkları (varyant ekran görüntüsüyle son seçim) |
-| Hedef | Oyuncular **tek ekip**; zafer ve yenilgi ekibindir, kişisel puan yalnız sonuç ekranında öne çıkar |
-| Ölüm | Düşen oyuncuyu **takım arkadaşı kaldırır**; kaldırılmayan dalga arasında kalkar; herkes aynı anda düşerse yenilgi |
+| Hedef | Oyuncular **tek ekip**; zafer ekibindir, kişisel puan yalnız sonuç ekranında öne çıkar |
+| Ölüm | Düşen oyuncuyu **takım arkadaşı kaldırır**; kaldırılmayan dalga arasında kalkar; herkes aynı anda düşerse maç bitmez, kısa bir geri sayımdan sonra çevre temizlenip ekip birlikte kalkar |
 | Maç sonu | Süre dolunca değil **Son Direniş**le biter: son 90 sn'de Dev gelir; Dev ölürse ya da süre biterse zafer |
 | Zombi türü | Yürüyen · Sürünen · Koşucu · İri · Çığlıkçı + Son Direniş'in Dev'i; tür sunucuda seçilir, gözü renginden okunur |
 | Hız tavanı | 1,2 m/sn güvenlik kuralı tür için de geçerli — "hızlı" zombi tavanda koşar, tavanı aşmaz |
@@ -83,8 +83,9 @@ Kod, kilit görünümü, açılış tablosu ve doküman bitti. Kalan:
 
 ## Faz 8 — Ekip kuralları ve maç sonu
 
-Kod, doküman ve prefab'lar bitti (arkadaşın kaldırması, dalga arası diriliş, ekip yenilgisi,
-süre dolunca zafer, türe göre puan, moda özel sonuç ekranı, takım şeridi + düşen arkadaş işareti).
+Kod, doküman ve prefab'lar bitti (arkadaşın kaldırması, dalga arası diriliş, ekip düşmesinde
+birlikte kalkma, süre dolunca zafer, türe göre puan, moda özel sonuç ekranı, takım şeridi + düşen
+arkadaş işareti).
 Kalan:
 
 - [ ] Gözlükte doğrulama: kaldırma mesafesi/süresi doğal mı, düşen arkadaş işareti duvar arkasından

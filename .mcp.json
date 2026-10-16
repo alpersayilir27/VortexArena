@@ -31,6 +31,20 @@
         "--mcp"
       ],
       "env": {}
+    },
+    "chrome-devtools": {
+      "type": "stdio",
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "chrome-devtools-mcp@1.11.0",
+        "--autoConnect",
+        "--no-usage-statistics",
+        "--no-performance-crux"
+      ],
+      "env": {}
     }
   }
 }

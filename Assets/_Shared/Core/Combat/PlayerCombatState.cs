@@ -191,6 +191,7 @@ namespace VortexArena.Core.Combat
 
         private bool _awaitingRevive;
         private float _reviveAt;
+        private float _reviveDelay; // OwnBase: the countdown restarts from this on every base entry
         private float _nextReviveSendAt;
 
         private BaseZone[] _zones = Array.Empty<BaseZone>();
@@ -286,6 +287,7 @@ namespace VortexArena.Core.Combat
                 ModeRuntime.Revive == ModeReviveAnchor.Teammate ? ResolveHead() : null, IsAlive);
             TickHoldAnchor();
             RefreshZoneState();
+            TickBaseCountdown();
             TickRevive();
             RefreshStatusText();
         }
@@ -319,6 +321,24 @@ namespace VortexArena.Core.Combat
             _reviveMsg.by = reviverId;
             ArenaClient.Instance?.Send(_reviveMsg);
         }
+
+        /// <summary>§10.4 OwnBase: the revive countdown runs only INSIDE the base — outside it is held
+        /// at the full delay, so leaving the base restarts it. Otherwise a delay spent walking would
+        /// revive the player the instant they step in.</summary>
+        private void TickBaseCountdown()
+        {
+            if (IsAlive || !_awaitingRevive || !IsWaitingForBase)
+            {
+                return;
+            }
+
+            _reviveAt = Time.time + _reviveDelay;
+        }
+
+        /// <summary>Dead in an OwnBase mode, outside every open base. ⚠️ No open base = false
+        /// (fail-open of <see cref="IsReviveConditionMet"/>): the countdown then runs from death.</summary>
+        private bool IsWaitingForBase =>
+            ModeRuntime.Revive == ModeReviveAnchor.OwnBase && HasOpenBaseZone && !IsInsideOwnBase;
 
         /// <summary>In StandStill mode, anchors the HMD position at death and resets anchor and
         /// timer on any move beyond <see cref="ArenaProtocol.REVIVE_HOLD_RADIUS"/>. Runs during the
@@ -483,6 +503,12 @@ namespace VortexArena.Core.Combat
                     text = "Engelden çık ve canlan";
                     kind = CombatStatusKind.Obstacle;
                 }
+                else if (IsWaitingForBase)
+                {
+                    // Before the countdown: outside the base the timer is held, a number would lie.
+                    text = "Tabanına dön ve canlan";
+                    kind = CombatStatusKind.ReturnBase;
+                }
                 else
                 {
                     float remaining = _reviveAt - Time.time;
@@ -526,9 +552,9 @@ namespace VortexArena.Core.Combat
                     }
                     else
                     {
-                        bool reviving = !HasOpenBaseZone || IsInsideOwnBase;
-                        text = reviving ? "Canlanılıyor..." : "Tabanına dön ve canlan";
-                        kind = reviving ? CombatStatusKind.Reviving : CombatStatusKind.ReturnBase;
+                        // Inside the base (or no open base): the outside case returned above.
+                        text = "Canlanılıyor...";
+                        kind = CombatStatusKind.Reviving;
                     }
                 }
             }
@@ -892,6 +918,7 @@ namespace VortexArena.Core.Combat
             if (IsAlive)
             {
                 _reviveAt = Time.time + delay;
+                _reviveDelay = delay;
                 _nextReviveSendAt = 0f;
                 _awaitingRevive = true;
                 _hasHoldAnchor = false; // the StandStill timer starts at death
@@ -902,7 +929,10 @@ namespace VortexArena.Core.Combat
             // Already dead: only the server's respawn message may update the timer.
             if (authoritative)
             {
+                // ⚠️ Arrives a moment after death: already inside the base, the countdown restarts
+                // here — never earlier than the server's threshold, which counts from death.
                 _reviveAt = Time.time + delay;
+                _reviveDelay = delay;
                 _nextReviveSendAt = 0f;
                 _awaitingRevive = true;
             }

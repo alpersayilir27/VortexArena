@@ -76,7 +76,13 @@ elle yapılan bir düzenleme betiğe yazılmadıkça bir sonraki üretimde kaybo
   - A1 ızgara: çubuk üstü **0,95 m** = istasyondaki ızgara gövdesinin `CounterSurface` kutusunun
     üstü. Kayarsa köfte plakaya gömülür ya da havada durur.
   - A4 buzdolabı: eski buzdolabının engel kutusunun (1,61 × 0,86 × 2,05 m) içine sığar; kutu
-    sahnede kalır.
+    sahnede kalır. **D4 gibi üç objedir** (`a4_fridge.py`): `A4_Fridge` gövde (önü açık hacim +
+    beyaz astar + raflar + `M_BK_Lamp` lamba çıtası), `A4_FridgeDoorL` / `A4_FridgeDoorR` kanatlar
+    — kanadın pivotu **menteşesidir** (kanadın arka dış köşesi: x = ±0,75, y = `FRONT`), yani
+    açılan kanat gövdeyi sıyırmaz. Kanatları Unity'de `BurgerFridgeDoor` sürer. ⚠️ **Kanat içi
+    gözler ile raf önleri bir boşluk sözleşmesidir:** kapı gözleri kapalıyken `FRONT + 0,117`'ye
+    kadar gelir, raflar `FRONT + 0,13`'ten başlar — biri kayarsa kapı kapanırken rafa girer.
+    Gövdenin materyal slotları palet (slot 0, `M_BK_Palette`) + lamba (slot 1, `M_BK_Lamp`).
   - G kabuk: duvarlar oyun alanının sınırında (x ±4,5, z ±4,0), görsel tavan `g_shell.CEIL`
     (3,2 m). Tavan değişirse davlumbaz bacası (`a2_hood.DUCT_TOP`) ve sahnedeki pişmiş spotların
     yüksekliği ile gücü birlikte değişir.

@@ -289,6 +289,15 @@ namespace VortexArena.Core.Combat
         /// stay with the weapon — they answer a rejected input, not the shot's weight.</para></summary>
         public static IWeaponFeel FeelOverride;
 
+        /// <summary>MODE hook returning the reload duration in seconds; <c>null</c> =
+        /// <see cref="WeaponDefinition.ReloadTime"/>. Client-local timing, no protocol involved.
+        /// <para>⚠️ Same lifecycle rule as <see cref="DamageOverride"/>.</para></summary>
+        public static Func<WeaponDefinition, float> ReloadTimeOverride;
+
+        /// <summary>MODE hook: multiplier on <see cref="WeaponDefinition.DryFireVolume"/>;
+        /// <c>null</c> = 1. ⚠️ Same lifecycle rule as <see cref="DamageOverride"/>.</summary>
+        public static Func<WeaponDefinition, float> DryFireVolumeOverride;
+
         // HeldItems collector state (§6.6): the hook is installed once and warnings fire once —
         // a broken setup would otherwise log on every grab.
         private static bool heldItemsHooked;
@@ -1191,8 +1200,12 @@ namespace VortexArena.Core.Combat
 
             IsReloading = true;
             burstShotsLeft = 0;
-            reloadEndTime = Time.time + definition.ReloadTime;
-            ReloadStarted?.Invoke(definition.ReloadTime);
+            // The resolved duration also drives WeaponAnimator's magazine timeline (ReloadStarted).
+            float reloadTime = ReloadTimeOverride != null
+                ? Mathf.Max(0.05f, ReloadTimeOverride(definition))
+                : definition.ReloadTime;
+            reloadEndTime = Time.time + reloadTime;
+            ReloadStarted?.Invoke(reloadTime);
             AmmoChanged?.Invoke();
             return true;
         }

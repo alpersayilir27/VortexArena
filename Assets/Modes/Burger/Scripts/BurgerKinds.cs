@@ -36,6 +36,10 @@ namespace VortexArena.Modes.Burger
         /// <summary>The bottle hanging from the ceiling cord; squeezing it paints ketchup.</summary>
         public const string KetchupBottle = "ketchup_bottle";
 
+        /// <summary>One leaf of the double-door fridge; its <c>stage</c> is the hinge angle in whole
+        /// degrees. Never grabbable — ownership stays closed on a scene part that only rotates.</summary>
+        public const string FridgeDoor = "fridge_door";
+
         /// <summary>Dispenser kinds are <c>dispenser_&lt;ingredient&gt;</c>.</summary>
         public const string DispenserPrefix = "dispenser_";
 
@@ -49,6 +53,10 @@ namespace VortexArena.Modes.Burger
         /// <summary>Stream on/off state of a ketchup bottle: <c>f:[1]</c> / <c>f:[0]</c>. Relayed, so
         /// the OWNER sends it and every other headset opens its own stream from it.</summary>
         public const string EventSqueeze = "squeeze";
+
+        /// <summary>Fridge door angle: <c>i:[whole degrees]</c>. Not relayed — the server clamps it and
+        /// writes <c>stage</c>, which is what reaches the other headsets.</summary>
+        public const string EventSwing = "swing";
 
         /// <summary>Ketchup held on a burger stack long enough: <c>i:[tahta netId]</c> +
         /// <c>f:[x,y,z]</c> (arena space). The server spawns the sauce layer; not relayed.</summary>

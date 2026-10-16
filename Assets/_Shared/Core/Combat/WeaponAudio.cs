@@ -64,9 +64,17 @@ namespace VortexArena.Core.Combat
             PlayClip(definition != null ? definition.MagInClip : null);
         }
 
+        /// <summary>Dry click at the definition's level times the mode's scale
+        /// (<see cref="Weapon.DryFireVolumeOverride"/>).</summary>
         public void PlayDry()
         {
-            PlayClip(definition != null ? definition.DryFireClip : null);
+            if (definition == null)
+                return;
+
+            float modeScale = Weapon.DryFireVolumeOverride != null
+                ? Mathf.Max(0f, Weapon.DryFireVolumeOverride(definition))
+                : 1f;
+            PlayClip(definition.DryFireClip, definition.DryFireVolume * modeScale);
         }
 
         public void PlayPickup()
@@ -75,13 +83,13 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>Silent no-op when the clip is null (not every weapon must have every sound).</summary>
-        private void PlayClip(AudioClip clip)
+        private void PlayClip(AudioClip clip, float volume = 1f)
         {
             if (source == null || clip == null)
                 return;
 
             source.pitch = 1f;
-            source.PlayOneShot(clip, AudioMix.Weapons);
+            source.PlayOneShot(clip, volume * AudioMix.Weapons);
         }
     }
 }

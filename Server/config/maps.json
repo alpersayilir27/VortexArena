@@ -64,7 +64,9 @@
         { "sceneId": 44, "kind": "cutting_board" },
         { "sceneId": 45, "kind": "cutting_board" },
         { "sceneId": 46, "kind": "ketchup_bottle" },
-        { "sceneId": 47, "kind": "ketchup_bottle" }
+        { "sceneId": 47, "kind": "ketchup_bottle" },
+        { "sceneId": 48, "kind": "fridge_door" },
+        { "sceneId": 49, "kind": "fridge_door" }
       ]
     },
     {
@@ -105,7 +107,9 @@
         { "sceneId": 44, "kind": "cutting_board" },
         { "sceneId": 45, "kind": "cutting_board" },
         { "sceneId": 46, "kind": "ketchup_bottle" },
-        { "sceneId": 47, "kind": "ketchup_bottle" }
+        { "sceneId": 47, "kind": "ketchup_bottle" },
+        { "sceneId": 48, "kind": "fridge_door" },
+        { "sceneId": 49, "kind": "fridge_door" }
       ]
     },
     {
@@ -474,6 +478,9 @@
       ] },
     { "kind": "dispenser_tomato", "maxHp": 0, "grab": "none", "events": [
         { "name": "take", "policy": "anyone", "phaseGate": "playing" }
+      ] },
+    { "kind": "fridge_door", "maxHp": 0, "grab": "none", "events": [
+        { "name": "swing", "policy": "anyone", "phaseGate": "any" }
       ] },
     { "kind": "ketchup_bottle", "maxHp": 0, "grab": "anyone", "events": [
         { "name": "squeeze", "policy": "owner", "phaseGate": "playing" },

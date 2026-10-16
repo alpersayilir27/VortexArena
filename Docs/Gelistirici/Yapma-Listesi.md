@@ -104,8 +104,10 @@ tümden bağımsız.
 Geçişin siyahı (`SceneTransitionFade`) hakeme kaynak olarak eklenmez ve alan-dışı karartmasının
 quad'ına (`OutOfBoundsFade`) ikinci bir yazıcı olarak konmaz — kendi quad'ı ve kendi sürücüsü
 vardır. Quad **sahnenindir**: `DontDestroyOnLoad` kökün altına taşınırsa yeni sahnede elle
-gizlenmesi gerekir ve eski sahnede inişi çizecek yüzey kalmaz. Gerekçeler `Docs/Sistem-Ozeti.md`
-bileşen sözlüğünde ve Tuzaklar bölümündedir.
+gizlenmesi gerekir ve eski sahnede inişi çizecek yüzey kalmaz. Quad'ın shader'ı (`ZTest Always`)
+ve `sortingOrder`'ı (25) da elle değiştirilmez — `HMD Katmanlarını Kur` yazar: arayüzün altına inen
+karartmada silahtaki mermi yazısı ve mod HUD'ı yükleme boyunca siyahın üstünde asılı kalır.
+Gerekçeler `Docs/Sistem-Ozeti.md` bileşen sözlüğünde ve Tuzaklar bölümündedir.
 
 ### ⛔ Ölü oyuncuları uzak oyuncu listesinden eleme
 
@@ -481,24 +483,25 @@ canlanamaz olurdu ve hiçbir yerde uyarı çıkmazdı.
 basıp kendini kapatır ve "açık taban yok" fail-open'ı devreye girer — belirtisi "taban çalışmıyor"
 değil, herkesin arenanın her yerinde canlanmasıdır.
 
-### ⛔ Taban şeridini occlusion culling'e sokma
+### ⛔ Oyun sahnesine occlusion bake alma
 
-Şeridin Renderer'ında **`Dynamic Occlusion` kapalıdır** (`VA_BaseZone` prefabında böyle gelir) ve
-şerit **`Occludee Static` işaretlenmez**. Occlusion bake'li sahnede duvarın ardında kalan renderer
-**bütünüyle** elenir; duvar-arkası çizim (x-ray) aynı renderer'ın ikinci slotu olduğu için onunla
-gider ve oyuncu tabanını duvar arkasından göremez. Bake'siz sahnede hiçbir belirti çıkmaz — hata
-ancak o haritaya occlusion bake alındığında görünür. `BaseZoneVisibility` slotu eklerken
-`Dynamic Occlusion`'ı kendisi de kapatır; static işaretli şeridi kurtaramaz (o, bake verisine
-girmiştir).
+Oyun sahneleri **yalnız ışık bake'i** alır: `Occlusion Culling` penceresinden bake alınmaz ve
+sahne klasöründe `OcclusionCullingData.asset` durmaz. Veri olmadan objelerdeki `Occluder Static` /
+`Occludee Static` bayrakları etkisizdir — onları temizlemek gerekmez (prefab örneklerinde binlerce
+override üretir), ama işaretlemek de bir şey kazandırmaz. Occlusion verisinin bedeli sessiz
+hatalardır:
 
-### ⛔ Kopyalanan sahneyi kaynağın occlusion verisiyle bırakma
+- **Taban şeridinin duvar-arkası çizimi (x-ray) gider:** duvarın ardında kalan renderer **bütünüyle**
+  elenir, x-ray aynı renderer'ın ikinci materyal slotu olduğu için onunla birlikte düşer ve oyuncu
+  tabanını duvar arkasından göremez. `BaseZoneVisibility` slotu eklerken `Dynamic Occlusion`'ı
+  kapatır (`VA_BaseZone` prefabında da kapalı gelir), ama bake verisine girmiş `Occludee Static`
+  şeridi kurtaramaz.
+- **Kopyalanan sahne kaynağın verisine bağlı kalır:** sahne kopyalanınca occlusion bağlantısı da
+  kopyalanır ve kopya **başka yerleşim için** bake edilmiş görünürlük verisiyle çalışır — görünmesi
+  gereken objeler elenir, hata ya da uyarı çıkmaz.
+- Her yerleşim değişikliği yeni bake ister; eskimiş veri belirti vermez, sessizce yanlış eler.
 
-Sahne kopyalanınca `Occlusion Culling` bağlantısı da kopyalanır: kopya **kaynağın** veri dosyasını
-gösterir ve **başka yerleşim için** bake edilmiş görünürlük verisiyle çalışır — görünmesi gereken
-objeler elenir, hata ya da uyarı çıkmaz. Occlusion kullanan bir sahneden kopyalanan sahne **kendi**
-bake'ini alır ve bağlı olduğu `OcclusionCullingData.asset` **kendi klasöründe** durur. Kontrol:
-sahneye sağ tık → *Select Dependencies*; başka sahnenin klasöründen bir `OcclusionCullingData.asset`
-seçiliyorsa bağlantı hâlâ kaynağınkidir.
+Renderer'ın kendi `Dynamic Occlusion` alanı ayrı konudur, bu madde onu kapsamaz.
 
 ### ⛔ Görünürlükle budanmış dekoru, kaynağı değişince yeniden üretmeden bırakma
 
@@ -806,15 +809,21 @@ tamamını saydığı için bu kontrolde yanıltır.
 ### ⛔ Arena dekorunu static flag'siz bırakma
 
 Hareketsiz environment objesi (duvar, taş, ağaç, prop) **Static** işaretlenmeden sahnede kalmaz:
-işaretsiz obje static batching'e girmez (her biri ayrı draw call), occlusion'a girmez, lightmap
+işaretsiz obje static batching'e girmez (her biri ayrı draw call), lightmap
 almaz — sahne klasöründe lightmap dosyası dursa bile bake **hiçbir renderer'a uygulanmaz**. Hata
-vermez; sahne yalnız Quest'te kasar. Yapraklı vegetasyon ve çimde **Occluder kapalı** kalır
-(yaprak örtmez, Umbra bake'i şişer); `Animator`/`Rigidbody` altındaki obje **işaretlenmez** — static
+vermez; sahne yalnız Quest'te kasar. `Animator`/`Rigidbody` altındaki obje **işaretlenmez** — static
 batching transform'u dondurur, obje görünürde kımıldamaz. Static'e çekilen obje lightmap'e girer:
 mesh'inde lightmap UV'si (UV2) yoksa bake sonrası siyah leke çıkar — önce UV2 üretilir, üretilemiyorsa
 obje ya işaretsiz kalır ya da `Receive GI = Light Probes` alır. Kontrol:
 `Tools > VortexArena > Arena > Sahne Bütçesini Ölç` → "static flag yok" uyarısı.
 Gerekçe → Sistem Özeti, Tuzaklar ("Arena dekoru static flag'siz bırakılmaz").
+
+### ⛔ Bozuk indeksli mesh'i Contribute GI'da bırakma
+
+Bake `'AddGeometry' failed` ile düşüyorsa ya da bitip `Non finite value` assert'i basıyorsa ve
+lightmap atlasını paylaşan her şey beyaz görünüyorsa, suçlu tek bir bozuk mesh'tir: Contribute GI'dan
+çıkarılır, `Receive GI = Light Probes` alır. Gerekçe → Sistem Özeti, Tuzaklar ("Bozuk indeksli mesh
+bütün lightmap atlasını beyaz yapar").
 
 ### ⛔ Rüzgârda sallanan bitkiyi "hareketli" sayıp bake dışında bırakma
 
@@ -825,6 +834,26 @@ yaprağın yere düşen gölgesinin sallanmamasıdır ve tepeden 10° güneşte 
 ortama yapıştırılmış görünür ve gerçek zamanlı gölge maliyetini ödemeye devam edersin.
 ⚠️ Ayrımı **Animator/Rigidbody** yapar, rüzgâr değil: gerçek controller'ı olan obje (yel değirmeni,
 testere) ve ağ nesneleri static işaretlenmez. Kurulum → [Sahne Kurulumu](Sahne-Kurulumu.md).
+
+### ⛔ Satıcı hayvanını poz verilmiş `_Static` mesh'iyle sahnede bırakma
+
+Toon Farm hayvan prefabları (tavuk, civciv, horoz, köpek, at…) görüntüyü `<Varyant>_Static` adlı
+**pozlanmış düz mesh**'ten çizer: skinned varyantlar kapalıdır, kökte `Animator` yoktur — hayvan
+sahnede heykel gibi durur, hata vermez. Canlandırmak için `_Static` kapatılır, aynı addaki skinned
+çocuk açılır (gölge ve ışık probu ayarı `_Static`'ten alınır) ve köke `Animator` eklenir: controller
+paketin `Animations/Animal Animations/<Tür>/` altındaki **idle/yeme** döngülerinden, avatar modelin
+FBX'inden, `Apply Root Motion` kapalı, `Culling Mode = Cull Completely`. Yürüme/koşma klibi yerinde
+sayar, verilmez. Komşu hayvanlara farklı klip ya da hız (`_Slow`/`_Regular`/`_Fast`) verilir, yoksa
+sürü aynı anda kıpırdar. `Source/` prefabları bütün renk varyantlarını üst üste açık getirir —
+yalnız biri bırakılır. Hayvan ve altı static işaretlenmez (yukarıdaki madde).
+
+### ⛔ Terrain katmanında smoothness kaynağını `Diffuse Alpha Channel` bırakma
+
+Bu kaynakta URP katmanın smoothness kaydırıcısını yok sayar, parlaklığı dokunun alfasından okur;
+alfasız dokuda alfa 1'dir → zemin **tam parlak** olur, güneşe doğru bakınca sırtlarda beyaz yansıma
+çizgisi çıkar. Kaydırıcıyı 0'a çekmek hiçbir şey değiştirmez; katman `Constant` kaynağa çekilir.
+Satıcı paketinin katmanı yamanmaz: kopyası haritanın kendi klasörüne alınır ve TerrainData ona
+bağlanır (köstebek haritaları: `Assets/Maps/MoleFarm/TerrainLayers/`).
 
 ### ⛔ İndeksi bozuk mesh'i `Contribute GI`'a sokma
 

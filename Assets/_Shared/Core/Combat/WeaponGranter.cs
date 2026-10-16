@@ -162,15 +162,18 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>May THIS hand take a weapon from a frame: was there NO weapon in either hand at
-        /// the moment this hand's grip press BEGAN.
-        /// <para>⚠️ <b>Latched for the whole press; never re-closed inside it.</b> One press does two
-        /// things — it selects at the frame AND it summons the held clone — and the summon lands on
-        /// the press's FIRST frame. A live "are the hands empty" test would therefore close the gate
-        /// on frame two, while ISDK delivers its select whenever the interactor reaches Select state,
-        /// commonly a frame or more later (Normal → Hover → Select). Selection would survive only a
-        /// one-frame race: the select is rejected, <c>_selected</c> never changes, the PREVIOUS
-        /// weapon is summoned again, and it "works on the second or third try". That race is decided
-        /// by frame rate and hover stability, which is why it looks like a per-map bug.</para>
+        /// the moment this hand's grip press BEGAN — and has this press not used its pick yet.
+        /// <para>⚠️ <b>Opened on the press edge, closed only by the press itself:</b> one press does
+        /// two things — it selects at the frame AND it summons the held clone — and the summon lands
+        /// on the press's FIRST frame. A live "are the hands empty" test would therefore close the
+        /// gate on frame two, while ISDK delivers its select whenever the interactor reaches Select
+        /// state, commonly a frame or more later (Normal → Hover → Select). Selection would survive
+        /// only a one-frame race: the select is rejected, the PREVIOUS weapon is summoned again, and
+        /// it "works on the second or third try".</para>
+        /// <para>⚠️ <b>One pick per press:</b> the latch closes after the press's first accepted
+        /// selection, and once <see cref="SelectWindowSeconds"/> have passed with a weapon in hand.
+        /// Otherwise a held grip carried off the rack and back picks whatever the cone touches first
+        /// (the hand line selects on any finger edge while hovering).</para>
         /// <para>⚠️ This must NEVER gate an ISDK candidate filter (<c>IGameObjectFilter</c> /
         /// <c>CanBeSelectedBy</c>), however tempting "then no reticle is drawn either" sounds. With
         /// an empty candidate list ISDK still hovers on a queued press
@@ -205,6 +208,14 @@ namespace VortexArena.Core.Combat
         private static bool _canSelectRight = true;
         private static bool _gripWasHeldLeft;
         private static bool _gripWasHeldRight;
+        private static float _pressStartLeft;
+        private static float _pressStartRight;
+
+        /// <summary>How long after the press edge ISDK's select may still arrive while the press's
+        /// own summon already fills the hand (see <see cref="CanSelectWith"/>). ⚠️ Too short and a
+        /// slow squeeze loses its pick to the old weapon (Sistem-Ozeti Tuzaklar: a gate its own trigger
+        /// closes).</summary>
+        private const float SelectWindowSeconds = 0.5f;
 
         // Per-hand "a throwable occupies this hand" flag, written by WristHolster. Static for the same
         // reason as the latches above (the gates reading it are static) and reset in Awake.
@@ -511,13 +522,9 @@ namespace VortexArena.Core.Combat
             // ⚠️ FIRST, before any summon or grant this frame — see TickSelectionGate.
             TickSelectionGate();
 
-            // A full hand must not even see what it cannot take: the distance-grab tube and reticle
-            // are the only aim feedback in the arena (every frame ships with isRayVisible off).
-            // ⚠️ Driven by the LIVE state, not by the latch: this is pure visuals with no ISDK side
-            // effect, and the latch deliberately stays open across a press that fills the hand.
-            ControllerModelHider.SetGrabVisualsSuppressed(this,
-                !IsHandFreeForRack(OVRInput.Controller.LTouch),
-                !IsHandFreeForRack(OVRInput.Controller.RTouch));
+            // ISDK's distance-grab tube bends toward the target; the rack's aim feedback is
+            // WeaponFrame's own straight ray, so the ISDK visuals stay silenced for good.
+            ControllerModelHider.SetGrabVisualsSuppressed(this, true);
 
             // ⚠️ Weaponless mode (§10.5 weaponSource:"none") closes BOTH delivery paths at once,
             // above them: neither a grant nor a frame clone may reach a hand. The sweep is repeated
@@ -583,20 +590,21 @@ namespace VortexArena.Core.Combat
             bool noWeaponHeld = NoWeaponHeld;
 
             TickHandGate(OVRInput.Controller.LTouch, ref _gripWasHeldLeft, ref _canSelectLeft,
-                ref _deathLatchLeft, ref _gripHeldThroughParkLeft, noWeaponHeld);
+                ref _deathLatchLeft, ref _gripHeldThroughParkLeft, ref _pressStartLeft, noWeaponHeld);
             TickHandGate(OVRInput.Controller.RTouch, ref _gripWasHeldRight, ref _canSelectRight,
-                ref _deathLatchRight, ref _gripHeldThroughParkRight, noWeaponHeld);
+                ref _deathLatchRight, ref _gripHeldThroughParkRight, ref _pressStartRight, noWeaponHeld);
         }
 
         /// <summary>One hand's latch: it follows the hands while the grip is up, freezes on the press
-        /// EDGE, and is left alone for the rest of the press.
+        /// EDGE, and inside the press can only CLOSE.
         /// <para>This is what blocks the SECOND weapon: a hand whose press begins while there is
         /// already a weapon in either hand starts shut and stays shut. A hand whose press begins with
-        /// no weapon in either hand keeps its permission even after this very press summons the
-        /// previously selected clone into it — that clone is the press's own doing, not a second
-        /// weapon (see <see cref="CanSelectWith"/>).</para></summary>
+        /// no weapon in either hand keeps its permission for <see cref="SelectWindowSeconds"/> even
+        /// after this very press summons the previously selected clone into it — that clone is the
+        /// press's own doing, not a second weapon (see <see cref="CanSelectWith"/>).</para></summary>
         private static void TickHandGate(OVRInput.Controller hand, ref bool gripWasHeld,
-            ref bool canSelect, ref bool deathLatch, ref bool gripHeldThroughPark, bool noWeaponHeld)
+            ref bool canSelect, ref bool deathLatch, ref bool gripHeldThroughPark, ref float pressStart,
+            bool noWeaponHeld)
         {
             bool gripHeld = OVRInput.Get(OVRInput.Axis1D.PrimaryHandTrigger, hand) >= GripThreshold;
 
@@ -612,9 +620,29 @@ namespace VortexArena.Core.Combat
             if (!gripHeld || !gripWasHeld)
             {
                 canSelect = noWeaponHeld;
+                pressStart = Time.unscaledTime;
+            }
+            else if (canSelect && !noWeaponHeld && Time.unscaledTime - pressStart > SelectWindowSeconds)
+            {
+                canSelect = false;
             }
 
             gripWasHeld = gripHeld;
+        }
+
+        /// <summary>Spends the press's single pick (see <see cref="CanSelectWith"/>); an unresolved
+        /// hand spends both.</summary>
+        private static void CloseSelectLatch(OVRInput.Controller hand)
+        {
+            if (hand != OVRInput.Controller.RTouch)
+            {
+                _canSelectLeft = false;
+            }
+
+            if (hand != OVRInput.Controller.LTouch)
+            {
+                _canSelectRight = false;
+            }
         }
 
         // ------------------------------------------------------------------- rules
@@ -1038,6 +1066,7 @@ namespace VortexArena.Core.Combat
             }
 
             Instance.ApplySelection(definition);
+            CloseSelectLatch(hand);
         }
 
         private static bool IsTwoHandHeld(Weapon weapon)

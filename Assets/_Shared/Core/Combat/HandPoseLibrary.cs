@@ -8,16 +8,16 @@ namespace VortexArena.Core.Combat
 {
     /// <summary>
     /// The single distribution gate for finger poses: the idle hand pose, converting a
-    /// weapon-specific rigged pose into an ISDK joint array, reducing that pose to curl ratios for
-    /// the humanoid hand, and the duration/curve of transitions between poses.
-    /// <para>Two consumers, two forms. The local synthetic hand (ISDK) receives RAW rotations per
-    /// joint — the player sees their own hand up close, so the fine detail belongs there and what
-    /// is rigged in the studio is what is seen in game. The remote avatar's Mixamo hand CANNOT take
-    /// raw rotations (the two skeletons' bone axes differ; the project's learned rule: a rotation
-    /// from tracking/network space is not written directly onto a humanoid bone) — it receives five
-    /// curl ratios MEASURED from the rigged pose (<see cref="MeasureCurl"/>,
-    /// <see cref="HandPoseProfile"/>). The ratio is not a second source of truth: it is never
-    /// stored, always derived.</para>
+    /// weapon-specific rigged pose into an ISDK joint array, measuring that array for retargeting
+    /// onto a humanoid hand, and the duration/curve of transitions between poses.
+    /// <para>Both consumers get the SAME authored joint array. The local synthetic hand (ISDK)
+    /// receives it RAW (<c>SyntheticHand.OverrideAllJoints</c>). The remote avatar's Mixamo hand
+    /// CANNOT take raw rotations (the two skeletons' bone axes differ; the project's learned rule: a
+    /// rotation from tracking/network space is not written directly onto a humanoid bone) — it gets
+    /// the array's per-bone wrist-space ORIENTATION and DIRECTION
+    /// (<see cref="TryResolveRetargetBones"/>) and <see cref="HandFingerRig"/> retargets those onto
+    /// its own bind pose. The measurement is not a second source of truth: it is never stored,
+    /// always derived.</para>
     /// <para>⚠️ Fingers are NEVER driven by hardware — not by the controller trigger/grip, not by
     /// hand tracking. Each frame a hand is either in the idle pose or in the held item's pose rigged
     /// for that slot, smoothed over <see cref="TransitionSeconds"/>. There is no "free" joint
@@ -48,12 +48,16 @@ namespace VortexArena.Core.Combat
         /// <summary>Finger count (guaranteed by ISDK).</summary>
         private const int FingerCount = 5;
 
+        /// <summary>Retargetable bones per finger (proximal/intermediate/distal; the tip is not a bone).</summary>
+        private const int BonesPerFinger = 3;
+
+        /// <summary>Retarget bone slots: 5 fingers × 3 bones, slot = <c>finger * 3 + bone</c>.</summary>
+        public const int RetargetBoneCount = FingerCount * BonesPerFinger;
+
         /// <summary>
-        /// Degrees per drivable joint at full curl — the SAME numbers as the table in
-        /// <see cref="HandFingerRig"/>. The thumb differs: anatomically it curls less and lies on
-        /// top of the grip rather than wrapping it. Reducing a rigged pose to curl ratios
-        /// (<see cref="MeasureCurl"/>) uses this table as the denominator, so "fully closed" means
-        /// the same on both ends.
+        /// Degrees per drivable joint at full curl, used ONLY to shape the ratio-driven idle/profile
+        /// pose (<see cref="IdleJointRotations"/>). The thumb differs: anatomically it curls less and
+        /// lies on top of the grip rather than wrapping it.
         /// </summary>
         private static readonly float[] FingerMaxAngles = { 50f, 60f, 40f };
         private static readonly float[] ThumbMaxAngles = { 25f, 35f, 30f };
@@ -73,8 +77,7 @@ namespace VortexArena.Core.Combat
         /// <summary>
         /// A drivable joint's measured hinge: its array slot, its finger, its rotation axis in the
         /// PARENT frame, its bind rotation and its angle at full curl.
-        /// <para>The table is used both for pose GENERATION (ratio → rotation) and pose MEASUREMENT
-        /// (rotation → ratio); it lives in one place so both directions come from one geometry.</para>
+        /// <para>Consumer: ratio → rotation generation (<see cref="BuildProfile"/>).</para>
         /// </summary>
         private struct Hinge
         {
@@ -96,6 +99,13 @@ namespace VortexArena.Core.Combat
         private static readonly Vector3[] ThumbDirectionCache = new Vector3[2];
         private static readonly bool[] AnatomyResolved = new bool[2];
         private static readonly bool[] AnatomyValid = new bool[2];
+
+        // Retarget scratch (main thread only): TryResolveRetargetBones runs per frame per remote hand
+        // and must not allocate. Shared across hands — the content is rebuilt on every call.
+        private static Vector3[] ScratchPos;
+        private static Quaternion[] ScratchRot;
+        private static bool[] ScratchResolved;
+        private static Quaternion[] ScratchLocal;
 
         /// <summary>
         /// Offset from the controller anchor to the hand's WRIST (anchor space, metres) — a
@@ -310,63 +320,128 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// The rigged pose's counterpart <b>for the humanoid hand</b>: curl ratio per finger.
-        /// <para>
-        /// Measurement is the inverse of generation: at each drivable joint the bind→authored rotation
-        /// is projected <b>signed</b> onto that joint's hinge axis; the finger's total deflection is
-        /// divided by the same finger's full-curl total. Signed is mandatory — with absolute angles a
-        /// finger bent backwards would look curled forwards on the remote side.
-        /// </para>
-        /// <para>An empty record returns the idle ratios.</para>
+        /// A NEW joint array built from five curl ratios — the remote empty hand's path
+        /// (<c>RemoteAvatar.idleHandPose</c>). The caller caches the result.
         /// </summary>
-        public static HandPoseProfile MeasureCurl(HandJointRotation[] joints, bool rightHand)
+        public static Quaternion[] BuildProfileJointRotations(in HandPoseProfile profile, bool rightHand)
         {
+            return BuildProfile(profile, rightHand);
+        }
+
+        // ------------------------------------------------------------------ humanoid retarget
+
+        /// <summary>
+        /// Measures an ISDK joint array <b>for a humanoid hand</b>: per finger bone its rotation and
+        /// its bone direction, both in the WRIST (root) frame. Slot = <c>finger * 3 + bone</c>
+        /// (0=Thumb…4=Pinky; bone 0 is the first of the chain's last four joints, i.e. the thumb's
+        /// metacarpal and the fingers' proximal — exactly Mixamo's <c>Thumb1…3</c> / <c>Index1…3</c>).
+        /// <para>Wrist-frame orientation and direction are the only two quantities BOTH skeletons can
+        /// state about the same bone, so they are what crosses between them; the raw quaternions never
+        /// do (<see cref="HandFingerRig"/> consumes this).</para>
+        /// <para>⚠️ <b>Allocation-free:</b> called per frame for every remote hand — the per-joint
+        /// composition uses static scratch buffers (main thread only) and the caller supplies the
+        /// output arrays (at least <see cref="RetargetBoneCount"/> long).</para>
+        /// <para>Returns <c>false</c> when the SDK skeleton is unreadable, a chain is shorter than four
+        /// joints or a bone direction is degenerate — the caller then writes nothing.</para>
+        /// </summary>
+        public static bool TryResolveRetargetBones(Quaternion[] jointRotations, bool rightHand,
+            Quaternion[] rotations, Vector3[] directions)
+        {
+            if (jointRotations == null || rotations == null || directions == null ||
+                rotations.Length < RetargetBoneCount || directions.Length < RetargetBoneCount)
+            {
+                return false;
+            }
+
+            HandSkeleton skeleton = rightHand
+                ? HandSkeleton.DefaultRightSkeleton
+                : HandSkeleton.DefaultLeftSkeleton;
+
+            HandSkeletonJoint[] joints = skeleton != null ? skeleton.joints : null;
             if (joints == null || joints.Length == 0)
             {
-                return HandPoseProfile.Idle;
+                return false;
             }
 
-            Quaternion[] pose = BuildJointRotations(joints, rightHand);
-            Hinge[] hinges = Hinges(rightHand);
-
-            var signed = new float[FingerCount];
-            var total = new float[FingerCount];
-
-            for (int i = 0; i < hinges.Length; i++)
+            int root = RootIndex(joints);
+            if (root < 0)
             {
-                Hinge hinge = hinges[i];
-                if (hinge.Slot < 0 || hinge.Slot >= pose.Length ||
-                    hinge.Finger < 0 || hinge.Finger >= FingerCount)
-                {
-                    continue;
-                }
-
-                (pose[hinge.Slot] * Quaternion.Inverse(hinge.Bind))
-                    .ToAngleAxis(out float angle, out Vector3 axis);
-
-                // ToAngleAxis returns 0..360; beyond 180 is a small rotation the other way.
-                if (angle > 180f)
-                {
-                    angle -= 360f;
-                }
-
-                if (float.IsNaN(angle) || float.IsInfinity(angle) || float.IsNaN(axis.x))
-                {
-                    angle = 0f;
-                }
-
-                signed[hinge.Finger] += angle * (Vector3.Dot(axis, hinge.AxisLocal) >= 0f ? 1f : -1f);
-                total[hinge.Finger] += hinge.MaxAngle;
+                return false;
             }
 
-            return new HandPoseProfile
+            EnsureScratch(joints.Length);
+
+            // Base is the skeleton's own local rotation; the authored array overrides the joints it
+            // covers (metacarpals and the tips keep the skeleton's).
+            for (int i = 0; i < joints.Length; i++)
             {
-                thumb = Ratio(signed[0], total[0]),
-                index = Ratio(signed[1], total[1]),
-                middle = Ratio(signed[2], total[2]),
-                ring = Ratio(signed[3], total[3]),
-                pinky = Ratio(signed[4], total[4]),
-            };
+                ScratchLocal[i] = joints[i].pose.rotation;
+            }
+
+            HandJointId[] ids = FingersMetadata.HAND_JOINT_IDS;
+            int count = Mathf.Min(ids.Length, jointRotations.Length);
+            for (int i = 0; i < count; i++)
+            {
+                int raw = (int)ids[i];
+                if (raw >= 0 && raw < joints.Length)
+                {
+                    ScratchLocal[raw] = jointRotations[i];
+                }
+            }
+
+            ResolveHandSpace(joints, ScratchPos, ScratchRot, ScratchResolved, ScratchLocal);
+
+            Quaternion toRoot = Quaternion.Inverse(ScratchRot[root]);
+
+            for (int finger = 0; finger < FingerCount; finger++)
+            {
+                HandJointId[] chain = ChainOf(finger);
+
+                // The LAST FOUR joints of the chain: "… first, second, third, tip" on every ISDK
+                // branch — so a branch with metacarpals and one without both land on the same bones.
+                if (chain == null || chain.Length < 4)
+                {
+                    return false;
+                }
+
+                int tail = chain.Length - 4;
+
+                for (int bone = 0; bone < BonesPerFinger; bone++)
+                {
+                    int raw = (int)chain[tail + bone];
+                    int next = (int)chain[tail + bone + 1];
+                    if (raw < 0 || raw >= joints.Length || next < 0 || next >= joints.Length)
+                    {
+                        return false;
+                    }
+
+                    Vector3 direction = toRoot * (ScratchPos[next] - ScratchPos[raw]);
+                    if (direction.sqrMagnitude < MinDirectionSqr)
+                    {
+                        return false;
+                    }
+
+                    int slot = finger * BonesPerFinger + bone;
+                    rotations[slot] = toRoot * ScratchRot[raw];
+                    directions[slot] = direction.normalized;
+                }
+            }
+
+            return true;
+        }
+
+        /// <summary>Grows the retarget scratch buffers to the skeleton's joint count.</summary>
+        private static void EnsureScratch(int length)
+        {
+            if (ScratchPos != null && ScratchPos.Length >= length)
+            {
+                return;
+            }
+
+            ScratchPos = new Vector3[length];
+            ScratchRot = new Quaternion[length];
+            ScratchResolved = new bool[length];
+            ScratchLocal = new Quaternion[length];
         }
 
         /// <summary>
@@ -378,11 +453,6 @@ namespace VortexArena.Core.Combat
             int slot = FingersMetadata.HandJointIdToIndex(id);
             return slot >= 0 && slot < FingersMetadata.HAND_JOINT_CAN_MOVE.Length &&
                    FingersMetadata.HAND_JOINT_CAN_MOVE[slot];
-        }
-
-        private static float Ratio(float signed, float total)
-        {
-            return total > 0f ? Mathf.Clamp01(signed / total) : 0f;
         }
 
         private static Quaternion[] Copy(Quaternion[] source)
@@ -579,24 +649,39 @@ namespace VortexArena.Core.Combat
 
         /// <summary>
         /// Composes every skeleton joint's pose in HAND space top-down (root = its own pose; the wrist
-        /// is identity in the default skeleton).
+        /// is identity in the default skeleton) into freshly allocated arrays — the cached paths.
         /// </summary>
         private static void ResolveHandSpace(HandSkeletonJoint[] joints,
             out Vector3[] positions, out Quaternion[] rotations)
         {
             positions = new Vector3[joints.Length];
             rotations = new Quaternion[joints.Length];
-            var resolved = new bool[joints.Length];
+            ResolveHandSpace(joints, positions, rotations, new bool[joints.Length], null);
+        }
+
+        /// <summary>
+        /// Same composition into caller-owned buffers, optionally with POSED local rotations
+        /// (<paramref name="localRotations"/>, per raw joint index; <c>null</c> = the skeleton's own).
+        /// <para>One composition for both the bind skeleton and an authored pose: two copies would
+        /// drift the day a parent chain or a joint layout changes.</para>
+        /// </summary>
+        private static void ResolveHandSpace(HandSkeletonJoint[] joints, Vector3[] positions,
+            Quaternion[] rotations, bool[] resolved, Quaternion[] localRotations)
+        {
+            for (int i = 0; i < joints.Length; i++)
+            {
+                resolved[i] = false;
+            }
 
             for (int i = 0; i < joints.Length; i++)
             {
-                Resolve(joints, positions, rotations, resolved, i);
+                Resolve(joints, positions, rotations, resolved, localRotations, i);
             }
         }
 
         /// <summary>Resolves a joint (its parent first if needed) into hand space.</summary>
         private static void Resolve(HandSkeletonJoint[] joints, Vector3[] positions,
-            Quaternion[] rotations, bool[] resolved, int index)
+            Quaternion[] rotations, bool[] resolved, Quaternion[] localRotations, int index)
         {
             if (index < 0 || index >= joints.Length || resolved[index])
             {
@@ -608,18 +693,21 @@ namespace VortexArena.Core.Combat
             resolved[index] = true;
 
             Pose local = joints[index].pose;
+            Quaternion localRotation = localRotations != null && index < localRotations.Length
+                ? localRotations[index]
+                : local.rotation;
             int parent = joints[index].parent;
 
             if (parent < 0 || parent >= joints.Length)
             {
                 positions[index] = local.position;
-                rotations[index] = local.rotation;
+                rotations[index] = localRotation;
                 return;
             }
 
-            Resolve(joints, positions, rotations, resolved, parent);
+            Resolve(joints, positions, rotations, resolved, localRotations, parent);
             positions[index] = positions[parent] + rotations[parent] * local.position;
-            rotations[index] = rotations[parent] * local.rotation;
+            rotations[index] = rotations[parent] * localRotation;
         }
 
         /// <summary>

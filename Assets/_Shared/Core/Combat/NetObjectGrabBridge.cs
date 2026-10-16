@@ -84,6 +84,10 @@ namespace VortexArena.Core.Combat
         /// <see cref="IReleasePoseOverride"/>); usually a component on this same object.</summary>
         public IReleasePoseOverride ReleaseOverride { get; set; }
 
+        /// <summary>Optional veto on a bare-hand grab (see <see cref="IHandGrabGate"/>); usually a
+        /// component on this same object.</summary>
+        public IHandGrabGate HandGate { get; set; }
+
         /// <summary>The controller holding it LOCALLY; <c>None</c> = we are not holding it (someone else
         /// may be).</summary>
         private OVRInput.Controller _localHand = OVRInput.Controller.None;
@@ -303,6 +307,13 @@ namespace VortexArena.Core.Combat
         /// <summary>The arbiter's callback: this bridge won that hand this frame.</summary>
         public void CommitGrab(bool rightHand)
         {
+            // Asked only after the arbiter picked us: a veto on the preview lane would hand the press to
+            // whatever lies next to it, and the player would get that instead of the reason.
+            if (HandGate != null && !HandGate.AllowHandGrab(rightHand))
+            {
+                return;
+            }
+
             OVRInput.Controller hand = rightHand ? OVRInput.Controller.RTouch : OVRInput.Controller.LTouch;
             if (!Grab(hand, rightHand))
             {

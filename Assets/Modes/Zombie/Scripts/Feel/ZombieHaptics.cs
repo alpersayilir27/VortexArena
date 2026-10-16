@@ -47,6 +47,8 @@ namespace VortexArena.Modes.Zombie
         }
 
         /// <summary>Plays a cue now; silent no-op with no clip, no hand or no working SDK.</summary>
+        /// <param name="amplitude">Clip gain; above 1 is valid — the SDK clamps each sample to 1, so
+        /// the clip's body rises toward the ceiling instead of the peak being lost.</param>
         public static void Play(ZombieHapticEvent id, Controller hand, float amplitude = 1f)
         {
             ZombieFeel feel = ZombieFeel.Live;
@@ -69,7 +71,8 @@ namespace VortexArena.Modes.Zombie
 
             try
             {
-                player.amplitude = Mathf.Clamp(amplitude, 0f, 1f);
+                // Negative throws in the SDK; no upper clamp (see the param doc).
+                player.amplitude = Mathf.Max(0f, amplitude);
                 player.priority = feel.GetPriority(id);
                 player.Play(hand);
             }

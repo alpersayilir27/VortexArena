@@ -6,8 +6,7 @@ using VortexArena.Protocol;
 namespace VortexArena.Modes.Zombie
 {
     /// <summary>The last <c>modeState</c> the mode broadcast (§10.5), parsed once for the whole machine:
-    /// the running wave, how many zombies are still to spawn in it, the empty-storey minimum and the
-    /// difficulty.</summary>
+    /// the running wave, its remaining clock, the empty-storey minimum and the difficulty.</summary>
     /// <remarks>⚠️ Separate from <see cref="ZombieClientController"/> on purpose: the HUD prefab only
     /// exists on a player headset, while the BRAIN needs the same numbers on the object host admin —
     /// where there is no HUD at all. Both read the same <c>match_state</c>, so there is no second source.
@@ -15,9 +14,9 @@ namespace VortexArena.Modes.Zombie
     /// the same answer computed twelve times.</para></remarks>
     internal static class ZombieWaveState
     {
-        /// <summary>Missing <c>rem</c> → "still spawning": the safe direction is to keep holding the empty
-        /// storeys, otherwise a wave's first zombies all pile onto the players.</summary>
-        private const int DefaultRemaining = 1;
+        /// <summary>Missing <c>wl</c> → "the wave is still spawning": the safe direction is to keep
+        /// holding the empty storeys, otherwise a wave's first zombies all pile onto the players.</summary>
+        private const int DefaultWaveLeft = 1;
 
         /// <summary>Missing <c>fm</c> → the <c>normal</c> value of the difficulty table.</summary>
         private const int DefaultFloorMin = 3;
@@ -25,8 +24,9 @@ namespace VortexArena.Modes.Zombie
         /// <summary>Running wave; <c>0</c> before the first wave (the pre-start countdown).</summary>
         public static int Wave { get; private set; }
 
-        /// <summary>Zombies the server has not spawned yet in the running wave.</summary>
-        public static int Remaining { get; private set; } = DefaultRemaining;
+        /// <summary>Seconds left of the running wave's clock; <c>0</c> = nothing is spawning any more
+        /// (the gap, the wave's tail, the final stand).</summary>
+        public static int WaveLeft { get; private set; } = DefaultWaveLeft;
 
         /// <summary>Seconds to the next wave; <c>0</c> = a wave is RUNNING. The music layer hangs off
         /// this, so missing it reads as "wave running" — same safe direction as the HUD.</summary>
@@ -134,7 +134,7 @@ namespace VortexArena.Modes.Zombie
         {
             Next = 0;
             ClearLeft = 0;
-            Remaining = DefaultRemaining;
+            WaveLeft = DefaultWaveLeft;
             FloorMin = DefaultFloorMin;
             Difficulty = string.Empty;
             Special = string.Empty;
@@ -160,7 +160,7 @@ namespace VortexArena.Modes.Zombie
         /// puts <see cref="UnlockWave"/> back to 1 for the next run.</summary>
         private static void SetWave(int wave) => Wave = wave;
 
-        /// <summary><c>"w:3;left:5;next:0;rem:2;fm:3;diff:normal"</c> → the cached numbers.</summary>
+        /// <summary><c>"w:3;left:5;next:0;wl:88;fm:3;diff:normal"</c> → the cached numbers.</summary>
         /// <remarks>⚠️ Tolerant like the HUD's parser: a partial or malformed string leaves the previous
         /// values in place and an unknown token is skipped — the mode's contract can gain tokens later.
         /// The pause reason rides the same field as free text and simply parses to nothing.</remarks>
@@ -253,9 +253,9 @@ namespace VortexArena.Modes.Zombie
                     sawClear = true;
                     ClearLeft = value;
                 }
-                else if (string.Equals(key, ZombieKinds.StateRemaining, StringComparison.Ordinal))
+                else if (string.Equals(key, ZombieKinds.StateWaveLeft, StringComparison.Ordinal))
                 {
-                    Remaining = value;
+                    WaveLeft = value;
                 }
                 else if (string.Equals(key, ZombieKinds.StateFloorMin, StringComparison.Ordinal))
                 {

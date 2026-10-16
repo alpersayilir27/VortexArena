@@ -101,6 +101,14 @@ namespace VortexArena.Modes.Burger
         /// <summary>Scratch for the pickup query — reused so a grab allocates nothing.</summary>
         private readonly List<NetObject> _free = new List<NetObject>();
 
+        /// <summary>Scratch for one gathered stack (<see cref="BurgerStackColumn.CollectStackOf"/>).</summary>
+        private readonly List<NetObject> _group = new List<NetObject>();
+
+        /// <summary>Cached so the per-frame claim allocates no delegate.</summary>
+        private System.Predicate<NetObject> _isFreeLayer;
+
+        private static readonly System.Predicate<NetObject> RestingFree = BurgerStackColumn.IsFree;
+
         /// <summary>Solid (non-trigger) colliders of the board: the surface a tool would ride on.</summary>
         private readonly List<Collider> _solids = new List<Collider>();
 
@@ -122,6 +130,7 @@ namespace VortexArena.Modes.Burger
             _bridge = GetComponent<NetObjectGrabBridge>();
             _sender = GetComponent<NetObjectPoseSender>();
             _column = new BurgerStackColumn(stackTrigger, stackAnchor, transform);
+            _isFreeLayer = IsFreeLayer;
 
             CollectSolids();
 
@@ -298,6 +307,22 @@ namespace VortexArena.Modes.Burger
             // Free layers only: one in a hand or still flying was never part of this column.
             _column.Collect(_free, true);
 
+            // A stack rising above the volume comes along whole, not cut at the volume's top.
+            int inVolume = _free.Count;
+            for (int i = 0; i < inVolume; i++)
+            {
+                BurgerStackColumn.CollectStackOf(_free[i], RestingFree, _group);
+                for (int g = 0; g < _group.Count; g++)
+                {
+                    if (!_free.Contains(_group[g]))
+                    {
+                        _free.Add(_group[g]);
+                    }
+                }
+            }
+
+            _free.Sort(BurgerStackColumn.CompareByHeight);
+
             for (int i = 0; i < _free.Count; i++)
             {
                 NetObject layer = _free[i];
@@ -356,7 +381,14 @@ namespace VortexArena.Modes.Burger
                     continue;
                 }
 
-                AddCargo(layer, rightHand);
+                // The whole stack the touched layer stands in joins, in its own order — one layer at a
+                // time would rebuild it in TOUCH order, not recipe order.
+                BurgerStackColumn.CollectStackOf(layer, _isFreeLayer, _group);
+                for (int i = 0; i < _group.Count; i++)
+                {
+                    AddCargo(_group[i], rightHand);
+                }
+
                 added = true;
             }
 
@@ -371,16 +403,7 @@ namespace VortexArena.Modes.Burger
         /// until it lands).</summary>
         private bool CanJoinCargo(NetObject layer)
         {
-            // HeldItems: a layer just taken off by our free hand is briefly "not held" on the wire.
-            if (layer == null || layer == _net || layer.NetId <= 0 || layer.IsHeld ||
-                HeldItems.Holds(layer.transform) ||
-                _cargo.Contains(layer) || _claimed.ContainsKey(layer.NetId) ||
-                BurgerStackColumn.IsCarried(layer))
-            {
-                return false;
-            }
-
-            if (layer.Owner != 0 && !layer.IsMine)
+            if (!IsFreeLayer(layer))
             {
                 return false;
             }
@@ -391,6 +414,22 @@ namespace VortexArena.Modes.Burger
                 : layer.transform.position.y;
 
             return Mathf.Abs(height - top) <= ClaimBandMetres;
+        }
+
+        /// <summary><see cref="CanJoinCargo"/> without the contact band — the rule for the rest of a stack
+        /// the touched layer stands in.</summary>
+        private bool IsFreeLayer(NetObject layer)
+        {
+            // HeldItems: a layer just taken off by our free hand is briefly "not held" on the wire.
+            if (layer == null || layer == _net || layer.NetId <= 0 || layer.IsHeld ||
+                HeldItems.Holds(layer.transform) ||
+                _cargo.Contains(layer) || _claimed.ContainsKey(layer.NetId) ||
+                BurgerStackColumn.IsCarried(layer))
+            {
+                return false;
+            }
+
+            return layer.Owner == 0 || layer.IsMine;
         }
 
         /// <summary>Top of the cargo column in world Y; the cargo anchor itself when nothing rides

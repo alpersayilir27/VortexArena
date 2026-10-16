@@ -27,6 +27,10 @@ namespace VortexArena.Modes.Zombie
 
         private static bool _active;
 
+        /// <summary>Board weapons outside the zombie roster, hidden by <see cref="BuildViews"/> and shown
+        /// again by <see cref="DestroyViews"/>.</summary>
+        private static readonly List<GameObject> HiddenOffRoster = new List<GameObject>();
+
         private static readonly List<string> NewNames = new List<string>();
         private static readonly StringBuilder Joined = new StringBuilder();
 
@@ -138,16 +142,22 @@ namespace VortexArena.Modes.Zombie
 
         private static bool IsUnlocked(WeaponDefinition definition)
         {
-            // The final stand opens the whole arsenal (§10.5) — the wave table no longer applies.
-            return definition == null || ZombieWaveState.FinalStand ||
-                   ZombieArsenal.Live.UnlockWave(definition.WeaponId) <= CurrentWave;
+            return definition == null || IsOpen(definition.WeaponId);
         }
 
         /// <summary>The wrist bomb rides the same table by its <c>throwableId</c>.</summary>
         private static bool IsThrowableUnlocked(ThrowableDefinition definition)
         {
-            return definition == null || ZombieWaveState.FinalStand ||
-                   ZombieArsenal.Live.UnlockWave(definition.ThrowableId) <= CurrentWave;
+            return definition == null || IsOpen(definition.ThrowableId);
+        }
+
+        /// <summary>Listed in the roster AND its wave reached; the final stand (§10.5) opens every
+        /// LISTED weapon — an unlisted one never opens.</summary>
+        private static bool IsOpen(string id)
+        {
+            ZombieArsenal arsenal = ZombieArsenal.Live;
+            return arsenal.IsListed(id) &&
+                   (ZombieWaveState.FinalStand || arsenal.UnlockWave(id) <= CurrentWave);
         }
 
         /// <summary>Final stand: every locked slot opens at once. No per-weapon toast — the HUD's
@@ -320,12 +330,34 @@ namespace VortexArena.Modes.Zombie
                     continue;
                 }
 
+                // Off-roster slot: hidden, not locked — a plate would promise a wave that never comes.
+                if (weapon.Definition != null && !ZombieArsenal.Live.IsListed(weapon.Definition.WeaponId))
+                {
+                    if (weapon.gameObject.activeSelf)
+                    {
+                        weapon.gameObject.SetActive(false);
+                        HiddenOffRoster.Add(weapon.gameObject);
+                    }
+
+                    continue;
+                }
+
                 weapon.gameObject.AddComponent<ZombieWeaponLockView>().Bind(frame);
             }
         }
 
         private static void DestroyViews()
         {
+            for (int i = 0; i < HiddenOffRoster.Count; i++)
+            {
+                if (HiddenOffRoster[i] != null)
+                {
+                    HiddenOffRoster[i].SetActive(true);
+                }
+            }
+
+            HiddenOffRoster.Clear();
+
             IReadOnlyList<ZombieWeaponLockView> views = ZombieWeaponLockView.All;
             for (int i = views.Count - 1; i >= 0; i--)
             {

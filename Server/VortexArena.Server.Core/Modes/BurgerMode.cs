@@ -59,7 +59,13 @@ public sealed class BurgerMode : IGameMode
     private const string Patty = "patty";
     private const string Sauce = "sauce";
     private const string KetchupBottle = "ketchup_bottle";
+    private const string FridgeDoor = "fridge_door";
     private const string DispenserPrefix = "dispenser_";
+
+    /// <summary>Widest the fridge leaf may open (deg); its <c>stage</c> is clamped to 0..this.</summary>
+    /// <remarks>⚠️ NOT a <c>server.json</c> knob: the limit is the hinge GEOMETRY of the model (past it
+    /// the leaf cuts into the body), not a balance number an operator may tune.</remarks>
+    private const int FridgeDoorMaxAngle = 110;
 
     /// <summary>Shortest gap between two sauce layers from the SAME bottle (s).</summary>
     /// <remarks>⚠️ The gate must be here: the squeezing client reports a continuous hit and its own
@@ -335,9 +341,26 @@ public sealed class BurgerMode : IGameMode
                 return false;
             case "squirt" when kind == KetchupBottle:
                 return HandleSquirt(director, playerId, netId, msg);
+            case "swing" when kind == FridgeDoor:
+                return HandleSwing(director, netId, msg);
             default:
                 return false;
         }
+    }
+
+    /// <summary>Fridge leaf dragged → the clamped angle becomes the object's <c>stage</c>.</summary>
+    /// <remarks>Always returns true: the written stage already reaches every headset, and a relay on top
+    /// of it would announce the same angle twice and make the drag stutter on the other clients.
+    /// <para>⚠️ The clamp is HERE, not only on the dragging client: a headset is free to send any
+    /// integer, and past the hinge limit the leaf is drawn inside the fridge body on every OTHER
+    /// headset.</para></remarks>
+    private static bool HandleSwing(MatchDirector director, int netId, ObjectEventMsg msg)
+    {
+        if (msg.i is not { Length: > 0 }) return true;
+
+        var degrees = Math.Clamp(msg.i[0], 0, FridgeDoorMaxAngle);
+        director.SetObjectStage(netId, degrees);
+        return true;
     }
 
     /// <summary>Ketchup squeezed onto a burger → one <c>sauce</c> layer at the reported point.</summary>

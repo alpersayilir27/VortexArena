@@ -1,12 +1,15 @@
+using System;
+using Oculus.Interaction.Input;
 using UnityEngine;
 using VortexArena.Core.Combat;
 
 namespace VortexArena.Core.Player
 {
     /// <summary>Seats a remote avatar's hand <b>onto the item it holds</b>: drives the fingers from the
-    /// item's pose (§6.9 — fingers do not travel on the wire; <c>Idle</c> when empty, the slot's preset
-    /// while holding, with a <see cref="HandPoseLibrary.TransitionSeconds"/> blend between) and solves the
-    /// arm so the wrist reaches the item's grip point (<see cref="TwoBoneIk"/>).</summary>
+    /// item's AUTHORED joint array, retargeted onto the humanoid hand (§6.9 — fingers do not travel on
+    /// the wire; idle when empty, the slot's rig while holding, with a
+    /// <see cref="HandPoseLibrary.TransitionSeconds"/> blend between) and solves the arm so the wrist
+    /// reaches the item's grip point (<see cref="TwoBoneIk"/>).</summary>
     /// <remarks>
     /// <b>Why the arm must be driven:</b> the item is drawn from the main hand's <b>controller anchor</b>
     /// pose (<c>RemoteAvatar.ApplyItemPoses</c>), while the remotely drawn hand is the retargeted
@@ -28,7 +31,7 @@ namespace VortexArena.Core.Player
     /// team body copies the character's <c>localRotation</c>s, so writing BEFORE it makes the second body
     /// correct for free — no separate hand/arm setup. The same holds for the ghost body.</para>
     /// <para>⚠️ <b>Not placed in a scene/prefab</b>: <see cref="RemoteAvatar"/> adds it in <c>Awake</c>.
-    /// The reason is TIMING, not convenience: finger axes and the wrist correction must be measured in
+    /// The reason is TIMING, not convenience: the finger retarget offsets and the wrist correction must be measured in
     /// bind pose (<see cref="HandFingerRig"/>), and a prefab-placed component's own <c>Awake</c> is not
     /// guaranteed to run before the skeleton is driven.</para>
     /// </remarks>
@@ -36,37 +39,51 @@ namespace VortexArena.Core.Player
     public class RemoteHandPoser : MonoBehaviour
     {
         /// <summary>
-        /// Finger pose transition for one hand — remote mirror of the local hand
-        /// (<c>HandGripPoser</c>): when the target pose changes, it travels from the currently shown
-        /// pose over <see cref="HandPoseLibrary.TransitionSeconds"/>. Remote fingers therefore close
-        /// on pickup and open on release at the same speed as the local hand, without snapping.
+        /// Finger transition for one hand — remote mirror of the local hand
+        /// (<c>HandGripPoser.ApplyFingers</c>): when the target array changes, each joint slerps from
+        /// the currently shown array over <see cref="HandPoseLibrary.TransitionSeconds"/>. Remote
+        /// fingers therefore close on pickup and open on release at the same speed as the local hand.
         /// </summary>
-        private struct PoseBlend
+        private sealed class JointBlend
         {
-            private HandPoseProfile _from;
-            private HandPoseProfile _target;
-            private HandPoseProfile _shown;
+            private readonly Quaternion[] _from;
+            private readonly Quaternion[] _shown;
+            private Quaternion[] _target;
             private float _progress;
-            private bool _started;
 
-            /// <summary>Takes the target, advances one frame and returns the pose to draw.</summary>
-            public HandPoseProfile Step(in HandPoseProfile target, float deltaTime)
+            public JointBlend()
             {
-                if (!_started)
+                int count = FingersMetadata.HAND_JOINT_IDS.Length;
+                _from = new Quaternion[count];
+                _shown = new Quaternion[count];
+            }
+
+            /// <summary>Takes the target, advances one frame and returns the array to draw.</summary>
+            /// <remarks>⚠️ The target is compared BY REFERENCE: targets are per-slot cached shared
+            /// arrays, so identity is the change signal — and the returned array is never the target
+            /// itself (it is copied in), since the shared cache must not be written.</remarks>
+            public Quaternion[] Step(Quaternion[] target, float deltaTime)
+            {
+                if (target == null)
                 {
-                    // First frame: no blend, start at the target (fingers must not look like they
-                    // close from empty when the avatar spawns).
-                    _started = true;
-                    _from = target;
-                    _target = target;
-                    _shown = target;
-                    _progress = 1f;
                     return _shown;
                 }
 
-                if (!target.Approximately(_target))
+                int count = Mathf.Min(_shown.Length, target.Length);
+
+                if (_target == null)
                 {
-                    _from = _shown;
+                    // First frame: no blend (fingers must not look like they close from empty when the
+                    // avatar spawns).
+                    _target = target;
+                    _progress = 1f;
+                    Array.Copy(target, _shown, count);
+                    return _shown;
+                }
+
+                if (!ReferenceEquals(target, _target))
+                {
+                    Array.Copy(_shown, _from, _shown.Length);
                     _target = target;
                     _progress = 0f;
                 }
@@ -76,11 +93,16 @@ namespace VortexArena.Core.Player
                     _progress = HandPoseLibrary.TransitionSeconds > 0f
                         ? Mathf.Min(1f, _progress + deltaTime / HandPoseLibrary.TransitionSeconds)
                         : 1f;
-                    _shown = HandPoseProfile.Lerp(_from, _target, HandPoseLibrary.Ease(_progress));
+
+                    float t = HandPoseLibrary.Ease(_progress);
+                    for (int i = 0; i < count; i++)
+                    {
+                        _shown[i] = Quaternion.Slerp(_from[i], target[i], t);
+                    }
                 }
                 else
                 {
-                    _shown = _target;
+                    Array.Copy(target, _shown, count);
                 }
 
                 return _shown;
@@ -92,8 +114,8 @@ namespace VortexArena.Core.Player
         private HandFingerRig _right;
         private TwoBoneIk _leftArm;
         private TwoBoneIk _rightArm;
-        private PoseBlend _leftBlend;
-        private PoseBlend _rightBlend;
+        private readonly JointBlend _leftBlend = new JointBlend();
+        private readonly JointBlend _rightBlend = new JointBlend();
 
         /// <summary>
         /// Resolves the character's finger chains in bind pose. On failure the component disables
@@ -149,11 +171,14 @@ namespace VortexArena.Core.Player
             }
 
             float dt = Time.deltaTime;
-            _left.Apply(_leftBlend.Step(_avatar.ResolveHandPose(false), dt));
-            _right.Apply(_rightBlend.Step(_avatar.ResolveHandPose(true), dt));
 
+            // ⚠️ Arm + wrist FIRST, fingers after: the retarget derives every finger bone from the
+            // wrist's final world rotation this frame (HandFingerRig.Apply).
             ApplyGrip(_left, _leftArm, false);
             ApplyGrip(_right, _rightArm, true);
+
+            _left.Apply(_leftBlend.Step(_avatar.ResolveHandJoints(false), dt));
+            _right.Apply(_rightBlend.Step(_avatar.ResolveHandJoints(true), dt));
         }
 
         /// <summary>

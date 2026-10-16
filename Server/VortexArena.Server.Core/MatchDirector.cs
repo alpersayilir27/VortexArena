@@ -515,10 +515,33 @@ public sealed class MatchDirector
 
     /// <summary>Difficulty of the running match (<see cref="MatchDifficulty"/>); only <c>zombie</c>
     /// reads it (§10.5). Resolved at <c>start_match</c>, so a mode may read it in
-    /// <c>OnMatchStart</c>.</summary>
+    /// <c>OnMatchStart</c>, and movable mid-match by <see cref="SetDifficulty"/>.</summary>
     public string Difficulty
     {
         get { lock (_gate) return _difficulty; }
+    }
+
+    /// <summary><c>set_difficulty</c> (§5.2) — the difficulty of the RUNNING match. No phase gate: the
+    /// operator may move it mid-match and the mode applies it at once
+    /// (<see cref="IGameMode.OnDifficultyChanged"/>). false = the value did not change.</summary>
+    /// <remarks>Nothing is broadcast from here: the difficulty reaches players through the mode's own
+    /// <c>modeState</c> (<c>diff</c>, §10.5) and admins through <c>admin_state</c>, which the lobby
+    /// sends. ⚠️ The hook is raised OUTSIDE the lock (hook contract): a mode takes its own gate in it.</remarks>
+    public bool SetDifficulty(string difficulty)
+    {
+        var applied = MatchDifficulty.Normalize(difficulty);
+        IGameMode? mode;
+        lock (_gate)
+        {
+            if (_difficulty == applied) return false;
+
+            _difficulty = applied;
+            mode = _mode;
+            Console.WriteLine($"[match] zorluk {applied} (faz {PhaseWire(_phase)}).");
+        }
+
+        mode?.OnDifficultyChanged(this);
+        return true;
     }
 
     /// <summary>Console/announcement text of the limit: <c>sınırsız</c> · <c>mod limiti</c> · a number.

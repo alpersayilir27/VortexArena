@@ -5,15 +5,12 @@ namespace VortexArena.Core.Combat
 {
     /// <summary>
     /// Coarse form of a hand's finger pose — five per-finger curl amounts (<c>0</c> = open,
-    /// <c>1</c> = fully closed). Drives the remote avatar's humanoid (Mixamo) hand and the idle hand.
-    /// <para>⚠️ Curl ratios, not quaternions, go to the humanoid hand: the rigged pose is ISDK
-    /// skeleton joint rotations (<see cref="HandJointRotation"/>) and the two skeletons' bone axes
-    /// differ — raw rotations would repeat, at finger scale, the trap in
-    /// <c>Docs/Sistem-Ozeti.md</c> §7 ("a rotation from tracking/network space is not written
-    /// directly onto a humanoid bone"). A ratio is rig-independent: the axis is measured at runtime
-    /// from that skeleton's own bind pose (<c>HandFingerRig</c>). Only
-    /// <see cref="HandPoseLibrary.MeasureCurl"/> derives it, and the result is NOT stored in the
-    /// asset — no second source of truth.</para>
+    /// <c>1</c> = fully closed). Authors the <b>empty</b> hand's rest pose; a grip is never described
+    /// this way.
+    /// <para>⚠️ Ratios do not reach a skeleton directly: they are turned into an ISDK joint array
+    /// (<see cref="HandPoseLibrary.BuildProfileJointRotations"/>) and both hands draw that array —
+    /// locally raw, remotely retargeted. So "ratio" is an authoring convenience, not a second pose
+    /// format.</para>
     /// <para>⚠️ Does NOT travel on the wire (§6.9): finger placement is a grip question, not a
     /// measurement, and the answer is in every client's APK. Hence the same weapon is held
     /// identically on every screen — the pose is bound to the ITEM, not the hand.</para>
@@ -64,32 +61,5 @@ namespace VortexArena.Core.Combat
             }
         }
 
-        /// <summary>
-        /// Per-finger linear blend between two poses — the remote avatar's transition step (idle ↔
-        /// grip, <c>RemoteHandPoser</c>). Duration and curve come from
-        /// <see cref="HandPoseLibrary.TransitionSeconds"/> / <see cref="HandPoseLibrary.Ease"/>.
-        /// </summary>
-        public static HandPoseProfile Lerp(in HandPoseProfile a, in HandPoseProfile b, float t)
-        {
-            t = Mathf.Clamp01(t);
-            return new HandPoseProfile
-            {
-                thumb = Mathf.Lerp(a.thumb, b.thumb, t),
-                index = Mathf.Lerp(a.index, b.index, t),
-                middle = Mathf.Lerp(a.middle, b.middle, t),
-                ring = Mathf.Lerp(a.ring, b.ring, t),
-                pinky = Mathf.Lerp(a.pinky, b.pinky, t),
-            };
-        }
-
-        /// <summary>Are all five ratios equal (used to tell whether the transition target changed).</summary>
-        public bool Approximately(in HandPoseProfile other)
-        {
-            return Mathf.Approximately(thumb, other.thumb) &&
-                   Mathf.Approximately(index, other.index) &&
-                   Mathf.Approximately(middle, other.middle) &&
-                   Mathf.Approximately(ring, other.ring) &&
-                   Mathf.Approximately(pinky, other.pinky);
-        }
     }
 }

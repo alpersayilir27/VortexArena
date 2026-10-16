@@ -45,6 +45,9 @@ namespace VortexArena.Modes.Burger
         /// <summary>Path fraction at which the customer starts peeling off toward its own slot.</summary>
         private const float SlotBlendStart = 0.75f;
 
+        /// <summary>Path fraction sampled ahead to get the walking direction (frame-rate independent).</summary>
+        private const float FacingLookAhead = 0.02f;
+
         private static readonly List<BurgerCustomer> Customers = new List<BurgerCustomer>();
 
         private static readonly int StageParam = Animator.StringToHash("stage");
@@ -314,7 +317,7 @@ namespace VortexArena.Modes.Burger
         private void TickWalk()
         {
             _walkTimer += Time.deltaTime;
-            MoveAlongPath(Mathf.Clamp01(_walkTimer / BurgerKinds.CustomerWalkSeconds));
+            MoveAlongPath(Mathf.Clamp01(_walkTimer / BurgerKinds.CustomerWalkSeconds), 1f);
         }
 
         /// <summary>Seated at the slot anchor. ⚠️ The walk timer is reset HERE so the same budget is
@@ -344,10 +347,11 @@ namespace VortexArena.Modes.Burger
         private void TickLeave()
         {
             _leaveTimer += Time.deltaTime;
-            MoveAlongPath(1f - Mathf.Clamp01(_leaveTimer / BurgerKinds.CustomerLeaveSeconds));
+            MoveAlongPath(1f - Mathf.Clamp01(_leaveTimer / BurgerKinds.CustomerLeaveSeconds), -1f);
         }
 
-        private void MoveAlongPath(float t)
+        /// <param name="heading">+1 walking in (t rises), -1 walking out (t falls).</param>
+        private void MoveAlongPath(float t, float heading)
         {
             BurgerCustomerPath path = BurgerCustomerPath.Instance;
             if (path == null)
@@ -355,7 +359,24 @@ namespace VortexArena.Modes.Burger
                 return;
             }
 
-            Vector3 previous = transform.position;
+            Vector3 position = PathPoint(path, t);
+            transform.position = position;
+
+            // ⚠️ Facing comes from the path tangent, NOT the per-frame delta: at high frame rates (admin
+            // on desktop) the per-frame step falls under the noise threshold and facing never updated.
+            Vector3 direction = PathPoint(path, t + heading * FacingLookAhead) - position;
+            direction.y = 0f;
+
+            // Below the threshold the direction is noise and would spin the customer on the spot.
+            if (direction.sqrMagnitude > 0.0001f)
+            {
+                transform.rotation = Quaternion.LookRotation(direction, Vector3.up);
+            }
+        }
+
+        /// <summary>Path point at <paramref name="t"/>, peeled off toward this customer's slot.</summary>
+        private Vector3 PathPoint(BurgerCustomerPath path, float t)
+        {
             Vector3 position = path.Sample(t);
 
             // The path is shared and ends at the counter; the slots sit beside it. Without this the
@@ -367,16 +388,7 @@ namespace VortexArena.Modes.Burger
                     Mathf.InverseLerp(SlotBlendStart, 1f, t));
             }
 
-            transform.position = position;
-
-            Vector3 direction = position - previous;
-            direction.y = 0f;
-
-            // Below the threshold the direction is noise and would spin the customer on the spot.
-            if (direction.sqrMagnitude > 0.0001f)
-            {
-                transform.rotation = Quaternion.LookRotation(direction, Vector3.up);
-            }
+            return position;
         }
     }
 }

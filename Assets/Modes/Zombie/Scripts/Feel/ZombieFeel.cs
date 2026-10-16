@@ -50,7 +50,11 @@ namespace VortexArena.Modes.Zombie
         [Tooltip("Kapalıyken hiçbir .haptic klibi çalmaz (titreşim yalnız silahın kendi kancalarından gelir).")]
         [SerializeField] private bool hapticEnabled = true;
 
-        [Tooltip("Destek elinde atış klibinin genliği.")]
+        [Tooltip("Atış klibinin genlik kazancı (1 = klibin kendisi). 1'in üstü klibin gövdesini " +
+                 "tavana yaklaştırır; SDK her örneği 1'de kırpar.")]
+        [SerializeField] private float fireHapticGain = 2f;
+
+        [Tooltip("Destek elinde atış klibinin genliği (kazançla çarpılır).")]
         [SerializeField] private float supportHandFireAmplitude = 0.5f;
 
         [Tooltip("İsabet onayının atıştan sonraki gecikmesi (s): atış klibi bitmeden çalarsa " +
@@ -173,6 +177,8 @@ namespace VortexArena.Modes.Zombie
         public float MaxPitchKicks => Mathf.Max(1f, maxPitchKicks);
 
         public bool HapticEnabled => hapticEnabled;
+
+        public float FireHapticGain => Mathf.Max(0f, fireHapticGain);
 
         public float SupportHandFireAmplitude => Mathf.Clamp(supportHandFireAmplitude, 0f, 1f);
 

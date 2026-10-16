@@ -124,6 +124,49 @@ açılışta çalışma dizinini indeksler.
 - ⚠️ Windows'ta komut **`auggie.cmd`**'dir, çıplak `auggie` değil: npm shim'i `.cmd`/`.ps1` olarak
   kurulur ve çıplak ad süreç olarak başlatılamaz.
 
+### `chrome-devtools` kaydı — geliştiricinin AÇIK Chrome'una bağlanır
+
+Kayıt `cmd /c npx -y chrome-devtools-mcp@<sürüm> --autoConnect`; ajan tarayıcıdan iş yapar
+(abonelikle kullanılan üretim siteleri: görsel/doku, ses). Ayrı tarayıcı açmaz, geliştiricinin
+**zaten çalışan** Chrome'una (144+) bağlanır — oturumlar orada açık olduğu için ajan hesaba giriş
+yapmaz.
+
+| # | Ne | Nasıl |
+|---|---|---|
+| 1 | Node.js | `npx` PATH'te olmalı |
+| 2 | Chrome'da uzaktan hata ayıklama | `chrome://inspect/#remote-debugging` → sunucuyu başlat (profil başına bir kez) |
+| 3 | Bağlantı onayı | Ajan bağlandığında Chrome izin sorar — onaylanır |
+
+- ⚠️ **Chrome kapalıyken her çağrı bağlantı hatası verir** — Blender köprüsündeki mantık: önce
+  tarayıcı, sonra iş.
+- ⚠️ `--autoConnect` yerine ajanın kendi açtığı profil kullanılmaz: otomasyonla başlatılan
+  Chrome'da Google hesabına giriş engellenebilir.
+- ⚠️ Ajan geliştiricinin **gerçek profilinde** çalışır (tüm açık oturumlar dahil); iş bitince
+  `chrome://inspect/#remote-debugging`'den sunucu kapatılabilir.
+- Sürüm `.mcp.json`'da sabittir (`@latest` değil) — araç seti sessizce değişmesin; güncelleme
+  elle yapılır.
+- Tarayıcıdan indirilen dosya Chrome'un indirme klasörüne düşer; `Assets/` ya da
+  `blender/<Proje>/ref/`'e ajan taşır.
+- ⚠️ Gemini görseli **"Tam boyutlu resmi indir"** ile alınır (sayfadaki önizleme küçültülmüştür) ve
+  `.jfif` uzantısıyla iner; Unity bu uzantıyı tanımaz → taşırken `.png`'ye çevrilir.
+- ⚠️ "Seamless" istense de Gemini çıktısı döşenebilir olmaz (ortada dikiş kalır); döşenebilirlik
+  Blender'da sağlanır. Gerçekçi haritada döşenen PBR doku Poly Haven'dan, stilize haritada Gemini'den
+  gelir (Poly Haven yalnız fotogerçekçidir).
+- Görsel üretiminde model **3.8 Flash, düşünme Düşük**: daha büyük model (Argon) aynı kaliteyi
+  birkaç kat sürede verir. Çıktı referanstır (ölçü betikten gelir), son ürün
+  değil.
+- ⚠️ Görünüm sayfasının (ön · sol · arka · sağ) görünümleri birbirini tutmaz; ölçü ve yerleşim
+  kaynağı değildir.
+- ⚠️ Aynı sayfadan art arda indirmeyi Chrome sessizce engeller ("Tam boyutlu resmi indir" tık alır
+  ama dosya düşmez); indirme sayısına güvenilmez. Görsel sayfadan okunur: `blob:` önizleme canvas'a
+  çizilir, `lh3.googleusercontent.com` adresli görsel `=s0` ile yeni sekmede açılıp orada okunur
+  (Gemini sayfasından fetch CORS'a takılır). Yakalanan "tam boyut" blob'u bazen bozuk karedir —
+  her görsel diske yazıldıktan sonra açılıp bakılır.
+- ⚠️ Bir sahneyi/maketi "bitmiş hale boya" isteğinde her seçenek **yeni sohbette** istenir: aynı
+  sohbetteki önceki görsel yeni sonuca sızar (obje yer değiştirir, eklenir). İstekte obje sayımı ve
+  "insan/ek prop yok" yasağı açıkça yazılır.
+- ⚠️ İstekte gerçek marka, logo ya da var olan karakter adı geçmez (ürün ticari); adlar uydurulur.
+
 ### `UnityMCP` kaydı — köprü **8080**'dedir, port kapılabilir
 
 Sunucuyu (`mcp-for-unity`) editör kendi başlatır ve `http://127.0.0.1:8080/mcp` adresine bağlar;

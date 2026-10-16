@@ -495,7 +495,8 @@ Okunabilir alanlar: `ModeId`, `Teams`, `Allies`, `Scoring`, `FriendlyFire`, `Rev
 > `Assets/_Shared/Arsenal/Data/WD_<Ad>.asset`'i seç, klibi ilgili alana **sürükle**. Beş yuva var:
 > `fireClips` (dizi — her atışta rastgele biri seçilir), `magOutClip` (reload `t=0`),
 > `magInClip` (reload `t = 0.70 × reloadTime`; boş bırakılırsa o an sessiz kalır ve `magOutClip`
-> tüm reload sesini taşır), `dryFireClip` (boş şarjörde tetik), `pickupClip` (silah alınırken).
+> tüm reload sesini taşır), `dryFireClip` (boş şarjörde tetik; seviyesi `dryFireVolume`, 1'in üstü klibi yükseltir),
+> `pickupClip` (silah alınırken).
 > Silah kiti koşusu (`Configure All Build Elements`) klibe dokunmaz — yalnız ateş sesi atanmamış
 > silahları koşu sonunda listeler.
 > ⚠️ Ateş klipleri `PlayOneShot` ile çalınır, yani **üst üste biner**: aranan dosya her zaman
@@ -632,19 +633,18 @@ Ayarlanabilir bir "silah dönüşü" alanı da yoktur.
 
 Parmaklar telde gitmez (`Docs/ArenaNet-Protokol.md` §6.9), yani uzak avatarın parmakları
 **sentezlenir**: eşya tutan elde **o slot için yakaladığın duruş** (`WD_*`'ta yazılı olan), boş elde
-`RemoteAvatar.prefab` → `idleHandPose` (boşsa `HandPoseProfile.Idle`). Yani stüdyoda yakaladığın
+`RemoteAvatar.prefab` → `idleHandPose` (boşsa yerel boş elin duruşu). Yani stüdyoda yakaladığın
 duruş yalnız senin elini değil, herkesin gördüğü eli de sürer — elle tutulan dünya objesinde de
 (§11.5): bayt gitmese de uzak el, objenin kendi kavrama kaydıyla ona oturur.
 
-⚠️ **Uzaktaki el KABACA çizilir ve bu bilinçlidir.** Uzak avatarın eli humanoid (Mixamo) bir
-rig'dir; ISDK eklem dönüşleri ona doğrudan yazılamaz (iki iskeletin kemik eksenleri aynı değil).
-Köprü, yakaladığın duruştan **ölçülen** parmak başına kapanma oranıdır — yani uzakta parmakların
-"ne kadar kapalı" olduğu doğrudur, kemik kemik ince ayar değil. İnce ayarın tüketicisi zaten
-oyuncunun kendi eli: uzak oyuncunun eli metrelerce öteden görülüyor.
+**Uzaktaki el yakaladığın duruşu yeniden üretir.** Uzak avatarın eli humanoid (Mixamo) bir rig'dir;
+ISDK eklem dönüşleri ona doğrudan yazılamaz (iki iskeletin kemik eksenleri aynı değil), ama köprü
+artık bir oran değil **yeniden hedeflemedir**: her kemiğin bilek uzayındaki yönelimi ve doğrultusu
+her iskeletin kendi bind pozunda ölçülüp eşleştirilir (`HandFingerRig`). Yani kapanma, parmak
+açıklığı ve baş parmak karşıtlığı uzakta da görünür; farklı kalan tek şey gövdenin kendi el
+ölçüleridir (parmak uzunluğu/kalınlığı).
 
-**Genel his** (tüm silahlar birden, uzak elde) eklem başına açı tavanlarından gelir:
-`HandFingerRig.FingerMaxAngles` / `ThumbMaxAngles`. Tek bir silah tuhaf duruyorsa bakılacak yer o
-silahın **kavrama kaydıdır**, tavanlar değil.
+Tek bir silah uzakta tuhaf duruyorsa bakılacak yer o silahın **kavrama kaydıdır**.
 
 ## 11.1 Silah çerçevesinin görünümü
 
@@ -654,14 +654,16 @@ silahın **kavrama kaydıdır**, tavanlar değil.
 alanına bağlanır, model çalışma anında silahın ölçüsüne oturtulur.
 
 > ⚠️ Görsel **yalnız sunumdur.** Çerçeve görünmese de silah yine oradan, `maxGrabDistance`
-> mesafesinden nişan alınarak seçilir ve ele klonlanır; görselin yokluğu alma menzilini ya da
+> mesafesinden (avuç ↔ çerçeve merkezi; kodda `WeaponFrame.MaxReachMeters` = 1,5 m ile tavanlanır,
+> sahnede büyütmek işe yaramaz) nişan alınarak seçilir ve ele klonlanır; görselin yokluğu alma menzilini ya da
 > kavramayı kapatmaz.
 
-> ⚠️ **Nişan ışını çerçeveden gelmez.** Oyuncunun gördüğü uzaktan-seçim göstergesi ISDK'nın kendi
-> mesafe-kavrama görselidir (tüp + reticle); `WeaponFrame`'in kendi `LineRenderer` ışını
-> (`isRayVisible`) **kapalıdır**, ikisi birden açıkken elde iki ışın görünür. Menzil bilgisi
-> kaybolmaz: ISDK adaylarını `WeaponFrame.Filter`'dan geçiriyor, menzil dışındaki çerçeve hover
-> bile almaz.
+> ⚠️ **Tek nişan geri bildirimi çerçevenin kendi DÜZ ışınıdır** (`WeaponFrame`'in `LineRenderer`'ı,
+> avuçtan çerçeve merkezine). ISDK'nın kendi mesafe-kavrama görselleri (eğri tüp + reticle)
+> **kalıcı olarak susturulur** (`WeaponGranter` → `ControllerModelHider.SetGrabVisualsSuppressed`):
+> ISDK tüpü Bezier'dir, hedefe doğru eğilir ve oyuncuya nereye nişan aldığını yanlış söyler.
+> Işın yalnız o el çerçeveyi hover'larken, el raf için boştayken (`IsHandFreeForRack`) ve çerçeve
+> **erişilebilirken** çizilir — erişilebilir = menzilde **ve** görüş hattı açık.
 
 > **Çerçeve yalnız silah SABİT dururken vardır.** Silah hangi yoldan tutulursa tutulsun — ele
 > verildi (`WeaponGranter`) ya da doğrudan kavrandı (ISDK) — çerçevenin GameObject'i kapanır;
@@ -1036,8 +1038,8 @@ sahibi admindir** (§3.6b "Sunucu-atanmış sahiplik"); örnek uygulama `Assets/
      koridorunun ucundakiler mesafeyi, çitin 4–6 m dışındakiler ise dalganın ilk zombilerinin
      oyuncuya **hızla ulaşmasını** verir — hepsi uzaktaysa dalganın başı boş geçer.
    - **Akın temposu `MapDefinition.zombiePace` ile ayarlanır** (temel değer `1`, aralık `0,25`–`2`):
-     doğum aralığını ve dalga arasını böler, aynı anda ayakta duran zombi sayısını çarpar; dalganın
-     toplam zombisi ile hasar değişmez. Dar ya da çok katlı arenada akını yavaşlatmak için kullanılır.
+     doğum aralığını ve dalga arasını böler, aynı anda ayakta duran zombi sayısını çarpar; **dalga
+     süresi** ile hasar değişmez. Dar ya da çok katlı arenada akını yavaşlatmak için kullanılır.
      Export'la `maps.json`'a çıkar.
    - Build penceresinin **"Zombi arenası hazır"** satırı açık sahne için üç şeyi birden denetler:
      NavMesh bake'i, **her katta** en az bir `zombie_spawn` ve sahnede silah panosu. ✗ kaldıysa eksik
@@ -1046,7 +1048,8 @@ sahibi admindir** (§3.6b "Sunucu-atanmış sahiplik"); örnek uygulama `Assets/
    her kata bir tane** konur — zombi gibi oyuncu da kat değiştirir, tek pano üst kattaki oyuncuyu
    silahsız bırakır. ⚠️ **Pano örneği unpack EDİLMEZ** (kilit plakaları çalışma anında eklenir,
    prefaba yazılmaz).
-   - **Panoda dalga başına bir modül vardır.** Modülün başlığını ("N. DALGA") kimse elle yazmaz:
+   - **Panoda dalga başına bir modül, modül başına tek yuva vardır** (3×3 ızgara, kalan gözde
+     plaka). Modülün başlığını ("N. DALGA") kimse elle yazmaz:
      `ZombieWaveModuleLabel` çalışma anında modülün altındaki **ilk silahtan** `ZombieArsenal`'a
      sorar. Bir silahı bir dalgaya eklemek = `WPN_*` prefab **örneğini** o modülün bir `Slot`'unun
      altına koymak + `ZombieArsenal`'da satırını yazmak; dalgayı belirleyen tablodur, modülün adı
@@ -1064,16 +1067,20 @@ sahibi admindir** (§3.6b "Sunucu-atanmış sahiplik"); örnek uygulama `Assets/
      Cephanelik tablosunu oluştur* ile `Resources/Zombie/ZombieArsenal` üretilir, sonra Inspector'dan
      satır eklenir/değiştirilir. `weaponId` `WeaponDefinition`'daki değerle **birebir** yazılır;
      bilek bombası aynı tabloda `ThrowableDefinition.throwableId`'siyle durur (kilitliyken bilek
-     **boştur**, `WristHolster.SelectionGate`). Son Direniş'te tablo işlemez, her şey açıktır.
-   - Kademe **rol** sırasıyla kurulur: her dalga yeni bir iş ekler (yan silah → yakın savunma →
-     ilk tüfekler + bomba → pompalı ve iri avcıları → isabet → üst kademe) ve en güçlü silah son
-     kademededir. Yeni silah eklerken rolüne göre dalgası seçilir — güçlü silahı erkene koymak sonraki
-     dalgaların açılışını değersizleştirir.
-   - ⚠️ **Tabloda olmayan silah AÇIKtır** — kilitli kalması bozukluk gibi görünür, açık kalması yalnız
-     eksik veridir. Maç başlamadan önceki her hâl (arena sahnelenmiş bekleme, geri sayım, dalga 0)
-     **dalga 1 sayılır** — kilit arena yüklenir yüklenmez işler, `start_match` beklenmez.
+     **boştur**, `WristHolster.SelectionGate`). Son Direniş'te tablo kademeyi işletmez: **tabloda
+     yazan** her silah açılır (yazmayan orada da açılmaz).
+   - **Her dalga BİR silah açar** ve sıra, en güçlü silah son dalgada olacak biçimde kurulur. Hangi
+     silahın hangi dalgada olduğu **yalnız asset'te** yazar — doküman ikinci bir liste tutmaz. Yeni
+     silah eklerken yeri gücüne göre seçilir; güçlü silahı erkene koymak sonraki dalgaların
+     açılışını değersizleştirir.
+   - ⚠️ **Tabloda olmayan silah modun KADROSUNDA değildir:** pano yuvası gizlenir (mod bitince geri
+     açılır) ve seçim kapısı o silahı reddeder (`ZombieArsenal.IsListed`) — aynısı atılabilirler
+     için. Yani zombiye silah eklemek **iki** adımdır: tabloya satır **ve**
+     `VA_WeaponCanvas_Zombie` üstünde o dalganın modülü/yuvası. Maç başlamadan önceki her hâl
+     (arena sahnelenmiş bekleme, geri sayım, dalga 0) **dalga 1 sayılır** — kilit arena yüklenir
+     yüklenmez işler, `start_match` beklenmez.
    - Kilitli silah **alınamaz** (`WeaponGranter.SelectionGate`): koyu örtü + kilit + "DALGA N" ile durur,
-     nişan ışını/retikülü bile çizilmez. **Kilit, bir önceki dalganın temizlik evresi başlarken
+     çerçevenin nişan ışını bile çizilmez. **Kilit, bir önceki dalganın temizlik evresi başlarken
      açılır** (ekip silahını o boşlukta değiştirir): plaka kızıl nabız atar ve HUD'ın temizlik
      yazısı "DALGA N TAMAMLANDI" + açılan silahların adlarını ("YENİ SİLAHLAR …") sıralar, ayrı bir
      bildirim yoktur — kod tarafı için `Docs/Sistem-Ozeti.md` §4 (`ZombieWeaponUnlocks`).
@@ -1083,9 +1090,12 @@ sahibi admindir** (§3.6b "Sunucu-atanmış sahiplik"); örnek uygulama `Assets/
      kendisinden gelir ve yeni gövde hasarına uygulanır. Kanca modun açılışında kurulur ve mod
      bitince bırakılır (`ZombieDamageTuning` → `Weapon.DamageOverride`), yani **PvP dengesi
      değişmez** — `WD_*.asset`'i zombi için düzenlemek PvP'yi sessizce bozardı.
+   - **Reload süresi ve boş tetik sesi zombide tablo genelinde ayarlanır:** `ZombieArsenal` üstündeki
+     `reloadTimeScale` (`reloadTime ×` çarpan, 1 = PvP ile aynı) ve `dryFireVolumeScale`
+     (`dryFireVolume ×` çarpan). Silah başına satır yoktur; aynı kancayla kurulur ve bırakılır.
    - ⚠️ Kafa merdiveni: 100 can'lık sıradan zombi ilk dalgaların hafif silahlarıyla **iki** kafa
-     vuruşu ister (kafa hasarı ~50); magnum, AK ve 5. dalgadan sonra açılan tüfekler kafayı **tek**
-     vuruşta indirir (~101). Dalga ilerlemesi kafa başına vuruş sayısının düşmesiyle hissedilir;
+     vuruşu ister (kafa hasarı ~50); magnum ve ileri dalgaların tüfekleri kafayı **tek** vuruşta
+     indirir (~101), saçmalılarda hesap **saçma başınadır**. Dalga ilerlemesi kafa başına vuruş sayısının düşmesiyle hissedilir;
      bu yüzden yeni silah ya 50'lik ya 101'lik basamağa oturtulur, arası (ör. 70) iki basamağı da
      bulanıklaştırır. Ölümcül kafa vuruşu kafayı patlatır.
    - Tablo tamamen istemci tarafıdır: sunucu silah doğrulaması yapmaz, yani denge değişikliği **sunucu
@@ -1297,7 +1307,7 @@ public sealed class BenimModum : IGameMode
 + `MatchDirector.RegisterModes()` içine `Register(new BenimModum());`
 
 > `IsMatchOver` `true` dönmeden önce son `modeState`'i yazabilir (`SetModeState`, ör. zombideki
-> `over:lost`): çekirdek bekleyen bu yayını `finished`'tan **önce** gönderir, yani maç sonu ekranı
+> `over:survived`): çekirdek bekleyen bu yayını `finished`'tan **önce** gönderir, yani maç sonu ekranı
 > sonucu `finished` ile birlikte okur.
 
 > ⚠️ **`Teams = None` seçtiysen bir karar daha vermek zorundasın: `Allies`.** `false` (varsayılan) =
@@ -1929,8 +1939,7 @@ değeri sahne objesinde durduğu için arena başına elle yapılır ve **atlan�
 **5. adımın bütçe kuralı.** Environment yerleştikten sonra `Tools > VortexArena > Arena > Sahne
 Bütçesini Ölç` koşulur: tenant'ın sahneleri yan yana, eşiği aşan hücre kırmızı (1M+ LOD0 üçgen ·
 1500+ LOD0 renderer · birden çok terrain · static flag'siz dekor). Hareketsiz dekor **Static**
-işaretlenir (yapraklı vegetasyon/çimde Occluder kapalı; `Animator`/`Rigidbody` altındaki obje
-işaretsiz), bake **ondan sonra** alınır — işaretsiz objeye bake uygulanmaz
+işaretlenir (`Animator`/`Rigidbody` altındaki obje işaretsiz), bake **ondan sonra** alınır — işaretsiz objeye bake uygulanmaz
 ([Yapma Listesi](Yapma-Listesi.md)). Hazır environment paketleri **çok parçalı terrain**le gelir;
 Quest'te terrain batch'lenmez — tek terrain'e indirilir ya da mesh'e çevrilir. Paylaşılan
 `TerrainData`'ya dokunulmaz: sahneye özel kopyası arena kutusunun `Art/`'ına alınır, sonra
@@ -1959,9 +1968,7 @@ blokları gibi) `MeshLodUtility.GenerateMeshLods` ile üretilen seviyeler ayrı 
 `LODGroup`'a konur (orijinal · %62 · %16; geçiş 0.30 / 0.10 / 0). Oyun alanının hiçbir noktasından
 ekrana gelemeyen üst LOD seviyesi kapatılır — görüntü değişmez, sayaç düşer. Arena sınırına 5 m'den uzak dekorun collider'ı
 silinir — paketin konkav `MeshCollider`'ları yüklemede tek tek pişirilir; bedeli: mermi o dekora
-çarpmaz, iz bırakmaz. Occluder yalnız ardını gerçekten kapatan
-yapıdadır (bina, duvar, döşeme, tank, araç); iskele, çit, tel örgü, kolon ve eşyada kapalı —
-sonra occlusion bake alınır. Yalnız bu sahnede ve arenaya 10 m'den uzakta kullanılan paket
+çarpmaz, iz bırakmaz. Yalnız bu sahnede ve arenaya 10 m'den uzakta kullanılan paket
 dokusuna Android override `Max Size 1024` konur; başka oyun sahnesinin de kullandığı dokuya
 dokunulmaz. ⚠️ Sahnenin `.lighting` dosyası klasörde durup **sahneye bağlı olmayabilir** —
 bağlı değilse bake hiç alınmamıştır ve bütün static dekor her karede gerçek zamanlı gölge öder.
@@ -1993,10 +2000,8 @@ görünür.
 (Mixed + Shadowmask), static flag'ler, gölge işaretleri ve güneş transform'u orada kurulur ve
 kopyayla gelir. **Lightmap gelmez** — bake sahnenin kendisine yazılır, o yüzden her mekan sahnesi
 çiti ve mekana özel yerleştirmesi bittikten sonra **kendi başına** bake edilir
-([Sahne Kurulumu](Sahne-Kurulumu.md)). ⚠️ **Occlusion bağlantısı ise kopyayla gelir** ve kaynağın
-veri dosyasını gösterir: kopya kendi occlusion bake'ini alana kadar başka yerleşimin görünürlük
-verisiyle çalışır ([Yapma Listesi](Yapma-Listesi.md) — "Kopyalanan sahneyi kaynağın occlusion
-verisiyle bırakma").
+([Sahne Kurulumu](Sahne-Kurulumu.md)). Occlusion bake'i hiç alınmaz
+([Yapma Listesi](Yapma-Listesi.md) — "Oyun sahnesine occlusion bake alma").
 
 ⚠️ **Gökyüzü bake'ten ÖNCE seçilir:** `Window > Rendering > Lighting > Environment > Skybox
 Material` = `_Shared/World/Sky/` içindeki bir `M_Sky_*`. Sahneler `Ambient = Skybox` kullanıyor,
@@ -2090,7 +2095,7 @@ Fiziksel oda değişmedi: ölçü aynı, kalibrasyon bantları aynı yerde.
 - Kalibresiz açılışta oyuncu **o sahnenin A-B ortasında** başlar, yani muhafazanın içinde
   ([API: ArenaCalibrator](API-Referansi.md#arenacalibrator--kalibresiz-ön-hizalama)).
 - ⚠️ **Taşınmış environment'ın bake'i taşıma SONRASI yeniden üretilir:** lightmap, ışık probu
-  verisi, occlusion ve (zombi haritasıysa) NavMesh konuma bağlıdır — taşımadan önce alınan bake
+  verisi ve (zombi haritasıysa) NavMesh konuma bağlıdır — taşımadan önce alınan bake
   eski yerinde kalır ve hata vermez.
 
 > **Neden böyle?** Arena uzayı **dünya uzayıdır**: ağa giden/gelen pozların sıfırı sahnenin dünya
@@ -2113,13 +2118,13 @@ Aynı harita (sanatı, modları, yerleşimi) ikinci bir işletmede oynanacak. Ta
 | # | Yaptığın | Neden? |
 |---|---|---|
 | 1 | Kaynak sahneyi `Venues/<HedefMekan>/Scenes/<Harita>_<HedefMekan>/<Harita>_<HedefMekan>.unity` olarak kopyala; klasör · sahne · `MapDefinition` **aynı adı** taşır. `MapDefinition` kaynağınkinden **kopyalanıp** yeni adla `Data/` altına konur. Kaynağın `_objects.json`'u ve lightmap klasörü **kopyalanmaz** | 8. adımdaki araç eksik tanımı boş üretir ve yalnız ad + modları yazar: `gameType`, ortam sesi ve admin görünümü varsayılanda kalır, Çocuk Oyunları haritası sessizce Hızlı Savaş olur. Ağ nesnesi listesini yeni sahne kendi kaydında yazar |
-| 2 | `.lighting` dosyasını yeni sahnenin klasörüne al, **iç adını (`m_Name`) dosya adına eşitle**, sonra kendi bake'ini çalıştır ([Sahne Kurulumu](Sahne-Kurulumu.md#aydınlatma)) | `LightingData` ve occlusion bağlantısı kopyada **kaynak sahneyi** göstermeye devam eder: kendi bake'i alınana kadar harita başka bir yerleşimin ışık ve görünürlük verisiyle çalışır |
+| 2 | `.lighting` dosyasını yeni sahnenin klasörüne al, **iç adını (`m_Name`) dosya adına eşitle**, sonra kendi bake'ini çalıştır ([Sahne Kurulumu](Sahne-Kurulumu.md#aydınlatma)) | `LightingData` bağlantısı kopyada **kaynak sahneyi** göstermeye devam eder: kendi bake'i alınana kadar harita başka bir yerleşimin ışık verisiyle çalışır |
 | 3 | `ArenaBoundary.dimensionsJson`'ı **hedef mekanın** boyut dosyasına bağla → `… > Arena > JSON'dan DimensionMesh Üret` (eski maket silinir). Muhafaza **dünya orijininde ve dönüşsüz** kalır | Ölçünün tek kaynağı mekanın boyut dosyasıdır ([Reçete 17](#17-arena-ölçüsü-boyut-dosyası)); kaynak mekanın maketi yeni odayı tarif etmez |
 | 4 | Sanatı **tek kök** altında hedef planın üstüne taşı/döndür — 90° döndürmek meşrudur, **ölçek yoktur**. Hedef plan kaynaktan büyükse boşluğu **siperle** doldur, küçükse obje yerleşimini daralt | Ölçekleme elle düzeltilecek bir yalancı-doğru üretir: silah menzili, kavrama yüksekliği ve oyuncunun boyu ölçeklenmez |
 | 5 | ⚠️ Hedef mekandaki **her kolonun izdüşümünü görünen bir objeyle ört** ve o objeye engel hacmi (`Obstacle`) ver | Oyuncu fiziksel kolondan ancak sanatta görürse kaçınır; muhafazanın kolon uyarısı tek başına yetmez — uyarı geldiğinde oyuncu kolona çoktan girmiştir |
 | 6 | Mekana bağlı objeleri yeniden yerleştir: taban bölgeleri · silah panoları · `ArenaRoof` · `VA_LightProbes` (yeni sınırı yatayda **+3 m** payla kaplar, [Sahne Kurulumu](Sahne-Kurulumu.md#aydınlatma)) · güneş (sınır merkezinin üstü) · mod istasyonları (Burger için [13.1.1](#1311-bir-oyun-istasyonunu-ikinci-bir-mekana-kurmak)) | Bunların yeri mekanın ölçüsüne bağlıdır, kaynak sahnedeki konumları yeni odada anlamsızdır |
 | 7 | Taşınan/eklenen her objenin collider'ını engel kuralına göre denet ([14](#14-yeni-arena-eklemek) 5. adım — `Obstacle` / `<Obje>_BulletCollider`), sonra `… > Arena > Engel Hacimlerini Denetle` | Layer değeri **sahne objesinde** durur: kopyada da arena başına elle yapılır, atlanırsa o haritada ihlal hiç çalışmaz ve hata vermez |
-| 8 | Işık + occlusion bake, sonra `… > Build > Configure All Build Elements` → **Hepsini Çalıştır** | Mod listeleri, `GameCatalog`, Build Settings ve `maps.json` yeni `sceneName`'i ancak bu adımda görür; atlanırsa `start_match` sessizce reddedilir |
+| 8 | Işık bake'i, sonra `… > Build > Configure All Build Elements` → **Hepsini Çalıştır** | Mod listeleri, `GameCatalog`, Build Settings ve `maps.json` yeni `sceneName`'i ancak bu adımda görür; atlanırsa `start_match` sessizce reddedilir |
 
 - **Eski bir sürümün yerine yenisi konuyorsa aynı sahne adı ve aynı `MapDefinition` asset'i
   korunur** — sahne adı katalog anahtarıdır, yeni ad lobideki ve `maps.json`'daki eski satırı

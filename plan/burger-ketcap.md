@@ -38,7 +38,7 @@ dağıtıcısı (`NO_dispenser_sauce`) sahneden kalkar. Mayonez/hardal yoktur.
 - Boştayken (sahipsiz) şişe asılma noktasında durur; sahnedeki ev pozu ile aynı.
 - Bırakılan şişe yay ile dönerken açısı da hemen asılma açısına döner (`uprightSpeed`, 720°/sn);
   elin son açısında kalmaz.
-- **Kordon sınırı:** tutan gözlükte şişe asılma noktasından `leashRadius` (3 m) uzaklaşınca
+- **Kordon sınırı:** tutan gözlükte şişe asılma noktasından `leashRadius` (4 m) uzaklaşınca
   `NetObjectGrabBridge.ForceRelease()` ile elden düşer ve yay onu yerine çeker.
 
 ## 2. Sıkma ve akış

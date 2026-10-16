@@ -86,8 +86,8 @@ namespace VortexArena.App
         /// <summary>Card corner radius (px) — this screen's own value, larger than the panel default.</summary>
         private const float CardRadius = 20f;
 
-        /// <summary>Canvas sorting order — above the blackout quad, the mode HUD and the result
-        /// screen; see <see cref="ApplySortingOrder"/>.</summary>
+        /// <summary>Canvas sorting order — above the blackout quad, the mode HUD, the result screen and
+        /// the scene transition black (25); see <see cref="ApplySortingOrder"/>.</summary>
         private const int CardSortingOrder = 30;
 
         // ----------------------------------------------------------------- state

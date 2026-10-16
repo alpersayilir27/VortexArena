@@ -378,6 +378,8 @@ MonoBehaviour:
   cord: {fileID: 8683099559335400873}
   springStrength: 24
   springDamping: 4
+  uprightSpeed: 720
+  leashRadius: 4
   visionPrefab: {fileID: 867597243788674642, guid: b719ef4e0894b8d4195b685139a6800b, type: 3}
   squeezeStartSound: {fileID: 8534420105778129546}
   squeezeStopSound: {fileID: 3706702451204788372}

@@ -135,6 +135,19 @@ namespace VortexArena.App.Admin
         }
 
         /// <summary>
+        /// Difficulty of the RUNNING match (§5.2 <c>set_difficulty</c>) — same class as
+        /// <see cref="SetFriendlyFire"/>: a live command, not a selection. ⚠️ Not the
+        /// <c>set_selection</c> field: that one arms the NEXT match, this one re-tunes a match already
+        /// in progress.
+        /// <para>Never written locally: the mode echoes it in <c>match_state.modeState</c>
+        /// (<c>diff</c>) — single source of truth.</para>
+        /// </summary>
+        public static void SetDifficulty(string difficulty)
+        {
+            Send(new SetDifficultyMsg { difficulty = MatchDifficulty.Normalize(difficulty) });
+        }
+
+        /// <summary>
         /// How headsets align AT STARTUP (§5.2 <c>set_calibration_mode</c>) — same class as
         /// <see cref="SetFriendlyFire"/>: a live command, not a selection.
         /// <para>Never written locally: the server echoes it via <c>admin_state</c>.</para>

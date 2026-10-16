@@ -178,6 +178,14 @@ namespace VortexArena.Core.Arena
         /// <c>ArenaNetCharacterBehaviour</c>) read this and drop their stored reference.</summary>
         public static int CalibrationGeneration { get; private set; }
 
+        /// <summary><see cref="CalibrationGeneration"/> minus floor hops: bumps only on a real alignment.</summary>
+        /// <remarks>⚠️ Body measurement watches THIS: a floor hop moves the rig but not the player, and
+        /// re-measuring after it would re-scale the body on every floor change.</remarks>
+        public static int AlignmentGeneration => CalibrationGeneration - floorLiftBumps;
+
+        /// <summary>How many <see cref="CalibrationGeneration"/> bumps came from <see cref="SetFloorLift"/>.</summary>
+        private static int floorLiftBumps;
+
         /// <summary>Has THIS scene's rig been placed yet (alignment, restore, pre-align guess, dev)?
         /// Until then the head sits in raw tracking space, so position-based reports are noise. True
         /// with no calibrator in the scene: nothing would ever place the rig.</summary>
@@ -1349,6 +1357,7 @@ namespace VortexArena.Core.Arena
             rig.position += Vector3.up * delta;
             // The rig teleported legitimately: continuity guards must not read this as a fault.
             CalibrationGeneration++;
+            floorLiftBumps++; // ...but it is no alignment (AlignmentGeneration)
         }
 
         /// <summary>Re-applies the floor lift after an alignment. ⚠️ Mandatory in every aligner: they

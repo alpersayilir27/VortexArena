@@ -78,9 +78,18 @@ namespace VortexArena.Modes.Zombie
         /// <summary>Seconds to the next wave; <c>0</c> = the wave is running.</summary>
         public const string StateNext = "next";
 
-        /// <summary>Zombies of the running wave the server has not spawned yet; <c>0</c> = the wave is
-        /// fully out. The brain holds the empty storeys only while this is above zero.</summary>
-        public const string StateRemaining = "rem";
+        /// <summary>Seconds left of the running wave's clock; <c>0</c> = no wave is spawning (the gap, the
+        /// tail waiting for the last zombie, the final stand). ⚠️ The brain holds the empty storeys only
+        /// while this is above zero — a wave ends on this clock, not on a body count.</summary>
+        public const string StateWaveLeft = "wl";
+
+        /// <summary>Squad wipe countdown (<c>wp:&lt;sn&gt;</c>), written only while it runs: in a few
+        /// seconds everyone who is down gets up together. A wipe does NOT end the match.</summary>
+        public const string StateWipe = "wp";
+
+        /// <summary>The squad rescue's revive window (<c>rv:&lt;sn&gt;</c>), written only while it is
+        /// open: the downed clients send the normal <c>revive_request</c> inside it (§10.4).</summary>
+        public const string StateWipeRevive = "rv";
 
         /// <summary>Empty-storey minimum: how many zombies may wait on a storey with no player
         /// (difficulty dependent).</summary>
@@ -89,9 +98,11 @@ namespace VortexArena.Modes.Zombie
         /// <summary>Difficulty the admin picked: <c>easy|normal|hard</c>.</summary>
         public const string StateDifficulty = "diff";
 
-        /// <summary>Present only when the run is over: <c>over:survived|rescued|lost</c>.</summary>
+        /// <summary>Present only when the run is over: <c>over:survived|rescued</c>.</summary>
         public const string StateOver = "over";
 
+        /// <summary>⚠️ The server does not write it any more (a squad wipe is rescued, not judged); the
+        /// result screen still knows it so a state from an older server does not read as "no outcome".</summary>
         public const string OverLost = "lost";
 
         /// <summary>Clock ran out with the squad standing.</summary>
@@ -106,7 +117,7 @@ namespace VortexArena.Modes.Zombie
         public const string StatePlayerStatsPrefix = "zs";
 
         /// <summary>Final stand ("Son Direniş") is on: <c>fs:0|1</c>. While it runs <c>next</c> and
-        /// <c>rem</c> are <c>0</c>.</summary>
+        /// <c>wl</c> are <c>0</c>.</summary>
         public const string StateFinalStand = "fs";
 
         /// <summary>The Dev: <c>dev:&lt;netId&gt;/&lt;maxHp&gt;</c>, present from its spawn to the end of

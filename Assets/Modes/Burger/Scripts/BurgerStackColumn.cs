@@ -38,6 +38,13 @@ namespace VortexArena.Modes.Burger
 
         private static readonly Collider[] Overlap = new Collider[64];
 
+        /// <summary>Largest gap (m) between two layers that still reads as one standing on the other.</summary>
+        private const float StackContactGap = 0.02f;
+
+        /// <summary>Upper bound on one gathered stack — a pile of loose ingredients must not walk the
+        /// whole counter.</summary>
+        private const int MaxStackLayers = 16;
+
         private struct PinEntry
         {
             public Pose Pose;
@@ -251,10 +258,7 @@ namespace VortexArena.Modes.Burger
                     continue;
                 }
 
-                bool ok = freeOnly
-                    ? IsIngredient(net) && net.Owner == 0 && !net.IsHeld && !net.IsAwake &&
-                      !IsCarried(net)
-                    : IsStandingLayer(net);
+                bool ok = freeOnly ? IsFree(net) : IsStandingLayer(net);
 
                 if (ok)
                 {
@@ -263,6 +267,76 @@ namespace VortexArena.Modes.Burger
             }
 
             into.Sort(CompareByHeight);
+        }
+
+        /// <summary>Free for a pickup: an ingredient nobody owns, at rest, riding no carrier.</summary>
+        public static bool IsFree(NetObject net)
+        {
+            return IsIngredient(net) && net.Owner == 0 && !net.IsHeld && !net.IsAwake && !IsCarried(net);
+        }
+
+        /// <summary>The whole stack <paramref name="seed"/> stands in, bottom to top: every ingredient
+        /// resting on it or under it, transitively, that passes <paramref name="isMember"/>. The seed is
+        /// always included.
+        /// <para>⚠️ Stacked = one layer's CENTRE inside the other's footprint: two layers side by side on
+        /// the counter overlap in height but are not a stack.</para></summary>
+        public static void CollectStackOf(NetObject seed, System.Predicate<NetObject> isMember,
+            List<NetObject> into)
+        {
+            into.Clear();
+
+            if (seed == null)
+            {
+                return;
+            }
+
+            into.Add(seed);
+
+            for (int head = 0; head < into.Count && into.Count < MaxStackLayers; head++)
+            {
+                if (!TryBounds(into[head], out Bounds layer))
+                {
+                    continue;
+                }
+
+                int count = Physics.OverlapBoxNonAlloc(layer.center,
+                    layer.extents + new Vector3(0f, StackContactGap, 0f), Overlap, Quaternion.identity, ~0,
+                    QueryTriggerInteraction.Ignore);
+
+                for (int i = 0; i < count && into.Count < MaxStackLayers; i++)
+                {
+                    NetObject other = Overlap[i] != null ? Overlap[i].GetComponentInParent<NetObject>() : null;
+                    if (other == null || into.Contains(other) || !IsIngredient(other) ||
+                        !isMember(other) || !TryBounds(other, out Bounds bounds))
+                    {
+                        continue;
+                    }
+
+                    if (StandsOn(bounds, layer) || StandsOn(layer, bounds))
+                    {
+                        into.Add(other);
+                    }
+                }
+            }
+
+            into.Sort(CompareByHeight);
+        }
+
+        /// <summary>Is <paramref name="upper"/> resting on <paramref name="lower"/> (world boxes).</summary>
+        private static bool StandsOn(Bounds upper, Bounds lower)
+        {
+            if (upper.min.y < lower.center.y || upper.min.y > lower.max.y + StackContactGap)
+            {
+                return false;
+            }
+
+            return InFootprint(upper.center, lower) || InFootprint(lower.center, upper);
+        }
+
+        private static bool InFootprint(Vector3 point, Bounds box)
+        {
+            return point.x >= box.min.x && point.x <= box.max.x &&
+                   point.z >= box.min.z && point.z <= box.max.z;
         }
 
         /// <summary>A layer that counts as part of the standing column right now.</summary>

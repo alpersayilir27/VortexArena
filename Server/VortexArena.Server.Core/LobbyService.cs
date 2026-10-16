@@ -1024,6 +1024,23 @@ public sealed class LobbyService
     }
 
     /// <summary>
+    /// <c>set_difficulty</c> (§5.2) — the difficulty, <b>no phase gate</b> and outside the selection lock:
+    /// it writes the shared selection for the next match AND hands the value to a running match, where
+    /// the mode applies it at once (§10.5).
+    /// <para>The notice is only printed when something actually changed; <c>admin_state</c> goes out
+    /// either way so an optimistic panel is pulled back to the server's value (§5.3).</para>
+    /// </summary>
+    public async Task HandleSetDifficultyAsync(ClientConnection connection, SetDifficultyMsg msg)
+    {
+        var applied = MatchDifficulty.Normalize(msg.difficulty);
+        var changed = ApplySelection(null, null, 0, 0, 0, applied);
+        changed |= _director.SetDifficulty(applied);
+        await BroadcastAdminStateAsync(changed
+            ? Notice(connection, $"zorluk {applied}")
+            : "");
+    }
+
+    /// <summary>
     /// <c>set_calibration_mode</c> (§5.2/§10.6) — how headsets align AT STARTUP. Same class as
     /// <c>set_friendly_fire</c>: no phase gate and no selection lock.
     /// <para>⚠️ Unknown/empty values and <c>anchor_cloud</c> are <b>rejected</b> — the state does not

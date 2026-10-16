@@ -9,6 +9,9 @@ using VortexArena.Core.UI;
 // `Image x = Image(...)` gives CS0119 — simple name lookup finds the member group BEFORE the type.
 using UiImage = UnityEngine.UI.Image;
 using UiButton = UnityEngine.UI.Button;
+using UiSlider = UnityEngine.UI.Slider;
+using UiSelectable = UnityEngine.UI.Selectable;
+using UiNavigation = UnityEngine.UI.Navigation;
 
 namespace VortexArena.App.Editor
 {
@@ -47,6 +50,23 @@ namespace VortexArena.App.Editor
         private const float SegPad = 5f;          // `.seg { padding }`
         private const float SegItemHeight = 40f;  // `.seg .btn`
 
+        // ---- ZORLUK slider above the bar's right end ----
+        private const float DiffGroupWidth = 268f;
+        private const float DiffGroupHeight = 72f;
+
+        /// <summary>Lift above the bar. ⚠️ Not 8 px: the "BİTİR?" note is center-anchored and 700 px
+        /// wide, so a widget hugging the bar would be drawn under it.</summary>
+        private const float DiffLift = 40f;
+
+        /// <summary>Track inset inside the group — wide enough that the KOLAY/ZOR labels, centred on
+        /// the outer stops, still fit inside the plate.</summary>
+        private const float DiffTrackInset = 30f;
+
+        private const float DiffTrackHeight = 10f;
+        private const float DiffHandleWidth = 16f;
+        private const float DiffHandleHeight = 20f;
+        private const float DiffLabelWidth = 76f;
+
         /// <summary>Both feeds start level with the columns and stop 16 px short of them.</summary>
         private const float FeedInset = HudEdge + HudColumnWidth + 16f;
 
@@ -84,6 +104,14 @@ namespace VortexArena.App.Editor
                 floors = root.AddComponent<AdminFloorControls>();
             }
 
+            // Same reason as the floor controls: the widget it drives is HIDDEN outside a zombie
+            // match, and a component sitting on it could never switch it back on.
+            var difficulty = root.GetComponent<AdminDifficultySlider>();
+            if (difficulty == null)
+            {
+                difficulty = root.AddComponent<AdminDifficultySlider>();
+            }
+
             Stretch((RectTransform)root.transform);
             HudClearChildren(root.transform);
 
@@ -100,7 +128,7 @@ namespace VortexArena.App.Editor
             HudColumn(parent, hudSo, "blue", "MAVİ", true);
             HudKillFeed(parent, hudSo);
             HudViolationFeed(parent, hudSo);
-            HudMatchBar(parent, floors);
+            HudMatchBar(parent, floors, difficulty);
 
             HudSet(hudSo, "rowPrefab", HudLoadComponent<AdminPlayerRow>("AdminPlayerRow"));
             HudSetInt(hudSo, "maxRowsPerColumn", HudMaxRows);
@@ -595,7 +623,8 @@ namespace VortexArena.App.Editor
 
         // ---------------------------------------------------------------- match bar
 
-        private static void HudMatchBar(Transform parent, AdminFloorControls floors)
+        private static void HudMatchBar(Transform parent, AdminFloorControls floors,
+            AdminDifficultySlider difficulty)
         {
             float startWidth = HudBarWidth("BAŞLAT", "");
             float pauseWidth = HudBarWidth("DURAKLAT", "DEVAM");
@@ -655,6 +684,109 @@ namespace VortexArena.App.Editor
             so.ApplyModifiedPropertiesWithoutUndo();
 
             HudFloorGroup(bar, floors, baseWidth, abortX + abortWidth);
+            HudDifficultySlider(bar, difficulty);
+        }
+
+        /// <summary>
+        /// ZORLUK slider over the bar's right end — the live difficulty of a zombie match (§10.5).
+        /// <para>⚠️ Parented to the BAR and anchored to its top-right corner, so it follows the right
+        /// end whether or not the floor group widened the strip; a HUD-level position would have to
+        /// guess the bar's runtime width.</para>
+        /// <para>Built INACTIVE: <see cref="AdminDifficultySlider"/> opens it only in a running zombie
+        /// match.</para>
+        /// </summary>
+        private static void HudDifficultySlider(RectTransform bar, AdminDifficultySlider controls)
+        {
+            RectTransform group = Node(bar, "DifficultyGroup");
+            group.anchorMin = new Vector2(1f, 1f);
+            group.anchorMax = new Vector2(1f, 1f);
+            group.pivot = new Vector2(1f, 0f);
+            group.anchoredPosition = new Vector2(0f, DiffLift);
+            group.sizeDelta = new Vector2(DiffGroupWidth, DiffGroupHeight);
+
+            // Same plate as the bar itself (`.mbar`), so the widget reads as part of the strip.
+            UiShape bg = Shape(group, "Bg");
+            Stretch(bg.rectTransform);
+            bg.Chamfer(12f).Outline(1f, Girdap.EdgeBar)
+                .Fill(Girdap.PlateA, Girdap.PlateB, UiGradientMode.Vertical);
+
+            // `.mbar .lbl`, like the floor group's "KAT".
+            TextMeshProUGUI caption = Text(group, "Caption", "ZORLUK", GirdapFont.ChakraSemiBold,
+                12f, Girdap.Faint, TextAlignmentOptions.MidlineLeft, 0.2f);
+            Place(caption.rectTransform, DiffTrackInset, 8f, 110f, 14f);
+
+            float trackWidth = DiffGroupWidth - DiffTrackInset * 2f;
+            RectTransform track = Node(group, "Track");
+            Place(track, DiffTrackInset, 26f, trackWidth, DiffTrackHeight);
+
+            UiShape trackBg = Shape(track, "Bg");
+            Stretch(trackBg.rectTransform);
+            trackBg.Chamfer(5f).Outline(1f, Girdap.SegBd).Fill(Girdap.Track);
+            // The Slider itself draws nothing: without ONE hittable graphic a click never reaches it.
+            trackBg.raycastTarget = true;
+
+            // Both containers are inset by half a handle, so the three stops land at the centres the
+            // labels are aligned to.
+            float inset = DiffHandleWidth * 0.5f;
+
+            RectTransform fillArea = Node(track, "FillArea");
+            Stretch(fillArea, inset, 0f, inset, 0f);
+            UiShape fill = Shape(fillArea, "Fill");
+            Stretch(fill.rectTransform);
+            fill.Chamfer(5f).Fill(Girdap.OnB, Girdap.OnA, UiGradientMode.Horizontal);
+
+            RectTransform handleArea = Node(track, "HandleArea");
+            Stretch(handleArea, inset, 0f, inset, 0f);
+
+            UiShape handle = Shape(handleArea, "Handle");
+            RectTransform handleRect = handle.rectTransform;
+            // Slider overwrites the anchors every frame; only the pivot and sizeDelta survive, and
+            // the vertical anchors it writes are 0..1 — hence the height is a DELTA over the track.
+            handleRect.pivot = new Vector2(0.5f, 0.5f);
+            handleRect.anchoredPosition = Vector2.zero;
+            handleRect.sizeDelta = new Vector2(DiffHandleWidth, DiffHandleHeight - DiffTrackHeight);
+            handle.Chamfer(5f).Outline(1f, Girdap.OnBd)
+                .Fill(Girdap.OnA, Girdap.OnB, UiGradientMode.Vertical);
+
+            var slider = track.gameObject.AddComponent<UiSlider>();
+            slider.transition = UiSelectable.Transition.None; // colour comes from the Girdap shapes
+            // ⚠️ Focusable would hand the arrow keys to the slider — the HUD's own shortcuts own them.
+            slider.navigation = new UiNavigation { mode = UiNavigation.Mode.None };
+            slider.fillRect = fill.rectTransform;
+            slider.handleRect = handleRect;
+            slider.targetGraphic = handle;
+            slider.direction = UiSlider.Direction.LeftToRight;
+            slider.minValue = 0f;
+            slider.maxValue = 2f;
+            slider.wholeNumbers = true; // three stops, no in-between difficulty exists
+            slider.value = 1f;
+
+            float left = DiffTrackInset + inset;
+            TextMeshProUGUI easy = HudDifficultyStop(group, "LabelEasy", "KOLAY", left);
+            TextMeshProUGUI normal = HudDifficultyStop(group, "LabelNormal", "NORMAL",
+                DiffGroupWidth * 0.5f);
+            TextMeshProUGUI hard = HudDifficultyStop(group, "LabelHard", "ZOR",
+                DiffGroupWidth - left);
+
+            var so = new SerializedObject(controls);
+            HudSet(so, "group", group.gameObject);
+            HudSet(so, "slider", slider);
+            HudSet(so, "easyLabel", easy);
+            HudSet(so, "normalLabel", normal);
+            HudSet(so, "hardLabel", hard);
+            so.ApplyModifiedPropertiesWithoutUndo();
+
+            group.gameObject.SetActive(false);
+        }
+
+        /// <summary>One stop label, centred on its stop; the live one is tinted at runtime.</summary>
+        private static TextMeshProUGUI HudDifficultyStop(RectTransform group, string name,
+            string label, float centerX)
+        {
+            TextMeshProUGUI text = Text(group, name, label, GirdapFont.SairaBold, 14f, Girdap.Muted,
+                TextAlignmentOptions.Center, 0.04f);
+            Place(text.rectTransform, centerX - DiffLabelWidth * 0.5f, 44f, DiffLabelWidth, 18f);
+            return text;
         }
 
         /// <summary>

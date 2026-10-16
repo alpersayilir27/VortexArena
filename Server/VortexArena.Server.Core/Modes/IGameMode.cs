@@ -57,6 +57,14 @@ public interface IGameMode
     /// <remarks>Modes with no round concept ignore it.</remarks>
     void OnRoundStart(MatchDirector director) { }
 
+    /// <summary>The operator moved the difficulty while the match runs (<c>set_difficulty</c>, §5.2);
+    /// the new value is already in <see cref="MatchDirector.Difficulty"/>.</summary>
+    /// <remarks>Raised OUTSIDE the director's lock like every other hook — a mode takes its own gate
+    /// first (lock order), so raising it inside would invert that order.
+    /// <para>Modes that do not read the difficulty ignore it: the field is generic, the reader is one
+    /// (§5.2).</para></remarks>
+    void OnDifficultyChanged(MatchDirector director) { }
+
     /// <summary>Called ONCE per match after entering Finished; the mode tidies its world objects.</summary>
     /// <remarks>Finished gets no <see cref="OnTick"/>, so anything left standing here stays for the whole
     /// result screen. Skipped if a new match or the lobby replaces this one first (the scene is rebuilt).</remarks>

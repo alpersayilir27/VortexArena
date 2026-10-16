@@ -63,11 +63,9 @@ namespace VortexArena.Modes.Zombie
         // ------------------------------------------------------------------- corpse timings
 
         [Header("Ceset zamanlaması (sn)")]
-        [Tooltip("Ragdoll bu süre sonunda dondurulur — çözülme oturmuş bir poz üzerinde koşsun.")]
+        [Tooltip("Ragdoll bu süre sonunda dondurulur — ceset sunucunun despawn'ına (4,5 sn) kadar " +
+                 "oturmuş pozda yatar.")]
         [SerializeField] private float ragdollFreezeSeconds = 2.6f;
-        [Tooltip("⚠️ Gecikme + süre, sunucunun despawn gecikmesinin (4,5 sn) ALTINDA kalmalı.")]
-        [SerializeField] private float deathDissolveDelay = 3.3f;
-        [SerializeField] private float deathDissolveSeconds = 0.8f;
         [SerializeField] private float bloodPoolDelay = 0.8f;
 
         [Tooltip("Tahminle başlayan ölümde sunucu bu süre içinde hâlâ 'ayakta' derse gövde geri alınır (sn).")]
@@ -221,10 +219,6 @@ namespace VortexArena.Modes.Zombie
         public float HitMemorySeconds => Mathf.Max(0f, hitMemorySeconds);
 
         public float RagdollFreezeSeconds => ragdollFreezeSeconds;
-
-        public float DeathDissolveDelay => deathDissolveDelay;
-
-        public float DeathDissolveSeconds => deathDissolveSeconds;
 
         public float BloodPoolDelay => bloodPoolDelay;
 

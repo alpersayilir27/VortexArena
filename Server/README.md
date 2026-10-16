@@ -478,7 +478,7 @@ alanları roster ile taşınıyor ve admin istatistik tablosunun sağlama noktas
 | `öldürme: Gözlük 03 → Gözlük 05 (ak47) — skor kırmızı 4 : mavi 2` | doğrulanmış öldürme |
 | `canlandı: Gözlük 05` | `revive_request` kabul edildi |
 | `maç sonu — kazanan: blue (kırmızı 12 : mavi 30)` | `match_end` yayınlandı |
-| `maç sonu (takımsız) — mod durumu 'w:3;left:0;next:0;over:lost'` | takımsız modda `match_end`; sonuç mod durumundadır, takım skoru basılmaz |
+| `maç sonu (takımsız) — mod durumu 'w:3;left:0;next:0;over:survived'` | takımsız modda `match_end`; sonuç mod durumundadır, takım skoru basılmaz |
 
 Kabul edilen vuruşların hasar satırı **yazılmaz** (saniyede onlarca satır olurdu); yalnız
 öldürme + ret satırları loglanır. Ret satırları da atıcı başına **2 sn'de bir** yazılır (istemciler
@@ -488,7 +488,9 @@ bir tekrarlar).
 
 **Free-roam respawn:** oyuncu ışınlanamaz → canlanma konum değil DURUM değişimidir. Ölünce
 kurbana `respawn{delaySeconds}` gider (`delaySeconds` = modun `Rules.RespawnDelay`'i);
-oyuncu süre dolduktan sonra **modun canlanma şartını** sağlayıp `revive_request` yollar; sunucu
+oyuncu süre dolduktan sonra **modun canlanma şartını** sağlayıp `revive_request` yollar (tabanlı
+modda süre istemcide tabana girince başlar; sunucunun ölüm anından ölçtüğü eşik bunun alt
+sınırıdır, değişmez); sunucu
 doğrulayıp `health_update{hp:100, attackerId:0}` yayınlar. ⚠️ **Canlandırmanın TEK yolu bu taleptir:**
 sunucunun zamanlayıcı tabanlı bir canlandırması da, operatörün elle canlandırma komutu da yoktur —
 şartı sağlamayan oyuncu maçın sonuna kadar ölü kalır ve bu bilinçlidir. Talep kalibrasyon, engel,
@@ -516,7 +518,7 @@ aynı ortak kanaldan (`set_selection` → `admin_state`) gider, böylece iki ope
 | `tournament` | `Modes/TournamentMode.cs` | TDM varsayılanından farkı: **canlanma yok** (`Revive = None`, gecikme 0) + **yedek mermi sınırlı** (`LimitedReserve = true`; yedek sınırını yazan tek mod). Tur tabanlı takım elemesi | 120 sn (**turun** süresi) / 4 tur (operatör **sınırsız** da seçebilir) |
 | `burger` | `Modes/BurgerMode.cs` | **Oyun tipi `kids`** · silah yok (`Weapons = None`, dolayısıyla hasar yok) · takımsız ama **tek ekip** (`Allies = true`: kırmızı/mavi yok, herkes birbirinin takım arkadaşı) · canlanma yok (gecikme 0) · ortak skor (`PlayerAndShared`) · denge `server.json → burger` | 600 sn / **sınırsız** (limit yok) |
 | `mole` | `Modes/MoleMode.cs` | **Oyun tipi `kids`** · silah yok (`Weapons = None`, dolayısıyla hasar yok) · **iki takım + takım skoru** · canlanma yok (gecikme 0) · köstebek yoğunluğu harita başına (`maps.json → moleDensity`; yazılmamışsa modun varsayılanı) | 300 sn / **sınırsız** (limit yok) |
-| `zombie` | `Modes/ZombieMode.cs` | **Oyun tipi `zombie`** · takımsız ama **tek ekip** (`Allies = true`) · **silah kanvası** · ortak skor (`PlayerAndShared`) · **arkadaşın kaldırmasıyla canlanma** (`Revive = Teammate`, gecikme 0, 3 sn doğum koruması) · zombiler ağ nesnesi, beyni **nesne sahibi admin**'de · dalga tablosu operatörün **zorluk** seçiminden (`start_match.difficulty`) · akın temposu harita başına (`maps.json → zombiePace`; yazılmamışsa `1`) | 600 sn / **sınırsız** (limit yok) |
+| `zombie` | `Modes/ZombieMode.cs` | **Oyun tipi `zombie`** · takımsız ama **tek ekip** (`Allies = true`) · **silah kanvası** · ortak skor (`PlayerAndShared`) · **arkadaşın kaldırmasıyla canlanma** (`Revive = Teammate`, gecikme 0, 3 sn doğum koruması) · zombiler ağ nesnesi, beyni **nesne sahibi admin**'de · dalga tablosu operatörün **zorluk** seçiminden (`start_match.difficulty`, maç ortasında `set_difficulty`) · akın temposu harita başına (`maps.json → zombiePace`; yazılmamışsa `1`) | 900 sn / **sınırsız** (limit yok) |
 
 > `ffa` skoru `AddPlayerScore(killerId, 1)` ile yazar ve kazananı `TryGetLeader` ile bulur;
 > eşitlikte `TryGetLeader` false döndüğü için maç berabere biter. Oyuncusuz başlatılan maçta
@@ -574,8 +576,11 @@ aynı ortak kanaldan (`set_selection` → `admin_state`) gider, böylece iki ope
 > zombi bekleme süresini ve vuruş sayacını harcar ama hasar vermez.
 > Doğum noktaları haritanın `zombie_spawn` nesneleridir, mod onları maç başında `ObjectIdsOfKind` ile
 > öğrenir — **haritada nokta yoksa konsola uyarı düşer ve zombi çıkmaz**. Dalga tablosunu operatörün
-> **zorluk** seçimi belirler (`start_match.difficulty`: `easy`/`normal`/`hard`; eksik/tanınmayan =
-> `normal`) ve dalga başına bağlı oyuncu sayısıyla ölçeklenir. Doğum aralığı, dalga arası ve aynı anda
+> **zorluk** seçimi belirler (`start_match.difficulty` ya da maç ortasında `set_difficulty`:
+> `easy`/`normal`/`hard`; eksik/tanınmayan = `normal`) ve dalga başına bağlı oyuncu sayısıyla
+> ölçeklenir. **Dalga süreyle biter:** dalga 1 120 sn · 2-3 180 sn · 4+ 240 sn; süre boyunca doğum
+> kesintisizdir (deste boşaldıkça yeniden dolar), süre dolunca doğum durur ve dalga son ayakta
+> zombi düşünce kapanır. Doğum aralığı, dalga arası ve aynı anda
 > ayakta duran zombi sayısı ayrıca haritanın `zombiePace` çarpanıyla ölçeklenir (maç başında bir kez
 > okunur, `1` temel tempo); hasar tablosu tempodan etkilenmez. Dalga arası zorluğa göre 15/12/10
 > sn'dir ve bir nefes payıdır: düşmüş herkes o pencerede **tam canla** kalkar, silah da orada
@@ -597,10 +602,12 @@ aynı ortak kanaldan (`set_selection` → `admin_state`) gider, böylece iki ope
 > ve tam candan düşükse yenilenme normal gecikmeyi bekler. Puan: zombi öldürme **türe göre**,
 > kafadan öldürme **+1** (`hit_report.zone`), arkadaş kaldırma
 > **+3** kaldırana; öldürme ayrıca `AddKillCredit` ile öldürenin `PlayerInfo.kills`'ine yazılır
-> (zombi ölümü `kill_event` üretmez). **Yenilgi** yalnız kalibreli oyuncu sayısı **en az 2** iken ve
-> onlardan hiçbiri **2 sn boyunca kesintisiz** ayakta değilken gelir → `modeState` `over:lost`; tek
-> oyunculu maçta yenilgi yoktur. Süre ekip ayaktayken dolarsa `over:survived` (zafer). Her iki bitiş
-> durumunda oyuncu başına `zs<playerId>:<kafadan>/<kaldırma>` jetonları da `modeState`'e yazılır.
+> (zombi ölümü `kill_event` üretmez). **Ekip düşmesi maçı BİTİRMEZ:** kalibreli oyuncu sayısı **en az
+> 2** iken ve onlardan hiçbiri **2 sn boyunca kesintisiz** ayakta değilken kurtarma makinesi işler —
+> 5 sn geri sayım (`modeState wp`), düşenlerin 6 m çevresindeki zombilerin puansız çökmesi (Dev
+> hariç) ve 3 sn'lik "hep beraber kalkma" penceresi (`rv`); tek oyunculu maçta hiç işlemez. Maçı
+> bitiren süredir (`over:survived`) ya da Son Direniş'te Dev'in ölümüdür (`over:rescued`).
+> Her iki bitiş durumunda oyuncu başına `zs<playerId>:<kafadan>/<kaldırma>` jetonları da `modeState`'e yazılır.
 > Kazanan **takım** yoktur ve sonuç ekranı `HoldsResultForOperator` ile operatörü bekler.
 
 > **Nesne sahibi admin = sunucu-atanmış sahiplik** (§10.10; `MatchDirector.ObjectHostId`, hepsine

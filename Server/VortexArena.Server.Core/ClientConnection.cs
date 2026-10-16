@@ -344,6 +344,13 @@ public sealed class ClientConnection
                 if (msg != null) await _lobby.HandleSetFriendlyFireAsync(this, msg);
                 return;
             }
+            case MessageTypes.SetDifficulty:
+            {
+                if (!RequireAdmin(type)) return;
+                var msg = JsonUtil.Deserialize<SetDifficultyMsg>(json);
+                if (msg != null) await _lobby.HandleSetDifficultyAsync(this, msg);
+                return;
+            }
             case MessageTypes.SetCalibrationMode:
             {
                 if (!RequireAdmin(type)) return;

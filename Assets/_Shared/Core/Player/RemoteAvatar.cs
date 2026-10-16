@@ -477,6 +477,10 @@ namespace VortexArena.Core.Player
                  "Tümü 0 = yazılmamış → gevşek dinlenme duruşu kullanılır.")]
         [SerializeField] private HandPoseProfile idleHandPose;
 
+        // Built once per hand from idleHandPose ([0] = left, [1] = right): the consumer compares the
+        // target BY REFERENCE, so a fresh array per frame would restart the blend every frame.
+        private readonly Quaternion[][] _idleHandJoints = new Quaternion[2][];
+
 
         /// <summary>The alternate body actually DRAWN right now; null = the default body.</summary>
         private AltBody DrawnAlt => _useAlt && _alt != null ? _alt : null;
@@ -2414,26 +2418,36 @@ namespace VortexArena.Core.Player
             }
         }
 
-        /// <summary>This hand's finger pose (§6.9): the SLOT's authored finger rig when holding an
-        /// item, otherwise idle.
+        /// <summary>This hand's finger pose as an ISDK joint array (§6.9): the SLOT's authored finger
+        /// rig when holding an item, otherwise idle.
         /// <para>⚠️ <b>The pose is NOT sent on the wire</b> (§6.6), so it is derived from the grip
-        /// record itself — the SAME rig the local synthetic hand applies; a second description would
-        /// hold the same weapon differently on each screen. The empty hand keeps its separate path
-        /// (a tunable rest pose, not a grip).</para>
-        /// <para>⚠️ The remote hand is HUMANOID (Mixamo), so it takes CURL RATIOS, not the authored
-        /// joint quaternions: raw rotations from another skeleton are never written onto humanoid
-        /// bones (<c>Docs/Sistem-Ozeti.md</c> §7). The bridge is
-        /// <c>ItemDefinition.GripFingerCurl</c>, which measures the ratios off the very same rig.</para>
+        /// record itself — <b>the very SAME array the local synthetic hand applies</b>
+        /// (<c>ItemDefinition.GripJointRotations</c>); a second description would hold the same weapon
+        /// differently on each screen. The humanoid (Mixamo) hand does not receive it raw: raw
+        /// rotations from another skeleton are never written onto humanoid bones
+        /// (<c>Docs/Sistem-Ozeti.md</c>, "Aynı duruş birden çok iskelette çiziliyorsa…"), the array is
+        /// RETARGETED bone by bone (<c>HandFingerRig.Apply</c>).</para>
+        /// <para>⚠️ The returned array is CACHED and SHARED — the caller reads it, never writes it, and
+        /// relies on its identity to detect a target change (<c>RemoteHandPoser</c>).</para>
+        /// <para>The empty hand keeps its separate path (a tunable rest pose, not a grip): the
+        /// serialized profile when authored, otherwise the array the local empty hand uses.</para>
         /// <para>Under <c>GRIP_LINKED</c> the two hands differ: the primary takes its own slot
         /// (trigger), the foregrip hand takes <see cref="GripSocketKind.Secondary"/> (wrap).</para></summary>
-        public HandPoseProfile ResolveHandPose(bool rightHand)
+        public Quaternion[] ResolveHandJoints(bool rightHand)
         {
             if (TryResolveSlot(rightHand, out _, out ItemDefinition definition, out GripSocketKind kind))
             {
-                return definition.GripFingerCurl(kind, rightHand);
+                return definition.GripJointRotations(kind, rightHand);
             }
 
-            return idleHandPose.IsEmpty ? HandPoseProfile.Idle : idleHandPose;
+            if (idleHandPose.IsEmpty)
+            {
+                return HandPoseLibrary.IdleJointRotations(rightHand);
+            }
+
+            int hand = rightHand ? 1 : 0;
+            return _idleHandJoints[hand] ??=
+                HandPoseLibrary.BuildProfileJointRotations(idleHandPose, rightHand);
         }
 
         /// <summary>

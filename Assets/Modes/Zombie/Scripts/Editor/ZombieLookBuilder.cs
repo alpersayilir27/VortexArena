@@ -99,8 +99,8 @@ namespace VortexArena.Modes.Zombie.Editor
             new Trim("ZA_StandUp_A", 105, 189, false),
             new Trim("ZA_StandUp_B", 110, 195, false),
             new Trim("ZA_Scream", 0, -1, false),
-            // ⚠️ Skips the opening sway: the body must be down well before the dissolve starts
-            // (ZombieView.DeathDissolveDelay), or it fades out while still falling.
+            // ⚠️ Skips the opening sway: the body must be down well before the server despawns it
+            // (4.5 s), or it vanishes while still falling.
             new Trim("ZA_Death", 18, -1, false),
             // ZA_Stumble is NOT used: it staggers 3.5 m sideways and only drops at its last frame.
         };

@@ -58,6 +58,9 @@ namespace VortexArena.Protocol
         // direction uses the same type. There is no reply — the only meaningful answer is the stream itself.
         public const string RestartBodyTracking = "restart_body_tracking";
         public const string SetFriendlyFire = "set_friendly_fire"; // friendly fire switch; NO phase gate, takes effect instantly (§5.2)
+        // Difficulty of the NEXT match and of the running one at once; same class as set_friendly_fire:
+        // no phase gate, instant, outside the selection lock (§5.2).
+        public const string SetDifficulty = "set_difficulty";
         // How headsets align AT STARTUP; same class as set_friendly_fire: instant, does not enter the
         // selection lock (§5.2/§10.6).
         public const string SetCalibrationMode = "set_calibration_mode";

@@ -23,8 +23,14 @@ namespace VortexArena.Modes.Zombie
         /// font sizes below read like the rest of the UI kit.</summary>
         private const float UnitsPerMeter = 1000f;
 
-        /// <summary>Gap (m) between the weapon's box and the plates, so neither z-fights the model.</summary>
-        private const float PlateGapMeters = 0.01f;
+        /// <summary>Gap (m) between the weapon's box and the front overlay.</summary>
+        private const float FrontGapMeters = 0.01f;
+
+        /// <summary>Gap (m) between the weapon's box and the backplate.</summary>
+        /// <remarks>⚠️ Kept small: at 1 cm the backplate lands ON the board's slot plate face (the
+        /// weapon hangs ~1 cm off it) and the transparent plate z-fights it — visible shimmer in the
+        /// headset.</remarks>
+        private const float BackplateGapMeters = 0.003f;
 
         /// <summary>Plate margin around the weapon's measured face (ratio of its size).</summary>
         private const float PlateMargin = 0.12f;
@@ -50,7 +56,7 @@ namespace VortexArena.Modes.Zombie
         private TMP_Text _label;
 
         /// <summary>Seconds left of the unlock animation; <c>&lt;= 0</c> = idle (Update returns at once,
-        /// which is the whole point — a board holds thirteen of these).</summary>
+        /// which is the whole point — a board holds one per slot).</summary>
         private float _animLeft;
 
         /// <summary><c>weaponId</c> of the slot, or empty when the weapon has no definition.</summary>
@@ -242,13 +248,14 @@ namespace VortexArena.Modes.Zombie
 
             float width = sizeMeters.x * (1f + PlateMargin * 2f) * UnitsPerMeter;
             float height = sizeMeters.y * (1f + PlateMargin * 2f) * UnitsPerMeter;
-            float depth = (sizeMeters.z * 0.5f + PlateGapMeters) * UnitsPerMeter;
+            float backDepth = (sizeMeters.z * 0.5f + BackplateGapMeters) * UnitsPerMeter;
+            float frontDepth = (sizeMeters.z * 0.5f + FrontGapMeters) * UnitsPerMeter;
             var plateSize = new Vector2(width, height);
 
             canvasRect.sizeDelta = plateSize;
 
-            BuildBackplate(canvasRect, plateSize, depth);
-            BuildFront(canvasRect, plateSize, depth, Mathf.Min(width, height));
+            BuildBackplate(canvasRect, plateSize, backDepth);
+            BuildFront(canvasRect, plateSize, frontDepth, Mathf.Min(width, height));
         }
 
         private void BuildBackplate(RectTransform parent, Vector2 size, float depth)
@@ -261,12 +268,12 @@ namespace VortexArena.Modes.Zombie
             plate.color = BackplateColor;
         }
 
-        private void BuildFront(RectTransform parent, Vector2 size, float depth, float minSide)
+        private void BuildFront(RectTransform parent, Vector2 size, float frontDepth, float minSide)
         {
             var frontGo = new GameObject("Front", typeof(RectTransform));
             _front = (RectTransform)frontGo.transform;
             _front.SetParent(parent, false);
-            Center(_front, size, -depth);
+            Center(_front, size, -frontDepth);
 
             _overlay = NewImage("Overlay", _front);
             Center(_overlay.rectTransform, size, 0f);

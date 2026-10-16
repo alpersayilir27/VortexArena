@@ -107,16 +107,14 @@ namespace VortexArena.Core.Combat
         // whereas the hand wrapping the foregrip and the hand on the trigger are different by
         // definition.
 
-        // ⚠️ Cache per slot ([kind, hand] = 4 entries): both converting the rigged pose into an ISDK
-        // joint array and reducing it to curl ratios for the humanoid hand allocate, and both paths are
-        // read PER FRAME (HandGripPoser / RemoteHandPoser). NOT serialized: derived data — a second
-        // copy in the asset would draw the old pose in game once the rig changed and the cache was
-        // forgotten. Editor write gates drop the cache (InvalidateGripCache).
+        // ⚠️ Cache per slot ([kind, hand] = 4 entries): converting the rigged pose into an ISDK joint
+        // array allocates, and that array is read PER FRAME by both hands (HandGripPoser locally,
+        // RemoteHandPoser through the retarget). NOT serialized: derived data — a second copy in the
+        // asset would draw the old pose in game once the rig changed and the cache was forgotten.
+        // Editor write gates drop the cache (InvalidateGripCache).
         private static readonly int TeamTintColorId = Shader.PropertyToID("_BaseColor");
 
         [NonSerialized] private Quaternion[][] _gripJointCache;
-        [NonSerialized] private HandPoseProfile[] _gripCurlCache;
-        [NonSerialized] private bool[] _gripCurlResolved;
 
         // Tracer appearance lives in the base because the base's criterion is "what the network AND
         // REMOTE DRAWING need", and a tracer is exactly remote drawing data: the side drawing a remote
@@ -272,34 +270,6 @@ namespace VortexArena.Core.Combat
             return cached;
         }
 
-        /// <summary>
-        /// The same slot for the <b>remote avatar's humanoid (Mixamo) hand</b>: curl ratio per finger,
-        /// MEASURED from the rigged pose (<see cref="HandPoseLibrary.MeasureCurl"/>).
-        /// <para>⚠️ Raw joint rotations cannot be written onto a humanoid bone (the two skeletons' axes
-        /// differ — the project's learned rule); this ratio is the bridge. The ratio is <b>not stored in
-        /// the asset</b>: derived data would be a second source of truth.</para>
-        /// </summary>
-        public HandPoseProfile GripFingerCurl(GripSocketKind kind, bool rightHand)
-        {
-            _gripCurlCache ??= new HandPoseProfile[4];
-            _gripCurlResolved ??= new bool[4];
-
-            int slot = GripSlot(kind, rightHand);
-            if (_gripCurlResolved[slot])
-            {
-                return _gripCurlCache[slot];
-            }
-
-            ItemGripPose grip = GetGrip(kind, rightHand);
-            HandPoseProfile profile = grip.HasFingers
-                ? HandPoseLibrary.MeasureCurl(grip.fingerJoints, rightHand)
-                : HandPoseProfile.Idle;
-
-            _gripCurlCache[slot] = profile;
-            _gripCurlResolved[slot] = true;
-            return profile;
-        }
-
         /// <summary>Cache slot: [grip point, hand] → <c>0..3</c>.</summary>
         private static int GripSlot(GripSocketKind kind, bool rightHand)
         {
@@ -307,15 +277,13 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>
-        /// Drops the derived finger caches — called whenever a record changes.
+        /// Drops the derived finger cache — called whenever a record changes.
         /// <para>⚠️ All four slots drop: clearing one hand's record can make the other hand fall back to
         /// it (<see cref="GetGrip"/>), so refreshing a single slot would leave its neighbour stale.</para>
         /// </summary>
         private void InvalidateGripCache()
         {
             _gripJointCache = null;
-            _gripCurlCache = null;
-            _gripCurlResolved = null;
         }
 
         /// <summary>

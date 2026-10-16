@@ -21,6 +21,13 @@ namespace VortexArena.Protocol
         /// an old client sends no <c>targetNetId</c>, so it can break nothing, and it ignores
         /// <c>object_state</c>, so it keeps seeing a cover others already broke — two players on either
         /// side of the same wall see different worlds.</para>
+        /// <para>v28 is the zombie mode's wave CLOCK, live difficulty and squad rescue (§10.5): the
+        /// admin→server <c>set_difficulty</c> (§5.2), <c>modeState</c> drops <c>rem</c> for <c>wl</c>
+        /// (wave seconds left), <c>wp</c> (wipe countdown) and <c>rv</c> (everybody-up window), and
+        /// <c>over:lost</c> is never written again. Mixed versions cost the headset the wave clock: an
+        /// old APK reads no <c>wl</c>, so its SÜRE cell stays on the between-waves countdown and its
+        /// brain holds the empty storeys for the whole wave — and it waits for a result screen on a wipe
+        /// the server no longer ends the match on.</para>
         /// <para>v27 adds the zombie hit-feel fields (§10.5): <see cref="HealthUpdateMsg.srcNetId"/>,
         /// the zombie payload's <c>cr</c> (crippled) key and the hit relay's <c>i[3]</c>. All additive and
         /// absent = safe default, but mixed versions LOSE the crippling: an old headset keeps driving a
@@ -64,7 +71,7 @@ namespace VortexArena.Protocol
         /// <para>v5 net telemetry + packet combining (<c>0x05</c>) · v4 held item on the wire, shot
         /// events moved to UDP · v3 phase machine · v2 <c>set_identity</c>.</para>
         /// </summary>
-        public const int PROTOCOL_VERSION = 27;
+        public const int PROTOCOL_VERSION = 28;
         public const string APP_ID = "VortexArena";
 
         // ---- Calibration mode (§5.2/§10.6): how headsets align AT STARTUP. ----

@@ -4,13 +4,12 @@ using UnityEngine;
 namespace VortexArena.Modes.Zombie
 {
     /// <summary>Which wave opens which weapon on the zombie boards — and the wrist bomb: <c>weaponId</c> /
-    /// <c>throwableId</c> → wave number, plus the mode's OWN damage numbers
-    /// (<see cref="TryGetDamage"/>, installed by <see cref="ZombieDamageTuning"/>).</summary>
+    /// <c>throwableId</c> → wave number, plus the mode's OWN damage, reload-time and dry-click numbers
+    /// (installed by <see cref="ZombieDamageTuning"/>).</summary>
     /// <remarks>Lives in an asset so balancing is a data edit, not a code edit — see
     /// <c>Docs/Gelistirici/Yemek-Kitabi.md</c> for the recipe.
-    /// <para>⚠️ A weapon the table does not list is UNLOCKED. The safe direction: a board carrying a
-    /// weapon nobody remembered to add would otherwise stay locked for the whole run, and a locked
-    /// board reads as broken rather than as missing data.</para>
+    /// <para>⚠️ The table IS the zombie roster: a weapon it does not list is not part of the mode —
+    /// its board slot is hidden and the selection gate refuses it (<see cref="IsListed"/>).</para>
     /// <para>⚠️ Progression is CLIENT-side only: the server validates no weapon
     /// (<c>Docs/ArenaNet-Protokol.md</c> §10.5), so this table changes no protocol and needs no server
     /// deploy.</para></remarks>
@@ -38,34 +37,44 @@ namespace VortexArena.Modes.Zombie
             public float headMultiplier;
         }
 
-        [Tooltip("Silah → açılış dalgası. Listede olmayan silah AÇIK sayılır.")]
+        [Tooltip("Silah → açılış dalgası. Listede olmayan silah zombi modunda YOKTUR: panodaki " +
+                 "yuvası gizlenir, seçilemez.")]
         [SerializeField] private Entry[] entries = DefaultEntries();
+
+        [Range(0.3f, 1f)]
+        [Tooltip("YALNIZ zombi modunda şarjör değiştirme süresi çarpanı (WeaponDefinition.reloadTime × " +
+                 "bu). 1 = PvP ile aynı.")]
+        [SerializeField] private float reloadTimeScale = 0.8f;
+
+        [Range(0f, 3f)]
+        [Tooltip("YALNIZ zombi modunda boş tetik sesine ek çarpan (WeaponDefinition.dryFireVolume × bu) " +
+                 "— zombi kalabalığının içinde de duyulmalı.")]
+        [SerializeField] private float dryFireVolumeScale = 1.5f;
+
+        /// <summary>Zombie-only multiplier on <c>WeaponDefinition.ReloadTime</c>.</summary>
+        public float ReloadTimeScale => Mathf.Clamp(reloadTimeScale, 0.3f, 1f);
+
+        /// <summary>Zombie-only multiplier on <c>WeaponDefinition.DryFireVolume</c>.</summary>
+        public float DryFireVolumeScale => Mathf.Max(0f, dryFireVolumeScale);
 
         /// <summary>Built-in table, used when no asset has been created yet (and as the asset's own
         /// starting content). ⚠️ Kept so a fresh clone plays the mode correctly without a data step;
         /// the asset, once present, is the only source.
-        /// <para>Each wave adds a ROLE (Yemek-Kitabi zombie recipe): sidearms, close defence, first
-        /// rifles + bomb, shotgun + brute hunter, precision, top tier.</para>
+        /// <para>One weapon per wave, in the order the squad meets them.</para>
         /// <para>⚠️ Head ladder against a 100 HP walker: light weapons ~50 per head (TWO headshots),
-        /// magnum, ak47 and the wave 5+ rifles ~101 (ONE). Progression is felt as fewer shots per head;
+        /// magnum, ak47 and the m4a4/aug rifles ~101 (ONE). Progression is felt as fewer shots per head;
         /// a value between the two steps blurs both.</para></summary>
         public static Entry[] DefaultEntries() => new[]
         {
-            new Entry { weaponId = "glock", wave = 1, bodyDamage = 20f, headMultiplier = 2.5f },
             new Entry { weaponId = "magnum", wave = 1, bodyDamage = 30f, headMultiplier = 3.4f },
-            new Entry { weaponId = "g36c", wave = 2, bodyDamage = 22f, headMultiplier = 2.3f },
-            new Entry { weaponId = "ump45", wave = 2, bodyDamage = 24f, headMultiplier = 2.1f },
-            new Entry { weaponId = "scarl", wave = 3, bodyDamage = 26f, headMultiplier = 2.0f },
-            new Entry { weaponId = "famas", wave = 3, bodyDamage = 24f, headMultiplier = 2.1f },
+            new Entry { weaponId = "famas", wave = 2, bodyDamage = 24f, headMultiplier = 2.1f },
+            new Entry { weaponId = "p90", wave = 3, bodyDamage = 20f, headMultiplier = 2.5f },
             new Entry { weaponId = "bomba", wave = 3 },
             new Entry { weaponId = "ak47", wave = 4, bodyDamage = 32f, headMultiplier = 3.2f },
-            new Entry { weaponId = "nova", wave = 4, bodyDamage = 10f, headMultiplier = 2.0f },
-            new Entry { weaponId = "m4a4", wave = 5, bodyDamage = 28f, headMultiplier = 3.6f },
             new Entry { weaponId = "xm1014", wave = 5, bodyDamage = 11f, headMultiplier = 2.0f },
             new Entry { weaponId = "aug", wave = 6, bodyDamage = 28f, headMultiplier = 3.6f },
-            new Entry { weaponId = "p90", wave = 6, bodyDamage = 20f, headMultiplier = 2.5f },
-            new Entry { weaponId = "m4a1", wave = 7, bodyDamage = 29f, headMultiplier = 3.5f },
-            new Entry { weaponId = "mp9", wave = 7, bodyDamage = 18f, headMultiplier = 2.8f },
+            new Entry { weaponId = "m4a4", wave = 7, bodyDamage = 28f, headMultiplier = 3.6f },
+            new Entry { weaponId = "nova", wave = 8, bodyDamage = 10f, headMultiplier = 2.0f },
         };
 
         private static ZombieArsenal live;
@@ -95,23 +104,33 @@ namespace VortexArena.Modes.Zombie
             }
         }
 
-        /// <summary>The wave <paramref name="weaponId"/> opens at; 1 (= always open) when unlisted.</summary>
+        /// <summary>Is <paramref name="weaponId"/> part of the zombie roster at all.</summary>
+        public bool IsListed(string weaponId) => IndexOf(weaponId) >= 0;
+
+        /// <summary>The wave <paramref name="weaponId"/> opens at; 1 when unlisted (callers check
+        /// <see cref="IsListed"/> first).</summary>
         public int UnlockWave(string weaponId)
+        {
+            int index = IndexOf(weaponId);
+            return index >= 0 ? Mathf.Max(1, entries[index].wave) : 1;
+        }
+
+        private int IndexOf(string weaponId)
         {
             if (string.IsNullOrEmpty(weaponId) || entries == null)
             {
-                return 1;
+                return -1;
             }
 
             for (int i = 0; i < entries.Length; i++)
             {
                 if (string.Equals(entries[i].weaponId, weaponId, StringComparison.OrdinalIgnoreCase))
                 {
-                    return Mathf.Max(1, entries[i].wave);
+                    return i;
                 }
             }
 
-            return 1;
+            return -1;
         }
 
         /// <summary>Whether any row opens exactly at <paramref name="wave"/> — read from the table, so it

@@ -405,6 +405,20 @@ namespace VortexArena.Protocol
         public bool enabled;
     }
 
+    /// <summary>Difficulty (§5.2) — <b>one command, two effects</b>: it writes the shared selection for
+    /// the next match AND changes the RUNNING match's difficulty at once (§10.5 reacts live).
+    /// ⚠️ Like friendly fire it has no phase gate and stays outside <c>set_selection</c>, because its
+    /// "empty = untouched" contract cannot express "apply now".</summary>
+    [Serializable]
+    public class SetDifficultyMsg
+    {
+        public string type = MessageTypes.SetDifficulty;
+
+        /// <summary><see cref="MatchDifficulty"/>; empty/unknown normalizes to <c>normal</c> — unlike
+        /// <c>set_selection</c> there is no "untouched" here, the operator pressed a button.</summary>
+        public string difficulty = MatchDifficulty.Normal;
+    }
+
     /// <summary>How headsets align AT STARTUP (§5.2/§10.6) — like friendly fire an immediate command,
     /// outside <c>set_selection</c> and the selection lock. Value is <c>ArenaProtocol.CALIB_MODE_*</c>.
     /// ⚠️ Unknown/empty is REJECTED (an operator decision, not a rule shape). ⚠️ It gates only the startup

@@ -156,9 +156,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: VortexArena.Core::VortexArena.Core.Combat.WeaponFrame
   isFrameVisible: 0
-  isRayVisible: 0
   frameVisual: {fileID: 0}
-  maxGrabDistance: 4
+  maxGrabDistance: 1.5
   rayColor: {r: 0.35, g: 0.7, b: 1, a: 0.9}
   rayWidth: 0.006
   framePadding: 0.06

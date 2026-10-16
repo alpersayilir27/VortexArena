@@ -46,7 +46,7 @@ namespace VortexArena.Modes.Burger
         [SerializeField] private float uprightSpeed = 720f;
 
         [Tooltip("Kordon boyu (m): şişe asılma noktasından bu kadar uzaklaşınca elden düşer ve yerine döner.")]
-        [SerializeField] private float leashRadius = 3f;
+        [SerializeField] private float leashRadius = 4f;
 
         [Tooltip("Görüş kenarı lekesi prefabı (BurgerKetchupVision). İlk şişe, oyuncu kamerasının " +
                  "(CenterEyeAnchor) altına bir kez örnekler; kamera rig'i yoksa (admin) örneklenmez.")]

@@ -52,24 +52,24 @@ namespace VortexArena.Core.Combat
         // (they all come from the same prefab).
         private static bool _warnedNoFrameArt;
 
+        /// <summary>Hard reach cap (m); a scene override of <see cref="maxGrabDistance"/> cannot exceed it.</summary>
+        public const float MaxReachMeters = 1.5f;
+
+        // Line-of-sight hits; more than this many obstacles on a ≤1.5 m line is a scene error.
+        private static readonly RaycastHit[] SightHits = new RaycastHit[8];
+
         [Header("Görünüm")]
         [Tooltip("Çerçeve görselini açar. Sahnedeki WPN_* ÖRNEĞİ üstünde override edilir — " +
                  "çerçevesiz durması istenen silahlarda kapatılır.")]
         [SerializeField] private bool isFrameVisible = true;
-
-        [Tooltip("Çerçevenin KENDİ nişan ışınını çizer. VARSAYILAN KAPALI: aynı geri bildirimi " +
-                 "ISDK'nın mesafe-kavrama göstergesi (tüp + reticle) zaten veriyor, ikisi birden " +
-                 "çizilince oyuncu elinde iki ışın görür.")]
-        [SerializeField] private bool isRayVisible;
 
         [Tooltip("Prefabdaki PASİF görsel kökü. Altındaki çerçeve MODELİ çalışma anında silahın " +
                  "ölçüsüne oturtulur (konum/dönüş/ölçek buradan yazılır).")]
         [SerializeField] private Transform frameVisual;
 
         [Tooltip("Silahın seçilebildiği en uzak mesafe (m) — AVUÇ ile çerçeve merkezi arası. " +
-                 "⚠️ ISDK'nın kendi mesafe-kavrama konisi 5 m'de biter: bunun üstüne çıkmak işe " +
-                 "yaramaz, silah aday bile olmaz.")]
-        [SerializeField] private float maxGrabDistance = 4f;
+                 "⚠️ Kodda 1.5 m ile tavanlanır: daha büyük değer işe yaramaz.")]
+        [SerializeField] private float maxGrabDistance = MaxReachMeters;
 
         [Tooltip("Nişan ışınının rengi (alfa dahil).")]
         [SerializeField] private Color rayColor = new Color(0.35f, 0.7f, 1f, 0.9f);
@@ -270,10 +270,9 @@ namespace VortexArena.Core.Combat
 
         private void Update()
         {
-            if (_weapon == null || _detached || !isRayVisible)
+            if (_weapon == null || _detached)
             {
-                // Collect any live ray, otherwise it freezes on screen — the toggle may have been
-                // cleared at runtime (Editor tinkering).
+                // Collect any live ray, otherwise it freezes on screen.
                 HideRay(_rayLeft);
                 HideRay(_rayRight);
                 return;
@@ -684,7 +683,7 @@ namespace VortexArena.Core.Combat
         }
 
         /// <summary>ISDK gate: may this interactor select the weapon right now — CALIBRATED, ALIVE,
-        /// allowed by the mode gate and within <see cref="maxGrabDistance"/>.
+        /// allowed by the mode gate, within reach and in sight (<see cref="IsReachable"/>).
         /// <para>⚠️ <b>Only conditions that are STABLE across a grip press belong here</b>, and
         /// "does the player already hold a weapon" is NOT one of them — that rule lives in
         /// <c>WeaponGranter.SelectWeapon</c> and must stay there. A filter that flips with the grip
@@ -729,7 +728,90 @@ namespace VortexArena.Core.Combat
                 return true; // no rig → the gate is meaningless
             }
 
-            return (palm.position - FrameCenterWorld).sqrMagnitude <= maxGrabDistance * maxGrabDistance;
+            // Range and sight are stable under the thumb, so they may gate candidacy (see summary).
+            return IsReachable(palm.position);
+        }
+
+        // ----------------------------------------------------------------------- reach + sight
+
+        private float Reach => Mathf.Min(maxGrabDistance, MaxReachMeters);
+
+        /// <summary>Within reach of <paramref name="palm"/> AND seen past every wall — the one test
+        /// <see cref="Filter"/> and the aim ray share.</summary>
+        private bool IsReachable(Vector3 palm)
+        {
+            Vector3 center = FrameCenterWorld;
+            float reach = Reach;
+            return (palm - center).sqrMagnitude <= reach * reach && HasLineOfSight(palm, center);
+        }
+
+        /// <summary>No obstacle between the head or the palm and the frame centre, and the palm not
+        /// inside one — a rack behind a wall is neither aimed at nor taken.</summary>
+        /// <remarks>⚠️ Obstacle layer only, the same "what is a wall" answer as the muzzle gate
+        /// (<c>ArenaCombat.IsMuzzleBlocked</c>): a maskless line would stop on the player's own hand or
+        /// the board's plates. The board itself is ignored even if it sits on that layer.</remarks>
+        private bool HasLineOfSight(Vector3 palm, Vector3 center)
+        {
+            if (ArenaLayers.ObstacleMask == 0)
+            {
+                return true; // ArenaLayers already reported the missing layer
+            }
+
+            if (ObstacleVolumes.ContainsPoint(palm))
+            {
+                return false;
+            }
+
+            if (WeaponGranter.TryResolveHead(out Vector3 head) && IsBlocked(head, center))
+            {
+                return false;
+            }
+
+            return !IsBlocked(palm, center);
+        }
+
+        private bool IsBlocked(Vector3 from, Vector3 to)
+        {
+            Vector3 delta = to - from;
+            float distance = delta.magnitude;
+            if (distance < 1e-4f)
+            {
+                return false;
+            }
+
+            int count = Physics.RaycastNonAlloc(new Ray(from, delta / distance), SightHits, distance,
+                ArenaLayers.ObstacleMask, QueryTriggerInteraction.Ignore);
+
+            Transform board = BoardRoot;
+            for (int i = 0; i < count; i++)
+            {
+                Transform hit = SightHits[i].collider.transform;
+                if (board == null || !hit.IsChildOf(board))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private Transform _boardRoot;
+        private bool _boardResolved;
+
+        /// <summary>The board this weapon hangs on (<see cref="WeaponCanvas"/>), else the weapon itself.</summary>
+        private Transform BoardRoot
+        {
+            get
+            {
+                if (!_boardResolved)
+                {
+                    _boardResolved = true;
+                    WeaponCanvas canvas = GetComponentInParent<WeaponCanvas>(true);
+                    _boardRoot = canvas != null ? canvas.transform : _weapon != null ? _weapon.transform : null;
+                }
+
+                return _boardRoot;
+            }
         }
 
         // ----------------------------------------------------------------------- aim ray
@@ -738,15 +820,12 @@ namespace VortexArena.Core.Combat
         private Vector3 FrameCenterWorld =>
             _weapon != null ? _weapon.transform.TransformPoint(_centerLocal) : transform.position;
 
-        /// <summary>Draws a ray from the hovering hand's PALM to the frame centre — only while in
-        /// range.
-        /// <para>⚠️ Off by default (<see cref="isRayVisible"/>): ISDK's distance grab draws its own
-        /// indicator (tube + reticle) and enabling both shows the player two rays.</para>
-        /// <para>⚠️ ISDK's indicator does not lie out of range, so turning ours off costs nothing:
-        /// its candidate list filters every entry through <c>CanBeSelectedBy</c>, i.e. through
-        /// <see cref="Filter"/>, so an out-of-range frame is not even a candidate.</para>
-        /// <para>The distance test is still repeated here because <see cref="Filter"/> is FAIL-OPEN
-        /// when the hand cannot be resolved (Editor session).</para></summary>
+        /// <summary>Draws a STRAIGHT ray from the hovering hand's PALM to the frame centre — only while
+        /// reachable (<see cref="IsReachable"/>).
+        /// <para>⚠️ This is the ONLY aim feedback: ISDK's distance-grab tube bends (Bezier toward the
+        /// target) and is silenced for good by <c>WeaponGranter</c>.</para>
+        /// <para>The reach test is repeated here because <see cref="Filter"/> is FAIL-OPEN when the
+        /// hand cannot be resolved (Editor session).</para></summary>
         private void TickRay(OVRInput.Controller hand, ref LineRenderer ray)
         {
             if (!IsHovering(hand))
@@ -763,12 +842,13 @@ namespace VortexArena.Core.Combat
                 return;
             }
 
-            Vector3 center = FrameCenterWorld;
-            if ((palm.position - center).sqrMagnitude > maxGrabDistance * maxGrabDistance)
+            if (!IsReachable(palm.position))
             {
                 HideRay(ray);
                 return;
             }
+
+            Vector3 center = FrameCenterWorld;
 
             ray = ray != null ? ray : CreateRay(hand);
             if (ray == null)

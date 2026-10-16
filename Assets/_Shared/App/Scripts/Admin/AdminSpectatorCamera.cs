@@ -39,10 +39,11 @@ namespace VortexArena.App.Admin
         private const float MinHeight = 0.2f;
 
         /// <summary>
-        /// POV camera's forward offset from the head pose (m), keeping head-mounted accessories
-        /// (hat, glasses) out of frame. ⚠️ Raising it too far pushes the camera into walls.
+        /// POV near clip (m): keeps the watched avatar's own head and accessories (hat, glasses) out
+        /// of frame WITHOUT moving the eye point — a camera offset forward would shift the whole
+        /// perspective and draw held items at the wrong size and place.
         /// </summary>
-        private const float PovForwardOffset = 0.1f;
+        private const float PovNearClip = 0.1f;
 
         /// <summary>
         /// DEFAULT top-down camera height (m) — in orthographic it only decides what the clip planes
@@ -127,9 +128,10 @@ namespace VortexArena.App.Admin
         {
             _camera.orthographic = mode == AdminCameraMode.TopDown;
 
-            // Full depth range on entry: POV/free must see everything. Top-down narrows it to the
-            // selected floor's band every frame.
-            _camera.nearClipPlane = DefaultNearClip;
+            // Full depth range on entry: free must see everything. POV clips the near distance
+            // instead of stepping the camera forward; top-down narrows the range to the selected
+            // floor's band every frame.
+            _camera.nearClipPlane = mode == AdminCameraMode.Pov ? PovNearClip : DefaultNearClip;
             _camera.farClipPlane = DefaultFarClip;
 
             // Roof hides on entering top-down and returns on leaving (preference: AdminSession.Roof).
@@ -180,10 +182,9 @@ namespace VortexArena.App.Admin
             }
 
             Pose world = ArenaSpace.ArenaToWorld(head);
-            // Slightly in FRONT of the head pose: accessories are parented to the head bone and
-            // would fill the frame at the exact head point.
-            Vector3 position = world.position + world.rotation * Vector3.forward * PovForwardOffset;
-            transform.SetPositionAndRotation(position, world.rotation);
+            // EXACTLY the head pose: the operator must see what the player sees (own head geometry is
+            // cut by PovNearClip, not by moving the camera).
+            transform.SetPositionAndRotation(world.position, world.rotation);
         }
 
         // ------------------------------------------------------------------- free

@@ -181,7 +181,7 @@ MeshRenderer:
   m_GlobalIlluminationMeshLod: 0
   m_SortingLayerID: 0
   m_SortingLayer: 0
-  m_SortingOrder: 0
+  m_SortingOrder: 25
   m_MaskInteraction: 0
   m_AdditionalVertexStreams: {fileID: 0}
 --- !u!1 &44015571468260134
@@ -8266,7 +8266,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Meta.XR.BuildingBlocks::Meta.XR.BuildingBlocks.BuildingBlock
   blockId: 5817f7c0-f2a5-45f9-a5ca-64264e0166e8
-  instanceId: 3b044a0b-24d0-45da-9957-6025e8fde997
+  instanceId: 2902fe91-fcf0-41a2-83a3-94743a04080d
   version: 1
   installationRoutineCheckpoint:
     _installationRoutineId: 
@@ -9015,7 +9015,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Meta.XR.BuildingBlocks::Meta.XR.BuildingBlocks.BuildingBlock
   blockId: e47682b9-c270-40b1-b16d-90b627a5ce1b
-  instanceId: b51ff229-6e67-4f87-bbc2-74f684e124ac
+  instanceId: 26d4c1d7-57fe-4032-9d9a-9d78be993970
   version: 1
   installationRoutineCheckpoint:
     _installationRoutineId: 
@@ -11003,7 +11003,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Meta.XR.BuildingBlocks::Meta.XR.BuildingBlocks.BuildingBlock
   blockId: 5817f7c0-f2a5-45f9-a5ca-64264e0166e8
-  instanceId: f7ca73d4-e341-4c62-bfd2-12a7dfeeecfe
+  instanceId: 1ce0aee2-79b2-41ed-b200-58bd87f60336
   version: 1
   installationRoutineCheckpoint:
     _installationRoutineId: 
@@ -12036,7 +12036,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Meta.XR.BuildingBlocks::Meta.XR.BuildingBlocks.BuildingBlock
   blockId: 81f55626-5fad-45e9-a1df-184f330da7ba
-  instanceId: 26444ea8-5b6d-43cd-9bb8-5c33f808d014
+  instanceId: 96928dba-a24a-4a62-b89b-f54d04279b21
   version: 1
   installationRoutineCheckpoint:
     _installationRoutineId: 2063f481-1b63-4eda-9ee8-a00df98536bc

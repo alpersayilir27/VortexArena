@@ -4,9 +4,10 @@ using VortexArena.Protocol;
 namespace VortexArena.Server.Core.Modes;
 
 /// <summary>Co-op wave defence (§10.5 <c>zombie</c>): players are ONE team, zombies arrive wave by wave
-/// and hit in melee. Ends on time (<c>over:survived</c>), with the Last Stand's Dev killed
-/// (<c>over:rescued</c>) or with the squad down (<c>over:lost</c>); there is no winner TEAM — the result
-/// travels in <c>modeState</c>.</summary>
+/// and hit in melee. Ends on time (<c>over:survived</c>) or with the Last Stand's Dev killed
+/// (<c>over:rescued</c>); there is no winner TEAM — the result travels in <c>modeState</c>.
+/// <para>⚠️ A squad wipe does NOT end the match: it opens the rescue machine (countdown → clearing the
+/// zombies around the downed → everybody stands up), so there is no <c>over:lost</c>.</para></summary>
 /// <remarks>⚠️ A zombie is a NETWORK OBJECT (§10.10), not a player: the server spawns it, holds its
 /// health, breaks it and writes its score, while its POSE is streamed by its owner — and that owner is
 /// the admin build (§10.10 "Sunucu-atanmış sahiplik"), because the brain needs NavMesh and the server
@@ -158,21 +159,34 @@ public sealed class ZombieMode : IGameMode
     /// <summary>HP a teammate-lifted player stands up with (§10.4); the wave break gives full HP.</summary>
     private const float TeammateReviveHp = 50f;
 
-    /// <summary>Calibrated players a match needs before a team loss is possible (§10.5).</summary>
+    /// <summary>Calibrated players a match needs before a squad wipe can fire (§10.5).</summary>
     /// <remarks>⚠️ Below it nobody can lift anybody (the revive condition needs a teammate), so a solo run
-    /// would be unlosable-by-design turned into instantly lost.</remarks>
+    /// would be rescued every few seconds instead of leaning on the stand-still fallback (§10.4).</remarks>
     private const int LossMinPlayers = 2;
 
-    /// <summary>Nobody alive for this long = loss (§10.5).</summary>
+    /// <summary>Nobody alive for this long = the squad is down (§10.5).</summary>
     /// <remarks>⚠️ Without the grace the single frame where everyone is down — the normal moment a
-    /// teammate runs over to lift someone — would end the match.</remarks>
+    /// teammate runs over to lift someone — would fire the rescue machine.</remarks>
     private const float LossGraceSeconds = 2f;
 
+    // ---- Squad wipe rescue (§10.5 "Ekip düşmesi"): a wipe costs time and position, not the match. ----
+
+    /// <summary>Seconds between the squad going down and the rescue. ⚠️ The match clock and the wave
+    /// clock keep running: the wipe is a setback, not a pause.</summary>
+    private const float WipeCountdownSeconds = 5f;
+
+    /// <summary>How long the "everybody up" window stays open (<c>modeState rv</c>) — the downed clients
+    /// send the normal <c>revive_request</c> inside it (§10.4). Same length as the Last Stand's window.</summary>
+    private const float WipeReviveSeconds = 3f;
+
+    /// <summary>Horizontal radius (m) around a downed player the wipe clears. ⚠️ A BOUND off
+    /// client-reported poses, not a measurement (§10.10): zombies with no streamed pose stay.</summary>
+    private const float WipeClearRadius = 6f;
+
     /// <summary>Final <c>modeState over:</c> values (§10.5); <c>Rescued</c> (the Last Stand's Dev kill)
-    /// is a win like <c>Survived</c>.</summary>
+    /// is a win like <c>Survived</c>. ⚠️ There is no "lost": a wipe is rescued, not judged.</summary>
     private const string OverSurvived = "survived";
     private const string OverRescued = "rescued";
-    private const string OverLost = "lost";
 
     // ---- Last Stand (§10.5 "Son Direniş") ----
 
@@ -194,9 +208,25 @@ public sealed class ZombieMode : IGameMode
     /// zombie has to be seen before the result screen covers it.</summary>
     private const float RescueDelaySeconds = 3f;
 
-    /// <summary>Total multipliers of the special waves (§10.5): fewer but faster, fewer but heavier.</summary>
+    /// <summary>Deck-batch multipliers of the special waves (§10.5): fewer but faster, fewer but
+    /// heavier.</summary>
     private const float SwarmTotalMul = 0.8f;
     private const float HeavyTotalMul = 0.7f;
+
+    // ---- Wave clock (§10.5): a wave lasts a fixed TIME, it is not a body count. ----
+
+    private const float Wave1Seconds = 120f;
+    private const float WaveEarlySeconds = 180f;
+    private const float WaveLateSeconds = 240f;
+
+    /// <summary>Last wave that still runs the short <see cref="WaveEarlySeconds"/>.</summary>
+    private const int WaveEarlyLast = 3;
+
+    /// <summary>How long wave <paramref name="wave"/> runs (s). ⚠️ Scaled by NEITHER the difficulty NOR
+    /// the map pace: this is the clock the squad reads, and a map must not move it.</summary>
+    private static float WaveSecondsOf(int wave) => wave <= 1
+        ? Wave1Seconds
+        : wave <= WaveEarlyLast ? WaveEarlySeconds : WaveLateSeconds;
 
     /// <summary>Player-count scaling of a wave (§10.5): <c>1 + PlayerFactorStep × (n − 4)</c>, clamped.
     /// 4 players is the reference group the difficulty table is written for.</summary>
@@ -209,8 +239,13 @@ public sealed class ZombieMode : IGameMode
     private readonly struct WaveTable
     {
         public readonly string Id;
-        public readonly int TotalBase;
-        public readonly int TotalPerWave;
+
+        /// <summary>Deck batch filled at once (<c>DeckBase + DeckPerWave × d</c>): only the composition's
+        /// PROPORTIONS and the refill granularity come from it — a wave ends on its clock, not on a
+        /// count, and the batch is refilled as long as the clock runs.</summary>
+        public readonly int DeckBase;
+        public readonly int DeckPerWave;
+
         public readonly int StandingBase;
         public readonly int StandingPerWave;
         public readonly int StandingCap;
@@ -231,13 +266,13 @@ public sealed class ZombieMode : IGameMode
         /// <summary>Multiplier on every type's max HP and on the Dev's damage (§10.5).</summary>
         public readonly float TypeScale;
 
-        public WaveTable(string id, int totalBase, int totalPerWave, int standingBase,
+        public WaveTable(string id, int deckBase, int deckPerWave, int standingBase,
             int standingPerWave, int standingCap, float spawnInterval, float waveBreak, int damageBase,
             int damagePerWave, int damageCap, int emptyFloorMin, int waveShift, float typeScale)
         {
             Id = id;
-            TotalBase = totalBase;
-            TotalPerWave = totalPerWave;
+            DeckBase = deckBase;
+            DeckPerWave = deckPerWave;
             StandingBase = standingBase;
             StandingPerWave = standingPerWave;
             StandingCap = standingCap;
@@ -350,12 +385,14 @@ public sealed class ZombieMode : IGameMode
     private readonly List<int> _adoptScratch = new();
 
     private int _wave;
-    private int _spawnedThisWave;
     private float _spawnTimer;
 
-    /// <summary>Wave size and standing cap of the RUNNING wave: both are snapshotted at wave start
-    /// (player factor), so the numbers cannot shift mid-wave.</summary>
-    private int _waveTotal;
+    /// <summary>Seconds left of the RUNNING wave (<c>modeState wl</c>); <c>0</c> = no wave is spawning
+    /// (the gap, the tail waiting for the last standing zombie, the Last Stand).</summary>
+    private float _waveTimer;
+
+    /// <summary>Standing cap of the running wave, snapshotted at wave start (player factor) so the
+    /// number cannot drift mid-wave — a live difficulty change re-resolves it on purpose.</summary>
     private int _standingCap;
 
     /// <summary>Player-count factor of the running wave (§10.5), snapshotted at wave start.</summary>
@@ -418,14 +455,25 @@ public sealed class ZombieMode : IGameMode
     private readonly Dictionary<int, int> _headshots = new();
     private readonly Dictionary<int, int> _revives = new();
 
-    /// <summary>Result key of the match: <c>""</c> until it ends, then <see cref="OverSurvived"/>,
-    /// <see cref="OverRescued"/> or <see cref="OverLost"/>.</summary>
+    /// <summary>Result key of the match: <c>""</c> until it ends, then <see cref="OverSurvived"/> or
+    /// <see cref="OverRescued"/>.</summary>
     private string _over = "";
 
-    /// <summary>When the squad went fully down; <c>null</c> = somebody is alive (§10.5 loss rule).</summary>
-    /// <remarks>A wall-clock stamp rather than a counted-down timer: the check lives in
-    /// <see cref="IsMatchOver"/>, which gets no delta.</remarks>
+    /// <summary>When the squad went fully down; <c>null</c> = somebody is alive (§10.5 wipe rule).</summary>
+    /// <remarks>A wall-clock stamp rather than a counted-down timer: the grace has to survive the
+    /// moment-to-moment roster read, not a delta.</remarks>
     private DateTime? _allDownSince;
+
+    /// <summary>Seconds left of the wipe countdown (<c>modeState wp</c>); <c>0</c> = none running.</summary>
+    private float _wipeTimer;
+
+    /// <summary>Seconds left of the "everybody up" window (<c>modeState rv</c>); <c>0</c> = closed.
+    /// ⚠️ While it runs a new wipe may NOT start: the squad is still on the floor, so the grace would
+    /// re-fire every tick and the rescue would never land.</summary>
+    private float _wipeReviveTimer;
+
+    /// <summary>Downed participants of the running wipe, reused so the tick allocates nothing.</summary>
+    private readonly List<int> _downedScratch = new();
 
     /// <summary>Do WE hold the mode pause right now (§10.1)?</summary>
     private bool _paused;
@@ -477,7 +525,7 @@ public sealed class ZombieMode : IGameMode
     /// difficulty). The real values arrive with the first push once the countdown ends, and nothing acts
     /// on <c>fm</c>/<c>diff</c> before the first wave.</remarks>
     public string InitialModeState =>
-        $"w:0;left:0;next:0;rem:0;fm:{NormalTable.EmptyFloorMin};diff:{NormalTable.Id}";
+        $"w:0;left:0;next:0;wl:0;fm:{NormalTable.EmptyFloorMin};diff:{NormalTable.Id}";
 
     public void OnMatchStart(MatchDirector director)
     {
@@ -487,11 +535,10 @@ public sealed class ZombieMode : IGameMode
             lock (_crippleGate) _legs.Clear();
             _spawnPoints.Clear();
             _wave = 0;
-            _spawnedThisWave = 0;
             _spawnTimer = 0f;
             _breakTimer = 0f;
             _clearTimer = 0f;
-            _waveTotal = 0;
+            _waveTimer = 0f;
             _standingCap = 0;
             _playerFactor = 1f;
             Array.Clear(_deck, 0, _deck.Length);
@@ -508,18 +555,18 @@ public sealed class ZombieMode : IGameMode
             _recentWrite = 0;
             _over = "";
             _allDownSince = null;
+            _wipeTimer = 0f;
+            _wipeReviveTimer = 0f;
             _headshots.Clear();
             _revives.Clear();
             _paused = false;
             _resuming = false;
             _savedRemaining = 0f;
 
-            // Difficulty is the operator's pick, pace is map data (§10.5): both read at setup, never on
-            // the tick.
-            _table = TableOf(director.Difficulty);
+            // Difficulty is the operator's pick (changeable mid-match, see OnDifficultyChanged), pace is
+            // map data (§10.5): both read here, never on the tick.
             _pace = ResolvePace(director);
-            _spawnInterval = _table.SpawnInterval / _pace;
-            _waveBreak = _table.WaveBreak / _pace;
+            ApplyDifficultyLocked(director.Difficulty);
 
             foreach (var netId in director.ObjectIdsOfKind(SpawnKind)) _spawnPoints.Add(netId);
         }
@@ -536,7 +583,7 @@ public sealed class ZombieMode : IGameMode
             Console.WriteLine($"[zombie] maç başladı — {director.RoundSeconds} sn, zorluk {_table.Id}, " +
                               $"{_spawnPoints.Count} doğum noktası, tempo ×{_pace:0.##}; süre bitince " +
                               $"dayanıldı, {LossMinPlayers} kalibreli oyuncudan hiçbiri " +
-                              $"{LossGraceSeconds:0} sn boyunca ayakta değilse kayıp.");
+                              $"{LossGraceSeconds:0} sn boyunca ayakta değilse ekip kurtarması işler.");
         }
 
         // No host = no brain: pause before the first wave rather than spawning zombies nobody drives.
@@ -561,6 +608,44 @@ public sealed class ZombieMode : IGameMode
         PushModeState(director);
     }
 
+    /// <summary>The operator moved the difficulty mid-match (<c>set_difficulty</c>, §5.2): the table, the
+    /// two intervals and the running wave's standing cap are re-resolved at once.</summary>
+    /// <remarks>⚠️ Already-spawned zombies keep their HP (the Dev included): max HP is written per
+    /// object at spawn and rewriting it would refill a boss bar mid-fight. Damage needs nothing here —
+    /// it reads the table at HIT time.</remarks>
+    public void OnDifficultyChanged(MatchDirector director)
+    {
+        lock (_gate)
+        {
+            if (string.Equals(_table.Id, MatchDifficulty.Normalize(director.Difficulty),
+                    StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            ApplyDifficultyLocked(director.Difficulty);
+            Console.WriteLine($"[zombie] zorluk {_table.Id} — doğum aralığı {_spawnInterval:0.##} sn, " +
+                              $"dalga arası {_waveBreak:0} sn, en çok {_standingCap} ayakta; " +
+                              "doğmuş zombilerin canı değişmez.");
+
+            // A finished run keeps its final state: rewriting it would redraw the result screen's
+            // numbers after the fact.
+            if (_over.Length > 0) return;
+        }
+
+        PushModeState(director);
+    }
+
+    /// <summary>Resolves everything the difficulty owns. The standing cap is only touched while a wave
+    /// runs: before the first one it belongs to <see cref="StartWaveLocked"/>.</summary>
+    private void ApplyDifficultyLocked(string difficulty)
+    {
+        _table = TableOf(difficulty);
+        _spawnInterval = _table.SpawnInterval / _pace;
+        _waveBreak = _table.WaveBreak / _pace;
+        if (_wave >= 1) _standingCap = ConcurrentCapLocked(_wave);
+    }
+
     /// <summary>Clears the field: <see cref="Phase.Finished"/> gets no ticks, so anything left standing
     /// would walk through the whole held result screen (its brain does not read the phase).</summary>
     public void OnMatchEnd(MatchDirector director)
@@ -583,13 +668,14 @@ public sealed class ZombieMode : IGameMode
         for (var i = 0; i < leftovers.Count; i++) director.DespawnObject(leftovers[i]);
     }
 
-    /// <summary>Three end conditions (§10.5): the Dev killed in the Last Stand (<c>over:rescued</c>),
-    /// the clock running out with the squad standing (<c>over:survived</c>) and the squad being down
-    /// (<c>over:lost</c>). There is no winner TEAM either way (<c>shared</c> scoring) — the result travels
-    /// in <c>modeState</c>.</summary>
-    /// <remarks>⚠️ All are asked only in <see cref="Phase.Playing"/>: the clock is deliberately zeroed
+    /// <summary>Two end conditions (§10.5): the Dev killed in the Last Stand (<c>over:rescued</c>) and the
+    /// clock running out (<c>over:survived</c>). There is no winner TEAM either way (<c>shared</c>
+    /// scoring) — the result travels in <c>modeState</c>.</summary>
+    /// <remarks>⚠️ A squad wipe is NOT an end condition: it is rescued on the tick (§10.5 "Ekip
+    /// düşmesi"), so a run can only be ended by the clock, the Dev or the operator.
+    /// <para>⚠️ Both are asked only in <see cref="Phase.Playing"/>: the clock is deliberately zeroed
     /// while we hold the mode pause, and a paused roster is revived by the core on the way back — judging
-    /// either there would end the match while it is waiting for an admin.</remarks>
+    /// either there would end the match while it is waiting for an admin.</para></remarks>
     public bool IsMatchOver(MatchDirector director, out MatchOutcome outcome)
     {
         outcome = MatchOutcome.Draw;
@@ -617,15 +703,7 @@ public sealed class ZombieMode : IGameMode
             return true;
         }
 
-        // ⚠️ Once the Dev is down the run is already won: a wipe inside the rescue window must not turn
-        // it into a loss.
-        if (devDead) return false;
-
-        if (!IsTeamDown(director)) return false;
-
-        SetOver(OverLost);
-        PushModeState(director);
-        return true;
+        return false;
     }
 
     /// <summary>Writes the outcome token and closes the clear phase with it: a gap that was running when
@@ -651,6 +729,7 @@ public sealed class ZombieMode : IGameMode
             TickDeadLocked(director, deltaSeconds);
             TickScreamsLocked(director, deltaSeconds);
             TickWaveLocked(director, deltaSeconds);
+            TickWipeLocked(director, deltaSeconds);
         }
 
         PushModeState(director);
@@ -846,9 +925,10 @@ public sealed class ZombieMode : IGameMode
         director.AddSharedScore(byPlayerId, RevivePoints);
     }
 
-    /// <summary>Revive HP (§10.4): a teammate lift is half health, the wave break is full.</summary>
-    /// <remarks>The partial revive is what makes lifting a risk rather than a reset — and the break is
-    /// full HP because nobody is there to carry the downed player then.</remarks>
+    /// <summary>Revive HP (§10.4): a teammate lift is half health, a mode window (wave break, Last Stand,
+    /// squad rescue) is full.</summary>
+    /// <remarks>The partial revive is what makes lifting a risk rather than a reset — a window is full HP
+    /// because nobody is there to carry the downed player then.</remarks>
     public float ReviveHp(MatchDirector director, int playerId, int byPlayerId) =>
         byPlayerId > 0 ? TeammateReviveHp : ArenaProtocol.PLAYER_MAX_HP;
 
@@ -891,20 +971,29 @@ public sealed class ZombieMode : IGameMode
             return;
         }
 
-        if (_spawnedThisWave >= _waveTotal)
+        if (_waveTimer > 0f)
         {
-            // ⚠️ STANDING count, not the table size: waiting for the corpses to despawn would push the
-            // "wave cleared" cue 4.5 s past the kill that earned it. They clear during the gap.
-            if (StandingCountLocked() == 0)
+            _waveTimer = MathF.Max(0f, _waveTimer - deltaSeconds);
+            if (_waveTimer > 0f)
             {
-                _clearTimer = ClearSeconds;
-                _breakTimer = ClearSeconds + _waveBreak;
+                // Endless while the clock runs: the batch is only the composition's granularity, so an
+                // emptied deck is refilled from the SAME wave's shape (§10.5).
+                if (DeckEmptyLocked()) BuildDeckLocked(_wave, DeckBatchLocked(_wave));
+                TrySpawnFromDeckLocked(director, deltaSeconds, _standingCap);
+                return;
             }
 
-            return;
+            Console.WriteLine($"[zombie] dalga {_wave} süresi doldu — doğum durdu, " +
+                              $"{StandingCountLocked()} zombi ayakta.");
         }
 
-        TrySpawnFromDeckLocked(director, deltaSeconds, _standingCap);
+        // ⚠️ STANDING count, not the corpses: waiting for them to despawn would push the "wave cleared"
+        // cue 4.5 s past the kill that earned it. They clear during the gap.
+        if (StandingCountLocked() == 0)
+        {
+            _clearTimer = ClearSeconds;
+            _breakTimer = ClearSeconds + _waveBreak;
+        }
     }
 
     /// <summary>One spawn slot of the running wave: waits out the interval, honours the standing cap and
@@ -1094,6 +1183,7 @@ public sealed class ZombieMode : IGameMode
         _breakTimer = 0f;
         _clearTimer = 0f;
         _spawnTimer = 0f;
+        _waveTimer = 0f; // overrides a running wave clock: from here the pressure is endless
         _devPlayers = Math.Max(DevMinPlayers, ConnectedCount(director)); // frozen like a wave's count
         SpawnDevLocked(director);
         Console.WriteLine($"[zombie] Son Direniş — dalga {_wave} dizilimi sonsuz sürüyor, " +
@@ -1118,8 +1208,98 @@ public sealed class ZombieMode : IGameMode
             if (_devRetryTimer <= 0f) SpawnDevLocked(director);
         }
 
-        if (DeckEmptyLocked()) BuildDeckLocked(_wave, WaveTotalLocked(_wave));
+        if (DeckEmptyLocked()) BuildDeckLocked(_wave, DeckBatchLocked(_wave));
         TrySpawnFromDeckLocked(director, deltaSeconds, _standingCap);
+    }
+
+    // ---------------------------------------------------------------- squad wipe (§10.5)
+
+    /// <summary>The rescue machine: the grace, the 5 s countdown, the clearing of the pack around the
+    /// downed squad and the "everybody up" window. A wipe never ends the match.</summary>
+    /// <remarks>⚠️ Runs on the tick and not in <see cref="IsMatchOver"/> any more: the condition no
+    /// longer judges a match, it schedules work.</remarks>
+    private void TickWipeLocked(MatchDirector director, float deltaSeconds)
+    {
+        // The Dev is down: the run is already won and the squad must not be dragged through a rescue
+        // while the result screen is coming.
+        if (_devDead || _over.Length > 0)
+        {
+            _wipeTimer = 0f;
+            _wipeReviveTimer = 0f;
+            _allDownSince = null;
+            return;
+        }
+
+        if (_wipeReviveTimer > 0f)
+        {
+            _wipeReviveTimer = MathF.Max(0f, _wipeReviveTimer - deltaSeconds);
+            _allDownSince = null; // the window itself is the answer; the grace restarts after it
+            return;
+        }
+
+        if (_wipeTimer > 0f)
+        {
+            _wipeTimer = MathF.Max(0f, _wipeTimer - deltaSeconds);
+            if (_wipeTimer <= 0f) RescueSquadLocked(director);
+            return;
+        }
+
+        if (!IsTeamDownLocked(director)) return;
+
+        _wipeTimer = WipeCountdownSeconds;
+        _allDownSince = null;
+        Console.WriteLine($"[zombie] ekip düştü — {WipeCountdownSeconds:0} sn sonra çevredeki zombiler " +
+                          "temizlenip herkes kaldırılacak.");
+    }
+
+    /// <summary>Clears the zombies crowding the downed players and opens the revive window.</summary>
+    /// <remarks>⚠️ <see cref="MatchDirector.BreakObject"/>, not a scored kill: a wipe clear is nobody's
+    /// leash. The Dev is skipped — a wipe may not win the Last Stand.</remarks>
+    private void RescueSquadLocked(MatchDirector director)
+    {
+        _wipeReviveTimer = WipeReviveSeconds;
+
+        _downedScratch.Clear();
+        foreach (var player in director.ConnectedPlayers())
+        {
+            if (player.MatchParticipant && player.Calibrated && !player.Alive)
+            {
+                _downedScratch.Add(player.PlayerId);
+            }
+        }
+
+        // Own list, not the tick's scratch: the dead pass is using that one in this very tick.
+        var cleared = new List<int>();
+        foreach (var pair in _zombies)
+        {
+            if (pair.Value.Dead || pair.Key == _devNetId) continue;
+            if (!IsNearDownedLocked(director, pair.Key)) continue;
+
+            pair.Value.Dead = true;
+            pair.Value.DeadSeconds = 0f;
+            cleared.Add(pair.Key);
+        }
+
+        for (var i = 0; i < cleared.Count; i++) director.BreakObject(cleared[i]);
+
+        Console.WriteLine($"[zombie] ekip kurtarıldı — {cleared.Count} zombi " +
+                          $"{WipeClearRadius:0} m içinde çöktü, {_downedScratch.Count} oyuncu için " +
+                          $"{WipeReviveSeconds:0} sn'lik kalkma penceresi açıldı.");
+    }
+
+    /// <summary>Is this zombie within <see cref="WipeClearRadius"/> of ANY downed player?</summary>
+    private bool IsNearDownedLocked(MatchDirector director, int netId)
+    {
+        for (var i = 0; i < _downedScratch.Count; i++)
+        {
+            if (director.TryGetObjectToPlayerDistance(netId, _downedScratch[i], out float meters) &&
+                meters <= WipeClearRadius)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private void SpawnDevLocked(MatchDirector director)
@@ -1176,15 +1356,15 @@ public sealed class ZombieMode : IGameMode
     private void StartWaveLocked(MatchDirector director)
     {
         _wave++;
-        _spawnedThisWave = 0;
         _spawnTimer = 0f;
         _breakTimer = 0f;
         _clearTimer = 0f;
+        _waveTimer = WaveSecondsOf(_wave);
         _playerFactor = PlayerFactorOf(ConnectedCount(director));
         _standingCap = ConcurrentCapLocked(_wave);
-        _waveTotal = BuildDeckLocked(_wave, WaveTotalLocked(_wave));
-        Console.WriteLine($"[zombie] dalga {_wave} ({_table.Id}) — {_waveTotal} zombi, en çok " +
-                          $"{_standingCap} ayakta, hasar {DamageOfWave(_wave):0}, " +
+        int batch = BuildDeckLocked(_wave, DeckBatchLocked(_wave));
+        Console.WriteLine($"[zombie] dalga {_wave} ({_table.Id}) — {_waveTimer:0} sn, {batch} zombilik " +
+                          $"deste partisi, en çok {_standingCap} ayakta, hasar {DamageOfWave(_wave):0}, " +
                           $"oyuncu çarpanı ×{_playerFactor:0.##}; dizilim " +
                           $"{_deck[IdxWalker]}/{_deck[IdxCrawler]}/{_deck[IdxRunner]}/" +
                           $"{_deck[IdxBrute]}/{_deck[IdxScreamer]}" +
@@ -1231,11 +1411,10 @@ public sealed class ZombieMode : IGameMode
         _zombies[netId] = zombie;
         lock (_crippleGate) _legs[netId] = new LegRecord();
 
-        // Only deck draws count against the wave: the Dev and his summons are extra (§10.5).
-        if (summonerNetId == 0 && typeIndex < _deck.Length)
+        // Only deck draws consume the deck: the Dev and his summons are extra (§10.5).
+        if (summonerNetId == 0 && typeIndex < _deck.Length && _deck[typeIndex] > 0)
         {
-            _spawnedThisWave++;
-            if (_deck[typeIndex] > 0) _deck[typeIndex]--;
+            _deck[typeIndex]--;
         }
 
         _recentSpawns[_recentWrite] = spawnPoint;
@@ -1362,12 +1541,13 @@ public sealed class ZombieMode : IGameMode
 
     // ---------------------------------------------------------------- helpers
 
-    /// <summary>Wave size: the difficulty table's <c>TotalBase + TotalPerWave × d</c> scaled by the
-    /// player factor. Never below 1 — a wave of zero zombies ends the moment it starts and the run would
-    /// race through its waves.</summary>
-    private int WaveTotalLocked(int wave)
+    /// <summary>One deck batch: the difficulty table's <c>DeckBase + DeckPerWave × d</c> scaled by the
+    /// player factor. Never below 1 — a batch of zero would refill forever and spawn nothing.</summary>
+    /// <remarks>⚠️ NOT a wave size: the wave ends on its clock (<see cref="WaveSecondsOf"/>), and this
+    /// number only sets the composition's proportions and how often the deck is rebuilt.</remarks>
+    private int DeckBatchLocked(int wave)
     {
-        int table = _table.TotalBase + _table.TotalPerWave * Math.Max(1, wave);
+        int table = _table.DeckBase + _table.DeckPerWave * Math.Max(1, wave);
         int scaled = (int)MathF.Round(table * _playerFactor, MidpointRounding.AwayFromZero);
         return Math.Max(1, scaled);
     }
@@ -1375,8 +1555,8 @@ public sealed class ZombieMode : IGameMode
     /// <summary>Zombies standing at once: the table's <c>StandingBase + StandingPerWave × d</c> capped by
     /// the difficulty, then scaled by the player factor and the map pace (in that order, §10.5).</summary>
     /// <remarks>⚠️ Never below 1 and never above the difficulty cap (nor
-    /// <see cref="ConcurrentCapMax"/>): a cap rounded down to 0 would leave the arena empty for the whole
-    /// wave, which then never ends (a wave ends when its zombies die).</remarks>
+    /// <see cref="ConcurrentCapMax"/>): a cap rounded down to 0 would leave the arena empty for the
+    /// whole wave.</remarks>
     private int ConcurrentCapLocked(int wave)
     {
         int table = Math.Min(_table.StandingCap,
@@ -1468,14 +1648,14 @@ public sealed class ZombieMode : IGameMode
         return MathF.Max(1f, value);
     }
 
-    /// <summary>Team loss (§10.5): at least <see cref="LossMinPlayers"/> calibrated players in the match
+    /// <summary>Squad down (§10.5): at least <see cref="LossMinPlayers"/> calibrated players in the match
     /// and NONE of them alive for <see cref="LossGraceSeconds"/> without a break.</summary>
     /// <remarks>Only calibrated participants are counted: an uncalibrated headset is not playing, so it
-    /// may neither count as alive nor keep the squad from losing (it used to do the latter — it can never
-    /// be damaged, §10.6).
-    /// <para>A solo run NEVER loses: with nobody to lift them the player's revive falls back to the
+    /// may neither count as alive nor keep the squad from going down (it used to do the latter — it can
+    /// never be damaged, §10.6).
+    /// <para>A solo run NEVER fires it: with nobody to lift them the player's revive falls back to the
     /// standstill rule (§10.4), so "everybody down" is a normal five seconds there.</para></remarks>
-    private bool IsTeamDown(MatchDirector director)
+    private bool IsTeamDownLocked(MatchDirector director)
     {
         var counted = 0;
         var anyAlive = false;
@@ -1488,16 +1668,13 @@ public sealed class ZombieMode : IGameMode
 
         if (anyAlive || counted < LossMinPlayers)
         {
-            lock (_gate) _allDownSince = null;
+            _allDownSince = null;
             return false;
         }
 
         var now = DateTime.UtcNow;
-        lock (_gate)
-        {
-            _allDownSince ??= now;
-            return (now - _allDownSince.Value).TotalSeconds >= LossGraceSeconds;
-        }
+        _allDownSince ??= now;
+        return (now - _allDownSince.Value).TotalSeconds >= LossGraceSeconds;
     }
 
     /// <summary>Kill points by zombie type (§10.5); an unknown type is worth a walker, never 0.</summary>
@@ -1507,12 +1684,12 @@ public sealed class ZombieMode : IGameMode
         tally[playerId] = tally.TryGetValue(playerId, out var count) ? count + 1 : 1;
 
     /// <summary>§10.5
-    /// <c>w:..;left:..;next:..;rem:..;fm:..;diff:..;fs:..[;dev:id/hp][;wx:..][;clr:..][;over:..][;zs&lt;id&gt;:h/r]</c>.
+    /// <c>w:..;left:..;next:..;wl:..;fm:..;diff:..;fs:..[;dev:id/hp][;wx:..][;clr:..][;wp:..][;rv:..][;over:..][;zs&lt;id&gt;:h/r]</c>.
     /// ⚠️ Not pushed while we hold the pause: the reason text lives in the same field there (§10.1) and
     /// would be overwritten.</summary>
-    /// <remarks><c>rem</c> and <c>fm</c> are the BRAIN's input, not HUD decoration (§10.5 multi-floor
-    /// rule): the storey quota is computed from them, and <c>rem:0</c> is what drops the empty-storey
-    /// minimum to 0 so a wave cannot stall on an unvisited floor.
+    /// <remarks><c>wl</c> and <c>fm</c> are the BRAIN's input, not HUD decoration (§10.5 multi-floor
+    /// rule): the storey quota is computed from them, and <c>wl:0</c> is what drops the empty-storey
+    /// minimum to 0 so the wave's tail cannot stall on an unvisited floor.
     /// <para>The per-player <c>zs</c> tokens ride ONLY the final state: the result screen reads them once,
     /// and a 10 Hz field has no room for a row per player. A player with both counts at 0 is omitted —
     /// the reader treats a missing token as <c>0/0</c>.</para></remarks>
@@ -1523,11 +1700,11 @@ public sealed class ZombieMode : IGameMode
         {
             if (_paused) return;
 
-            // In the Last Stand there is no next wave and no remaining count: spawning is endless, and a
+            // In the Last Stand there is no next wave and no wave clock: spawning is endless, and a
             // counting-down `next` would promise a wave that never comes.
             int next = _finalStand ? 0 : (int)MathF.Ceiling(_breakTimer);
-            int remaining = _finalStand ? 0 : Math.Max(0, _waveTotal - _spawnedThisWave);
-            state = $"w:{_wave};left:{StandingCountLocked()};next:{next};rem:{remaining};" +
+            int waveLeft = _finalStand ? 0 : (int)MathF.Ceiling(_waveTimer);
+            state = $"w:{_wave};left:{StandingCountLocked()};next:{next};wl:{waveLeft};" +
                     $"fm:{_table.EmptyFloorMin};diff:{_table.Id};fs:{(_finalStand ? 1 : 0)}";
             if (_devNetId != 0)
             {
@@ -1543,6 +1720,11 @@ public sealed class ZombieMode : IGameMode
             {
                 state += $";clr:{(int)MathF.Ceiling(_clearTimer)}";
             }
+
+            // The squad's rescue (§10.5). Both only while they run: the client reads the countdown and
+            // the revive window from their PRESENCE, exactly like `clr`.
+            if (_wipeTimer > 0f) state += $";wp:{(int)MathF.Ceiling(_wipeTimer)}";
+            if (_wipeReviveTimer > 0f) state += $";rv:{(int)MathF.Ceiling(_wipeReviveTimer)}";
 
             if (_over.Length > 0) state += $";over:{_over}{PlayerTokensLocked()}";
         }

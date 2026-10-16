@@ -139,7 +139,7 @@ namespace VortexArena.Core.Player
             }
 
             Instance = this;
-            _seenGeneration = ArenaCalibrator.CalibrationGeneration;
+            _seenGeneration = ArenaCalibrator.AlignmentGeneration;
 
             // We are a persistent singleton: we subscribe in Awake/OnDestroy instead of
             // OnEnable/OnDisable so that no event is missed even if the object is disabled.
@@ -205,10 +205,12 @@ namespace VortexArena.Core.Player
         /// <summary>Every alignment (generation bump) schedules a measurement
         /// <see cref="AutoMeasureDelaySeconds"/> later; a newer alignment restarts the wait.
         /// <para>⚠️ Fires only on a player: an admin observer has no rig, and a failed measurement from
-        /// it would be announced to every operator as a player's error.</para></summary>
+        /// it would be announced to every operator as a player's error.</para>
+        /// <para>⚠️ Alignments only, not floor hops (<see cref="ArenaCalibrator.AlignmentGeneration"/>):
+        /// the player did not change, so neither may the body scale.</para></summary>
         private void TickAutoMeasure()
         {
-            int generation = ArenaCalibrator.CalibrationGeneration;
+            int generation = ArenaCalibrator.AlignmentGeneration;
             if (generation != _seenGeneration)
             {
                 _seenGeneration = generation;
@@ -251,6 +253,8 @@ namespace VortexArena.Core.Player
         /// of the window.
         /// <para>⚠️ Arena space needs a calibration: without one "floor" is the headset's own guess,
         /// which is exactly the number the stale-space-data fault corrupts.</para>
+        /// <para>⚠️ The floor lift is subtracted: on an upper floor the raw reading is a storey tall and
+        /// would clamp to the maximum stature.</para>
         /// </summary>
         private bool TrySampleEyeHeight(out float eyeHeight)
         {
@@ -262,7 +266,7 @@ namespace VortexArena.Core.Player
                 return false;
             }
 
-            eyeHeight = ArenaSpace.WorldToArena(rig.centerEyeAnchor.position).y;
+            eyeHeight = ArenaSpace.WorldToArena(rig.centerEyeAnchor.position).y - ArenaCalibrator.FloorLiftMeters;
             return true;
         }
 

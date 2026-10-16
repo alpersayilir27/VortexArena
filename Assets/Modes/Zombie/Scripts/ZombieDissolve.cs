@@ -3,8 +3,8 @@ using UnityEngine;
 
 namespace VortexArena.Modes.Zombie
 {
-    /// <summary>Drives the zombie body's dissolve: <c>_Dissolve</c> 1→0 when it materialises, 0→1 when
-    /// it leaves. The model is temporarily switched to the shared dissolve material.</summary>
+    /// <summary>Drives the zombie body's dissolve-in: <c>_Dissolve</c> 1→0 when it materialises (no
+    /// dissolve on death). The model is temporarily switched to the shared dissolve material.</summary>
     /// <remarks>Same shape as <c>SimpleWeaponDissolve</c> but without the <c>Weapon</c> gate: here the
     /// trigger is the net state (first pose · relocation · broken), so <see cref="ZombieView"/> calls
     /// it directly.
@@ -81,13 +81,6 @@ namespace VortexArena.Modes.Zombie
         public void Appear(float seconds)
         {
             Run(Drive(1f, 0f, seconds, true));
-        }
-
-        /// <summary>Dissolves the body away (<c>_Dissolve</c> 0 → 1) and LEAVES it gone — the server
-        /// despawns the object itself.</summary>
-        public void Vanish(float seconds)
-        {
-            Run(Drive(0f, 1f, seconds, false));
         }
 
         private void Run(IEnumerator routine)

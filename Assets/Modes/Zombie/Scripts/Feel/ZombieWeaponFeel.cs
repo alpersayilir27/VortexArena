@@ -193,13 +193,13 @@ namespace VortexArena.Modes.Zombie
 
             if (ZombieHaptics.TryMapHand(mainHand, out Oculus.Haptics.Controller main))
             {
-                ZombieHaptics.Play(fire, main);
+                ZombieHaptics.Play(fire, main, feel.FireHapticGain);
             }
 
             if (supportHand != OVRInput.Controller.None && supportHand != mainHand &&
                 ZombieHaptics.TryMapHand(supportHand, out Oculus.Haptics.Controller support))
             {
-                ZombieHaptics.Play(fire, support, feel.SupportHandFireAmplitude);
+                ZombieHaptics.Play(fire, support, feel.SupportHandFireAmplitude * feel.FireHapticGain);
             }
         }
 
